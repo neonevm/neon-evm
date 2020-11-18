@@ -15,6 +15,9 @@ use solana_sdk::{
     info,
 };
 
+use crate::hamt::Hamt;
+use crate::solana_backend::SolanaBackend;
+
 use evm::backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply};
 use evm::executor::StackExecutor;
 use primitive_types::{H160, H256, U256};
@@ -29,65 +32,6 @@ fn unpack_loader_instruction(data: &[u8]) -> LoaderInstruction {
 //}
 
 
-enum AccountData {
-    Empty,
-    Account {
-        nonce: u64,
-    },
-    Contract {
-        nonce: u64,
-        code_size: u64,
-        /// Actual items count in hash map
-        hash_count: u64,
-        /// Maximum items count in hash map
-        max_hash_count: u64,
-    },
-}
-
-impl AccountData {
-    fn unpack(src: &[u8]) -> Result<Self, ProgramError> {
-        use ProgramError::InvalidAccountData;
-        let (&tag, rest) = src.split_first().ok_or(InvalidAccountData)?;
-        Ok(match tag {
-            0 => Self::Empty,
-            1 => {
-                let (nonce, rest) = rest.split_at(8);
-                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidAccountData)?;
-                Self::Account {nonce,}
-            },
-            2 => {
-                let src = array_ref![rest, 0, 32];
-                let (nonce, code_size, hash_count, max_hash_count) = array_refs![src, 8, 8, 8, 8];
-                Self::Contract {
-                        nonce: u64::from_le_bytes(*nonce),
-                        code_size: u64::from_le_bytes(*code_size),
-                        hash_count: u64::from_le_bytes(*hash_count),
-                        max_hash_count: u64::from_le_bytes(*max_hash_count),
-                }
-            },
-            _ => return Err(InvalidAccountData),
-        })
-    }
-
-    fn pack(&self, dst: &mut [u8]) {
-        match self {
-            AccountData::Empty => dst[0] = 0,
-            &AccountData::Account {nonce} => {
-                let nonce_dst = array_mut_ref![dst, 1, 8];
-                *nonce_dst = nonce.to_le_bytes();
-            },
-            &AccountData::Contract {nonce, code_size, hash_count, max_hash_count} => {
-                let dst = array_mut_ref![dst, 0, 32];
-                let (nonce_dst, code_size_dst, hash_count_dst, max_hash_count_dst) = 
-                        mut_array_refs![dst, 8, 8, 8, 8];
-                *nonce_dst = nonce.to_le_bytes();
-                *code_size_dst = code_size.to_le_bytes();
-                *hash_count_dst = hash_count.to_le_bytes();
-                *max_hash_count_dst = max_hash_count.to_le_bytes();
-            }
-        }
-    }
-}
 
 
 entrypoint!(process_instruction);
@@ -109,15 +53,11 @@ fn process_instruction<'a>(
     if data[0] == 0 {
         match instruction {
             LoaderInstruction::Write {offset, bytes} => {
-//                info!("LoaderInstruction");
-//                info!(&offset.to_string());
-//                info!(&hex::encode(&bytes));
-//                info!(&bs58::encode(program_info.key).into_string());
                 return do_write(program_info, &mut data, offset, &bytes);
             },
             LoaderInstruction::Finalize => {
                 info!("FinalizeInstruction");
-                return do_finalize(program_info, &mut data);
+                return do_finalize(accounts, program_info, &mut data);
             },
         }
     } else {
@@ -136,21 +76,9 @@ fn do_write(program_info: &AccountInfo, data: &mut [u8], offset: u32, bytes: &Ve
     Ok(())
 }
 
-fn do_finalize(program_info: &AccountInfo, data: &mut [u8]) -> ProgramResult {
-    let vicinity = MemoryVicinity {
-        gas_price: U256::zero(),
-        origin: H160::default(),
-        chain_id: U256::zero(),
-        block_hashes: Vec::new(),
-        block_number: U256::zero(),
-        block_coinbase: H160::default(),
-        block_timestamp: U256::zero(),
-        block_difficulty: U256::zero(),
-        block_gas_limit: U256::zero(),
-    };
-    let mut state = BTreeMap::new();
+fn do_finalize<'a>(accounts: &'a [AccountInfo<'a>], program_info: &AccountInfo, data: &mut [u8]) -> ProgramResult {
 
-    let backend = MemoryBackend::new(&vicinity, state);
+    let backend = SolanaBackend::new(accounts); //MemoryBackend::new(&vicinity, state);
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
 
@@ -164,6 +92,9 @@ fn do_finalize(program_info: &AccountInfo, data: &mut [u8]) -> ProgramResult {
     } else {
         info!("Not succeed execution");
     }
+
+    let (_applies, _logs) = executor.deconstruct();
+    let hamt = Hamt::new(data);
 
     Ok(())
 }
