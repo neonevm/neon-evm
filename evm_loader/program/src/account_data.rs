@@ -3,7 +3,7 @@ use primitive_types::{U256,H160};
 use solana_sdk::program_error::ProgramError;
 use std::convert::TryInto;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum AccountData {
     Empty,
     Account {
@@ -14,6 +14,7 @@ pub enum AccountData {
 }
 
 impl AccountData {
+    pub fn size() -> usize {61}
     pub fn unpack(src: &[u8]) -> Result<(Self, &[u8]), ProgramError> {
         use ProgramError::InvalidAccountData;
         let (&tag, rest) = src.split_first().ok_or(InvalidAccountData)?;

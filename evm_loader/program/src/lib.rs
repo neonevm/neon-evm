@@ -12,6 +12,7 @@ pub mod entrypoint;
 mod hamt;
 mod solana_backend;
 mod account_data;
+mod solidity_account;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version

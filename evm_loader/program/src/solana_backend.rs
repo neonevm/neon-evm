@@ -9,7 +9,9 @@ use solana_sdk::{
     pubkey::Pubkey,
     program_error::ProgramError,
 };
-use crate::hamt::Hamt;
+use std::cell::RefCell;
+
+use crate::solidity_account::SolidityAccount;
 use crate::account_data::AccountData;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
@@ -20,37 +22,57 @@ fn solidity_address<'a>(key: &Pubkey) -> H160 {
     H256::from_slice(key.as_ref()).into()
 }
 
-struct SolidityAccount<'a> {
-    key: H160,
-    account: AccountData,
-    info: &'a AccountInfo<'a>,
+fn U256_to_H256(value: U256) -> H256 {
+    let mut v = vec![0u8; 32];
+    value.to_big_endian(&mut v);
+    H256::from_slice(&v)
 }
 
 pub struct SolanaBackend<'a> {
-    accounts: &'a [AccountInfo<'a>],
-    acc_index: Vec<(H160,&'a AccountInfo<'a>)>,
+    accounts: Vec<SolidityAccount<'a>>,
+    aliases: RefCell<Vec<(H160, usize)>>,
 }
 
 impl<'a> SolanaBackend<'a> {
-    pub fn new(accounts: &'a [AccountInfo<'a>]) -> Self {
-        let mut acc_index = Vec::with_capacity(accounts.len());
-        for acc in accounts {
-            acc_index.push((solidity_address(&acc.key), acc));
+    pub fn new(accountInfos: &'a [AccountInfo<'a>]) -> Result<Self,ProgramError> {
+        let mut accounts = Vec::with_capacity(accountInfos.len());
+        let mut aliases = Vec::with_capacity(accountInfos.len());
+        for (i, account) in (&accountInfos).iter().enumerate() {
+            let sol_account = SolidityAccount::new(account)?;
+            aliases.push((sol_account.get_address(), i));
+            accounts.push(sol_account);
         };
-        acc_index.sort_by_key(|v| v.0);
-        Self {accounts: accounts, acc_index: acc_index}
+        aliases.sort_by_key(|v| v.0);
+        Ok(Self {accounts: accounts, aliases: RefCell::new(aliases)})
     }
 
-    fn add_account(&mut self, address: H160, account: &'a AccountInfo<'a>) {
-        self.acc_index.push((address, account));
-        self.acc_index.sort_by_key(|v| v.0);
+    pub fn add_alias(&self, address: &H160, pubkey: &Pubkey) {
+        for (i, account) in (&self.accounts).iter().enumerate() {
+            if account.accountInfo.key == pubkey {
+                let mut aliases = self.aliases.borrow_mut();
+                aliases.push((*address, i));
+                aliases.sort_by_key(|v| v.0);
+                return;
+            }
+        }
     }
 
-    fn get_account(&self, address: H160) -> Option<&'a AccountInfo<'a>> {
-        match self.acc_index.binary_search_by_key(&address, |v| v.0) {
-            Ok(pos) => Some(self.acc_index[pos].1),
+    fn find_account(&self, address: H160) -> Option<usize> {
+        let aliases = self.aliases.borrow();
+        match aliases.binary_search_by_key(&address, |v| v.0) {
+            Ok(pos) => Some(aliases[pos].1),
             Err(_) => None,
         }
+    }
+
+    fn get_account(&self, address: H160) -> Option<&SolidityAccount<'a>> {
+        self.find_account(address).map(|pos| &self.accounts[pos])
+    }
+
+    fn get_account_mut(&mut self, address: H160) -> Option<&mut SolidityAccount<'a>> {
+        if let Some(pos) = self.find_account(address) {
+            Some(&mut self.accounts[pos])
+        } else {None}
     }
 
     fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
@@ -59,69 +81,29 @@ impl<'a> SolanaBackend<'a> {
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
     {
-        for i in &self.acc_index {println!("{:?}", i);};
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
-                    // Print applies
-                    let header_size = 60;
-                    let codeString = match code {
-                        Some(ref code) => {"\"".to_owned() + &hex::encode(&code[..24]) + "...\""},
-                        None => {"None".to_string()},
-                    };
-                    let mut storage = storage.into_iter().peekable();
-                    println!("Address: {:?}, basic {:?}, code {}, storage {:?}, reset {:?}",
-                            address, basic, codeString, if let Some(_) = storage.peek() {"Not empty"} else {"empty"}, reset_storage);
+                    let mut storageIter = storage.into_iter().peekable();
 
                     // Get account data
-                    let account = self.get_account(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
-                    println!("    {:?}", account);
+                    let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
+                    account.update(address, basic.nonce, basic.balance.as_u64(), &code);
 
-                    **account.lamports.borrow_mut() = basic.balance.as_u64();
-                    let mut data = account.data.borrow_mut();
-                    let (mut account_data, rest) = AccountData::unpack(&data)?;
-
-                    let mut current_code_size = match account_data {
-                        AccountData::Empty => 0,
-                        AccountData::Account{code_size, ..} => code_size as usize,
-                    };
-
-                    if let Some(code) = code {
-                        if current_code_size != 0 {
-                            return Err(ProgramError::AccountAlreadyInitialized);
-                        }
-                        current_code_size = code.len();
-                        data[header_size..header_size+current_code_size].copy_from_slice(&code);
+                    if let Some(_) = storageIter.peek() {
+                        account.storage(|storage| {
+                            //if reset_storage {storage.reset();}
+                            for (key,value) in storageIter {
+                                storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into());
+                            }
+                        });
                     }
-
-                    if let Some(_) = storage.peek() {
-                        if current_code_size == 0 {
-                            return Err(ProgramError::UninitializedAccount);
-                        }
-                        let mut account_storage = Hamt::new(&mut data[header_size+current_code_size..])?;
-                        //if reset_storage {account_storage.reset();}
-                        for (key, value) in storage {
-                            println!("     {:?} -> {:?}", key, value);
-                            account_storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into());
-                        }
-                    }
-
-                    let account_data = AccountData::Account{
-                        nonce: basic.nonce,
-                        address: address,
-                        code_size: current_code_size as u64,
-                    };
-
-                    println!("   Account data: {:?}", account_data);
-                    account_data.pack(&mut data);
                 },
-                Apply::Delete {address} => {
-                },
+                Apply::Delete {address} => {},
             }
         };
 
-        for log in logs {
-        };
+        //for log in logs {};
 
         Ok(())
     }
@@ -144,11 +126,47 @@ impl<'a> Backend for SolanaBackend<'a> {
             None => false,
         }
     }
-    fn basic(&self, address: H160) -> Basic { Basic {balance: U256::zero(), nonce: U256::zero() } }
-    fn code_hash(&self, address: H160) -> H256 { keccak256_digest(&[]) }
-    fn code_size(&self, address: H160) -> usize { 0 }
-    fn code(&self, address: H160) -> Vec<u8> { Vec::<u8>::new() }
-    fn storage(&self, address: H160, index: H256) -> H256 { H256::default() }
+    fn basic(&self, address: H160) -> Basic {
+        match self.get_account(address) {
+            None => Basic{balance: U256::zero(), nonce: U256::zero()},
+            Some(acc) => Basic{
+                balance: (**acc.accountInfo.lamports.borrow()).into(),
+                nonce: if let AccountData::Account{nonce, ..} = acc.accountData {nonce} else {U256::zero()},
+            },
+        }
+    }
+    fn code_hash(&self, address: H160) -> H256 {
+        self.get_account(address).map_or_else(
+                || keccak256_digest(&[]), 
+                |acc| acc.code(|d| keccak256_digest(d))
+            )
+    }
+    fn code_size(&self, address: H160) -> usize {
+        self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
+    }
+    fn code(&self, address: H160) -> Vec<u8> {
+        self.get_account(address).map_or_else(
+                || Vec::new(),
+                |acc| acc.code(|d| d.into())
+            )
+    }
+    fn storage(&self, address: H160, index: H256) -> H256 {
+        match self.get_account(address) {
+            None => H256::default(),
+            Some(acc) => {
+                let index = index.as_fixed_bytes().into();
+                let value = acc.storage(|storage| storage.find(index)).unwrap_or_default();
+                if let Some(v) = value {U256_to_H256(v)} else {H256::default()}
+            },
+        }
+    }
+
+    fn create(&self, scheme: &CreateScheme, address: &H160) {
+        let account = if let CreateScheme::Create2{salt,..} = scheme
+                {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
+        //println!("Create new account: {:x?} -> {:x?} // {}", scheme, address, account);
+        self.add_alias(address, &account);
+    }
 }
 
 
@@ -227,7 +245,7 @@ mod test {
     }
 
     #[test]
-    fn test_solana_backend() {
+    fn test_solana_backend() -> Result<(), ProgramError> {
         let owner = Pubkey::new_rand();
         let mut accounts = Vec::new();
         for i in 0..8 {
@@ -237,12 +255,14 @@ mod test {
                 ) );
         }
 
+        for acc in &accounts {println!("{:x?}", acc);};
+
         let mut infos = Vec::new();
         for acc in &mut accounts {
             infos.push(AccountInfo::from((&acc.0, acc.1==0, &mut acc.2)));
         }
 
-        let mut backend = SolanaBackend::new(&infos[1..]);
+        let mut backend = SolanaBackend::new(&infos[..]).unwrap();
 
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -254,30 +274,49 @@ mod test {
         println!("Creator: {:?}", creator);
         executor.deposit(creator, U256::exp10(18));
 
-        let contract = executor.create_address(CreateScheme::Legacy{caller: creator});
-        let exit_reason = executor.transact_create(creator, U256::zero(), TestContract::code(), usize::max_value());
+        let contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&TestContract::code()), salt: infos[0].key.to_bytes().into()});
+        let exit_reason = executor.transact_create2(creator, U256::zero(), TestContract::code(), infos[0].key.to_bytes().into(), usize::max_value());
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         let (applies, logs) = executor.deconstruct();
 
-        backend.add_account(contract, &infos[0]);
+//        backend.add_account(contract, &infos[0]);
         let apply_result = backend.apply(applies, logs, false);
         println!("Apply result: {:?}", apply_result);
 
         println!();
+//        let mut backend = SolanaBackend::new(&infos).unwrap();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        println!("======================================");
+        println!("Contract: {:x}", contract);
+        println!("{:x?}", backend.exists(contract));
+        println!("{:x}", backend.code_size(contract));
+        println!("code_hash {:x}", backend.code_hash(contract));
+        println!("code: {:x?}", hex::encode(backend.code(contract)));
+        println!("storage value: {:x}", backend.storage(contract, H256::default()));
+        println!();
+
+        println!("Creator: {:x}", creator);
+        println!("code_size: {:x}", backend.code_size(creator));
+        println!("code_hash: {:x}", backend.code_hash(creator));
+        println!("code: {:x?}", hex::encode(backend.code(creator)));
+
+        println!("Missing account code_size: {:x}", backend.code_size(H160::zero()));
+        println!("Code_hash: {:x}", backend.code_hash(H160::zero()));
+        println!("storage value: {:x}", backend.storage(H160::zero(), H256::default()));
 
         let (exit_reason, result) = executor.transact_call(
                 creator, contract, U256::zero(), TestContract::get_owner(), usize::max_value());
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (applies, logs) = executor.deconstruct();
-        backend.apply(applies, logs, false);
+        backend.apply(applies, logs, false)?;
         
 
-        println!();
+/*        println!();
         for acc in &accounts {
             println!("{:x?}", acc);
-        }
+        }*/
+        Ok(())
     }
 }
