@@ -16,10 +16,15 @@ use solana_sdk::{
 };
 
 use crate::hamt::Hamt;
-use crate::solana_backend::SolanaBackend;
+use crate::solana_backend::{
+    SolanaBackend, solidity_address,
+};
 
-use evm::backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply};
-use evm::executor::StackExecutor;
+use evm::{
+    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
+    executor::{StackExecutor},
+    ExitReason,
+};
 use primitive_types::{H160, H256, U256};
 use std::collections::BTreeMap;
 
@@ -42,31 +47,33 @@ fn process_instruction<'a>(
 ) -> ProgramResult {
 
 
-    let instruction: LoaderInstruction = limited_deserialize(instruction_data)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
 
-    let mut data = program_info.data.borrow_mut();
+    let account_type = {program_info.data.borrow()[0]};
 
-    if data[0] == 0 {
+    if account_type == 0 {
+        let instruction: LoaderInstruction = limited_deserialize(instruction_data)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
         match instruction {
             LoaderInstruction::Write {offset, bytes} => {
-                return do_write(program_info, &mut data, offset, &bytes);
+                return do_write(program_info, offset, &bytes);
             },
             LoaderInstruction::Finalize => {
                 info!("FinalizeInstruction");
-                return do_finalize(accounts, program_info, &mut data);
+                return do_finalize(program_id, accounts, program_info);
             },
         }
     } else {
-        return do_execute();
+        info!("Execute");
+        return do_execute(program_id, accounts, instruction_data);
     }
     Ok(())
 }
 
-fn do_write(program_info: &AccountInfo, data: &mut [u8], offset: u32, bytes: &Vec<u8>) -> ProgramResult {
+fn do_write(program_info: &AccountInfo, offset: u32, bytes: &Vec<u8>) -> ProgramResult {
+    let mut data = program_info.data.borrow_mut();
     let offset = offset as usize;
     if data.len() < offset+1 + bytes.len() {
         info!("Account data too small");
@@ -76,30 +83,72 @@ fn do_write(program_info: &AccountInfo, data: &mut [u8], offset: u32, bytes: &Ve
     Ok(())
 }
 
-fn do_finalize<'a>(accounts: &'a [AccountInfo<'a>], program_info: &AccountInfo, data: &mut [u8]) -> ProgramResult {
+fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program_info: &AccountInfo) -> ProgramResult {
 
-    let backend = SolanaBackend::new(accounts); //MemoryBackend::new(&vicinity, state);
+    info!("do_finalize");
+    let mut backend = SolanaBackend::new(program_id, accounts)?; //MemoryBackend::new(&vicinity, state);
+    info!("  backend initialized");
+
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    info!("  executor initialized");
 
     //trace!("Execute transact_create");
 
-    //let data = Vec::new();
-    //let _ = executor.transact_call(H160::default(), H160::default(), U256::zero(), Vec::new(), usize::max_value(),);
-    let exit_reason = executor.transact_create(H160::zero(), U256::zero(), data[1..].to_vec(), usize::max_value());
+    let code = {program_info.data.borrow()[1..].to_vec()};
+
+    let exit_reason = executor.transact_create2(
+            solidity_address(&accounts[1].key),
+            U256::zero(),
+            code,
+            program_info.key.to_bytes().into(), usize::max_value()
+        );
+    info!("  create2 done");
+
     if exit_reason.is_succeed() {
         info!("Succeed execution");
+        let (applies, logs) = executor.deconstruct();
+        backend.apply(applies, logs, false)?;
+        Ok(())
     } else {
         info!("Not succeed execution");
+        Err(ProgramError::InvalidInstructionData)
     }
-
-    let (_applies, _logs) = executor.deconstruct();
-    let hamt = Hamt::new(data);
-
-    Ok(())
 }
 
-fn do_execute() -> ProgramResult {
+fn do_execute<'a>(
+        program_id: &Pubkey,
+        accounts: &'a [AccountInfo<'a>],
+        instruction_data: &[u8],
+    ) -> ProgramResult
+{
+    let mut backend = SolanaBackend::new(program_id, accounts)?;
+    let config = evm::Config::istanbul();
+    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    info!("Executor initialized");
+
+    let (exit_reason, result) = executor.transact_call(
+            backend.get_address_by_index(1),
+            backend.get_address_by_index(0),
+            U256::zero(),
+            instruction_data.to_vec(),
+            usize::max_value()
+        );
+
+    info!("Call done");
+    info!(match exit_reason {
+        ExitReason::Succeed(_) => {
+            let (applies, logs) = executor.deconstruct();
+            backend.apply(applies, logs, false)?;
+            info!("Applies done");
+            "succeed"
+        },
+        ExitReason::Error(_) => "error",
+        ExitReason::Revert(_) => "revert",
+        ExitReason::Fatal(_) => "fatal",
+    });
+    info!(&hex::encode(&result));
+    
     Ok(())
 }
 

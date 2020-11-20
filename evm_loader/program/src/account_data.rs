@@ -11,6 +11,7 @@ pub enum AccountData {
         address: H160,
         code_size: u64,
     },
+    Foreign,
 }
 
 impl AccountData {
@@ -46,6 +47,7 @@ impl AccountData {
                 *code_size_dst = code_size.to_le_bytes();
                 36
             }
+            AccountData::Foreign => 0,
         }
     }
 }

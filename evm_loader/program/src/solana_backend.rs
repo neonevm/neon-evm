@@ -8,6 +8,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
+    info,
 };
 use std::cell::RefCell;
 
@@ -18,7 +19,7 @@ fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
 }
 
-fn solidity_address<'a>(key: &Pubkey) -> H160 {
+pub fn solidity_address<'a>(key: &Pubkey) -> H160 {
     H256::from_slice(key.as_ref()).into()
 }
 
@@ -34,19 +35,30 @@ pub struct SolanaBackend<'a> {
 }
 
 impl<'a> SolanaBackend<'a> {
-    pub fn new(accountInfos: &'a [AccountInfo<'a>]) -> Result<Self,ProgramError> {
+    pub fn new(program_id: &Pubkey, accountInfos: &'a [AccountInfo<'a>]) -> Result<Self,ProgramError> {
+        info!("backend::new");
         let mut accounts = Vec::with_capacity(accountInfos.len());
         let mut aliases = Vec::with_capacity(accountInfos.len());
+
         for (i, account) in (&accountInfos).iter().enumerate() {
-            let sol_account = SolidityAccount::new(account)?;
+            info!(&i.to_string());
+            let sol_account = if account.owner == program_id {SolidityAccount::new(account)?}
+                    else {SolidityAccount::foreign(account)?};
+            //println!(" ==> sol_account: {:?}", sol_account);
             aliases.push((sol_account.get_address(), i));
             accounts.push(sol_account);
         };
+        info!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
         Ok(Self {accounts: accounts, aliases: RefCell::new(aliases)})
     }
 
+    pub fn get_address_by_index(&self, index: usize) -> H160 {
+        self.accounts[index].get_address()
+    }
+
     pub fn add_alias(&self, address: &H160, pubkey: &Pubkey) {
+        info!(&("Add alias ".to_owned() + &address.to_string() + " for " + &pubkey.to_string()));
         for (i, account) in (&self.accounts).iter().enumerate() {
             if account.accountInfo.key == pubkey {
                 let mut aliases = self.aliases.borrow_mut();
@@ -60,8 +72,14 @@ impl<'a> SolanaBackend<'a> {
     fn find_account(&self, address: H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
         match aliases.binary_search_by_key(&address, |v| v.0) {
-            Ok(pos) => Some(aliases[pos].1),
-            Err(_) => None,
+            Ok(pos) => {
+                info!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
+                Some(aliases[pos].1)
+            },
+            Err(_) => {
+                info!(&("Not found account for ".to_owned() + &address.to_string()));
+                None
+            },
         }
     }
 
@@ -75,7 +93,7 @@ impl<'a> SolanaBackend<'a> {
         } else {None}
     }
 
-    fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(H256, H256)>,
@@ -84,20 +102,8 @@ impl<'a> SolanaBackend<'a> {
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
-                    let mut storageIter = storage.into_iter().peekable();
-
-                    // Get account data
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
-                    account.update(address, basic.nonce, basic.balance.as_u64(), &code);
-
-                    if let Some(_) = storageIter.peek() {
-                        account.storage(|storage| {
-                            //if reset_storage {storage.reset();}
-                            for (key,value) in storageIter {
-                                storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into());
-                            }
-                        });
-                    }
+                    account.update(address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                 },
                 Apply::Delete {address} => {},
             }
@@ -145,20 +151,26 @@ impl<'a> Backend for SolanaBackend<'a> {
         self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        self.get_account(address).map_or_else(
+        let code = self.get_account(address).map_or_else(
                 || Vec::new(),
                 |acc| acc.code(|d| d.into())
-            )
+            );
+        info!(&("Get code for ".to_owned() + &address.to_string() +
+                " " + &hex::encode(&code[..])));
+        code
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        match self.get_account(address) {
+        let result = match self.get_account(address) {
             None => H256::default(),
             Some(acc) => {
                 let index = index.as_fixed_bytes().into();
                 let value = acc.storage(|storage| storage.find(index)).unwrap_or_default();
                 if let Some(v) = value {U256_to_H256(v)} else {H256::default()}
             },
-        }
+        };
+        info!(&("Storage ".to_owned() + &address.to_string() + " : " + &index.to_string() + " = " +
+                &result.to_string()));
+        result
     }
 
     fn create(&self, scheme: &CreateScheme, address: &H160) {
@@ -248,21 +260,25 @@ mod test {
     fn test_solana_backend() -> Result<(), ProgramError> {
         let owner = Pubkey::new_rand();
         let mut accounts = Vec::new();
-        for i in 0..8 {
+
+        for i in 0..4 {
             accounts.push( (
-                    Pubkey::new_rand(), i,
+                    Pubkey::new_rand(), i == 0,
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
+        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &owner)));
+        accounts.push((Pubkey::new_rand(), false, Account::new(5423u64, 1024, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &Pubkey::new_rand())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 
         let mut infos = Vec::new();
         for acc in &mut accounts {
-            infos.push(AccountInfo::from((&acc.0, acc.1==0, &mut acc.2)));
+            infos.push(AccountInfo::from((&acc.0, acc.1, &mut acc.2)));
         }
 
-        let mut backend = SolanaBackend::new(&infos[..]).unwrap();
+        let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
 
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
