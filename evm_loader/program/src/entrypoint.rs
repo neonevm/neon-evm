@@ -15,8 +15,16 @@ use solana_sdk::{
     info,
 };
 
-use evm::backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply};
-use evm::executor::StackExecutor;
+use crate::hamt::Hamt;
+use crate::solana_backend::{
+    SolanaBackend, solidity_address,
+};
+
+use evm::{
+    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
+    executor::{StackExecutor},
+    ExitReason,
+};
 use primitive_types::{H160, H256, U256};
 use std::collections::BTreeMap;
 
@@ -29,65 +37,6 @@ fn unpack_loader_instruction(data: &[u8]) -> LoaderInstruction {
 //}
 
 
-enum AccountData {
-    Empty,
-    Account {
-        nonce: u64,
-    },
-    Contract {
-        nonce: u64,
-        code_size: u64,
-        /// Actual items count in hash map
-        hash_count: u64,
-        /// Maximum items count in hash map
-        max_hash_count: u64,
-    },
-}
-
-impl AccountData {
-    fn unpack(src: &[u8]) -> Result<Self, ProgramError> {
-        use ProgramError::InvalidAccountData;
-        let (&tag, rest) = src.split_first().ok_or(InvalidAccountData)?;
-        Ok(match tag {
-            0 => Self::Empty,
-            1 => {
-                let (nonce, rest) = rest.split_at(8);
-                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidAccountData)?;
-                Self::Account {nonce,}
-            },
-            2 => {
-                let src = array_ref![rest, 0, 32];
-                let (nonce, code_size, hash_count, max_hash_count) = array_refs![src, 8, 8, 8, 8];
-                Self::Contract {
-                        nonce: u64::from_le_bytes(*nonce),
-                        code_size: u64::from_le_bytes(*code_size),
-                        hash_count: u64::from_le_bytes(*hash_count),
-                        max_hash_count: u64::from_le_bytes(*max_hash_count),
-                }
-            },
-            _ => return Err(InvalidAccountData),
-        })
-    }
-
-    fn pack(&self, dst: &mut [u8]) {
-        match self {
-            AccountData::Empty => dst[0] = 0,
-            &AccountData::Account {nonce} => {
-                let nonce_dst = array_mut_ref![dst, 1, 8];
-                *nonce_dst = nonce.to_le_bytes();
-            },
-            &AccountData::Contract {nonce, code_size, hash_count, max_hash_count} => {
-                let dst = array_mut_ref![dst, 0, 32];
-                let (nonce_dst, code_size_dst, hash_count_dst, max_hash_count_dst) = 
-                        mut_array_refs![dst, 8, 8, 8, 8];
-                *nonce_dst = nonce.to_le_bytes();
-                *code_size_dst = code_size.to_le_bytes();
-                *hash_count_dst = hash_count.to_le_bytes();
-                *max_hash_count_dst = max_hash_count.to_le_bytes();
-            }
-        }
-    }
-}
 
 
 entrypoint!(process_instruction);
@@ -98,35 +47,33 @@ fn process_instruction<'a>(
 ) -> ProgramResult {
 
 
-    let instruction: LoaderInstruction = limited_deserialize(instruction_data)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
 
-    let mut data = program_info.data.borrow_mut();
+    let account_type = {program_info.data.borrow()[0]};
 
-    if data[0] == 0 {
+    if account_type == 0 {
+        let instruction: LoaderInstruction = limited_deserialize(instruction_data)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
         match instruction {
             LoaderInstruction::Write {offset, bytes} => {
-//                info!("LoaderInstruction");
-//                info!(&offset.to_string());
-//                info!(&hex::encode(&bytes));
-//                info!(&bs58::encode(program_info.key).into_string());
-                return do_write(program_info, &mut data, offset, &bytes);
+                return do_write(program_info, offset, &bytes);
             },
             LoaderInstruction::Finalize => {
                 info!("FinalizeInstruction");
-                return do_finalize(program_info, &mut data);
+                return do_finalize(program_id, accounts, program_info);
             },
         }
     } else {
-        return do_execute();
+        info!("Execute");
+        return do_execute(program_id, accounts, instruction_data);
     }
     Ok(())
 }
 
-fn do_write(program_info: &AccountInfo, data: &mut [u8], offset: u32, bytes: &Vec<u8>) -> ProgramResult {
+fn do_write(program_info: &AccountInfo, offset: u32, bytes: &Vec<u8>) -> ProgramResult {
+    let mut data = program_info.data.borrow_mut();
     let offset = offset as usize;
     if data.len() < offset+1 + bytes.len() {
         info!("Account data too small");
@@ -136,39 +83,72 @@ fn do_write(program_info: &AccountInfo, data: &mut [u8], offset: u32, bytes: &Ve
     Ok(())
 }
 
-fn do_finalize(program_info: &AccountInfo, data: &mut [u8]) -> ProgramResult {
-    let vicinity = MemoryVicinity {
-        gas_price: U256::zero(),
-        origin: H160::default(),
-        chain_id: U256::zero(),
-        block_hashes: Vec::new(),
-        block_number: U256::zero(),
-        block_coinbase: H160::default(),
-        block_timestamp: U256::zero(),
-        block_difficulty: U256::zero(),
-        block_gas_limit: U256::zero(),
-    };
-    let mut state = BTreeMap::new();
+fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program_info: &AccountInfo) -> ProgramResult {
 
-    let backend = MemoryBackend::new(&vicinity, state);
+    info!("do_finalize");
+    let mut backend = SolanaBackend::new(program_id, accounts)?; //MemoryBackend::new(&vicinity, state);
+    info!("  backend initialized");
+
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    info!("  executor initialized");
 
     //trace!("Execute transact_create");
 
-    //let data = Vec::new();
-    //let _ = executor.transact_call(H160::default(), H160::default(), U256::zero(), Vec::new(), usize::max_value(),);
-    let exit_reason = executor.transact_create(H160::zero(), U256::zero(), data[1..].to_vec(), usize::max_value());
+    let code = {program_info.data.borrow()[1..].to_vec()};
+
+    let exit_reason = executor.transact_create2(
+            solidity_address(&accounts[1].key),
+            U256::zero(),
+            code,
+            program_info.key.to_bytes().into(), usize::max_value()
+        );
+    info!("  create2 done");
+
     if exit_reason.is_succeed() {
         info!("Succeed execution");
+        let (applies, logs) = executor.deconstruct();
+        backend.apply(applies, logs, false)?;
+        Ok(())
     } else {
         info!("Not succeed execution");
+        Err(ProgramError::InvalidInstructionData)
     }
-
-    Ok(())
 }
 
-fn do_execute() -> ProgramResult {
+fn do_execute<'a>(
+        program_id: &Pubkey,
+        accounts: &'a [AccountInfo<'a>],
+        instruction_data: &[u8],
+    ) -> ProgramResult
+{
+    let mut backend = SolanaBackend::new(program_id, accounts)?;
+    let config = evm::Config::istanbul();
+    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    info!("Executor initialized");
+
+    let (exit_reason, result) = executor.transact_call(
+            backend.get_address_by_index(1),
+            backend.get_address_by_index(0),
+            U256::zero(),
+            instruction_data.to_vec(),
+            usize::max_value()
+        );
+
+    info!("Call done");
+    info!(match exit_reason {
+        ExitReason::Succeed(_) => {
+            let (applies, logs) = executor.deconstruct();
+            backend.apply(applies, logs, false)?;
+            info!("Applies done");
+            "succeed"
+        },
+        ExitReason::Error(_) => "error",
+        ExitReason::Revert(_) => "revert",
+        ExitReason::Fatal(_) => "fatal",
+    });
+    info!(&hex::encode(&result));
+    
     Ok(())
 }
 

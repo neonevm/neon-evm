@@ -9,6 +9,10 @@ pub mod entrypoint;
 //pub mod native_mint;
 //pub mod processor;
 //pub mod state;
+mod hamt;
+mod solana_backend;
+mod account_data;
+mod solidity_account;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
@@ -26,3 +30,12 @@ pub use solana_sdk;
 //}
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_evm_integration() {
+    }
+}
