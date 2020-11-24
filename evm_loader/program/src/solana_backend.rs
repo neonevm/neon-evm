@@ -1,7 +1,8 @@
 use evm::{
     backend::{Basic, Backend, ApplyBackend, Apply, Log},
-    CreateScheme,
+    CreateScheme, Capture, Transfer, ExitReason
 };
+use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
@@ -14,6 +15,10 @@ use std::cell::RefCell;
 
 use crate::solidity_account::SolidityAccount;
 use crate::account_data::AccountData;
+use solana_sdk::program::invoke;
+use solana_sdk::program::invoke_signed;
+use std::convert::TryInto;
+use std::str::FromStr;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -178,6 +183,68 @@ impl<'a> Backend for SolanaBackend<'a> {
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         //println!("Create new account: {:x?} -> {:x?} // {}", scheme, address, account);
         self.add_alias(address, &account);
+    }
+
+    fn call_inner(&self,
+        _code_address: H160,
+        _transfer: Option<Transfer>,
+        _input: Vec<u8>,
+        _target_gas: Option<usize>,
+        _is_static: bool,
+        _take_l64: bool,
+        _take_stipend: bool,
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        if _input.len() < 9+20+20+8+1 { // transfer(H160, H160, u64)
+            return None;
+        }
+
+        let (callName, rest) = _input.split_at(9);
+        let callNameStr = std::str::from_utf8(callName);
+        if callNameStr.is_err() {
+            return None;
+        }
+        if callNameStr.unwrap() != "transfer(" {
+            return None;
+        }
+
+        let (from, rest) = rest.split_at(20);
+        let from = H160::from_slice(from);
+        let (to, rest) = rest.split_at(20);
+        let to = H160::from_slice(to);
+        let (amount, _rest) = _input.split_at(8);
+        let amount = amount
+            .try_into()
+            .ok()
+            .map(u64::from_le_bytes)
+            .unwrap();
+
+        let from_acc_opt = self.get_account(from);
+        if from_acc_opt.is_none() {
+            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+        }
+        let from_acc = from_acc_opt.unwrap().accountInfo;
+        let to_acc_opt = self.get_account(to);
+        if to_acc_opt.is_none() {
+            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+        }
+        let to_acc = to_acc_opt.unwrap().accountInfo;
+
+        let from_acc2 = from_acc.clone();
+        let to_acc2 = to_acc.clone();
+
+        let ix = spl_token::instruction::transfer(
+            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            from_acc.key,
+            to_acc.key,
+            from_acc.key,
+            &[],
+            amount,
+        ).unwrap();
+        invoke(
+            &ix,
+            &[from_acc2.clone(), to_acc2, from_acc2],
+        );
+        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
     }
 }
 

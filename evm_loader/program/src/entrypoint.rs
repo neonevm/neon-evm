@@ -156,6 +156,10 @@ fn do_execute<'a>(
     });
     info!(&hex::encode(&result));
     
+    if !exit_reason.is_succeed() {
+        info!("Not succeed execution");
+        return Err(ProgramError::InvalidInstructionData);
+    }
     Ok(())
 }
 
