@@ -39,7 +39,7 @@ class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.acc = Account(b'\xdc~\x1c\xc0\x1a\x97\x80\xc2\xcd\xdfn\xdb\x05.\xf8\x90N\xde\xf5\x042\xe2\xd8\x10xO%/\xe7\x89\xc0<')
-        print('Account:', cls.acc.public_key())
+        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print('Private:', cls.acc.secret_key())
         balance = http_client.get_balance(cls.acc.public_key())['result']['value']
         if balance == 0:
@@ -55,6 +55,15 @@ class EvmLoaderTests(unittest.TestCase):
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+            ]))
+        result = http_client.send_transaction(trx, self.acc)
+
+    def test_call_changeOwner(self):
+        data = bytearray.fromhex("a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
+        trx = Transaction().add(
+            TransactionInstruction(program_id=evm_loader, data=data, keys=[
+                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey="6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r", is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 

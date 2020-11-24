@@ -134,6 +134,8 @@ fn do_execute<'a>(
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("Executor initialized");
+    info!(&("   caller: ".to_owned() + &backend.get_address_by_index(1).to_string()));
+    info!(&(" contract: ".to_owned() + &backend.get_address_by_index(0).to_string()));
 
     let (exit_reason, result) = executor.transact_call(
             backend.get_address_by_index(1),
