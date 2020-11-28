@@ -10,6 +10,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     program_error::ProgramError,
     info,
+    instruction
 };
 use std::cell::RefCell;
 
@@ -186,7 +187,7 @@ impl<'a> Backend for SolanaBackend<'a> {
     }
 
     fn call_inner(&self,
-        _code_address: H160,
+        code_address: H160,
         _transfer: Option<Transfer>,
         _input: Vec<u8>,
         _target_gas: Option<usize>,
@@ -194,55 +195,68 @@ impl<'a> Backend for SolanaBackend<'a> {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        if _input.len() < 9+20+20+8+1 { // transfer(H160, H160, u64)
+        if (code_address.as_bytes()[0] != 0xFF) {
             return None;
         }
 
-        let (callName, rest) = _input.split_at(9);
-        let callNameStr = std::str::from_utf8(callName);
-        if callNameStr.is_err() {
-            return None;
-        }
-        if callNameStr.unwrap() != "transfer(" {
-            return None;
-        }
-
-        let (from, rest) = rest.split_at(20);
-        let from = H160::from_slice(from);
-        let (to, rest) = rest.split_at(20);
-        let to = H160::from_slice(to);
-        let (amount, _rest) = _input.split_at(8);
-        let amount = amount
+        let (program_id_len, rest) = _input.split_at(2);
+        let program_id_len = program_id_len
             .try_into()
             .ok()
-            .map(u64::from_le_bytes)
+            .map(u16::from_le_bytes)
+            .unwrap();
+        let (program_id_str, rest) = rest.split_at(program_id_len as usize);
+        let program_id = Pubkey::new(program_id_str);
+
+        let mut accountMetas = Vec::new();
+        let mut accountInfos = Vec::new();
+        let (accs_len, rest) = rest.split_at(2);
+        let accs_len = accs_len
+            .try_into()
+            .ok()
+            .map(u16::from_le_bytes)
+            .unwrap();
+        let mut sl = rest;
+        for i in 0..accs_len {
+            let (acc, rest) = sl.split_at(20);
+            let (is_signer, rest) = rest.split_at(1);
+            let is_signer = is_signer[0] != 0;
+            let (is_writable, rest) = rest.split_at(1);
+            let is_writable = is_writable[0] != 0;
+            let (needs_translate, rest) = rest.split_at(1);
+            let needs_translate = needs_translate[0] != 0;
+            sl = rest;
+
+            let acc_id = H160::from_slice(acc);
+            let acc_opt = self.get_account(acc_id);
+            if acc_opt.is_none() {
+                return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+            }
+            let acc = acc_opt.unwrap().accountInfo.clone();
+            accountMetas.push(instruction::AccountMeta { 
+                pubkey: acc.key.clone(), 
+                is_signer: is_signer,
+                is_writable: is_writable });
+            accountInfos.push(acc);
+        }
+
+        let (data_len, rest) = sl.split_at(2);
+        let data_len = data_len
+            .try_into()
+            .ok()
+            .map(u16::from_le_bytes)
             .unwrap();
 
-        let from_acc_opt = self.get_account(from);
-        if from_acc_opt.is_none() {
-            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
-        }
-        let from_acc = from_acc_opt.unwrap().accountInfo;
-        let to_acc_opt = self.get_account(to);
-        if to_acc_opt.is_none() {
-            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
-        }
-        let to_acc = to_acc_opt.unwrap().accountInfo;
+        let (data, rest) = rest.split_at(data_len as usize);
 
-        let from_acc2 = from_acc.clone();
-        let to_acc2 = to_acc.clone();
-
-        let ix = spl_token::instruction::transfer(
-            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
-            from_acc.key,
-            to_acc.key,
-            from_acc.key,
-            &[],
-            amount,
-        ).unwrap();
+        let ix = instruction::Instruction {
+            program_id,
+            accounts: accountMetas,
+            data: data.to_vec()
+        };
         invoke(
             &ix,
-            &[from_acc2.clone(), to_acc2, from_acc2],
+            &accountInfos,
         );
         return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
     }
