@@ -99,6 +99,10 @@ impl<'a> SolanaBackend<'a> {
         } else {None}
     }
 
+    fn is_solana_address(&self, code_address: &H160) -> bool {
+        return code_address.to_string() == "0xff00000000000000000000000000000000000000";
+    }
+
     pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
             where
                 A: IntoIterator<Item=Apply<I>>,
@@ -186,6 +190,10 @@ impl<'a> Backend for SolanaBackend<'a> {
         self.add_alias(address, &account);
     }
 
+    fn is_stateless_address(&self, code_address: &H160) -> bool {
+        return self.is_solana_address(code_address);
+    }
+
     fn call_inner(&self,
         code_address: H160,
         _transfer: Option<Transfer>,
@@ -195,7 +203,7 @@ impl<'a> Backend for SolanaBackend<'a> {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        if (code_address.as_bytes()[0] != 0xFF) {
+        if (!self.is_solana_address(&code_address)) {
             return None;
         }
 
