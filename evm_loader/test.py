@@ -5,8 +5,8 @@ import unittest
 import time
 
 http_client = Client("http://localhost:8899")
-evm_loader = "3vvM7pF29dvetHE9ZcTnRH7Q6Sm899utBrGR65D3BDkr"
-owner_contract = "528vz79WTjxJSKCYscRuHgHYNehXdeYBmphrU2X7Wge1"
+evm_loader = "BH2utvquuz1DsfsMeH8GzqCBdsypcarCYRtctTZYiLME"
+owner_contract = "78asSk7PHbbU4zVdWcRrdpxsai3541xsjBT4Z3HYHLgs"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 
 
