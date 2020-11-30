@@ -100,7 +100,7 @@ impl<'a> SolanaBackend<'a> {
     }
 
     fn is_solana_address(&self, code_address: &H160) -> bool {
-        return code_address.to_string() == "0xff00000000000000000000000000000000000000";
+        return code_address.to_string() == "0xff00…0000";
     }
 
     pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
