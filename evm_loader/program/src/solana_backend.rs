@@ -112,6 +112,9 @@ impl<'a> SolanaBackend<'a> {
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
+                    if self.is_solana_address(&address) {
+                        continue;
+                    }
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                     account.update(address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                 },
@@ -190,10 +193,6 @@ impl<'a> Backend for SolanaBackend<'a> {
         self.add_alias(address, &account);
     }
 
-    fn is_stateless_address(&self, code_address: &H160) -> bool {
-        return self.is_solana_address(code_address);
-    }
-
     fn call_inner(&self,
         code_address: H160,
         _transfer: Option<Transfer>,
@@ -211,7 +210,7 @@ impl<'a> Backend for SolanaBackend<'a> {
         let program_id_len = program_id_len
             .try_into()
             .ok()
-            .map(u16::from_le_bytes)
+            .map(u16::from_be_bytes)
             .unwrap();
         let (program_id_str, rest) = rest.split_at(program_id_len as usize);
         let program_id = Pubkey::new(program_id_str);
@@ -222,7 +221,7 @@ impl<'a> Backend for SolanaBackend<'a> {
         let accs_len = accs_len
             .try_into()
             .ok()
-            .map(u16::from_le_bytes)
+            .map(u16::from_be_bytes)
             .unwrap();
         let mut sl = rest;
         for i in 0..accs_len {
@@ -252,7 +251,7 @@ impl<'a> Backend for SolanaBackend<'a> {
         let data_len = data_len
             .try_into()
             .ok()
-            .map(u16::from_le_bytes)
+            .map(u16::from_be_bytes)
             .unwrap();
 
         let (data, rest) = rest.split_at(data_len as usize);
