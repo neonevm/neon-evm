@@ -5,8 +5,8 @@ import unittest
 import time
 
 http_client = Client("http://localhost:8899")
-evm_loader = "DW4K2NVLb7Y5EJDLspbbZ7nhP35G2TWXFVAS5UH2MVaa"
-owner_contract = "AYboh1oKpesPF9iUq2Sn8gLWGogxAjMnbDszJ7NpD9G5"
+evm_loader = "7Cdv9VeQEbBmXvJZaE4vmGkyobr1zUAJ8yu8urKFxpBM"
+owner_contract = "GoXMtBXLRLU3mQsfKtvTD2bWqmkfvSZmhcaTdCyC6vVk"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 
 
@@ -50,7 +50,7 @@ class EvmLoaderTests(unittest.TestCase):
 
 
     def test_call_getOwner(self):
-        data = bytearray.fromhex("893d20e8")
+        data = bytearray.fromhex("b7f05836")
         trx = Transaction().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),

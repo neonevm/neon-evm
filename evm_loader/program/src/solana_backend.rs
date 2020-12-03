@@ -1,7 +1,8 @@
 use evm::{
     backend::{Basic, Backend, ApplyBackend, Apply, Log},
-    CreateScheme,
+    CreateScheme, Capture, Transfer, ExitReason
 };
+use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
@@ -9,11 +10,16 @@ use solana_sdk::{
     pubkey::Pubkey,
     program_error::ProgramError,
     info,
+    instruction
 };
 use std::cell::RefCell;
 
 use crate::solidity_account::SolidityAccount;
 use crate::account_data::AccountData;
+use solana_sdk::program::invoke;
+use solana_sdk::program::invoke_signed;
+use std::convert::TryInto;
+use std::str::FromStr;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -93,6 +99,10 @@ impl<'a> SolanaBackend<'a> {
         } else {None}
     }
 
+    fn is_solana_address(&self, code_address: &H160) -> bool {
+        return code_address.to_string() == "0xff00…0000";
+    }
+
     pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
             where
                 A: IntoIterator<Item=Apply<I>>,
@@ -102,6 +112,9 @@ impl<'a> SolanaBackend<'a> {
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
+                    if self.is_solana_address(&address) {
+                        continue;
+                    }
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                     account.update(address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                 },
@@ -178,6 +191,95 @@ impl<'a> Backend for SolanaBackend<'a> {
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         //println!("Create new account: {:x?} -> {:x?} // {}", scheme, address, account);
         self.add_alias(address, &account);
+    }
+
+    fn call_inner(&self,
+        code_address: H160,
+        _transfer: Option<Transfer>,
+        _input: Vec<u8>,
+        _target_gas: Option<usize>,
+        _is_static: bool,
+        _take_l64: bool,
+        _take_stipend: bool,
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        if (!self.is_solana_address(&code_address)) {
+            return None;
+        }
+
+        let (program_id_len, rest) = _input.split_at(2);
+        let program_id_len = program_id_len
+            .try_into()
+            .ok()
+            .map(u16::from_be_bytes)
+            .unwrap();
+        let (program_id_str, rest) = rest.split_at(program_id_len as usize);
+        let program_id = Pubkey::new(program_id_str);
+
+        let mut accountMetas = Vec::new();
+        let mut accountInfos = Vec::new();
+        let (accs_len, rest) = rest.split_at(2);
+        let accs_len = accs_len
+            .try_into()
+            .ok()
+            .map(u16::from_be_bytes)
+            .unwrap();
+        let mut sl = rest;
+        for i in 0..accs_len {
+            let (needs_translate, rest) = rest.split_at(1);
+            let needs_translate = needs_translate[0] != 0;
+            let mut acc_len = 32;
+            if needs_translate { acc_len = 20; }
+
+            let (acc, rest) = sl.split_at(acc_len);
+
+            let (is_signer, rest) = rest.split_at(1);
+            let is_signer = is_signer[0] != 0;
+
+            let (is_writable, rest) = rest.split_at(1);
+            let is_writable = is_writable[0] != 0;
+
+            sl = rest;
+
+            if (needs_translate) {
+                let acc_id = H160::from_slice(acc);
+                let acc_opt = self.get_account(acc_id);
+                if acc_opt.is_none() {
+                    return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+                }
+                let acc = acc_opt.unwrap().accountInfo.clone();
+                accountMetas.push(instruction::AccountMeta { 
+                    pubkey: acc.key.clone(), 
+                    is_signer: is_signer,
+                    is_writable: is_writable });
+                accountInfos.push(acc);
+            } else {
+                let key = Pubkey::new(acc);
+                accountMetas.push(instruction::AccountMeta { 
+                    pubkey: key,
+                    is_signer: is_signer,
+                    is_writable: is_writable });
+            }
+        }
+
+        let (data_len, rest) = sl.split_at(2);
+        let data_len = data_len
+            .try_into()
+            .ok()
+            .map(u16::from_be_bytes)
+            .unwrap();
+
+        let (data, rest) = rest.split_at(data_len as usize);
+
+        let ix = instruction::Instruction {
+            program_id,
+            accounts: accountMetas,
+            data: data.to_vec()
+        };
+        invoke(
+            &ix,
+            &accountInfos,
+        );
+        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
     }
 }
 
