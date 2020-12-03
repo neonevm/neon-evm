@@ -95,8 +95,9 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program
 
     //trace!("Execute transact_create");
 
-    let code_data = {program_info.data.borrow()[1..].to_vec()};
-    let (code_len, rest) = code_data.split_at(8);
+    let code_data = program_info.data.borrow();
+    let (_unused, rest) = code_data.split_at(1);
+    let (code_len, rest) = rest.split_at(8);
     let code_len = code_len
         .try_into()
         .ok()

@@ -225,26 +225,40 @@ impl<'a> Backend for SolanaBackend<'a> {
             .unwrap();
         let mut sl = rest;
         for i in 0..accs_len {
-            let (acc, rest) = sl.split_at(20);
-            let (is_signer, rest) = rest.split_at(1);
-            let is_signer = is_signer[0] != 0;
-            let (is_writable, rest) = rest.split_at(1);
-            let is_writable = is_writable[0] != 0;
             let (needs_translate, rest) = rest.split_at(1);
             let needs_translate = needs_translate[0] != 0;
+            let mut acc_len = 32;
+            if needs_translate { acc_len = 20; }
+
+            let (acc, rest) = sl.split_at(acc_len);
+
+            let (is_signer, rest) = rest.split_at(1);
+            let is_signer = is_signer[0] != 0;
+
+            let (is_writable, rest) = rest.split_at(1);
+            let is_writable = is_writable[0] != 0;
+
             sl = rest;
 
-            let acc_id = H160::from_slice(acc);
-            let acc_opt = self.get_account(acc_id);
-            if acc_opt.is_none() {
-                return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+            if (needs_translate) {
+                let acc_id = H160::from_slice(acc);
+                let acc_opt = self.get_account(acc_id);
+                if acc_opt.is_none() {
+                    return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+                }
+                let acc = acc_opt.unwrap().accountInfo.clone();
+                accountMetas.push(instruction::AccountMeta { 
+                    pubkey: acc.key.clone(), 
+                    is_signer: is_signer,
+                    is_writable: is_writable });
+                accountInfos.push(acc);
+            } else {
+                let key = Pubkey::new(acc);
+                accountMetas.push(instruction::AccountMeta { 
+                    pubkey: key,
+                    is_signer: is_signer,
+                    is_writable: is_writable });
             }
-            let acc = acc_opt.unwrap().accountInfo.clone();
-            accountMetas.push(instruction::AccountMeta { 
-                pubkey: acc.key.clone(), 
-                is_signer: is_signer,
-                is_writable: is_writable });
-            accountInfos.push(acc);
         }
 
         let (data_len, rest) = sl.split_at(2);
