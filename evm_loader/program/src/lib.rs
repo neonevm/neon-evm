@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-#![forbid(unsafe_code)]
+//#![forbid(unsafe_code)]
 
 //! An ERC20-like Token program for the Solana blockchain
 

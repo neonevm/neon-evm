@@ -3,13 +3,20 @@ from solana.account import Account
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 import time
+import os
 
 http_client = Client("http://localhost:8899")
-evm_loader = "7Cdv9VeQEbBmXvJZaE4vmGkyobr1zUAJ8yu8urKFxpBM"
-owner_contract = "GoXMtBXLRLU3mQsfKtvTD2bWqmkfvSZmhcaTdCyC6vVk"
+evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
+owner_contract = os.environ.get("CONTRACT")  #"HegAG2D9DwRaSiRPb6SaDrmaMYFq9uaqZcn3E1fyYZ2M"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 
+if evm_loader is None:
+    print("Please set EVM_LOADER environment")
+    exit(1)
 
+if owner_contract is None:
+    print("Please set CONTRACT environment")
+    exit(1)
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -64,6 +71,16 @@ class EvmLoaderTests(unittest.TestCase):
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey="6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r", is_signer=False, is_writable=False),
+            ]))
+        result = http_client.send_transaction(trx, self.acc)
+
+
+    def test_call(self):
+        #data = bytearray.fromhex("893d20e8")
+        data = (1024*1024-1024).to_bytes(4, "little")
+        trx = Transaction().add(
+            TransactionInstruction(program_id=owner_contract, data=data, keys=[
+                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 
