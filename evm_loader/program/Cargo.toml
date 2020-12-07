@@ -14,15 +14,14 @@ exclude = ["js/**"]
 [features]
 no-entrypoint = []
 custom-heap = []
-program = ["custom-heap", "solana-sdk/program", "spl-token/no-entrypoint"]
-default = ["custom-heap", "solana-sdk/program", "spl-token/default"]
+program = ["custom-heap", "solana-sdk/program"]
+default = ["custom-heap", "solana-sdk/program"]
 
 [dependencies]
 num-derive = "0.3"
 num-traits = "0.2"
 remove_dir_all = "=0.5.0"
-solana-sdk = { default-features = false, optional = true }
-spl-token = { path = "../../token/program", default-features = false, optional = true }
+solana-sdk = { version = "1.3.17", default-features = false, optional = true }
 thiserror = "1.0"
 arrayref = "0.3.6"
 num_enum = "0.5.1"
