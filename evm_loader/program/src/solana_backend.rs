@@ -23,7 +23,6 @@ use crate::account_data::AccountData;
 use solana_sdk::program::invoke;
 use solana_sdk::program::invoke_signed;
 use std::convert::TryInto;
-use std::str::FromStr;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())

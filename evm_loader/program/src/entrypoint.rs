@@ -138,20 +138,19 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program
 
     info!("Execute transact_create");
 
-    let code_data = program_info.data.borrow();
-    let (_unused, rest) = code_data.split_at(1);
-    let (code_len, rest) = rest.split_at(8);
-    let code_len = code_len
-        .try_into()
-        .ok()
-        .map(u64::from_le_bytes)
-        .unwrap();
-    let (code, _rest) = rest.split_at(code_len as usize);
+    let code_data = {
+        let data = program_info.data.borrow();
+        let (_unused, rest) = data.split_at(1);
+        let (code_len, rest) = rest.split_at(8);
+        let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+        let (code, _rest) = rest.split_at(code_len as usize);
+        code.to_vec()
+    };
 
     let exit_reason = executor.transact_create2(
             solidity_address(&accounts[1].key),
             U256::zero(),
-            code.to_vec(),
+            code_data,
             program_info.key.to_bytes().into(), usize::max_value()
         );
     info!("  create2 done");
