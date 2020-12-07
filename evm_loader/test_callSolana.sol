@@ -3,10 +3,10 @@ pragma experimental ABIEncoderV2;
 
 contract helloWorld {
     struct AccountMeta {
+        bool need_translate;
         address name;
         bool is_signer;
         bool is_writable;
-        bool need_translate;
     }
 
     address solana = 0xfF00000000000000000000000000000000000000;
@@ -17,11 +17,11 @@ contract helloWorld {
         string memory program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
         
         AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(solana, true, false, false);
-        accs[1] = AccountMeta(0xBd770416a3345F91E4B34576cb804a576fa48EB1, true, false, true);
-        accs[2] = AccountMeta(address(this), false, true, true);
+        accs[0] = AccountMeta(false, solana, true, false);
+        accs[1] = AccountMeta(true, 0xBd770416a3345F91E4B34576cb804a576fa48EB1, true, false);
+        accs[2] = AccountMeta(true, address(this), false, true);
         
-        bytes memory instruction_data = hex"7472616E7366657228Bd770416a3345F91E4B34576cb804a576fa48EB1Bd770416a3345F91E4B34576cb804a576fa48EB1000000000000000029";
+        bytes memory instruction_data = hex"00000000000003e8"; // 1000
         
         bytes memory call_data = abi.encodeWithSignature(
             "(string, (address, bool, bool, bool)[], hex)",
