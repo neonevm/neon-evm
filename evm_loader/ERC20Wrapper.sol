@@ -28,13 +28,13 @@ contract ERC20Wrapper {
         return result;
     }
 
-    function bytesToUint(bytes memory b) public returns (uint256) {
+    /*function bytesToUint(bytes memory b) public returns (uint256) {
         uint256 number;
         for(uint i = 0; i < b.length; i++){
             number = number + uint(b[i]) * (2** (8* (b.length - (i+1))));
         }
         return number;
-    }
+    }*/
 
     function transferFrom(bool from_nt, bytes memory from,
         bool to_nt, bytes memory to,
@@ -61,7 +61,7 @@ contract ERC20Wrapper {
         _callSolana(accs, abi.encodePacked(instr_id, amount));
     }
 
-    function totalSupply() public returns (uint256) {
+    /*function totalSupply() public returns (uint256) {
         uint8 instr_id = 0x2;
 
         AccountMeta[] memory accs = new AccountMeta[](3);
@@ -80,5 +80,5 @@ contract ERC20Wrapper {
         bytes memory result = _callSolana(accs, abi.encodePacked(instr_id));
 
         return bytesToUint(result);
-    }
+    }*/
 }
