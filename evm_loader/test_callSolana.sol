@@ -1,30 +1,23 @@
 pragma solidity ^0.5.12;
 pragma experimental ABIEncoderV2;
 
-contract helloWorld {
+contract ERC20Wrapper {
     struct AccountMeta {
         bool need_translate;
-        address name;
+        bytes name;
         bool is_signer;
         bool is_writable;
     }
 
     address solana = 0xfF00000000000000000000000000000000000000;
 
-    function testCall() public { 
+    function _callSolana(AccountMeta[] memory accs, bytes memory instruction_data) private returns(bytes memory) { 
         bool status;
         
         string memory program_id = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-        
-        AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(false, solana, true, false);
-        accs[1] = AccountMeta(true, 0xBd770416a3345F91E4B34576cb804a576fa48EB1, true, false);
-        accs[2] = AccountMeta(true, address(this), false, true);
-        
-        bytes memory instruction_data = hex"00000000000003e8"; // 1000
-        
+
         bytes memory call_data = abi.encodeWithSignature(
-            "(string, (address, bool, bool, bool)[], hex)",
+            "(string, (bytes, bool, bool, bool)[], hex)",
             program_id, accs, instruction_data);
 
         bytes memory result;
@@ -32,5 +25,60 @@ contract helloWorld {
         if (!status) {
             revert();
         }
+        return result;
+    }
+
+    function bytesToUint(bytes memory b) public returns (uint256) {
+        uint256 number;
+        for(uint i = 0; i < b.length; i++){
+            number = number + uint(b[i]) * (2** (8* (b.length - (i+1))));
+        }
+        return number;
+    }
+
+    function transferFrom(bool from_nt, bytes memory from,
+        bool to_nt, bytes memory to,
+        uint256 amount) public {
+        uint8 instr_id = 0x0;
+
+        AccountMeta[] memory accs = new AccountMeta[](3);
+        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
+        accs[1] = AccountMeta(from_nt, from, true, false);
+        accs[2] = AccountMeta(to_nt, to, false, true);
+
+        _callSolana(accs, abi.encodePacked(instr_id, amount));
+    }
+
+    function transfer(bool to_nt, bytes memory to,
+        uint64 amount) public {
+        uint8 instr_id = 0x1;
+
+        AccountMeta[] memory accs = new AccountMeta[](3);
+        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
+        accs[1] = AccountMeta(true, abi.encodePacked(address(this)), true, false);
+        accs[2] = AccountMeta(to_nt, to, false, true);
+
+        _callSolana(accs, abi.encodePacked(instr_id, amount));
+    }
+
+    function totalSupply() public returns (uint256) {
+        uint8 instr_id = 0x2;
+
+        AccountMeta[] memory accs = new AccountMeta[](3);
+        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
+        bytes memory result = _callSolana(accs, abi.encodePacked(instr_id));
+
+        return bytesToUint(result);
+    }
+
+    function balanceOf(bool holder_nt, bytes memory holder) public returns (uint256) {
+        uint8 instr_id = 0x3;
+
+        AccountMeta[] memory accs = new AccountMeta[](3);
+        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
+        accs[1] = AccountMeta(holder_nt, abi.encodePacked(holder), true, false);
+        bytes memory result = _callSolana(accs, abi.encodePacked(instr_id));
+
+        return bytesToUint(result);
     }
 }
