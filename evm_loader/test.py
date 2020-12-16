@@ -9,6 +9,7 @@ http_client = Client("http://localhost:8899")
 evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
 owner_contract = os.environ.get("CONTRACT")  #"HegAG2D9DwRaSiRPb6SaDrmaMYFq9uaqZcn3E1fyYZ2M"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
+#user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2q"
 
 if evm_loader is None:
     print("Please set EVM_LOADER environment")
@@ -80,7 +81,7 @@ class EvmLoaderTests(unittest.TestCase):
         data = (1024*1024-1024).to_bytes(4, "little")
         trx = Transaction().add(
             TransactionInstruction(program_id=owner_contract, data=data, keys=[
-                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=user, is_signer=False, is_writable=True),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 
