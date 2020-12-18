@@ -26,6 +26,7 @@ use crate::{
 //    bump_allocator::BumpAllocator,
     instruction::EvmInstruction,
     account_data::AccountData,
+    solidity_account::SolidityAccount,
 };
 
 use evm::{
@@ -37,6 +38,14 @@ use primitive_types::{U256};
 
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 use solana_sdk::entrypoint::HEAP_START_ADDRESS;
+
+
+use sha3::{Keccak256, Digest};
+use primitive_types::H256;
+fn keccak256_digest(data: &[u8]) -> H256 {
+    H256::from_slice(Keccak256::digest(&data).as_slice())
+}
+
 
 const HEAP_LENGTH: usize = 1024*1024;
 
@@ -107,10 +116,14 @@ fn process_instruction<'a>(
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
+    info!("Instruction parsed");
+
     let result = match instruction {
         EvmInstruction::CreateAccount {lamports, space, ether, nonce} => {
             let funding_info = next_account_info(account_info_iter)?;
             let program_info = next_account_info(account_info_iter)?;
+
+            info!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             if expected_address != *program_info.key {
@@ -130,13 +143,17 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Write {offset, bytes} => {
-            Err(ProgramError::InvalidInstructionData)
+            let program_info = next_account_info(account_info_iter)?;
+            if program_info.owner != program_id {
+                return Err(ProgramError::InvalidArgument);
+            }
+            do_write(program_info, offset, &bytes)
         },
         EvmInstruction::Finalize => {
-            Err(ProgramError::InvalidInstructionData)
+            do_finalize(program_id, accounts)
         },
-        EvmInstruction::Call {contract, bytes} => {
-            Err(ProgramError::InvalidInstructionData)
+        EvmInstruction::Call {bytes} => {
+            do_call(program_id, accounts, bytes)
         },
     };
 
@@ -195,21 +212,30 @@ fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], i
     Err(ProgramError::InvalidInstructionData)
 }
 
-fn do_write(program_info: &AccountInfo, offset: u32, bytes: &Vec<u8>) -> ProgramResult {
+fn do_write(program_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
     let mut data = program_info.data.borrow_mut();
     let offset = offset as usize;
-    if data.len() < offset+1 + bytes.len() {
+    if data.len() < offset+AccountData::SIZE + bytes.len() {
         info!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
     }
-    data[offset+1..offset+1 + bytes.len()].copy_from_slice(&bytes);
+    data[offset+AccountData::SIZE..offset+AccountData::SIZE + bytes.len()].copy_from_slice(&bytes);
     Ok(())
 }
 
-fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program_info: &AccountInfo) -> ProgramResult {
-
+fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
     info!("do_finalize");
-    let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?; //MemoryBackend::new(&vicinity, state);
+    let account_info_iter = &mut accounts.iter();
+    let program_info = next_account_info(account_info_iter)?;
+    let signer_info = next_account_info(account_info_iter)?;
+    let rent_info = next_account_info(account_info_iter)?;
+    let clock_info = next_account_info(account_info_iter)?;
+
+    if program_info.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
     info!("  backend initialized");
 
     let config = evm::Config::istanbul();
@@ -220,18 +246,20 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program
 
     let code_data = {
         let data = program_info.data.borrow();
-        let (_unused, rest) = data.split_at(1);
+        let (_unused, rest) = data.split_at(AccountData::SIZE);
         let (code_len, rest) = rest.split_at(8);
         let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
         let (code, _rest) = rest.split_at(code_len as usize);
         code.to_vec()
     };
 
+    let program_account = SolidityAccount::new(program_info)?;
+
     let exit_reason = executor.transact_create2(
-            solidity_address(&accounts[1].key),
+            SolanaBackend::system_account(),
             U256::zero(),
             code_data,
-            program_info.key.to_bytes().into(), usize::max_value()
+            signer_info.key.to_bytes().into(), usize::max_value()
         );
     info!("  create2 done");
 
@@ -246,18 +274,25 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program
     }
 }
 
-fn do_execute<'a>(
+fn do_call<'a>(
         program_id: &Pubkey,
         accounts: &'a [AccountInfo<'a>],
         instruction_data: &[u8],
     ) -> ProgramResult
 {
+    info!("do_call");
+    let account_info_iter = &mut accounts.iter();
+    let program_info = next_account_info(account_info_iter)?;
+    let caller_info = next_account_info(account_info_iter)?;
+    let signer_info = next_account_info(account_info_iter)?;
+    let clock_info = next_account_info(account_info_iter)?;
+
     let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("Executor initialized");
-    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
     let contract = backend.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?;
+    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
     info!(&("   caller: ".to_owned() + &caller.get_ether().to_string()));
     info!(&(" contract: ".to_owned() + &contract.get_ether().to_string()));
 

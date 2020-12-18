@@ -114,7 +114,11 @@ impl<'a> SolanaBackend<'a> {
     }
 
     fn is_solana_address(&self, code_address: &H160) -> bool {
-        return code_address.to_string() == "0xff00…0000";
+        *code_address == Self::system_account()
+    }
+
+    pub fn system_account() -> H160 {
+        H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
     }
 
     pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
@@ -123,10 +127,11 @@ impl<'a> SolanaBackend<'a> {
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
     {
+        let system_account = Self::system_account();
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
-                    if self.is_solana_address(&address) {
+                    if address == system_account {
                         continue;
                     }
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
@@ -176,7 +181,7 @@ impl<'a> Backend for SolanaBackend<'a> {
     fn code_hash(&self, address: H160) -> H256 {
         self.get_account(address).map_or_else(
                 || keccak256_digest(&[]), 
-                |acc| acc.code(|d| keccak256_digest(d))
+                |acc| acc.code(|d| {info!(&hex::encode(&d[0..32])); keccak256_digest(d)})
             )
     }
     fn code_size(&self, address: H160) -> usize {
@@ -197,7 +202,12 @@ impl<'a> Backend for SolanaBackend<'a> {
     }
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
-        info!("Call create");
+        if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
+            info!(&("CreateScheme2 ".to_owned()+&hex::encode(_address)+" from "+
+                  &hex::encode(caller)+" "+&hex::encode(code_hash)+" "+&hex::encode(salt)));
+        } else {
+            info!("Call create");
+        }
     /*    let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         self.add_alias(address, &account);*/

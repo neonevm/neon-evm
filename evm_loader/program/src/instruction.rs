@@ -9,7 +9,8 @@ pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Account to write to
+    ///   0. [WRITE] Account to write to
+    ///   1. [SIGNER] Signer for Ether account
     Write {
         /// Offset at which to write the given bytes
         offset: u32,
@@ -22,8 +23,11 @@ pub enum EvmInstruction<'a> {
     /// bit of the account.
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] The account to prepare for execution
-    ///   1. [] Rent sysvar
+    ///   0. [WRITE] The account to prepare for execution
+    ///   1. [SIGNER] Signer for Ether account
+    ///   2. [] Rent sysvar
+    ///   3. [] Clock sysvar
+    ///   ... other Ether accounts
     Finalize,
 
     ///
@@ -46,10 +50,13 @@ pub enum EvmInstruction<'a> {
     },
 
     /// Call Ethereum-contract action
+    /// # Account references
+    ///   0. [] Contract for execution (Ether account)
+    ///   1. [WRITE] Caller (Ether account)
+    ///   2. [SIGNER] Signer for caller
+    ///   3. [] Clock sysvar
+    ///   ... other Ether accounts
     Call {
-        /// Ethereum address of contract
-        contract: H160,
-
         /// Call data
         bytes: &'a [u8],
     },
@@ -64,8 +71,11 @@ impl<'a> EvmInstruction<'a> {
         Ok(match tag {
             0 => {
                 let (_, rest) = rest.split_at(3);
-                let (offset, bytes) = rest.split_at(4);
+                let (offset, rest) = rest.split_at(4);
+                let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (bytes, _) = rest.split_at(length as usize);
                 EvmInstruction::Write {offset, bytes}
             },
             1 => {
@@ -86,9 +96,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
             },
             3 => {
-                let (ether, bytes) = rest.split_at(20);
-                let contract = H160::from_slice(&*ether);
-                EvmInstruction::Call {contract, bytes}
+                EvmInstruction::Call {bytes: rest}
             },
             _ => return Err(InvalidInstructionData),
         })
