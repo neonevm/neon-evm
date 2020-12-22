@@ -227,9 +227,10 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     info!("do_finalize");
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
+    let caller_info = next_account_info(account_info_iter)?;
     let signer_info = next_account_info(account_info_iter)?;
-    let rent_info = next_account_info(account_info_iter)?;
     let clock_info = next_account_info(account_info_iter)?;
+    let rent_info = next_account_info(account_info_iter)?;
 
     if program_info.owner != program_id {
         return Err(ProgramError::InvalidArgument);
@@ -241,6 +242,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("  executor initialized");
+
+    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
 
     info!("Execute transact_create");
 
@@ -256,10 +259,10 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let program_account = SolidityAccount::new(program_info)?;
 
     let exit_reason = executor.transact_create2(
-            SolanaBackend::system_account(),
+            caller.get_ether(),
             U256::zero(),
             code_data,
-            signer_info.key.to_bytes().into(), usize::max_value()
+            H256::default(), usize::max_value()
         );
     info!("  create2 done");
 

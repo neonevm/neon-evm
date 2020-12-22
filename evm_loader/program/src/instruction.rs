@@ -24,9 +24,10 @@ pub enum EvmInstruction<'a> {
     ///
     /// # Account references
     ///   0. [WRITE] The account to prepare for execution
-    ///   1. [SIGNER] Signer for Ether account
-    ///   2. [] Rent sysvar
+    ///   1. [WRITE] Caller (Ether account)
+    ///   2. [SIGNER] Signer for Ether account
     ///   3. [] Clock sysvar
+    ///   4. [] Rent sysvar
     ///   ... other Ether accounts
     Finalize,
 

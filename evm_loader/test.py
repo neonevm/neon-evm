@@ -58,7 +58,7 @@ class EvmLoaderTests(unittest.TestCase):
         print('Balance:', balance)
 
         # caller created with "50b41b481f04ac2949c9cc372b8f502aa35bddd1" ethereum address
-        cls.caller = PublicKey("5ratjbtFdxAKZGpsCJoPrA4MAVHPqoc3XGtta71x6ztF")
+        cls.caller = PublicKey("A8semLLUsg5ZbhACjD2Vdvn8gpDZV1Z2dPwoid9YUr4S")
 
 
     def test_call_getOwner(self):
