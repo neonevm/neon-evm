@@ -8,12 +8,13 @@ use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use std::convert::TryInto;
 use solana_sdk::{
     account_info::{next_account_info, AccountInfo},
-    entrypoint, entrypoint::ProgramResult,
+    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError, PrintProgramError}, pubkey::Pubkey,
     program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
     info,
 };
+use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
 use crate::hamt::Hamt;
 use crate::solana_backend::{
@@ -28,16 +29,56 @@ use evm::{
 use primitive_types::{H160, H256, U256};
 use std::collections::BTreeMap;
 
-fn unpack_loader_instruction(data: &[u8]) -> LoaderInstruction {
-    LoaderInstruction::Finalize
+
+const HEAP_LENGTH: usize = 1024*1024;
+
+/// Developers can implement their own heap by defining their own
+/// `#[global_allocator]`.  The following implements a dummy for test purposes
+/// but can be flushed out with whatever the developer sees fit.
+struct BumpAllocator;
+
+#[cfg(target_arch = "bpf")]
+#[global_allocator]
+static mut A: BumpAllocator = BumpAllocator;
+
+impl BumpAllocator {
+    #[inline]
+    fn occupied() -> usize {
+        const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
+        const TOP_ADDRESS: usize = HEAP_START_ADDRESS + HEAP_LENGTH;
+        const BOTTOM_ADDRESS: usize = HEAP_START_ADDRESS + size_of::<*mut u8>();
+
+        let mut pos = unsafe{*POS_PTR};
+        if pos == 0 {0} else {TOP_ADDRESS-pos}
+    }
 }
 
-//fn pubkey_to_address(key: &Pubkey) -> H160 {
-//    H256::from_slice(key.as_ref()).into()
-//}
+unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
+    #[inline]
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
+        const TOP_ADDRESS: usize = HEAP_START_ADDRESS + HEAP_LENGTH;
+        const BOTTOM_ADDRESS: usize = HEAP_START_ADDRESS + size_of::<*mut u8>();
 
+        let mut pos = *POS_PTR;
+        if pos == 0 {
+            // First time, set starting position
+            pos = TOP_ADDRESS;
+        }
+        pos = pos.saturating_sub(layout.size());
+        pos &= !(layout.align().saturating_sub(1));
+        if pos < BOTTOM_ADDRESS {
+            return null_mut();
+        }
 
-
+        *POS_PTR = pos;
+        pos as *mut u8
+    }
+    #[inline]
+    unsafe fn dealloc(&self, _: *mut u8, layout: Layout) {
+        // I'm a bump allocator, I don't free
+    }
+}
 
 entrypoint!(process_instruction);
 fn process_instruction<'a>(
@@ -52,24 +93,26 @@ fn process_instruction<'a>(
 
     let account_type = {program_info.data.borrow()[0]};
 
-    if account_type == 0 {
+    let result = if account_type == 0 {
         let instruction: LoaderInstruction = limited_deserialize(instruction_data)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         match instruction {
             LoaderInstruction::Write {offset, bytes} => {
-                return do_write(program_info, offset, &bytes);
+                do_write(program_info, offset, &bytes)
             },
             LoaderInstruction::Finalize => {
                 info!("FinalizeInstruction");
-                return do_finalize(program_id, accounts, program_info);
+                do_finalize(program_id, accounts, program_info)
             },
         }
     } else {
         info!("Execute");
-        return do_execute(program_id, accounts, instruction_data);
-    }
-    Ok(())
+        do_execute(program_id, accounts, instruction_data)
+    };
+
+    info!(&("Total memory occupied: ".to_owned() + &BumpAllocator::occupied().to_string()));
+    result
 }
 
 fn do_write(program_info: &AccountInfo, offset: u32, bytes: &Vec<u8>) -> ProgramResult {
@@ -93,22 +136,21 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], program
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("  executor initialized");
 
-    //trace!("Execute transact_create");
+    info!("Execute transact_create");
 
-    let code_data = program_info.data.borrow();
-    let (_unused, rest) = code_data.split_at(1);
-    let (code_len, rest) = rest.split_at(8);
-    let code_len = code_len
-        .try_into()
-        .ok()
-        .map(u64::from_le_bytes)
-        .unwrap();
-    let (code, _rest) = rest.split_at(code_len as usize);
+    let code_data = {
+        let data = program_info.data.borrow();
+        let (_unused, rest) = data.split_at(1);
+        let (code_len, rest) = rest.split_at(8);
+        let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+        let (code, _rest) = rest.split_at(code_len as usize);
+        code.to_vec()
+    };
 
     let exit_reason = executor.transact_create2(
             solidity_address(&accounts[1].key),
             U256::zero(),
-            code.to_vec(),
+            code_data,
             program_info.key.to_bytes().into(), usize::max_value()
         );
     info!("  create2 done");
@@ -134,6 +176,8 @@ fn do_execute<'a>(
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("Executor initialized");
+    info!(&("   caller: ".to_owned() + &backend.get_address_by_index(1).to_string()));
+    info!(&(" contract: ".to_owned() + &backend.get_address_by_index(0).to_string()));
 
     let (exit_reason, result) = executor.transact_call(
             backend.get_address_by_index(1),

@@ -9,17 +9,20 @@ use solana_sdk::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
+    sysvar::{clock::Clock, Sysvar},
     info,
     instruction
 };
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    str::FromStr,
+};
 
 use crate::solidity_account::SolidityAccount;
 use crate::account_data::AccountData;
 use solana_sdk::program::invoke;
 use solana_sdk::program::invoke_signed;
 use std::convert::TryInto;
-use std::str::FromStr;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -130,20 +133,23 @@ impl<'a> SolanaBackend<'a> {
 
 impl<'a> Backend for SolanaBackend<'a> {
     fn gas_price(&self) -> U256 { U256::zero() }
-    fn origin(&self) -> H160 { H160::default() }
+    fn origin(&self) -> H160 { self.aliases.borrow()[1].0 }
     fn block_hash(&self, number: U256) -> H256 { H256::default() }
-    fn block_number(&self) -> U256 { U256::zero() }
+    fn block_number(&self) -> U256 {
+        let clock = &Clock::from_account_info(&self.accounts[self.accounts.len()-1].accountInfo).unwrap();
+        clock.slot.into()
+    }
     fn block_coinbase(&self) -> H160 { H160::default() }
-    fn block_timestamp(&self) -> U256 { U256::zero() }
+    fn block_timestamp(&self) -> U256 {
+        let clock = &Clock::from_account_info(&self.accounts[self.accounts.len()-1].accountInfo).unwrap();
+        clock.unix_timestamp.into()
+    }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
     fn chain_id(&self) -> U256 { U256::zero() }
 
     fn exists(&self, address: H160) -> bool {
-        match self.get_account(address) {
-            Some(_) => true,
-            None => false,
-        }
+        self.get_account(address).map_or(false, |_| true)
     }
     fn basic(&self, address: H160) -> Basic {
         match self.get_account(address) {
@@ -164,32 +170,22 @@ impl<'a> Backend for SolanaBackend<'a> {
         self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        let code = self.get_account(address).map_or_else(
-                || Vec::new(),
-                |acc| acc.code(|d| d.into())
-            );
-        info!(&("Get code for ".to_owned() + &address.to_string() +
-                " " + &hex::encode(&code[..])));
-        code
+        self.get_account(address).map_or_else(|| Vec::new(), |acc| acc.code(|d| d.into()))
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        let result = match self.get_account(address) {
+        match self.get_account(address) {
             None => H256::default(),
             Some(acc) => {
                 let index = index.as_fixed_bytes().into();
                 let value = acc.storage(|storage| storage.find(index)).unwrap_or_default();
                 if let Some(v) = value {U256_to_H256(v)} else {H256::default()}
             },
-        };
-        info!(&("Storage ".to_owned() + &address.to_string() + " : " + &index.to_string() + " = " +
-                &result.to_string()));
-        result
+        }
     }
 
     fn create(&self, scheme: &CreateScheme, address: &H160) {
         let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
-        //println!("Create new account: {:x?} -> {:x?} // {}", scheme, address, account);
         self.add_alias(address, &account);
     }
 
@@ -289,7 +285,7 @@ mod test {
     use super::*;
     use solana_sdk::{
         account::Account,
-        account_info::{AccountInfo, create_is_signer_account_infos},
+        account_info::{AccountInfo},
         pubkey::Pubkey,
     };
     use evm::executor::StackExecutor;
@@ -339,6 +335,17 @@ mod test {
         fn donateFrom() -> Vec<u8> {
             hex::decode("3071fbec").unwrap();
         }
+    }
+
+    #[test]
+    fn test_solidity_address() -> Result<(), ProgramError> {
+//        let account = Pubkey::from_str("Bfj8CF5ywavXyqkkuKSXt5AVhMgxUJgHfQsQjPc1JKzj").unwrap();
+        let account = Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap();
+        let account = Pubkey::from_str("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r").unwrap();
+        let sol_acc = solidity_address(&account);
+        println!("{:?}", hex::encode(account.to_bytes()));
+        println!("{:?}", hex::encode(sol_acc));
+        Ok(())
     }
 
     #[test]
