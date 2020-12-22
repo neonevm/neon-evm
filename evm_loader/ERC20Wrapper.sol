@@ -28,44 +28,58 @@ contract ERC20Wrapper {
         return result;
     }
 
-    function bytesToUint(bytes memory b) public returns (uint256) {
+    /*function bytesToUint(bytes memory b) public returns (uint256) {
         uint256 number;
         for(uint i = 0; i < b.length; i++){
             number = number + uint(b[i]) * (2** (8* (b.length - (i+1))));
         }
         return number;
-    }
+    }*/
 
-    function transferFrom(bool from_nt, bytes memory from,
-        bool to_nt, bytes memory to,
-        uint256 amount) public {
+    function transferFrom(address from, address to, uint amount) public {
         uint8 instr_id = 0x0;
 
-        AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
-        accs[1] = AccountMeta(from_nt, from, true, false);
-        accs[2] = AccountMeta(to_nt, to, false, true);
+        AccountMeta[] memory accs = new AccountMeta[](2);
+        accs[0] = AccountMeta(true, abi.encodePacked(from), true, false);
+        accs[1] = AccountMeta(true, abi.encodePacked(to), false, true);
 
         _callSolana(accs, abi.encodePacked(instr_id, amount));
     }
 
-    function transfer(bool to_nt, bytes memory to,
-        uint64 amount) public {
+    function transferFromSol(bytes memory from, bytes memory to, uint amount) public {
+        uint8 instr_id = 0x0;
+
+        AccountMeta[] memory accs = new AccountMeta[](2);
+        accs[0] = AccountMeta(false, from, true, false);
+        accs[1] = AccountMeta(false, to, false, true);
+
+        _callSolana(accs, abi.encodePacked(instr_id, amount));
+    }
+
+    function transfer(address to, uint amount) public {
+        uint8 instr_id = 0x0;
+
+        AccountMeta[] memory accs = new AccountMeta[](2);
+        accs[0] = AccountMeta(true, abi.encodePacked(address(this)), true, false);
+        accs[1] = AccountMeta(true, abi.encodePacked(to), false, true);
+
+        _callSolana(accs, abi.encodePacked(instr_id, amount));
+    }
+
+    function transferSol(bytes memory to, uint amount) public {
         uint8 instr_id = 0x1;
 
-        AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
-        accs[1] = AccountMeta(true, abi.encodePacked(address(this)), true, false);
-        accs[2] = AccountMeta(to_nt, to, false, true);
+        AccountMeta[] memory accs = new AccountMeta[](2);
+        accs[0] = AccountMeta(false, abi.encodePacked(address(this)), true, false);
+        accs[1] = AccountMeta(false, to, false, true);
 
         _callSolana(accs, abi.encodePacked(instr_id, amount));
     }
 
-    function totalSupply() public returns (uint256) {
+    /*function totalSupply() public returns (uint256) {
         uint8 instr_id = 0x2;
 
-        AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
+        AccountMeta[] memory accs = new AccountMeta[](0);
         bytes memory result = _callSolana(accs, abi.encodePacked(instr_id));
 
         return bytesToUint(result);
@@ -74,11 +88,10 @@ contract ERC20Wrapper {
     function balanceOf(bool holder_nt, bytes memory holder) public returns (uint256) {
         uint8 instr_id = 0x3;
 
-        AccountMeta[] memory accs = new AccountMeta[](3);
-        accs[0] = AccountMeta(false, abi.encodePacked(solana), true, false);
-        accs[1] = AccountMeta(holder_nt, abi.encodePacked(holder), true, false);
+        AccountMeta[] memory accs = new AccountMeta[](0);
+        accs[0] = AccountMeta(holder_nt, abi.encodePacked(holder), true, false);
         bytes memory result = _callSolana(accs, abi.encodePacked(instr_id));
 
         return bytesToUint(result);
-    }
+    }*/
 }
