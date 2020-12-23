@@ -3,7 +3,6 @@ use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
 use solana_sdk::{
     program_error::ProgramError,
-    info,
 };
 
 /*
@@ -38,7 +37,7 @@ enum ItemType {
 
 impl<'a> Hamt<'a> {
     pub fn new(data: &'a mut [u8], reset: bool) -> Result<Self, ProgramError> {
-        let header_len = (size_of::<u32>() * 32 * 2);
+        let header_len = size_of::<u32>() * 32 * 2;
 
         if data.len() < header_len {
             return Err(ProgramError::AccountDataTooSmall);

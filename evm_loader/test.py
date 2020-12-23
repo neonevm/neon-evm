@@ -1,5 +1,6 @@
 from solana.rpc.api import Client
 from solana.account import Account
+from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 import time
@@ -9,6 +10,7 @@ http_client = Client("http://localhost:8899")
 evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
 owner_contract = os.environ.get("CONTRACT")  #"HegAG2D9DwRaSiRPb6SaDrmaMYFq9uaqZcn3E1fyYZ2M"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
+#user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2q"
 
 if evm_loader is None:
     print("Please set EVM_LOADER environment")
@@ -55,32 +57,42 @@ class EvmLoaderTests(unittest.TestCase):
             balance = http_client.get_balance(cls.acc.public_key())['result']['value']
         print('Balance:', balance)
 
+        # caller created with "50b41b481f04ac2949c9cc372b8f502aa35bddd1" ethereum address
+        cls.caller = PublicKey("A8semLLUsg5ZbhACjD2Vdvn8gpDZV1Z2dPwoid9YUr4S")
+
 
     def test_call_getOwner(self):
-        data = bytearray.fromhex("b7f05836")
+        data = bytearray.fromhex("03893d20e8")
         trx = Transaction().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 
     def test_call_changeOwner(self):
-        data = bytearray.fromhex("a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
+        data = bytearray.fromhex("03a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
         trx = Transaction().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey="6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r", is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 
 
     def test_call(self):
-        #data = bytearray.fromhex("893d20e8")
-        data = (1024*1024-1024).to_bytes(4, "little")
+        data = bytearray.fromhex("03893d20e8")
+        #data = (1024*1024-1024).to_bytes(4, "little")
         trx = Transaction().add(
-            TransactionInstruction(program_id=owner_contract, data=data, keys=[
+            TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
 

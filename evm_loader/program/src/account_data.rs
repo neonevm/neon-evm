@@ -1,54 +1,50 @@
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use primitive_types::{U256,H160};
-use solana_sdk::program_error::ProgramError;
-use std::convert::TryInto;
+use solana_sdk::{
+    program_error::ProgramError,
+    pubkey::Pubkey,
+};
 
 #[derive(Debug,Clone)]
-pub enum AccountData {
-    Empty,
-    Account {
-        nonce: U256,
-        address: H160,
-        code_size: u64,
-    },
-    Foreign,
+pub struct AccountData {
+    pub ether: H160,
+    pub nonce: u8,
+    pub trx_count: u64,
+    pub signer: Pubkey,
+    pub code_size: u32,
 }
 
 impl AccountData {
-    pub fn size() -> usize {61}
+    pub const SIZE: usize = 20+1+8+32+4;
+    pub fn size() -> usize {AccountData::SIZE}
     pub fn unpack(src: &[u8]) -> Result<(Self, &[u8]), ProgramError> {
-        use ProgramError::InvalidAccountData;
-        let (&tag, rest) = src.split_first().ok_or(InvalidAccountData)?;
-        Ok(match tag {
-            0 => (Self::Empty, rest),
-            1 => {
-                let src = array_ref![rest, 0, 60];
-                let (nonce, address, code_size) = array_refs![src, 32, 20, 8];
-                (Self::Account {
-                        nonce: U256::from_little_endian(&*nonce),
-                        address: H160::from_slice(&*address),
-                        code_size: u64::from_le_bytes(*code_size),
-                }, &rest[1..])
-            },
-            _ => return Err(InvalidAccountData),
-        })
+        if src.len() < AccountData::SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        let data = array_ref![src, 0, AccountData::SIZE];
+        let (ether, nonce, trx_count, signer, code_size) = array_refs![data, 20, 1, 8, 32, 4];
+        Ok((Self {
+                ether: H160::from_slice(&*ether),
+                nonce: nonce[0],
+                trx_count: u64::from_le_bytes(*trx_count),
+                signer: Pubkey::new_from_array(*signer),
+                code_size: u32::from_le_bytes(*code_size),
+        }, &src[AccountData::SIZE..]))
     }
 
-    pub fn pack(&self, dst: &mut [u8]) -> usize {
-        match self {
-            AccountData::Empty => {dst[0] = 0; 1},
-            &AccountData::Account {nonce, address, code_size} => {
-                dst[0] = 1;
-                let dst = array_mut_ref![dst, 1, 60];
-                let (nonce_dst, address_dst, code_size_dst) = 
-                        mut_array_refs![dst, 32, 20, 8];
-                nonce.to_little_endian(&mut *nonce_dst);
-                *address_dst = address.to_fixed_bytes();
-                *code_size_dst = code_size.to_le_bytes();
-                36
-            }
-            AccountData::Foreign => 0,
+    pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
+        if dst.len() < AccountData::SIZE {
+            return Err(ProgramError::AccountDataTooSmall);
         }
+        let data = array_mut_ref![dst, 0, AccountData::SIZE];
+        let (ether_dst, nonce_dst, trx_count_dst, signer_dst, code_size_dst) = 
+                mut_array_refs![data, 20, 1, 8, 32, 4];
+        *ether_dst = self.ether.to_fixed_bytes();
+        nonce_dst[0] = self.nonce;
+        *trx_count_dst = self.trx_count.to_le_bytes();
+        signer_dst.copy_from_slice(self.signer.as_ref());
+        *code_size_dst = self.code_size.to_le_bytes();
+        Ok(AccountData::SIZE)
     }
 }
 
