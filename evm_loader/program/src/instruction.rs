@@ -52,7 +52,7 @@ pub enum EvmInstruction<'a> {
 
     /// Call Ethereum-contract action
     /// # Account references
-    ///   0. [] Contract for execution (Ether account)
+    ///   0. [WRITE] Contract for execution (Ether account)
     ///   1. [WRITE] Caller (Ether account)
     ///   2. [SIGNER] Signer for caller
     ///   3. [] Clock sysvar
