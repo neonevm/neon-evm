@@ -2,11 +2,14 @@ from solana.rpc.api import Client
 from solana.account import Account
 from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solana.sysvar import *
 from solana.rpc.types import TxOpts
 import unittest
 import time
 import os
 import json
+from hashlib import sha256
+from spl.token.client import Token
 
 import subprocess
 
@@ -17,9 +20,9 @@ owner_contract = os.environ.get("CONTRACT")  #"HegAG2D9DwRaSiRPb6SaDrmaMYFq9uaqZ
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 #user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2q"
 
-if evm_loader is None:
-    print("Please set EVM_LOADER environment")
-    exit(1)
+#if evm_loader is None:
+#    print("Please set EVM_LOADER environment")
+#    exit(1)
 
 #if owner_contract is None:
 #    print("Please set CONTRACT environment")
@@ -107,15 +110,17 @@ class SolanaCliTests(unittest.TestCase):
 
 
 class EvmLoader:
-    loader_id = None or 'G4U8QxK9DnvjxHE5rxMgt8tsjkBK1zevsi4mAsfTxfPA'
+    loader_id = evm_loader
 
     def __init__(self, solana_url, loader_id=None):
         if not loader_id and not EvmLoader.loader_id:
+            print("Load EVM loader...")
             cli = SolanaCli(solana_url)
             contract = 'target/bpfel-unknown-unknown/release/evm_loader.so'
             result = json.loads(cli.call('deploy {}'.format(contract)))
             programId = result['programId']
             EvmLoader.loader_id = programId
+            print("Done\n")
 
         self.solana_url = solana_url
         self.loader_id = loader_id or EvmLoader.loader_id
@@ -134,7 +139,7 @@ class EvmLoader:
                 AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]
-        if accs: accounts.append(accs)
+        if accs: accounts.extend(accs)
 
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader_id, data=data, keys=accounts))
@@ -144,16 +149,39 @@ class EvmLoader:
         if not res.startswith("Program log: "): raise Exception("Invalid program logs: no result")
         else: return bytearray.fromhex(res[13:])
 
+    def accountWithSeed(self, base, seed, owner):
+        seed_data = bytes(seed,'utf8')
+        return PublicKey(sha256(bytes(base)+seed_data+bytes(owner)).digest())
+
+    def createAccountWithSeed(self, signer, base, seed, owner, lamports, space):
+        seed_data = bytes(seed,'utf8')
+        created = self.accountWithSeed(base, seed, owner) #PublicKey(sha256(bytes(base)+seed_data+bytes(owner)).digest())
+        print("created: {}".format(created))
+        accounts = [
+                AccountMeta(pubkey=signer.public_key(), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=created, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=base, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            ]
+
+        data =(bytes.fromhex("04000000") +
+               bytes(base) +
+               bytes.fromhex("%08x"%len(seed_data))[::-1] +
+               bytes.fromhex("00000000") +
+               seed_data +
+               bytes.fromhex("%016x"%lamports)[::-1] +
+               bytes.fromhex("%016x"%space)[::-1] +
+               bytes(owner)
+              )
+
+        print("Data:", data.hex())
+        return TransactionInstruction(program_id=self.loader_id, data=data, keys=accounts)
+
     def createEtherAccount(self, ether):
         cli = SolanaCli(self.solana_url)
-        try:
-            (prog,nonce) = self.ether2program(ether)
-            cli.call("account {}".format(prog))
-            return prog
-        except:
-            output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether.hex()))
-            result = json.loads(output.splitlines()[-1])
-            return result["solana"]
+        output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether.hex()))
+        result = json.loads(output.splitlines()[-1])
+        return result["solana"]
 
     def ether2program(self, ether):
         cli = SolanaCli(self.solana_url)
@@ -165,33 +193,62 @@ class EvmLoader:
         info = http_client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
+    def deployChecked(self, location):
+        from web3 import Web3
+        creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
+        with open(location, mode='rb') as file:
+            fileHash = Web3.keccak(file.read())
+            ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
+        program = self.ether2program(ether)
+        info = http_client.get_account_info(program[0])
+        if info['result']['value'] is None:
+            return self.deploy(location)
+        elif info['result']['value']['owner'] != self.loader_id:
+            raise Exception("Invalid owner for account {}".format(program))
+        else:
+            return {"ethereum": ether.hex(), "programId": program[0]}
+
 
 def solana2ether(public_key):
     from web3 import Web3
     return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
 
 
+def getBalance(account):
+    return http_client.get_balance(account)['result']['value']
+
 class EvmLoaderTests2(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.loader = EvmLoader(solana_url)
+
+        # Initialize user account
         cls.acc = Account(b'\xdc~\x1c\xc0\x1a\x97\x80\xc2\xcd\xdfn\xdb\x05.\xf8\x90N\xde\xf5\x042\xe2\xd8\x10xO%/\xe7\x89\xc0<')
-        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print('Private:', cls.acc.secret_key())
-        balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        if balance == 0:
+
+        # Create ethereum account for user account
+        cls.caller_ether = solana2ether(cls.acc.public_key())
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+
+        if getBalance(cls.acc.public_key()) == 0:
+            print("Create user account...")
             tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
             confirm_transaction(http_client, tx['result'])
             balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        print('Balance:', balance)
+            print("Done\n")
 
-        # caller created with "50b41b481f04ac2949c9cc372b8f502aa35bddd1" ethereum address
-        evm_loader = EvmLoader(solana_url)
-        cls.caller = evm_loader.createEtherAccount(solana2ether(cls.acc.public_key()))
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
+            caller_created = cls.loader.createEtherAccount(solana2ether(cls.acc.public_key()))
+            print("Done\n")
+
+        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
 
 
-    def test_deploy_evm_loader(self):
-        evm_loader = EvmLoader(solana_url)
+
+    def test_deploy_loader(self):
+        loader = EvmLoader(solana_url)
 
 
 
@@ -201,9 +258,6 @@ class EvmLoaderTests2(unittest.TestCase):
         #ownerId = loader.deploy('owner.bin.3')["programId"]
         print("Owner program:", ownerId)
 
-        caller_ether = solana2ether(self.acc.public_key())
-        (caller_program, caller_nonce) = loader.ether2program(caller_ether)
-        print("Caller:", caller_ether.hex())
         result = loader.call(ownerId, caller_program, self.acc, bytearray.fromhex("03893d20e8"))
         print("GetOwner result:", result.hex())
 
@@ -215,11 +269,83 @@ class EvmLoaderTests2(unittest.TestCase):
             result = loader.call(ownerId, caller_program, self.acc, bytearray.fromhex("03a6f9dae1")+bytes(12)+caller_ether)
 
 
+    def createMint(self, signer):
+        return PublicKey('AGoTeNZuy5TVTXcQimVDazFH59TQVcyqJcuPg2yyWyGh')
+
 
     def test_deploy_erc20wrapper(self):
+        tokenId = PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        mintId = self.createMint(self.acc)
+        mint = Token(http_client, mintId, tokenId, self.acc)
+        print("Mint: {} -> 0x{}".format(mintId, bytes(mintId).hex()))
+
+        erc20Id = self.loader.deployChecked("erc20wrapper.bin")["programId"]
+        print("ERC20Wrapper program:", erc20Id)
+        seed = "btc3"
+        seedData = bytes(seed, 'utf8')
+        
+        # Call setToken for erc20
+        data = (bytes.fromhex("036131bdab") + # setToken(uint256,string)
+                bytes(mintId) +
+                bytes.fromhex("%064x"%0x40) +
+                bytes.fromhex("%064x"%len(seedData)) +
+                seedData + bytes(32-len(seedData))
+               )
+        print('setToken arguments:', data.hex())
+        result = self.loader.call(
+                contract=erc20Id,
+                caller=PublicKey(self.caller),
+                signer=self.acc,
+                data=data,
+                accs=None)
+        print('setToken result:', result.hex())
+
+
+        balanceAccount = self.loader.accountWithSeed(PublicKey(self.caller), seed, tokenId)
+        balance = http_client.get_balance(balanceAccount)['result']['value']
+        if 0 == balance:
+            lamports = Token.get_min_balance_rent_for_exempt_for_account(http_client)
+            trx = Transaction()
+            trx.add(self.loader.createAccountWithSeed(self.acc, PublicKey(self.caller), seed, tokenId, lamports, 165))
+            trx.add(TransactionInstruction(program_id=tokenId, data=bytes.fromhex('01'), keys=[
+                    AccountMeta(pubkey=balanceAccount, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=mintId, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=PublicKey(self.caller), is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
+                ]))
+
+            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            print("createAccountWithSeed:", result)
+
+        print("Balance {} {}: {}".format(
+                balanceAccount, bytes(balanceAccount).hex(),
+                mint.get_balance(balanceAccount)['result']['value']['uiAmount']))
+
+
+        # Call transfer(uint256, uint256)
+        to = PublicKey("EDPtG7cJ5eEBREiTU6QyGktK4kBXwFcurGKERcZaXgJo")
+        data =(bytes.fromhex("030cf79e0a") +
+               bytes(to) + bytes.fromhex('%064x'%(1000000000))
+              )
+        result = self.loader.call(
+                contract=erc20Id,
+                caller=PublicKey(self.caller),
+                signer=self.acc,
+                data=data,
+                accs=[
+                    AccountMeta(pubkey=tokenId, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=balanceAccount, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=to, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=mintId, is_signer=False, is_writable=False),
+                ]
+            )
+        print('transfer result:', result.hex())
+
+
+
+    def test_deployChecked(self):
         loader = EvmLoader(solana_url)
-        ownerId = ""
-        ownerId = loader.deploy('
+        loader.deployChecked("erc20wrapper.bin")
 
 
 
