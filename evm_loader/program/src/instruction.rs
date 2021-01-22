@@ -1,5 +1,5 @@
 use serde::{Serialize, Deserialize};
-use solana_sdk::program_error::ProgramError;
+use solana_sdk::{program_error::ProgramError, pubkey::Pubkey};
 use std::convert::TryInto;
 use primitive_types::H160;
 
@@ -50,9 +50,32 @@ pub enum EvmInstruction<'a> {
         nonce: u8,
     },
 
+    ///
+    /// Create ethereum account with seed
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [WRITE] New account (create_with_seed(base, seed, owner)
+    ///   2. [] Base (program_addres(ether, nonce))
+    CreateAccountWithSeed {
+        /// Base public key
+        base: Pubkey,
+
+        /// String of ASCII chars, no longer than `Pubkey::MAX_SEED_LEN`
+        seed: Vec<u8>,
+
+        /// Number of lamports to transfer to the new account
+        lamports: u64,
+
+        /// Number of bytes of memory to allocate
+        space: u64,
+
+        /// Owner program account address
+        owner: Pubkey,
+    },
+
     /// Call Ethereum-contract action
     /// # Account references
-    ///   0. [] Contract for execution (Ether account)
+    ///   0. [WRITE] Contract for execution (Ether account)
     ///   1. [WRITE] Caller (Ether account)
     ///   2. [SIGNER] Signer for caller
     ///   3. [] Clock sysvar
@@ -98,6 +121,27 @@ impl<'a> EvmInstruction<'a> {
             },
             3 => {
                 EvmInstruction::Call {bytes: rest}
+            },
+            4 => {
+                let (_, rest) = rest.split_at(3);
+                let (base, rest) = rest.split_at(32);
+                let (seed_len, rest) = rest.split_at(4);
+                let (_, rest) = rest.split_at(4);  // padding
+                let seed_len = seed_len.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (seed, rest) = rest.split_at(seed_len as usize);
+
+                let base = Pubkey::new(base);
+                let (lamports, rest) = rest.split_at(8);
+                let (space, rest) = rest.split_at(8);
+
+                let (owner, rest) = rest.split_at(32);
+                let owner = Pubkey::new(owner);
+
+                let seed = seed.into();
+                let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+
+                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner}
             },
             _ => return Err(InvalidInstructionData),
         })

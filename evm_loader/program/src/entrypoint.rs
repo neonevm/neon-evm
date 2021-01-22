@@ -12,7 +12,7 @@ use solana_sdk::{
     program_error::{ProgramError}, pubkey::Pubkey,
     program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
-    system_instruction::create_account,
+    system_instruction::{create_account, create_account_with_seed},
     program::invoke_signed,
     info,
 };
@@ -140,6 +140,27 @@ fn process_instruction<'a>(
             let mut data = program_info.data.borrow_mut();
             let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_size: 0u32};
             account_data.pack(&mut data)?;
+            Ok(())
+        },
+        EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner} => {
+            let funding_info = next_account_info(account_info_iter)?;
+            let created_info = next_account_info(account_info_iter)?;
+            let base_info = next_account_info(account_info_iter)?;
+
+            //info!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
+            if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
+            let caller = SolidityAccount::new(base_info)?;
+
+            let program_seeds = [caller.account_data.ether.as_bytes(), &[caller.account_data.nonce]];
+            let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
+            info!(&lamports.to_string());
+            info!(&space.to_string());
+            invoke_signed(
+                &create_account_with_seed(funding_info.key, created_info.key, &base, &seed, lamports, space, &owner),
+                &accounts, &[&program_seeds[..]]
+            )?;
+            info!("create_account_with_seed done");
+
             Ok(())
         },
         EvmInstruction::Write {offset, bytes} => {

@@ -11,7 +11,7 @@ use solana_sdk::{
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
     info,
-    instruction
+    instruction::{Instruction, AccountMeta},
 };
 use std::{
     cell::RefCell,
@@ -41,6 +41,7 @@ pub struct SolanaBackend<'a> {
     accounts: Vec<Option<SolidityAccount<'a>>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
+    account_infos: &'a [AccountInfo<'a>],
 }
 
 impl<'a> SolanaBackend<'a> {
@@ -66,6 +67,7 @@ impl<'a> SolanaBackend<'a> {
             accounts: accounts,
             aliases: RefCell::new(aliases),
             clock_account,
+            account_infos: account_infos,
         })
     }
 
@@ -216,7 +218,7 @@ impl<'a> Backend for SolanaBackend<'a> {
     fn call_inner(&self,
         code_address: H160,
         _transfer: Option<Transfer>,
-        _input: Vec<u8>,
+        input: Vec<u8>,
         _target_gas: Option<usize>,
         _is_static: bool,
         _take_l64: bool,
@@ -226,80 +228,95 @@ impl<'a> Backend for SolanaBackend<'a> {
             return None;
         }
 
-        let (program_id_len, rest) = _input.split_at(2);
-        let program_id_len = program_id_len
-            .try_into()
-            .ok()
-            .map(u16::from_be_bytes)
-            .unwrap();
-        let (program_id_str, rest) = rest.split_at(program_id_len as usize);
-        let program_id = Pubkey::new(program_id_str);
+        info!("Call inner");
+        info!(&code_address.to_string());
+        info!(&hex::encode(&input));
 
-        let mut account_metas = Vec::new();
-        let mut account_infos = Vec::new();
-        let (accs_len, rest) = rest.split_at(2);
-        let accs_len = accs_len
-            .try_into()
-            .ok()
-            .map(u16::from_be_bytes)
-            .unwrap();
-        let mut sl = rest;
-        for _i in 0..accs_len {
-            let (needs_translate, _rest) = rest.split_at(1);
-            let needs_translate = needs_translate[0] != 0;
-            let mut acc_len = 32;
-            if needs_translate { acc_len = 20; }
-
-            let (acc, rest) = sl.split_at(acc_len);
-
-            let (is_signer, rest) = rest.split_at(1);
-            let is_signer = is_signer[0] != 0;
-
-            let (is_writable, rest) = rest.split_at(1);
-            let is_writable = is_writable[0] != 0;
-
-            sl = rest;
-
-            if needs_translate {
-                let acc_id = H160::from_slice(acc);
-                let acc_opt = self.get_account(acc_id);
-                if acc_opt.is_none() {
+        let (cmd, input) = input.split_at(1);
+        match cmd[0] {
+            0 => {
+                let (program_id, input) = input.split_at(32);
+                let program_id = Pubkey::new(program_id);
+        
+                let (acc_length, input) = input.split_at(2);
+                let acc_length = acc_length.try_into().ok().map(u16::from_be_bytes).unwrap();
+                
+                let mut accounts = Vec::new();
+                for i in 0..acc_length {
+                    use arrayref::{array_ref, array_refs};
+                    let data = array_ref![input, 35*i as usize, 35];
+                    let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
+                    let pubkey = if translate[0] != 0 {
+                        let account = self.get_account(H160::from_slice(&pubkey[12..]));
+                        if let Some(account) = account {
+                            account.account_info.key.clone()
+                        } else {
+                            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+                        }
+                    } else {
+                        Pubkey::new(pubkey)
+                    };
+                    accounts.push(AccountMeta {
+                        is_signer: signer[0] != 0,
+                        is_writable: writable[0] != 0,
+                        pubkey: pubkey,
+                    });
+                    info!(&format!("Acc: {}", pubkey));
+                };
+        
+                let (_, input) = input.split_at(35 * acc_length as usize);
+                info!(&hex::encode(&input));
+                
+                let caller = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
+                let program_seeds = [caller.account_data.ether.as_bytes(), &[caller.account_data.nonce]];
+                //let empty_seeds = [];
+                info!("account_infos");
+                for info in self.account_infos {
+                    info!(&format!("  {}", info.key));
+                };
+                let result = invoke_signed(
+                    &Instruction{program_id, accounts: accounts, data: input.to_vec()}, 
+                    &self.account_infos, &[&program_seeds[..]]
+                );
+        
+                if let Err(err) = result {
+                    info!(&format!("result: {}", err));
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
-                }
-                let acc = acc_opt.unwrap().account_info.clone();
-                account_metas.push(instruction::AccountMeta { 
-                    pubkey: acc.key.clone(), 
-                    is_signer: is_signer,
-                    is_writable: is_writable });
-                account_infos.push(acc);
-            } else {
-                let key = Pubkey::new(acc);
-                account_metas.push(instruction::AccountMeta { 
-                    pubkey: key,
-                    is_signer: is_signer,
-                    is_writable: is_writable });
+                };
+        
+                return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
+            },
+            1 => {
+                use arrayref::{array_ref, array_refs};
+                let data = array_ref![input, 0, 66];
+                let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
+
+                let base = if tr_base[0] != 0 {
+                    let account = self.get_account(H160::from_slice(&base[12..]));
+                    if let Some(account) = account {account.account_info.key.clone()}
+                    else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));}
+                } else {Pubkey::new(base)};
+
+                let owner = if tr_owner[0] != 0 {
+                    let account = self.get_account(H160::from_slice(&owner[12..]));
+                    if let Some(account) = account {account.account_info.key.clone()}
+                    else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));}
+                } else {Pubkey::new(owner)};
+
+                let (_, seed) = input.split_at(66);
+                let seed = if let Ok(seed) = std::str::from_utf8(&seed) {seed}
+                else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
+
+                let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed.into(), &owner) {pubkey}
+                else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
+
+                info!(&format!("result: {}", &hex::encode(pubkey.as_ref())));
+                return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec())));
+            },
+            _ => {
+                return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
             }
         }
-
-        let (data_len, rest) = sl.split_at(2);
-        let data_len = data_len
-            .try_into()
-            .ok()
-            .map(u16::from_be_bytes)
-            .unwrap();
-
-        let (data, _rest) = rest.split_at(data_len as usize);
-
-        let ix = instruction::Instruction {
-            program_id,
-            accounts: account_metas,
-            data: data.to_vec()
-        };
-        invoke(
-            &ix,
-            &account_infos,
-        );
-        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
     }
 }
 
