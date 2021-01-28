@@ -34,7 +34,7 @@ use evm::{
     executor::{StackExecutor},
     ExitReason,
 };
-use primitive_types::{U256};
+use primitive_types::{H160, U256};
 
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 use solana_sdk::entrypoint::HEAP_START_ADDRESS;
@@ -264,7 +264,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("  executor initialized");
 
-    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
+    let caller_ether: H160 = if caller_info.owner == program_id {
+        backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?.get_ether()
+    } else {
+        H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into()
+    };
 
     info!("Execute transact_create");
 
@@ -280,7 +284,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let program_account = SolidityAccount::new(program_info)?;
 
     let exit_reason = executor.transact_create2(
-            caller.get_ether(),
+            caller_ether,
             U256::zero(),
             code_data,
             H256::default(), usize::max_value()
@@ -316,12 +320,20 @@ fn do_call<'a>(
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("Executor initialized");
     let contract = backend.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?;
-    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
-    info!(&("   caller: ".to_owned() + &caller.get_ether().to_string()));
+    
+    let caller_ether: H160 = if caller_info.owner == program_id {
+        info!("  caller_info.owner == program_id");
+        backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?.get_ether()
+    } else {
+        info!("  caller_info.owner != program_id");
+        H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into()
+    };
+
+    info!(&("   caller: ".to_owned() + &caller_ether.to_string()));
     info!(&(" contract: ".to_owned() + &contract.get_ether().to_string()));
 
     let (exit_reason, result) = executor.transact_call(
-            caller.get_ether(),
+            caller_ether,
             contract.get_ether(),
             U256::zero(),
             instruction_data.to_vec(),

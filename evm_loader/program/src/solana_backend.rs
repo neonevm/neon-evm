@@ -6,7 +6,7 @@ use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
-    account_info::AccountInfo,
+    account_info::{next_account_info, AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
@@ -128,14 +128,42 @@ impl<'a> SolanaBackend<'a> {
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
-    {
-        let system_account = Self::system_account();
+    {        
+        let (caller_ether, sol_or_eth) = {
+            let account_info_iter = &mut self.account_infos.iter();
+            let myself_info = next_account_info(account_info_iter)?;
+            let program_info = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let signer_info = next_account_info(account_info_iter)?;
+            let clock_info = next_account_info(account_info_iter)?;
+            if program_info.owner == caller_info.owner {
+                let caller = self
+                    .get_account_by_index(1)
+                    .ok_or(ProgramError::InvalidArgument)?;
+                (caller.get_ether(), false)
+            } else {
+                (
+                    H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice())
+                        .into(),
+                    true,
+                )
+            }
+        };
+
+        let system_account = Self::system_account();        
+        info!(&("system_account: ".to_owned() + &system_account.to_string()));
+
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
+                    info!(&("address: ".to_owned() + &address.to_string()));
                     if address == system_account {
                         continue;
                     }
+                    if self.is_solana_address(address) {
+                        continue;
+                    }
+                    info!("process: ");
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                     account.update(address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                 },
