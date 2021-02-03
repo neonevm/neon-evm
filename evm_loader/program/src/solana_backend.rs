@@ -266,17 +266,19 @@ impl<'a> Backend for SolanaBackend<'a> {
         
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 info!(&hex::encode(&input));
-                
-                let caller = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
-                let program_seeds = [caller.account_data.ether.as_bytes(), &[caller.account_data.nonce]];
+
+                let contract = self.get_account_by_index(0).unwrap();   // do_call already check existence of Ethereum account with such index
+                let sender = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
+                let sender_seeds = [sender.account_data.ether.as_bytes(), &[sender.account_data.nonce]];
+                let contract_seeds = [contract.account_data.ether.as_bytes(), &[contract.account_data.nonce]];
                 //let empty_seeds = [];
                 info!("account_infos");
                 for info in self.account_infos {
                     info!(&format!("  {}", info.key));
                 };
                 let result = invoke_signed(
-                    &Instruction{program_id, accounts: accounts, data: input.to_vec()}, 
-                    &self.account_infos, &[&program_seeds[..]]
+                        &Instruction{program_id, accounts: accounts, data: input.to_vec()},
+                    &self.account_infos, &[&sender_seeds[..], &contract_seeds[..]]
                 );
         
                 if let Err(err) = result {
