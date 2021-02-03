@@ -14,6 +14,9 @@ import base58
 
 import subprocess
 
+tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+sysvarclock = "SysvarC1ock11111111111111111111111111111111"
+
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
@@ -78,51 +81,6 @@ class SplToken:
             raise
 
 
-class SolanaCliTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.acc = Account(b'\xdc~\x1c\xc0\x1a\x97\x80\xc2\xcd\xdfn\xdb\x05.\xf8\x90N\xde\xf5\x042\xe2\xd8\x10xO%/\xe7\x89\xc0<')
-        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print('Private:', cls.acc.secret_key())
-        balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        if balance == 0:
-            tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        print('Balance:', balance)
-       
-
-    def test_solana_cli(self):
-        cli = SolanaCli(solana_url)
-        result = cli.call('--version')
-        print(result)
-
-
-    def test_solana_deploy(self):
-        cli = SolanaCli(solana_url)
-        contract = 'target/bpfel-unknown-unknown/release/spl_memo.so'
-        result = json.loads(cli.call('deploy {}'.format(contract)))
-        programId = result['programId']
-#        programId = "6H7ruy1fNisqx7zS6DGmb7JTasnBmQVKfk6AMUB58Tui"
-        print("Memo program: {}".format(programId))
-
-        def send_memo_trx(data):
-            trx = Transaction().add(
-                TransactionInstruction(program_id=programId, data=data, keys=[
-                    AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
-                ]))
-            return http_client.send_transaction(trx, self.acc)["result"]
-
-        trxId = send_memo_trx('hello')
-        #confirm_transaction(http_client, trxId)
-
-        err = "Transaction simulation failed: Error processing Instruction 0: invalid instruction data"
-        with self.assertRaisesRegex(Exception, err):
-            send_memo_trx(b'\xF0\x9F\x90\xff')
-
-
-
-
 class EvmLoader:
     loader_id = evm_loader
 
@@ -163,33 +121,6 @@ class EvmLoader:
         if not res.startswith("Program log: "): raise Exception("Invalid program logs: no result")
         else: return bytearray.fromhex(res[13:])
 
-    def accountWithSeed(self, base, seed, owner):
-        seed_data = bytes(seed,'utf8')
-        return PublicKey(sha256(bytes(base)+seed_data+bytes(owner)).digest())
-
-    def createAccountWithSeed(self, signer, base, seed, owner, lamports, space):
-        seed_data = bytes(seed,'utf8')
-        created = self.accountWithSeed(base, seed, owner) #PublicKey(sha256(bytes(base)+seed_data+bytes(owner)).digest())
-        print("created: {}".format(created))
-        accounts = [
-                AccountMeta(pubkey=signer.public_key(), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=base, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            ]
-
-        data =(bytes.fromhex("04000000") +
-               bytes(base) +
-               bytes.fromhex("%08x"%len(seed_data))[::-1] +
-               bytes.fromhex("00000000") +
-               seed_data +
-               bytes.fromhex("%016x"%lamports)[::-1] +
-               bytes.fromhex("%016x"%space)[::-1] +
-               bytes(owner)
-              )
-
-        print("Data:", data.hex())
-        return TransactionInstruction(program_id=self.loader_id, data=data, keys=accounts)
 
     def createEtherAccount(self, ether):
         cli = SolanaCli(self.solana_url)
@@ -225,7 +156,6 @@ class EvmLoader:
             with open(location_bin, mode='wb') as bin:
                 bin.write(binary)
 
-
         creator = solana2ether(solana_creator)
         with open(location_bin, mode='rb') as file:
             fileHash = Web3.keccak(file.read())
@@ -239,24 +169,6 @@ class EvmLoader:
         else:
             return {"ethereum": ether.hex(), "programId": program[0]}
 
-
-def test_calc_erc20acc():
-    from web3 import Web3
-    creator = solana2ether("AyMNYaFujid8uaZ5Ee69QSgUGw4WM75cf45eEM58gUGH")
-    location  = '/home/user/sol/bin'
-    with open(location, mode='rb') as file:
-        fileHash = Web3.keccak(file.read())
-        ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-
-    cli = SolanaCli(solana_url)
-    loader_id = "yV498ddGwxukbvoaT7Hom83z5Xyb3omSUNZT6PVEjhp"
-    output = cli.call("create-program-address {} {}".format(ether.hex(), loader_id))
-    items = output.rstrip().split('  ')
-    print (items[0], int(items[1]))
-
-    program = [items[0], int(items[1])]
-    info = http_client.get_account_info(program[0])
-    print (info['result']['value']['owner'])
 
 def solana2ether(public_key):
     from web3 import Web3
@@ -297,24 +209,6 @@ class EvmLoaderTests2(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
 
-    def test_deploy_loader(self):
-        loader = EvmLoader(solana_url, "yV498ddGwxukbvoaT7Hom83z5Xyb3omSUNZT6PVEjhp")
-
-    def test_deploy_owner(self):
-        loader = EvmLoader(solana_url)
-        ownerId = "ApDWzULkJs7Bcc8VrExMZvVsP2Hbq3tTSs9bGF4AjoKs"
-        #ownerId = loader.deploy('owner.bin.3')["programId"]
-        print("Owner program:", ownerId)
-
-        result = loader.call(ownerId, caller_program, self.acc, bytearray.fromhex("03893d20e8"))
-        print("GetOwner result:", result.hex())
-
-        self.assertEqual(result[0:12], bytes(12))
-        self.assertEqual(result[12:], solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"))
-
-        with self.assertRaisesRegex(Exception, "Error processing Instruction 0: invalid instruction data"):
-            # Can't change owner because contract was deployed by another account
-            result = loader.call(ownerId, caller_program, self.acc, bytearray.fromhex("03a6f9dae1")+bytes(12)+caller_ether)
 
     def createMint(self):
         spl = SplToken(solana_url)
@@ -339,27 +233,74 @@ class EvmLoaderTests2(unittest.TestCase):
         if owner != res[pos+11:pos+55]:
             raise Exception("change owner error")
 
+    def tokenMint(self, mint_id, recipient):
+        spl = SplToken(solana_url)
+        res = spl.call("mint {} 100 {}".format(mint_id, recipient))
+        print ("minting 100 tokens for {}".format(recipient))
+
+    def tokenBalance(self, acc):
+        spl = SplToken(solana_url)
+        return spl.call("balance {}".format(acc))
+
+    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id):
+        signer = "AyMNYaFujid8uaZ5Ee69QSgUGw4WM75cf45eEM58gUGH"
+        # input = bytearray.fromhex(
+        #     "0300aeef8a" +
+        #     base58.b58decode(payer).hex() +
+        #     base58.b58decode(signer).hex() +
+        #     "%064x" % amount
+        # )
+        input = (bytes.fromhex("03") +
+                 bytes.fromhex("6f0372af") +
+                 bytes.fromhex(base58.b58decode(payer).hex()) +
+                 bytes.fromhex("0000000000000000000000000000000000000000000000000000000000001111") +
+                 bytes.fromhex(base58.b58decode(signer).hex()) +
+                 bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001"))
+
+        print (input.hex())
+        trx = Transaction().add(
+            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
+            [
+                AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                # AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey="pYgtfm12kpkJmpLt2TY9Hzj9ifmYKdbsSQ2tWojaeN1", is_signer=False, is_writable=True),
+                AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=signer, is_signer=True, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ]))
+        result = http_client.send_transaction(trx, self.acc)
+        result = confirm_transaction(http_client, result["result"])
+        print(result["result"])
 
     def test_deploy_erc20(self):
-        tokenId = PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        tokenId = PublicKey(tokenkeg)
         mintId = self.createMint()
         time.sleep(20)
-        print("")
-        print("mint:", mintId)
+        # print("")
+        print("\ncreate token:", mintId)
         acc_client = self.createTokenAccount(mintId)
-        print ("acc_client:", acc_client)
+        print ("create account acc_client:", acc_client)
         balance_erc20 = self.createTokenAccount(mintId)
-        print ("balance_erc20:", balance_erc20)
+        print ("create account balance_erc20:", balance_erc20)
         # mint = Token(http_client, mintId, tokenId, self.acc)
         # print("Mint: {} -> 0x{}".format(mintId, bytes(mintId).hex()))
 
         erc20Id = self.loader.deployChecked("/home/user/sol/erc20_ctor_uninit.hex",
                                             "/home/user/sol/erc20.bin",
                                             self.acc.public_key(), mintId, balance_erc20)["programId"]
-        print ("erc20Id:", erc20Id)
+        print ("erc20_id:", erc20Id)
         time.sleep(20)
         self.changeOwner(balance_erc20, erc20Id)
-        print("balance_erc20 owner changed")
+        print("balance_erc20 owner changed to {}".format(erc20Id))
+        self.tokenMint(mintId, acc_client)
+        time.sleep(20)
+        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
+        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
+        self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        # balance = http_client.get_balance(cls.acc.public_key())['result']['value']
 
         # print("ERC20 program:", erc20Id)
         # seed = "btc3"
@@ -453,61 +394,6 @@ class EvmLoaderTests2(unittest.TestCase):
 
 
 
-
-class EvmLoaderTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.acc = Account(
-            [209, 145, 218, 165, 152, 167, 119, 103, 234, 226, 29, 51, 200, 101, 66, 47, 149, 160, 31, 112, 91, 196,
-             251, 239, 130, 113, 212, 97, 119, 176, 117, 190])
-        # cls.acc = Account(b'\xdc~\x1c\xc0\x1a\x97\x80\xc2\xcd\xdfn\xdb\x05.\xf8\x90N\xde\xf5\x042\xe2\xd8\x10xO%/\xe7\x89\xc0<')
-        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print('Private:', cls.acc.secret_key())
-        balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        if balance == 0:
-            tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
-        print('Balance:', balance)
-
-        # caller created with "50b41b481f04ac2949c9cc372b8f502aa35bddd1" ethereum address
-        cls.caller = PublicKey("A8semLLUsg5ZbhACjD2Vdvn8gpDZV1Z2dPwoid9YUr4S")
-
-
-    def test_call_getOwner(self):
-        data = bytearray.fromhex("03893d20e8")
-        trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader, data=data, keys=[
-                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            ]))
-        result = http_client.send_transaction(trx, self.acc)
-
-    def test_call_changeOwner(self):
-        data = bytearray.fromhex("03a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
-        trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader, data=data, keys=[
-                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey="6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r", is_signer=False, is_writable=False),
-            ]))
-        result = http_client.send_transaction(trx, self.acc)
-
-
-    def test_call(self):
-        data = bytearray.fromhex("03893d20e8")
-        #data = (1024*1024-1024).to_bytes(4, "little")
-        trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader, data=data, keys=[
-                AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            ]))
-        result = http_client.send_transaction(trx, self.acc)
 
 
 if __name__ == '__main__':
