@@ -13,20 +13,10 @@ import subprocess
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 evm_loader = os.environ.get("EVM_LOADER")
-owner_contract = os.environ.get("CONTRACT")
-user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
-
-#if evm_loader is None:
-#    print("Please set EVM_LOADER environment")
-#    exit(1)
-
-#if owner_contract is None:
-#    print("Please set CONTRACT environment")
-#    exit(1)
+path_to_evm_loader = '../../../target/bpfel-unknown-unknown/release/evm_loader.so'
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -83,7 +73,7 @@ class EvmLoader:
         if not loader_id and not EvmLoader.loader_id:
             print("Load EVM loader...")
             cli = SolanaCli(solana_url)
-            contract = '../../../target/bpfel-unknown-unknown/release/evm_loader.so'
+            contract = path_to_evm_loader
             result = json.loads(cli.call('deploy {}'.format(contract)))
             programId = result['programId']
             EvmLoader.loader_id = programId
@@ -99,24 +89,6 @@ class EvmLoader:
         print(type(output), output)
         return json.loads(output.splitlines()[-1])
 
-    def call(self, contract, caller, signer, data, accs=None):
-        accounts = [
-                AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            ]
-        if accs: accounts.extend(accs)
-
-        trx = Transaction().add(
-            TransactionInstruction(program_id=self.loader_id, data=data, keys=accounts))
-        result = http_client.send_transaction(trx, signer, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-        messages = result["meta"]["logMessages"]
-        res = messages[messages.index("Program log: succeed")+1]
-        if not res.startswith("Program log: "): raise Exception("Invalid program logs: no result")
-        else: return bytearray.fromhex(res[13:])
-
-
     def createEtherAccount(self, ether):
         cli = SolanaCli(self.solana_url)
         output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether.hex()))
@@ -129,11 +101,7 @@ class EvmLoader:
         items = output.rstrip().split('  ')
         return (items[0], int(items[1]))
 
-    def accountExist(self, account):
-        res = http_client.get_account_info(account)
-        return dict(res.get('result')).get('value') != None
-
-    def deployChecked(self, location_hex, location_bin, solana_creator, mintId, balance_erc20):
+    def deployERC20(self, location_hex, location_bin, solana_creator, mintId, balance_erc20):
         from web3 import Web3
 
         ctor_init = str("%064x" % 0xa0) + \
@@ -150,19 +118,20 @@ class EvmLoader:
             binary = bytearray.fromhex(hex.read() + ctor_init)
             with open(location_bin, mode='wb') as bin:
                 bin.write(binary)
+                return self.deploy(location_bin)
 
-        creator = solana2ether(solana_creator)
-        with open(location_bin, mode='rb') as file:
-            fileHash = Web3.keccak(file.read())
-            ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-        program = self.ether2program(ether)
-        info = http_client.get_account_info(program[0])
-        if info['result']['value'] is None:
-            return self.deploy(location_bin)
-        elif info['result']['value']['owner'] != self.loader_id:
-            raise Exception("Invalid owner for account {}".format(program))
-        else:
-            return {"ethereum": ether.hex(), "programId": program[0]}
+        # creator = solana2ether(solana_creator)
+        # with open(location_bin, mode='rb') as file:
+        #     fileHash = Web3.keccak(file.read())
+        #     ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
+        # program = self.ether2program(ether)
+        # info = http_client.get_account_info(program[0])
+        # if info['result']['value'] is None:
+        #     return self.deploy(location_bin)
+        # elif info['result']['value']['owner'] != self.loader_id:
+        #     raise Exception("Invalid owner for account {}".format(program))
+        # else:
+        #     return {"ethereum": ether.hex(), "programId": program[0]}
 
 
 def solana2ether(public_key):
@@ -177,7 +146,7 @@ def getBalance(account):
 class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.loader = EvmLoader(solana_url, "yV498ddGwxukbvoaT7Hom83z5Xyb3omSUNZT6PVEjhp")
+        cls.loader = EvmLoader(solana_url, evm_loader)
 
         # Initialize user account
         cls.acc = Account(
@@ -188,7 +157,8 @@ class EvmLoaderTests(unittest.TestCase):
         cls.caller_ether = solana2ether(cls.acc.public_key())
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
-        if not cls.loader.accountExist(cls.caller):
+        info = http_client.get_account_info(cls.caller)
+        if info['result']['value'] is None:
             print("Create caller account...")
             cls.caller = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done")
@@ -263,7 +233,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("deposit value: ", res[13:])
+            print("deposit {}: {}".format(self.caller_ether.hex(), res[13:]))
 
     def erc20_withdraw(self, receiver, amount, erc20, balance_erc20, mint_id, evm_loader_id):
         input = bytearray.fromhex(
@@ -294,7 +264,8 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("withdraw value: ", res[13:])
+            print("withdraw {}: {}".format(self.caller_ether.hex(), res[13:]))
+
 
 
     def erc20_balance(self, erc20, evm_loader_id):
@@ -318,7 +289,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("balance: ", res[13:])
+            print("erc20 balance {}: {}".format(self.caller_ether.hex(),  res[13:]))
 
     def test_erc20(self):
         mintId = self.createMint()
@@ -329,7 +300,7 @@ class EvmLoaderTests(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(mintId)
         print ("create account balance_erc20:", balance_erc20)
 
-        deploy_result= self.loader.deployChecked("erc20_ctor_uninit.hex",
+        deploy_result= self.loader.deployERC20("erc20_ctor_uninit.hex",
                                             "erc20.bin",
                                             self.acc.public_key(), mintId, balance_erc20)
         erc20Id = deploy_result["programId"]
@@ -349,10 +320,14 @@ class EvmLoaderTests(unittest.TestCase):
 
         self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
+        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
+        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
         self.erc20_balance( erc20Id, self.loader.loader_id)
 
         self.erc20_withdraw( acc_client, 1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
+        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
+        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
         self.erc20_balance( erc20Id, self.loader.loader_id)
 
 
