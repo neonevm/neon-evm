@@ -153,7 +153,7 @@ class EvmLoaderTests(unittest.TestCase):
         if info['result']['value'] is None:
             print("Create caller account...")
             cls.caller = cls.loader.createEtherAccount(cls.caller_ether)
-            print("Dsolana2etherone")
+            print("Done")
             print("cls.caller:", cls.caller)
 
         if getBalance(cls.acc.public_key()) == 0:
@@ -320,23 +320,6 @@ class EvmLoaderTests(unittest.TestCase):
         print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
         print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
         self.erc20_balance( erc20Id, self.loader.loader_id)
-
-
-    def test(self):
-        cli = SolanaCli(solana_url)
-        res = cli.call("config get")
-        res = res.splitlines()[-1]
-        substr = "Keypair Path: "
-        if not res.startswith(substr):
-            raise Exception("cannot get keypair path")
-        path = res[len(substr):]
-        print (path)
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            nums = list(map(int, pk.strip("[]").split(',')))
-            nums = nums[0:32]
-            values = bytes(nums)
-            print (Account(values).public_key().to_base58())
 
 if __name__ == '__main__':
     unittest.main()
