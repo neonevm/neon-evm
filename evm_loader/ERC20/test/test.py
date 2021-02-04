@@ -2,13 +2,11 @@ from solana.rpc.api import Client
 from solana.account import Account
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.sysvar import *
-from solana.rpc.types import TxOpts
 import unittest
 import time
 import os
 import json
 import base58
-
 import subprocess
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -101,9 +99,7 @@ class EvmLoader:
         items = output.rstrip().split('  ')
         return (items[0], int(items[1]))
 
-    def deployERC20(self, location_hex, location_bin, solana_creator, mintId, balance_erc20):
-        from web3 import Web3
-
+    def deployERC20(self, location_hex, location_bin,  mintId, balance_erc20):
         ctor_init = str("%064x" % 0xa0) + \
                     str("%064x" % 0xe0) + \
                     str("%064x" % 0x9) + \
@@ -120,20 +116,6 @@ class EvmLoader:
                 bin.write(binary)
                 return self.deploy(location_bin)
 
-        # creator = solana2ether(solana_creator)
-        # with open(location_bin, mode='rb') as file:
-        #     fileHash = Web3.keccak(file.read())
-        #     ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-        # program = self.ether2program(ether)
-        # info = http_client.get_account_info(program[0])
-        # if info['result']['value'] is None:
-        #     return self.deploy(location_bin)
-        # elif info['result']['value']['owner'] != self.loader_id:
-        #     raise Exception("Invalid owner for account {}".format(program))
-        # else:
-        #     return {"ethereum": ether.hex(), "programId": program[0]}
-
-
 def solana2ether(public_key):
     from web3 import Web3
     return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
@@ -149,9 +131,19 @@ class EvmLoaderTests(unittest.TestCase):
         cls.loader = EvmLoader(solana_url, evm_loader)
 
         # Initialize user account
-        cls.acc = Account(
-            [209, 145, 218, 165, 152, 167, 119, 103, 234, 226, 29, 51, 200, 101, 66, 47, 149, 160, 31, 112, 91, 196,
-             251, 239, 130, 113, 212, 97, 119, 176, 117, 190])
+        cli = SolanaCli(solana_url)
+        res = cli.call("config get")
+        res = res.splitlines()[-1]
+        substr = "Keypair Path: "
+        if not res.startswith(substr):
+            raise Exception("cannot get keypair path")
+        path = res[len(substr):]
+        with open(path.strip(), mode='r') as file:
+            pk = (file.read())
+            nums = list(map(int, pk.strip("[]").split(',')))
+            nums = nums[0:32]
+            values = bytes(nums)
+            cls.acc = Account(values)
 
         # Create ethereum account for user account
         cls.caller_ether = solana2ether(cls.acc.public_key())
@@ -161,14 +153,14 @@ class EvmLoaderTests(unittest.TestCase):
         if info['result']['value'] is None:
             print("Create caller account...")
             cls.caller = cls.loader.createEtherAccount(cls.caller_ether)
-            print("Done")
+            print("Dsolana2etherone")
             print("cls.caller:", cls.caller)
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
             tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
             confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
+            # balance = http_client.get_balance(cls.acc.public_key())['result']['value']
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -291,6 +283,7 @@ class EvmLoaderTests(unittest.TestCase):
         else:
             print("erc20 balance {}: {}".format(self.caller_ether.hex(),  res[13:]))
 
+
     def test_erc20(self):
         mintId = self.createMint()
         time.sleep(20)
@@ -300,9 +293,7 @@ class EvmLoaderTests(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(mintId)
         print ("create account balance_erc20:", balance_erc20)
 
-        deploy_result= self.loader.deployERC20("erc20_ctor_uninit.hex",
-                                            "erc20.bin",
-                                            self.acc.public_key(), mintId, balance_erc20)
+        deploy_result= self.loader.deployERC20("erc20_ctor_uninit.hex", "erc20.bin",  mintId, balance_erc20)
         erc20Id = deploy_result["programId"]
         erc20Id_ether = bytearray.fromhex(deploy_result["ethereum"][2:])
 
@@ -331,6 +322,21 @@ class EvmLoaderTests(unittest.TestCase):
         self.erc20_balance( erc20Id, self.loader.loader_id)
 
 
+    def test(self):
+        cli = SolanaCli(solana_url)
+        res = cli.call("config get")
+        res = res.splitlines()[-1]
+        substr = "Keypair Path: "
+        if not res.startswith(substr):
+            raise Exception("cannot get keypair path")
+        path = res[len(substr):]
+        print (path)
+        with open(path.strip(), mode='r') as file:
+            pk = (file.read())
+            nums = list(map(int, pk.strip("[]").split(',')))
+            nums = nums[0:32]
+            values = bytes(nums)
+            print (Account(values).public_key().to_base58())
 
 if __name__ == '__main__':
     unittest.main()
