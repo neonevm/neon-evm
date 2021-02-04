@@ -1,6 +1,5 @@
 from solana.rpc.api import Client
 from solana.account import Account
-from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.sysvar import *
 from solana.rpc.types import TxOpts
@@ -8,8 +7,6 @@ import unittest
 import time
 import os
 import json
-from hashlib import sha256
-from spl.token.client import Token
 import base58
 
 import subprocess
@@ -19,10 +16,9 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-evm_loader = os.environ.get("EVM_LOADER")  #"CLBfz3DZK4VBYAu6pCgDrQkNwLsQphT9tg41h6TQZAh3"
-owner_contract = os.environ.get("CONTRACT")  #"HegAG2D9DwRaSiRPb6SaDrmaMYFq9uaqZcn3E1fyYZ2M"
+evm_loader = os.environ.get("EVM_LOADER")
+owner_contract = os.environ.get("CONTRACT")
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
-#user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2q"
 
 #if evm_loader is None:
 #    print("Please set EVM_LOADER environment")
@@ -79,7 +75,6 @@ class SplToken:
             import sys
             print("ERR: spl-token error {}".format(err))
             raise
-
 
 class EvmLoader:
     loader_id = evm_loader
@@ -179,7 +174,7 @@ def getBalance(account):
     return http_client.get_balance(account)['result']['value']
 
 
-class EvmLoaderTests2(unittest.TestCase):
+class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.loader = EvmLoader(solana_url, "yV498ddGwxukbvoaT7Hom83z5Xyb3omSUNZT6PVEjhp")
@@ -210,7 +205,10 @@ class EvmLoaderTests2(unittest.TestCase):
         # print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
         print("Caller:", cls.caller_ether.hex(),  "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-
+    def test_check_account(self):
+        evm_loader = EvmLoader(solana_url)
+        evm_loader.checkAccount("ApDWzULkJs7Bcc8VrExMZvVsP2Hbq3tTSs9bGF4AjoKs")
+        evm_loader.checkAccount("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
 
     def createMint(self):
         spl = SplToken(solana_url)
@@ -328,7 +326,7 @@ class EvmLoaderTests2(unittest.TestCase):
         else:
             print("balance: ", res[13:])
 
-    def test_deploy_erc20(self):
+    def test_erc20(self):
         mintId = self.createMint()
         time.sleep(20)
         print("\ncreate token:", mintId)
@@ -357,43 +355,12 @@ class EvmLoaderTests2(unittest.TestCase):
         self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
 
         self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id, eth_acc)
-        time.sleep(20)
 
         self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
 
         self.erc20_withdraw( acc_client, 1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
         self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
-
-
-    def test_deployChecked(self):
-        loader = EvmLoader(solana_url)
-        loader.deployChecked("erc20wrapper.bin")
-
-
-
-    def test_address_conversions(self):
-        ''' This tests check address convertions:
-            - Solana -> Ethereum
-            - Ethereum -> Solana program_address
-            (Python implementation create_program_address not worked yet, so we use solana cli)
-        '''
-        loader = EvmLoader(solana_url, "AXn5Wa1iZPkkjeRmhPwh3uZidt6nLmwE4cbjYXYue9wL")
-        ether = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
-        self.assertEqual(ether.hex(), "6150976660fd363fbbf2c6ce87da0002c24c0d81")
-
-        (solana, nonce) = loader.ether2program(ether)
-        self.assertEqual(solana, "EDy1dxh381pTJYytTwawYbcDT4UanYRiyAk6NuixPcdV")
-        self.assertEqual(nonce, 253)
-
-
-
-    def test_check_account(self):
-        evm_loader = EvmLoader(solana_url)
-        evm_loader.checkAccount("ApDWzULkJs7Bcc8VrExMZvVsP2Hbq3tTSs9bGF4AjoKs")
-        evm_loader.checkAccount("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
-
-
 
 
 
