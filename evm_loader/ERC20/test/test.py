@@ -129,9 +129,9 @@ class EvmLoader:
         items = output.rstrip().split('  ')
         return (items[0], int(items[1]))
 
-    def checkAccount(self, solana):
-        info = http_client.get_account_info(solana)
-        print("checkAccount({}): {}".format(solana, info))
+    def accountExist(self, account):
+        res = http_client.get_account_info(account)
+        return dict(res.get('result')).get('value') != None
 
     def deployChecked(self, location_hex, location_bin, solana_creator, mintId, balance_erc20):
         from web3 import Web3
@@ -185,10 +185,15 @@ class EvmLoaderTests(unittest.TestCase):
              251, 239, 130, 113, 212, 97, 119, 176, 117, 190])
 
         # Create ethereum account for user account
-        # cls.caller_ether = solana2ether(cls.acc.public_key())
-        # (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
-        cls.caller_ether  = bytearray.fromhex("0000000000000000000000000000000000001111")
-        cls.caller = "pYgtfm12kpkJmpLt2TY9Hzj9ifmYKdbsSQ2tWojaeN1"
+        cls.caller_ether = solana2ether(cls.acc.public_key())
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+
+        if not cls.loader.accountExist(cls.caller):
+            print("Create caller account...")
+            cls.caller = cls.loader.createEtherAccount(cls.caller_ether)
+            print("Done")
+            print("cls.caller:", cls.caller)
+
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
             tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
@@ -196,19 +201,8 @@ class EvmLoaderTests(unittest.TestCase):
             balance = http_client.get_balance(cls.acc.public_key())['result']['value']
             print("Done\n")
 
-        if getBalance(cls.caller) == 0:
-            print("Create caller account...")
-            caller_created = cls.loader.createEtherAccount(solana2ether(cls.acc.public_key()))
-            print("Done\n")
-
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        # print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
-        print("Caller:", cls.caller_ether.hex(),  "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
-
-    def test_check_account(self):
-        evm_loader = EvmLoader(solana_url)
-        evm_loader.checkAccount("ApDWzULkJs7Bcc8VrExMZvVsP2Hbq3tTSs9bGF4AjoKs")
-        evm_loader.checkAccount("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
     def createMint(self):
         spl = SplToken(solana_url)
@@ -242,11 +236,11 @@ class EvmLoaderTests(unittest.TestCase):
         spl = SplToken(solana_url)
         return spl.call("balance {}".format(acc))
 
-    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id, erc20Id_ether):
+    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id):
         input = bytearray.fromhex(
             "036f0372af" +
             base58.b58decode(payer).hex() +
-            str("%024x" % 0) + erc20Id_ether.hex() +
+            str("%024x" % 0) + self.caller_ether.hex() +
             self.acc.public_key()._key.hex() +
             "%064x" % amount
         )
@@ -303,10 +297,10 @@ class EvmLoaderTests(unittest.TestCase):
             print("withdraw value: ", res[13:])
 
 
-    def erc20_balance(self, erc20, evm_loader_id, erc20Id_ether):
+    def erc20_balance(self, erc20, evm_loader_id):
         input = bytearray.fromhex(
             "0370a08231" +
-            str("%024x" % 0) + erc20Id_ether.hex()
+            str("%024x" % 0) + self.caller_ether.hex()
         )
         trx = Transaction().add(
             TransactionInstruction(program_id=evm_loader_id, data=input, keys=
@@ -335,8 +329,8 @@ class EvmLoaderTests(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(mintId)
         print ("create account balance_erc20:", balance_erc20)
 
-        deploy_result= self.loader.deployChecked("/home/user/sol/erc20_ctor_uninit.hex",
-                                            "/home/user/sol/erc20.bin",
+        deploy_result= self.loader.deployChecked("erc20_ctor_uninit.hex",
+                                            "erc20.bin",
                                             self.acc.public_key(), mintId, balance_erc20)
         erc20Id = deploy_result["programId"]
         erc20Id_ether = bytearray.fromhex(deploy_result["ethereum"][2:])
@@ -350,17 +344,16 @@ class EvmLoaderTests(unittest.TestCase):
         time.sleep(20)
         print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
         print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
-        eth_acc = self.caller_ether
 
-        self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
+        self.erc20_balance( erc20Id, self.loader.loader_id)
 
-        self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id, eth_acc)
+        self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
-        self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
+        self.erc20_balance( erc20Id, self.loader.loader_id)
 
         self.erc20_withdraw( acc_client, 1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
-        self.erc20_balance( erc20Id, self.loader.loader_id, eth_acc)
+        self.erc20_balance( erc20Id, self.loader.loader_id)
 
 
 
