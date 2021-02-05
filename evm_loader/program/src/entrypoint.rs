@@ -34,7 +34,7 @@ use evm::{
     executor::{StackExecutor},
     ExitReason,
 };
-use primitive_types::{U256};
+use primitive_types::{H160, U256};
 
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 use solana_sdk::entrypoint::HEAP_START_ADDRESS;
@@ -246,10 +246,15 @@ fn do_write(program_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
 fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
     info!("do_finalize");
+
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
-    let signer_info = next_account_info(account_info_iter)?;
+    let signer_info = if caller_info.owner == program_id {
+        next_account_info(account_info_iter)?
+    } else {
+        caller_info
+    };
     let clock_info = next_account_info(account_info_iter)?;
     let rent_info = next_account_info(account_info_iter)?;
 
@@ -260,11 +265,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
     info!("  backend initialized");
 
+    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info).ok_or(ProgramError::InvalidArgument)?;
+
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("  executor initialized");
-
-    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
 
     info!("Execute transact_create");
 
@@ -280,7 +285,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let program_account = SolidityAccount::new(program_info)?;
 
     let exit_reason = executor.transact_create2(
-            caller.get_ether(),
+            caller_ether.0,
             U256::zero(),
             code_data,
             H256::default(), usize::max_value()
@@ -290,7 +295,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     if exit_reason.is_succeed() {
         info!("Succeed execution");
         let (applies, logs) = executor.deconstruct();
-        backend.apply(applies, logs, false)?;
+        backend.apply(applies, logs, false, Some(caller_ether))?;
         Ok(())
     } else {
         info!("Not succeed execution");
@@ -305,23 +310,36 @@ fn do_call<'a>(
     ) -> ProgramResult
 {
     info!("do_call");
+
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
-    let signer_info = next_account_info(account_info_iter)?;
+    let signer_info = if caller_info.owner == program_id {
+        next_account_info(account_info_iter)?
+    } else {
+        caller_info
+    };
     let clock_info = next_account_info(account_info_iter)?;
 
-    let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
+    if program_info.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
+    info!("  backend initialized");
+
+    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info).ok_or(ProgramError::InvalidArgument)?;
+
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     info!("Executor initialized");
     let contract = backend.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?;
-    let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
-    info!(&("   caller: ".to_owned() + &caller.get_ether().to_string()));
+
+    info!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
     info!(&(" contract: ".to_owned() + &contract.get_ether().to_string()));
 
     let (exit_reason, result) = executor.transact_call(
-            caller.get_ether(),
+            caller_ether.0,
             contract.get_ether(),
             U256::zero(),
             instruction_data.to_vec(),
@@ -332,7 +350,7 @@ fn do_call<'a>(
     info!(match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, logs) = executor.deconstruct();
-            backend.apply(applies, logs, false)?;
+            backend.apply(applies, logs, false, Some(caller_ether))?;
             info!("Applies done");
             "succeed"
         },
@@ -350,6 +368,42 @@ fn do_call<'a>(
 }
 
 
+fn get_ether_address<'a>(
+    program_id: &Pubkey,
+    caller_opt: Option<&SolidityAccount<'a>>,
+    caller_info: &'a AccountInfo<'a>,
+    signer_info: &'a AccountInfo<'a>,
+) ->  Option<(H160, bool)>
+{
+    if caller_info.owner == program_id {
+        if caller_opt.is_some() {
+            let caller = caller_opt.unwrap();
+        
+            if caller.account_data.signer != *signer_info.key || !signer_info.is_signer {
+                info!("Add valid account signer");
+                info!(&("   caller signer: ".to_owned() + &caller.account_data.signer.to_string()));
+                info!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
+                info!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
+    
+                return None
+            }
+    
+            Some ( ( caller.get_ether(), true) )
+
+        } else {
+            None
+        }
+    } else {
+        if !caller_info.is_signer {
+            info!("Caller mast be signer");
+            info!(&("Caller pubkey: ".to_owned() + &caller_info.key.to_string()));
+
+            return None
+        }
+
+        Some ( ( H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(), false) )
+    }
+}
 
 // Pull in syscall stubs when building for non-BPF targets
 //#[cfg(not(target_arch = "bpf"))]

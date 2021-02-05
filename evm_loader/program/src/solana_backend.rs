@@ -6,7 +6,7 @@ use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
-    account_info::AccountInfo,
+    account_info::{next_account_info, AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
@@ -123,17 +123,22 @@ impl<'a> SolanaBackend<'a> {
         H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
     }
 
-    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
-    {
-        let system_account = Self::system_account();
+    {        
+        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
+        let system_account = Self::system_account();        
+
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
+                Apply::Modify {address, basic, code, storage, reset_storage} => {   
                     if address == system_account {
+                        continue;
+                    }
+                    if ether_addr.1 != true && address == ether_addr.0 {
                         continue;
                     }
                     let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
