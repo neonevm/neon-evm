@@ -104,7 +104,14 @@ contract ERC20 is Context, IERC20 {
     function decimals() public view virtual returns (uint8) {
         return _decimals;
     }
+    
+    function balance_ext() public view virtual returns (uint256) {
+        return _balance_ext;
+    }
 
+    function mint_id() public view virtual returns (uint256) {
+        return _mint_id;
+    }
     /**
      * @dev See {IERC20-totalSupply}.
      */
