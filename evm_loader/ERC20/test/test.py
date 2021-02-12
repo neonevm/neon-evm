@@ -8,6 +8,7 @@ import os
 import json
 import base58
 import subprocess
+import unittest
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -190,14 +191,14 @@ class EvmLoaderTests(unittest.TestCase):
         if owner != res[pos+11:pos+55]:
             raise Exception("change owner error")
 
-    def tokenMint(self, mint_id, recipient):
+    def tokenMint(self, mint_id, recipient, amount):
         spl = SplToken(solana_url)
-        res = spl.call("mint {} 100 {}".format(mint_id, recipient))
-        print ("minting 100 tokens for {}".format(recipient))
+        res = spl.call("mint {} {} {}".format(mint_id, amount, recipient))
+        print ("minting {} tokens for {}".format(amount, recipient))
 
     def tokenBalance(self, acc):
         spl = SplToken(solana_url)
-        return spl.call("balance {}".format(acc))
+        return int(spl.call("balance {}".format(acc)).rstrip())
 
     def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id):
         input = bytearray.fromhex(
@@ -226,7 +227,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("deposit {}: {}".format(self.caller_ether.hex(), res[13:]))
+            print("deposit {}".format(int(res[13:], 16)))
 
     def erc20_withdraw(self, receiver, amount, erc20, balance_erc20, mint_id, evm_loader_id):
         input = bytearray.fromhex(
@@ -257,7 +258,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("withdraw {}: {}".format(self.caller_ether.hex(), res[13:]))
+            print("withdraw {}".format(int(res[13:], 16)))
 
 
 
@@ -282,7 +283,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("erc20 balance {}: {}".format(self.caller_ether.hex(),  res[13:]))
+            return int(res[13:], 16)
 
 
     def erc20_transfer(self, erc20, evm_loader_id, eth_to, amount):
@@ -329,7 +330,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("erc20 balance_ext: {}".format( res[13:]))
+            return res[13:]
 
     def erc20_mint_id(self, erc20, evm_loader_id):
         input = bytearray.fromhex("03e132a122")
@@ -349,7 +350,7 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("erc20 mint_id: {}".format( res[13:]))
+            return res[13:]
 
 
     def test_erc20(self):
@@ -368,30 +369,30 @@ class EvmLoaderTests(unittest.TestCase):
         print ("erc20_id:", erc20Id)
         print ("erc20_id_ethereum:", erc20Id_ether.hex())
         time.sleep(20)
+        print("erc20 balance_ext():", self.erc20_balance_ext( erc20Id, self.loader.loader_id))
+        print("erc20 mint_id():", self.erc20_mint_id( erc20Id, self.loader.loader_id))
+
         self.changeOwner(balance_erc20, erc20Id)
         print("balance_erc20 owner changed to {}".format(erc20Id))
-        self.tokenMint(mintId, acc_client)
+        mint_amount = 100
+        self.tokenMint(mintId, acc_client, mint_amount)
         time.sleep(20)
-        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
-        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
+        assert(self.tokenBalance(acc_client) == mint_amount)
+        assert(self.tokenBalance(balance_erc20) == 0)
+        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == 0)
 
-        self.erc20_balance( erc20Id, self.loader.loader_id)
-
-        self.erc20_deposit( acc_client,  1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
-
-        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
-        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
-        self.erc20_balance( erc20Id, self.loader.loader_id)
-
-        self.erc20_withdraw( acc_client, 1, erc20Id, balance_erc20, mintId, self.loader.loader_id)
-
-        print("balance {}: {}".format( acc_client, self.tokenBalance(acc_client)))
-        print("balance {}: {}".format( balance_erc20, self.tokenBalance(balance_erc20)))
-        self.erc20_balance( erc20Id, self.loader.loader_id)
-        self.erc20_balance_ext( erc20Id, self.loader.loader_id)
-        self.erc20_mint_id( erc20Id, self.loader.loader_id)
+        deposit_amount = 1
+        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        assert(self.tokenBalance(acc_client) == mint_amount-deposit_amount)
+        assert(self.tokenBalance(balance_erc20) == deposit_amount)
+        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == deposit_amount*(10**9))
+        self.erc20_withdraw( acc_client, deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        assert(self.tokenBalance(acc_client) == mint_amount)
+        assert(self.tokenBalance(balance_erc20) == 0)
+        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == 0)
 
 
+    @unittest.skip("not for CI")
     def test_dep(self):
         print("test_dep")
         acc_client = "7qYyuJo5cjtndkSv619T9mbHYRvPtxNB4PkBWL9eaXr2"
@@ -400,21 +401,25 @@ class EvmLoaderTests(unittest.TestCase):
         mintId = "8H4yRiqfqLws8Pisjza4TpRfWX7QN5tpc4PZw5oNNRij"
         self.erc20_deposit( acc_client,  50, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
+    @unittest.skip("not for CI")
     def test_balance_ext(self):
         print("test_balance_ext")
         erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
         self.erc20_balance_ext( erc20Id, self.loader.loader_id)
 
+    @unittest.skip("not for CI")
     def test_mint_id(self):
         print("test_mint_id")
         erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
         self.erc20_mint_id( erc20Id, self.loader.loader_id)
 
+    @unittest.skip("not for CI")
     def test_balance(self):
         print("test_balance")
         erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
         self.erc20_balance( erc20Id, self.loader.loader_id, )
 
+    @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
         erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
