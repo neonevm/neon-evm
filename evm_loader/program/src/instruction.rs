@@ -84,6 +84,16 @@ pub enum EvmInstruction<'a> {
         /// Call data
         bytes: &'a [u8],
     },
+
+    CallFromRawEthereumTX {
+        /// Call data
+        from_addr: &'a [u8],
+        sign: &'a [u8],
+        unsigned_msg: &'a [u8],
+    },
+
+    CheckEtheriumTX ,
+
 }
 
 
@@ -142,6 +152,14 @@ impl<'a> EvmInstruction<'a> {
                 let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
 
                 EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner}
+            },
+            5 => {
+                let (from_addr, rest) = rest.split_at(20);
+                let (sign, unsigned_msg) = rest.split_at(65);
+                EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg}
+            },
+            0xa1 => {
+                EvmInstruction::CheckEtheriumTX
             },
             _ => return Err(InvalidInstructionData),
         })
