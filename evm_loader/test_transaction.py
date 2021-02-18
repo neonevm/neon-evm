@@ -9,8 +9,8 @@ from solana_utils import *
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # cls.acc = RandomAccaunt()
-        cls.acc = RandomAccaunt('1613586854.json')
+        cls.acc = RandomAccaunt()
+        # cls.acc = RandomAccaunt('1613635909.json')
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
             cli = SolanaCli(solana_url, cls.acc)
@@ -20,12 +20,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             # balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
-        # cls.loader = EvmLoader(solana_url, cls.acc)
-        cls.loader = EvmLoader(solana_url, cls.acc, 'BSU1sPKutxTeeRN8zqhvESXCAE4Xbap3CmsLuMfpLho2')
+        cls.loader = EvmLoader(solana_url, cls.acc)
+        # cls.loader = EvmLoader(solana_url, cls.acc, 'E5eNJ1WLD9pSmBseBcVSwdusoaSKH7rMmmhNZT3gmswy')
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
-        # cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
-        cls.owner_contract = "a8CsHohzxZb67uEJHsocq2NRqnSVQ9Xxqiedu9hFDkE"
+        cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
+        # cls.owner_contract = "B7azmbC5hQZbP2twARJk1T51PkA3CyhRV1mZxWoKSwMA"
         print("contract id: ", cls.owner_contract)
         print("contract id: ", solana2ether(cls.owner_contract).hex())
 
@@ -49,12 +49,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'nonce': 0,
             'data': '3917b3df',
             'chainId': 1
-        } 
+        }
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-        print(from_addr.hex())
-        print(self.caller_ether.hex())
-        print(base58.b58decode(self.acc.get_acc().public_key().to_base58()).hex())
 
         keccak_instruction = make_keccak_instruction_data(0, len(msg))
 
@@ -70,6 +67,33 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             ]))
         result = http_client.send_transaction(trx, self.acc.get_acc())
 
+
+    def test_check_wo_checks(self):  
+        tx_1 = {
+            'to': solana2ether(self.owner_contract),
+            'value': 0,
+            'gas': 0,
+            'gasPrice': 0,
+            'nonce': 0,
+            'data': '3917b3df',
+            'chainId': 1
+        }
+        
+        (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
+
+        keccak_instruction = make_keccak_instruction_data(0, len(msg))
+
+        trx = Transaction().add(
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction + from_addr + sign + msg, keys=[
+                AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])).add(
+            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05"), keys=[
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
+                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+            ]))
+        result = http_client.send_transaction(trx, self.acc.get_acc())
 
 if __name__ == '__main__':
     unittest.main()

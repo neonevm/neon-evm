@@ -181,8 +181,56 @@ fn process_instruction<'a>(
         EvmInstruction::Call {bytes} => {
             do_call(program_id, accounts, bytes)
         },
-        EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg} => {
-            do_call(program_id, accounts, &get_data(unsigned_msg).1)
+        EvmInstruction::CallFromRawEthereumTX => {
+            let account_info_iter = &mut accounts.iter();
+            let program_info = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let signer_info = if caller_info.owner == program_id {
+                next_account_info(account_info_iter)?
+            } else {
+                caller_info
+            };
+            let sysvar_info = next_account_info(account_info_iter)?;
+            let clock_info = next_account_info(account_info_iter)?;
+
+            let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
+            info!(&(" current instruction: ".to_owned() + &current_instruction.to_string())); 
+
+            let index = current_instruction - 1;
+            info!(&("index: ".to_owned() + &index.to_string())); 
+
+            match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
+                Ok(instr) => {
+                    info!(&format!("ID: {}", instr.program_id));
+                    if instr.program_id == secp256k1_program::id() {
+                        let sliced_data = instr.data.as_slice();
+                        let (_, rest) = sliced_data.split_at(12);
+                        let (from_addr, rest) = rest.split_at(20);
+                        let (sign, unsigned_msg) = rest.split_at(65);
+
+                        let caller = H160::from_slice(from_addr);
+                        let (contract, data) = get_data(unsigned_msg);
+            
+                        let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
+                        let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();
+                        
+                        info!(&("caller: ".to_owned() + &caller.to_string()));    
+                        info!(&("contract: ".to_owned() + &contract.to_string()));
+                        info!(&("program_eth: ".to_owned() + &program_eth.to_string()));
+                        info!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));     
+            
+                        return do_call(program_id, accounts, &data);
+                    } else {
+                        return Err(ProgramError::IncorrectProgramId);
+                    }
+                },
+                Err(err) => {
+                    info!("ERR");                    
+                    return Err(ProgramError::MissingRequiredSignature);
+                }
+            }
+                
+            return Err(ProgramError::InvalidInstructionData);
         },
         EvmInstruction::CheckEtheriumTX => {    
             let account_info_iter = &mut accounts.iter();
