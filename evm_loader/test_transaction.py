@@ -11,6 +11,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     def setUpClass(cls):
         cls.acc = RandomAccaunt()
         # cls.acc = RandomAccaunt('1613635909.json')
+        # print(bytes(cls.acc.get_acc().public_key()).hex())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
             cli = SolanaCli(solana_url, cls.acc)
@@ -53,13 +54,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
 
-        keccak_instruction = make_keccak_instruction_data(0, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
         trx = Transaction().add(
-            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction + from_addr + sign + msg, keys=[
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1"), keys=[
+            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
@@ -81,13 +82,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
 
-        keccak_instruction = make_keccak_instruction_data(0, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
         trx = Transaction().add(
-            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction + from_addr + sign + msg, keys=[
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05"), keys=[
+            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
@@ -100,13 +101,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
 
-        keccak_instruction = make_keccak_instruction_data(0, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
         trx = Transaction().add(
-            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction + from_addr + sign + msg, keys=[
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05"), keys=[
+            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  

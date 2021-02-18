@@ -15,7 +15,7 @@ def unpack(data):
         return (data[1:1+l].tobytes(), data[1+l:])
     elif (ch <= 0xBF):
         lLen = ch - 0xB7
-        l = int.from_bytes(data[1:1+lLen], byteorder='little')
+        l = int.from_bytes(data[1:1+lLen], byteorder='big')
         return (data[1+lLen:1+lLen+l].tobytes(), data[1+lLen+l:])
     elif (ch == 0xC0):
         return ((), data[1:])
@@ -29,7 +29,7 @@ def unpack(data):
         return (lst, data[1+l:])
     else:
         lLen = ch - 0xF7
-        l = int.from_bytes(data[1:1+lLen], byteorder='little')
+        l = int.from_bytes(data[1:1+lLen], byteorder='big')
         lst = list()
         sub = data[1+lLen:1+lLen+l]
         while len(sub):
@@ -64,7 +64,7 @@ def pack(data):
             for d in data:
                 res += pack(d)
             l = len(res)
-            if l <= 0x55:
+            if l <= 55:
                 return (l + 0xC0).to_bytes(1,'big')+res
             else:
                 lLen = (l.bit_length()+7)//8
@@ -167,6 +167,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
             raise Exception("Needed private key for transaction creation from fields")
 
         signed_tx = w3.eth.account.sign_transaction(instruction, private_key)
+        print(signed_tx.rawTransaction.hex())
         _trx = Trx.fromString(signed_tx.rawTransaction)        
 
         raw_msg = _trx.get_msg(instruction['chainId'])        
@@ -199,7 +200,7 @@ def make_keccak_instruction_data(check_instruction_index, msg_len):
         raise Exception("Invalid index for instruction - {}".format(check_instruction_index))
 
     check_count = 1
-    data_start = 1 + 11
+    data_start = 1
     eth_address_size = 20
     signature_size = 65
     eth_address_offset = data_start
