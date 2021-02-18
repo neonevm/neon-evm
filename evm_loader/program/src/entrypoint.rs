@@ -258,9 +258,9 @@ fn process_instruction<'a>(
 
             match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
                 Ok(instr) => {
-                    info!(&format!("ID: {}", instr.program_id));
                     if instr.program_id == secp256k1_program::id() {
-                        let sliced_data = instr.data.as_slice();
+                        let sliced = instr.data.as_slice();
+                    
 
                         const CHECK_COUNT: u8 = 1;
                         const DATA_START: u16 = 1;
@@ -270,17 +270,59 @@ fn process_instruction<'a>(
                         const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
                         const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
 
-                        // if sliced_data[0] != CHECK_COUNT
-                        // || u16::from_le_bytes(sliced_data[1..2].try_into().unwrap()) != SIGN_OFFSET
-                        // || sliced_data[3] != current_instruction.try_into().unwrap()
-                        // || u16::from_le_bytes(sliced_data[4..5].try_into().unwrap()) != ETH_OFFSET
-                        // || sliced_data[6] != current_instruction.try_into().unwrap()
-                        // || u16::from_le_bytes(sliced_data[7..8].try_into().unwrap()) != MSG_OFFSET
-                        // || u16::from_le_bytes(sliced_data[9..10].try_into().unwrap()) != unsigned_msg.len().try_into().unwrap()
-                        // || sliced_data[11] != current_instruction.try_into().unwrap() {
-                        //     info!("wrong index");
-                        //     return Err(ProgramError::InvalidInstructionData);
-                        // }
+                    
+                        let (int_slice, rest) = sliced.split_at(1);
+                        if int_slice[0] != CHECK_COUNT {
+                            info!("wrong CHECK_COUNT");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(2);
+                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
+                        if int_from_slice != SIGN_OFFSET {
+                            info!("wrong SIGN_OFFSET");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(1);
+                        if int_slice[0] != current_instruction.try_into().unwrap() {
+                            info!("wrong current_instruction");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(2);
+                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
+                        if int_from_slice != ETH_OFFSET {
+                            info!("wrong index");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(1);
+                        if int_slice[0] != current_instruction.try_into().unwrap() {
+                            info!("wrong current_instruction");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(2);
+                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
+                        if int_from_slice != MSG_OFFSET {
+                            info!("wrong index");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(2);
+                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
+                        if int_from_slice != unsigned_msg.len().try_into().unwrap() {
+                            info!("wrong current_instruction");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
+                        let (int_slice, rest) = rest.split_at(1);
+                        if int_slice[0] != current_instruction.try_into().unwrap() {
+                            info!("wrong index");
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    
                     } else {
                         info!("wrong program id");
                         return Err(ProgramError::IncorrectProgramId);
@@ -303,9 +345,13 @@ fn process_instruction<'a>(
             info!(&("program_eth: ".to_owned() + &program_eth.to_string()));
             info!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));
 
-            if program_eth != contract || caller != caller_eth {
+            if program_eth != contract {
                 return Err(ProgramError::InvalidAccountData);
             }       
+            
+            // if caller != caller_eth {
+            //     return Err(ProgramError::InvalidAccountData);
+            // }       
 
             do_call(program_id, accounts, &data)
         },

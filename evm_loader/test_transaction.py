@@ -10,7 +10,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.acc = RandomAccaunt()
-        # cls.acc = RandomAccaunt('1613635909.json')
+        # cls.acc = RandomAccaunt('1613657705.json')
         # print(bytes(cls.acc.get_acc().public_key()).hex())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
@@ -22,11 +22,11 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print("Done\n")
             
         cls.loader = EvmLoader(solana_url, cls.acc)
-        # cls.loader = EvmLoader(solana_url, cls.acc, 'E5eNJ1WLD9pSmBseBcVSwdusoaSKH7rMmmhNZT3gmswy')
+        # cls.loader = EvmLoader(solana_url, cls.acc, '7L8pxuVybPm5KRwMcssU4mptBqXgw4EHHC4BvhFu4cmy')
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
-        # cls.owner_contract = "B7azmbC5hQZbP2twARJk1T51PkA3CyhRV1mZxWoKSwMA"
+        # cls.owner_contract = "4aMVBH1nGSbcF1c3RLjpLaQ8beQQVYBqGGxgmFeoabLB"
         print("contract id: ", cls.owner_contract)
         print("contract id: ", solana2ether(cls.owner_contract).hex())
 
@@ -97,7 +97,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         result = http_client.send_transaction(trx, self.acc.get_acc())
 
     def test_raw_tx_wo_checks(self):  
-        tx_2 = "0xf86c258520d441420082520894d8587a2fd6c30dd5c70f0630f1a635e4ae6ae47188043b93e2507e80008025a00675d0de7873f2c77a1c7ab0806cbda67ea6c25303ca7a80c211af97ea202d6aa022eb61dbc3097d7a8a4b142fd7f3c03bd8320ad02d564d368078a0a5fe227199"
+        tx_2 = "0xf86180808094535d33341d2ddcc6411701b1cf7634535f1e8d1680843917b3df26a013a4d8875dfc46a489c2641af798ec566d57852b94743b234517b73e239a5a22a07586d01a8a1125be7108ee6580c225a622c9baa0938f4d08abe78556c8674d58"
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
 

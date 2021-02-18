@@ -167,14 +167,15 @@ def make_instruction_data_from_tx(instruction, private_key=None):
             raise Exception("Needed private key for transaction creation from fields")
 
         signed_tx = w3.eth.account.sign_transaction(instruction, private_key)
-        print(signed_tx.rawTransaction.hex())
-        _trx = Trx.fromString(signed_tx.rawTransaction)        
+        # print(signed_tx.rawTransaction.hex())
+        _trx = Trx.fromString(signed_tx.rawTransaction)   
+        # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))     
 
         raw_msg = _trx.get_msg(instruction['chainId'])        
         sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
         pub = sig.recover_public_key_from_msg_hash(_trx.hash())
 
-        print(pub.to_hex())
+        # print(pub.to_hex())
 
         return (pub.to_canonical_address(), sig.to_bytes(), raw_msg)
     elif isinstance(instruction, str):
@@ -182,6 +183,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
             instruction = instruction[2:]
         
         _trx = Trx.fromString(bytearray.fromhex(instruction))
+        # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
         
         raw_msg = _trx.get_msg()        
         sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
@@ -219,7 +221,7 @@ def make_keccak_instruction_data(check_instruction_index, msg_len):
     return data
     
 # tx_1 = {
-#     'to': "0x2ccb0f131443b797b46dd9690a7dec9e6eeee309",
+#     'to': '0x2ccb0f131443b797b46dd9690a7dec9e6eeee309',
 #     'value': 1,
 #     'gas': 1,
 #     'gasPrice': 1,
@@ -227,15 +229,18 @@ def make_keccak_instruction_data(check_instruction_index, msg_len):
 #     'data': '3917b3df',
 #     'chainId': 1
 # } 
+# trx = "0xf86c018522ecb25c0082520894a090e606e30bd747d4e6245a1517ebe430f0057e880340c0086a5cbe008025a0e213a2a87b050644f9c982144fa762132bbc00b9ac63d168d68146e300de6b4ba059dbbae6d190d820ddde818a98204232194eb6d27226190b4c0be82480d6a735"
 # signed = w3.eth.account.sign_transaction(tx_1, '0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff')
 
 # _trx = Trx.fromString(signed.rawTransaction)
-# # _trx = Trx.fromString(bytearray.fromhex(trx[2:]))
+# _trx = Trx.fromString(bytearray.fromhex(trx[2:]))
 # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
 # print("0x" + str(_trx))
 # print(signed.rawTransaction.hex())
 
 # msgHash = _trx.hash()
+# print(_trx.get_msg().hex())
+
 # sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
 # pub = sig.recover_public_key_from_msg_hash(msgHash)
 # print('SENDER', pub.to_canonical_address().hex())
