@@ -95,5 +95,25 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             ]))
         result = http_client.send_transaction(trx, self.acc.get_acc())
 
+    def test_raw_tx_wo_checks(self):  
+        tx_2 = "0xf86c258520d441420082520894d8587a2fd6c30dd5c70f0630f1a635e4ae6ae47188043b93e2507e80008025a00675d0de7873f2c77a1c7ab0806cbda67ea6c25303ca7a80c211af97ea202d6aa022eb61dbc3097d7a8a4b142fd7f3c03bd8320ad02d564d368078a0a5fe227199"
+        
+        (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
+
+        keccak_instruction = make_keccak_instruction_data(0, len(msg))
+
+        trx = Transaction().add(
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction + from_addr + sign + msg, keys=[
+                AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])).add(
+            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05"), keys=[
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
+                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+            ]))
+        result = http_client.send_transaction(trx, self.acc.get_acc())
+
+
 if __name__ == '__main__':
     unittest.main()
