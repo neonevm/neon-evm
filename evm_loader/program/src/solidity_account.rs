@@ -27,6 +27,8 @@ impl<'a> SolidityAccount<'a> {
 
     pub fn get_ether(&self) -> H160 {self.account_data.ether}
 
+    pub fn get_nonce(&self) -> u64 {self.account_data.trx_count}
+
     pub fn code<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
         /*if let AccountData::Account{code_size,..} = self.account_data {

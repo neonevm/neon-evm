@@ -12,6 +12,47 @@ use std::error::Error;
 use std::convert::TryFrom;
 pub use ethereum_types::{Address, U256};
 
+#[derive(Default, Serialize, Deserialize, Debug)]
+struct SecpSignatureOffsets {
+    signature_offset: u16, // offset to [signature,recovery_id] of 64+1 bytes
+    signature_instruction_index: u8,
+    eth_address_offset: u16, // offset to eth_address of 20 bytes
+    eth_address_instruction_index: u8,
+    message_data_offset: u16, // offset to start of message data
+    message_data_size: u16,   // size of message data
+    message_instruction_index: u8,
+}
+
+pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize) -> Vec<u8> {
+    let mut instruction_data = vec![];                    
+
+    const CHECK_COUNT: u8 = 1;
+    const DATA_START: u16 = 1;
+    const ETH_SIZE: u16 = 20;
+    const SIGN_SIZE: u16 = 65;
+    const ETH_OFFSET: u16 = DATA_START;
+    const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
+    const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+
+    let offsets = SecpSignatureOffsets {
+        signature_offset: SIGN_OFFSET as u16,
+        signature_instruction_index: instruction_index as u8,
+        eth_address_offset: ETH_OFFSET as u16,
+        eth_address_instruction_index: instruction_index as u8,
+        message_data_offset: MSG_OFFSET as u16,
+        message_data_size: message_len as u16,
+        message_instruction_index: instruction_index as u8,
+    };
+
+    let bin_offsets = bincode::serialize(&offsets).unwrap();
+
+    instruction_data.push(1);
+    instruction_data.extend(&bin_offsets);
+
+    instruction_data
+}
+
+
 pub fn get_check_fields(raw_tx: &[u8]) {
     let data_start = 1 + 11;
     let eth_address_size = 20;
@@ -61,11 +102,11 @@ pub fn check_tx(raw_tx: &[u8]) {
     info!(&("       sign: ".to_owned() + &hex::encode(&compact_bytes))); 
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (Address, std::vec::Vec<u8>) {    
-    let eth_tx: Result<SignedTransaction, _> = rlp::decode(&raw_tx);
-    let tx = eth_tx.unwrap();
+pub fn get_data(raw_tx: &[u8]) -> (u64, Address, std::vec::Vec<u8>) {    
+    let tx: Result<SignedTransaction, _> = rlp::decode(&raw_tx);
+    let tx = tx.unwrap();
 
-    (tx.to.unwrap(), tx.data.0)
+    (tx.nonce.as_u64(), tx.to.unwrap(), tx.data.0)
 }
 
 /// Hex-serialized shim for `Vec<u8>`.

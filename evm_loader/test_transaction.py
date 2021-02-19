@@ -10,7 +10,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.acc = RandomAccaunt()
-        # cls.acc = RandomAccaunt('1613657705.json')
+        # cls.acc = RandomAccaunt('1613730252.json')
         # print(bytes(cls.acc.get_acc().public_key()).hex())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
@@ -22,24 +22,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print("Done\n")
             
         cls.loader = EvmLoader(solana_url, cls.acc)
-        # cls.loader = EvmLoader(solana_url, cls.acc, '7L8pxuVybPm5KRwMcssU4mptBqXgw4EHHC4BvhFu4cmy')
+        # cls.loader = EvmLoader(solana_url, cls.acc, 'EUtt2RvjHfrLg9gfd7ug1ptczZ6FvNwrePv8VJbQmRBW')
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
-        # cls.owner_contract = "4aMVBH1nGSbcF1c3RLjpLaQ8beQQVYBqGGxgmFeoabLB"
+        # cls.owner_contract = "68UUgBG8AKVZTqA9u3C3UGksWhtVXBxjuXozdnLH8uex"
         print("contract id: ", cls.owner_contract)
         print("contract id: ", solana2ether(cls.owner_contract).hex())
-
-        cls.caller_ether = solana2ether(cls.acc.get_acc().public_key())
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
-
-        if getBalance(cls.caller) == 0:
-            print("Create caller account...")
-            caller_created = cls.loader.createEtherAccount(solana2ether(cls.acc.get_acc().public_key()))
-            print("Done\n")
-
-        print('Account:', cls.acc.get_acc().public_key(), bytes(cls.acc.get_acc().public_key()).hex())
-        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
     def test_check_tx(self):  
         tx_1 = {
@@ -53,8 +42,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         }
         
         (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-
         keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        
+        (caller, caller_nonce) = self.loader.ether2program(from_addr)
+        print(" ether: " + from_addr.hex())
+        print("solana: " + caller)
+        print(" nonce: " + str(caller_nonce))
+
+        if getBalance(caller) == 0:
+            print("Create caller account...")
+            caller_created = self.loader.createEtherAccount(from_addr)
+            print("Done\n")
 
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -62,6 +60,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             ])).add(
             TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
@@ -69,51 +68,51 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         result = http_client.send_transaction(trx, self.acc.get_acc())
 
 
-    def test_check_wo_checks(self):  
-        tx_1 = {
-            'to': solana2ether(self.owner_contract),
-            'value': 0,
-            'gas': 0,
-            'gasPrice': 0,
-            'nonce': 0,
-            'data': '3917b3df',
-            'chainId': 1
-        }
+    # def test_check_wo_checks(self):  
+    #     tx_1 = {
+    #         'to': solana2ether(self.owner_contract),
+    #         'value': 0,
+    #         'gas': 0,
+    #         'gasPrice': 0,
+    #         'nonce': 0,
+    #         'data': '3917b3df',
+    #         'chainId': 1
+    #     }
         
-        (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
+    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
 
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
-        trx = Transaction().add(
-            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-                AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
-            ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
-                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
-            ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc())
+    #     trx = Transaction().add(
+    #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
+    #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
+    #         ])).add(
+    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
+    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
+    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+    #         ]))
+    #     result = http_client.send_transaction(trx, self.acc.get_acc())
 
-    def test_raw_tx_wo_checks(self):  
-        tx_2 = "0xf86180808094535d33341d2ddcc6411701b1cf7634535f1e8d1680843917b3df26a013a4d8875dfc46a489c2641af798ec566d57852b94743b234517b73e239a5a22a07586d01a8a1125be7108ee6580c225a622c9baa0938f4d08abe78556c8674d58"
+    # def test_raw_tx_wo_checks(self):  
+    #     tx_2 = "0xf86180808094535d33341d2ddcc6411701b1cf7634535f1e8d1680843917b3df26a013a4d8875dfc46a489c2641af798ec566d57852b94743b234517b73e239a5a22a07586d01a8a1125be7108ee6580c225a622c9baa0938f4d08abe78556c8674d58"
         
-        (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
+    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
 
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
-        trx = Transaction().add(
-            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-                AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
-            ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
-                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
-            ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc())
+    #     trx = Transaction().add(
+    #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
+    #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
+    #         ])).add(
+    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
+    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
+    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+    #         ]))
+    #     result = http_client.send_transaction(trx, self.acc.get_acc())
 
 
 if __name__ == '__main__':

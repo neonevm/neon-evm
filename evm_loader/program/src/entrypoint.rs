@@ -31,7 +31,7 @@ use crate::{
     instruction::EvmInstruction,
     account_data::AccountData,
     solidity_account::SolidityAccount,
-    transaction::{check_tx, get_check_fields, get_data},
+    transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
 };
 
 use evm::{
@@ -179,7 +179,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
-            do_call(program_id, accounts, bytes)
+            do_call(program_id, accounts, &bytes, None)
         },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
@@ -199,8 +199,6 @@ fn process_instruction<'a>(
             match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
                 Ok(instr) => {
                     if instr.program_id == secp256k1_program::id() {
-                        let sliced_data = instr.data.as_slice();
-
                         const CHECK_COUNT: u8 = 1;
                         const DATA_START: u16 = 1;
                         const ETH_SIZE: u16 = 20;
@@ -208,18 +206,6 @@ fn process_instruction<'a>(
                         const ETH_OFFSET: u16 = DATA_START;
                         const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
                         const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
-
-                        // if sliced_data[0] != CHECK_COUNT
-                        // || u16::from_le_bytes(sliced_data[1..2].try_into().unwrap()) != SIGN_OFFSET
-                        // || sliced_data[3] != current_instruction.try_into().unwrap()
-                        // || u16::from_le_bytes(sliced_data[4..5].try_into().unwrap()) != ETH_OFFSET
-                        // || sliced_data[6] != current_instruction.try_into().unwrap()
-                        // || u16::from_le_bytes(sliced_data[7..8].try_into().unwrap()) != MSG_OFFSET
-                        // || u16::from_le_bytes(sliced_data[9..10].try_into().unwrap()) != unsigned_msg.len().try_into().unwrap()
-                        // || sliced_data[11] != current_instruction.try_into().unwrap() {
-                        //     info!("wrong index");
-                        //     return Err(ProgramError::InvalidInstructionData);
-                        // }
                     } else {
                         return Err(ProgramError::IncorrectProgramId);
                     }
@@ -231,12 +217,12 @@ fn process_instruction<'a>(
             }
 
             let caller = H160::from_slice(from_addr);
-            let (contract, data) = get_data(unsigned_msg);
+            let (nonce, contract, data) = get_data(unsigned_msg);
 
             let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
             let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(); 
 
-            do_call(program_id, accounts, &data)
+            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
         EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg} => {    
             let account_info_iter = &mut accounts.iter();
@@ -260,100 +246,52 @@ fn process_instruction<'a>(
                 Ok(instr) => {
                     if instr.program_id == secp256k1_program::id() {
                         let sliced = instr.data.as_slice();
-                    
 
-                        const CHECK_COUNT: u8 = 1;
-                        const DATA_START: u16 = 1;
-                        const ETH_SIZE: u16 = 20;
-                        const SIGN_SIZE: u16 = 65;
-                        const ETH_OFFSET: u16 = DATA_START;
-                        const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
-                        const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len());
 
-                    
-                        let (int_slice, rest) = sliced.split_at(1);
-                        if int_slice[0] != CHECK_COUNT {
-                            info!("wrong CHECK_COUNT");
+                        if reference_instruction != instr.data {
+                            info!("wrong keccak instruction data");
+                            info!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                            info!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
                             return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(2);
-                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
-                        if int_from_slice != SIGN_OFFSET {
-                            info!("wrong SIGN_OFFSET");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(1);
-                        if int_slice[0] != current_instruction.try_into().unwrap() {
-                            info!("wrong current_instruction");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(2);
-                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
-                        if int_from_slice != ETH_OFFSET {
-                            info!("wrong index");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(1);
-                        if int_slice[0] != current_instruction.try_into().unwrap() {
-                            info!("wrong current_instruction");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(2);
-                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
-                        if int_from_slice != MSG_OFFSET {
-                            info!("wrong index");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(2);
-                        let int_from_slice = int_slice.try_into().ok().map(u16::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
-                        if int_from_slice != unsigned_msg.len().try_into().unwrap() {
-                            info!("wrong current_instruction");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
-                        let (int_slice, rest) = rest.split_at(1);
-                        if int_slice[0] != current_instruction.try_into().unwrap() {
-                            info!("wrong index");
-                            return Err(ProgramError::InvalidInstructionData);
-                        }
-                    
+                        }                    
                     } else {
                         info!("wrong program id");
                         return Err(ProgramError::IncorrectProgramId);
                     }
                 },
                 Err(err) => {
-                    info!("ERR");                    
+                    info!("Invalid or no instruction to verify the signature");                    
                     return Err(ProgramError::MissingRequiredSignature);
                 }
             }
 
             let caller = H160::from_slice(from_addr);
-            let (contract, data) = get_data(unsigned_msg);
+            let (nonce, contract, data) = get_data(unsigned_msg);
 
             let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
-            let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();
+            // let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();
             
             info!(&("caller: ".to_owned() + &caller.to_string()));    
             info!(&("contract: ".to_owned() + &contract.to_string()));
             info!(&("program_eth: ".to_owned() + &program_eth.to_string()));
-            info!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));
+            // info!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));
+            // info!(&format!("caller: {}", &caller.to_string()));
+            // info!(&format!("contract: {}", &contract.to_string()));
+            // info!(&format!("program_eth: {}", &program_eth.to_string()));
+            // info!(&format!("caller_eth: {}", &caller_eth.to_string()));
 
             if program_eth != contract {
+                info!("Add valid account signer");
                 return Err(ProgramError::InvalidAccountData);
-            }       
-            
-            // if caller != caller_eth {
-            //     return Err(ProgramError::InvalidAccountData);
-            // }       
+            }
 
-            do_call(program_id, accounts, &data)
+            if caller_info.owner != program_id {
+                info!("Add valid account signer");
+                return Err(ProgramError::InvalidAccountData);
+            }    
+
+            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
     };
 
@@ -486,6 +424,7 @@ fn do_call<'a>(
         program_id: &Pubkey,
         accounts: &'a [AccountInfo<'a>],
         instruction_data: &[u8],
+        from_info: Option<(H160, u64)>,
     ) -> ProgramResult
 {
     info!("do_call");
@@ -509,6 +448,28 @@ fn do_call<'a>(
     info!("  backend initialized");
 
     let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info).ok_or(ProgramError::InvalidArgument)?;
+
+    if from_info.is_some() {
+        info!("  do caller checks");
+        if caller_ether.1 != true {
+            info!("Sender must be Ethereum account. This method is not allowed for Solana accounts.");
+            return Err(ProgramError::InvalidAccountData);
+        }
+        let (from, nonce) = from_info.unwrap();
+        if caller_ether.0 != from {
+            info!("Invalin caller account");
+            info!(&("   caller addres: ".to_owned() + &caller_ether.0.to_string()));
+            info!(&("     from addres: ".to_owned() + &from.to_string()));
+
+            return Err(ProgramError::InvalidAccountData);
+        }
+        info!(&("     tx nonce: ".to_owned() + &nonce.to_string()));
+        info!(&("    acc nonce: ".to_owned() + &caller_ether.2.to_string()));
+        if caller_ether.2 != nonce {
+            info!("Invalin Ethereum transaction nonce");
+            return Err(ProgramError::InvalidInstructionData);
+        }
+    }
 
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -553,7 +514,7 @@ fn get_ether_address<'a>(
     caller_opt: Option<&SolidityAccount<'a>>,
     caller_info: &'a AccountInfo<'a>,
     signer_info: &'a AccountInfo<'a>,
-) ->  Option<(H160, bool)>
+) ->  Option<(H160, bool, u64)>
 {
     if caller_info.owner == program_id {
         if caller_opt.is_some() {
@@ -568,7 +529,7 @@ fn get_ether_address<'a>(
                 return None
             }
     
-            Some ( ( caller.get_ether(), true) )
+            Some ( ( caller.get_ether(), true, caller.get_nonce()) )
 
         } else {
             None
@@ -581,7 +542,7 @@ fn get_ether_address<'a>(
             return None
         }
 
-        Some ( ( H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(), false) )
+        Some ( ( H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(), false, 0) )
     }
 }
 
