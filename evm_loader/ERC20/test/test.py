@@ -9,12 +9,14 @@ import json
 import base58
 import subprocess
 import unittest
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-evm_loader = os.environ.get("EVM_LOADER")
+# evm_loader = os.environ.get("EVM_LOADER")
+evm_loader = "5rpSFgyx4mAJQpPffvggvKodsGzf1kkus28SkXAnsUZF"
 path_to_evm_loader = '../../../target/bpfel-unknown-unknown/release/evm_loader.so'
 
 def confirm_transaction(client, tx_sig):
@@ -201,25 +203,85 @@ class EvmLoaderTests(unittest.TestCase):
         return int(spl.call("balance {}".format(acc)).rstrip())
 
     def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id):
-        input = bytearray.fromhex(
-            "036f0372af" +
-            base58.b58decode(payer).hex() +
-            str("%024x" % 0) + self.caller_ether.hex() +
-            self.acc.public_key()._key.hex() +
+        # input = bytearray.fromhex(
+        #     "036f0372af" +
+        #     base58.b58decode(payer).hex() +
+        #     str("%024x" % 0) + self.caller_ether.hex() +
+        #     self.acc.public_key()._key.hex() +
+        #     "%064x" % amount
+        # )
+        # trx = Transaction().add(
+        #     TransactionInstruction(program_id=evm_loader_id, data=input, keys=
+        #     [
+        #         AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+        #         AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+        #         # AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+        #         AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+        #         AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+        #         AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+        #         AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+        #         # AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+        #         AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+        #     ]))
+        # result = http_client.send_transaction(trx, self.acc)
+        # result = confirm_transaction(http_client, result["result"])
+        # messages = result["result"]["meta"]["logMessages"]
+        # res = messages[messages.index("Program log: succeed") + 1]
+        # if not res.startswith("Program log: "):
+        #     raise Exception("Invalid program logs: no result")
+        # else:
+        #     print("deposit {}".format(int(res[13:], 16)))
+
+        input = "6f0372af" + \
+            base58.b58decode(payer).hex() + \
+            str("%024x" % 0) + self.caller_ether.hex() + \
+            self.acc.public_key()._key.hex() + \
             "%064x" % amount
-        )
+
+        tx_1 = {
+            'to': solana2ether(erc20),
+            'value': 0,
+            'gas': 0,
+            'gasPrice': 0,
+            'nonce': 0,
+            'data': input,
+            'chainId': 1
+        }
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
+        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+
+        (caller, caller_nonce) = self.loader.ether2program(from_addr)
+        print(" ether: " + from_addr.hex())
+        print("solana: " + caller)
+        print(" nonce: " + str(caller_nonce))
+
+        if getBalance(caller) == 0:
+            print("Create caller account...")
+            caller_created = self.loader.createEtherAccount(from_addr)
+            print("Done\n")
+
+        # (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
+        # keccak_instruction = make_keccak_instruction_data(1, len(msg))
+
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
-            [
+            TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
+                AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])).add(
+            TransactionInstruction(program_id=evm_loader_id, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+
+                # AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+                # AccountMeta(pubkAney=payer, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                # AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
+
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
@@ -392,12 +454,12 @@ class EvmLoaderTests(unittest.TestCase):
         assert(self.erc20_balance( erc20Id, self.loader.loader_id) == 0)
 
 
-    @unittest.skip("not for CI")
+    # @unittest.skip("not for CI")
     def test_dep(self):
         print("test_dep")
         acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        balance_erc20= "HjpNJwDPApLjrDuFagw8HkQwQrgF5B6Ps9cjdGqcpvGC"
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        balance_erc20= "1nqiH9YUkU3FAACb1eYKQjA9r1mGKkKW3veCFJ3gyug"
         mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
         self.erc20_deposit( acc_client,  50, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
@@ -412,25 +474,25 @@ class EvmLoaderTests(unittest.TestCase):
     @unittest.skip("not for CI")
     def test_balance_ext(self):
         print("test_balance_ext")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
         print(self.erc20_balance_ext( erc20Id, self.loader.loader_id))
 
     @unittest.skip("not for CI")
     def test_mint_id(self):
         print("test_mint_id")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        print(self.erc20_mint_id( erc20Id, self.loader.loader_id))
+        erc20Id = "7G3Pihd5ZMtCD91N2vc2hEmwt1yC4Sbk2eDtAGyTG9NV"
+        self.erc20_mint_id( erc20Id, self.loader.loader_id)
 
-    @unittest.skip("not for CI")
+    # @unittest.skip("not for CI")
     def test_balance(self):
         print("test_balance")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
         print(self.erc20_balance( erc20Id, self.loader.loader_id, ))
 
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        erc20Id = "7G3Pihd5ZMtCD91N2vc2hEmwt1yC4Sbk2eDtAGyTG9NV"
         self.erc20_transfer( erc20Id, self.loader.loader_id, "0000000000000000000000000000000000000011", 1)
 
 
