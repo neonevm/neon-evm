@@ -213,11 +213,11 @@ class EvmLoaderTests(unittest.TestCase):
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
@@ -240,6 +240,8 @@ class EvmLoaderTests(unittest.TestCase):
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                # signer
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 # from
                 AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                 # to
@@ -247,8 +249,6 @@ class EvmLoaderTests(unittest.TestCase):
                 # mint_id
                 AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                # signer
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False,  is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc)
@@ -395,35 +395,43 @@ class EvmLoaderTests(unittest.TestCase):
     @unittest.skip("not for CI")
     def test_dep(self):
         print("test_dep")
-        acc_client = "7qYyuJo5cjtndkSv619T9mbHYRvPtxNB4PkBWL9eaXr2"
-        erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
-        balance_erc20= "2Ya8KY9HHjP74cuwnuyopjBvq5KBAGQWYJCeaKUNwVM5"
-        mintId = "8H4yRiqfqLws8Pisjza4TpRfWX7QN5tpc4PZw5oNNRij"
+        acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        balance_erc20= "HjpNJwDPApLjrDuFagw8HkQwQrgF5B6Ps9cjdGqcpvGC"
+        mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
         self.erc20_deposit( acc_client,  50, erc20Id, balance_erc20, mintId, self.loader.loader_id)
+
+    def test_with_draw(self):
+        print("test_dep")
+        acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        balance_erc20= "HjpNJwDPApLjrDuFagw8HkQwQrgF5B6Ps9cjdGqcpvGC"
+        mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
+        self.erc20_withdraw(acc_client,  10, erc20Id, balance_erc20, mintId, self.loader.loader_id)
 
     @unittest.skip("not for CI")
     def test_balance_ext(self):
         print("test_balance_ext")
-        erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
-        self.erc20_balance_ext( erc20Id, self.loader.loader_id)
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        print(self.erc20_balance_ext( erc20Id, self.loader.loader_id))
 
     @unittest.skip("not for CI")
     def test_mint_id(self):
         print("test_mint_id")
-        erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
-        self.erc20_mint_id( erc20Id, self.loader.loader_id)
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        print(self.erc20_mint_id( erc20Id, self.loader.loader_id))
 
     @unittest.skip("not for CI")
     def test_balance(self):
         print("test_balance")
-        erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
-        self.erc20_balance( erc20Id, self.loader.loader_id, )
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        print(self.erc20_balance( erc20Id, self.loader.loader_id, ))
 
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20Id = "FRp8E7Bj9tPuPX57ynD7WtZAKkFqQzk3WPEyXA6Rg613"
-        self.erc20_transfer( erc20Id, self.loader.loader_id, "0000000000000000000000000000000000000099", 1)
+        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
+        self.erc20_transfer( erc20Id, self.loader.loader_id, "0000000000000000000000000000000000000011", 1)
 
 
 if __name__ == '__main__':
