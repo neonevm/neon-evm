@@ -123,13 +123,13 @@ impl<'a> SolanaBackend<'a> {
         H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
     }
 
-    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool, skip_addr: Option<(H160, bool, u64)>) -> Result<(), ProgramError>
+    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
     {        
-        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true, 0));
+        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
         let system_account = Self::system_account();        
 
         for apply in values {

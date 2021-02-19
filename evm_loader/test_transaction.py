@@ -10,7 +10,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.acc = RandomAccaunt()
-        # cls.acc = RandomAccaunt('1613730252.json')
+        # cls.acc = RandomAccaunt('1613734358.json')
         # print(bytes(cls.acc.get_acc().public_key()).hex())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
@@ -22,15 +22,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print("Done\n")
             
         cls.loader = EvmLoader(solana_url, cls.acc)
-        # cls.loader = EvmLoader(solana_url, cls.acc, 'EUtt2RvjHfrLg9gfd7ug1ptczZ6FvNwrePv8VJbQmRBW')
+        # cls.loader = EvmLoader(solana_url, cls.acc, 'ChcwPA3VHaKHEuzikJXHEy6jP5Ycn9ZV7KYZXfeiNp5m')
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
-        # cls.owner_contract = "68UUgBG8AKVZTqA9u3C3UGksWhtVXBxjuXozdnLH8uex"
+        # cls.owner_contract = "HAAfFJK4tsJb38LC2MULMzgpYkqAKRguyq7GRTocvGE9"
         print("contract id: ", cls.owner_contract)
         print("contract id: ", solana2ether(cls.owner_contract).hex())
 
-    def test_check_tx(self):  
+    def test_success_tx_send(self):  
         tx_1 = {
             'to': solana2ether(self.owner_contract),
             'value': 1,
@@ -61,11 +61,44 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
             ]))
         result = http_client.send_transaction(trx, self.acc.get_acc())
+
+    # def test_fail_on_no_signature(self):  
+    #     tx_1 = {
+    #         'to': solana2ether(self.owner_contract),
+    #         'value': 1,
+    #         'gas': 1,
+    #         'gasPrice': 1,
+    #         'nonce': 0,
+    #         'data': '3917b3df',
+    #         'chainId': 1
+    #     }
+        
+    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        
+    #     (caller, caller_nonce) = self.loader.ether2program(from_addr)
+    #     print(" ether: " + from_addr.hex())
+    #     print("solana: " + caller)
+    #     print(" nonce: " + str(caller_nonce))
+
+    #     if getBalance(caller) == 0:
+    #         print("Create caller account...")
+    #         caller_created = self.loader.createEtherAccount(from_addr)
+    #         print("Done\n")
+
+    #     trx = Transaction().add(
+    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
+    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+    #             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
+    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+    #         ]))
+    #     result = http_client.send_transaction(trx, self.acc.get_acc())
 
 
     # def test_check_wo_checks(self):  
