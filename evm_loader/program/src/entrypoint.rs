@@ -13,8 +13,12 @@ use solana_sdk::{
     program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
     system_instruction::{create_account, create_account_with_seed},
-    program::invoke_signed,
+    sysvar::instructions::{load_current_index, load_instruction_at}, 
+    program::{invoke_signed, invoke},
     info,
+    secp256k1_program,
+    instruction::Instruction,
+    sysvar::instructions
 };
 
 //use crate::hamt::Hamt;
@@ -27,6 +31,7 @@ use crate::{
     instruction::EvmInstruction,
     account_data::AccountData,
     solidity_account::SolidityAccount,
+    transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
 };
 
 use evm::{
@@ -174,7 +179,109 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
-            do_call(program_id, accounts, bytes)
+            do_call(program_id, accounts, &bytes, None)
+        },
+        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
+            let account_info_iter = &mut accounts.iter();
+            let program_info = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let sysvar_info = next_account_info(account_info_iter)?;
+            let clock_info = next_account_info(account_info_iter)?;
+
+            let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
+            let index = current_instruction - 1;
+
+            match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
+                Ok(instr) => {
+                    if instr.program_id == secp256k1_program::id() {
+                        const CHECK_COUNT: u8 = 1;
+                        const DATA_START: u16 = 1;
+                        const ETH_SIZE: u16 = 20;
+                        const SIGN_SIZE: u16 = 65;
+                        const ETH_OFFSET: u16 = DATA_START;
+                        const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
+                        const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+                    } else {
+                        return Err(ProgramError::IncorrectProgramId);
+                    }
+                },
+                Err(err) => {
+                    info!("ERR");                    
+                    return Err(ProgramError::MissingRequiredSignature);
+                }
+            }
+
+            let caller = H160::from_slice(from_addr);
+            let (nonce, contract, data) = get_data(unsigned_msg);
+
+            let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
+            let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(); 
+
+            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
+        },
+        EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg} => {    
+            let account_info_iter = &mut accounts.iter();
+            let program_info = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let sysvar_info = next_account_info(account_info_iter)?;
+            let clock_info = next_account_info(account_info_iter)?;
+
+            let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
+            info!(&(" current instruction: ".to_owned() + &current_instruction.to_string())); 
+
+            let index = current_instruction - 1;
+            info!(&("index: ".to_owned() + &index.to_string())); 
+
+            match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
+                Ok(instr) => {
+                    if instr.program_id == secp256k1_program::id() {
+                        let sliced = instr.data.as_slice();
+
+                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len());
+
+                        if reference_instruction != instr.data {
+                            info!("wrong keccak instruction data");
+                            info!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                            info!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                            return Err(ProgramError::InvalidInstructionData);
+                        }                    
+                    } else {
+                        info!("wrong program id");
+                        return Err(ProgramError::IncorrectProgramId);
+                    }
+                },
+                Err(err) => {
+                    info!("Invalid or no instruction to verify the signature");                    
+                    return Err(ProgramError::MissingRequiredSignature);
+                }
+            }
+
+            let caller = H160::from_slice(from_addr);
+            let (nonce, contract, data) = get_data(unsigned_msg);
+
+            let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
+            // let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();
+            
+            info!(&("caller: ".to_owned() + &caller.to_string()));    
+            info!(&("contract: ".to_owned() + &contract.to_string()));
+            info!(&("program_eth: ".to_owned() + &program_eth.to_string()));
+            // info!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));
+            // info!(&format!("caller: {}", &caller.to_string()));
+            // info!(&format!("contract: {}", &contract.to_string()));
+            // info!(&format!("program_eth: {}", &program_eth.to_string()));
+            // info!(&format!("caller_eth: {}", &caller_eth.to_string()));
+
+            if program_eth != contract {
+                info!("Add valid account signer");
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            if caller_info.owner != program_id {
+                info!("Add valid account signer");
+                return Err(ProgramError::InvalidAccountData);
+            }    
+
+            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
     };
 
@@ -265,7 +372,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
     info!("  backend initialized");
 
-    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info).ok_or(ProgramError::InvalidArgument)?;
+    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
 
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -307,6 +414,7 @@ fn do_call<'a>(
         program_id: &Pubkey,
         accounts: &'a [AccountInfo<'a>],
         instruction_data: &[u8],
+        from_info: Option<(H160, u64)>,
     ) -> ProgramResult
 {
     info!("do_call");
@@ -319,16 +427,17 @@ fn do_call<'a>(
     } else {
         caller_info
     };
-    let clock_info = next_account_info(account_info_iter)?;
+    // let sysvar_info = next_account_info(account_info_iter)?;
+    // let clock_info = next_account_info(account_info_iter)?;
 
     if program_info.owner != program_id {
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
+    let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
     info!("  backend initialized");
 
-    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info).ok_or(ProgramError::InvalidArgument)?;
+    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
 
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -373,27 +482,55 @@ fn get_ether_address<'a>(
     caller_opt: Option<&SolidityAccount<'a>>,
     caller_info: &'a AccountInfo<'a>,
     signer_info: &'a AccountInfo<'a>,
+    from_info: Option<(H160, u64)>,
 ) ->  Option<(H160, bool)>
 {
+
     if caller_info.owner == program_id {
         if caller_opt.is_some() {
             let caller = caller_opt.unwrap();
+
+            let caller_ether = caller.get_ether();
+            let caller_nonce = caller.get_nonce();
         
-            if caller.account_data.signer != *signer_info.key || !signer_info.is_signer {
-                info!("Add valid account signer");
-                info!(&("   caller signer: ".to_owned() + &caller.account_data.signer.to_string()));
-                info!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
-                info!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
-    
-                return None
+            if from_info.is_none() {
+                if caller.account_data.signer != *signer_info.key || !signer_info.is_signer {
+                    info!("Add valid account signer");
+                    info!(&("   caller signer: ".to_owned() + &caller.account_data.signer.to_string()));
+                    info!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
+                    info!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
+        
+                    return None
+                }
+            } else {
+                let (from, nonce) = from_info.unwrap();
+                if caller_ether != from {
+                    info!("Invalin caller account");
+                    info!(&("   caller addres: ".to_owned() + &caller_ether.to_string()));
+                    info!(&("     from addres: ".to_owned() + &from.to_string()));
+        
+                    return None
+                }
+                if caller_nonce != nonce {
+                    info!("Invalin Ethereum transaction nonce");
+                    info!(&("     tx nonce: ".to_owned() + &nonce.to_string()));
+                    info!(&("    acc nonce: ".to_owned() + &caller_nonce.to_string()));
+
+                    return None
+                }
             }
     
-            Some ( ( caller.get_ether(), true) )
+            Some ( ( caller_ether, true) )
 
         } else {
             None
         }
     } else {
+        if from_info.is_some() {
+            info!("Sender must be Ethereum account. This method is not allowed for Solana accounts.");
+
+            return None
+        }
         if !caller_info.is_signer {
             info!("Caller mast be signer");
             info!(&("Caller pubkey: ".to_owned() + &caller_info.key.to_string()));
