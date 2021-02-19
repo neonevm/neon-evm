@@ -273,24 +273,34 @@ impl<'a> Backend for SolanaBackend<'a> {
                 info!(&hex::encode(&input));
 
                 let contract = self.get_account_by_index(0).unwrap();   // do_call already check existence of Ethereum account with such index
-                let sender = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
-                let sender_seeds = [sender.account_data.ether.as_bytes(), &[sender.account_data.nonce]];
                 let contract_seeds = [contract.account_data.ether.as_bytes(), &[contract.account_data.nonce]];
-                //let empty_seeds = [];
+
                 info!("account_infos");
                 for info in self.account_infos {
                     info!(&format!("  {}", info.key));
                 };
-                let result = invoke_signed(
-                        &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                    &self.account_infos, &[&sender_seeds[..], &contract_seeds[..]]
-                );
-        
+                let result : solana_sdk::entrypoint::ProgramResult;
+                match self.get_account_by_index(1){
+                    Some(inner) => {
+                        let sender = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
+                        let sender_seeds = [sender.account_data.ether.as_bytes(), &[sender.account_data.nonce]];
+                         result = invoke_signed(
+                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
+                            &self.account_infos, &[&sender_seeds[..], &contract_seeds[..]]
+                        );
+
+                    }
+                    None => {
+                        result = invoke_signed(
+                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
+                            &self.account_infos, &[&contract_seeds[..]]
+                        );
+                    }
+                }
                 if let Err(err) = result {
                     info!(&format!("result: {}", err));
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
-        
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
             },
             1 => {
