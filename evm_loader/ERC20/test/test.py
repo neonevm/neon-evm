@@ -235,10 +235,10 @@ class EvmLoaderTests(unittest.TestCase):
         spl = SplToken(solana_url)
         return int(spl.call("balance {}".format(acc)).rstrip())
 
-    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id):
+    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, receiver_erc20):
         input = "6f0372af" + \
                 base58.b58decode(payer).hex() + \
-                str("%024x" % 0) + self.caller_eth.hex() + \
+                str("%024x" % 0) + receiver_erc20.hex() + \
                 self.acc.public_key()._key.hex() + \
                 "%064x" % amount
 
@@ -469,7 +469,7 @@ class EvmLoaderTests(unittest.TestCase):
         assert(self.erc20_balance( erc20Id) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId)
+        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.caller_eth)
         assert(self.tokenBalance(acc_client) == mint_amount-deposit_amount)
         assert(self.tokenBalance(balance_erc20) == deposit_amount)
         assert(self.erc20_balance( erc20Id) == deposit_amount*(10**9))
@@ -483,10 +483,11 @@ class EvmLoaderTests(unittest.TestCase):
     def test_deposit(self):
         print("test_deposit")
         acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
-        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
-        balance_erc20= "1nqiH9YUkU3FAACb1eYKQjA9r1mGKkKW3veCFJ3gyug"
+        erc20Id = "7HdN2wCAFDR9J91KSCQ48USp6XvRCQ7Uow9g95qtfEHV"
+        balance_erc20= "DXtQ8FJyUgfwBLaVHnAoRcvbvgudRYZBGJPTMwUm9EHa"
         mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
-        self.erc20_deposit( acc_client,  50, erc20Id, balance_erc20, mintId)
+        receiver_erc20 = bytes.fromhex("cf9f430BE7E6C473EC1556004650328C71051BD4")
+        self.erc20_deposit( acc_client,  900, erc20Id, balance_erc20, mintId, receiver_erc20)
 
     @unittest.skip("not for CI")
     def test_with_draw(self):
