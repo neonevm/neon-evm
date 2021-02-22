@@ -9,9 +9,18 @@ import json
 import base58
 import subprocess
 import unittest
+from eth_tx_utils import  make_keccak_instruction_data, Trx
+import base64
+from construct import Struct as cStruct
+from construct import Bytes, Int8ul, Int32ul
+from typing import NamedTuple
+from eth_keys import keys as eth_keys
+from web3.auto import w3
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
+sysinstruct = "Sysvar1nstructions1111111111111111111111111"
+keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 evm_loader = os.environ.get("EVM_LOADER")
@@ -37,6 +46,33 @@ def confirm_transaction(client, tx_sig):
         raise RuntimeError("could not confirm transaction: ", tx_sig)
     return resp
 
+
+ACCOUNT_INFO_LAYOUT = cStruct(
+    "eth_acc" / Bytes(20),
+    "nonce" / Int8ul,
+    "trx_count" / Bytes(8),
+    "signer_acc" / Bytes(32),
+    "code_size" / Int32ul
+)
+
+class AccountInfo(NamedTuple):
+    eth_acc: eth_keys.PublicKey
+    trx_count: int
+
+    @staticmethod
+    def frombytes(data):
+        cont = ACCOUNT_INFO_LAYOUT.parse(data)
+        return AccountInfo(cont.eth_acc, cont.trx_count)
+
+def _getAccountData(client, account, expected_length, owner=None):
+    info = client.get_account_info(account)['result']['value']
+    if info is None:
+        raise Exception("Can't get information about {}".format(account))
+
+    data = base64.b64decode(info['data'][0])
+    if len(data) != expected_length:
+        raise Exception("Wrong data length for account data {}".format(account))
+    return data
 
 
 class SolanaCli:
@@ -146,17 +182,16 @@ class EvmLoaderTests(unittest.TestCase):
             values = bytes(nums)
             cls.acc = Account(values)
 
-        # Create ethereum account for user account
-        cls.caller_ether = bytes.fromhex("cf9f430be7e6c473ec1556004650328c71051bd4")
-        # cls.caller_ether = solana2ether(cls.acc.public_key())
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
+        cls.caller_eth = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
+        (cls.caller, caller_nonce) = cls.loader.ether2program(cls.caller_eth)
 
         info = http_client.get_account_info(cls.caller)
         if info['result']['value'] is None:
-            print("Create caller account...")
-            cls.caller = cls.loader.createEtherAccount(cls.caller_ether)
+            print("Create solana caller account...")
+            caller = cls.loader.createEtherAccount(cls.caller_eth)
             print("Done")
-            print("cls.caller:", cls.caller)
+            print("solana caller:", caller)
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
@@ -166,7 +201,7 @@ class EvmLoaderTests(unittest.TestCase):
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
+        print("Caller:", cls.caller_eth.hex(), caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
     def createMint(self):
         spl = SplToken(solana_url)
@@ -200,26 +235,42 @@ class EvmLoaderTests(unittest.TestCase):
         spl = SplToken(solana_url)
         return int(spl.call("balance {}".format(acc)).rstrip())
 
-    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, evm_loader_id):
-        input = bytearray.fromhex(
-            "036f0372af" +
-            base58.b58decode(payer).hex() +
-            str("%024x" % 0) + self.caller_ether.hex() +
-            self.acc.public_key()._key.hex() +
-            "%064x" % amount
-        )
+    def erc20_deposit(self, payer, amount, erc20, balance_erc20, mint_id, receiver_erc20):
+        input = "6f0372af" + \
+                base58.b58decode(payer).hex() + \
+                str("%024x" % 0) + receiver_erc20.hex() + \
+                self.acc.public_key()._key.hex() + \
+                "%064x" % amount
+
+        info = _getAccountData(http_client, self.caller, ACCOUNT_INFO_LAYOUT.sizeof())
+        caller_trx_cnt = int.from_bytes(AccountInfo.frombytes(info).trx_count, 'little')
+
+        trx_raw = { 'to': solana2ether(erc20), 'value': 0, 'gas': 0, 'gasPrice': 0, 'nonce': caller_trx_cnt,
+            'data': input, 'chainId': 1 }
+        trx_signed = w3.eth.account.sign_transaction(trx_raw, self.caller_eth_pr_key.key)
+        trx_parsed = Trx.fromString(trx_signed.rawTransaction)
+        trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
+        eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v%2==0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
+        keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
+        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
-            [
-                AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-            ]))
+            TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
+                    AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False,  is_writable=False),  ])).add(
+            TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ]))
+
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
@@ -227,30 +278,47 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("deposit {}".format(int(res[13:], 16)))
+            if int(res[13:], 16) == 1:
+                print ("deposit OK")
+            else:
+                print ("deposit Fail")
 
-    def erc20_withdraw(self, receiver, amount, erc20, balance_erc20, mint_id, evm_loader_id):
+
+    def erc20_withdraw(self, receiver, amount, erc20, balance_erc20, mint_id):
         input = bytearray.fromhex(
-            "03441a3e70" +
+            "441a3e70" +
             base58.b58decode(receiver).hex() +
             "%064x" % amount
         )
+        info = _getAccountData(http_client, self.caller, ACCOUNT_INFO_LAYOUT.sizeof())
+        caller_trx_cnt = int.from_bytes(AccountInfo.frombytes(info).trx_count, 'little')
+
+        trx_raw = { 'to': solana2ether(erc20), 'value': 0, 'gas': 0, 'gasPrice': 0, 'nonce': caller_trx_cnt,
+            'data': input, 'chainId': 1 }
+        trx_signed = w3.eth.account.sign_transaction(trx_raw, self.caller_eth_pr_key.key)
+        trx_parsed = Trx.fromString(trx_signed.rawTransaction)
+        trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
+        eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v%2==0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
+        keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
+        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
-            [
-                AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                # signer
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                # from
-                AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-                # to
-                AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
-                # mint_id
-                AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False,  is_writable=False),
-            ]))
+            TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
+                    AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False,  is_writable=False),  ])).add(
+            TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ]))
+
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
@@ -258,17 +326,19 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("withdraw {}".format(int(res[13:], 16)))
+            if int(res[13:], 16) == 1:
+                print ("wirdraw OK")
+            else:
+                print ("wirdraw Fail")
 
 
-
-    def erc20_balance(self, erc20, evm_loader_id):
+    def erc20_balance(self, erc20):
         input = bytearray.fromhex(
             "0370a08231" +
-            str("%024x" % 0) + self.caller_ether.hex()
+            str("%024x" % 0) + self.caller_eth.hex()
         )
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
+            TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -286,21 +356,36 @@ class EvmLoaderTests(unittest.TestCase):
             return int(res[13:], 16)
 
 
-    def erc20_transfer(self, erc20, evm_loader_id, eth_to, amount):
+    def erc20_transfer(self, erc20, eth_to, amount):
         input = bytearray.fromhex(
-            "03a9059cbb" +
+            "a9059cbb" +
             str("%024x" % 0) + eth_to +
             "%064x" % amount
         )
-        trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
-            [
-                AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-            ]))
 
+        info = _getAccountData(http_client, self.caller, ACCOUNT_INFO_LAYOUT.sizeof())
+        caller_trx_cnt = int.from_bytes(AccountInfo.frombytes(info).trx_count, 'little')
+
+        trx_raw = {'to': solana2ether(erc20), 'value': 0, 'gas': 0, 'gasPrice': 0, 'nonce': caller_trx_cnt,
+                   'data': input, 'chainId': 1}
+        trx_signed = w3.eth.account.sign_transaction(trx_raw, self.caller_eth_pr_key.key)
+        trx_parsed = Trx.fromString(trx_signed.rawTransaction)
+        trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
+        eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v % 2 == 0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
+        keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
+        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+
+        trx = Transaction().add(
+            TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
+                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])).add(
+            TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ]))
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
@@ -309,13 +394,15 @@ class EvmLoaderTests(unittest.TestCase):
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
-            print("erc20 transfer {} ".format(res[13:]))
+            if int(res[13:], 16) == 1:
+                print("transfer OK")
+            else:
+                print("transfer Fail")
 
-
-    def erc20_balance_ext(self, erc20, evm_loader_id):
+    def erc20_balance_ext(self, erc20):
         input = bytearray.fromhex("0340b6674d")
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
+            TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -332,10 +419,11 @@ class EvmLoaderTests(unittest.TestCase):
         else:
             return res[13:]
 
-    def erc20_mint_id(self, erc20, evm_loader_id):
+
+    def erc20_mint_id(self, erc20):
         input = bytearray.fromhex("03e132a122")
         trx = Transaction().add(
-            TransactionInstruction(program_id=evm_loader_id, data=input, keys=
+            TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -351,7 +439,6 @@ class EvmLoaderTests(unittest.TestCase):
             raise Exception("Invalid program logs: no result")
         else:
             return res[13:]
-
 
     def test_erc20(self):
         mintId = self.createMint()
@@ -369,8 +456,8 @@ class EvmLoaderTests(unittest.TestCase):
         print ("erc20_id:", erc20Id)
         print ("erc20_id_ethereum:", erc20Id_ether.hex())
         time.sleep(20)
-        print("erc20 balance_ext():", self.erc20_balance_ext( erc20Id, self.loader.loader_id))
-        print("erc20 mint_id():", self.erc20_mint_id( erc20Id, self.loader.loader_id))
+        print("erc20 balance_ext():", self.erc20_balance_ext( erc20Id))
+        print("erc20 mint_id():", self.erc20_mint_id( erc20Id))
 
         self.changeOwner(balance_erc20, erc20Id)
         print("balance_erc20 owner changed to {}".format(erc20Id))
@@ -379,60 +466,61 @@ class EvmLoaderTests(unittest.TestCase):
         time.sleep(20)
         assert(self.tokenBalance(acc_client) == mint_amount)
         assert(self.tokenBalance(balance_erc20) == 0)
-        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == 0)
+        assert(self.erc20_balance( erc20Id) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.caller_eth)
         assert(self.tokenBalance(acc_client) == mint_amount-deposit_amount)
         assert(self.tokenBalance(balance_erc20) == deposit_amount)
-        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == deposit_amount*(10**9))
-        self.erc20_withdraw( acc_client, deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        assert(self.erc20_balance( erc20Id) == deposit_amount*(10**9))
+        self.erc20_withdraw( acc_client, deposit_amount*(10**9), erc20Id, balance_erc20, mintId)
         assert(self.tokenBalance(acc_client) == mint_amount)
         assert(self.tokenBalance(balance_erc20) == 0)
-        assert(self.erc20_balance( erc20Id, self.loader.loader_id) == 0)
+        assert(self.erc20_balance( erc20Id) == 0)
 
 
     @unittest.skip("not for CI")
-    def test_dep(self):
-        print("test_dep")
+    def test_deposit(self):
+        print("test_deposit")
         acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        balance_erc20= "HjpNJwDPApLjrDuFagw8HkQwQrgF5B6Ps9cjdGqcpvGC"
+        erc20Id = "7HdN2wCAFDR9J91KSCQ48USp6XvRCQ7Uow9g95qtfEHV"
+        balance_erc20= "DXtQ8FJyUgfwBLaVHnAoRcvbvgudRYZBGJPTMwUm9EHa"
         mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
-        self.erc20_deposit( acc_client,  50, erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        receiver_erc20 = bytes.fromhex("cf9f430BE7E6C473EC1556004650328C71051BD4")
+        self.erc20_deposit( acc_client,  900, erc20Id, balance_erc20, mintId, receiver_erc20)
 
+    @unittest.skip("not for CI")
     def test_with_draw(self):
-        print("test_dep")
+        print("test_withdraw")
         acc_client = "Fda8oxqwnch7soumCXPPyTckbLVQ1FckuE1B5c6pV82r"
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        balance_erc20= "HjpNJwDPApLjrDuFagw8HkQwQrgF5B6Ps9cjdGqcpvGC"
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        balance_erc20= "1nqiH9YUkU3FAACb1eYKQjA9r1mGKkKW3veCFJ3gyug"
         mintId = "D4fcZmhhgcKuj9xZVcFCY99WiLxBPNxNBbuM4yNRTdM6"
-        self.erc20_withdraw(acc_client,  10, erc20Id, balance_erc20, mintId, self.loader.loader_id)
+        self.erc20_withdraw(acc_client,  10, erc20Id, balance_erc20, mintId)
 
     @unittest.skip("not for CI")
     def test_balance_ext(self):
         print("test_balance_ext")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        print(self.erc20_balance_ext( erc20Id, self.loader.loader_id))
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        print(self.erc20_balance_ext( erc20Id))
 
     @unittest.skip("not for CI")
     def test_mint_id(self):
         print("test_mint_id")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        print(self.erc20_mint_id( erc20Id, self.loader.loader_id))
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        print(self.erc20_mint_id( erc20Id))
 
     @unittest.skip("not for CI")
     def test_balance(self):
         print("test_balance")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        print(self.erc20_balance( erc20Id, self.loader.loader_id, ))
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        print(self.erc20_balance( erc20Id))
 
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20Id = "sr9JLRv6U9vYcm6PHDSyREfUwqw8dzKBz4CTqFcBq4B"
-        self.erc20_transfer( erc20Id, self.loader.loader_id, "0000000000000000000000000000000000000011", 1)
-
+        erc20Id = "EHoMc1NwjuBnDcjhczpQgiQ268kL4mbUT7hkiNszMVRZ"
+        self.erc20_transfer( erc20Id, "0000000000000000000000000000000000000011", 1)
 
 if __name__ == '__main__':
     unittest.main()
