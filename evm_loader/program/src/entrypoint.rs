@@ -28,7 +28,7 @@ use crate::solana_backend::{
 
 use crate::{
 //    bump_allocator::BumpAllocator,
-    instruction::EvmInstruction,
+    instruction::{EvmInstruction, on_return, on_event},
     account_data::AccountData,
     solidity_account::SolidityAccount,
     transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
@@ -283,6 +283,12 @@ fn process_instruction<'a>(
 
             do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
+        EvmInstruction::OnReturn {bytes} => {
+            Ok(())
+        },
+        EvmInstruction::OnEvent {address, topics, data} => {
+            Ok(())
+        },
     };
 
 /*    let result = if program_lamports == 0 {
@@ -402,7 +408,14 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     if exit_reason.is_succeed() {
         info!("Succeed execution");
         let (applies, logs) = executor.deconstruct();
-        backend.apply(applies, logs, false, Some(caller_ether))?;
+        backend.apply(applies,false, Some(caller_ether))?;
+        for log in logs {
+            let ix = on_event(program_id, log)?;
+            invoke(
+                &ix,
+                &accounts
+            )?;
+        }
         Ok(())
     } else {
         info!("Not succeed execution");
@@ -459,7 +472,14 @@ fn do_call<'a>(
     info!(match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, logs) = executor.deconstruct();
-            backend.apply(applies, logs, false, Some(caller_ether))?;
+            backend.apply(applies,false, Some(caller_ether))?;
+            for log in logs {
+                let ix = on_event(program_id, log)?;
+                invoke(
+                    &ix,
+                    &accounts
+                )?;
+            }
             info!("Applies done");
             "succeed"
         },
@@ -473,6 +493,13 @@ fn do_call<'a>(
         info!("Not succeed execution");
         return Err(ProgramError::InvalidInstructionData);
     }
+
+    let ix = on_return(program_id, result)?;
+    invoke(
+        &ix,
+        &accounts
+    )?;
+
     Ok(())
 }
 

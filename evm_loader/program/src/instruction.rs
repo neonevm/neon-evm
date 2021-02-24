@@ -1,7 +1,8 @@
 use serde::{Serialize, Deserialize};
-use solana_sdk::{program_error::ProgramError, pubkey::Pubkey};
+use solana_sdk::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::TryInto;
-use primitive_types::H160;
+use primitive_types::{H160, H256};
+use evm::backend::Log;
 
 /// Create a new account
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -98,7 +99,19 @@ pub enum EvmInstruction<'a> {
         sign: &'a [u8],
         unsigned_msg: &'a [u8],
     },
+    /// Called action return
+    OnReturn {
+        /// Returned data
+        bytes: &'a [u8],
+    },
 
+    /// Called action event
+    OnEvent {
+        address: H160,
+        topics: Vec<H256>,
+        /// Data
+        data: &'a [u8],
+    },
 }
 
 
@@ -168,7 +181,64 @@ impl<'a> EvmInstruction<'a> {
                 let (sign, unsigned_msg) = rest.split_at(65);
                 EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg}
             },
+            6 => {
+                EvmInstruction::OnReturn {bytes: rest}
+            },
+            7 => {
+                let (address, rest) = rest.split_at(20);
+                let address = H160::from_slice(&*address); //address.try_into().map_err(|_| InvalidInstructionData)?;
+
+                let (topics_cnt, mut rest) = rest.split_at(8);
+                let topics_cnt = topics_cnt.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let mut topics = Vec::new();
+                for i in 1..=topics_cnt {
+                    let (topic, rest2) = rest.split_at(32);
+                    let topic = H256::from_slice(&*topic);
+                    topics.push(topic);
+                    rest = rest2;
+                }
+                EvmInstruction::OnEvent {address, topics, data: rest}
+            },
+
             _ => return Err(InvalidInstructionData),
         })
     }
+}
+
+/// Creates a `OnReturn` instruction.
+pub fn on_return(
+    myself_program_id: &Pubkey,
+    mut result: Vec<u8>
+) -> Result<Instruction, ProgramError> {
+    result.insert(0, 6u8);
+
+    Ok(Instruction {
+        program_id: *myself_program_id,
+        accounts: [].to_vec(),
+        data: result,
+    })
+}
+
+/// Creates a `OnEvent` instruction.
+pub fn on_event(
+    myself_program_id: &Pubkey,
+    log: Log
+) -> Result<Instruction, ProgramError> {
+    let mut data = Vec::new();
+    data.insert(0, 7u8);
+
+    data.extend_from_slice(log.address.as_bytes());
+
+    data.extend_from_slice(&log.topics.len().to_le_bytes());
+    for topic in log.topics {
+        data.extend_from_slice(topic.as_bytes());
+    }
+
+    data.extend(&log.data);
+
+    Ok(Instruction {
+        program_id: *myself_program_id,
+        accounts: [].to_vec(),
+        data,
+    })
 }
