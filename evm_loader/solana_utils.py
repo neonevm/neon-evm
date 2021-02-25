@@ -10,8 +10,8 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 # path_to_patched_solana = 'solana'
 # path_to_patched_solana = '../solana/target/debug/solana'
-# path_to_patched_solana = 'solana'
-path_to_patched_solana = '/home/dmitriy/cyber-core/solana/target/debug/solana'
+path_to_patched_solana = 'solana'
+# path_to_patched_solana = '/home/dmitriy/cyber-core/solana/target/debug/solana'
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -137,9 +137,10 @@ class EvmLoader:
         info = http_client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
-    def deployChecked(self, location):
+    def deployChecked(self, location,  creator=None):
         from web3 import Web3
-        creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
+        if creator is None:
+            creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
         with open(location, mode='rb') as file:
             fileHash = Web3.keccak(file.read())
             ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
@@ -150,7 +151,8 @@ class EvmLoader:
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return {"ethereum": ether.hex(), "programId": program[0]}
+            return program[0]
+            # return {"ethereum": ether.hex(), "programId": program[0]}
 
 
 def getBalance(account):
