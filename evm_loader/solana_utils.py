@@ -3,22 +3,17 @@ from solana.account import Account
 from solana.publickey import PublicKey
 import time
 import os
-import json
 import subprocess
 from typing import NamedTuple
 from construct import Bytes, Int8ul, Int32ul
 from construct import Struct as cStruct
-import random
 import json
-from sha3 import keccak_256
-import struct
 from eth_keys import keys as eth_keys
 import base64
 
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-# path_to_patched_solana = 'solana'
 # path_to_patched_solana = '../solana/target/debug/solana'
 path_to_patched_solana = 'solana'
 # path_to_patched_solana = '/home/dmitriy/cyber-core/solana/target/debug/solana'
@@ -120,7 +115,6 @@ class EvmLoader:
             result = json.loads(cli.call('deploy {}'.format(contract)))
             programId = result['programId']
         EvmLoader.loader_id = programId
-        # EvmLoader.loader_id = "3qEJUEkcbP5PEWzRxRYpa6yfVBm5yZmHkz7TzjRzUPhP"
         print("Done\n")
 
         self.solana_url = solana_url

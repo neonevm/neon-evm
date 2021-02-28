@@ -4,6 +4,7 @@ import unittest
 from base58 import b58decode
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
@@ -77,69 +78,42 @@ class EventTest(unittest.TestCase):
         else:
             return bytearray.fromhex(res[13:])
 
-    def test_evmloader_returns_events(self):
-        print("ReturnsEvents program:", self.reId)
-
-        # Call addNoReturn for returnsevents
-        data = (bytes.fromhex("c2eb5db1") +
-                bytes.fromhex("%064x" % 0x1) +
-                bytes.fromhex("%064x" % 0x2)
-                )
-        print('addNoReturn arguments:', data.hex())
-        result = self.call_signed(
-            input=data,
-            raw_result=True)
-        print('addNoReturn result:', result)
+    def test_addNoReturn(self):
+        data = (bytes.fromhex("c2eb5db1") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
+        result = self.call_signed(input=data, raw_result=True)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data, b'\x06')  # 6 means OnReturn, and no value next - empty
+        print()
+
+    def test_addReturn(self):
+        data = (bytes.fromhex("c14f01d7") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        result = self.call_signed(input=data, raw_result=True)
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x06')
+        self.assertEqual(data[1:], bytes().fromhex("%064x" % 0x3))
         print('')
 
-        # # Call addReturn for returnsevents
-        # data = (bytes.fromhex("03c14f01d7") +  # 03 means call, next part means addReturn(uint8,uint8)
-        #         bytes.fromhex("%064x" % 0x1) +
-        #         bytes.fromhex("%064x" % 0x2)
-        #         )
-        # print('addReturn arguments:', data.hex())
-        # result = self.call(
-        #     contract=self.reId,
-        #     data=data,
-        #     raw_result=True)
-        # print('addReturn result:', result)
-        # self.assertEqual(result['meta']['err'], None)
-        # self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        # self.assertEqual(data[:1], b'\x06')
-        # self.assertEqual(data[1:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03')
-        # print('')
-        #
-        # # Call addReturnEvent for returnsevents
-        # data = (bytes.fromhex("030049a148") +  # 03 means call, next part means addReturnEvent(uint8,uint8)
-        #         bytes.fromhex("%064x" % 0x1) +
-        #         bytes.fromhex("%064x" % 0x2)
-        #         )
-        # print('addReturnEvent arguments:', data.hex())
-        # result = self.call(
-        #     contract=self.reId,
-        #     data=data,
-        #     raw_result=True)
-        # print('addReturnEvent result:', result)
-        # self.assertEqual(result['meta']['err'], None)
-        # self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        # self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
-        # self.assertEqual(data[-32:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03')
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
-        # self.assertEqual(data[:1], b'\x06')
-        # self.assertEqual(data[1:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03')
-        # print('')
+    def test_addReturnEvent(self):
+        data = (bytes.fromhex("0049a148") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        result = self.call_signed(input=data, raw_result=True)
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
+        print(data.hex())
+        # self.assertEqual(data[1:33], abi.event_signature_to_log_topic('addReturnEvent(uint8,uint8)'))
+        self.assertEqual(data[1:21], b58decode(self.reId))
+        self.assertEqual(data[-32:], bytes().fromhex("%064x" % 0x3))  # sum
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        self.assertEqual(data[:1], b'\x06')
+        print('')
         #
         # # Call addReturnEventTwice for returnsevents
         # data = (bytes.fromhex("036268c754") +  # 03 means call, next part means addReturnEventTwice(uint8,uint8)
