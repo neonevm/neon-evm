@@ -8,8 +8,7 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-# evm_loader = os.environ.get("EVM_LOADER")
-evm_loader_id = "3hW56nLdw595VxjHJrYZcBsVe2fduEtoedFixdPbdYUH"
+evm_loader = os.environ.get("EVM_LOADER")
 owner_contract = os.environ.get("CONTRACT")
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -30,14 +29,14 @@ class EventTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        cls.reId = cls.loader.deployChecked("event.bin", solana2ether(cls.acc.public_key()))
-
+        (cls.reId, cls.reId_eth) = cls.loader.deployChecked("event.bin", solana2ether(cls.acc.public_key()))
+        print ('contract', cls.reId)
+        print ('contract_eth', cls.reId_eth.hex())
 
     def call_signed(self, input, raw_result):
         tx = {
@@ -79,88 +78,67 @@ class EventTest(unittest.TestCase):
             return bytearray.fromhex(res[13:])
 
     def test_addNoReturn(self):
-        data = (bytes.fromhex("c2eb5db1") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
+        func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
         result = self.call_signed(input=data, raw_result=True)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data, b'\x06')  # 6 means OnReturn, and no value next - empty
-        print()
 
     def test_addReturn(self):
-        data = (bytes.fromhex("c14f01d7") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         result = self.call_signed(input=data, raw_result=True)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x06')
         self.assertEqual(data[1:], bytes().fromhex("%064x" % 0x3))
-        print('')
 
     def test_addReturnEvent(self):
-        data = (bytes.fromhex("0049a148") + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         result = self.call_signed(input=data, raw_result=True)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
-        print(data.hex())
-        # self.assertEqual(data[1:33], abi.event_signature_to_log_topic('addReturnEvent(uint8,uint8)'))
-        self.assertEqual(data[1:21], b58decode(self.reId))
-        self.assertEqual(data[-32:], bytes().fromhex("%064x" % 0x3))  # sum
+        self.assertEqual(data[1:21], self.reId_eth)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Added(uint8)'))  #topics
+        self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x3))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
-        self.assertEqual(data[:1], b'\x06')
-        print('')
-        #
-        # # Call addReturnEventTwice for returnsevents
-        # data = (bytes.fromhex("036268c754") +  # 03 means call, next part means addReturnEventTwice(uint8,uint8)
-        #         bytes.fromhex("%064x" % 0x1) +
-        #         bytes.fromhex("%064x" % 0x2)
-        #         )
-        # print('addReturnEventTwice arguments:', data.hex())
-        # result = self.call(
-        #     contract=self.reId,
-        #     data=data,
-        #     raw_result=True)
-        # print('addReturnEventTwice result:', result)
-        # self.assertEqual(result['meta']['err'], None)
-        # self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        # self.assertEqual(data[:1], b'\x07')
-        # self.assertEqual(data[-32:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03')
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
-        # self.assertEqual(data[:1], b'\x07')
-        # self.assertEqual(data[-32:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05')
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
-        # self.assertEqual(data[:1], b'\x06')
-        # self.assertEqual(data[1:],
-        #                  b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05')
-        # print('')
-        #
-        # # Call addReturnEventTwice 2 times in same trx
-        # data1 = (bytes.fromhex("036268c754") +  # 03 means call, next part means addReturnEventTwice(uint8,uint8)
-        #          bytes.fromhex("%064x" % 0x1) +
-        #          bytes.fromhex("%064x" % 0x2)
-        #          )
-        # data2 = (bytes.fromhex("036268c754") +  # 03 means call, next part means addReturnEventTwice(uint8,uint8)
-        #          bytes.fromhex("%064x" % 0x3) +
-        #          bytes.fromhex("%064x" % 0x4)
-        #          )
-        # print('addReturnEventTwice*2 arguments:', data.hex())
-        # trx = Transaction().add(self.call(
-        #     contract=self.reId,
-        #     data=data1,
-        #     run_tx=False)).add(self.call( contract=reId, data=data2, run_tx=False))
-        # result = \
-        # http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))[
-        #     "result"]
-        # print('addReturnEventTwice*2 result:', result)
+        self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
+        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 3)) #sum
+
+    def test_addReturnEventTwice(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        result = self.call_signed(input=data, raw_result=True)
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[1:21], self.reId_eth)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Added(uint8)'))  #topics
+        self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x3))  # sum
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        self.assertEqual(data[1:21], self.reId_eth)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Added(uint8)'))  #topics
+        self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x5))  # sum
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
+        self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
+        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 3)) #sum
 
 if __name__ == '__main__':
     unittest.main()

@@ -128,7 +128,7 @@ class EvmLoader:
         output = cli.call("deploy --use-evm-loader {} {}".format(self.loader_id, contract))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
-        return result['programId']
+        return result
 
 
     def createEtherAccount(self, ether):
@@ -158,11 +158,12 @@ class EvmLoader:
         program = self.ether2program(ether)
         info = http_client.get_account_info(program[0])
         if info['result']['value'] is None:
-            return self.deploy(location)
+            res = self.deploy(location)
+            return (res['programId'], bytes.fromhex(res['ethereum'][2:]))
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return program[0]
+            return (program[0], ether)
 
 
 def getBalance(account):
@@ -205,7 +206,7 @@ def getTransactionCount(client, sol_account):
     info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
     acc_info = AccountInfo.frombytes(info)
     res = int.from_bytes(acc_info.trx_count, 'little')
-    print('getTransactionCount {}: {}', sol_account, res)
+    print('getTransactionCount {}: {}'.format(sol_account, res))
     return res
 
 def wallet_path():

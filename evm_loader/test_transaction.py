@@ -25,7 +25,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # cls.loader = EvmLoader(solana_url, cls.acc, 'ChcwPA3VHaKHEuzikJXHEy6jP5Ycn9ZV7KYZXfeiNp5m')
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
-        cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')
+        cls.owner_contract = cls.loader.deploy('evm_loader/hello_world.bin')['programId']
         # cls.owner_contract = "HAAfFJK4tsJb38LC2MULMzgpYkqAKRguyq7GRTocvGE9"
         print("contract id: ", cls.owner_contract)
         print("contract id: ", solana2ether(cls.owner_contract).hex())
