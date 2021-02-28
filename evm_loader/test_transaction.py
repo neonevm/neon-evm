@@ -9,8 +9,8 @@ from solana_utils import *
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.acc = RandomAccaunt()
-        # cls.acc = RandomAccaunt('1613734358.json')
+        cls.acc = RandomAccount()
+        # cls.acc = RandomAccount('1613734358.json')
         # print(bytes(cls.acc.get_acc().public_key()).hex())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())

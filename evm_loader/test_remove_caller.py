@@ -55,7 +55,7 @@ class SolanaCli:
 
 
 
-class RandomAccaunt:
+class RandomAccount:
     def __init__(self):
         self.make_random_path()
         print("New keypair file: {}".format(self.path))
@@ -173,7 +173,7 @@ def solana2ether(public_key):
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.acc = RandomAccaunt()
+        cls.acc = RandomAccount()
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
             tx = http_client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
@@ -222,7 +222,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print(result)
 
     def test_call_by_signer(self):
-        acc = RandomAccaunt()
+        acc = RandomAccount()
         if getBalance(acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", acc.get_acc().public_key())
             tx = http_client.request_airdrop(acc.get_acc().public_key(), 10*10**9)
