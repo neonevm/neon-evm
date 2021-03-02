@@ -8,8 +8,8 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-evm_loader = os.environ.get("EVM_LOADER")
-owner_contract = os.environ.get("CONTRACT")
+evm_loader_id = os.environ.get("EVM_LOADER")
+evm_loader_id = 'yVwMvKtjxT5Pg3AfzFqLfeT2fsQzM8JNqQuH4cc3Pbt'
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
