@@ -45,7 +45,7 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
