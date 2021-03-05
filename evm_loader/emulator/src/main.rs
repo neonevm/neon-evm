@@ -1,6 +1,9 @@
 use crate::solana_backend::SolanaBackend;
 use solana_sdk::pubkey::Pubkey;
-use evm::executor::StackExecutor;
+use evm::{
+    executor::{StackExecutor},
+    ExitReason,
+};
 use std::env;
 use std::str::FromStr;
 use primitive_types::{H160, U256};
@@ -48,6 +51,5 @@ fn main() {
     println!("{}", &hex::encode(&result));
     if !exit_reason.is_succeed() {
         println!("Not succeed execution");
-        return Err(ProgramError::InvalidInstructionData);
     }
 }

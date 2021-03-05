@@ -1,27 +1,26 @@
 use crate::hamt::Hamt;
 use crate::account_data::AccountData;
-use solana_sdk::{
-    account_info::AccountInfo,
-    program_error::ProgramError,
-    pubkey::Pubkey,
-    info,
-};
 use primitive_types::{H160, H256, U256};
 use std::convert::TryInto;
+use std::borrow::BorrowMut;
+
+const ERR_UninitializedAccount: u8 = 0x10;
+const ERR_AccountDataTooSmall: u8 = 0x20;
+const ERR_AccountAlreadyInitialized: u8 = 0x30;
 
 #[derive(Debug,Clone)]
 pub struct SolidityAccount {
     //pub key: H160,
     pub account_data: AccountData,
-    pub data: [u8],
+    pub data: Vec<u8>,
     pub lamports: u64,
 }
 
 impl SolidityAccount {
-    pub fn new(data: [u8], lamports: u64) -> Result<Self, ProgramError> {
+    pub fn new(data: Vec<u8>, lamports: u64) -> Result<Self, u8> {
         println!("  SolidityAccount::new");
         println!("  Get data with length {}", data.len());
-        let (account_data, _) = AccountData::unpack(&data)?;
+        let (account_data, _) = AccountData::unpack(&data.as_slice()).unwrap();
         Ok(Self{account_data, data, lamports})
     }
 
@@ -47,7 +46,7 @@ impl SolidityAccount {
         }
     }
 
-    pub fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
+    pub fn storage<U, F>(&self, f: F) -> Result<U, u8>
     where F: FnOnce(&mut Hamt) -> U {
         /*if let AccountData::Account{code_size,..} = self.account_data {
             if code_size > 0 {
@@ -60,24 +59,25 @@ impl SolidityAccount {
         }
         Err(ProgramError::UninitializedAccount)*/
         if self.account_data.code_size > 0 {
-            let mut mdata = self.data.borrow_mut();
+            let sdata = self.data.as_slice();
+            let mut mdata = sdata.borrow_mut();
             println!("Storage data borrowed");
             let code_size = self.account_data.code_size as usize;
             let offset = AccountData::SIZE + code_size;
             let mut hamt = Hamt::new(&mut mdata[offset..], false)?;
             Ok(f(&mut hamt))
         } else {
-            Err(ProgramError::UninitializedAccount)
+            Err(ERR_UninitializedAccount)
         }
     }
 
     pub fn update<I>(&mut self, solidity_address: H160, nonce: U256, lamports: u64, code: &Option<Vec<u8>>,
-            storage_items: I, reset_storage: bool) -> Result<(), ProgramError>
+            storage_items: I, reset_storage: bool) -> Result<(), u8>
         where I: IntoIterator<Item=(H256, H256)>,
     {
         println!("Update: {}, {}, {}, {:?} for {:?}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, self);
-        let mut mdata = self.data.borrow_mut();
-        **self.lamports.borrow_mut() = lamports;
+        let mut mdata = self.data.as_slice().borrow_mut();
+        *self.lamports.borrow_mut() = lamports;
 
         /*let mut current_code_size = match self.account_data {
             AccountData::Empty => 0,
@@ -87,9 +87,9 @@ impl SolidityAccount {
         self.account_data.trx_count = nonce.as_u64();
         if let Some(code) = code {
             if self.account_data.code_size != 0 {
-                return Err(ProgramError::AccountAlreadyInitialized);
+                return Err(ERR_AccountAlreadyInitialized);
             };
-            self.account_data.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
+            self.account_data.code_size = code.len().try_into().map_err(|_| ERR_AccountDataTooSmall)?;
             println!("Write code");
             mdata[AccountData::SIZE..AccountData::SIZE+code.len()].copy_from_slice(&code);
             println!("Code written");
@@ -104,7 +104,7 @@ impl SolidityAccount {
         if reset_storage || exist_items {
             println!("Update storage");
             let code_size = self.account_data.code_size as usize;
-            if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+            if code_size == 0 {return Err(ERR_UninitializedAccount);};
 
             let mut storage = Hamt::new(&mut mdata[AccountData::SIZE+code_size..], reset_storage)?;
             println!("Storage initialized");

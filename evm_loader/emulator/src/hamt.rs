@@ -1,9 +1,6 @@
 use primitive_types::U256;
 use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
-use solana_sdk::{
-    program_error::ProgramError,
-};
 
 /*
 #[derive(Debug)]
@@ -19,6 +16,11 @@ struct HamtHeader {
     last_used: u32,
     free: [u32;32],
 }*/
+
+const ERR_UninitializedAccount: u8 = 0x10;
+const ERR_AccountDataTooSmall: u8 = 0x20;
+const ERR_AccountAlreadyInitialized: u8 = 0x30;
+const ERR_InvalidAccountData: u8 = 0x40;
 
 #[derive(Debug)]
 pub struct Hamt<'a> {
@@ -36,11 +38,11 @@ enum ItemType {
 }
 
 impl<'a> Hamt<'a> {
-    pub fn new(data: &'a mut [u8], reset: bool) -> Result<Self, ProgramError> {
+    pub fn new(data: &'a mut [u8], reset: bool) -> Result<Self, u8> {
         let header_len = size_of::<u32>() * 32 * 2;
 
         if data.len() < header_len {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err(ERR_AccountDataTooSmall);
         }
 
         if reset {
@@ -52,13 +54,13 @@ impl<'a> Hamt<'a> {
             let last_used_ptr = array_mut_ref![data, 0, 4];
             let last_used = u32::from_le_bytes(*last_used_ptr);
             if last_used < header_len as u32 {
-                return Err(ProgramError::InvalidAccountData);
+                return Err(ERR_InvalidAccountData);
             }
             Ok(Hamt {data: data, last_used: last_used, used: 0, item_count: 0})
         }
     }
 
-    fn allocate_item(&mut self, item_type: u8) -> Result<u32, ProgramError> {
+    fn allocate_item(&mut self, item_type: u8) -> Result<u32, u8> {
         let free_pos = item_type as u32 * size_of::<u32>() as u32;
         let size:u32 = match item_type {
             0 => (256+256)/8,
@@ -74,7 +76,7 @@ impl<'a> Hamt<'a> {
             }
         }
         if (self.last_used + size) as usize > self.data.len() {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err(ERR_AccountDataTooSmall);
         }
         let item_pos = self.last_used;
         self.last_used += size;
@@ -95,7 +97,7 @@ impl<'a> Hamt<'a> {
         self.used -= size;
     }
 
-    fn place_item(&mut self, key: U256, value: U256) -> Result<u32, ProgramError> {
+    fn place_item(&mut self, key: U256, value: U256) -> Result<u32, u8> {
         let pos = self.allocate_item(0)?;
         let ptr = array_mut_ref![self.data, pos as usize, 256/8*2];
         key.to_little_endian(&mut ptr[..256/8]);
@@ -103,7 +105,7 @@ impl<'a> Hamt<'a> {
         Ok(pos | 1)
     }
 
-    fn place_items2(&mut self, tags: u32, item1: u32, item2: u32) -> Result<u32, ProgramError> {
+    fn place_items2(&mut self, tags: u32, item1: u32, item2: u32) -> Result<u32, u8> {
         let pos = self.allocate_item(2)?;
         let ptr = array_mut_ref![self.data, pos as usize, 3*4];
         let (tags_ptr, item1_ptr, item2_ptr) = mut_array_refs!(ptr, 4, 4, 4);
@@ -146,7 +148,7 @@ impl<'a> Hamt<'a> {
         }
     }
 
-    pub fn insert(&mut self, key: U256, value: U256) -> Result<(), ProgramError> {
+    pub fn insert(&mut self, key: U256, value: U256) -> Result<(), u8> {
         let (key, tag) = (key >> 5, key.low_u32() & 0b11111);
         let ptr_pos = 32*4 + tag * 4;
         let res = self.insert_item(ptr_pos, key, value);
@@ -154,7 +156,7 @@ impl<'a> Hamt<'a> {
         res
     }
 
-    fn insert_item(&mut self, ptr_pos: u32, key: U256, value: U256) -> Result<(), ProgramError> {
+    fn insert_item(&mut self, ptr_pos: u32, key: U256, value: U256) -> Result<(), u8> {
         match self.get_item(ptr_pos) {
             ItemType::Empty => {
                 let item_pos = self.place_item(key, value)?;
