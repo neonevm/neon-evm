@@ -36,6 +36,7 @@ RUN solc --output-dir . --bin *.sol && \
 
 # Define solana-image that contains utility
 FROM cybercoredev/solana:latest AS solana
+FROM cybercoredev/solana:v1.4.25-resources AS solana-deploy
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -44,18 +45,17 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install openssl ca-certificates curl python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install solana web3
+RUN pip3 install solana web3 pysha3
 COPY solana-py.patch /tmp/
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
+COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
 COPY --from=evm-loader-builder /opt/target/bpfel-unknown-unknown/release/evm_loader.so /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/evm_loader/*.bin /opt/contracts/
-COPY evm_loader/test.py /opt/
+COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
-ENV SOLANA_URL=http://solana:8899
 ENV CONTRACTS_DIR=/opt/contracts/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-RUN solana-keygen new --no-passphrase
