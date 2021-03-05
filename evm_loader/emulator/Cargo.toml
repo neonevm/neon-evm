@@ -1,0 +1,16 @@
+[package]
+name = "emulator"
+version = "0.1.0"
+authors = ["Dmitriy Borisenko <otselnik@yandex.ru>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
+solana-sdk = { version = "", default-features = false, optional = true }
+solana-client = { version = "1.4.0" }
+bs58 = "0.4.0"
+primitive-types = ""
+hex = ""
+sha3 = ""
+arrayref = ""
