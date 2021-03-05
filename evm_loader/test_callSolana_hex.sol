@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
 
-contract helloWorld {
+contract callSolanaHex {
 
     address solana = 0xfF00000000000000000000000000000000000000;
     function testCall() public { 

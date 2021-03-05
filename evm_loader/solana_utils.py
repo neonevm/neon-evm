@@ -13,10 +13,10 @@ import base64
 
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
+EVM_LOADER = os.environ.get("EVM_LOADER")
+EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 http_client = Client(solana_url)
-# path_to_patched_solana = '../solana/target/debug/solana'
-path_to_patched_solana = 'solana'
-# path_to_patched_solana = '/home/dmitriy/cyber-core/solana/target/debug/solana'
+path_to_solana = 'solana'
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -34,8 +34,8 @@ def confirm_transaction(client, tx_sig):
 #            print('Confirmed transaction:', resp)
             break
         elapsed_time += sleep_time
-        if not resp["result"]:
-            raise RuntimeError("could not confirm transaction: ", tx_sig)
+    if not resp["result"]:
+        raise RuntimeError("could not confirm transaction: ", tx_sig)
     return resp
 
 
@@ -46,7 +46,7 @@ class SolanaCli:
         self.acc = acc
 
     def call(self, arguments):
-        cmd = '{} --keypair {} --url {} {}'.format(path_to_patched_solana, self.acc.get_path(), self.url, arguments)
+        cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), self.url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -107,12 +107,11 @@ class WalletAccount (RandomAccount):
 
 
 class EvmLoader:
-    def __init__(self, solana_url, acc, programId=None):
+    def __init__(self, solana_url, acc, programId=EVM_LOADER):
         if programId == None:
             print("Load EVM loader...")
             cli = SolanaCli(solana_url, acc)
-            contract = 'target/bpfel-unknown-unknown/release/evm_loader.so'
-            result = json.loads(cli.call('deploy {}'.format(contract)))
+            result = json.loads(cli.call('deploy {}'.format(EVM_LOADER_SO)))
             programId = result['programId']
         EvmLoader.loader_id = programId
         print("Done\n")
@@ -132,15 +131,21 @@ class EvmLoader:
 
 
     def createEtherAccount(self, ether):
+        if isinstance(ether, str):
+            if ether.startswith('0x'): ether = ether[2:]
+        else: ether = ether.hex()
         cli = SolanaCli(self.solana_url, self.acc)
-        output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether.hex()))
+        output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether))
         result = json.loads(output.splitlines()[-1])
         return result["solana"]
 
 
     def ether2program(self, ether):
+        if isinstance(ether, str):
+            if ether.startswith('0x'): ether = ether[2:]
+        else: ether = ether.hex()
         cli = SolanaCli(self.solana_url, self.acc)
-        output = cli.call("create-program-address {} {}".format(ether.hex(), self.loader_id))
+        output = cli.call("create-program-address {} {}".format(ether, self.loader_id))
         items = output.rstrip().split('  ')
         return (items[0], int(items[1]))
 

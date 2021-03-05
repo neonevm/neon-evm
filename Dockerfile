@@ -12,6 +12,16 @@ COPY ./token/program /opt/token/program/
 WORKDIR /opt/token/cli
 RUN cargo build --release
 
+# Build spl-memo
+# Note: create stub Cargo.toml to speedup build
+FROM builder AS spl-memo-builder
+COPY ./do.sh Cargo.lock /opt/
+COPY ./memo/program/ /opt/memo/program/
+WORKDIR /opt/
+RUN echo "[workspace]\nmembers = [\n  \"memo/program\",\n]" >Cargo.toml && \
+    cat Cargo.toml && \
+    /bin/bash -x ./do.sh build memo/program
+
 # Build evm_loader
 # Note: create stub Cargo.toml to speedup build
 FROM builder AS evm-loader-builder
@@ -27,11 +37,15 @@ RUN ls -l target target/bpfel-unknown-unknown target/bpfel-unknown-unknown/relea
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
-FROM builder AS contracts
-COPY evm_loader/*.sol /opt/evm_loader/
+FROM ubuntu:20.04 AS contracts
+RUN apt-get update && \
+    DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
+    rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
+COPY evm_loader/*.sol /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
-WORKDIR /opt/evm_loader/
+WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
+    for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
 
 # Define solana-image that contains utility
@@ -52,10 +66,11 @@ RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patc
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
+COPY --from=spl-memo-builder /opt/target/bpfel-unknown-unknown/release/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/target/bpfel-unknown-unknown/release/evm_loader.so /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
-COPY --from=contracts /opt/evm_loader/*.bin /opt/contracts/
+COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
-ENV CONTRACTS_DIR=/opt/contracts/
+ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
