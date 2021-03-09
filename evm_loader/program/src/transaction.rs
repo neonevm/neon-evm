@@ -4,7 +4,7 @@ use rlp::RlpStream;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
-    entrypoint::ProgramResult, info, instruction::Instruction, program_error::ProgramError,
+    entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
     secp256k1_program
 };
 use std::borrow::Cow;
@@ -62,9 +62,9 @@ pub fn get_check_fields(raw_tx: &[u8]) {
     let (eth_adr, rest) = rest.split_at(eth_address_size);
     let (sign, msg) = rest.split_at(signature_size);
 
-    info!(&("from: ".to_owned() + &hex::encode(&eth_adr)));
-    info!(&("sign: ".to_owned() + &hex::encode(&sign)));
-    info!(&(" msg: ".to_owned() + &hex::encode(&msg)));
+    debug_print!(&("from: ".to_owned() + &hex::encode(&eth_adr)));
+    debug_print!(&("sign: ".to_owned() + &hex::encode(&sign)));
+    debug_print!(&(" msg: ".to_owned() + &hex::encode(&msg)));
 }
 
 pub fn check_tx(raw_tx: &[u8]) {
@@ -74,19 +74,19 @@ pub fn check_tx(raw_tx: &[u8]) {
     }
 
     let tx = eth_tx.unwrap();
-    info!(&("         to: ".to_owned() + &tx.to.unwrap().to_string()));
-    info!(&("      nonce: ".to_owned() + &tx.nonce.to_string()));
-    info!(&("        gas: ".to_owned() + &tx.gas.to_string()));
-    info!(&("  gas_price: ".to_owned() + &tx.gas_price.to_string()));
-    info!(&("      value: ".to_owned() + &tx.value.to_string()));
-    info!(&("       data: ".to_owned() + &hex::encode(&tx.data.0)));
-    info!(&("          v: ".to_owned() + &tx.v.to_string()));
-    info!(&("          r: ".to_owned() + &tx.r.to_string()));
-    info!(&("          s: ".to_owned() + &tx.s.to_string()));
-    info!("");
+    debug_print!(&("         to: ".to_owned() + &tx.to.unwrap().to_string()));
+    debug_print!(&("      nonce: ".to_owned() + &tx.nonce.to_string()));
+    debug_print!(&("        gas: ".to_owned() + &tx.gas.to_string()));
+    debug_print!(&("  gas_price: ".to_owned() + &tx.gas_price.to_string()));
+    debug_print!(&("      value: ".to_owned() + &tx.value.to_string()));
+    debug_print!(&("       data: ".to_owned() + &hex::encode(&tx.data.0)));
+    debug_print!(&("          v: ".to_owned() + &tx.v.to_string()));
+    debug_print!(&("          r: ".to_owned() + &tx.r.to_string()));
+    debug_print!(&("          s: ".to_owned() + &tx.s.to_string()));
+    debug_print!("");
 
     let rlp_data = rlp::encode(&tx);
-    info!(&("        msg: ".to_owned() + &hex::encode(&rlp_data)));    
+    debug_print!(&("        msg: ".to_owned() + &hex::encode(&rlp_data)));    
 
     let mut r_bytes: [u8; 32] = [0; 32];
     let mut s_bytes: [u8; 32] = [0; 32];
@@ -99,7 +99,7 @@ pub fn check_tx(raw_tx: &[u8]) {
     compact_bytes.extend(r);
     compact_bytes.extend(s);
     compact_bytes.push(u8::try_from(tx.v).unwrap());
-    info!(&("       sign: ".to_owned() + &hex::encode(&compact_bytes))); 
+    debug_print!(&("       sign: ".to_owned() + &hex::encode(&compact_bytes))); 
 }
 
 pub fn get_data(raw_tx: &[u8]) -> (u64, Address, std::vec::Vec<u8>) {    

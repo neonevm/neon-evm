@@ -12,9 +12,10 @@ edition = "2018"
 exclude = ["js/**"]
 
 [features]
+evm_debug = []
 no-entrypoint = []
 custom-heap = []
-program = ["custom-heap", "solana-sdk/program"]
+program = ["custom-heap", "solana-sdk/program", "evm_debug"]
 default = ["custom-heap", "solana-sdk/program"]
 
 [dependencies]

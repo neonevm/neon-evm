@@ -10,7 +10,6 @@ use solana_sdk::{
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
-    info,
     instruction::{Instruction, AccountMeta},
 };
 use std::{
@@ -47,12 +46,12 @@ pub struct SolanaBackend<'a> {
 impl<'a> SolanaBackend<'a> {
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>],
                clock_account: &'a AccountInfo<'a>) -> Result<Self,ProgramError> {
-        info!("backend::new");
+        debug_print!("backend::new");
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
 
         for (i, account) in (&account_infos).iter().enumerate() {
-            info!(&i.to_string());
+            debug_print!(&i.to_string());
             if account.owner == program_id {
                 let sol_account = SolidityAccount::new(account)?;
                 aliases.push((sol_account.get_ether(), i));
@@ -61,7 +60,7 @@ impl<'a> SolanaBackend<'a> {
                 accounts.push(None)
             }
         };
-        info!("Accounts was read");
+        debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
         Ok(Self {
             accounts: accounts,
@@ -78,7 +77,7 @@ impl<'a> SolanaBackend<'a> {
     }
 
 /*    pub fn add_alias(&self, address: &H160, pubkey: &Pubkey) {
-        info!(&("Add alias ".to_owned() + &address.to_string() + " for " + &pubkey.to_string()));
+        debug_print!(&("Add alias ".to_owned() + &address.to_string() + " for " + &pubkey.to_string()));
         for (i, account) in (&self.accounts).iter().enumerate() {
             if account.account_info.key == pubkey {
                 let mut aliases = self.aliases.borrow_mut();
@@ -93,11 +92,11 @@ impl<'a> SolanaBackend<'a> {
         let aliases = self.aliases.borrow();
         match aliases.binary_search_by_key(&address, |v| v.0) {
             Ok(pos) => {
-                info!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
+                debug_print!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
                 Some(aliases[pos].1)
             },
             Err(_) => {
-                info!(&("Not found account for ".to_owned() + &address.to_string()));
+                debug_print!(&("Not found account for ".to_owned() + &address.to_string()));
                 None
             },
         }
@@ -187,7 +186,7 @@ impl<'a> Backend for SolanaBackend<'a> {
     fn code_hash(&self, address: H160) -> H256 {
         self.get_account(address).map_or_else(
                 || keccak256_digest(&[]), 
-                |acc| acc.code(|d| {info!(&hex::encode(&d[0..32])); keccak256_digest(d)})
+                |acc| acc.code(|d| {debug_print!(&hex::encode(&d[0..32])); keccak256_digest(d)})
             )
     }
     fn code_size(&self, address: H160) -> usize {
@@ -209,10 +208,10 @@ impl<'a> Backend for SolanaBackend<'a> {
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
-            info!(&("CreateScheme2 ".to_owned()+&hex::encode(_address)+" from "+
+            debug_print!(&("CreateScheme2 ".to_owned()+&hex::encode(_address)+" from "+
                   &hex::encode(caller)+" "+&hex::encode(code_hash)+" "+&hex::encode(salt)));
         } else {
-            info!("Call create");
+            debug_print!("Call create");
         }
     /*    let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
@@ -232,9 +231,9 @@ impl<'a> Backend for SolanaBackend<'a> {
             return None;
         }
 
-        info!("Call inner");
-        info!(&code_address.to_string());
-        info!(&hex::encode(&input));
+        debug_print!("Call inner");
+        debug_print!(&code_address.to_string());
+        debug_print!(&hex::encode(&input));
 
         let (cmd, input) = input.split_at(1);
         match cmd[0] {
@@ -265,18 +264,18 @@ impl<'a> Backend for SolanaBackend<'a> {
                         is_writable: writable[0] != 0,
                         pubkey: pubkey,
                     });
-                    info!(&format!("Acc: {}", pubkey));
+                    debug_print!(&format!("Acc: {}", pubkey));
                 };
         
                 let (_, input) = input.split_at(35 * acc_length as usize);
-                info!(&hex::encode(&input));
+                debug_print!(&hex::encode(&input));
 
                 let contract = self.get_account_by_index(0).unwrap();   // do_call already check existence of Ethereum account with such index
                 let contract_seeds = [contract.account_data.ether.as_bytes(), &[contract.account_data.nonce]];
 
-                info!("account_infos");
+                debug_print!("account_infos");
                 for info in self.account_infos {
-                    info!(&format!("  {}", info.key));
+                    debug_print!(&format!("  {}", info.key));
                 };
                 let result : solana_sdk::entrypoint::ProgramResult;
                 match self.get_account_by_index(1){
@@ -297,7 +296,7 @@ impl<'a> Backend for SolanaBackend<'a> {
                     }
                 }
                 if let Err(err) = result {
-                    info!(&format!("result: {}", err));
+                    debug_print!(&format!("result: {}", err));
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
@@ -326,7 +325,7 @@ impl<'a> Backend for SolanaBackend<'a> {
                 let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed.into(), &owner) {pubkey}
                 else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
 
-                info!(&format!("result: {}", &hex::encode(pubkey.as_ref())));
+                debug_print!(&format!("result: {}", &hex::encode(pubkey.as_ref())));
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec())));
             },
             _ => {
