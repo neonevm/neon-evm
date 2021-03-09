@@ -1,0 +1,24 @@
+--- solana/rpc/api.py	2021-02-15 13:52:17.894709239 +0700
++++ solana/rpc/api.py	2021-02-15 13:51:25.274466703 +0700
+@@ -33,6 +33,11 @@
+     return types.MemcmpOpts(*args, **kwargs)
+ 
+ 
++class SendTransactionError(Exception):
++    def __init__(self, result):
++        super().__init__(result['message'])
++        self.result=result
++
+ class Client:  # pylint: disable=too-many-public-methods
+     """Client class."""
+ 
+@@ -1039,6 +1044,7 @@
+     def __post_send(self, resp: types.RPCResponse, skip_confirm: bool, conf_comm: Commitment) -> types.RPCResponse:
+         if resp.get("error"):
+             self._provider.logger.error(resp.get("error"))
++            raise SendTransactionError(resp.get("error"))
+         if not resp.get("result"):
+             raise Exception("Failed to send transaction")
+         if skip_confirm:
+
+

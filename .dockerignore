@@ -1,0 +1,11 @@
+Dockerfile
+Dockerfile.*
+.*.swp
+
+.git
+.github
+.gitignore
+.gitmodules
+.dockerfile
+bin
+target

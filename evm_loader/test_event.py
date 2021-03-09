@@ -8,6 +8,7 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -34,7 +35,7 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId, cls.reId_eth) = cls.loader.deployChecked("event.bin", solana2ether(cls.acc.public_key()))
+        (cls.reId, cls.reId_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"ReturnsEvents.binary", solana2ether(cls.acc.public_key()))
         print ('contract', cls.reId)
         print ('contract_eth', cls.reId_eth.hex())
 
