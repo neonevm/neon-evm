@@ -2,10 +2,8 @@ use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use primitive_types::H160;
 use solana_sdk::pubkey::Pubkey;
 
-const ERR_UninitializedAccount: u8 = 0x10;
-const ERR_AccountDataTooSmall: u8 = 0x20;
-const ERR_AccountAlreadyInitialized: u8 = 0x30;
-const ERR_InvalidAccountData: u8 = 0x40;
+const ERR_ACCOUNTDATATOOSMALL: u8 = 0x20;
+const ERR_INVALIDACCOUNTDATA: u8 = 0x40;
 
 #[derive(Debug,Clone)]
 pub struct AccountData {
@@ -21,7 +19,7 @@ impl AccountData {
     pub fn size() -> usize {AccountData::SIZE}
     pub fn unpack(src: &[u8]) -> Result<(Self, &[u8]), u8> {
         if src.len() < AccountData::SIZE {
-            return Err(ERR_InvalidAccountData);
+            return Err(ERR_INVALIDACCOUNTDATA);
         }
         let data = array_ref![src, 0, AccountData::SIZE];
         let (ether, nonce, trx_count, signer, code_size) = array_refs![data, 20, 1, 8, 32, 4];
@@ -36,7 +34,7 @@ impl AccountData {
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, u8> {
         if dst.len() < AccountData::SIZE {
-            return Err(ERR_AccountDataTooSmall);
+            return Err(ERR_ACCOUNTDATATOOSMALL);
         }
         let data = array_mut_ref![dst, 0, AccountData::SIZE];
         let (ether_dst, nonce_dst, trx_count_dst, signer_dst, code_size_dst) = 

@@ -1,13 +1,16 @@
+mod hamt;
+mod solana_backend;
+mod account_data;
+mod solidity_account;
+
 use crate::solana_backend::SolanaBackend;
+
+use evm::{executor::StackExecutor, ExitReason};
+use hex;
+use primitive_types::{H160, U256};
 use solana_sdk::pubkey::Pubkey;
-use evm::{
-    executor::{StackExecutor},
-    ExitReason,
-};
 use std::env;
 use std::str::FromStr;
-use primitive_types::{H160, U256};
-use hex;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -20,8 +23,7 @@ fn main() {
     let evm_loader = Pubkey::from_str(&evm_loader.to_string()).unwrap();
     let contract_id = H160::from_str(&contract_id.to_string()).unwrap();
     let caller_id = H160::from_str(&caller_id.to_string()).unwrap();
-    let data = hex::decode(&args[4].to_string()).unwrap();
-    
+    let data = hex::decode(&data.to_string()).unwrap();
 
     let mut backend = SolanaBackend::new(evm_loader, contract_id, caller_id).unwrap();
     let config = evm::Config::istanbul();
@@ -39,7 +41,7 @@ fn main() {
     println!("{}", match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, logs) = executor.deconstruct();
-            backend.apply(applies, logs, false).unwrap();
+            backend.apply(applies, logs, false);
             println!("Applies done");
             "succeed"
         }

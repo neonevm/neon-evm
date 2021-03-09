@@ -17,10 +17,8 @@ struct HamtHeader {
     free: [u32;32],
 }*/
 
-const ERR_UninitializedAccount: u8 = 0x10;
-const ERR_AccountDataTooSmall: u8 = 0x20;
-const ERR_AccountAlreadyInitialized: u8 = 0x30;
-const ERR_InvalidAccountData: u8 = 0x40;
+const ERR_ACCOUNTDATATOOSMALL: u8 = 0x20;
+const ERR_INVALIDACCOUNTDATA: u8 = 0x40;
 
 #[derive(Debug)]
 pub struct Hamt<'a> {
@@ -42,7 +40,7 @@ impl<'a> Hamt<'a> {
         let header_len = size_of::<u32>() * 32 * 2;
 
         if data.len() < header_len {
-            return Err(ERR_AccountDataTooSmall);
+            return Err(ERR_ACCOUNTDATATOOSMALL);
         }
 
         if reset {
@@ -54,7 +52,7 @@ impl<'a> Hamt<'a> {
             let last_used_ptr = array_mut_ref![data, 0, 4];
             let last_used = u32::from_le_bytes(*last_used_ptr);
             if last_used < header_len as u32 {
-                return Err(ERR_InvalidAccountData);
+                return Err(ERR_INVALIDACCOUNTDATA);
             }
             Ok(Hamt {data: data, last_used: last_used, used: 0, item_count: 0})
         }
@@ -76,7 +74,7 @@ impl<'a> Hamt<'a> {
             }
         }
         if (self.last_used + size) as usize > self.data.len() {
-            return Err(ERR_AccountDataTooSmall);
+            return Err(ERR_ACCOUNTDATATOOSMALL);
         }
         let item_pos = self.last_used;
         self.last_used += size;

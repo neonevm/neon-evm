@@ -1,16 +1,19 @@
-use evm::{
-    backend::{Basic, Backend, Apply, Log},
-    CreateScheme, Capture, Transfer, ExitReason
-};
 use core::convert::Infallible;
+use evm::{
+    backend::{Apply, Backend, Basic, Log},
+    Capture, CreateScheme, ExitReason, Transfer,
+};
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::solidity_account::SolidityAccount;
 use std::borrow::Borrow;
+use std::cell::RefCell; 
 
 use solana_client::rpc_client::RpcClient;
+
+use std::collections::HashMap;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -27,7 +30,7 @@ fn u256_to_h256(value: U256) -> H256 {
 }
 
 pub struct SolanaBackend {
-    accounts: Vec<(H160, SolidityAccount)>,
+    accounts: RefCell<HashMap<H160, SolidityAccount>>,
     rpc_client: RpcClient,
     program_id: Pubkey,
     contract_id: H160,
@@ -35,10 +38,10 @@ pub struct SolanaBackend {
 }
 
 impl SolanaBackend {
-    pub fn new(program_id: Pubkey, contract_id: H160, caller_id: H160,) -> Result<Self, u8> {
+    pub fn new(program_id: Pubkey, contract_id: H160, caller_id: H160) -> Result<Self, u8> {
         println!("backend::new");
         Ok(Self {
-            accounts: Vec::new(),
+            accounts: RefCell::new(HashMap::new()),
             rpc_client: RpcClient::new("http://localhost:8899".to_string()),
             program_id: program_id,
             contract_id: contract_id,
@@ -46,79 +49,36 @@ impl SolanaBackend {
         })
     }
 
-    fn get_account(&mut self, address: H160) -> Option<&SolidityAccount> {
-        match self.accounts.binary_search_by_key(&address, |v| v.0) {
-            Ok(pos) => {
-                Some(&self.accounts[pos].1)
-            },
-            Err(_) => {
-                println!("Not found account for {}", &address.to_string());
+    fn create_acc_if_not_axists(&self, address: H160) -> bool {
+        let accounts = self.accounts.borrow();
+        if accounts.get(&address).is_none() {
+            println!("Not found account for {}", &address.to_string());
 
-                let (solana_address, nonce) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
-                
-                match self.rpc_client.get_account(&solana_address) {
-                    Ok(acc) => {
-                        println!("Account found");                        
-                        println!("Account data len {}", acc.data.len());
-                        println!("Account owner {}", acc.owner.to_string());
+            let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
+            
+            match self.rpc_client.get_account(&solana_address) {
+                Ok(acc) => {
+                    println!("Account found");                        
+                    println!("Account data len {}", acc.data.len());
+                    println!("Account owner {}", acc.owner.to_string());
 
-                        self.accounts.push((address, SolidityAccount::new(acc.data, acc.lamports).unwrap()));                        
-                        self.accounts.sort_by_key(|v| v.0);
+                    let mut mut_accounts = self.accounts.borrow_mut();                     
+                    mut_accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
 
-                        let pos = self.accounts.binary_search_by_key(&address, |v| v.0).unwrap();
-                        
-                        Some(&self.accounts[pos].1)
-                    },
-                    Err(_) => {
-                        println!("Account not found");
-                        None
-                    }
+                    true
+                },
+                Err(_) => {
+                    println!("Account not found {}", &address.to_string());
+
+                    false
                 }
-            },
+            }
+        } else {
+            true
         }
     }
 
-    fn get_account_mut(&mut self, address: H160) -> Option<&mut SolidityAccount> {
-        match self.accounts.binary_search_by_key(&address, |v| v.0) {
-            Ok(pos) => {
-                Some(&mut self.accounts[pos].1)
-            },
-            Err(_) => {
-                println!("Not found account for {}", &address.to_string());
-
-                let (solana_address, nonce) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
-                
-                match self.rpc_client.get_account(&solana_address) {
-                    Ok(acc) => {
-                        println!("Account found");                        
-                        println!("Account data len {}", acc.data.len());
-                        println!("Account owner {}", acc.owner.to_string());
-
-                        self.accounts.push((address, SolidityAccount::new(acc.data, acc.lamports).unwrap()));                        
-                        self.accounts.sort_by_key(|v| v.0);
-
-                        let pos = self.accounts.binary_search_by_key(&address, |v| v.0).unwrap();
-                        
-                        Some(&mut  self.accounts[pos].1)
-                    },
-                    Err(_) => {
-                        println!("Account not found");
-                        None
-                    }
-                }
-            },
-        }
-    }
-
-    fn is_solana_address(&self, code_address: &H160) -> bool {
-        *code_address == Self::system_account()
-    }
-
-    pub fn system_account() -> H160 {
-        H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
-    }
-
-    pub fn apply<A, I, L>(&mut self, values: A, logs: L, delete_empty: bool)
+    pub fn apply<A, I, L>(&mut self, values: A, _logs: L, _delete_empty: bool)
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(H256, H256)>,
@@ -126,7 +86,7 @@ impl SolanaBackend {
     {             
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
+                Apply::Modify {address, basic, code: _, storage: _, reset_storage: _} => {
                     println!("Modify: {} {} {}", address.to_string(), basic.nonce.as_u64(), basic.balance.as_u64());
                 },
                 Apply::Delete {address: addr} => {
@@ -189,10 +149,12 @@ impl Backend for SolanaBackend {
     fn chain_id(&self) -> U256 { U256::zero() }
 
     fn exists(&self, address: H160) -> bool {
-        self.get_account(address).map_or(false, |_| true)
+        self.create_acc_if_not_axists(address)
     }
     fn basic(&self, address: H160) -> Basic {
-        match self.get_account(address) {
+        self.create_acc_if_not_axists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
             None => Basic{balance: U256::zero(), nonce: U256::zero()},
             Some(acc) => Basic{
                 balance: (*acc.lamports.borrow()).into(),
@@ -201,19 +163,39 @@ impl Backend for SolanaBackend {
         }
     }
     fn code_hash(&self, address: H160) -> H256 {
-        self.get_account(address).map_or_else(
-                || keccak256_digest(&[]), 
-                |acc| acc.code(|d| {println!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
-            )
+        self.create_acc_if_not_axists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => keccak256_digest(&[]),
+            Some(acc) => {
+                acc.code(|d| {println!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
+            },
+        }
     }
     fn code_size(&self, address: H160) -> usize {
-        self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
+        self.create_acc_if_not_axists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => 0,
+            Some(acc) => {
+                acc.code(|d| d.len())
+            },
+        }
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        self.get_account(address).map_or_else(|| Vec::new(), |acc| acc.code(|d| d.into()))
+        self.create_acc_if_not_axists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => Vec::new(),
+            Some(acc) => {
+                acc.code(|d| d.into())
+            },
+        }
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        match self.get_account(address) {
+        self.create_acc_if_not_axists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
             None => H256::default(),
             Some(acc) => {
                 let index = index.as_fixed_bytes().into();
