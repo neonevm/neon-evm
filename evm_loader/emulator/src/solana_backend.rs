@@ -50,7 +50,7 @@ impl SolanaBackend {
     }
 
     fn create_acc_if_not_axists(&self, address: H160) -> bool {
-        let accounts = self.accounts.borrow();
+        let mut accounts = self.accounts.borrow_mut(); 
         if accounts.get(&address).is_none() {
             println!("Not found account for {}", &address.to_string());
 
@@ -61,9 +61,8 @@ impl SolanaBackend {
                     println!("Account found");                        
                     println!("Account data len {}", acc.data.len());
                     println!("Account owner {}", acc.owner.to_string());
-
-                    let mut mut_accounts = self.accounts.borrow_mut();                     
-                    mut_accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
+                   
+                    accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
 
                     true
                 },
