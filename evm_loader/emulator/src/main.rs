@@ -15,17 +15,30 @@ use std::str::FromStr;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let evm_loader = &args[1];
-    let contract_id = &args[2];
-    let caller_id = &args[3];
-    let data = &args[4];
+    let (solana_url, evm_loader, contract_id, caller_id, data) = if args.len() == 6 {
+        let solana_url = args[1].to_string();
+        let evm_loader = Pubkey::from_str(&args[2].to_string()).unwrap();
+        let contract_id = H160::from_str(&args[3].to_string()).unwrap();
+        let caller_id = H160::from_str(&args[4].to_string()).unwrap();
+        let data = hex::decode(&args[5].to_string()).unwrap();
 
-    let evm_loader = Pubkey::from_str(&evm_loader.to_string()).unwrap();
-    let contract_id = H160::from_str(&contract_id.to_string()).unwrap();
-    let caller_id = H160::from_str(&caller_id.to_string()).unwrap();
-    let data = hex::decode(&data.to_string()).unwrap();
+        (solana_url, evm_loader, contract_id, caller_id, data)
+    } else if args.len() == 5 {        
+        let solana_url = "http://localhost:8899".to_string();
+        let evm_loader = Pubkey::from_str(&args[1].to_string()).unwrap();
+        let contract_id = H160::from_str(&args[2].to_string()).unwrap();
+        let caller_id = H160::from_str(&args[3].to_string()).unwrap();
+        let data = hex::decode(&args[4].to_string()).unwrap();
 
-    let mut backend = SolanaBackend::new(evm_loader, contract_id, caller_id).unwrap();
+        (solana_url, evm_loader, contract_id, caller_id, data)
+    } else {
+        eprintln!("{} SOLANA_URL EVM_LOADER CONTRACT_ID CALLER_ID DATA", &args[0].to_string());
+        eprintln!("or for local cluster");
+        eprintln!("{} EVM_LOADER CONTRACT_ID CALLER_ID DATA", &args[0].to_string());
+        return;
+    };
+
+    let mut backend = SolanaBackend::new(solana_url, evm_loader, contract_id, caller_id).unwrap();
     let config = evm::Config::istanbul();
     let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
 
@@ -37,12 +50,12 @@ fn main() {
         usize::max_value(),
     );
 
-    println!("Call done");
-    println!("{}", match exit_reason {
+    eprintln!("Call done");
+    eprintln!("{}", match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, logs) = executor.deconstruct();
             backend.apply(applies, logs, false);
-            println!("Applies done");
+            eprintln!("Applies done");
             "succeed"
         }
         ExitReason::Error(_) => "error",
@@ -50,8 +63,10 @@ fn main() {
         ExitReason::Fatal(_) => "fatal",
     });
 
-    println!("{}", &hex::encode(&result));
+    eprintln!("{}", &hex::encode(&result));
     if !exit_reason.is_succeed() {
-        println!("Not succeed execution");
+        eprintln!("Not succeed execution");
     }
+
+    backend.get_used_accounts();
 }

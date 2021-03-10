@@ -9,11 +9,15 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::solidity_account::SolidityAccount;
 use std::borrow::Borrow;
+use std::borrow::BorrowMut;
 use std::cell::RefCell; 
 
 use solana_client::rpc_client::RpcClient;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use serde_json::json;
+use serde::{Deserialize, Serialize};
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -29,8 +33,16 @@ fn u256_to_h256(value: U256) -> H256 {
     H256::from_slice(&v)
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct AccountJSON {
+    address: String,
+    readonly: bool,
+    new: bool,
+}
+
 pub struct SolanaBackend {
     accounts: RefCell<HashMap<H160, SolidityAccount>>,
+    new_accounts: RefCell<HashSet<H160>>,
     rpc_client: RpcClient,
     program_id: Pubkey,
     contract_id: H160,
@@ -38,11 +50,12 @@ pub struct SolanaBackend {
 }
 
 impl SolanaBackend {
-    pub fn new(program_id: Pubkey, contract_id: H160, caller_id: H160) -> Result<Self, u8> {
-        println!("backend::new");
+    pub fn new(solana_url: String, program_id: Pubkey, contract_id: H160, caller_id: H160) -> Result<Self, u8> {
+        eprintln!("backend::new");
         Ok(Self {
             accounts: RefCell::new(HashMap::new()),
-            rpc_client: RpcClient::new("http://localhost:8899".to_string()),
+            rpc_client: RpcClient::new(solana_url),
+            new_accounts: RefCell::new(HashSet::new()),
             program_id: program_id,
             contract_id: contract_id,
             caller_id: caller_id,
@@ -51,23 +64,26 @@ impl SolanaBackend {
 
     fn create_acc_if_not_axists(&self, address: H160) -> bool {
         let mut accounts = self.accounts.borrow_mut(); 
+        let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(&address).is_none() {
-            println!("Not found account for {}", &address.to_string());
+            eprintln!("Not found account for {}", &address.to_string());
 
             let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
             
             match self.rpc_client.get_account(&solana_address) {
                 Ok(acc) => {
-                    println!("Account found");                        
-                    println!("Account data len {}", acc.data.len());
-                    println!("Account owner {}", acc.owner.to_string());
+                    eprintln!("Account found");                        
+                    eprintln!("Account data len {}", acc.data.len());
+                    eprintln!("Account owner {}", acc.owner.to_string());
                    
                     accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
 
                     true
                 },
                 Err(_) => {
-                    println!("Account not found {}", &address.to_string());
+                    eprintln!("Account not found {}", &address.to_string());
+
+                    new_accounts.insert(address);
 
                     false
                 }
@@ -83,16 +99,49 @@ impl SolanaBackend {
                 I: IntoIterator<Item=(H256, H256)>,
                 L: IntoIterator<Item=Log>,
     {             
+        let mut accounts = self.accounts.borrow_mut(); 
+
+
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code: _, storage: _, reset_storage: _} => {
-                    println!("Modify: {} {} {}", address.to_string(), basic.nonce.as_u64(), basic.balance.as_u64());
+                Apply::Modify {address, basic, code: _, storage: _, reset_storage} => {
+                    match accounts.get_mut(&address) {
+                        Some(acc) => {
+                            *acc.updated.borrow_mut() = true;
+                        },
+                        None => {
+                            eprintln!("Account not found {}", &address.to_string());
+                        },
+                    }
+                    eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance.as_u64(), &reset_storage.to_string());
                 },
                 Apply::Delete {address: addr} => {
-                    println!("Delete: {}", addr.to_string());
+                    eprintln!("Delete: {}", addr.to_string());
                 },
             }
         };
+    }
+
+    pub fn get_used_accounts(&self)
+    {          
+        let mut arr = Vec::new();    
+        
+        eprint!("[");
+        let accounts = self.accounts.borrow();
+        for (address, acc) in accounts.iter() {
+            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), readonly: !&acc.updated, new: false});
+            eprint!("{{\"address\":\"0x{}\",\"write\":\"{}\"}},", &hex::encode(&address.to_fixed_bytes()), &acc.updated.to_string());
+        }
+        let new_accounts = self.new_accounts.borrow(); 
+        for address in new_accounts.iter() {
+            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), readonly: false, new: true});
+            eprint!("{{\"address\":\"0x{}\",\"new\":\"true\"}},", &hex::encode(&address.to_fixed_bytes()));
+        }    
+        eprintln!("]");
+
+        let js = json!({"accounts": arr}).to_string();
+
+        println!("{}", js);
     }
 }
 
@@ -103,12 +152,12 @@ impl Backend for SolanaBackend {
     fn block_number(&self) -> U256 {
         let slot = match self.rpc_client.get_slot(){
             Ok(slot) => {
-                println!("Got slot");                
-                println!("Slot {}", slot);    
+                eprintln!("Got slot");                
+                eprintln!("Slot {}", slot);    
                 slot
             },
             Err(_) => {
-                println!("Get slot error");    
+                eprintln!("Get slot error");    
                 0
             }
         };
@@ -119,24 +168,24 @@ impl Backend for SolanaBackend {
     fn block_timestamp(&self) -> U256 {
         let slot = match self.rpc_client.get_slot() {
             Ok(slot) => {
-                println!("Got slot");                
-                println!("Slot {}", slot);    
+                eprintln!("Got slot");                
+                eprintln!("Slot {}", slot);    
                 slot
             },
             Err(_) => {
-                println!("Get slot error");    
+                eprintln!("Get slot error");    
                 0
             }
         };
     
         let timestamp = match self.rpc_client.get_block_time(slot) {
             Ok(timestamp) => {
-                println!("Got timestamp");                
-                println!("timestamp {}", timestamp);
+                eprintln!("Got timestamp");                
+                eprintln!("timestamp {}", timestamp);
                 timestamp
             },
             Err(_) => {
-                println!("Get timestamp error");    
+                eprintln!("Get timestamp error");    
                 0
             }
         };
@@ -167,7 +216,7 @@ impl Backend for SolanaBackend {
         match accounts.get(&address) {
             None => keccak256_digest(&[]),
             Some(acc) => {
-                acc.code(|d| {println!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
+                acc.code(|d| {eprintln!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
             },
         }
     }
@@ -205,9 +254,9 @@ impl Backend for SolanaBackend {
     }
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
-            println!("CreateScheme2 {} from {} {} {}", &hex::encode(_address), &hex::encode(caller) ,&hex::encode(code_hash), &hex::encode(salt));
+            eprintln!("CreateScheme2 {} from {} {} {}", &hex::encode(_address), &hex::encode(caller) ,&hex::encode(code_hash), &hex::encode(salt));
         } else {
-            println!("Call create");
+            eprintln!("Call create");
         }
     /*    let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};

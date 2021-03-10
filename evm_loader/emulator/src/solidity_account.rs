@@ -15,14 +15,16 @@ pub struct SolidityAccount {
     pub account_data: AccountData,
     pub data: RefCell<Vec<u8>>,
     pub lamports: u64,
+    pub updated: bool,
 }
 
 impl SolidityAccount {
     pub fn new(data: Vec<u8>, lamports: u64) -> Result<Self, u8> {
-        println!("  SolidityAccount::new");
-        println!("  Get data with length {}", data.len());
+        eprintln!("  SolidityAccount::new");
+        eprintln!("  Get data with length {}", data.len());
         let (account_data, _) = AccountData::unpack(&data.as_slice()).unwrap();
-        Ok(Self{account_data, data: RefCell::new(data), lamports})
+        eprintln!("Unpack: {} {}", &account_data.trx_count, &lamports);
+        Ok(Self{account_data, data: RefCell::new(data), lamports, updated: false})
     }
 
     pub fn get_ether(&self) -> H160 {self.account_data.ether}
@@ -53,7 +55,7 @@ impl SolidityAccount {
         /*if let AccountData::Account{code_size,..} = self.account_data {
             if code_size > 0 {
                 let mut data = self.account_info.data.borrow_mut();
-                println!("Storage data borrowed");
+                eprintln!("Storage data borrowed");
                 let offset = AccountData::size() + code_size as usize;
                 let mut hamt = Hamt::new(&mut data[offset..], false)?;
                 return Ok(f(&mut hamt));
@@ -62,7 +64,7 @@ impl SolidityAccount {
         Err(ProgramError::UninitializedAccount)*/
         if self.account_data.code_size > 0 {
             let mut data = self.data.borrow_mut();
-            println!("Storage data borrowed");
+            eprintln!("Storage data borrowed");
             let code_size = self.account_data.code_size as usize;
             let offset = AccountData::SIZE + code_size;
             let mut hamt = Hamt::new(&mut data[offset..], false)?;
@@ -76,7 +78,7 @@ impl SolidityAccount {
             storage_items: I, reset_storage: bool) -> Result<(), u8>
         where I: IntoIterator<Item=(H256, H256)>,
     {
-        println!("Update: {}, {}, {}, {:?} for {:?}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, self);
+        eprintln!("Update: {}, {}, {}, {:?} for {:?}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, self);
         let mut data = self.data.borrow_mut();
         *self.lamports.borrow_mut() = lamports;
 
@@ -91,31 +93,31 @@ impl SolidityAccount {
                 return Err(ERR_ACCOUNTALREADYINITIALIZED);
             };
             self.account_data.code_size = code.len().try_into().map_err(|_| ERR_ACCOUNTDATATOOSMALL)?;
-            println!("Write code");
+            eprintln!("Write code");
             data[AccountData::SIZE..AccountData::SIZE+code.len()].copy_from_slice(&code);
-            println!("Code written");
+            eprintln!("Code written");
         }
 
 
-        println!("Write account data");
+        eprintln!("Write account data");
         self.account_data.pack(&mut data)?;
 
         let mut storage_iter = storage_items.into_iter().peekable();
         let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
         if reset_storage || exist_items {
-            println!("Update storage");
+            eprintln!("Update storage");
             let code_size = self.account_data.code_size as usize;
             if code_size == 0 {return Err(ERR_UNINITIALIZEDACCOUNT);};
 
             let mut storage = Hamt::new(&mut data[AccountData::SIZE+code_size..], reset_storage)?;
-            println!("Storage initialized");
+            eprintln!("Storage initialized");
             for (key, value) in storage_iter {
-                println!("Storage value: {} = {}", &key.to_string() , &value.to_string());
+                eprintln!("Storage value: {} = {}", &key.to_string() , &value.to_string());
                 storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
             }
         }
 
-        println!("Account updated");
+        eprintln!("Account updated");
         
         Ok(())
     }
