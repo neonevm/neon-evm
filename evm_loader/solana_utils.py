@@ -23,16 +23,16 @@ def confirm_transaction(client, tx_sig):
     TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
+        resp = client.get_confirmed_transaction(tx_sig)
+        if resp["result"]:
+#            print('Confirmed transaction:', resp)
+            break
         sleep_time = 3
         if not elapsed_time:
             sleep_time = 7
             time.sleep(sleep_time)
         else:
             time.sleep(sleep_time)
-        resp = client.get_confirmed_transaction(tx_sig)
-        if resp["result"]:
-#            print('Confirmed transaction:', resp)
-            break
         elapsed_time += sleep_time
     if not resp["result"]:
         raise RuntimeError("could not confirm transaction: ", tx_sig)

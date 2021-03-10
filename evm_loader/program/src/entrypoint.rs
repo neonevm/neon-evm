@@ -36,7 +36,8 @@ use crate::{
 use evm::{
 //    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
     executor::{StackExecutor},
-    ExitReason,
+    CreateScheme,
+    ExitReason, ExitFatal,
 };
 use primitive_types::{H160, U256};
 
@@ -180,6 +181,58 @@ fn process_instruction<'a>(
         EvmInstruction::Call {bytes} => {
             do_call(program_id, accounts, &bytes, None)
         },
+        EvmInstruction::ExecuteTrxFromAccountData => {
+            let account_info_iter = &mut accounts.iter();
+            let trx_info = next_account_info(account_info_iter)?;
+            //let caller_info = next_account_info(account_info_iter)?;
+
+            let unsigned_msg = {
+                let data = trx_info.data.borrow();
+                let (_unused, rest) = data.split_at(AccountData::SIZE);
+                let (trx_len, rest) = rest.split_at(8);
+                let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+                let (trx, _rest) = rest.split_at(trx_len as usize);
+                trx.to_vec()
+            };
+            let (nonce, to, data) = get_data(&unsigned_msg);
+
+            let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
+            let config = evm::Config::istanbul();
+            let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+
+            let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
+            if caller.get_nonce() != nonce {
+                debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
+            // TODO add check for correct caller
+            let exit_reason = match to {
+                None => {
+                    executor.transact_create(caller.get_ether(), U256::zero(), data, usize::max_value())
+                },
+                Some(contract) => {
+                    debug_print!("Not supported");
+                    ExitReason::Fatal(ExitFatal::NotSupported)
+                },
+            };
+
+            if !exit_reason.is_succeed() {
+                debug_print!("Not succeed execution");
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let (applies, logs) = executor.deconstruct();
+            backend.apply(applies,false, None)?;
+            for log in logs {
+                let ix = on_event(program_id, log)?;
+                invoke(
+                    &ix,
+                    &accounts
+                )?;
+            }
+            debug_print!("Applies done");
+            Ok(())
+        },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
@@ -212,6 +265,7 @@ fn process_instruction<'a>(
 
             let caller = H160::from_slice(from_addr);
             let (nonce, contract, data) = get_data(unsigned_msg);
+            let contract = contract.unwrap();
 
             let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
             let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(); 
@@ -257,6 +311,7 @@ fn process_instruction<'a>(
 
             let caller = H160::from_slice(from_addr);
             let (nonce, contract, data) = get_data(unsigned_msg);
+            let contract = contract.unwrap();
 
             let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
             // let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();

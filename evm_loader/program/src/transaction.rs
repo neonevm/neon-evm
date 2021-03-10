@@ -102,11 +102,11 @@ pub fn check_tx(raw_tx: &[u8]) {
     debug_print!(&("       sign: ".to_owned() + &hex::encode(&compact_bytes))); 
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Address, std::vec::Vec<u8>) {    
+pub fn get_data(raw_tx: &[u8]) -> (u64, Option<Address>, std::vec::Vec<u8>) {    
     let tx: Result<SignedTransaction, _> = rlp::decode(&raw_tx);
     let tx = tx.unwrap();
 
-    (tx.nonce.as_u64(), tx.to.unwrap(), tx.data.0)
+    (tx.nonce.as_u64(), tx.to, tx.data.0)
 }
 
 /// Hex-serialized shim for `Vec<u8>`.
