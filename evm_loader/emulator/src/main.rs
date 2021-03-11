@@ -16,19 +16,19 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let (solana_url, evm_loader, contract_id, caller_id, data) = if args.len() == 6 {
-        let solana_url = args[1].to_string();
+        let solana_url = args[1].to_string();;
         let evm_loader = Pubkey::from_str(&args[2].to_string()).unwrap();
-        let contract_id = H160::from_str(&args[3].to_string()).unwrap();
-        let caller_id = H160::from_str(&args[4].to_string()).unwrap();
-        let data = hex::decode(&args[5].to_string()).unwrap();
+        let contract_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
+        let caller_id = H160::from_str(&make_clean_hex(&args[4])).unwrap();
+        let data = hex::decode(&make_clean_hex(&args[5])).unwrap();
 
         (solana_url, evm_loader, contract_id, caller_id, data)
     } else if args.len() == 5 {        
         let solana_url = "http://localhost:8899".to_string();
         let evm_loader = Pubkey::from_str(&args[1].to_string()).unwrap();
-        let contract_id = H160::from_str(&args[2].to_string()).unwrap();
-        let caller_id = H160::from_str(&args[3].to_string()).unwrap();
-        let data = hex::decode(&args[4].to_string()).unwrap();
+        let contract_id = H160::from_str(&make_clean_hex(&args[2])).unwrap();
+        let caller_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
+        let data = hex::decode(&make_clean_hex(&args[4])).unwrap();
 
         (solana_url, evm_loader, contract_id, caller_id, data)
     } else {
@@ -51,22 +51,32 @@ fn main() {
     );
 
     eprintln!("Call done");
-    eprintln!("{}", match exit_reason {
+    let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, logs) = executor.deconstruct();
             backend.apply(applies, logs, false);
             eprintln!("Applies done");
-            "succeed"
+            "succeed".to_string()
         }
-        ExitReason::Error(_) => "error",
-        ExitReason::Revert(_) => "revert",
-        ExitReason::Fatal(_) => "fatal",
-    });
+        ExitReason::Error(_) => "error".to_string(),
+        ExitReason::Revert(_) => "revert".to_string(),
+        ExitReason::Fatal(_) => "fatal".to_string(),
+    };
 
+    eprintln!("{}", &status);
     eprintln!("{}", &hex::encode(&result));
+
     if !exit_reason.is_succeed() {
         eprintln!("Not succeed execution");
     }
 
-    backend.get_used_accounts();
+    backend.get_used_accounts(&status, &result);
+}
+
+fn make_clean_hex(in_str: &String) -> String {
+    if &in_str[..2] == "0x" {
+        in_str[2..].to_string()
+    } else {        
+        in_str.to_string()
+    }
 }

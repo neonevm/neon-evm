@@ -36,7 +36,7 @@ fn u256_to_h256(value: U256) -> H256 {
 #[derive(Serialize, Deserialize, Debug)]
 struct AccountJSON {
     address: String,
-    readonly: bool,
+    writable: bool,
     new: bool,
 }
 
@@ -62,7 +62,7 @@ impl SolanaBackend {
         })
     }
 
-    fn create_acc_if_not_axists(&self, address: H160) -> bool {
+    fn create_acc_if_not_exists(&self, address: H160) -> bool {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(&address).is_none() {
@@ -122,24 +122,24 @@ impl SolanaBackend {
         };
     }
 
-    pub fn get_used_accounts(&self)
+    pub fn get_used_accounts(&self, status: &String, result: &std::vec::Vec<u8>)
     {          
         let mut arr = Vec::new();    
         
         eprint!("[");
         let accounts = self.accounts.borrow();
         for (address, acc) in accounts.iter() {
-            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), readonly: !&acc.updated, new: false});
+            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), writable: acc.updated, new: false});
             eprint!("{{\"address\":\"0x{}\",\"write\":\"{}\"}},", &hex::encode(&address.to_fixed_bytes()), &acc.updated.to_string());
         }
         let new_accounts = self.new_accounts.borrow(); 
         for address in new_accounts.iter() {
-            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), readonly: false, new: true});
+            arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), writable: false, new: true});
             eprint!("{{\"address\":\"0x{}\",\"new\":\"true\"}},", &hex::encode(&address.to_fixed_bytes()));
         }    
         eprintln!("]");
 
-        let js = json!({"accounts": arr}).to_string();
+        let js = json!({"accounts": arr, "result": &hex::encode(&result), "exit_status": &status}).to_string();
 
         println!("{}", js);
     }
@@ -197,10 +197,10 @@ impl Backend for SolanaBackend {
     fn chain_id(&self) -> U256 { U256::zero() }
 
     fn exists(&self, address: H160) -> bool {
-        self.create_acc_if_not_axists(address)
+        self.create_acc_if_not_exists(address)
     }
     fn basic(&self, address: H160) -> Basic {
-        self.create_acc_if_not_axists(address);
+        self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => Basic{balance: U256::zero(), nonce: U256::zero()},
@@ -211,7 +211,7 @@ impl Backend for SolanaBackend {
         }
     }
     fn code_hash(&self, address: H160) -> H256 {
-        self.create_acc_if_not_axists(address);
+        self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => keccak256_digest(&[]),
@@ -221,7 +221,7 @@ impl Backend for SolanaBackend {
         }
     }
     fn code_size(&self, address: H160) -> usize {
-        self.create_acc_if_not_axists(address);
+        self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => 0,
@@ -231,7 +231,7 @@ impl Backend for SolanaBackend {
         }
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        self.create_acc_if_not_axists(address);
+        self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => Vec::new(),
@@ -241,7 +241,7 @@ impl Backend for SolanaBackend {
         }
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        self.create_acc_if_not_axists(address);
+        self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => H256::default(),
