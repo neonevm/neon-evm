@@ -1,0 +1,18 @@
+[package]
+name = "emulator"
+version = "0.1.0"
+authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
+solana-sdk = "1.4.0"
+solana-client = "1.4.0"
+bs58 = "0.4.0"
+primitive-types = "0.7"
+hex = ""
+sha3 = ""
+arrayref = ""
+serde = ""
+serde_json = ""
