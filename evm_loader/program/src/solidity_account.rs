@@ -4,7 +4,6 @@ use solana_sdk::{
     account_info::AccountInfo,
     program_error::ProgramError,
     pubkey::Pubkey,
-    info,
 };
 use primitive_types::{H160, H256, U256};
 use std::convert::TryInto;
@@ -18,9 +17,9 @@ pub struct SolidityAccount<'a> {
 
 impl<'a> SolidityAccount<'a> {
     pub fn new(acc: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
-        info!("  SolidityAccount::new");
+        debug_print!("  SolidityAccount::new");
         let data = acc.data.borrow_mut();
-        info!(&("  Get data with length ".to_owned() + &data.len().to_string()));
+        debug_print!(&("  Get data with length ".to_owned() + &data.len().to_string()));
         let (account_data, _) = AccountData::unpack(&data)?;
         Ok(Self{account_data, account_info: acc})
     }
@@ -53,7 +52,7 @@ impl<'a> SolidityAccount<'a> {
         /*if let AccountData::Account{code_size,..} = self.account_data {
             if code_size > 0 {
                 let mut data = self.account_info.data.borrow_mut();
-                info!("Storage data borrowed");
+                debug_print!("Storage data borrowed");
                 let offset = AccountData::size() + code_size as usize;
                 let mut hamt = Hamt::new(&mut data[offset..], false)?;
                 return Ok(f(&mut hamt));
@@ -62,7 +61,7 @@ impl<'a> SolidityAccount<'a> {
         Err(ProgramError::UninitializedAccount)*/
         if self.account_data.code_size > 0 {
             let mut data = self.account_info.data.borrow_mut();
-            info!("Storage data borrowed");
+            debug_print!("Storage data borrowed");
             let code_size = self.account_data.code_size as usize;
             let offset = AccountData::SIZE + code_size;
             let mut hamt = Hamt::new(&mut data[offset..], false)?;
@@ -91,31 +90,31 @@ impl<'a> SolidityAccount<'a> {
                 return Err(ProgramError::AccountAlreadyInitialized);
             };
             self.account_data.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
-            info!("Write code");
+            debug_print!("Write code");
             data[AccountData::SIZE..AccountData::SIZE+code.len()].copy_from_slice(&code);
-            info!("Code written");
+            debug_print!("Code written");
         }
 
 
-        info!("Write account data");
+        debug_print!("Write account data");
         self.account_data.pack(&mut data)?;
 
         let mut storage_iter = storage_items.into_iter().peekable();
         let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
         if reset_storage || exist_items {
-            info!("Update storage");
+            debug_print!("Update storage");
             let code_size = self.account_data.code_size as usize;
             if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
 
             let mut storage = Hamt::new(&mut data[AccountData::SIZE+code_size..], reset_storage)?;
-            info!("Storage initialized");
+            debug_print!("Storage initialized");
             for (key, value) in storage_iter {
-                info!(&("Storage value: ".to_owned() + &key.to_string() + " = " + &value.to_string()));
+                debug_print!(&("Storage value: ".to_owned() + &key.to_string() + " = " + &value.to_string()));
                 storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
             }
         }
 
-        info!("Account updated");
+        debug_print!("Account updated");
         
         Ok(())
     }
