@@ -468,20 +468,22 @@ fn do_call<'a>(
         );
 
     debug_print!("Call done");
+
+    if exit_reason.is_succeed() {
+        let (applies, logs) = executor.deconstruct();
+        backend.apply(applies,false, Some(caller_ether))?;
+        for log in logs {
+            let ix = on_event(program_id, log)?;
+            invoke(
+                &ix,
+                &accounts
+            )?;
+        }
+        debug_print!("Applies done");
+    }
+
     debug_print!(match exit_reason {
-        ExitReason::Succeed(_) => {
-            let (applies, logs) = executor.deconstruct();
-            backend.apply(applies,false, Some(caller_ether))?;
-            for log in logs {
-                let ix = on_event(program_id, log)?;
-                invoke(
-                    &ix,
-                    &accounts
-                )?;
-            }
-            debug_print!("Applies done");
-            "succeed"
-        },
+        ExitReason::Succeed(_) => "succeed",
         ExitReason::Error(_) => "error",
         ExitReason::Revert(_) => "revert",
         ExitReason::Fatal(_) => "fatal",
