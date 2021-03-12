@@ -34,6 +34,22 @@ RUN echo "[workspace]\nmembers = [\n  \"evm_loader/program\",\n]" >Cargo.toml &&
     /bin/bash -x ./do.sh build evm_loader/program
 RUN ls -l target target/bpfel-unknown-unknown target/bpfel-unknown-unknown/release
 
+# Build evm_loader_no_logs
+# Note: create stub Cargo.toml to speedup build
+# Replace 'name = "evm-loader"' with 'name = "evm-loader-no-logs"' in Cargo.toml
+# Replace 'program = ["custom-heap", "solana-sdk/program", "evm_debug"]' with 'program = ["custom-heap", "solana-sdk/program"]' in Cargo.toml
+FROM builder AS evm-loader-no-logs-builder
+COPY ./do.sh Cargo.lock /opt/
+COPY ./evm_loader/program/ /opt/evm_loader_no_logs/program/
+COPY ./evm_loader/rust-evm/ /opt/evm_loader_no_logs/rust-evm/
+WORKDIR /opt/
+RUN sed -i 's/\(name = \)"evm-loader"/\1"evm-loader-no-logs"/' evm_loader_no_logs/program/Cargo.toml
+RUN sed -i 's/\(program =.*\), "evm_debug"\(.*\)/\1\2/' evm_loader_no_logs/program/Cargo.toml
+RUN echo "[workspace]\nmembers = [\n  \"evm_loader_no_logs/program\",\n]" >Cargo.toml && \
+    cat Cargo.toml && \
+    /bin/bash -x ./do.sh build evm_loader_no_logs/program
+RUN ls -l target target/bpfel-unknown-unknown target/bpfel-unknown-unknown/release
+
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
@@ -68,6 +84,7 @@ COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
 COPY --from=spl-memo-builder /opt/target/bpfel-unknown-unknown/release/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/target/bpfel-unknown-unknown/release/evm_loader.so /opt/
+COPY --from=evm-loader-no-logs-builder /opt/target/bpfel-unknown-unknown/release/evm_loader_no_logs.so /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
