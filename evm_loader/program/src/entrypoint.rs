@@ -217,20 +217,18 @@ fn process_instruction<'a>(
                 },
             };
 
-            if !exit_reason.is_succeed() {
-                debug_print!("Not succeed execution");
-                return Err(ProgramError::InvalidInstructionData);
+            if exit_reason.is_succeed() {
+                let (applies, logs) = executor.deconstruct();
+                backend.apply(applies, false, None)?;
+                for log in logs {
+                    invoke(&on_event(program_id, log)?, &accounts)?;
+                }
+                debug_print!("Applies done");
             }
-            let (applies, logs) = executor.deconstruct();
-            backend.apply(applies,false, None)?;
-            for log in logs {
-                let ix = on_event(program_id, log)?;
-                invoke(
-                    &ix,
-                    &accounts
-                )?;
-            }
-            debug_print!("Applies done");
+
+            let result = Vec::new();
+            invoke_on_return(&program_id, &accounts, exit_reason, result);
+
             Ok(())
         },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
@@ -337,7 +335,7 @@ fn process_instruction<'a>(
 
             do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
-        EvmInstruction::OnReturn {bytes} => {
+        EvmInstruction::OnReturn {status, bytes} => {
             Ok(())
         },
         EvmInstruction::OnEvent {address, topics, data} => {
@@ -458,23 +456,20 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             H256::default(), usize::max_value()
         );
     debug_print!("  create2 done");
-
+    
     if exit_reason.is_succeed() {
-        debug_print!("Succeed execution");
         let (applies, logs) = executor.deconstruct();
-        backend.apply(applies,false, Some(caller_ether))?;
+        backend.apply(applies,false, Some(caller_ether));
         for log in logs {
-            let ix = on_event(program_id, log)?;
-            invoke(
-                &ix,
-                &accounts
-            )?;
+            invoke(&on_event(program_id, log)?, &accounts);
         }
-        Ok(())
-    } else {
-        debug_print!("Not succeed execution");
-        Err(ProgramError::InvalidInstructionData)
+        debug_print!("Applies done");
     }
+
+    let result = Vec::new();
+    invoke_on_return(&program_id, &accounts, exit_reason, result);
+
+    Ok(())
 }
 
 fn do_call<'a>(
@@ -523,42 +518,42 @@ fn do_call<'a>(
         );
 
     debug_print!("Call done");
-
+    
     if exit_reason.is_succeed() {
         let (applies, logs) = executor.deconstruct();
         backend.apply(applies,false, Some(caller_ether))?;
         for log in logs {
-            let ix = on_event(program_id, log)?;
-            invoke(
-                &ix,
-                &accounts
-            )?;
+            invoke(&on_event(program_id, log)?, &accounts)?;
         }
         debug_print!("Applies done");
     }
 
-    debug_print!(match exit_reason {
-        ExitReason::Succeed(_) => "succeed",
-        ExitReason::Error(_) => "error",
-        ExitReason::Revert(_) => "revert",
-        ExitReason::Fatal(_) => "fatal",
-    });
-    debug_print!(&hex::encode(&result));
-    
-    if !exit_reason.is_succeed() {
-        debug_print!("Not succeed execution");
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    let ix = on_return(program_id, result)?;
-    invoke(
-        &ix,
-        &accounts
-    )?;
+    invoke_on_return(&program_id, &accounts, exit_reason, result);
 
     Ok(())
 }
 
+fn invoke_on_return<'a>(
+    program_id: &Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    exit_reason: ExitReason,
+    result: Vec<u8>,) 
+{    
+    let exit_status = match exit_reason {
+        ExitReason::Succeed(_) => { debug_print!("succeed"); 1},
+        ExitReason::Error(_) => { debug_print!("error"); 0},
+        ExitReason::Revert(_) => { debug_print!("revert"); 0},
+        ExitReason::Fatal(_) => { debug_print!("fatal"); 0},
+    };
+    
+    debug_print!(&hex::encode(&result));
+
+    let ix = on_return(program_id, exit_status, result).unwrap();
+    invoke(
+        &ix,
+        &accounts
+    );
+}
 
 fn get_ether_address<'a>(
     program_id: &Pubkey,

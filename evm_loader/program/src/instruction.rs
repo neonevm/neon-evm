@@ -109,6 +109,9 @@ pub enum EvmInstruction<'a> {
     },
     /// Called action return
     OnReturn {
+        /// Contract execution status 
+        /// Success - 1 otherwise 0
+        status: u8,
         /// Returned data
         bytes: &'a [u8],
     },
@@ -190,7 +193,8 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg}
             },
             6 => {
-                EvmInstruction::OnReturn {bytes: rest}
+                let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;
+                EvmInstruction::OnReturn {status, bytes}
             },
             7 => {
                 let (address, rest) = rest.split_at(20);
@@ -219,8 +223,10 @@ impl<'a> EvmInstruction<'a> {
 /// Creates a `OnReturn` instruction.
 pub fn on_return(
     myself_program_id: &Pubkey,
+    status: u8,
     mut result: Vec<u8>
 ) -> Result<Instruction, ProgramError> {
+    result.insert(0, status);
     result.insert(0, 6u8);
 
     Ok(Instruction {
