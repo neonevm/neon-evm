@@ -32,6 +32,14 @@ pub enum EvmInstruction<'a> {
     ///   ... other Ether accounts
     Finalize,
 
+    /// Execute Ethereum transaction from account data
+    /// # Account references
+    ///   0. [] The account with transaction for execution
+    ///   1. [WRITE] Caller (Ether account)
+    ///   ... another accounts
+    ///   2. [] Clock sysvar
+    ExecuteTrxFromAccountData,
+
     ///
     /// Create Ethereum account (create program_address account and write data)
     /// # Account references
@@ -198,6 +206,9 @@ impl<'a> EvmInstruction<'a> {
                     rest = rest2;
                 }
                 EvmInstruction::OnEvent {address, topics, data: rest}
+            },
+            8 => {
+                EvmInstruction::ExecuteTrxFromAccountData
             },
 
             _ => return Err(InvalidInstructionData),
