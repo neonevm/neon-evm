@@ -455,21 +455,20 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code_data,
             H256::default(), usize::max_value()
         );
-    debug_print!("  create2 done");
-    
+    debug_print!("  create2 done");    
+
     if exit_reason.is_succeed() {
+        debug_print!("Succeed execution");
         let (applies, logs) = executor.deconstruct();
-        backend.apply(applies,false, Some(caller_ether));
+        backend.apply(applies,false, Some(caller_ether))?;
         for log in logs {
-            invoke(&on_event(program_id, log)?, &accounts);
+            invoke(&on_event(program_id, log)?, &accounts)?;
         }
-        debug_print!("Applies done");
+        Ok(())
+    } else {
+        debug_print!("Not succeed execution");
+        Err(ProgramError::InvalidInstructionData)
     }
-
-    let result = Vec::new();
-    invoke_on_return(&program_id, &accounts, exit_reason, result);
-
-    Ok(())
 }
 
 fn do_call<'a>(
