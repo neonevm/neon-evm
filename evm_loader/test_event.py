@@ -76,7 +76,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
 
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
@@ -88,7 +88,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:], bytes().fromhex("%064x" % 0x3))
 
     def test_addReturnEvent(self):
@@ -107,7 +107,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x3))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 3)) #sum
 
     def test_addReturnEventTwice(self):
@@ -132,7 +132,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x5))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 5)) #sum
 
     def test_events_of_different_instructions(self):
@@ -177,7 +177,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x5))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0x5)) #sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
@@ -196,7 +196,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0xb))  # sum
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1], 1)  # 1 - success
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0xb)) #sum
 
 if __name__ == '__main__':

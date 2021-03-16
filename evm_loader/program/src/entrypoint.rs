@@ -37,7 +37,7 @@ use evm::{
 //    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
     executor::{StackExecutor},
     CreateScheme,
-    ExitReason, ExitFatal,
+    ExitReason, ExitFatal, ExitError, ExitSucceed,
 };
 use primitive_types::{H160, U256};
 
@@ -562,10 +562,43 @@ fn invoke_on_return<'a>(
     result: Vec<u8>,) 
 {    
     let exit_status = match exit_reason {
-        ExitReason::Succeed(_) => { debug_print!("succeed"); 1},
-        ExitReason::Error(_) => { debug_print!("error"); 0},
-        ExitReason::Revert(_) => { debug_print!("revert"); 0},
-        ExitReason::Fatal(_) => { debug_print!("fatal"); 0},
+        ExitReason::Succeed(success_code) => { 
+            debug_print!("Succeed");
+            match success_code {
+                ExitSucceed::Stopped => { debug_print!("Machine encountered an explict stop."); 0x11},
+                ExitSucceed::Returned => { debug_print!("Machine encountered an explict return."); 0x12},
+                ExitSucceed::Suicided => { debug_print!("Machine encountered an explict suicide."); 0x13},
+            }
+        },
+        ExitReason::Error(error_code) => { 
+            debug_print!("Error");
+            match error_code {
+                ExitError::StackUnderflow => { debug_print!("Trying to pop from an empty stack."); 0xe1},
+                ExitError::StackOverflow => { debug_print!("Trying to push into a stack over stack limit."); 0xe2},
+                ExitError::InvalidJump => { debug_print!("Jump destination is invalid."); 0xe3},
+                ExitError::InvalidRange => { debug_print!("An opcode accesses memory region, but the region is invalid."); 0xe4},
+                ExitError::DesignatedInvalid => { debug_print!("Encountered the designated invalid opcode."); 0xe5},
+                ExitError::CallTooDeep => { debug_print!("Call stack is too deep (runtime)."); 0xe6},
+                ExitError::CreateCollision => { debug_print!("Create opcode encountered collision (runtime)."); 0xe7},
+                ExitError::CreateContractLimit => { debug_print!("Create init code exceeds limit (runtime)."); 0xe8},
+                ExitError::OutOfOffset => { debug_print!("An opcode accesses external information, but the request is off offset limit (runtime)."); 0xe9},
+                ExitError::OutOfGas => { debug_print!("Execution runs out of gas (runtime)."); 0xea},
+                ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
+                ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
+                ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
+                ExitError::Other(_) => { debug_print!("Other normal errors."); 0xee},
+            }
+        },
+        ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
+        ExitReason::Fatal(fatal_code) => {             
+            debug_print!("Fatal");
+            match fatal_code {
+                ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
+                ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
+                ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
+                ExitFatal::Other(_) => { debug_print!("Other fatal errors."); 0xf4},
+            }
+        },
     };
     
     debug_print!(&hex::encode(&result));
