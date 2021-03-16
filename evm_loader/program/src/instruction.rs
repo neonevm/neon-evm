@@ -60,6 +60,25 @@ pub enum EvmInstruction<'a> {
     },
 
     ///
+    /// Create Ethereum account (create program_address account and write data)
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [WRITE] New account (program_address(ether, nonce))
+    CreateAccount2 {
+        /// Number of lamports to transfer to the new account
+        lamports: u64,
+
+        /// Number of bytes of memory to allocate
+        space: u64,
+
+        /// Ethereum address of account
+        ether: H160,
+
+        /// Nonce for create valid program_address from ethereum address
+        nonce: u8,
+    },
+
+    ///
     /// Create ethereum account with seed
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
@@ -157,6 +176,19 @@ impl<'a> EvmInstruction<'a> {
                 let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
+            },
+            102 => {
+                let (_, rest) = rest.split_at(3);
+                let (lamports, rest) = rest.split_at(8);
+                let (space, rest) = rest.split_at(8);
+
+                let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+
+                let (ether, rest) = rest.split_at(20);
+                let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
+                let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
+                EvmInstruction::CreateAccount2 {lamports, space, ether, nonce: *nonce}
             },
             3 => {
                 EvmInstruction::Call {bytes: rest}

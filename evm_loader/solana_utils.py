@@ -1,4 +1,6 @@
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.rpc.api import Client
+from solana.rpc.types import TxOpts
 from solana.account import Account
 from solana.publickey import PublicKey
 import time
@@ -10,7 +12,19 @@ from construct import Struct as cStruct
 import json
 from eth_keys import keys as eth_keys
 import base64
+from base58 import b58encode
+from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
+from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from hashlib import sha256
 
+CREATE_ACCOUNT_LAYOUT = cStruct(
+    "lamports" / Int64ul,
+    "space" / Int64ul,
+    "ether" / Bytes(20),
+    "nonce" / Int8ul
+)
+
+system = "11111111111111111111111111111111"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -37,6 +51,36 @@ def confirm_transaction(client, tx_sig):
     if not resp["result"]:
         raise RuntimeError("could not confirm transaction: ", tx_sig)
     return resp
+
+def accountWithSeed(base, seed, program):
+    print(type(base), type(seed), type(program))
+    return PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+
+def createAccountWithSeed(funding, base, seed, lamports, space, program):
+    data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
+        dict(
+            instruction_type = SystemInstructionType.CreateAccountWithSeed,
+            args=dict(
+                base=bytes(base),
+                seed=dict(length=len(seed), chars=seed),
+                lamports=lamports,
+                space=space,
+                program_id=bytes(program)
+            )
+        )
+    )
+    print("createAccountWithSeed", data.hex())
+    created = accountWithSeed(base, seed, program) #PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    print("created", created)
+    return TransactionInstruction(
+        keys=[
+            AccountMeta(pubkey=funding, is_signer=True, is_writable=True),
+            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=base, is_signer=True, is_writable=False),
+        ],
+        program_id=system,
+        data=data
+    )
 
 
 
@@ -134,13 +178,39 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        cli = SolanaCli(self.solana_url, self.acc)
-        output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether))
-        result = json.loads(output.splitlines()[-1])
-        return result["solana"]
+        (sol, nonce) = self.ether2program(ether)
+        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+        trx = Transaction()
+        seed = str(b58encode(bytes.fromhex(ether)))
+        base = self.acc.get_acc().public_key()
+        trx.add(createAccountWithSeed(base, base, seed, 10**9, 65, PublicKey(self.loader_id)))
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**0,
+                space=0,
+                ether=bytes.fromhex(ether),
+                nonce=nonce)),
+            keys=[
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+            ]))
+        result = http_client.send_transaction(trx, self.acc.get_acc(),
+                opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
+        print('result:', result)
+        return sol
 
 
     def ether2program(self, ether):
+        if isinstance(ether, str):
+            if ether.startswith('0x'): ether = ether[2:]
+        else: ether = ether.hex()
+        seed = str(b58encode(bytes.fromhex(ether)))
+        acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
+        print('ether2program: {} {} => {}'.format(ether, 255, acc))
+        return (acc, 255)
+
+    def ether2programAddress(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
@@ -160,7 +230,7 @@ class EvmLoader:
         with open(location, mode='rb') as file:
             fileHash = Web3.keccak(file.read())
             ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-        program = self.ether2program(ether)
+        program = self.ether2programAddress(ether)
         info = http_client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)

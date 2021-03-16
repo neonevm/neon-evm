@@ -56,7 +56,7 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
         )
     )
     print("createAccountWithSeed", data.hex())
-    created = PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    created = accountWithSeed(base, seed, program) #PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
     print("created", created)
     return TransactionInstruction(
         keys=[
@@ -149,12 +149,20 @@ class DeployTest(unittest.TestCase):
 
         # Create contract account & execute deploy transaction
         trx = Transaction()
+        base = self.acc.public_key()
+        seed = str(b58encode(contract_eth))
+        trx.add(createAccountWithSeed(base, base, seed, 10**9, 65+len(msg)+2048, PublicKey(evm_loader_id)))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-            data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
+            #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
+            data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**0,
+                space=len(msg)+2048,
+                ether=contract_eth,
+                nonce=contract_nonce)),
             keys=[
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                #AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('08'),

@@ -47,10 +47,11 @@ pub struct SolanaBackend {
     program_id: Pubkey,
     contract_id: H160,
     caller_id: H160,
+    base_account: Pubkey,
 }
 
 impl SolanaBackend {
-    pub fn new(solana_url: String, program_id: Pubkey, contract_id: H160, caller_id: H160) -> Result<Self, u8> {
+    pub fn new(solana_url: String, base_account: Pubkey, program_id: Pubkey, contract_id: H160, caller_id: H160) -> Result<Self, u8> {
         eprintln!("backend::new");
         Ok(Self {
             accounts: RefCell::new(HashMap::new()),
@@ -59,6 +60,7 @@ impl SolanaBackend {
             program_id: program_id,
             contract_id: contract_id,
             caller_id: caller_id,
+            base_account: base_account,
         })
     }
 
@@ -66,9 +68,12 @@ impl SolanaBackend {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(&address).is_none() {
-            eprintln!("Not found account for {}", &address.to_string());
 
-            let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
+            //let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
+            let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
+            let solana_address = Pubkey::create_with_seed(&self.base_account, &seed, &self.program_id).unwrap();
+
+            eprintln!("Not found account for {} => {} (seed {})", &address.to_string(), &solana_address.to_string(), &seed);
             
             match self.rpc_client.get_account(&solana_address) {
                 Ok(acc) => {
