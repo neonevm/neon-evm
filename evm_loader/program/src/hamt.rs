@@ -1,7 +1,7 @@
 use primitive_types::U256;
 use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
-use solana_sdk::{
+use solana_program::{
     program_error::ProgramError,
 };
 

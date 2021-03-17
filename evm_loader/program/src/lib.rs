@@ -22,7 +22,7 @@ mod transaction;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
-pub use solana_sdk;
+pub use solana_program;
 
 // Convert the UI representation of a token amount (using the decimals field defined in its mint)
 // to the raw amount
