@@ -37,7 +37,7 @@ use evm::{
 //    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
     executor::{StackExecutor},
     CreateScheme,
-    ExitReason, ExitFatal,
+    ExitReason, ExitFatal, ExitError, ExitSucceed,
 };
 use primitive_types::{H160, U256};
 
@@ -240,20 +240,18 @@ fn process_instruction<'a>(
                 },
             };
 
-            if !exit_reason.is_succeed() {
-                debug_print!("Not succeed execution");
-                return Err(ProgramError::InvalidInstructionData);
+            if exit_reason.is_succeed() {
+                let (applies, logs) = executor.deconstruct();
+                backend.apply(applies, false, None)?;
+                for log in logs {
+                    invoke(&on_event(program_id, log)?, &accounts)?;
+                }
+                debug_print!("Applies done");
             }
-            let (applies, logs) = executor.deconstruct();
-            backend.apply(applies,false, None)?;
-            for log in logs {
-                let ix = on_event(program_id, log)?;
-                invoke(
-                    &ix,
-                    &accounts
-                )?;
-            }
-            debug_print!("Applies done");
+
+            let result = Vec::new();
+            invoke_on_return(&program_id, &accounts, exit_reason, result);
+
             Ok(())
         },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
@@ -360,7 +358,7 @@ fn process_instruction<'a>(
 
             do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
-        EvmInstruction::OnReturn {bytes} => {
+        EvmInstruction::OnReturn {status, bytes} => {
             Ok(())
         },
         EvmInstruction::OnEvent {address, topics, data} => {
@@ -480,18 +478,14 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code_data,
             H256::default(), usize::max_value()
         );
-    debug_print!("  create2 done");
+    debug_print!("  create2 done");    
 
     if exit_reason.is_succeed() {
         debug_print!("Succeed execution");
         let (applies, logs) = executor.deconstruct();
         backend.apply(applies,false, Some(caller_ether))?;
         for log in logs {
-            let ix = on_event(program_id, log)?;
-            invoke(
-                &ix,
-                &accounts
-            )?;
+            invoke(&on_event(program_id, log)?, &accounts)?;
         }
         Ok(())
     } else {
@@ -546,42 +540,75 @@ fn do_call<'a>(
         );
 
     debug_print!("Call done");
-
+    
     if exit_reason.is_succeed() {
         let (applies, logs) = executor.deconstruct();
         backend.apply(applies,false, Some(caller_ether))?;
         for log in logs {
-            let ix = on_event(program_id, log)?;
-            invoke(
-                &ix,
-                &accounts
-            )?;
+            invoke(&on_event(program_id, log)?, &accounts)?;
         }
         debug_print!("Applies done");
     }
 
-    debug_print!(match exit_reason {
-        ExitReason::Succeed(_) => "succeed",
-        ExitReason::Error(_) => "error",
-        ExitReason::Revert(_) => "revert",
-        ExitReason::Fatal(_) => "fatal",
-    });
-    debug_print!(&hex::encode(&result));
-    
-    if !exit_reason.is_succeed() {
-        debug_print!("Not succeed execution");
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    let ix = on_return(program_id, result)?;
-    invoke(
-        &ix,
-        &accounts
-    )?;
+    invoke_on_return(&program_id, &accounts, exit_reason, result);
 
     Ok(())
 }
 
+fn invoke_on_return<'a>(
+    program_id: &Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    exit_reason: ExitReason,
+    result: Vec<u8>,) 
+{    
+    let exit_status = match exit_reason {
+        ExitReason::Succeed(success_code) => { 
+            debug_print!("Succeed");
+            match success_code {
+                ExitSucceed::Stopped => { debug_print!("Machine encountered an explict stop."); 0x11},
+                ExitSucceed::Returned => { debug_print!("Machine encountered an explict return."); 0x12},
+                ExitSucceed::Suicided => { debug_print!("Machine encountered an explict suicide."); 0x13},
+            }
+        },
+        ExitReason::Error(error_code) => { 
+            debug_print!("Error");
+            match error_code {
+                ExitError::StackUnderflow => { debug_print!("Trying to pop from an empty stack."); 0xe1},
+                ExitError::StackOverflow => { debug_print!("Trying to push into a stack over stack limit."); 0xe2},
+                ExitError::InvalidJump => { debug_print!("Jump destination is invalid."); 0xe3},
+                ExitError::InvalidRange => { debug_print!("An opcode accesses memory region, but the region is invalid."); 0xe4},
+                ExitError::DesignatedInvalid => { debug_print!("Encountered the designated invalid opcode."); 0xe5},
+                ExitError::CallTooDeep => { debug_print!("Call stack is too deep (runtime)."); 0xe6},
+                ExitError::CreateCollision => { debug_print!("Create opcode encountered collision (runtime)."); 0xe7},
+                ExitError::CreateContractLimit => { debug_print!("Create init code exceeds limit (runtime)."); 0xe8},
+                ExitError::OutOfOffset => { debug_print!("An opcode accesses external information, but the request is off offset limit (runtime)."); 0xe9},
+                ExitError::OutOfGas => { debug_print!("Execution runs out of gas (runtime)."); 0xea},
+                ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
+                ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
+                ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
+                ExitError::Other(_) => { debug_print!("Other normal errors."); 0xee},
+            }
+        },
+        ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
+        ExitReason::Fatal(fatal_code) => {             
+            debug_print!("Fatal");
+            match fatal_code {
+                ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
+                ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
+                ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
+                ExitFatal::Other(_) => { debug_print!("Other fatal errors."); 0xf4},
+            }
+        },
+    };
+    
+    debug_print!(&hex::encode(&result));
+
+    let ix = on_return(program_id, exit_status, result).unwrap();
+    invoke(
+        &ix,
+        &accounts
+    );
+}
 
 fn get_ether_address<'a>(
     program_id: &Pubkey,

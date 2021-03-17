@@ -40,13 +40,13 @@ class EventTest(unittest.TestCase):
         print ('contract_eth', cls.reId_eth.hex())
 
     def sol_instr_05(self, evm_instruction):
-        return TransactionInstruction(program_id=evm_loader_id,
+        return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
@@ -75,7 +75,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        self.assertEqual(data, b'\x06')  # 6 means OnReturn, and no value next - empty
+        self.assertEqual(data[0], 6)  # 6 means OnReturn,
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
 
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
@@ -86,8 +87,9 @@ class EventTest(unittest.TestCase):
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        self.assertEqual(data[:1], b'\x06')
-        self.assertEqual(data[1:], bytes().fromhex("%064x" % 0x3))
+        self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:], bytes().fromhex("%064x" % 0x3))
 
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
@@ -105,7 +107,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x3))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 3)) #sum
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 3)) #sum
 
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
@@ -129,7 +132,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x5))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 5)) #sum
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 5)) #sum
 
     def test_events_of_different_instructions(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
@@ -148,10 +152,9 @@ class EventTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1))))
         trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg2))))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2))))
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
-        result = http_client.send_transaction(trx, self.acc,
-                                     opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
 
@@ -174,7 +177,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x5))  # sum
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 0x5)) #sum
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0x5)) #sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
         self.assertEqual(len(result['meta']['innerInstructions'][1]['instructions']), 3)
@@ -192,7 +196,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0xb))  # sum
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
-        self.assertEqual(data[1:33], bytes().fromhex('%064x' % 0xb)) #sum
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0xb)) #sum
 
 if __name__ == '__main__':
     unittest.main()
