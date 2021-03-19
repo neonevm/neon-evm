@@ -24,13 +24,10 @@ RUN cd /opt/memo/program && cargo build-bpf
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
-RUN cd /opt/evm_loader/program && cargo build-bpf
+RUN cargo build-bpf
 # Build evm_loader_no_logs
-RUN cd /opt/evm_loader/program && \
-    sed -i 's/\(name = \)"evm-loader"/\1"evm-loader-no-logs"/' Cargo.toml && \
-    sed -i 's/\(program =.*\), "evm_debug"\(.*\)/\1\2/' Cargo.toml && \
-    cargo build-bpf
-
+RUN sed -i 's/\(name = \)"evm-loader"/\1"evm-loader-no-logs"/' Cargo.toml && \
+    cargo build-bpf --no-default-features --features custom-heap
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
