@@ -3,7 +3,7 @@ use impl_serde::serialize as bytes;
 use rlp::RlpStream;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use solana_sdk::{
+use solana_program::{
     entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
     secp256k1_program
 };

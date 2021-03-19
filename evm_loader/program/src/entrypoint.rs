@@ -1,23 +1,22 @@
 //! Program entrypoint
 
-#![cfg(feature = "program")]
 #![cfg(not(feature = "no-entrypoint"))]
 
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use std::convert::TryInto;
-use solana_sdk::{
+use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult},
     program_error::{ProgramError}, pubkey::Pubkey,
-    program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
     system_instruction::{create_account, create_account_with_seed},
     sysvar::instructions::{load_current_index, load_instruction_at}, 
     program::{invoke_signed, invoke},
     secp256k1_program,
     instruction::Instruction,
-    sysvar::instructions
+    sysvar::instructions,
+    entrypoint::HEAP_START_ADDRESS
 };
 
 //use crate::hamt::Hamt;
@@ -42,7 +41,6 @@ use evm::{
 use primitive_types::{H160, U256};
 
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
-use solana_sdk::entrypoint::HEAP_START_ADDRESS;
 
 
 use sha3::{Keccak256, Digest};

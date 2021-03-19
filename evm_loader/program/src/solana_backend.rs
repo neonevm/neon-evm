@@ -5,12 +5,13 @@ use evm::{
 use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
-use solana_sdk::{
+use solana_program::{
     account_info::{next_account_info, AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
     instruction::{Instruction, AccountMeta},
+    program::{invoke, invoke_signed}
 };
 use std::{
     cell::RefCell,
@@ -18,8 +19,6 @@ use std::{
 
 use crate::solidity_account::SolidityAccount;
 use crate::account_data::AccountData;
-use solana_sdk::program::invoke;
-use solana_sdk::program::invoke_signed;
 use std::convert::TryInto;
 
 fn keccak256_digest(data: &[u8]) -> H256 {
@@ -277,7 +276,7 @@ impl<'a> Backend for SolanaBackend<'a> {
                 for info in self.account_infos {
                     debug_print!(&format!("  {}", info.key));
                 };
-                let result : solana_sdk::entrypoint::ProgramResult;
+                let result : solana_program::entrypoint::ProgramResult;
                 match self.get_account_by_index(1){
                     Some(inner) => {
                         let sender = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index

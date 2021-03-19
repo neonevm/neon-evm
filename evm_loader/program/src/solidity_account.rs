@@ -1,6 +1,6 @@
 use crate::hamt::Hamt;
 use crate::account_data::AccountData;
-use solana_sdk::{
+use solana_program::{
     account_info::AccountInfo,
     program_error::ProgramError,
     pubkey::Pubkey,
