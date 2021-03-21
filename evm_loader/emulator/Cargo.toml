@@ -16,3 +16,5 @@ sha3 = ""
 arrayref = ""
 serde = ""
 serde_json = ""
+getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
+libsecp256k1 = { version = "0.3.5", default-features = false }
