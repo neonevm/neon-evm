@@ -191,7 +191,7 @@ impl<'a> SolanaBackend<'a> {
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
         };
 
-        let mut address = Keccak256::digest(&public_key.serialize());
+        let mut address = Keccak256::digest(&public_key.serialize()[1..]);
         for i in 0..12 { address[i] = 0 }
         debug_print!(&hex::encode(&address));
 
