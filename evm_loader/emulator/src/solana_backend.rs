@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::json;
 use serde::{Deserialize, Serialize};
+use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -148,6 +149,53 @@ impl SolanaBackend {
 
         println!("{}", js);
     }
+
+    fn is_ecrecover_address(&self, code_address: &H160) -> bool {
+        *code_address == Self::system_account_ecrecover()
+    }
+
+    pub fn system_account_ecrecover() -> H160 {
+        H160::from_slice(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0x01u8])
+    }
+
+    pub fn call_inner_ecrecover(&self,
+        code_address: H160,
+        _transfer: Option<Transfer>,
+        input: Vec<u8>,
+        _target_gas: Option<usize>,
+        _is_static: bool,
+        _take_l64: bool,
+        _take_stipend: bool,
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        eprintln!("ecrecover");
+        eprintln!("input: {}", &hex::encode(&input));
+    
+        if (input.len() != 128) {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
+        }
+
+        let data = array_ref![input, 0, 128];
+        let (msg, v, sig) = array_refs![data, 32, 32, 64];
+        let message = secp256k1::Message::parse(&msg);
+        let v = U256::from(v).as_u32() as u8;
+        eprintln!("V: {}", v);
+        let signature = secp256k1::Signature::parse(&sig);
+        let recoveryId = match secp256k1::RecoveryId::parse_rpc(v) {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+        };
+
+        let public_key = match secp256k1::recover(&message, &signature, &recoveryId) {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+        };
+
+        let mut address = Keccak256::digest(&public_key.serialize()[1..]);
+        for i in 0..12 { address[i] = 0 }
+        eprintln!("{:x?} {:?}", &public_key.serialize(), &hex::encode(&address));
+
+        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address.to_vec())));
+    }
 }
 
 impl Backend for SolanaBackend {
@@ -268,14 +316,17 @@ impl Backend for SolanaBackend {
         self.add_alias(address, &account);*/
     }
     fn call_inner(&self,
-        _code_address: H160,
+        code_address: H160,
         _transfer: Option<Transfer>,
-        _input: Vec<u8>,
+        input: Vec<u8>,
         _target_gas: Option<usize>,
         _is_static: bool,
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        if (self.is_ecrecover_address(&code_address)) {
+            return self.call_inner_ecrecover(code_address, _transfer, input, _target_gas, _is_static, _take_l64, _take_stipend);
+        }
 
         return None;
     //     if !self.is_solana_address(&code_address) {

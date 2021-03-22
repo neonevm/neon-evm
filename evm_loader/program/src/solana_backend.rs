@@ -21,6 +21,7 @@ use crate::account_data::AccountData;
 use solana_sdk::program::invoke;
 use solana_sdk::program::invoke_signed;
 use std::convert::TryInto;
+use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 
 fn keccak256_digest(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
@@ -118,8 +119,16 @@ impl<'a> SolanaBackend<'a> {
         *code_address == Self::system_account()
     }
 
+    fn is_ecrecover_address(&self, code_address: &H160) -> bool {
+        *code_address == Self::system_account_ecrecover()
+    }
+
     pub fn system_account() -> H160 {
         H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
+    }
+
+    pub fn system_account_ecrecover() -> H160 {
+        H160::from_slice(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0x01u8])
     }
 
     pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
@@ -128,12 +137,13 @@ impl<'a> SolanaBackend<'a> {
                 I: IntoIterator<Item=(H256, H256)>
     {
         let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
-        let system_account = Self::system_account();        
+        let system_account = Self::system_account();
+        let system_account_ecrecover = Self::system_account_ecrecover();          
 
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {   
-                    if address == system_account {
+                    if (address == system_account) || (address == system_account_ecrecover) {
                         continue;
                     }
                     if ether_addr.1 != true && address == ether_addr.0 {
@@ -149,6 +159,43 @@ impl<'a> SolanaBackend<'a> {
         //for log in logs {};
 
         Ok(())
+    }
+    pub fn call_inner_ecrecover(&self,
+        code_address: H160,
+        _transfer: Option<Transfer>,
+        input: Vec<u8>,
+        _target_gas: Option<usize>,
+        _is_static: bool,
+        _take_l64: bool,
+        _take_stipend: bool,
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        debug_print!("ecrecover");
+        debug_print!(&format!("input: {}", &hex::encode(&input)));
+    
+        if (input.len() != 128) {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
+        }
+
+        let data = array_ref![input, 0, 128];
+        let (msg, v, sig) = array_refs![data, 32, 32, 64];
+        let message = secp256k1::Message::parse(&msg);
+        let v = U256::from(v).as_u32() as u8;
+        let signature = secp256k1::Signature::parse(&sig);
+        let recoveryId = match secp256k1::RecoveryId::parse_rpc(v) {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+        };
+
+        let public_key = match secp256k1::recover(&message, &signature, &recoveryId) {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+        };
+
+        let mut address = Keccak256::digest(&public_key.serialize()[1..]);
+        for i in 0..12 { address[i] = 0 }
+        debug_print!(&hex::encode(&address));
+
+        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address.to_vec())));
     }
 }
 
@@ -227,6 +274,10 @@ impl<'a> Backend for SolanaBackend<'a> {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        if (self.is_ecrecover_address(&code_address)) {
+            return self.call_inner_ecrecover(code_address, _transfer, input, _target_gas, _is_static, _take_l64, _take_stipend);
+        }
+
         if !self.is_solana_address(&code_address) {
             return None;
         }
