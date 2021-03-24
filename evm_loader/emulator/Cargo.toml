@@ -6,6 +6,7 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
+evm-loader = { path = "../program", version = "2.0.8" }
 evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
 solana-sdk = "1.4.0"
 solana-client = "1.4.0"

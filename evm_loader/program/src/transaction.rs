@@ -10,7 +10,7 @@ use solana_sdk::{
 use std::borrow::Cow;
 use std::error::Error;
 use std::convert::TryFrom;
-pub use ethereum_types::{Address, U256};
+use primitive_types::{H160, U256};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -102,7 +102,7 @@ pub fn check_tx(raw_tx: &[u8]) {
     debug_print!(&("       sign: ".to_owned() + &hex::encode(&compact_bytes))); 
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Option<Address>, std::vec::Vec<u8>) {    
+pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, std::vec::Vec<u8>) {    
     let tx: Result<SignedTransaction, _> = rlp::decode(&raw_tx);
     let tx = tx.unwrap();
 
@@ -127,8 +127,8 @@ impl std::ops::Deref for Bytes {
 
 #[derive(Clone)]
 pub struct SignedTransaction {
-    pub from: Address,
-    pub to: Option<Address>,
+    pub from: H160,
+    pub to: Option<H160>,
     pub nonce: U256,
     pub gas: U256,
     pub gas_price: U256,
@@ -156,8 +156,8 @@ mod replay_protection {
 
 impl SignedTransaction {
     pub fn new(
-        from: Address,
-        to: Option<Address>,
+        from: H160,
+        to: Option<H160>,
         nonce: U256,
         gas: U256,
         gas_price: U256,
@@ -189,7 +189,7 @@ impl SignedTransaction {
     pub fn network_id(&self) -> Option<U256> {
         if self.r == U256::zero() && self.s == U256::zero() {
             Some(U256::from(self.v.clone()))
-        } else if self.v == 27u32.into() || self.v == 28u32.into() {
+        } else if self.v == 27 || self.v == 28 {
             None
         } else {
             Some(((U256::from(self.v.clone()) - 1u32) / 2u32) - 17u32)

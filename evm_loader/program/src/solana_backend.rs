@@ -47,9 +47,9 @@ pub struct SolanaBackend<'a, 's> {
 }
 
 impl<'a, 's> SolanaBackend<'a, 's> {
-    pub fn new(account_storage: Ref<'s ,dyn AccountStorage>, account_infos: &'a [AccountInfo<'a>]) -> Result<Self,ProgramError> {
+    pub fn new(account_storage: Ref<'s ,dyn AccountStorage>, account_infos: Option<&'a [AccountInfo<'a>]>) -> Self {
         debug_print!("backend::new"); 
-        Ok(Self { account_storage, account_infos: Some(account_infos) } )
+        Self { account_storage, account_infos }
     }
 
     fn is_solana_address(&self, code_address: &H160) -> bool {

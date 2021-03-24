@@ -1,9 +1,7 @@
-mod hamt;
-mod solana_backend;
-mod account_data;
-mod solidity_account;
+mod account_storage;
+use crate::account_storage::EmulatorAccountStorage;
 
-use crate::solana_backend::SolanaBackend;
+use evm_loader::solana_backend::SolanaBackend;
 
 use evm::{executor::StackExecutor, ExitReason};
 use hex;
@@ -11,6 +9,7 @@ use primitive_types::{H160, U256};
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::str::FromStr;
+use std::cell::RefCell;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -40,23 +39,37 @@ fn main() {
         return;
     };
 
-    let mut backend = SolanaBackend::new(solana_url, base_account, evm_loader, contract_id, caller_id).unwrap();
-    let config = evm::Config::istanbul();
-    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    let account_storage = RefCell::new(EmulatorAccountStorage::new(solana_url, base_account, evm_loader, contract_id, caller_id));
 
-    let (exit_reason, result) = executor.transact_call(
-        caller_id,
-        contract_id,
-        U256::zero(),
-        data,
-        usize::max_value(),
-    );
+    let (exit_reason, result, applies_logs) = {
+        let acc_storage = account_storage.borrow();
+
+        let backend = SolanaBackend::new(acc_storage, None);
+        let config = evm::Config::istanbul();
+        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::max_value());
+    
+        eprintln!("Call done");
+        
+        if exit_reason.is_succeed() {
+            eprintln!("Succeed execution");
+            let (applies, logs) = executor.deconstruct();
+            (exit_reason, result, Some((applies, logs)))
+        } else {
+            (exit_reason, result, None)
+        }
+    };
 
     eprintln!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, logs) = executor.deconstruct();
-            backend.apply(applies, logs, false);
+            let acc_storage = account_storage.borrow();
+    
+            let (applies, logs) = applies_logs.unwrap();
+    
+            acc_storage.apply(applies);
+
             eprintln!("Applies done");
             "succeed".to_string()
         }
@@ -72,7 +85,9 @@ fn main() {
         eprintln!("Not succeed execution");
     }
 
-    backend.get_used_accounts(&status, &result);
+    
+    let acc_storage = account_storage.borrow();
+    acc_storage.get_used_accounts(&status, &result);
 }
 
 fn make_clean_hex(in_str: &String) -> String {

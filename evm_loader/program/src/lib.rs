@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 //#![forbid(unsafe_code)]
 
 
@@ -6,6 +6,7 @@
 //! An ERC20-like Token program for the Solana blockchain
 #[macro_use]
 mod debug;
+// mod error;
 pub mod entrypoint;
 //pub mod error;
 //pub mod instruction;

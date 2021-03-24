@@ -236,7 +236,7 @@ fn process_instruction<'a>(
                 }
                 let caller_ether = caller.get_ether();
         
-                let backend = SolanaBackend::new(acc_storage, accounts)?;
+                let backend = SolanaBackend::new(acc_storage, Some(accounts));
                 debug_print!("  backend initialized");
             
                 let config = evm::Config::istanbul();
@@ -479,7 +479,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let caller_ether = get_ether_address(program_id, account_storage.borrow().get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
     
     let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(account_storage.borrow(), accounts)?;
+        let backend = SolanaBackend::new(account_storage.borrow(), Some(accounts));
         debug_print!("  backend initialized");
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -570,7 +570,7 @@ fn do_call<'a>(
     let (exit_reason, result, applies_logs) = {
         let acc_storage = account_storage.borrow();
 
-        let backend = SolanaBackend::new(acc_storage, accounts)?;
+        let backend = SolanaBackend::new(acc_storage, Some(accounts));
         debug_print!("  backend initialized");
     
         let config = evm::Config::istanbul();
