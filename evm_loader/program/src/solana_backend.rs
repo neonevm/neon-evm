@@ -14,105 +14,42 @@ use solana_sdk::{
 };
 use std::{
     cell::RefCell,
+    cell::Ref,
 };
 
-use crate::solidity_account::SolidityAccount;
-use crate::account_data::AccountData;
 use solana_sdk::program::invoke;
 use solana_sdk::program::invoke_signed;
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
-}
-
 pub fn solidity_address<'a>(key: &Pubkey) -> H160 {
     H256::from_slice(key.as_ref()).into()
 }
 
-fn u256_to_h256(value: U256) -> H256 {
-    let mut v = vec![0u8; 32];
-    value.to_big_endian(&mut v);
-    H256::from_slice(&v)
+pub trait AccountStorage {
+    fn contract_id(&self) -> H160;
+    fn get_account_solana_address(&self, address: H160) -> Option<&Pubkey>;
+    fn get_contract_seeds(&self) -> Option<(H160, u8)>;
+    fn get_caller_seeds(&self) -> Option<(H160, u8)>;
+    fn exists(&self, address: H160) -> bool;
+    fn basic(&self, address: H160) -> Basic;
+    fn code_hash(&self, address: H160) -> H256;
+    fn code_size(&self, address: H160) -> usize;
+    fn code(&self, address: H160) -> Vec<u8>;
+    fn storage(&self, address: H160, index: H256) -> H256;
+    fn block_number(&self) -> U256;
+    fn block_timestamp(&self) -> U256;
 }
 
-pub struct SolanaBackend<'a> {
-    accounts: Vec<Option<SolidityAccount<'a>>>,
-    aliases: RefCell<Vec<(H160, usize)>>,
-    clock_account: &'a AccountInfo<'a>,
-    account_infos: &'a [AccountInfo<'a>],
+pub struct SolanaBackend<'a, 's> {
+    account_storage: Ref<'s ,dyn AccountStorage>,
+    account_infos: Option<&'a [AccountInfo<'a>]>,
 }
 
-impl<'a> SolanaBackend<'a> {
-    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>],
-               clock_account: &'a AccountInfo<'a>) -> Result<Self,ProgramError> {
-        debug_print!("backend::new");
-        let mut accounts = Vec::with_capacity(account_infos.len());
-        let mut aliases = Vec::with_capacity(account_infos.len());
-
-        for (i, account) in (&account_infos).iter().enumerate() {
-            debug_print!(&i.to_string());
-            if account.owner == program_id {
-                let sol_account = SolidityAccount::new(account)?;
-                aliases.push((sol_account.get_ether(), i));
-                accounts.push(Some(sol_account));
-            } else {
-                accounts.push(None)
-            }
-        };
-        debug_print!("Accounts was read");
-        aliases.sort_by_key(|v| v.0);
-        Ok(Self {
-            accounts: accounts,
-            aliases: RefCell::new(aliases),
-            clock_account,
-            account_infos: account_infos,
-        })
-    }
-
-    pub fn get_account_by_index(&self, index: usize) -> Option<&SolidityAccount<'a>> {
-        if let Some(acc) = &self.accounts[index] {
-            Some(&acc)
-        } else {None}
-    }
-
-/*    pub fn add_alias(&self, address: &H160, pubkey: &Pubkey) {
-        debug_print!(&("Add alias ".to_owned() + &address.to_string() + " for " + &pubkey.to_string()));
-        for (i, account) in (&self.accounts).iter().enumerate() {
-            if account.account_info.key == pubkey {
-                let mut aliases = self.aliases.borrow_mut();
-                aliases.push((*address, i));
-                aliases.sort_by_key(|v| v.0);
-                return;
-            }
-        }
-    }*/
-
-    fn find_account(&self, address: H160) -> Option<usize> {
-        let aliases = self.aliases.borrow();
-        match aliases.binary_search_by_key(&address, |v| v.0) {
-            Ok(pos) => {
-                debug_print!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
-                Some(aliases[pos].1)
-            },
-            Err(_) => {
-                debug_print!(&("Not found account for ".to_owned() + &address.to_string()));
-                None
-            },
-        }
-    }
-
-    fn get_account(&self, address: H160) -> Option<&SolidityAccount<'a>> {
-        if let Some(pos) = self.find_account(address) {
-            self.accounts[pos].as_ref()
-        } else {None}
-    }
-
-    fn get_account_mut(&mut self, address: H160) -> Option<&mut SolidityAccount<'a>> {
-        if let Some(pos) = self.find_account(address) {
-            self.accounts[pos].as_mut()
-        } else {None}
+impl<'a, 's> SolanaBackend<'a, 's> {
+    pub fn new(account_storage: Ref<'s ,dyn AccountStorage>, account_infos: &'a [AccountInfo<'a>]) -> Result<Self,ProgramError> {
+        debug_print!("backend::new"); 
+        Ok(Self { account_storage, account_infos: Some(account_infos) } )
     }
 
     fn is_solana_address(&self, code_address: &H160) -> bool {
@@ -131,35 +68,6 @@ impl<'a> SolanaBackend<'a> {
         H160::from_slice(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0x01u8])
     }
 
-    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
-            where
-                A: IntoIterator<Item=Apply<I>>,
-                I: IntoIterator<Item=(H256, H256)>
-    {
-        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
-        let system_account = Self::system_account();
-        let system_account_ecrecover = Self::system_account_ecrecover();          
-
-        for apply in values {
-            match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {   
-                    if (address == system_account) || (address == system_account_ecrecover) {
-                        continue;
-                    }
-                    if ether_addr.1 != true && address == ether_addr.0 {
-                        continue;
-                    }
-                    let account = self.get_account_mut(address).ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
-                    account.update(address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
-                },
-                Apply::Delete {address: _} => {},
-            }
-        };
-
-        //for log in logs {};
-
-        Ok(())
-    }
     pub fn call_inner_ecrecover(&self,
         code_address: H160,
         _transfer: Option<Transfer>,
@@ -199,58 +107,38 @@ impl<'a> SolanaBackend<'a> {
     }
 }
 
-impl<'a> Backend for SolanaBackend<'a> {
+impl<'a, 's> Backend for SolanaBackend<'a, 's> {
     fn gas_price(&self) -> U256 { U256::zero() }
-    fn origin(&self) -> H160 { self.aliases.borrow()[1].0 }
+    fn origin(&self) -> H160 { self.account_storage.contract_id() }
     fn block_hash(&self, _number: U256) -> H256 { H256::default() }
     fn block_number(&self) -> U256 {
-        //let clock = &Clock::from_account_info(&self.accounts[self.accounts.len()-1].account_info).unwrap();
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
-        clock.slot.into()
+        self.account_storage.block_number()
     }
     fn block_coinbase(&self) -> H160 { H160::default() }
     fn block_timestamp(&self) -> U256 {
-        //let clock = &Clock::from_account_info(&self.accounts[self.accounts.len()-1].account_info).unwrap();
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
-        clock.unix_timestamp.into()
+        self.account_storage.block_timestamp()
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
     fn chain_id(&self) -> U256 { U256::zero() }
 
     fn exists(&self, address: H160) -> bool {
-        self.get_account(address).map_or(false, |_| true)
+        self.account_storage.exists(address)
     }
     fn basic(&self, address: H160) -> Basic {
-        match self.get_account(address) {
-            None => Basic{balance: U256::zero(), nonce: U256::zero()},
-            Some(acc) => Basic{
-                balance: (**acc.account_info.lamports.borrow()).into(),
-                nonce: U256::from(acc.account_data.trx_count),
-            },
-        }
+        self.account_storage.basic(address)
     }
     fn code_hash(&self, address: H160) -> H256 {
-        self.get_account(address).map_or_else(
-                || keccak256_digest(&[]), 
-                |acc| acc.code(|d| {debug_print!(&hex::encode(&d[0..32])); keccak256_digest(d)})
-            )
+        self.account_storage.code_hash(address)
     }
     fn code_size(&self, address: H160) -> usize {
-        self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
+        self.account_storage.code_size(address)
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        self.get_account(address).map_or_else(|| Vec::new(), |acc| acc.code(|d| d.into()))
+        self.account_storage.code(address)
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        match self.get_account(address) {
-            None => H256::default(),
-            Some(acc) => {
-                let index = index.as_fixed_bytes().into();
-                let value = acc.storage(|storage| storage.find(index)).unwrap_or_default();
-                if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
-            },
-        }
+        self.account_storage.storage(address, index)
     }
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
@@ -301,11 +189,9 @@ impl<'a> Backend for SolanaBackend<'a> {
                     let data = array_ref![input, 35*i as usize, 35];
                     let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
                     let pubkey = if translate[0] != 0 {
-                        let account = self.get_account(H160::from_slice(&pubkey[12..]));
-                        if let Some(account) = account {
-                            account.account_info.key.clone()
-                        } else {
-                            return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+                        match self.account_storage.get_account_solana_address(H160::from_slice(&pubkey[12..])) {
+                            Some(key) => key.clone(),
+                            None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                         }
                     } else {
                         Pubkey::new(pubkey)
@@ -321,28 +207,27 @@ impl<'a> Backend for SolanaBackend<'a> {
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 debug_print!(&hex::encode(&input));
 
-                let contract = self.get_account_by_index(0).unwrap();   // do_call already check existence of Ethereum account with such index
-                let contract_seeds = [contract.account_data.ether.as_bytes(), &[contract.account_data.nonce]];
+                let (contract_eth, contract_nonce) = self.account_storage.get_contract_seeds().unwrap();   // do_call already check existence of Ethereum account with such index
+                let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos");
-                for info in self.account_infos {
+                for info in self.account_infos.unwrap() {
                     debug_print!(&format!("  {}", info.key));
                 };
                 let result : solana_sdk::entrypoint::ProgramResult;
-                match self.get_account_by_index(1){
-                    Some(inner) => {
-                        let sender = self.get_account_by_index(1).unwrap();   // do_call already check existence of Ethereum account with such index
-                        let sender_seeds = [sender.account_data.ether.as_bytes(), &[sender.account_data.nonce]];
-                         result = invoke_signed(
+                match self.account_storage.get_caller_seeds() {
+                    Some((sender_eth, sender_nonce)) => {
+                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                        result = invoke_signed(
                             &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos, &[&sender_seeds[..], &contract_seeds[..]]
+                            &self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
                         );
 
                     }
                     None => {
                         result = invoke_signed(
                             &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos, &[&contract_seeds[..]]
+                            &self.account_infos.unwrap(), &[&contract_seeds[..]]
                         );
                     }
                 }
@@ -358,15 +243,17 @@ impl<'a> Backend for SolanaBackend<'a> {
                 let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
 
                 let base = if tr_base[0] != 0 {
-                    let account = self.get_account(H160::from_slice(&base[12..]));
-                    if let Some(account) = account {account.account_info.key.clone()}
-                    else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));}
+                    match self.account_storage.get_account_solana_address(H160::from_slice(&base[12..])) {
+                        Some(key) => key.clone(),
+                        None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
+                    }
                 } else {Pubkey::new(base)};
 
                 let owner = if tr_owner[0] != 0 {
-                    let account = self.get_account(H160::from_slice(&owner[12..]));
-                    if let Some(account) = account {account.account_info.key.clone()}
-                    else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));}
+                    match self.account_storage.get_account_solana_address(H160::from_slice(&owner[12..])) {
+                        Some(key) => key.clone(),
+                        None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
+                    }
                 } else {Pubkey::new(owner)};
 
                 let (_, seed) = input.split_at(66);

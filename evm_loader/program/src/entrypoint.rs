@@ -24,6 +24,9 @@ use solana_sdk::{
 use crate::solana_backend::{
     SolanaBackend, solidity_address,
 };
+use crate::account_storage::{
+    ProgramAccountStorage, 
+};
 
 use crate::{
 //    bump_allocator::BumpAllocator,
@@ -32,6 +35,8 @@ use crate::{
     solidity_account::SolidityAccount,
     transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
 };
+
+use std::cell::RefCell;
 
 use evm::{
 //    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
@@ -177,7 +182,7 @@ fn process_instruction<'a>(
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
-            let caller = SolidityAccount::new(base_info)?;
+            let caller = SolidityAccount::new(base_info.key, base_info.data.clone(), (*base_info.lamports.borrow()).clone())?;
 
             let program_seeds = [caller.account_data.ether.as_bytes(), &[caller.account_data.nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
@@ -219,37 +224,56 @@ fn process_instruction<'a>(
             };
             let (nonce, to, data) = get_data(&unsigned_msg);
 
-            let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
-            let config = evm::Config::istanbul();
-            let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+            let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);    
+    
+            let (exit_reason, result, applies_logs) = {
+                let acc_storage = account_storage.borrow();
 
-            let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
-            if caller.get_nonce() != nonce {
-                debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
-                return Err(ProgramError::InvalidInstructionData);
-            }
+                let caller = acc_storage.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;  
+                if caller.get_nonce() != nonce {
+                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let caller_ether = caller.get_ether();
+        
+                let backend = SolanaBackend::new(acc_storage, accounts)?;
+                debug_print!("  backend initialized");
+            
+                let config = evm::Config::istanbul();
+                let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+                debug_print!("Executor initialized");
 
-            // TODO add check for correct caller
-            let exit_reason = match to {
-                None => {
-                    executor.transact_create(caller.get_ether(), U256::zero(), data, usize::max_value())
-                },
-                Some(contract) => {
-                    debug_print!("Not supported");
-                    ExitReason::Fatal(ExitFatal::NotSupported)
-                },
-            };
+                let exit_reason = match to {
+                    None => {
+                        executor.transact_create(caller_ether, U256::zero(), data, usize::max_value())
+                    },
+                    Some(contract) => {
+                        debug_print!("Not supported");
+                        ExitReason::Fatal(ExitFatal::NotSupported)
+                    },
+                };
 
-            if exit_reason.is_succeed() {
-                let (applies, logs) = executor.deconstruct();
-                backend.apply(applies, false, None)?;
+                if exit_reason.is_succeed() {
+                    debug_print!("Succeed execution");
+                    let (applies, logs) = executor.deconstruct();
+                    (exit_reason, Vec::new(), Some((applies, logs)))
+                } else {
+                    (exit_reason, Vec::new(), None)
+                }
+            };      
+
+            if applies_logs.is_some() {
+                let mut mut_acc_storage = account_storage.borrow_mut();
+
+                let (applies, logs) = applies_logs.unwrap();
+
+                mut_acc_storage.apply(applies, false, None)?;
+                debug_print!("Applies done");
                 for log in logs {
                     invoke(&on_event(program_id, log)?, &accounts)?;
                 }
-                debug_print!("Applies done");
             }
 
-            let result = Vec::new();
             invoke_on_return(&program_id, &accounts, exit_reason, result);
 
             Ok(())
@@ -450,47 +474,56 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut backend = SolanaBackend::new(program_id, accounts, clock_info)?;
-    debug_print!("  backend initialized");
+    let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);
 
-    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
-
-    let config = evm::Config::istanbul();
-    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-    debug_print!("  executor initialized");
-
-    debug_print!("Execute transact_create");
-
-    let code_data = {
-        let data = program_info.data.borrow();
-        let (_unused, rest) = data.split_at(AccountData::SIZE);
-        let (code_len, rest) = rest.split_at(8);
-        let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-        let (code, _rest) = rest.split_at(code_len as usize);
-        code.to_vec()
-    };
-
-    let program_account = SolidityAccount::new(program_info)?;
-
-    let exit_reason = executor.transact_create2(
-            caller_ether.0,
-            U256::zero(),
-            code_data,
-            H256::default(), usize::max_value()
-        );
-    debug_print!("  create2 done");    
+    let caller_ether = get_ether_address(program_id, account_storage.borrow().get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
     
-    if exit_reason.is_succeed() {
-        debug_print!("Succeed execution");
-        let (applies, logs) = executor.deconstruct();
-        backend.apply(applies,false, Some(caller_ether))?;
+    let (exit_reason, result, applies_logs) = {
+        let backend = SolanaBackend::new(account_storage.borrow(), accounts)?;
+        debug_print!("  backend initialized");
+        let config = evm::Config::istanbul();
+        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        debug_print!("  executor initialized");
+
+        let code_data = {
+            let data = program_info.data.borrow();
+            let (_unused, rest) = data.split_at(AccountData::SIZE);
+            let (code_len, rest) = rest.split_at(8);
+            let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+            let (code, _rest) = rest.split_at(code_len as usize);
+            code.to_vec()
+        };
+    
+        // let program_account = SolidityAccount::new(program_info)?;
+    
+        debug_print!("Execute transact_create");
+        let exit_reason = executor.transact_create2(
+                caller_ether.0,
+                U256::zero(),
+                code_data,
+                H256::default(), usize::max_value()
+            );
+        debug_print!("  create2 done");   
+        
+        if exit_reason.is_succeed() {
+            debug_print!("Succeed execution");
+            let (applies, logs) = executor.deconstruct();
+            (exit_reason, Vec::new(), Some((applies, logs)))
+        } else {
+            (exit_reason, Vec::new(), None)
+        }
+    }; 
+
+    if applies_logs.is_some() {
+        let mut mut_acc_storage = account_storage.borrow_mut();
+        let (applies, logs) = applies_logs.unwrap();
+        mut_acc_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
         }
     }
 
-    let result = Vec::new();
     invoke_on_return(&program_id, &accounts, exit_reason, result);
     
     Ok(())
@@ -520,33 +553,49 @@ fn do_call<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
-    debug_print!("  backend initialized");
+    let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);
 
-    let caller_ether = get_ether_address(program_id, backend.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+    let (caller_ether, contract_ether) = {
+        let acc_storage = account_storage.borrow();
 
-    let config = evm::Config::istanbul();
-    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-    debug_print!("Executor initialized");
-    let contract = backend.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?;
+        let caller_ether = get_ether_address(program_id, acc_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = acc_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
 
-    debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
-    debug_print!(&(" contract: ".to_owned() + &contract.get_ether().to_string()));
+        debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
+        debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
 
-    let (exit_reason, result) = executor.transact_call(
-            caller_ether.0,
-            contract.get_ether(),
-            U256::zero(),
-            instruction_data.to_vec(),
-            usize::max_value()
-        );
-
-    debug_print!("Call done");
+        (caller_ether, contract_ether)
+    };
     
-    if exit_reason.is_succeed() {
-        debug_print!("Succeed execution");
-        let (applies, logs) = executor.deconstruct();
-        backend.apply(applies,false, Some(caller_ether))?;
+    let (exit_reason, result, applies_logs) = {
+        let acc_storage = account_storage.borrow();
+
+        let backend = SolanaBackend::new(acc_storage, accounts)?;
+        debug_print!("  backend initialized");
+    
+        let config = evm::Config::istanbul();
+        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        debug_print!("Executor initialized");
+    
+        let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
+    
+        debug_print!("Call done");
+        
+        if exit_reason.is_succeed() {
+            debug_print!("Succeed execution");
+            let (applies, logs) = executor.deconstruct();
+            (exit_reason, result, Some((applies, logs)))
+        } else {
+            (exit_reason, result, None)
+        }
+    };
+
+    if applies_logs.is_some() {
+        let mut mut_acc_storage = account_storage.borrow_mut();
+
+        let (applies, logs) = applies_logs.unwrap();
+
+        mut_acc_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
