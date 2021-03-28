@@ -8,7 +8,7 @@
 use std::convert::TryInto;
 use solana_sdk::{
     account_info::{next_account_info, AccountInfo},
-    entrypoint, entrypoint::{ProgramResult},
+    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
     program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
@@ -19,42 +19,26 @@ use solana_sdk::{
     instruction::Instruction,
     sysvar::instructions
 };
-
-//use crate::hamt::Hamt;
-use crate::solana_backend::{
-    SolanaBackend, solidity_address,
-};
-use crate::account_storage::{
-    ProgramAccountStorage, 
-};
-
 use crate::{
 //    bump_allocator::BumpAllocator,
     instruction::{EvmInstruction, on_return, on_event},
     account_data::AccountData,
+    account_storage::ProgramAccountStorage, 
+    solana_backend::SolanaBackend,    
     solidity_account::SolidityAccount,
     transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
+    utils::{keccak256_digest, solidity_address},
 };
-
-use std::cell::RefCell;
-
 use evm::{
 //    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
     executor::{StackExecutor},
     CreateScheme,
     ExitReason, ExitFatal, ExitError, ExitSucceed,
 };
-use primitive_types::{H160, U256};
-
+use primitive_types::{H160, U256, H256};
+use std::cell::RefCell;
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
-use solana_sdk::entrypoint::HEAP_START_ADDRESS;
 
-
-use sha3::{Keccak256, Digest};
-use primitive_types::H256;
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
-}
 
 
 const HEAP_LENGTH: usize = 1024*1024;
@@ -312,8 +296,8 @@ fn process_instruction<'a>(
             let (nonce, contract, data) = get_data(unsigned_msg);
             let contract = contract.unwrap();
 
-            let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
-            let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(); 
+            let program_eth: H160 = keccak256_digest(&program_info.key.to_bytes()).into();
+            let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into(); 
 
             do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
@@ -358,8 +342,8 @@ fn process_instruction<'a>(
             let (nonce, contract, data) = get_data(unsigned_msg);
             let contract = contract.unwrap();
 
-            let program_eth: H160 = H256::from_slice(Keccak256::digest(&program_info.key.to_bytes()).as_slice()).into();
-            // let caller_eth: H160 = H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into();
+            let program_eth: H160 = keccak256_digest(&program_info.key.to_bytes()).into();
+            // let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into();
             
             debug_print!(&("caller: ".to_owned() + &caller.to_string()));    
             debug_print!(&("contract: ".to_owned() + &contract.to_string()));
@@ -723,7 +707,7 @@ fn get_ether_address<'a>(
             return None
         }
 
-        Some ( ( H256::from_slice(Keccak256::digest(&caller_info.key.to_bytes()).as_slice()).into(), false) )
+        Some ( ( keccak256_digest(&caller_info.key.to_bytes()).into(), false) )
     }
 }
 

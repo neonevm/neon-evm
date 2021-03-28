@@ -1,33 +1,22 @@
 use evm::{
-    backend::{Basic, Backend, Apply, Log},
+    backend::{Basic, Backend},
     CreateScheme, Capture, Transfer, ExitReason
 };
 use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_sdk::{
-    account_info::{next_account_info, AccountInfo},
+    account_info::AccountInfo,
     pubkey::Pubkey,
-    program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar},
+    program::invoke_signed,
     instruction::{Instruction, AccountMeta},
 };
-use std::{
-    cell::RefCell,
-    cell::Ref,
-};
-
-use solana_sdk::program::invoke;
-use solana_sdk::program::invoke_signed;
+use std::cell::Ref;
 use std::convert::TryInto;
-use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-
-pub fn solidity_address<'a>(key: &Pubkey) -> H160 {
-    H256::from_slice(key.as_ref()).into()
-}
+use arrayref::{array_ref, array_refs};
 
 pub trait AccountStorage {
-    fn contract_id(&self) -> H160;
+    fn origin(&self) -> H160;
     fn get_account_solana_address(&self, address: H160) -> Option<&Pubkey>;
     fn get_contract_seeds(&self) -> Option<(H160, u8)>;
     fn get_caller_seeds(&self) -> Option<(H160, u8)>;
@@ -80,7 +69,7 @@ impl<'a, 's> SolanaBackend<'a, 's> {
         debug_print!("ecrecover");
         debug_print!(&format!("input: {}", &hex::encode(&input)));
     
-        if (input.len() != 128) {
+        if input.len() != 128 {
             return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
         }
 
@@ -109,7 +98,7 @@ impl<'a, 's> SolanaBackend<'a, 's> {
 
 impl<'a, 's> Backend for SolanaBackend<'a, 's> {
     fn gas_price(&self) -> U256 { U256::zero() }
-    fn origin(&self) -> H160 { self.account_storage.contract_id() }
+    fn origin(&self) -> H160 { self.account_storage.origin() }
     fn block_hash(&self, _number: U256) -> H256 { H256::default() }
     fn block_number(&self) -> U256 {
         self.account_storage.block_number()
@@ -162,7 +151,7 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        if (self.is_ecrecover_address(&code_address)) {
+        if self.is_ecrecover_address(&code_address) {
             return self.call_inner_ecrecover(code_address, _transfer, input, _target_gas, _is_static, _take_l64, _take_stipend);
         }
 
@@ -185,7 +174,6 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
                 
                 let mut accounts = Vec::new();
                 for i in 0..acc_length {
-                    use arrayref::{array_ref, array_refs};
                     let data = array_ref![input, 35*i as usize, 35];
                     let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
                     let pubkey = if translate[0] != 0 {
@@ -238,7 +226,6 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
             },
             1 => {
-                use arrayref::{array_ref, array_refs};
                 let data = array_ref![input, 0, 66];
                 let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
 

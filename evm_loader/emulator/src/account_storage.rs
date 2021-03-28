@@ -167,7 +167,7 @@ impl EmulatorAccountStorage {
 }
 
 impl AccountStorage for EmulatorAccountStorage {
-    fn contract_id(&self) -> H160 { self.contract_id }
+    fn origin(&self) -> H160 { self.contract_id }
     fn block_number(&self) -> U256 {
         let slot = match self.rpc_client.get_slot(){
             Ok(slot) => {

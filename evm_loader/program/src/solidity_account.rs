@@ -1,13 +1,17 @@
-use crate::account_data::AccountData;
-use solana_sdk::program_error::ProgramError;
-// use crate::constatns::ProgramError;
-use crate::hamt::Hamt;
-use solana_sdk::account_info::AccountInfo;
-use solana_sdk::pubkey::Pubkey;
+use crate::{
+    account_data::AccountData,
+    hamt::Hamt,
+};
+use solana_sdk::{
+    account_info::AccountInfo,
+    pubkey::Pubkey,
+    program_error::ProgramError,
+};
 use primitive_types::{H160, H256, U256};
 use std::cell::RefCell;
-use std::convert::TryInto;
 use std::rc::Rc;
+use std::convert::TryInto;
+
 
 #[derive(Debug, Clone)]
 pub struct SolidityAccount<'a> {

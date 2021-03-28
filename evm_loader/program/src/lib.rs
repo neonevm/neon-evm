@@ -13,13 +13,14 @@ pub mod entrypoint;
 //pub mod native_mint;
 //pub mod processor;
 //pub mod state;
-pub mod hamt;
+mod hamt;
 pub mod solana_backend;
-pub mod account_data;
+mod account_data;
 mod account_storage;
 pub mod solidity_account;
 mod instruction;
 mod transaction;
+mod utils;
 
 
 // Export current solana-sdk types for downstream users who may also be building with a different

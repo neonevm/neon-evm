@@ -2,13 +2,6 @@ use bincode;
 use impl_serde::serialize as bytes;
 use rlp::RlpStream;
 use serde::{Deserialize, Serialize};
-use sha3::{Digest, Keccak256};
-use solana_sdk::{
-    entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
-    secp256k1_program
-};
-use std::borrow::Cow;
-use std::error::Error;
 use std::convert::TryFrom;
 use primitive_types::{H160, U256};
 

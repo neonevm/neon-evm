@@ -1,38 +1,21 @@
-use crate::solana_backend::AccountStorage;
-use evm::{
-    backend::{Basic, Backend, Apply, Log},
-    CreateScheme, Capture, Transfer, ExitReason
+use crate::{
+    solana_backend::{AccountStorage, SolanaBackend},
+    solidity_account::SolidityAccount,
+    utils::{keccak256_digest, u256_to_h256}
 };
-use core::convert::Infallible;
+use evm::{
+    backend::{Basic, Apply},
+};
 use primitive_types::{H160, H256, U256};
-use sha3::{Digest, Keccak256};
 use solana_sdk::{
-    account_info::{next_account_info, AccountInfo},
+    account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
-    instruction::{Instruction, AccountMeta},
 };
 use std::{
     cell::RefCell,
 };
-
-use crate::solidity_account::SolidityAccount;
-use crate::account_data::AccountData;
-use solana_sdk::program::invoke;
-use solana_sdk::program::invoke_signed;
-use std::convert::TryInto;
-use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
-}
-
-fn u256_to_h256(value: U256) -> H256 {
-    let mut v = vec![0u8; 32];
-    value.to_big_endian(&mut v);
-    H256::from_slice(&v)
-}
 
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<Option<SolidityAccount<'a>>>,
@@ -75,13 +58,13 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn get_account_by_index_mut(&mut self, index: usize) -> Option<&SolidityAccount<'a>> {
-        if let Some(acc) = &self.accounts[index] {
-            Some(&acc)
-        } else {
-            None
-        }
-    }
+    // pub fn get_account_by_index_mut(&mut self, index: usize) -> Option<&SolidityAccount<'a>> {
+    //     if let Some(acc) = &self.accounts[index] {
+    //         Some(&acc)
+    //     } else {
+    //         None
+    //     }
+    // }
 
     fn find_account(&self, address: H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
@@ -113,36 +96,14 @@ impl<'a> ProgramAccountStorage<'a> {
     //     }
     // }
 
-    fn is_solana_address(&self, code_address: &H160) -> bool {
-        *code_address == Self::system_account()
-    }
-
-    fn is_ecrecover_address(&self, code_address: &H160) -> bool {
-        *code_address == Self::system_account_ecrecover()
-    }
-
-    pub fn system_account() -> H160 {
-        H160::from_slice(&[
-            0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-            0u8, 0u8, 0u8,
-        ])
-    }
-
-    pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&[
-            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-            0u8, 0u8, 0x01u8,
-        ])
-    }
-
     pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (H256, H256)>,
     {
         let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
-        let system_account = Self::system_account();
-        let system_account_ecrecover = Self::system_account_ecrecover();
+        let system_account = SolanaBackend::system_account();
+        let system_account_ecrecover = SolanaBackend::system_account_ecrecover();
 
         for apply in values {
             match apply {
@@ -170,7 +131,7 @@ impl<'a> ProgramAccountStorage<'a> {
 }
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
-    fn contract_id(&self) -> H160{
+    fn origin(&self) -> H160{
         self.aliases.borrow()[1].0
     }
 
