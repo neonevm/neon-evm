@@ -1,36 +1,23 @@
-use evm_loader::solana_backend::AccountStorage;
 use evm::{
     backend::{Basic, Apply},
 };
 use primitive_types::{H160, H256, U256};
-use sha3::{Digest, Keccak256};
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey,
+    account::Account,
+};
+use serde_json::json;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use evm_loader::{
+    solana_backend::AccountStorage,
+    solidity_account::SolidityAccount,
+    utils::{keccak256_digest, u256_to_h256},
 };
 use std::borrow::BorrowMut;
 use std::cell::RefCell; 
 use std::rc::Rc;
-
-use serde_json::json;
-use serde::{Deserialize, Serialize};
-
-use solana_client::rpc_client::RpcClient;
-
-use std::collections::{HashMap, HashSet};
-
-
-use evm_loader::solidity_account::SolidityAccount;
-use solana_sdk::account::Account;
-
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
-}
-
-fn u256_to_h256(value: U256) -> H256 {
-    let mut v = vec![0u8; 32];
-    value.to_big_endian(&mut v);
-    H256::from_slice(&v)
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct AccountJSON {
@@ -60,19 +47,50 @@ pub struct EmulatorAccountStorage {
     contract_id: H160,
     caller_id: H160,
     base_account: Pubkey,
+    block_number: u64,
+    block_timestamp: i64,
 }
 
 impl EmulatorAccountStorage {
     pub fn new(solana_url: String, base_account: Pubkey, program_id: Pubkey, contract_id: H160, caller_id: H160) -> EmulatorAccountStorage {
         eprintln!("backend::new");
+
+        let rpc_client = RpcClient::new(solana_url);
+
+        let slot = match rpc_client.get_slot() {
+            Ok(slot) => {
+                eprintln!("Got slot");                
+                eprintln!("Slot {}", slot);    
+                slot
+            },
+            Err(_) => {
+                eprintln!("Get slot error");    
+                0
+            }
+        };
+    
+        let timestamp = match rpc_client.get_block_time(slot) {
+            Ok(timestamp) => {
+                eprintln!("Got timestamp");                
+                eprintln!("timestamp {}", timestamp);
+                timestamp
+            },
+            Err(_) => {
+                eprintln!("Get timestamp error");    
+                0
+            }
+        };
+
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashSet::new()),
-            rpc_client: RpcClient::new(solana_url),
+            rpc_client: rpc_client,
             program_id: program_id,
             contract_id: contract_id,
             caller_id: caller_id,
             base_account: base_account,
+            block_number: slot,
+            block_timestamp: timestamp,
         }
     }
 
@@ -169,46 +187,10 @@ impl EmulatorAccountStorage {
 impl AccountStorage for EmulatorAccountStorage {
     fn origin(&self) -> H160 { self.contract_id }
     fn block_number(&self) -> U256 {
-        let slot = match self.rpc_client.get_slot(){
-            Ok(slot) => {
-                eprintln!("Got slot");                
-                eprintln!("Slot {}", slot);    
-                slot
-            },
-            Err(_) => {
-                eprintln!("Get slot error");    
-                0
-            }
-        };
-        
-        slot.into()
+        self.block_number.into()
     }
     fn block_timestamp(&self) -> U256 {
-        let slot = match self.rpc_client.get_slot() {
-            Ok(slot) => {
-                eprintln!("Got slot");                
-                eprintln!("Slot {}", slot);    
-                slot
-            },
-            Err(_) => {
-                eprintln!("Get slot error");    
-                0
-            }
-        };
-    
-        let timestamp = match self.rpc_client.get_block_time(slot) {
-            Ok(timestamp) => {
-                eprintln!("Got timestamp");                
-                eprintln!("timestamp {}", timestamp);
-                timestamp
-            },
-            Err(_) => {
-                eprintln!("Get timestamp error");    
-                0
-            }
-        };
-
-        timestamp.into()
+        self.block_timestamp.into()
     }
     fn exists(&self, address: H160) -> bool {
         self.create_acc_if_not_exists(address)
