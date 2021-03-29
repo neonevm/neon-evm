@@ -216,7 +216,7 @@ impl<'a> Backend for SolanaBackend<'a> {
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
-    fn chain_id(&self) -> U256 { U256::zero() }
+    fn chain_id(&self) -> U256 { U256::from(111) }
 
     fn exists(&self, address: H160) -> bool {
         self.get_account(address).map_or(false, |_| true)

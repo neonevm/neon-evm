@@ -121,10 +121,10 @@ class DeployTest(unittest.TestCase):
             'gasPrice': 1,
             'nonce': trx_count,
             'data': content,
-            'chainId': 1
+            'chainId': 111
         }
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        msg = len(msg).to_bytes(8, byteorder="little") + msg
+        msg = sign + len(msg).to_bytes(8, byteorder="little") + msg
         #print("msg", msg.hex())
 
         # Write transaction to transaction holder account
