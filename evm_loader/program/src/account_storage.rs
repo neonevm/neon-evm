@@ -1,7 +1,7 @@
 use crate::{
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
-    utils::{keccak256_digest, u256_to_h256}
+    utils::keccak256_digest,
 };
 use evm::{
     backend::{Basic, Apply},
@@ -66,9 +66,9 @@ impl<'a> ProgramAccountStorage<'a> {
     //     }
     // }
 
-    fn find_account(&self, address: H160) -> Option<usize> {
+    fn find_account(&self, address: &H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
-        match aliases.binary_search_by_key(&address, |v| v.0) {
+        match aliases.binary_search_by_key(&address, |v| &v.0) {
             Ok(pos) => {
                 debug_print!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
                 Some(aliases[pos].1)
@@ -80,7 +80,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    fn get_account(&self, address: H160) -> Option<&SolidityAccount<'a>> {
+    fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
         if let Some(pos) = self.find_account(address) {
             self.accounts[pos].as_ref()
         } else {
@@ -114,7 +114,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     if ether_addr.1 != true && address == ether_addr.0 {
                         continue;
                     }
-                    if let Some(pos) = self.find_account(address) {
+                    if let Some(pos) = self.find_account(&address) {
                         let account = self.accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                         let account_info = &self.account_infos[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
@@ -131,76 +131,7 @@ impl<'a> ProgramAccountStorage<'a> {
 }
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
-    fn origin(&self) -> H160{
-        self.aliases.borrow()[1].0
-    }
-
-    fn get_account_solana_address(&self, address: H160) -> Option<&Pubkey> {
-        match self.get_account(address) {
-            Some(account) => {
-                Some(account.solana_address)
-            },
-            None => None,
-        }
-    }
-
-    fn get_contract_seeds(&self) -> Option<(H160, u8)> {
-        match self.get_account_by_index(0) {
-            Some(contract) => {
-                Some((contract.account_data.ether, contract.account_data.nonce))
-            },
-            None => None,
-        }
-    }
-
-    fn get_caller_seeds(&self) -> Option<(H160, u8)> {
-        match self.get_account_by_index(1) {
-            Some(caller) => {
-                Some((caller.account_data.ether, caller.account_data.nonce))
-            },
-            None => None,
-        }
-    }
-
-    fn exists(&self, address: H160) -> bool {
-        self.get_account(address).map_or(false, |_| true)
-    }
-
-    fn basic(&self, address: H160) -> Basic {
-        match self.get_account(address) {
-            None => Basic{balance: U256::zero(), nonce: U256::zero()},
-            Some(acc) => Basic{
-                balance: acc.lamports.into(),
-                nonce: U256::from(acc.account_data.trx_count),
-            },
-        }
-    }
-
-    fn code_hash(&self, address: H160) -> H256 {
-        self.get_account(address).map_or_else(
-                || keccak256_digest(&[]), 
-                |acc| acc.code(|d| {debug_print!(&hex::encode(&d[0..32])); keccak256_digest(d)})
-            )
-    }
-
-    fn code_size(&self, address: H160) -> usize {
-        self.get_account(address).map_or_else(|| 0, |acc| acc.code(|d| d.len()))
-    }
-
-    fn code(&self, address: H160) -> Vec<u8> {
-        self.get_account(address).map_or_else(|| Vec::new(), |acc| acc.code(|d| d.into()))
-    }
-
-    fn storage(&self, address: H160, index: H256) -> H256 {
-        match self.get_account(address) {
-            None => H256::default(),
-            Some(acc) => {
-                let index = index.as_fixed_bytes().into();
-                let value = acc.storage(|storage| storage.find(index)).unwrap_or_default();
-                if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
-            },
-        }
-    }
+    fn origin(&self) -> H160 { self.aliases.borrow()[1].0 }
 
     fn block_number(&self) -> U256 {
         let clock = &Clock::from_account_info(self.clock_account).unwrap();
@@ -210,5 +141,63 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn block_timestamp(&self) -> U256 {
         let clock = &Clock::from_account_info(self.clock_account).unwrap();
         clock.unix_timestamp.into()
+    }
+
+    fn exists(&self, address: &H160) -> bool {        self.get_account(address).map_or(false, |_| true)    }
+
+    fn get_account_solana_address(&self, address: &H160) -> Option<&Pubkey> {
+        match self.get_account(address) {
+            Some(account) => Some(account.get_solana_address()),
+            None => None,
+        }
+    }
+
+    fn get_contract_seeds(&self) -> Option<(H160, u8)> {
+        match self.get_account_by_index(0) {
+            Some(contract) => Some(contract.get_seeds()),
+            None => None,
+        }
+    }
+
+    fn get_caller_seeds(&self) -> Option<(H160, u8)> {
+        match self.get_account_by_index(1) {
+            Some(caller) => Some(caller.get_seeds()),
+            None => None,
+        }
+    }
+
+    fn basic(&self, address: &H160) -> Basic {
+        match self.get_account(address) {
+            None => Basic{balance: U256::zero(), nonce: U256::zero()},
+            Some(acc) => acc.basic(),
+        }
+    }
+
+    fn code_hash(&self, address: &H160) -> H256 {
+        match self.get_account(address) {
+            None =>  keccak256_digest(&[]),
+            Some(acc) => acc.code_hash(),
+        }
+    }
+
+    fn code_size(&self, address: &H160) -> usize {
+        match self.get_account(address) {
+            None => 0,
+            Some(acc) => acc.code_size(),
+        }
+    }
+
+    fn code(&self, address: &H160) -> Vec<u8> {
+        match self.get_account(address) {
+            None => Vec::new(),
+            Some(acc) => acc.get_code(),
+        }
+    }
+
+    fn storage(&self, address: &H160, index: &H256) -> H256 {
+        match self.get_account(address) {
+            None => H256::default(),
+            Some(acc) => acc.get_storage(index),
+        }
     }
 }

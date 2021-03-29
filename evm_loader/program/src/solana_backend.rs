@@ -17,17 +17,17 @@ use arrayref::{array_ref, array_refs};
 
 pub trait AccountStorage {
     fn origin(&self) -> H160;
-    fn get_account_solana_address(&self, address: H160) -> Option<&Pubkey>;
-    fn get_contract_seeds(&self) -> Option<(H160, u8)>;
-    fn get_caller_seeds(&self) -> Option<(H160, u8)>;
-    fn exists(&self, address: H160) -> bool;
-    fn basic(&self, address: H160) -> Basic;
-    fn code_hash(&self, address: H160) -> H256;
-    fn code_size(&self, address: H160) -> usize;
-    fn code(&self, address: H160) -> Vec<u8>;
-    fn storage(&self, address: H160, index: H256) -> H256;
     fn block_number(&self) -> U256;
     fn block_timestamp(&self) -> U256;
+    fn get_account_solana_address(&self, address: &H160) -> Option<&Pubkey>;
+    fn get_contract_seeds(&self) -> Option<(H160, u8)>;
+    fn get_caller_seeds(&self) -> Option<(H160, u8)>;
+    fn exists(&self, address: &H160) -> bool;
+    fn basic(&self, address: &H160) -> Basic;
+    fn code_hash(&self, address: &H160) -> H256;
+    fn code_size(&self, address: &H160) -> usize;
+    fn code(&self, address: &H160) -> Vec<u8>;
+    fn storage(&self, address: &H160, index: &H256) -> H256;
 }
 
 pub struct SolanaBackend<'a, 's> {
@@ -112,22 +112,22 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
     fn chain_id(&self) -> U256 { U256::zero() }
 
     fn exists(&self, address: H160) -> bool {
-        self.account_storage.exists(address)
+        self.account_storage.exists(&address)
     }
     fn basic(&self, address: H160) -> Basic {
-        self.account_storage.basic(address)
+        self.account_storage.basic(&address)
     }
     fn code_hash(&self, address: H160) -> H256 {
-        self.account_storage.code_hash(address)
+        self.account_storage.code_hash(&address)
     }
     fn code_size(&self, address: H160) -> usize {
-        self.account_storage.code_size(address)
+        self.account_storage.code_size(&address)
     }
     fn code(&self, address: H160) -> Vec<u8> {
-        self.account_storage.code(address)
+        self.account_storage.code(&address)
     }
     fn storage(&self, address: H160, index: H256) -> H256 {
-        self.account_storage.storage(address, index)
+        self.account_storage.storage(&address, &index)
     }
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
@@ -177,7 +177,7 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
                     let data = array_ref![input, 35*i as usize, 35];
                     let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
                     let pubkey = if translate[0] != 0 {
-                        match self.account_storage.get_account_solana_address(H160::from_slice(&pubkey[12..])) {
+                        match self.account_storage.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {
                             Some(key) => key.clone(),
                             None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                         }
@@ -230,14 +230,14 @@ impl<'a, 's> Backend for SolanaBackend<'a, 's> {
                 let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
 
                 let base = if tr_base[0] != 0 {
-                    match self.account_storage.get_account_solana_address(H160::from_slice(&base[12..])) {
+                    match self.account_storage.get_account_solana_address(&H160::from_slice(&base[12..])) {
                         Some(key) => key.clone(),
                         None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                     }
                 } else {Pubkey::new(base)};
 
                 let owner = if tr_owner[0] != 0 {
-                    match self.account_storage.get_account_solana_address(H160::from_slice(&owner[12..])) {
+                    match self.account_storage.get_account_solana_address(&H160::from_slice(&owner[12..])) {
                         Some(key) => key.clone(),
                         None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                     }

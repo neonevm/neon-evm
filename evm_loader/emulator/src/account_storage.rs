@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use evm_loader::{
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
-    utils::{keccak256_digest, u256_to_h256},
+    utils::keccak256_digest,
 };
 use std::borrow::BorrowMut;
 use std::cell::RefCell; 
@@ -94,10 +94,10 @@ impl EmulatorAccountStorage {
         }
     }
 
-    fn create_acc_if_not_exists(&self, address: H160) -> bool {
+    fn create_acc_if_not_exists(&self, address: &H160) -> bool {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
-        if accounts.get(&address).is_none() {
+        if accounts.get(address).is_none() {
 
             //let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
             let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
@@ -111,14 +111,14 @@ impl EmulatorAccountStorage {
                     eprintln!("Account data len {}", acc.data.len());
                     eprintln!("Account owner {}", acc.owner.to_string());
                    
-                    accounts.insert(address, SolanaAccount::new(acc, solana_address));
+                    accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address));
 
                     true
                 },
                 Err(_) => {
                     eprintln!("Account not found {}", &address.to_string());
 
-                    new_accounts.insert(address);
+                    new_accounts.insert(address.clone());
 
                     false
                 }
@@ -186,114 +186,24 @@ impl EmulatorAccountStorage {
 
 impl AccountStorage for EmulatorAccountStorage {
     fn origin(&self) -> H160 { self.contract_id }
-    fn block_number(&self) -> U256 {
-        self.block_number.into()
-    }
-    fn block_timestamp(&self) -> U256 {
-        self.block_timestamp.into()
-    }
-    fn exists(&self, address: H160) -> bool {
-        self.create_acc_if_not_exists(address)
-    }
-    fn basic(&self, address: H160) -> Basic {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
-            None => Basic{balance: U256::zero(), nonce: U256::zero()},
-            Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
 
-                Basic{
-                    balance: solidity_account.lamports.into(),
-                    nonce: U256::from(solidity_account.account_data.trx_count),
-                }
-            },
-        }
-    }
-    fn code_hash(&self, address: H160) -> H256 {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
-            None => keccak256_digest(&[]),
-            Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
+    fn block_number(&self) -> U256 { self.block_number.into() }
 
-                solidity_account.code(|d| {eprintln!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
-            },
-        }
-    }
-    fn code_size(&self, address: H160) -> usize {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
-            None => 0,
-            Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
+    fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
 
-                solidity_account.code(|d| d.len())
-            },
-        }
-    }
-    fn code(&self, address: H160) -> Vec<u8> {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
-            None => Vec::new(),
-            Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
+    fn exists(&self, address: &H160) -> bool { self.create_acc_if_not_exists(&address) }
 
-                solidity_account.code(|d| d.into())
-            },
-        }
-    }
-    fn storage(&self, address: H160, index: H256) -> H256 {
-        self.create_acc_if_not_exists(address);
-        let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
-            None => H256::default(),
-            Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
-
-                let index = index.as_fixed_bytes().into();
-                let value = solidity_account.storage(|storage| storage.find(index)).unwrap_or_default();
-                if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
-            },
-        }
-    }
-
-    fn get_account_solana_address(&self, address: H160) -> Option<&Pubkey> {
-        // self.create_acc_if_not_exists(address);
-        // let accounts = self.accounts.borrow();
-        // match accounts.get(&address) {
-        //     None => None,
-        //     Some(acc) => Some(&acc.key),
-        // }
-        None
-    }
+    fn get_account_solana_address(&self, _address: &H160) -> Option<&Pubkey> { None }
 
     fn get_contract_seeds(&self) -> Option<(H160, u8)> {
         let address = self.contract_id;
 
-        self.create_acc_if_not_exists(address);
+        self.create_acc_if_not_exists(&address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => None,
             Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
-
-                Some((solidity_account.account_data.ether, solidity_account.account_data.nonce))
+                Some(SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().get_seeds())
             }
         }
     }
@@ -301,17 +211,68 @@ impl AccountStorage for EmulatorAccountStorage {
     fn get_caller_seeds(&self) -> Option<(H160, u8)> {
         let address = self.caller_id;
 
-        self.create_acc_if_not_exists(address);
+        self.create_acc_if_not_exists(&address);
         let accounts = self.accounts.borrow();
         match accounts.get(&address) {
             None => None,
             Some(acc) => {
-                let mut data = acc.account.data.clone();
-                let data_rc: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut data));
-                let solidity_account = SolidityAccount::new(&acc.key, data_rc, acc.account.lamports).unwrap();
-
-                Some((solidity_account.account_data.ether, solidity_account.account_data.nonce))
+                Some(SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().get_seeds())
             }
+        }
+    }
+
+    fn basic(&self, address: &H160) -> Basic {
+        self.create_acc_if_not_exists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => Basic{balance: U256::zero(), nonce: U256::zero()},
+            Some(acc) => {
+                SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().basic()
+            },
+        }
+    }
+
+    fn code_hash(&self, address: &H160) -> H256 {
+        self.create_acc_if_not_exists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => keccak256_digest(&[]),
+            Some(acc) => {
+                SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().code_hash()
+            },
+        }
+    }
+
+    fn code_size(&self, address: &H160) -> usize {
+        self.create_acc_if_not_exists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => 0,
+            Some(acc) => {
+                SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().code_size()
+            },
+        }
+    }
+
+    fn code(&self, address: &H160) -> Vec<u8> {
+        self.create_acc_if_not_exists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => Vec::new(),
+            Some(acc) => {
+                SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().get_code()
+            },
+        }
+    }
+
+    fn storage(&self, address: &H160, index: &H256) -> H256 {
+        self.create_acc_if_not_exists(address);
+        let accounts = self.accounts.borrow();
+        match accounts.get(&address) {
+            None => H256::default(),
+            Some(acc) => {
+                SolidityAccount::new(&acc.key, Rc::new(RefCell::new(&mut acc.account.data.clone())), acc.account.lamports).unwrap().get_storage(index)
+            },
         }
     }
 }

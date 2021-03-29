@@ -1,7 +1,9 @@
 use crate::{
     account_data::AccountData,
     hamt::Hamt,
+    utils::{keccak256_digest, u256_to_h256},
 };
+use evm::backend::Basic;
 use solana_sdk::{
     account_info::AccountInfo,
     pubkey::Pubkey,
@@ -130,5 +132,38 @@ impl<'a> SolidityAccount<'a> {
 
         debug_print!("Account updated");
         Ok(())
+    }
+
+    pub fn get_solana_address(&self) -> &Pubkey {
+        self.solana_address
+    }
+
+    pub fn get_seeds(&self) -> (H160, u8) {
+        (self.account_data.ether, self.account_data.nonce)
+    }
+    
+    pub fn basic(&self) -> Basic {
+        Basic {
+            balance: self.lamports.into(),
+            nonce: U256::from(self.account_data.trx_count),
+        }
+    }
+    
+    pub fn code_hash(&self) -> H256 {
+        self.code(|d| {debug_print!(&hex::encode(&d[0..32])); keccak256_digest(d)})
+    }
+    
+    pub fn code_size(&self) -> usize {
+        self.code(|d| d.len())
+    }
+    
+    pub fn get_code(&self) -> Vec<u8> {
+        self.code(|d| d.into())
+    }
+    
+    pub fn get_storage(&self, index: &H256) -> H256 {
+        let index = index.as_fixed_bytes().into();
+        let value = self.storage(|storage| storage.find(index)).unwrap_or_default();
+        if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
     }
 }
