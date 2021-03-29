@@ -25,7 +25,7 @@ fn main() {
         (solana_url, base_account, evm_loader, contract_id, caller_id, data)
     } else if args.len() == 6 {        
         let solana_url = "http://localhost:8899".to_string();
-        let base_account = Pubkey::from_str(&args[2].to_string()).unwrap();
+        let base_account = Pubkey::from_str(&args[1].to_string()).unwrap();
         let evm_loader = Pubkey::from_str(&args[2].to_string()).unwrap();
         let contract_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
         let caller_id = H160::from_str(&make_clean_hex(&args[4])).unwrap();
@@ -66,7 +66,7 @@ fn main() {
         ExitReason::Succeed(_) => {
             let acc_storage = account_storage.borrow();
     
-            let (applies, logs) = applies_logs.unwrap();
+            let (applies, _logs) = applies_logs.unwrap();
     
             acc_storage.apply(applies);
 
