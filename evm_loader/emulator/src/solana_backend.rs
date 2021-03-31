@@ -5,7 +5,10 @@ use evm::{
 };
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    pubkey::Pubkey,
+    commitment_config::CommitmentConfig,
+};
 
 use crate::solidity_account::SolidityAccount;
 use std::borrow::Borrow;
@@ -76,15 +79,24 @@ impl SolanaBackend {
 
             eprintln!("Not found account for {} => {} (seed {})", &address.to_string(), &solana_address.to_string(), &seed);
             
-            match self.rpc_client.get_account(&solana_address) {
-                Ok(acc) => {
-                    eprintln!("Account found");                        
-                    eprintln!("Account data len {}", acc.data.len());
-                    eprintln!("Account owner {}", acc.owner.to_string());
-                   
-                    accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
-
-                    true
+            match self.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()) {
+                Ok(value) => {
+                    match value.value {
+                        Some(acc) => {
+                            eprintln!("Account found");                        
+                            eprintln!("Account data len {}", acc.data.len());
+                            eprintln!("Account owner {}", acc.owner.to_string());
+                           
+                            accounts.insert(address, SolidityAccount::new(acc.data, acc.lamports).unwrap());
+        
+                            true
+                        },
+                        None => {
+                            eprintln!("Empty response. Account not found {}", &address.to_string());
+                            new_accounts.insert(address);
+                            false
+                        }
+                    }
                 },
                 Err(_) => {
                     eprintln!("Account not found {}", &address.to_string());
