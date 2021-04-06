@@ -14,33 +14,50 @@ use solana_sdk::{
 use std::cell::Ref;
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
+use crate::{
+    solidity_account::SolidityAccount,
+    utils::keccak256_digest,
+};
 
 pub trait AccountStorage {
+    fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
+    where F: FnOnce(&SolidityAccount) -> U,
+          D: FnOnce() -> U;
+
+    fn apply_to_contract<U, D, F>(&self, d: D, f: F) -> U
+    where F: FnOnce(&SolidityAccount) -> U,
+        D: FnOnce() -> U;
+
+    fn apply_to_caller<U, D, F>(&self, d: D, f: F) -> U
+    where F: FnOnce(&SolidityAccount) -> U,
+        D: FnOnce() -> U;
+
     fn origin(&self) -> H160;
     fn block_number(&self) -> U256;
     fn block_timestamp(&self) -> U256;
-    fn get_account_solana_address(&self, address: &H160) -> Option<&Pubkey>;
-    fn get_contract_seeds(&self) -> Option<(H160, u8)>;
-    fn get_caller_seeds(&self) -> Option<(H160, u8)>;
-    fn exists(&self, address: &H160) -> bool;
-    fn basic(&self, address: &H160) -> Basic;
-    fn code_hash(&self, address: &H160) -> H256;
-    fn code_size(&self, address: &H160) -> usize;
-    fn code(&self, address: &H160) -> Vec<u8>;
-    fn storage(&self, address: &H160, index: &H256) -> H256;
+
+    fn get_contract_seeds(&self) -> Option<(H160, u8)> { self.apply_to_contract(|| None, |account| Some(account.get_seeds())) }
+    fn get_caller_seeds(&self) -> Option<(H160, u8)> { self.apply_to_caller(|| None, |account| Some(account.get_seeds())) }
+    fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> { self.apply_to_account(address, || None, |account| Some(account.get_solana_address())) }
+    fn exists(&self, address: &H160) -> bool { self.apply_to_account(address, || false, |_| true) }
+    fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
+    fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_digest(&[]) , |account| account.code_hash()) }
+    fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
+    fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, || Vec::new(), |account| account.get_code()) }
+    fn storage(&self, address: &H160, index: &H256) -> H256 { self.apply_to_account(address, || H256::default(), |account| account.get_storage(index)) }
 }
 
-pub struct SolanaBackend<'a, 's> {
-    account_storage: Ref<'s ,dyn AccountStorage>,
+pub struct SolanaBackend<'a, 's, S> {
+    account_storage: &'s S,
     account_infos: Option<&'a [AccountInfo<'a>]>,
 }
 
-impl<'a, 's> SolanaBackend<'a, 's> {
-    pub fn new(account_storage: Ref<'s ,dyn AccountStorage>, account_infos: Option<&'a [AccountInfo<'a>]>) -> Self {
+impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
+    pub fn new(account_storage: &'s S, account_infos: Option<&'a [AccountInfo<'a>]>) -> Self {
         debug_print!("backend::new"); 
         Self { account_storage, account_infos }
     }
-
+    
     fn is_solana_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account()
     }
@@ -96,7 +113,7 @@ impl<'a, 's> SolanaBackend<'a, 's> {
     }
 }
 
-impl<'a, 's> Backend for SolanaBackend<'a, 's> {
+impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     fn gas_price(&self) -> U256 { U256::zero() }
     fn origin(&self) -> H160 { self.account_storage.origin() }
     fn block_hash(&self, _number: U256) -> H256 { H256::default() }

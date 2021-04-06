@@ -168,7 +168,9 @@ fn process_instruction<'a>(
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
             let caller = SolidityAccount::new(base_info.key, base_info.data.clone(), (*base_info.lamports.borrow()).clone())?;
 
-            let program_seeds = [caller.account_data.ether.as_bytes(), &[caller.account_data.nonce]];
+            let (caller_ether, caller_nonce) = caller.get_seeds();
+
+            let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
             debug_print!(&lamports.to_string());
             debug_print!(&space.to_string());
@@ -208,19 +210,16 @@ fn process_instruction<'a>(
             };
             let (nonce, to, data) = get_data(&unsigned_msg);
 
-            let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);    
+            let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
     
             let (exit_reason, result, applies_logs) = {
-                let acc_storage = account_storage.borrow();
-
-                let caller = acc_storage.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;  
-                if caller.get_nonce() != nonce {
-                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
+                let (caller_ether, caller_nonce) = account_storage.apply_to_account_by_index(1, || None, |acc| Some((acc.get_ether(), acc.get_nonce()))).ok_or(ProgramError::InvalidArgument)?;  
+                if caller_nonce != nonce {
+                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller_nonce));
                     return Err(ProgramError::InvalidInstructionData);
                 }
-                let caller_ether = caller.get_ether();
         
-                let backend = SolanaBackend::new(acc_storage, Some(accounts));
+                let backend = SolanaBackend::new(&account_storage, Some(accounts));
                 debug_print!("  backend initialized");
             
                 let config = evm::Config::istanbul();
@@ -247,11 +246,9 @@ fn process_instruction<'a>(
             };      
 
             if applies_logs.is_some() {
-                let mut mut_acc_storage = account_storage.borrow_mut();
-
                 let (applies, logs) = applies_logs.unwrap();
 
-                mut_acc_storage.apply(applies, false, None)?;
+                account_storage.apply(applies, false, None)?;
                 debug_print!("Applies done");
                 for log in logs {
                     invoke(&on_event(program_id, log)?, &accounts)?;
@@ -458,12 +455,12 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         return Err(ProgramError::InvalidArgument);
     }
 
-    let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);
+    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let caller_ether = get_ether_address(program_id, account_storage.borrow().get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
+    let caller_ether = get_ether_address(program_id, &account_storage, 1, caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
     
     let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(account_storage.borrow(), Some(accounts));
+        let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -499,9 +496,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     }; 
 
     if applies_logs.is_some() {
-        let mut mut_acc_storage = account_storage.borrow_mut();
         let (applies, logs) = applies_logs.unwrap();
-        mut_acc_storage.apply(applies, false, Some(caller_ether))?;
+        account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
@@ -537,34 +533,30 @@ fn do_call<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let account_storage = RefCell::new(ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?);
+    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
-        let acc_storage = account_storage.borrow();
-
-        let caller_ether = get_ether_address(program_id, acc_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = acc_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
+        let caller_ether = get_ether_address(program_id, &account_storage, 1, caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.apply_to_account_by_index(0, || Err(ProgramError::InvalidArgument), |acc| Ok(acc.get_ether()))?;
 
         debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
         debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
 
         (caller_ether, contract_ether)
     };
-    
-    let (exit_reason, result, applies_logs) = {
-        let acc_storage = account_storage.borrow();
 
-        let backend = SolanaBackend::new(acc_storage, Some(accounts));
+    let (exit_reason, result, applies_logs) = {
+        let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
-    
+
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
         debug_print!("Executor initialized");
-    
+
         let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
-    
+
         debug_print!("Call done");
-        
+
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let (applies, logs) = executor.deconstruct();
@@ -575,11 +567,9 @@ fn do_call<'a>(
     };
 
     if applies_logs.is_some() {
-        let mut mut_acc_storage = account_storage.borrow_mut();
-
         let (applies, logs) = applies_logs.unwrap();
 
-        mut_acc_storage.apply(applies, false, Some(caller_ether))?;
+        account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
@@ -636,7 +626,7 @@ fn invoke_on_return<'a>(
             }
         },
     };
-    
+
     debug_print!(&hex::encode(&result));
 
     let ix = on_return(program_id, exit_status, result).unwrap();
@@ -648,24 +638,23 @@ fn invoke_on_return<'a>(
 
 fn get_ether_address<'a>(
     program_id: &Pubkey,
-    caller_opt: Option<&SolidityAccount<'a>>,
+    account_storage: &ProgramAccountStorage,
+    index: usize,
     caller_info: &'a AccountInfo<'a>,
     signer_info: &'a AccountInfo<'a>,
     from_info: Option<(H160, u64)>,
 ) ->  Option<(H160, bool)>
 {
+    let caller_opt = account_storage.apply_to_account_by_index(index, || None, |acc| Some((acc.get_signer(), acc.get_ether(), acc.get_nonce())));
 
     if caller_info.owner == program_id {
         if caller_opt.is_some() {
-            let caller = caller_opt.unwrap();
-
-            let caller_ether = caller.get_ether();
-            let caller_nonce = caller.get_nonce();
+            let (caller_signer, caller_ether, caller_nonce) = caller_opt.unwrap();
         
             if from_info.is_none() {
-                if caller.account_data.signer != *signer_info.key || !signer_info.is_signer {
+                if caller_signer != *signer_info.key || !signer_info.is_signer {
                     debug_print!("Add valid account signer");
-                    debug_print!(&("   caller signer: ".to_owned() + &caller.account_data.signer.to_string()));
+                    debug_print!(&("   caller signer: ".to_owned() + &caller_signer.to_string()));
                     debug_print!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
                     debug_print!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
         

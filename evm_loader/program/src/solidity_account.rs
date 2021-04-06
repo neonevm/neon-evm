@@ -17,10 +17,10 @@ use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct SolidityAccount<'a> {
-    pub account_data: AccountData,
-    pub solana_address: &'a Pubkey,
-    pub data: Rc<RefCell<&'a mut [u8]>>,
-    pub lamports: u64,
+    account_data: AccountData,
+    solana_address: &'a Pubkey,
+    data: Rc<RefCell<&'a mut [u8]>>,
+    lamports: u64,
     pub updated: bool,
 }
 
@@ -32,6 +32,8 @@ impl<'a> SolidityAccount<'a> {
         let (account_data, _) = AccountData::unpack(&data_b)?;
         Ok(Self{account_data, solana_address, data: data.clone(), lamports, updated: false})
     }
+
+    pub fn get_signer(&self) -> Pubkey {self.account_data.signer}
 
     pub fn get_ether(&self) -> H160 {self.account_data.ether}
 
@@ -134,8 +136,8 @@ impl<'a> SolidityAccount<'a> {
         Ok(())
     }
 
-    pub fn get_solana_address(&self) -> &Pubkey {
-        self.solana_address
+    pub fn get_solana_address(&self) -> Pubkey {
+        *self.solana_address
     }
 
     pub fn get_seeds(&self) -> (H160, u8) {
