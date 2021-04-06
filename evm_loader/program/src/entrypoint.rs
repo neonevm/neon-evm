@@ -211,42 +211,33 @@ fn process_instruction<'a>(
             let (nonce, to, data) = get_data(&unsigned_msg);
 
             let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+
+            let (caller_ether, caller_nonce) = account_storage.apply_to_account_by_index(1, || None, |acc| Some((acc.get_ether(), acc.get_nonce()))).ok_or(ProgramError::InvalidArgument)?;  
+            if caller_nonce != nonce {
+                debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller_nonce));
+                return Err(ProgramError::InvalidInstructionData);
+            }
     
-            let (exit_reason, result, applies_logs) = {
-                let (caller_ether, caller_nonce) = account_storage.apply_to_account_by_index(1, || None, |acc| Some((acc.get_ether(), acc.get_nonce()))).ok_or(ProgramError::InvalidArgument)?;  
-                if caller_nonce != nonce {
-                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller_nonce));
-                    return Err(ProgramError::InvalidInstructionData);
-                }
+            let backend = SolanaBackend::new(&account_storage, Some(accounts));
+            debug_print!("  backend initialized");
         
-                let backend = SolanaBackend::new(&account_storage, Some(accounts));
-                debug_print!("  backend initialized");
-            
-                let config = evm::Config::istanbul();
-                let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-                debug_print!("Executor initialized");
+            let config = evm::Config::istanbul();
+            let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+            debug_print!("Executor initialized");
 
-                let exit_reason = match to {
-                    None => {
-                        executor.transact_create(caller_ether, U256::zero(), data, usize::max_value())
-                    },
-                    Some(contract) => {
-                        debug_print!("Not supported");
-                        ExitReason::Fatal(ExitFatal::NotSupported)
-                    },
-                };
+            let exit_reason = match to {
+                None => {
+                    executor.transact_create(caller_ether, U256::zero(), data, usize::max_value())
+                },
+                Some(contract) => {
+                    debug_print!("Not supported");
+                    ExitReason::Fatal(ExitFatal::NotSupported)
+                },
+            };
 
-                if exit_reason.is_succeed() {
-                    debug_print!("Succeed execution");
-                    let (applies, logs) = executor.deconstruct();
-                    (exit_reason, Vec::new(), Some((applies, logs)))
-                } else {
-                    (exit_reason, Vec::new(), None)
-                }
-            };      
-
-            if applies_logs.is_some() {
-                let (applies, logs) = applies_logs.unwrap();
+            if exit_reason.is_succeed() {
+                debug_print!("Succeed execution");
+                let (applies, logs) = executor.deconstruct();
 
                 account_storage.apply(applies, false, None)?;
                 debug_print!("Applies done");
@@ -255,6 +246,7 @@ fn process_instruction<'a>(
                 }
             }
 
+            let result = Vec::new();
             invoke_on_return(&program_id, &accounts, exit_reason, result);
 
             Ok(())
@@ -459,44 +451,33 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let caller_ether = get_ether_address(program_id, &account_storage, 1, caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
     
-    let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(&account_storage, Some(accounts));
-        debug_print!("  backend initialized");
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-        debug_print!("  executor initialized");
+    let backend = SolanaBackend::new(&account_storage, Some(accounts));
+    debug_print!("  backend initialized");
+    let config = evm::Config::istanbul();
+    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    debug_print!("  executor initialized");
 
-        let code_data = {
-            let data = program_info.data.borrow();
-            let (_unused, rest) = data.split_at(AccountData::SIZE);
-            let (code_len, rest) = rest.split_at(8);
-            let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-            let (code, _rest) = rest.split_at(code_len as usize);
-            code.to_vec()
-        };
-    
-        // let program_account = SolidityAccount::new(program_info)?;
-    
-        debug_print!("Execute transact_create");
-        let exit_reason = executor.transact_create2(
-                caller_ether.0,
-                U256::zero(),
-                code_data,
-                H256::default(), usize::max_value()
-            );
-        debug_print!("  create2 done");   
-        
-        if exit_reason.is_succeed() {
-            debug_print!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
-            (exit_reason, Vec::new(), Some((applies, logs)))
-        } else {
-            (exit_reason, Vec::new(), None)
-        }
-    }; 
+    let code_data = {
+        let data = program_info.data.borrow();
+        let (_unused, rest) = data.split_at(AccountData::SIZE);
+        let (code_len, rest) = rest.split_at(8);
+        let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+        let (code, _rest) = rest.split_at(code_len as usize);
+        code.to_vec()
+    };
 
-    if applies_logs.is_some() {
-        let (applies, logs) = applies_logs.unwrap();
+    debug_print!("Execute transact_create");
+    let exit_reason = executor.transact_create2(
+            caller_ether.0,
+            U256::zero(),
+            code_data,
+            H256::default(), usize::max_value()
+        );
+    debug_print!("  create2 done");
+
+    if exit_reason.is_succeed() {
+        debug_print!("Succeed execution");
+        let (applies, logs) = executor.deconstruct();
         account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
@@ -504,6 +485,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         }
     }
 
+    let result = Vec::new();
     invoke_on_return(&program_id, &accounts, exit_reason, result);
     
     Ok(())
@@ -545,30 +527,20 @@ fn do_call<'a>(
         (caller_ether, contract_ether)
     };
 
-    let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(&account_storage, Some(accounts));
-        debug_print!("  backend initialized");
+    let backend = SolanaBackend::new(&account_storage, Some(accounts));
+    debug_print!("  backend initialized");
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-        debug_print!("Executor initialized");
+    let config = evm::Config::istanbul();
+    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    debug_print!("Executor initialized");
 
-        let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
+    let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
 
-        debug_print!("Call done");
+    debug_print!("Call done");
 
-        if exit_reason.is_succeed() {
-            debug_print!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
-        } else {
-            (exit_reason, result, None)
-        }
-    };
-
-    if applies_logs.is_some() {
-        let (applies, logs) = applies_logs.unwrap();
-
+    if exit_reason.is_succeed() {
+        debug_print!("Succeed execution");
+        let (applies, logs) = executor.deconstruct();
         account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
@@ -586,7 +558,7 @@ fn invoke_on_return<'a>(
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
     result: Vec<u8>,) 
-{    
+{
     let exit_status = match exit_reason {
         ExitReason::Succeed(success_code) => { 
             debug_print!("Succeed");

@@ -89,7 +89,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let mut accounts = self.accounts.borrow_mut();
-                        let mut account = accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
+                        let account = accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                         let account_info = &self.account_infos[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
