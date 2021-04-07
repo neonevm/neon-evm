@@ -29,11 +29,11 @@ use crate::{
     instruction::{EvmInstruction, on_return, on_event},
     account_data::AccountData,
     solidity_account::SolidityAccount,
-    transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
+    transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction},
 };
 
 use evm::{
-//    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
+    backend::{Backend},
     executor::{StackExecutor},
     CreateScheme,
     ExitReason, ExitFatal, ExitError, ExitSucceed,
@@ -207,30 +207,40 @@ fn process_instruction<'a>(
             let trx_info = next_account_info(account_info_iter)?;
             //let caller_info = next_account_info(account_info_iter)?;
 
-            let unsigned_msg = {
+            let (unsigned_msg, signature) = {
                 let data = trx_info.data.borrow();
                 let (_unused, rest) = data.split_at(AccountData::SIZE);
+                let (signature, rest) = rest.split_at(65);
                 let (trx_len, rest) = rest.split_at(8);
                 let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
                 let (trx, _rest) = rest.split_at(trx_len as usize);
-                trx.to_vec()
+                (trx.to_vec(), signature.to_vec())
             };
-            let (nonce, to, data) = get_data(&unsigned_msg);
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!(&format!("{}", e));
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
+            if (trx.chain_id != backend.chain_id()) {
+                debug_print!(&format!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id()));
+                return Err(ProgramError::InvalidInstructionData); 
+            }
+
             let config = evm::Config::istanbul();
             let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
 
             let caller = backend.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;
-            if caller.get_nonce() != nonce {
-                debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
+            if caller.get_nonce() != trx.nonce {
+                debug_print!(&format!("Invalid nonce: actual {}, expect {}", trx.nonce, caller.get_nonce()));
                 return Err(ProgramError::InvalidInstructionData);
             }
 
             // TODO add check for correct caller
-            let exit_reason = match to {
+            let exit_reason = match trx.to {
                 None => {
-                    executor.transact_create(caller.get_ether(), U256::zero(), data, usize::max_value())
+                    executor.transact_create(caller.get_ether(), U256::zero(), trx.call_data, usize::max_value())
                 },
                 Some(contract) => {
                     debug_print!("Not supported");
