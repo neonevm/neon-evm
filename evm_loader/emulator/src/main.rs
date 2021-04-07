@@ -9,7 +9,6 @@ use primitive_types::{H160, U256};
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::str::FromStr;
-use std::cell::RefCell;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -39,12 +38,10 @@ fn main() {
         return;
     };
 
-    let account_storage = RefCell::new(EmulatorAccountStorage::new(solana_url, base_account, evm_loader, contract_id, caller_id));
+    let account_storage = EmulatorAccountStorage::new(solana_url, base_account, evm_loader, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs) = {
-        let acc_storage = account_storage.borrow();
-
-        let backend = SolanaBackend::new(acc_storage, None);
+        let backend = SolanaBackend::new(&account_storage, None);
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
     
@@ -63,12 +60,10 @@ fn main() {
 
     eprintln!("Call done");
     let status = match exit_reason {
-        ExitReason::Succeed(_) => {
-            let acc_storage = account_storage.borrow();
-    
+        ExitReason::Succeed(_) => {    
             let (applies, _logs) = applies_logs.unwrap();
     
-            acc_storage.apply(applies);
+            account_storage.apply(applies);
 
             eprintln!("Applies done");
             "succeed".to_string()
@@ -85,9 +80,7 @@ fn main() {
         eprintln!("Not succeed execution");
     }
 
-    
-    let acc_storage = account_storage.borrow();
-    acc_storage.get_used_accounts(&status, &result);
+    account_storage.get_used_accounts(&status, &result);
 }
 
 fn make_clean_hex(in_str: &String) -> String {
