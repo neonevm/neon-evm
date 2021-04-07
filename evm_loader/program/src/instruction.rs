@@ -1,5 +1,5 @@
 use serde::{Serialize, Deserialize};
-use solana_sdk::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
+use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::TryInto;
 use primitive_types::{H160, H256};
 use evm::backend::Log;

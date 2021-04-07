@@ -1,6 +1,13 @@
 use ethereum_types::{Address, U256};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use solana_program::{
+    entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
+    secp256k1_program
+};
+use std::borrow::Cow;
+use std::error::Error;
+use std::convert::TryFrom;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
