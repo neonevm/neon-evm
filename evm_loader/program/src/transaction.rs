@@ -8,7 +8,6 @@ use solana_program::{
 use std::borrow::Cow;
 use std::error::Error;
 use std::convert::TryFrom;
-pub use ethereum_types::{Address, U256};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
