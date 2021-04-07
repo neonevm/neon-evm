@@ -229,7 +229,7 @@ fn process_instruction<'a>(
 
                 let exit_reason = match to {
                     None => {
-                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
+                        executor.transact_create(caller_ether, U256::zero(), data, usize::max_value())
                     },
                     Some(contract) => {
                         debug_print!("Not supported");
@@ -482,7 +482,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let exit_reason = executor.transact_create2(
                 caller_ether.0,
                 U256::zero(),
-                &code_data,
+                code_data,
                 H256::default(), usize::max_value()
             );
         debug_print!("  create2 done");   
