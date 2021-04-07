@@ -210,14 +210,15 @@ fn process_instruction<'a>(
             };
             let (nonce, to, data) = get_data(&unsigned_msg);
 
-            let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
     
             let (exit_reason, result, applies_logs) = {
-                let (caller_ether, caller_nonce) = account_storage.apply_to_account_by_index(1, || None, |acc| Some((acc.get_ether(), acc.get_nonce()))).ok_or(ProgramError::InvalidArgument)?;  
-                if caller_nonce != nonce {
-                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller_nonce));
+                let caller = account_storage.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;  
+                if caller.get_nonce() != nonce {
+                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
                     return Err(ProgramError::InvalidInstructionData);
                 }
+                let caller_ether = caller.get_ether();
         
                 let backend = SolanaBackend::new(&account_storage, Some(accounts));
                 debug_print!("  backend initialized");
@@ -228,7 +229,7 @@ fn process_instruction<'a>(
 
                 let exit_reason = match to {
                     None => {
-                        executor.transact_create(caller_ether, U256::zero(), data, usize::max_value())
+                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
                     },
                     Some(contract) => {
                         debug_print!("Not supported");
@@ -455,9 +456,9 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         return Err(ProgramError::InvalidArgument);
     }
 
-    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let caller_ether = get_ether_address(program_id, &account_storage, 1, caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
+    let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
     
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
@@ -481,7 +482,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let exit_reason = executor.transact_create2(
                 caller_ether.0,
                 U256::zero(),
-                code_data,
+                &code_data,
                 H256::default(), usize::max_value()
             );
         debug_print!("  create2 done");   
@@ -533,11 +534,11 @@ fn do_call<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, &account_storage, 1, caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.apply_to_account_by_index(0, || Err(ProgramError::InvalidArgument), |acc| Ok(acc.get_ether()))?;
+        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
 
         debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
         debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
@@ -638,26 +639,27 @@ fn invoke_on_return<'a>(
 
 fn get_ether_address<'a>(
     program_id: &Pubkey,
-    account_storage: &ProgramAccountStorage,
-    index: usize,
+    caller_opt: Option<&SolidityAccount<'a>>,
     caller_info: &'a AccountInfo<'a>,
     signer_info: &'a AccountInfo<'a>,
     from_info: Option<(H160, u64)>,
 ) ->  Option<(H160, bool)>
 {
-    let caller_opt = account_storage.apply_to_account_by_index(index, || None, |acc| Some((acc.get_signer(), acc.get_ether(), acc.get_nonce())));
-
     if caller_info.owner == program_id {
         if caller_opt.is_some() {
-            let (caller_signer, caller_ether, caller_nonce) = caller_opt.unwrap();
-        
+            let caller = caller_opt.unwrap();
+
+            let caller_signer = caller.get_signer();
+            let caller_ether = caller.get_ether();
+            let caller_nonce = caller.get_nonce();
+
             if from_info.is_none() {
                 if caller_signer != *signer_info.key || !signer_info.is_signer {
                     debug_print!("Add valid account signer");
                     debug_print!(&("   caller signer: ".to_owned() + &caller_signer.to_string()));
                     debug_print!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
                     debug_print!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
-        
+
                     return None
                 }
             } else {
@@ -666,7 +668,7 @@ fn get_ether_address<'a>(
                     debug_print!("Invalin caller account");
                     debug_print!(&("   caller addres: ".to_owned() + &caller_ether.to_string()));
                     debug_print!(&("     from addres: ".to_owned() + &from.to_string()));
-        
+
                     return None
                 }
                 if caller_nonce != nonce {
@@ -677,7 +679,7 @@ fn get_ether_address<'a>(
                     return None
                 }
             }
-    
+
             Some ( ( caller_ether, true) )
 
         } else {

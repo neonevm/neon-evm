@@ -15,7 +15,7 @@ use std::{
 };
 
 pub struct ProgramAccountStorage<'a> {
-    accounts: RefCell<Vec<Option<SolidityAccount<'a>>>>,
+    accounts: Vec<Option<SolidityAccount<'a>>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
     account_infos: &'a [AccountInfo<'a>],
@@ -40,11 +40,19 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
         Ok(Self {
-            accounts: RefCell::new(accounts),
+            accounts: accounts,
             aliases: RefCell::new(aliases),
             clock_account,
             account_infos: account_infos,
         })
+    }
+
+    pub fn get_account_by_index(&self, index: usize) -> Option<&SolidityAccount<'a>> {
+        if let Some(acc) = &self.accounts[index] {
+            Some(&acc)
+        } else {
+            None
+        }
     }
 
     fn find_account(&self, address: &H160) -> Option<usize> {
@@ -61,15 +69,15 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn apply_to_account_by_index<U, D, F>(&self, index: usize, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        let accounts = self.accounts.borrow();
-        accounts[index].as_ref().map_or_else(d, f)
+    fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
+        if let Some(pos) = self.find_account(address) {
+            self.accounts[pos].as_ref()
+        } else {
+            None
+        }
     }
 
-    pub fn apply<A, I>(&self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
+    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (H256, H256)>,
@@ -88,8 +96,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
-                        let mut accounts = self.accounts.borrow_mut();
-                        let mut account = accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
+                        let account = self.accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
                         let account_info = &self.account_infos[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
@@ -108,27 +115,22 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U
-    {        
-        match self.find_account(address) {
-            Some(pos) => {
-                self.apply_to_account_by_index(pos, d, f) 
-            },
-            None => d(),
-        }
+    {
+        self.get_account(address).map_or_else(d, f)
     }
 
     fn apply_to_contract<U, D, F>(&self, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U
-    { 
-        self.apply_to_account_by_index(0, d, f) 
+    {
+        self.get_account_by_index(0).map_or_else(d, f)
     }
         
     fn apply_to_caller<U, D, F>(&self, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U
     {
-        self.apply_to_account_by_index(1, d, f)   
+        self.get_account_by_index(1).map_or_else(d, f)
     }
 
     fn origin(&self) -> H160 { self.aliases.borrow()[1].0 }
