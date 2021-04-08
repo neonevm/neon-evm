@@ -56,24 +56,24 @@ impl EmulatorAccountStorage {
 
         let slot = match rpc_client.get_slot() {
             Ok(slot) => {
-                eprintln!("Got slot");                
-                eprintln!("Slot {}", slot);    
+                eprintln!("Got slot");
+                eprintln!("Slot {}", slot);
                 slot
             },
             Err(_) => {
-                eprintln!("Get slot error");    
+                eprintln!("Get slot error");
                 0
             }
         };
     
         let timestamp = match rpc_client.get_block_time(slot) {
             Ok(timestamp) => {
-                eprintln!("Got timestamp");                
+                eprintln!("Got timestamp");
                 eprintln!("timestamp {}", timestamp);
                 timestamp
             },
             Err(_) => {
-                eprintln!("Get timestamp error");    
+                eprintln!("Get timestamp error");
                 0
             }
         };
@@ -95,12 +95,13 @@ impl EmulatorAccountStorage {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
+            let solana_address = if *address == self.contract_id {
+                Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id).0
+            } else {
+                let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
+                Pubkey::create_with_seed(&self.base_account, &seed, &self.program_id).unwrap()
+            };
 
-            //let (solana_address, _) = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id);
-            let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
-            let solana_address = Pubkey::create_with_seed(&self.base_account, &seed, &self.program_id).unwrap();
-
-            eprintln!("{} {} {}", &self.base_account.to_string(), &seed, &self.program_id.to_string());
             eprintln!("Not found account for {} => {}", &address.to_string(), &solana_address.to_string());
             
             match self.rpc_client.get_account(&solana_address) {
@@ -108,7 +109,7 @@ impl EmulatorAccountStorage {
                     eprintln!("Account found");                        
                     eprintln!("Account data len {}", acc.data.len());
                     eprintln!("Account owner {}", acc.owner.to_string());
-                   
+
                     accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address));
 
                     true

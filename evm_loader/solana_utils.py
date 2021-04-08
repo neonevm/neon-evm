@@ -181,7 +181,7 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
-        seed = str(b58encode(bytes.fromhex(ether)))
+        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         base = self.acc.get_acc().public_key()
         trx.add(createAccountWithSeed(base, base, seed, 10**9, 65, PublicKey(self.loader_id)))
         trx.add(TransactionInstruction(
@@ -205,7 +205,7 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        seed = str(b58encode(bytes.fromhex(ether)))
+        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
