@@ -8,7 +8,6 @@ use sha3::{Digest, Keccak256};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     pubkey::Pubkey,
-    program::invoke_signed,
     instruction::{Instruction, AccountMeta},
     program::{invoke, invoke_signed}
 };
@@ -85,7 +84,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         debug_print!("ecrecover");
-        debug_print!(&format!("input: {}", &hex::encode(&input)));
+        debug_print!("input: {}", &hex::encode(&input));
     
         if input.len() != 128 {
             return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
@@ -108,7 +107,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
         let mut address = Keccak256::digest(&public_key.serialize()[1..]);
         for i in 0..12 { address[i] = 0 }
-        debug_print!(&hex::encode(&address));
+        debug_print!("{}", &hex::encode(&address));
 
         return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address.to_vec())));
     }
@@ -150,8 +149,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
-            debug_print!(&("CreateScheme2 ".to_owned()+&hex::encode(_address)+" from "+
-                  &hex::encode(caller)+" "+&hex::encode(code_hash)+" "+&hex::encode(salt)));
+            debug_print!("CreateScheme2 {} from {} {} {}", &hex::encode(_address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt));
         } else {
             debug_print!("Call create");
         }
@@ -178,8 +176,8 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         debug_print!("Call inner");
-        debug_print!(&code_address.to_string());
-        debug_print!(&hex::encode(&input));
+        debug_print!("{}", &code_address.to_string());
+        debug_print!("{}", &hex::encode(&input));
 
         let (cmd, input) = input.split_at(1);
         match cmd[0] {
@@ -207,18 +205,18 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                         is_writable: writable[0] != 0,
                         pubkey: pubkey,
                     });
-                    debug_print!(&format!("Acc: {}", pubkey));
+                    debug_print!("Acc: {}", pubkey);
                 };
         
                 let (_, input) = input.split_at(35 * acc_length as usize);
-                debug_print!(&hex::encode(&input));
+                debug_print!("{}", &hex::encode(&input));
 
                 let (contract_eth, contract_nonce) = self.account_storage.get_contract_seeds().unwrap();   // do_call already check existence of Ethereum account with such index
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos");
                 for info in self.account_infos.unwrap() {
-                    debug_print!(&format!("  {}", info.key));
+                    debug_print!("  {}", info.key);
                 };
                 let result : solana_program::entrypoint::ProgramResult;
                 match self.account_storage.get_caller_seeds() {
@@ -238,7 +236,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     }
                 }
                 if let Err(err) = result {
-                    debug_print!(&format!("result: {}", err));
+                    debug_print!("result: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
@@ -268,7 +266,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed.into(), &owner) {pubkey}
                 else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
 
-                debug_print!(&format!("result: {}", &hex::encode(pubkey.as_ref())));
+                debug_print!("result: {}", &hex::encode(pubkey.as_ref()));
                 return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec())));
             },
             _ => {
@@ -328,11 +326,11 @@ mod test {
         }
 
         fn donate() -> Vec<u8> {
-            hex::decode("ed88c68e").unwrap();
+            hex::decode("ed88c68e").unwrap()
         }
 
         fn donateFrom() -> Vec<u8> {
-            hex::decode("3071fbec").unwrap();
+            hex::decode("3071fbec").unwrap()
         }
     }
 

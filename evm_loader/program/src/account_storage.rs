@@ -4,7 +4,7 @@ use crate::{
 };
 use evm::backend::Apply;
 use primitive_types::{H160, H256, U256};
-use solana_sdk::{
+use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
@@ -28,7 +28,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let mut aliases = Vec::with_capacity(account_infos.len());
 
         for (i, account) in (&account_infos).iter().enumerate() {
-            debug_print!(&i.to_string());
+            debug_print!("{}", &i);
             if account.owner == program_id {
                 let sol_account = SolidityAccount::new(account.key, account.data.clone(), (*account.lamports.borrow()).clone())?;
                 aliases.push((sol_account.get_ether(), i));
@@ -59,11 +59,11 @@ impl<'a> ProgramAccountStorage<'a> {
         let aliases = self.aliases.borrow();
         match aliases.binary_search_by_key(&address, |v| &v.0) {
             Ok(pos) => {
-                debug_print!(&("Found account for ".to_owned() + &address.to_string() + " on position " + &pos.to_string()));
+                debug_print!("Found account for {} on position {}", &address.to_string(), &pos.to_string());
                 Some(aliases[pos].1)
             }
             Err(_) => {
-                debug_print!(&("Not found account for ".to_owned() + &address.to_string()));
+                debug_print!("Not found account for {}", &address.to_string());
                 None
             }
         }

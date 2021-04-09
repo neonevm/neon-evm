@@ -16,7 +16,6 @@ use solana_program::{
     secp256k1_program,
     instruction::Instruction,
     sysvar::instructions,
-    entrypoint::HEAP_START_ADDRESS
 };
 use crate::{
 //    bump_allocator::BumpAllocator,
@@ -116,7 +115,7 @@ fn process_instruction<'a>(
             let funding_info = next_account_info(account_info_iter)?;
             let program_info = next_account_info(account_info_iter)?;
 
-            debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
+            debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             if expected_address != *program_info.key {
@@ -139,7 +138,7 @@ fn process_instruction<'a>(
             let funding_info = next_account_info(account_info_iter)?;
             let program_info = next_account_info(account_info_iter)?;
 
-            debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
+            debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             //let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             //if expected_address != *program_info.key {
@@ -171,8 +170,8 @@ fn process_instruction<'a>(
 
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
-            debug_print!(&lamports.to_string());
-            debug_print!(&space.to_string());
+            debug_print!("{}", &lamports.to_string());
+            debug_print!("{}", &space.to_string());
             invoke_signed(
                 &create_account_with_seed(funding_info.key, created_info.key, &base, &seed, lamports, space, &owner),
                 &accounts, &[&program_seeds[..]]
@@ -208,8 +207,9 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
+            let (nonce, to, data) = get_data(&unsigned_msg);
             if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
-                debug_print!(&format!("{}", e));
+                debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
             }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -219,7 +219,7 @@ fn process_instruction<'a>(
             let (exit_reason, result, applies_logs) = {
                 let caller = account_storage.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;  
                 if caller.get_nonce() != nonce {
-                    debug_print!(&format!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce()));
+                    debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
                     return Err(ProgramError::InvalidInstructionData);
                 }
                 let caller_ether = caller.get_ether();
@@ -227,8 +227,8 @@ fn process_instruction<'a>(
                 let backend = SolanaBackend::new(&account_storage, Some(accounts));
                 debug_print!("  backend initialized");
 
-                if (trx.chain_id != backend.chain_id()) {
-                    debug_print!(&format!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id()));
+                if trx.chain_id != backend.chain_id() {
+                    debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
                     return Err(ProgramError::InvalidInstructionData); 
                 }
             
@@ -257,9 +257,15 @@ fn process_instruction<'a>(
 
             if applies_logs.is_some() {
                 let (applies, logs) = applies_logs.unwrap();
-            let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
 
-            invoke_on_return(&program_id, &accounts, exit_reason, result);
+                account_storage.apply(applies, false, None)?;
+                debug_print!("Applies done");
+                for log in logs {
+                    invoke(&on_event(program_id, log)?, &accounts)?;
+                }
+            }
+
+            invoke_on_return(&program_id, &accounts, exit_reason, result)?;
 
             Ok(())
         },
@@ -310,10 +316,10 @@ fn process_instruction<'a>(
             let clock_info = next_account_info(account_info_iter)?;
 
             let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
-            debug_print!(&(" current instruction: ".to_owned() + &current_instruction.to_string())); 
+            debug_print!(" current instruction: {}", &current_instruction); 
 
             let index = current_instruction - 1;
-            debug_print!(&("index: ".to_owned() + &index.to_string())); 
+            debug_print!("index: {}", &index); 
 
             match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
                 Ok(instr) => {
@@ -324,8 +330,8 @@ fn process_instruction<'a>(
 
                         if reference_instruction != instr.data {
                             debug_print!("wrong keccak instruction data");
-                            debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
-                            debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                            debug_print!("instruction: {}", &hex::encode(&instr.data));    
+                            debug_print!("reference: {}", &hex::encode(&reference_instruction));    
                             return Err(ProgramError::InvalidInstructionData);
                         }                    
                     } else {
@@ -346,9 +352,9 @@ fn process_instruction<'a>(
             let program_eth: H160 = keccak256_digest(&program_info.key.to_bytes()).into();
             // let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into();
             
-            debug_print!(&("caller: ".to_owned() + &caller.to_string()));    
-            debug_print!(&("contract: ".to_owned() + &contract.to_string()));
-            debug_print!(&("program_eth: ".to_owned() + &program_eth.to_string()));
+            debug_print!("caller: {}", &caller.to_string());    
+            debug_print!("contract: {}", &contract.to_string());
+            debug_print!("program_eth: {}", &program_eth.to_string());
             // debug_print!(&("caller_eth: ".to_owned() + &caller_eth.to_string()));
             // debug_print!(&format!("caller: {}", &caller.to_string()));
             // debug_print!(&format!("contract: {}", &contract.to_string()));
@@ -398,7 +404,7 @@ fn process_instruction<'a>(
         }
     };*/
 
-    debug_print!(&("Total memory occupied: ".to_owned() + &BumpAllocator::occupied().to_string()));
+    debug_print!("Total memory occupied: {}", &BumpAllocator::occupied());
     result
 }
 
@@ -508,7 +514,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result);
+    invoke_on_return(&program_id, &accounts, exit_reason, result)?;
     
     Ok(())
 }
@@ -543,8 +549,8 @@ fn do_call<'a>(
         let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
         let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
 
-        debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
-        debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
+        debug_print!("   caller: {}", &caller_ether.0.to_string());
+        debug_print!(" contract: {}", &contract_ether.to_string());
 
         (caller_ether, contract_ether)
     };
@@ -580,7 +586,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result);
+    invoke_on_return(&program_id, &accounts, exit_reason, result)?;
 
     Ok(())
 }
@@ -589,7 +595,7 @@ fn invoke_on_return<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
-    result: Vec<u8>,) 
+    result: Vec<u8>,) -> ProgramResult
 {    
     let exit_status = match exit_reason {
         ExitReason::Succeed(success_code) => { 
@@ -631,13 +637,15 @@ fn invoke_on_return<'a>(
         },
     };
 
-    debug_print!(&hex::encode(&result));
+    debug_print!("{}", &hex::encode(&result));
 
     let ix = on_return(program_id, exit_status, result).unwrap();
     invoke(
         &ix,
         &accounts
-    );
+    )?;
+
+    Ok(())
 }
 
 fn get_ether_address<'a>(
@@ -659,9 +667,9 @@ fn get_ether_address<'a>(
             if from_info.is_none() {
                 if caller_signer != *signer_info.key || !signer_info.is_signer {
                     debug_print!("Add valid account signer");
-                    debug_print!(&("   caller signer: ".to_owned() + &caller_signer.to_string()));
-                    debug_print!(&("   signer pubkey: ".to_owned() + &signer_info.key.to_string()));
-                    debug_print!(&("is signer signer: ".to_owned() + &signer_info.is_signer.to_string()));
+                    debug_print!("   caller signer: {}", &caller_signer.to_string());
+                    debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
+                    debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
 
                     return None
                 }
@@ -669,15 +677,15 @@ fn get_ether_address<'a>(
                 let (from, nonce) = from_info.unwrap();
                 if caller_ether != from {
                     debug_print!("Invalin caller account");
-                    debug_print!(&("   caller addres: ".to_owned() + &caller_ether.to_string()));
-                    debug_print!(&("     from addres: ".to_owned() + &from.to_string()));
+                    debug_print!("   caller addres: {}", &caller_ether.to_string());
+                    debug_print!("     from addres: {}", &from.to_string());
 
                     return None
                 }
                 if caller_nonce != nonce {
                     debug_print!("Invalin Ethereum transaction nonce");
-                    debug_print!(&("     tx nonce: ".to_owned() + &nonce.to_string()));
-                    debug_print!(&("    acc nonce: ".to_owned() + &caller_nonce.to_string()));
+                    debug_print!("     tx nonce: {}", &nonce.to_string());
+                    debug_print!("    acc nonce: {}", &caller_nonce.to_string());
 
                     return None
                 }
@@ -696,7 +704,7 @@ fn get_ether_address<'a>(
         }
         if !caller_info.is_signer {
             debug_print!("Caller mast be signer");
-            debug_print!(&("Caller pubkey: ".to_owned() + &caller_info.key.to_string()));
+            debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
 
             return None
         }

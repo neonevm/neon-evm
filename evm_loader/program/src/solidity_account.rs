@@ -28,7 +28,7 @@ impl<'a> SolidityAccount<'a> {
     pub fn new(solana_address: &'a Pubkey, data: Rc<RefCell<&'a mut [u8]>>, lamports: u64) -> Result<Self, ProgramError> {
         debug_print!("  SolidityAccount::new");
         let data_b = data.borrow();
-        debug_print!(&("  Get data with length ".to_owned() + &data_b.len().to_string()));
+        debug_print!("  Get data with length {}", &data_b.len());
         let (account_data, _) = AccountData::unpack(&data_b)?;
         Ok(Self{account_data, solana_address, data: data.clone(), lamports, updated: false})
     }
@@ -127,7 +127,7 @@ impl<'a> SolidityAccount<'a> {
             let mut storage = Hamt::new(&mut data[AccountData::SIZE + code_size..], reset_storage)?;
             debug_print!("Storage initialized");
             for (key, value) in storage_iter {
-                debug_print!(&("Storage value: ".to_owned() + &key.to_string() + " = " + &value.to_string()));
+                debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                 storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
             }
         }
@@ -152,7 +152,7 @@ impl<'a> SolidityAccount<'a> {
     }
     
     pub fn code_hash(&self) -> H256 {
-        self.code(|d| {debug_print!(&hex::encode(&d[0..32])); keccak256_digest(d)})
+        self.code(|d| {debug_print!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
     }
     
     pub fn code_size(&self) -> usize {
