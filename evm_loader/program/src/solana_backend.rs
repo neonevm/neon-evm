@@ -5,11 +5,12 @@ use evm::{
 use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
-use solana_sdk::{
-    account_info::AccountInfo,
+use solana_program::{
+    account_info::{next_account_info, AccountInfo},
     pubkey::Pubkey,
     program::invoke_signed,
     instruction::{Instruction, AccountMeta},
+    program::{invoke, invoke_signed}
 };
 use std::cell::Ref;
 use std::convert::TryInto;
@@ -126,7 +127,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
-    fn chain_id(&self) -> U256 { U256::zero() }
+    fn chain_id(&self) -> U256 { U256::from(111) }
 
     fn exists(&self, address: H160) -> bool {
         self.account_storage.exists(&address)
@@ -219,7 +220,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 for info in self.account_infos.unwrap() {
                     debug_print!(&format!("  {}", info.key));
                 };
-                let result : solana_sdk::entrypoint::ProgramResult;
+                let result : solana_program::entrypoint::ProgramResult;
                 match self.account_storage.get_caller_seeds() {
                     Some((sender_eth, sender_nonce)) => {
                         let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];

@@ -1,5 +1,5 @@
 
-# Note: This crate must be built using do.sh
+# Note: This crate must be built using cargo build-bpf
 
 [package]
 name = "evm-loader"
@@ -14,15 +14,15 @@ exclude = ["js/**"]
 [features]
 evm_debug = []
 no-entrypoint = []
+test-bpf = []
 custom-heap = []
-program = ["custom-heap", "solana-sdk/program", "evm_debug"]
-default = ["custom-heap", "solana-sdk/program"]
+default = ["custom-heap", "evm_debug"]
 
 [dependencies]
+solana-program = { version = "1.5.14", default_features = false }
 num-derive = "0.3"
 num-traits = "0.2"
 remove_dir_all = "=0.5.0"
-solana-sdk = { version = "1.3.17", default-features = false, optional = true }
 thiserror = "1.0"
 arrayref = "0.3.6"
 num_enum = "0.5.1"
@@ -43,6 +43,12 @@ bincode = ""
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
+solana-program-test = "1.5.14"
+solana-sdk = "1.5.14"
+tokio = { version = "0.3", features = ["macros"]}
 
 [lib]
 crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

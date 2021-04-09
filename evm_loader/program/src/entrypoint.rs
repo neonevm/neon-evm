@@ -1,23 +1,22 @@
 //! Program entrypoint
 
-#![cfg(feature = "program")]
 #![cfg(not(feature = "no-entrypoint"))]
 
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use std::convert::TryInto;
-use solana_sdk::{
+use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
-    program_utils::{limited_deserialize},
     loader_instruction::LoaderInstruction,
     system_instruction::{create_account, create_account_with_seed},
     sysvar::instructions::{load_current_index, load_instruction_at}, 
     program::{invoke_signed, invoke},
     secp256k1_program,
     instruction::Instruction,
-    sysvar::instructions
+    sysvar::instructions,
+    entrypoint::HEAP_START_ADDRESS
 };
 use crate::{
 //    bump_allocator::BumpAllocator,
@@ -26,11 +25,11 @@ use crate::{
     account_storage::ProgramAccountStorage, 
     solana_backend::SolanaBackend,    
     solidity_account::SolidityAccount,
-    transaction::{check_tx, get_check_fields, get_data, make_secp256k1_instruction},
     utils::{keccak256_digest, solidity_address},
+    transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction},
 };
 use evm::{
-//    backend::{MemoryVicinity, MemoryAccount, MemoryBackend, Apply},
+    backend::{Backend},
     executor::{StackExecutor},
     CreateScheme,
     ExitReason, ExitFatal, ExitError, ExitSucceed,
@@ -200,15 +199,20 @@ fn process_instruction<'a>(
             let trx_info = next_account_info(account_info_iter)?;
             //let caller_info = next_account_info(account_info_iter)?;
 
-            let unsigned_msg = {
+            let (unsigned_msg, signature) = {
                 let data = trx_info.data.borrow();
                 let (_unused, rest) = data.split_at(AccountData::SIZE);
+                let (signature, rest) = rest.split_at(65);
                 let (trx_len, rest) = rest.split_at(8);
                 let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
                 let (trx, _rest) = rest.split_at(trx_len as usize);
-                trx.to_vec()
+                (trx.to_vec(), signature.to_vec())
             };
-            let (nonce, to, data) = get_data(&unsigned_msg);
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!(&format!("{}", e));
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
     
@@ -222,6 +226,11 @@ fn process_instruction<'a>(
         
                 let backend = SolanaBackend::new(&account_storage, Some(accounts));
                 debug_print!("  backend initialized");
+
+                if (trx.chain_id != backend.chain_id()) {
+                    debug_print!(&format!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id()));
+                    return Err(ProgramError::InvalidInstructionData); 
+                }
             
                 let config = evm::Config::istanbul();
                 let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
@@ -248,13 +257,7 @@ fn process_instruction<'a>(
 
             if applies_logs.is_some() {
                 let (applies, logs) = applies_logs.unwrap();
-
-                account_storage.apply(applies, false, None)?;
-                debug_print!("Applies done");
-                for log in logs {
-                    invoke(&on_event(program_id, log)?, &accounts)?;
-                }
-            }
+            let mut backend = SolanaBackend::new(program_id, accounts, accounts.last().unwrap())?;
 
             invoke_on_return(&program_id, &accounts, exit_reason, result);
 

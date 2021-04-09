@@ -1,6 +1,6 @@
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use primitive_types::H160;
-use solana_sdk::{
+use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };

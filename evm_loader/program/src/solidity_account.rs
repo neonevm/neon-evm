@@ -4,7 +4,7 @@ use crate::{
     utils::{keccak256_digest, u256_to_h256},
 };
 use evm::backend::Basic;
-use solana_sdk::{
+use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
