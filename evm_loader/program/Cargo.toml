@@ -19,15 +19,15 @@ custom-heap = []
 default = ["custom-heap", "evm_debug"]
 
 [dependencies]
-solana-program = { version = "1.5.14", default_features = false }
+solana-program = { version = "1.6.4", default_features = false }
 num-derive = "0.3"
 num-traits = "0.2"
 remove_dir_all = "=0.5.0"
 thiserror = "1.0"
 arrayref = "0.3.6"
 num_enum = "0.5.1"
-primitive-types = { version = "0.7", default-features = false }
-evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
+primitive-types = { version = "0.7", default-features = false, features = ["serde_no_std"] }
+evm = { path = "../rust-evm", version = "0.18.0", default_features = false, features = ["with-serde"] }
 hex = "0.4.2"
 bs58 = "0.3.1"
 sha3 = { version = "0.8", default-features = false }
@@ -38,15 +38,14 @@ serde = "1.0.112"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 impl-serde = "0.1"
-ethereum-types = { version = "0.9.2", default-features = false }
+ethereum-types = { version = "0.9.2", default-features = false, features = ["serialize"] }
 rlp = "0.4"
 bincode = ""
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
-solana-program-test = "1.5.14"
-solana-sdk = "1.5.14"
-tokio = { version = "0.3", features = ["macros"]}
+solana-program-test = "1.6.4"
+solana-sdk = "1.6.4"
 
 [lib]
 crate-type = ["cdylib", "lib"]

@@ -18,6 +18,8 @@ mod account_data;
 mod solidity_account;
 mod instruction;
 mod transaction;
+mod executor;
+mod executor_state;
 
 
 // Export current solana-sdk types for downstream users who may also be building with a different
