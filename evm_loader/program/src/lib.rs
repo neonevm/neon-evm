@@ -1,4 +1,4 @@
-// #![deny(missing_docs)]
+// #![deny(missing_docs)] // TODO #106 Write missing docs
 //#![forbid(unsafe_code)]
 
 
@@ -16,7 +16,7 @@ pub mod entrypoint;
 mod hamt;
 pub mod solana_backend;
 mod account_data;
-mod account_storage;
+pub mod account_storage;
 pub mod solidity_account;
 mod instruction;
 mod transaction;

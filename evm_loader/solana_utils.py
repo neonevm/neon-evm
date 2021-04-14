@@ -30,7 +30,7 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 http_client = Client(solana_url)
-path_to_solana = '' #/home/dmitriy/git/solana/target/debug/
+path_to_solana = 'solana'
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -90,7 +90,7 @@ class SolanaCli:
         self.acc = acc
 
     def call(self, arguments):
-        cmd = '{}solana --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), self.url, arguments)
+        cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), self.url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -122,7 +122,7 @@ class RandomAccount:
         
 
     def generate_key(self):
-        cmd_generate = '{}solana-keygen new --no-passphrase --outfile {}'.format(path_to_solana, self.path)
+        cmd_generate = 'solana-keygen new --no-passphrase --outfile {}'.format(self.path)
         try:
             return subprocess.check_output(cmd_generate, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -181,7 +181,7 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
-        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
+        seed = str(b58encode(bytes.fromhex(ether)))
         base = self.acc.get_acc().public_key()
         trx.add(createAccountWithSeed(base, base, seed, 10**9, 65, PublicKey(self.loader_id)))
         trx.add(TransactionInstruction(
@@ -205,7 +205,7 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
+        seed = str(b58encode(bytes.fromhex(ether)))
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
@@ -285,15 +285,14 @@ def getTransactionCount(client, sol_account):
     return res
 
 def wallet_path():
-    cmd = '{}solana --url {} config get'.format(path_to_solana, solana_url)
+    cmd = 'solana --url {} config get'.format(solana_url)
     try:
         res =  subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        res = res.splitlines()[-1]
         substr = "Keypair Path: "
-        if not res.startswith(substr):
-            raise Exception("cannot get keypair path")
-        path = res[len(substr):]
-        return path.strip()
+        for line in res.splitlines():
+            if line.startswith(substr):
+                return line[len(substr):].strip()
+        raise Exception("cannot get keypair path")
     except subprocess.CalledProcessError as err:
         import sys
         print("ERR: solana error {}".format(err))
