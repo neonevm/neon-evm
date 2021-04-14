@@ -60,7 +60,7 @@ fn main() {
 
     eprintln!("Call done");
     let status = match exit_reason {
-        ExitReason::Succeed(_) => {    
+        ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
             account_storage.apply(applies);

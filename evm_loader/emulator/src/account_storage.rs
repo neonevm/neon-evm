@@ -200,21 +200,9 @@ impl AccountStorage for EmulatorAccountStorage {
         }
     }
 
-    fn apply_to_contract<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.apply_to_account(&self.contract_id, d, f)
-    }
-        
-    fn apply_to_caller<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.apply_to_account(&self.caller_id, d, f)
-    }
+    fn contract(&self) -> H160 { self.contract_id }
 
-    fn origin(&self) -> H160 { self.contract_id }
+    fn origin(&self) -> H160 { self.caller_id }
 
     fn block_number(&self) -> U256 { self.block_number.into() }
 

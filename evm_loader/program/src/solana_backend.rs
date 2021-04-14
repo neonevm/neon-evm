@@ -11,7 +11,6 @@ use solana_program::{
     instruction::{Instruction, AccountMeta},
     program::{invoke, invoke_signed}
 };
-use std::cell::Ref;
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
@@ -24,20 +23,11 @@ pub trait AccountStorage {
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U;
 
-    fn apply_to_contract<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-        D: FnOnce() -> U;
-
-    fn apply_to_caller<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-        D: FnOnce() -> U;
-
+    fn contract(&self) -> H160;
     fn origin(&self) -> H160;
     fn block_number(&self) -> U256;
     fn block_timestamp(&self) -> U256;
 
-    fn get_contract_seeds(&self) -> Option<(H160, u8)> { self.apply_to_contract(|| None, |account| Some(account.get_seeds())) }
-    fn get_caller_seeds(&self) -> Option<(H160, u8)> { self.apply_to_caller(|| None, |account| Some(account.get_seeds())) }
     fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> { self.apply_to_account(address, || None, |account| Some(account.get_solana_address())) }
     fn exists(&self, address: &H160) -> bool { self.apply_to_account(address, || false, |_| true) }
     fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
@@ -45,6 +35,7 @@ pub trait AccountStorage {
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, || Vec::new(), |account| account.get_code()) }
     fn storage(&self, address: &H160, index: &H256) -> H256 { self.apply_to_account(address, || H256::default(), |account| account.get_storage(index)) }
+    fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(&address, || None, |account| Some(account.get_seeds())) }
 }
 
 pub struct SolanaBackend<'a, 's, S> {
@@ -57,7 +48,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("backend::new"); 
         Self { account_storage, account_infos }
     }
-    
+
     fn is_solana_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account()
     }
@@ -149,7 +140,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
 
     fn create(&self, _scheme: &CreateScheme, _address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
-            debug_print!("CreateScheme2 {} from {} {} {}", &hex::encode(_address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt));
+            debug_print!("CreateScheme2 {} from {} {} {} {}", &hex::encode(_address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt), "" /*dummy arg for use correct message function*/);
         } else {
             debug_print!("Call create");
         }
@@ -211,7 +202,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 debug_print!("{}", &hex::encode(&input));
 
-                let (contract_eth, contract_nonce) = self.account_storage.get_contract_seeds().unwrap();   // do_call already check existence of Ethereum account with such index
+                let (contract_eth, contract_nonce) = self.account_storage.seeds(&self.account_storage.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos");
@@ -219,7 +210,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     debug_print!("  {}", info.key);
                 };
                 let result : solana_program::entrypoint::ProgramResult;
-                match self.account_storage.get_caller_seeds() {
+                match self.account_storage.seeds(&self.account_storage.origin()) {
                     Some((sender_eth, sender_nonce)) => {
                         let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
                         result = invoke_signed(

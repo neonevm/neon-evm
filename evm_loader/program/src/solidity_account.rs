@@ -21,7 +21,6 @@ pub struct SolidityAccount<'a> {
     solana_address: &'a Pubkey,
     data: Rc<RefCell<&'a mut [u8]>>,
     lamports: u64,
-    pub updated: bool,
 }
 
 impl<'a> SolidityAccount<'a> {
@@ -30,7 +29,7 @@ impl<'a> SolidityAccount<'a> {
         let data_b = data.borrow();
         debug_print!("  Get data with length {}", &data_b.len());
         let (account_data, _) = AccountData::unpack(&data_b)?;
-        Ok(Self{account_data, solana_address, data: data.clone(), lamports, updated: false})
+        Ok(Self{account_data, solana_address, data: data.clone(), lamports})
     }
 
     pub fn get_signer(&self) -> Pubkey {self.account_data.signer}
@@ -152,7 +151,10 @@ impl<'a> SolidityAccount<'a> {
     }
     
     pub fn code_hash(&self) -> H256 {
-        self.code(|d| {debug_print!("{}", &hex::encode(&d[0..32])); keccak256_digest(d)})
+        self.code(|d| {
+            debug_print!("{}", &hex::encode(&d[0..32]));
+            keccak256_digest(d)
+        })
     }
     
     pub fn code_size(&self) -> usize {

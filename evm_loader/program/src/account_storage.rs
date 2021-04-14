@@ -119,20 +119,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         self.get_account(address).map_or_else(d, f)
     }
 
-    fn apply_to_contract<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.get_account_by_index(0).map_or_else(d, f)
-    }
-        
-    fn apply_to_caller<U, D, F>(&self, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.get_account_by_index(1).map_or_else(d, f)
-    }
-
+    fn contract(&self) -> H160 { self.aliases.borrow()[0].0 }
     fn origin(&self) -> H160 { self.aliases.borrow()[1].0 }
 
     fn block_number(&self) -> U256 {
