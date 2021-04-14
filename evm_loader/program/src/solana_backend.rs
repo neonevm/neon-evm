@@ -6,10 +6,10 @@ use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
 use sha3::{Digest, Keccak256};
 use solana_program::{
-    account_info::{next_account_info, AccountInfo},
+    account_info::AccountInfo,
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
-    program::{invoke, invoke_signed}
+    program::invoke_signed,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
