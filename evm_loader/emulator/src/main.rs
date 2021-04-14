@@ -1,9 +1,7 @@
-mod hamt;
-mod solana_backend;
-mod account_data;
-mod solidity_account;
+mod account_storage;
+use crate::account_storage::EmulatorAccountStorage;
 
-use crate::solana_backend::SolanaBackend;
+use evm_loader::solana_backend::SolanaBackend;
 
 use evm::{executor::StackExecutor, ExitReason};
 use hex;
@@ -26,7 +24,7 @@ fn main() {
         (solana_url, base_account, evm_loader, contract_id, caller_id, data)
     } else if args.len() == 6 {        
         let solana_url = "http://localhost:8899".to_string();
-        let base_account = Pubkey::from_str(&args[2].to_string()).unwrap();
+        let base_account = Pubkey::from_str(&args[1].to_string()).unwrap();
         let evm_loader = Pubkey::from_str(&args[2].to_string()).unwrap();
         let contract_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
         let caller_id = H160::from_str(&make_clean_hex(&args[4])).unwrap();
@@ -40,23 +38,33 @@ fn main() {
         return;
     };
 
-    let mut backend = SolanaBackend::new(solana_url, base_account, evm_loader, contract_id, caller_id).unwrap();
-    let config = evm::Config::istanbul();
-    let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    let account_storage = EmulatorAccountStorage::new(solana_url, base_account, evm_loader, contract_id, caller_id);
 
-    let (exit_reason, result) = executor.transact_call(
-        caller_id,
-        contract_id,
-        U256::zero(),
-        data,
-        usize::max_value(),
-    );
+    let (exit_reason, result, applies_logs) = {
+        let backend = SolanaBackend::new(&account_storage, None);
+        let config = evm::Config::istanbul();
+        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+    
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::max_value());
+    
+        eprintln!("Call done");
+        
+        if exit_reason.is_succeed() {
+            eprintln!("Succeed execution");
+            let (applies, logs) = executor.deconstruct();
+            (exit_reason, result, Some((applies, logs)))
+        } else {
+            (exit_reason, result, None)
+        }
+    };
 
     eprintln!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, logs) = executor.deconstruct();
-            backend.apply(applies, logs, false);
+            let (applies, _logs) = applies_logs.unwrap();
+    
+            account_storage.apply(applies);
+
             eprintln!("Applies done");
             "succeed".to_string()
         }
@@ -72,7 +80,7 @@ fn main() {
         eprintln!("Not succeed execution");
     }
 
-    backend.get_used_accounts(&status, &result);
+    account_storage.get_used_accounts(&status, &result);
 }
 
 fn make_clean_hex(in_str: &String) -> String {
