@@ -202,15 +202,19 @@ impl<'config, B: Backend> Machine<'config, B> {
         Self{ executor, runtime: Vec::new() }
     }
 
-    pub fn save(&self) -> (Vec<u8>, Vec<u8>) {
+    pub fn save_into(&self, storage: &mut [u8]) {
         let machine_data = bincode::serialize(&self.runtime).unwrap();
         let executor_state_data = self.executor.state.save();
-        (machine_data, executor_state_data)
+        
+        bincode::serialize_into(storage, &(machine_data, executor_state_data)).unwrap();
     }
 
-    pub fn restore(data: &[u8], state: ExecutorState<B>) -> Self {
+    pub fn restore(storage: &[u8], backend: B) -> Self {
+        let (machine_data, state_data): (Vec<u8>, Vec<u8>) = bincode::deserialize(&storage).unwrap();
+        let state = ExecutorState::restore(&state_data, backend);
+
         let executor = Executor { state, config: evm::Config::default() };
-        Self{ executor, runtime: bincode::deserialize(data).unwrap() }
+        Self{ executor, runtime: bincode::deserialize(&machine_data).unwrap() }
     }
 
     pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {
@@ -271,6 +275,22 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
 
         Err(ExitReason::Fatal(ExitFatal::NotSupported))
+    }
+
+    pub fn execute(&mut self) -> ExitReason {
+        loop {
+            if let Err(reason) = self.step() {
+                return reason;
+            }
+        }
+    }
+
+    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), ExitReason> {
+        for i in 0..n {
+            self.step()?;
+        }
+
+        Ok(())
     }
 
     #[must_use]

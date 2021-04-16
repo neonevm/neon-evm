@@ -50,13 +50,49 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
+    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
+        return TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ])
+
+    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction):
+        return TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ])
+
+    def sol_instr_11_finalize_partial_call(self, storage_account, evm_instruction):
+        return TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("0B") + evm_instruction,
+                                   keys=[
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ])
+
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
     def call_signed(self, input):
         tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 1}
+            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -65,6 +101,45 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_05(from_addr + sign + msg))
         return http_client.send_transaction(trx, self.acc,
                                      opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+    def create_storage_account(self, seed):
+        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
+        print("Storage", storage)
+
+        if getBalance(storage) == 0:
+            trx = Transaction()
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
+            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            print(result)
+
+        return storage
+
+    def call_partial_signed(self, input):
+        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
+            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+        assert (from_addr == self.caller_ether)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account("1234")
+
+        trx = Transaction()
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
+        trx.add(self.sol_instr_09_partial_call(storage, 3, instruction))
+        result1 = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+        trx = Transaction()
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
+        trx.add(self.sol_instr_10_continue(storage, 2, instruction))
+        result2 = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+        trx = Transaction()
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
+        trx.add(self.sol_instr_11_finalize_partial_call(storage, instruction))
+        result3 = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+        return (result1, result2, result3)
 
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
@@ -198,6 +273,38 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0xb)) #sum
+
+    def test_Partial_addReturn(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        (result1, result2, result3) = self.call_partial_signed(input=data)
+        self.assertEqual(result3['meta']['err'], None)
+        self.assertEqual(len(result3['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result3['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(result3['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        data = b58decode(result3['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:], bytes().fromhex("%064x" % 0x3))
+
+    def test_Partial_addReturnEvent(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
+        data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
+        (result1, result2, result3) = self.call_partial_signed(input=data)
+        self.assertEqual(result3['meta']['err'], None)
+        self.assertEqual(len(result3['meta']['innerInstructions']), 1)
+        self.assertEqual(result3['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(len(result3['meta']['innerInstructions'][0]['instructions']), 2)
+        data = b58decode(result3['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
+        self.assertEqual(data[1:21], self.reId_eth)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Added(uint8)'))  #topics
+        self.assertEqual(data[61:93], bytes().fromhex("%064x" % 0x3))  # sum
+        data = b58decode(result3['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 3)) #sum
 
 if __name__ == '__main__':
     unittest.main()
