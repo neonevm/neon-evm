@@ -41,6 +41,7 @@ impl-serde = "0.1"
 ethereum-types = { version = "0.9.2", default-features = false, features = ["serialize"] }
 rlp = "0.4"
 bincode = ""
+evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 
 [dev-dependencies]
 rand = { version = "0.7.0"}

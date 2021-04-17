@@ -1,9 +1,11 @@
 use std::convert::Infallible;
 use std::rc::Rc;
+use evm_runtime::{return_value_to_memory};
 
 use primitive_types::{H160, H256, U256};
-use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend};
+use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
+use std::mem;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -19,7 +21,12 @@ fn l64(gas: u64) -> u64 {
 }
 
 
-struct CallInterrupt {}
+struct CallInterrupt {
+    code_address : H160,
+    input : Vec<u8>,
+    context: evm::Context,
+}
+
 struct CreateInterrupt {}
 
 struct Executor<'config, B: Backend> {
@@ -163,7 +170,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{})
+        Capture::Trap(CallInterrupt{code_address, input, context})
     }
 
     fn pre_validate(
@@ -253,29 +260,95 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     pub fn step(&mut self) -> Result<(), ExitReason> {
 
+        enum modify<'a>{
+            none,
+            add(evm::Runtime<'a>),
+            remove(ExitReason),
+        }
+        let mut runtime_modify = modify::none;
+
         if let Some(runtime) = self.runtime.last_mut() {
             match runtime.step(&mut self.executor) {
-                Ok(()) => return Ok(()),
+                Ok(()) => {},
                 Err(capture) => match capture {
                     Capture::Exit(reason) => {
                         match &reason {
-                            ExitReason::Succeed(_) => {
+                            ExitReason::Succeed(res) => {
                                 self.executor.state.exit_commit().unwrap();
-                                // todo call interrupt
+                                if (self.runtime.len() == 1){
+                                    return Err(reason.clone());
+                                } else{
+                                    runtime_modify = modify::remove(reason.clone());
+                                }
                             },
-                            ExitReason::Error(_) => self.executor.state.exit_discard().unwrap(),
-                            ExitReason::Revert(_) => self.executor.state.exit_revert().unwrap(),
-                            ExitReason::Fatal(_) => self.executor.state.exit_discard().unwrap()
+                            ExitReason::Error(_) => {
+                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
+                                self.executor.state.exit_discard().unwrap();
+                                return Err(reason.clone());
+                            },
+                            ExitReason::Revert(_) => {
+                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
+                                self.executor.state.exit_revert().unwrap();
+                                return Err(reason.clone());
+                            },
+                            ExitReason::Fatal(_) => {
+                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
+                                self.executor.state.exit_discard().unwrap();
+                                return Err(reason.clone());
+                            }
                         }
-                        return Err(reason);
                     },
-                    Capture::Trap(resolve) => return Err(ExitReason::Fatal(ExitFatal::NotSupported)) // todo
+                    Capture::Trap(interrupt) => match interrupt{
+                        Resolve::Call(interrupt, resolve) =>{
+                            mem::forget(resolve);
+                            debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: Resolve::Call(interrupt)");
+                            let code = self.executor.code(interrupt.code_address);
+                            self.executor.state.enter(u64::max_value(), false);
+                            self.executor.state.touch(interrupt.code_address);
+
+                            let runtime = evm::Runtime::new(
+                                Rc::new(code),
+                                Rc::new(interrupt.input),
+                                interrupt.context,
+                                &self.executor.config
+                            );
+                            runtime_modify = modify::add(runtime);
+                        },
+                        _ => {
+                            debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: _");
+                            return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                        }
+                    }
                 }
             }
         }
 
-        Err(ExitReason::Fatal(ExitFatal::NotSupported))
+        match runtime_modify {
+            modify::remove(reason) => {
+                let mut call_return_value = Vec::new();
+                if let Some(runtime) = self.runtime.last(){
+                    call_return_value = runtime.machine().return_value();
+                };
+                self.runtime.pop();
+                if let Some(runtime) = self.runtime.last_mut(){
+                    let val =  return_value_to_memory(
+                        runtime,
+                        reason,
+                        call_return_value,
+                        &self.executor
+                    );
+                    // TODO check val
+                }
+            },
+            modify::add(runtime) => {
+                debug_print!("runtime_modify:  add");
+                self.runtime.push(runtime);
+            },
+            modify::none => {},
+        }
+        return Ok(());
     }
+
 
     pub fn execute(&mut self) -> ExitReason {
         loop {
