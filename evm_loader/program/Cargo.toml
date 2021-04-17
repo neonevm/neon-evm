@@ -40,6 +40,7 @@ serde_derive = "1.0.103"
 impl-serde = "0.1"
 rlp = "0.4"
 bincode = ""
+evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
