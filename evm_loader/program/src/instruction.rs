@@ -181,7 +181,6 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::Write {offset, bytes}
             },
             100 => {
-                let (_, rest) = rest.split_at(3);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
