@@ -537,15 +537,13 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     } else {
         caller_info
     };
-    let clock_info = next_account_info(account_info_iter)?;
-    let rent_info = next_account_info(account_info_iter)?;
 
     check_contract_and_code_keys(program_id, program_info, program_code)?;
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, clock_info)?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
-    
+
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
@@ -563,7 +561,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         };
     
         // let program_account = SolidityAccount::new(program_info)?;
-    
         debug_print!("Execute transact_create");
         let exit_reason = executor.transact_create2(
                 caller_ether.0,
@@ -614,12 +611,10 @@ fn do_call<'a>(
     } else {
         caller_info
     };
-    let sysvar_info = next_account_info(account_info_iter)?;
-    let clock_info = next_account_info(account_info_iter)?;
 
     check_contract_and_code_keys(program_id, program_info, program_code)?;
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, clock_info)?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
         let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
