@@ -43,7 +43,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM cybercoredev/solana:latest AS solana
+FROM cybercoredev/solana:ci-split_accoint_cli AS solana
 FROM cybercoredev/solana:v1.4.25-resources AS solana-deploy
 
 # Build target image
