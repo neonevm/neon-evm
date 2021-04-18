@@ -20,7 +20,7 @@ use solana_program::{
 use crate::{
 //    bump_allocator::BumpAllocator,
     instruction::{EvmInstruction, on_return, on_event},
-    account_data::AccountData,
+    account_data::{AccountData, AccountType, ContractData},
     account_storage::ProgramAccountStorage, 
     solana_backend::SolanaBackend,    
     solidity_account::SolidityAccount,
@@ -505,23 +505,29 @@ fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], i
 
 fn do_write(program_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
     let mut data = program_info.data.borrow_mut();
-    let offset = offset as usize;
-    if data.len() < offset+AccountData::SIZE + bytes.len() {
-        debug_print!("Account data too small");
-        return Err(ProgramError::AccountDataTooSmall);
-    }
-    data[offset+AccountData::SIZE..offset+AccountData::SIZE + bytes.len()].copy_from_slice(&bytes);
-    Ok(())
-}
 
-fn do_write_code(program_code: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
-    let mut data = program_code.data.borrow_mut();
-    let offset = offset as usize;
-    if data.len() < 32 + offset + bytes.len() {
+    let account_data = AccountType::unpack(&data)?;
+    let header_size: usize = match account_data {
+        AccountType::AccountData(_) => {
+            AccountData::SIZE + 1
+        }, 
+        AccountType::ContractData(acc) => {
+            if acc.code_size != 0 {
+                return Err(ProgramError::InvalidAccountData);
+            }
+            ContractData::SIZE + 1
+        }, 
+        AccountType::Empty => {
+            1
+        }, 
+    };
+
+    let offset = header_size + offset as usize;
+    if data.len() < offset + bytes.len() {
         debug_print!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
     }
-    data[32+offset .. 32+offset+bytes.len()].copy_from_slice(&bytes);
+    data[offset .. offset+bytes.len()].copy_from_slice(&bytes);
     Ok(())
 }
 
