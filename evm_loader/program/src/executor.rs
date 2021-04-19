@@ -266,7 +266,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             remove(ExitReason),
         }
         let mut runtime_modify = modify::none;
-
+        let runtime_cnt = self.runtime.len();
         if let Some(runtime) = self.runtime.last_mut() {
             match runtime.step(&mut self.executor) {
                 Ok(()) => {},
@@ -275,7 +275,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                         match &reason {
                             ExitReason::Succeed(res) => {
                                 self.executor.state.exit_commit().unwrap();
-                                if (self.runtime.len() == 1){
+                                if (runtime_cnt == 1){
                                     return Err(reason.clone());
                                 } else{
                                     runtime_modify = modify::remove(reason.clone());
