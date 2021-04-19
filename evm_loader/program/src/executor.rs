@@ -301,7 +301,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                     Capture::Trap(interrupt) => match interrupt{
                         Resolve::Call(interrupt, resolve) =>{
                             mem::forget(resolve);
-                            debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: Resolve::Call(interrupt)");
                             let code = self.executor.code(interrupt.code_address);
                             self.executor.state.enter(u64::max_value(), false);
                             self.executor.state.touch(interrupt.code_address);
@@ -341,7 +340,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
             },
             modify::add(runtime) => {
-                debug_print!("runtime_modify:  add");
                 self.runtime.push(runtime);
             },
             modify::none => {},
