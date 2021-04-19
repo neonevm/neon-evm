@@ -1,4 +1,5 @@
 use crate::{
+    account_data::AccountType,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
 };
@@ -45,25 +46,32 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             if account.owner == program_id {
-                let account_data = account.data.borrow();
-                let code_account = SolidityAccount::get_code_account(&account_data)?;
-                let code_data = if code_account == Pubkey::new_from_array([0u8; 32]) {
+                let account_data = match AccountType::unpack(&account.data.borrow())? {
+                    AccountType::AccountData(acc) => acc,
+                    _ => return Err(ProgramError::InvalidAccountData),
+                };
+                let code_data = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
                     debug_print!("code_account == Pubkey::new_from_array([0u8; 32])");
                     None
                 } else {
                     debug_print!("code_account != Pubkey::new_from_array([0u8; 32])");
                     debug_print!("account key:  {}", &account.key.to_string());
-                    debug_print!("code account: {}", &code_account.to_string());
+                    debug_print!("code account: {}", &account_data.code_account.to_string());
                     if account_infos.len() < i+2 {
                         return Err(ProgramError::NotEnoughAccountKeys)
                     }
-                    if *account_infos[i+1].key != code_account {
+                    if *account_infos[i+1].key != account_data.code_account {
                         return Err(ProgramError::InvalidAccountData)
                     }
                     skip_next = true;
-                    Some(account_infos[i+1].data.clone())
+                    let code_data = account_infos[i+1].data.clone();
+                    let contract_data = match AccountType::unpack(&code_data.borrow())? {
+                        AccountType::ContractData(acc) => acc,
+                        _ => return Err(ProgramError::InvalidAccountData),
+                    };
+                    Some((contract_data.code_size, code_data))
                 };
-                let sol_account = SolidityAccount::new(account.key, &account_data, (*account.lamports.borrow()).clone(), code_data)?;
+                let sol_account = SolidityAccount::new(account.key, (*account.lamports.borrow()).clone(), account_data, code_data)?;
                 aliases.push((sol_account.get_ether(), i));
 
                 if contract {

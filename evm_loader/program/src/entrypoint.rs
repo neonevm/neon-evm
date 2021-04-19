@@ -130,7 +130,7 @@ fn process_instruction<'a>(
             debug_print!("create_account done");
             
             let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: Pubkey::new_from_array([0u8; 32]), code_size: 0u32};
+            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: Pubkey::new_from_array([0u8; 32])};
             account_data.pack(&mut data)?;
             Ok(())
         },
@@ -174,17 +174,16 @@ fn process_instruction<'a>(
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64 + space, program_id),
+                &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64, program_id),
                 &accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
-            
-            let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: *program_code.key, code_size: 0u32};
-            account_data.pack(&mut data)?;
 
-            let mut code_data = program_code.data.borrow_mut();
-            code_data[..32].copy_from_slice(program_info.key.as_ref());
+            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: *program_code.key};
+            account_data.pack(&mut program_info.data.borrow_mut())?;
+
+            let contract_data = ContractData {owner: *program_info.key, code_size: 0u32};
+            contract_data.pack(&mut program_code.data.borrow_mut())?;
 
             Ok(())
         },
@@ -207,7 +206,7 @@ fn process_instruction<'a>(
             //debug_print!("create_account done");
             
             let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: Pubkey::new_from_array([0u8; 32]), code_size: 0u32};
+            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: Pubkey::new_from_array([0u8; 32])};
             account_data.pack(&mut data)?;
             Ok(())
         },
@@ -218,8 +217,11 @@ fn process_instruction<'a>(
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
-            let base_info_data = base_info.data.borrow();
-            let caller = SolidityAccount::new(base_info.key, &base_info_data, (*base_info.lamports.borrow()).clone(), None)?;
+            let base_info_data = match AccountType::unpack(&base_info.data.borrow())? {
+                AccountType::AccountData(acc) => acc,
+                _ => return Err(ProgramError::InvalidAccountData),
+            };
+            let caller = SolidityAccount::new(base_info.key, (*base_info.lamports.borrow()).clone(), base_info_data, None)?;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
@@ -246,9 +248,7 @@ fn process_instruction<'a>(
             let program_info = next_account_info(account_info_iter)?;
             let program_code = next_account_info(account_info_iter)?;
 
-            check_contract_and_code_keys(program_id, program_info, program_code)?;
-
-            do_write_code(program_code, offset, &bytes)
+            do_write(program_code, offset, &bytes)
         },
         EvmInstruction::Finalize => {
             do_finalize(program_id, accounts)
@@ -503,23 +503,19 @@ fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], i
     Err(ProgramError::InvalidInstructionData)
 }
 
-fn do_write(program_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
-    let mut data = program_info.data.borrow_mut();
+fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
+    let mut data = account_info.data.borrow_mut();
 
     let account_data = AccountType::unpack(&data)?;
     let header_size: usize = match account_data {
-        AccountType::AccountData(_) => {
-            AccountData::SIZE + 1
-        }, 
         AccountType::ContractData(acc) => {
             if acc.code_size != 0 {
                 return Err(ProgramError::InvalidAccountData);
             }
-            ContractData::SIZE + 1
+            ContractData::SIZE
         }, 
-        AccountType::Empty => {
-            1
-        }, 
+        AccountType::AccountData(_) => AccountData::SIZE, 
+        AccountType::Empty => 1, 
     };
 
     let offset = header_size + offset as usize;
@@ -544,8 +540,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         caller_info
     };
 
-    check_contract_and_code_keys(program_id, program_info, program_code)?;
-
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
@@ -559,7 +553,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
         let code_data = {
             let data = program_code.data.borrow();
-            let (owner_contract, rest) = data.split_at(32);
+            let (_contract_header, rest) = data.split_at(ContractData::SIZE);
             let (code_len, rest) = rest.split_at(8);
             let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
             let (code, _rest) = rest.split_at(code_len as usize);
@@ -617,8 +611,6 @@ fn do_call<'a>(
     } else {
         caller_info
     };
-
-    check_contract_and_code_keys(program_id, program_info, program_code)?;
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
@@ -788,24 +780,6 @@ fn get_ether_address<'a>(
 
         Some ( ( keccak256_digest(&caller_info.key.to_bytes()).into(), false) )
     }
-}
-
-fn check_contract_and_code_keys<'a>(
-    program_id: &Pubkey,
-    program_info: &'a AccountInfo<'a>,
-    program_code: &'a AccountInfo<'a>,
-) -> ProgramResult
-{ // do checks
-    if program_info.owner != program_id {
-        return Err(ProgramError::InvalidArgument);
-    }
-    if *program_code.key != SolidityAccount::get_code_account(&program_info.data.borrow())? {
-        return Err(ProgramError::InvalidArgument);
-    }
-    if &program_code.data.borrow()[..32] != program_info.key.as_ref() {
-        return Err(ProgramError::InvalidArgument);
-    }
-    Ok(())
 }
 
 // Pull in syscall stubs when building for non-BPF targets

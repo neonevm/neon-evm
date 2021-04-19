@@ -28,18 +28,16 @@ pub enum AccountType {
 }
 
 impl AccountType {
-    // pub fn size() -> usize {AccountData::SIZE}
+    pub const EMPTY_TAG: u8 = 0;
 
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        use ProgramError::InvalidAccountData;
-
-        let (&tag, rest) = input.split_first().ok_or(InvalidAccountData)?;
+        let (&tag, rest) = input.split_first().ok_or(ProgramError::InvalidAccountData)?;
         Ok(match tag {
-            0 => {
+            AccountType::EMPTY_TAG => {
                 AccountType::Empty
             },
-            1 => {
-                let data = array_ref![rest, 0, AccountData::SIZE];
+            AccountData::TAG => {
+                let data = array_ref![rest, 0, AccountData::HEADER_SIZE];
                 let (ether, nonce, trx_count, signer, code_account) = array_refs![data, 20, 1, 8, 32, 32];
                 
                 AccountType::AccountData(
@@ -52,8 +50,8 @@ impl AccountType {
                     }
                 )
             },
-            2 => {
-                let data = array_ref![rest, 0, ContractData::SIZE];
+            ContractData::TAG => {
+                let data = array_ref![rest, 0, ContractData::HEADER_SIZE];
                 let (owner, code_size) = array_refs![data, 32, 4];
                 AccountType::ContractData(
                     ContractData {
@@ -63,20 +61,25 @@ impl AccountType {
                 )
             },
 
-            _ => return Err(InvalidAccountData),
+            _ => return Err(ProgramError::InvalidAccountData),
         })
     }
 }
 
-
 impl AccountData {
-    pub const SIZE: usize = 20+1+8+32+32;
+    pub const TAG: u8 = 1;
+    pub const HEADER_SIZE: usize = 20+1+8+32+32;
+    pub const SIZE: usize = 1 + AccountData::HEADER_SIZE;
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < AccountData::SIZE {
             return Err(ProgramError::AccountDataTooSmall);
         }
-        let data = array_mut_ref![dst, 0, AccountData::SIZE];
+        if dst[0] != AccountType::EMPTY_TAG && dst[0] != AccountData::TAG {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        dst[0] = AccountData::TAG;
+        let data = array_mut_ref![dst, 1, AccountData::HEADER_SIZE];
         let (ether_dst, nonce_dst, trx_count_dst, signer_dst, code_account_dst) = 
                 mut_array_refs![data, 20, 1, 8, 32, 32];
         *ether_dst = self.ether.to_fixed_bytes();
@@ -84,22 +87,28 @@ impl AccountData {
         *trx_count_dst = self.trx_count.to_le_bytes();
         signer_dst.copy_from_slice(self.signer.as_ref());
         code_account_dst.copy_from_slice(self.code_account.as_ref());
-        Ok(AccountData::SIZE)
+        Ok(AccountData::HEADER_SIZE)
     }
 }
 
 impl ContractData {
-    pub const SIZE: usize = 32+4;
+    pub const TAG: u8 = 2;
+    pub const HEADER_SIZE: usize = 32+4;
+    pub const SIZE: usize = 1 + ContractData::HEADER_SIZE;
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < ContractData::SIZE {
             return Err(ProgramError::AccountDataTooSmall);
         }
-        let data = array_mut_ref![dst, 0, ContractData::SIZE];
+        if dst[0] != AccountType::EMPTY_TAG && dst[0] != ContractData::TAG {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        dst[0] = ContractData::TAG;
+        let data = array_mut_ref![dst, 1, ContractData::HEADER_SIZE];
         let (owner_dst, code_size_dst) = 
                 mut_array_refs![data, 32, 4];
                 owner_dst.copy_from_slice(self.owner.as_ref());
         *code_size_dst = self.code_size.to_le_bytes();
-        Ok(ContractData::SIZE)
+        Ok(ContractData::HEADER_SIZE)
     }
 }
