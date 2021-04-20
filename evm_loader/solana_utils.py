@@ -178,22 +178,21 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        (sol, nonce) = self.ether2program(ether)
+        (sol, nonce) = self.ether2programAddress(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
-        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         base = self.acc.get_acc().public_key()
-        trx.add(createAccountWithSeed(base, base, seed, 10**9, ACCOUNT_INFO_LAYOUT.sizeof(), PublicKey(self.loader_id)))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**0,
+            data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**9,
                 space=0,
                 ether=bytes.fromhex(ether),
                 nonce=nonce)),
             keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=base, is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc.get_acc(),
                 opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))

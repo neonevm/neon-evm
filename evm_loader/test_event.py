@@ -24,7 +24,7 @@ class EventTest(unittest.TestCase):
 
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2programAddress(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")

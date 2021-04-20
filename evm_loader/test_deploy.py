@@ -78,7 +78,7 @@ class DeployTest(unittest.TestCase):
 
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2programAddress(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -129,13 +129,34 @@ class DeployTest(unittest.TestCase):
         msg = sign + len(msg).to_bytes(8, byteorder="little") + msg
         #print("msg", msg.hex())
 
+        # Create code account 
         if getBalance(code_sol) == 0:
             base = self.acc.public_key()
             seed = b58encode(contract_eth).decode('utf8')
             trx = Transaction()
-            trx.add(createAccountWithSeed(base, base, seed, 10**9, 32+len(msg)+2048, PublicKey(evm_loader_id)))
+            trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
             print(result)
+
+        # Create contract account 
+        if getBalance(contract_sol) == 0:
+            trx = Transaction()
+            trx.add(TransactionInstruction(program_id=evm_loader_id,
+                #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
+                data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                    lamports=10**9,
+                    space=0,
+                    ether=contract_eth,
+                    nonce=contract_nonce)),
+                keys=[
+                    AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+                    AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                ]))
+            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            print(result)
+
 
         # Write transaction to transaction holder account
         offset = 0
@@ -157,21 +178,8 @@ class DeployTest(unittest.TestCase):
             confirm_transaction(http_client, rcpt)
             print("confirmed:", rcpt)
 
-        # Create contract account & execute deploy transaction
+        # Execute deploy transaction
         trx = Transaction()
-        trx.add(TransactionInstruction(program_id=evm_loader_id,
-            #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
-            data=bytes.fromhex('16000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**0,
-                space=97,
-                ether=contract_eth,
-                nonce=contract_nonce)),
-            keys=[
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-            ]))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('08'),
             keys=[
