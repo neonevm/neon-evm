@@ -1,13 +1,18 @@
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, Trx
 from eth_utils import abi
+from web3.auto import w3
+from eth_keys import keys
+
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-evm_loader_id = os.environ.get("EVM_LOADER")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+# evm_loader_id = os.environ.get("EVM_LOADER")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+evm_loader_id = "GXRkzJMSrzyucEvDwqDJtGYwqkXzw4anYJENLnicu69A"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -104,3 +109,28 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
+    def test_calc_signature(self):
+        # PERMIT_TYPEHASH = "0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9"
+        # (from_addr, sign, msg) = make_instruction_data_from_tx(PERMIT_TYPEHASH, self.acc.secret_key())
+        # print(from_addr)
+        # print(msg)
+        func_name = abi.function_signature_to_4byte_selector('testCallFoo(address)')
+        input = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
+
+        tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
+              'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+
+        signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())
+        _trx = Trx.fromString(signed_tx.rawTransaction)
+
+        sig = keys.Signature(vrs=[1 if _trx.v % 2 == 0 else 0, _trx.r, _trx.s])
+        pub = sig.recover_public_key_from_msg_hash(_trx.hash())
+
+        print(_trx.hash().hex())
+        print(hex(_trx.v))
+        print(_trx.v)
+        print(hex(_trx.r))
+        print(hex(_trx.s))
+        print(_trx.sender())
+        print(_trx.sender())
+        print("_trx.sender()")
