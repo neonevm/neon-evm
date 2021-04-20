@@ -463,9 +463,9 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
                 return Err(ProgramError::InvalidAccountData);
             }
             ContractData::SIZE
-        }, 
-        AccountType::AccountData(_) => AccountData::SIZE, 
-        AccountType::Empty => 1, 
+        },
+        AccountType::AccountData(_) => return Err(ProgramError::InvalidAccountData),
+        AccountType::Empty => 1,
     };
 
     let offset = header_size + offset as usize;
