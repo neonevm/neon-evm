@@ -18,12 +18,6 @@ pub enum EvmInstruction<'a> {
         bytes: &'a [u8],
     },
 
-    WriteContractCode {
-        /// Offset at which to write the given bytes
-        offset: u32,
-        bytes: &'a [u8],
-    },
-
     /// Finalize an account loaded with program data for execution
     ///
     /// The exact preparation steps is loader specific but on success the loader must set the executable
@@ -53,25 +47,6 @@ pub enum EvmInstruction<'a> {
     ///   1. [WRITE] New account (program_address(ether, nonce))
     ///   2. (for contract creation) [WRITE] Code account for new contract account
     CreateAccount {
-        /// Number of lamports to transfer to the new account
-        lamports: u64,
-
-        /// Number of bytes of memory to allocate
-        space: u64,
-
-        /// Ethereum address of account
-        ether: H160,
-
-        /// Nonce for create valid program_address from ethereum address
-        nonce: u8,
-    },
-
-    ///
-    /// Create Ethereum account (create program_address account and write data)
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] New account (program_address(ether, nonce))
-    CreateAccount2 {
         /// Number of lamports to transfer to the new account
         lamports: u64,
 
@@ -167,14 +142,6 @@ impl<'a> EvmInstruction<'a> {
                 let (bytes, _) = rest.split_at(length as usize);
                 EvmInstruction::Write {offset, bytes}
             },
-            100 => {
-                let (offset, rest) = rest.split_at(4);
-                let (length, rest) = rest.split_at(8);
-                let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (bytes, _) = rest.split_at(length as usize);
-                EvmInstruction::WriteContractCode {offset, bytes}
-            },
             1 => {
                 let (_, _rest) = rest.split_at(3);
                 EvmInstruction::Finalize
@@ -191,19 +158,6 @@ impl<'a> EvmInstruction<'a> {
                 let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
-            },
-            102 => {
-                let (_, rest) = rest.split_at(3);
-                let (lamports, rest) = rest.split_at(8);
-                let (space, rest) = rest.split_at(8);
-
-                let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-
-                let (ether, rest) = rest.split_at(20);
-                let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
-                let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
-                EvmInstruction::CreateAccount2 {lamports, space, ether, nonce: *nonce}
             },
             3 => {
                 EvmInstruction::Call {bytes: rest}
