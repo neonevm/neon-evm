@@ -265,7 +265,10 @@ fn process_instruction<'a>(
 
             let (unsigned_msg, signature) = {
                 let data = trx_info.data.borrow();
-                let (_unused, rest) = data.split_at(AccountData::SIZE);
+                let (acc_type, rest) = data.split_at(1);
+                if acc_type[0] != AccountType::EMPTY_TAG {
+                    return Err(ProgramError::InvalidAccountData);
+                }
                 let (signature, rest) = rest.split_at(65);
                 let (trx_len, rest) = rest.split_at(8);
                 let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
