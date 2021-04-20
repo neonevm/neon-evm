@@ -150,25 +150,10 @@ fn process_instruction<'a>(
                     return Err(ProgramError::InvalidArgument);
                 };
 
-                let seed = bs58::encode(&ether.to_fixed_bytes()).into_string();
-                let expected_code_address = Pubkey::create_with_seed(&funding_info.key, &seed, &program_id)?;
-                if expected_code_address != *program_code.key {
-                    debug_print!("expected_code_address != *program_code.key");
-                    return Err(ProgramError::InvalidArgument);
-                };
-
                 let data = program_code.data.borrow();
-                let data_slice = &data[..32];
-                if data_slice != expected_address.as_ref() {
-                    debug_print!("Ether: {}", &data_slice.len());
-                    debug_print!("Ether: {}", &(hex::encode(data_slice)));
-                    debug_print!("Ether: {}", &(hex::encode(expected_address.as_ref())));
-
-                    let zero_arr: [u8; 32] = [0; 32];
-                    if data[..32] != zero_arr {
-                        debug_print!("Program code stored public key not contract key nor zero");
-                        return Err(ProgramError::InvalidArgument);
-                    }
+                if data[0] != AccountType::EMPTY_TAG {
+                    debug_print!("expected expected empty account for code");
+                    return Err(ProgramError::InvalidAccountData);
                 }
             }
 
