@@ -9,6 +9,7 @@ use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use evm_loader::{
+    account_data::AccountType,
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
 };
@@ -106,13 +107,14 @@ impl EmulatorAccountStorage {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
-            let solana_address = if *address == self.contract_id {
-                Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id).0
-            } else {
-                let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
-                Pubkey::create_with_seed(&self.base_account, &seed, &self.program_id).unwrap()
-            };
+            // let solana_address = if *address == self.contract_id {
+            //     Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id).0
+            // } else {
+            //     let seed = bs58::encode(&address.to_fixed_bytes()).into_string();
+            //     Pubkey::create_with_seed(&self.base_account, &seed, &self.program_id).unwrap()
+            // };
 
+            let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.program_id).0;
             eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
             match self.rpc_client.get_account(&solana_address) {
@@ -121,24 +123,30 @@ impl EmulatorAccountStorage {
                     eprintln!("Account data len {}", acc.data.len());
                     eprintln!("Account owner {}", acc.owner.to_string());
 
-                    let code_key= SolidityAccount::get_code_account(&acc.data).unwrap();
+                    let account_data = match AccountType::unpack(&acc.data) {
+                        Ok(acc_data) => match acc_data {
+                            AccountType::AccountData(acc) => acc,
+                            _ => return false,
+                        },
+                        Err(_) => return false,
+                    };
 
-                    let code_account = if code_key == Pubkey::new_from_array([0u8; 32]) {
+                    let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
                         eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
                         None
                     } else {
                         eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
                         eprintln!("account key:  {}", &solana_address.to_string());
-                        eprintln!("code account: {}", &code_key.to_string());
+                        eprintln!("code account: {}", &account_data.code_account.to_string());
 
-                        match self.rpc_client.get_account(&code_key) {
+                        match self.rpc_client.get_account(&account_data.code_account) {
                             Ok(acc) => {
                                 eprintln!("Account found");
                                 Some(acc)
                             },
                             Err(_) => {
                                 eprintln!("Account not found");
-                                new_accounts.push(Key::Solana{key: code_key.clone()});
+                                new_accounts.push(Key::Solana{key: account_data.code_account.clone()});
                                 None
                             }
                         }
@@ -218,7 +226,13 @@ impl EmulatorAccountStorage {
             };
             arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), writable: acc.writable, new: false, key: solana_address.to_string()});
             if acc.code_account.is_some() {
-                let code_key= SolidityAccount::get_code_account(&acc.account.data).unwrap();
+                let code_key = match AccountType::unpack(&acc.account.data) {
+                    Ok(acc_data) => match acc_data {
+                        AccountType::AccountData(acc) => acc.code_account,
+                        _ => Pubkey::new_from_array([0u8; 32]),
+                    },
+                    Err(_) => Pubkey::new_from_array([0u8; 32]),
+                };
                 arr.push(AccountJSON{address: "".to_string(), writable: acc.writable, new: false, key: code_key.to_string()});
             }
         }
@@ -251,12 +265,27 @@ impl AccountStorage for EmulatorAccountStorage {
         match accounts.get(&address) {
             None => d(),
             Some(acc) => {
+                let account_data = match AccountType::unpack(&acc.account.data) {
+                    Ok(acc_data) => match acc_data {
+                        AccountType::AccountData(acc) => acc,
+                        _ => return d(),
+                    },
+                    Err(_) => return d(),
+                };
                 if acc.code_account.is_some() {
+                    let contract_data = match AccountType::unpack(&acc.account.data) {
+                        Ok(acc_data) => match acc_data {
+                            AccountType::ContractData(acc) => acc,
+                            _ => return d(),
+                        },
+                        Err(_) => return d(),
+                    };
                     let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
-                    let account = SolidityAccount::new(&acc.key, &acc.account.data, acc.account.lamports, Some(Rc::new(RefCell::new(&mut code_data)))).unwrap();
+                    let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
+                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data.code_size, code_data))).unwrap();
                     f(&account)
                 } else {
-                    let account = SolidityAccount::new(&acc.key, &acc.account.data, acc.account.lamports, None).unwrap();
+                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, None).unwrap();
                     f(&account)
                 }
             },
