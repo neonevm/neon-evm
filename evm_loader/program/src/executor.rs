@@ -170,6 +170,18 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
+        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
+        if hook_res.is_some() {
+            match hook_res.as_ref().unwrap() {
+                Capture::Exit((reason, _return_data)) => {
+                    return Capture::Exit((reason.clone(), _return_data.clone()))
+                },
+                Capture::Trap(_interrupt) => {
+                    unreachable!("not implemented");
+                },
+            }
+        }
+
         Capture::Trap(CallInterrupt{code_address, input, context})
     }
 
