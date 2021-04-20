@@ -183,7 +183,7 @@ class EvmLoader:
         trx = Transaction()
         seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         base = self.acc.get_acc().public_key()
-        trx.add(createAccountWithSeed(base, base, seed, 10**9, 97, PublicKey(self.loader_id)))
+        trx.add(createAccountWithSeed(base, base, seed, 10**9, ACCOUNT_INFO_LAYOUT.sizeof(), PublicKey(self.loader_id)))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
             data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
@@ -251,12 +251,12 @@ def solana2ether(public_key):
 
 
 ACCOUNT_INFO_LAYOUT = cStruct(
+    "type" / Int8ul,
     "eth_acc" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
     "signer_acc" / Bytes(32),
     "code_acc" / Bytes(32),
-    "code_size" / Int32ul,
 )
 
 class AccountInfo(NamedTuple):
@@ -275,6 +275,7 @@ def getAccountData(client, account, expected_length):
 
     data = base64.b64decode(info['data'][0])
     if len(data) != expected_length:
+        print("len(data)({}) != expected_length({})".format(len(data), expected_length))
         raise Exception("Wrong data length for account data {}".format(account))
     return data
 
