@@ -33,33 +33,9 @@ impl AccountType {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (&tag, rest) = input.split_first().ok_or(ProgramError::InvalidAccountData)?;
         Ok(match tag {
-            AccountType::EMPTY_TAG => {
-                AccountType::Empty
-            },
-            AccountData::TAG => {
-                let data = array_ref![rest, 0, AccountData::HEADER_SIZE];
-                let (ether, nonce, trx_count, signer, code_account) = array_refs![data, 20, 1, 8, 32, 32];
-                
-                AccountType::AccountData(
-                    AccountData {
-                        ether: H160::from_slice(&*ether),
-                        nonce: nonce[0],
-                        trx_count: u64::from_le_bytes(*trx_count),
-                        signer: Pubkey::new_from_array(*signer),
-                        code_account: Pubkey::new_from_array(*code_account),
-                    }
-                )
-            },
-            ContractData::TAG => {
-                let data = array_ref![rest, 0, ContractData::HEADER_SIZE];
-                let (owner, code_size) = array_refs![data, 32, 4];
-                AccountType::ContractData(
-                    ContractData {
-                        owner: Pubkey::new_from_array(*owner),
-                        code_size: u32::from_le_bytes(*code_size),
-                    }
-                )
-            },
+            AccountType::EMPTY_TAG => AccountType::Empty,
+            AccountData::TAG => AccountType::AccountData( AccountData::unpack(rest)? ),
+            ContractData::TAG => AccountType::ContractData( ContractData::unpack(rest)? ),
 
             _ => return Err(ProgramError::InvalidAccountData),
         })
@@ -70,6 +46,24 @@ impl AccountData {
     pub const TAG: u8 = 1;
     pub const HEADER_SIZE: usize = 20+1+8+32+32;
     pub const SIZE: usize = 1 + AccountData::HEADER_SIZE;
+
+    pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+        if input.len() < AccountData::HEADER_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        let data = array_ref![input, 0, AccountData::HEADER_SIZE];
+        let (ether, nonce, trx_count, signer, code_account) = array_refs![data, 20, 1, 8, 32, 32];
+        
+        Ok(
+            AccountData {
+                ether: H160::from_slice(&*ether),
+                nonce: nonce[0],
+                trx_count: u64::from_le_bytes(*trx_count),
+                signer: Pubkey::new_from_array(*signer),
+                code_account: Pubkey::new_from_array(*code_account),
+            }
+        )
+    }
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < AccountData::SIZE {
@@ -95,6 +89,20 @@ impl ContractData {
     pub const TAG: u8 = 2;
     pub const HEADER_SIZE: usize = 32+4;
     pub const SIZE: usize = 1 + ContractData::HEADER_SIZE;
+
+    pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+        if input.len() < ContractData::HEADER_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        let data = array_ref![input, 0, ContractData::HEADER_SIZE];
+        let (owner, code_size) = array_refs![data, 32, 4];
+        Ok(
+            ContractData {
+                owner: Pubkey::new_from_array(*owner),
+                code_size: u32::from_le_bytes(*code_size),
+            }
+        )
+    }
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < ContractData::SIZE {
