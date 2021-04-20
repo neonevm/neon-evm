@@ -1,13 +1,6 @@
-use ethereum_types::{Address, U256};
+use primitive_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use solana_program::{
-    entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
-    secp256k1_program
-};
-use std::borrow::Cow;
-use std::error::Error;
-use std::convert::TryFrom;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -53,7 +46,7 @@ pub struct UnsignedTransaction {
     pub nonce: u64,
     pub gas_price: U256,
     pub gas_limit: U256,
-    pub to: Option<Address>,
+    pub to: Option<H160>,
     pub value: U256,
     pub call_data: Vec<u8>,
     pub chain_id: U256,
@@ -90,7 +83,7 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Option<Address>, Vec<u8>) {
+pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
     let tx: Result<UnsignedTransaction, _> = rlp::decode(&raw_tx);
     let tx = tx.unwrap();
 

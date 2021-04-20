@@ -120,10 +120,7 @@ impl ExecutorSubstate {
     pub fn deconstruct<B: Backend>(
         mut self,
         backend: &B,
-    ) -> (
-        impl IntoIterator<Item = Apply<impl IntoIterator<Item = (H256, H256)>>>,
-        impl IntoIterator<Item = Log>,
-    ) {
+    ) -> (Vec::<Apply<BTreeMap<H256, H256>>>, Vec<Log>) {
         assert!(self.parent.is_none());
 
         let mut applies = Vec::<Apply<BTreeMap<H256, H256>>>::new();
@@ -648,10 +645,7 @@ impl<B: Backend> ExecutorState<B> {
     #[must_use]
     pub fn deconstruct(
         self,
-    ) -> (B, (
-        impl IntoIterator<Item = Apply<impl IntoIterator<Item = (H256, H256)>>>,
-        impl IntoIterator<Item = Log>,
-    )) {
+    ) -> (B, (Vec::<Apply<BTreeMap<H256, H256>>>, Vec<Log>)) {
         let (applies, logs) = self.substate.deconstruct(&self.backend);
         (self.backend, (applies, logs))
     }
