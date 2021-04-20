@@ -25,10 +25,11 @@ pub enum EvmInstruction<'a> {
     ///
     /// # Account references
     ///   0. [WRITE] The account to prepare for execution
-    ///   1. [WRITE] Caller (Ether account)
-    ///   2. [SIGNER] Signer for Ether account
-    ///   3. [] Clock sysvar
-    ///   4. [] Rent sysvar
+    ///   1. [WRITE] Contract code account (Code account)
+    ///   2. [WRITE] Caller (Ether account)
+    ///   3. [SIGNER] Signer for Ether account
+    ///   4. [] Clock sysvar
+    ///   5. [] Rent sysvar
     ///   ... other Ether accounts
     Finalize,
 
@@ -85,16 +86,19 @@ pub enum EvmInstruction<'a> {
 
     /// Call Ethereum-contract action
     /// # Account references
-    ///   0. [WRITE] Contract for execution (Ether account)
-    ///   1. [WRITE] Caller (Ether account)
-    ///   2. [SIGNER] Signer for caller
-    ///   3. [] Clock sysvar
+    ///   0. [WRITE] Contract account for execution (Ether account)
+    ///   1. [WRITE] Contract code account (Code account)
+    ///   2. [WRITE] Caller (Ether account)
+    ///   3. [SIGNER] Signer for caller
+    ///   4. [] Clock sysvar
     ///   ... other Ether accounts
     Call {
         /// Call data
         bytes: &'a [u8],
     },
 
+    /// Call Ethereum-contract action from raw transaction data
+    /// # Account references same as in Call
     CallFromRawEthereumTX {
         /// Call data
         from_addr: &'a [u8],
@@ -102,16 +106,19 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
+    /// Call Ethereum-contract action from raw transaction data
+    /// # Account references same as in Call
     CheckEtheriumTX {
         /// Call data
         from_addr: &'a [u8],
         sign: &'a [u8],
         unsigned_msg: &'a [u8],
     },
+
     /// Called action return
     OnReturn {
         /// Contract execution status 
-        /// Success - 1 otherwise 0
+        /// Success - 0x11, 0x12 or 0x13 otherwise Error
         status: u8,
         /// Returned data
         bytes: &'a [u8],
