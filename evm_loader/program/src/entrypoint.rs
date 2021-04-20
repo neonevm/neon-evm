@@ -111,46 +111,30 @@ fn process_instruction<'a>(
     debug_print!("Instruction parsed");
 
     let result = match instruction {
-        EvmInstruction::CreateAccount {lamports, space, ether, nonce} => {
+        EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
+            let zero_key = Pubkey::new_from_array([0u8; 32]);
+
             let funding_info = next_account_info(account_info_iter)?;
-            let program_info = next_account_info(account_info_iter)?;
+            let account_info = next_account_info(account_info_iter)?;
+            let code_account = {
+                let program_code = next_account_info(account_info_iter)?;
+                if program_code.owner == program_id {
+                    Some(program_code)
+                } else {
+                    None
+                }
+            };
 
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
-            if expected_address != *program_info.key {
+            if expected_address != *account_info.key {
+                debug_print!("expected_address != *program_info.key");
                 return Err(ProgramError::InvalidArgument);
             };
 
-            let program_seeds = [ether.as_bytes(), &[nonce]];
-            invoke_signed(
-                &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64 + space, program_id),
-                &accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_account done");
-            
-            let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: Pubkey::new_from_array([0u8; 32])};
-            account_data.pack(&mut data)?;
-            Ok(())
-        },
-        EvmInstruction::CreateProgramAccount {lamports, space, ether, nonce} => {
-            debug_print!("CreateProgramAccount");
-            let funding_info = next_account_info(account_info_iter)?;
-            let program_info = next_account_info(account_info_iter)?;
-            let program_code = next_account_info(account_info_iter)?;
-
-            debug_print!("Ether: {} {}", &(hex::encode(ether)), &nonce);
-            debug_print!("Data len: contract {} code {}", &program_info.data.borrow().len(), &program_code.data.borrow().len());
-
-            {// Do checks
-                let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
-                if expected_address != *program_info.key {
-                    debug_print!("expected_address != *program_info.key");
-                    return Err(ProgramError::InvalidArgument);
-                };
-
-                let data = program_code.data.borrow();
+            if code_account.is_some() {
+                let data = code_account.unwrap().data.borrow();
                 if data[0] != AccountType::EMPTY_TAG {
                     debug_print!("expected expected empty account for code");
                     return Err(ProgramError::InvalidAccountData);
@@ -159,16 +143,23 @@ fn process_instruction<'a>(
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64, program_id),
+                &create_account(funding_info.key, account_info.key, lamports, AccountData::SIZE as u64, program_id),
                 &accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
 
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: *program_code.key};
-            account_data.pack(&mut program_info.data.borrow_mut())?;
+            let code_account_key = if code_account.is_some() {
+                *code_account.unwrap().key
+            } else {
+                zero_key
+            };
+            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key};
+            account_data.pack(&mut account_info.data.borrow_mut())?;
 
-            let contract_data = ContractData {owner: *program_info.key, code_size: 0u32};
-            contract_data.pack(&mut program_code.data.borrow_mut())?;
+            if code_account.is_some() {
+                let contract_data = ContractData {owner: *account_info.key, code_size: 0u32};
+                contract_data.pack(&mut code_account.unwrap().data.borrow_mut())?;
+            }
 
             Ok(())
         },
@@ -348,7 +339,7 @@ fn process_instruction<'a>(
                     }
                 },
                 Err(err) => {
-                    debug_print!("ERR");                    
+                    debug_print!("ERR");
                     return Err(ProgramError::MissingRequiredSignature);
                 }
             }
