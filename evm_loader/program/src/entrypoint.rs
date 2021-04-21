@@ -26,6 +26,8 @@ use crate::{
     solidity_account::SolidityAccount,
     utils::{keccak256_digest, solidity_address},
     transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction},
+    executor::{ Machine },
+    executor_state::{ ExecutorState, ExecutorMetadata }
 };
 use evm::{
     backend::{Backend},
@@ -326,7 +328,7 @@ fn process_instruction<'a>(
                     if instr.program_id == secp256k1_program::id() {
                         let sliced = instr.data.as_slice();
 
-                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len());
+                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len(), 1u16);
 
                         if reference_instruction != instr.data {
                             debug_print!("wrong keccak instruction data");
@@ -379,6 +381,79 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address, topics, data} => {
             Ok(())
         },
+        EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg} => {
+            let account_info_iter = &mut accounts.iter();
+            let _storage_info = next_account_info(account_info_iter)?;
+            let _program_info = next_account_info(account_info_iter)?;
+            let _caller_info = next_account_info(account_info_iter)?;
+            let sysvar_info = next_account_info(account_info_iter)?;
+
+            let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
+            let index = current_instruction - 1;
+
+            match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
+                Ok(instr) => {
+                    if instr.program_id == secp256k1_program::id() {
+                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len(), 9u16);
+                        if reference_instruction != instr.data {
+                            debug_print!("wrong keccak instruction data");
+                            debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                            debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    } else {
+                        return Err(ProgramError::IncorrectProgramId);
+                    }
+                },
+                Err(err) => {
+                    debug_print!("ERR");
+                    return Err(ProgramError::MissingRequiredSignature);
+                }
+            }
+
+            let caller = H160::from_slice(from_addr);
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+            do_partial_call(program_id, step_count, accounts, trx.call_data, Some( (caller, trx.nonce) ))
+        },
+        EvmInstruction::Continue {step_count} => { 
+            do_continue(program_id, step_count, accounts)
+        },
+        EvmInstruction::FinalizeCallFromRawEthereumTX { from_addr, sign, unsigned_msg } => {
+            let account_info_iter = &mut accounts.iter();
+            let _storage_info = next_account_info(account_info_iter)?;
+            let _program_info = next_account_info(account_info_iter)?;
+            let _caller_info = next_account_info(account_info_iter)?;
+            let sysvar_info = next_account_info(account_info_iter)?;
+
+            let current_instruction = instructions::load_current_index(&sysvar_info.try_borrow_data()?);
+            let index = current_instruction - 1;
+
+            match load_instruction_at(index.try_into().unwrap(), &sysvar_info.try_borrow_data()?) {
+                Ok(instr) => {
+                    if instr.program_id == secp256k1_program::id() {
+                        let reference_instruction = make_secp256k1_instruction(current_instruction, unsigned_msg.len(), 1u16);
+                        if reference_instruction != instr.data {
+                            debug_print!("wrong keccak instruction data");
+                            debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                            debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                            return Err(ProgramError::InvalidInstructionData);
+                        }
+                    } else {
+                        return Err(ProgramError::IncorrectProgramId);
+                    }
+                },
+                Err(err) => {
+                    debug_print!("ERR");
+                    return Err(ProgramError::MissingRequiredSignature);
+                }
+            }
+
+            let caller = H160::from_slice(from_addr);
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+            do_finalize_partial_call(program_id, accounts, Some((caller, trx.nonce)))
+         },
     };
 
 /*    let result = if program_lamports == 0 {
@@ -520,11 +595,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 }
 
 fn do_call<'a>(
-        program_id: &Pubkey,
-        accounts: &'a [AccountInfo<'a>],
-        instruction_data: &[u8],
-        from_info: Option<(H160, u64)>,
-    ) -> ProgramResult
+    program_id: &Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    instruction_data: &[u8],
+    from_info: Option<(H160, u64)>,
+) -> ProgramResult
 {
     debug_print!("do_call");
 
@@ -589,6 +664,157 @@ fn do_call<'a>(
     invoke_on_return(&program_id, &accounts, exit_reason, result)?;
 
     Ok(())
+}
+
+fn do_partial_call<'a>(
+    program_id: &Pubkey,
+    step_count: u64,
+    accounts: &'a [AccountInfo<'a>],
+    instruction_data: Vec<u8>,
+    from_info: Option<(H160, u64)>,
+) -> ProgramResult
+{
+    debug_print!("do_partial_call");
+
+    let account_info_iter = &mut accounts.iter();
+    let storage_info = next_account_info(account_info_iter)?;
+    let program_info = next_account_info(account_info_iter)?;
+    let caller_info = next_account_info(account_info_iter)?;
+    let signer_info = if caller_info.owner == program_id {
+        next_account_info(account_info_iter)?
+    } else {
+        caller_info
+    };
+
+    if program_info.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let accounts = &accounts[1..];
+    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+
+    let (caller_ether, contract_ether) = {
+        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
+
+        debug_print!("   caller: {}", &caller_ether.0.to_string());
+        debug_print!(" contract: {}", &contract_ether.to_string());
+
+        (caller_ether, contract_ether)
+    };
+
+    let backend = SolanaBackend::new(&account_storage, Some(accounts));
+    debug_print!("  backend initialized");
+
+    let executor_state = ExecutorState::new(ExecutorMetadata::new(), backend);
+    let mut executor = Machine::new(executor_state);
+
+    debug_print!("Executor initialized");
+
+    debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
+    debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
+
+    executor.call_begin(caller_ether.0, contract_ether, instruction_data, u64::max_value());
+    executor.execute_n_steps(step_count).unwrap();
+
+    debug_print!("save");
+    let mut storage = storage_info.try_borrow_mut_data()?;
+    executor.save_into(&mut storage);
+
+    debug_print!("partial call complete");
+
+    Ok(())
+}
+
+fn do_continue<'a>(
+    program_id: &Pubkey,
+    step_count: u64,
+    accounts: &'a [AccountInfo<'a>],
+) -> ProgramResult
+{
+    debug_print!("do_continue");
+
+    let account_info_iter = &mut accounts.iter();
+    let storage_info = next_account_info(account_info_iter)?;
+
+    let accounts = &accounts[1..];
+    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+
+    let mut executor = {
+        let backend = SolanaBackend::new(&account_storage, Some(accounts));
+        let storage = storage_info.try_borrow_data()?;
+        Machine::restore(&storage, backend)
+    };
+
+    debug_print!("executor restored");
+
+    executor.execute_n_steps(step_count).unwrap();
+
+    debug_print!("save");
+    let mut storage = storage_info.try_borrow_mut_data()?;
+    executor.save_into(&mut storage);
+
+    debug_print!("continue complete");
+
+    Ok(())
+}
+
+fn do_finalize_partial_call<'a>(
+    program_id: &Pubkey,
+    accounts: &'a [AccountInfo<'a>],
+    from_info: Option<(H160, u64)>,
+) -> ProgramResult
+{
+    debug_print!("do_finalize_partial_call");
+
+    let account_info_iter = &mut accounts.iter();
+    let storage_info = next_account_info(account_info_iter)?;
+    let program_info = next_account_info(account_info_iter)?;
+    let caller_info = next_account_info(account_info_iter)?;
+    let signer_info = if caller_info.owner == program_id {
+        next_account_info(account_info_iter)?
+    } else {
+        caller_info
+    };
+
+    let accounts = &accounts[1..];
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+
+    let (exit_reason, result, applies_logs) = {
+        let backend = SolanaBackend::new(&account_storage, Some(accounts));
+        debug_print!("  backend initialized");
+
+        let storage = storage_info.try_borrow_data()?;
+        let mut executor = Machine::restore(&storage, backend);
+        debug_print!("Executor restored");
+
+        let exit_reason = executor.execute();
+        let result = executor.return_value();
+
+        debug_print!("Call done");
+
+        if exit_reason.is_succeed() {
+            debug_print!("Succeed execution");
+            let executor_state = executor.into_state();
+            let (_, (applies, logs)) = executor_state.deconstruct();
+            (exit_reason, result, Some((applies, logs)))
+        } else {
+            (exit_reason, result, None)
+        }
+    };
+
+    if applies_logs.is_some() {
+        let (applies, logs) = applies_logs.unwrap();
+
+        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        account_storage.apply(applies, false, Some(caller_ether))?;
+        debug_print!("Applies done");
+        for log in logs {
+            invoke(&on_event(program_id, log)?, &accounts)?;
+        }
+    }
+
+    invoke_on_return(&program_id, &accounts, exit_reason, result)
 }
 
 fn invoke_on_return<'a>(

@@ -13,16 +13,15 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize) -> Vec<u8> {
+pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, data_start: u16) -> Vec<u8> {
     let mut instruction_data = vec![];
 
-    const CHECK_COUNT: u8 = 1;
-    const DATA_START: u16 = 1;
+    const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
     const SIGN_SIZE: u16 = 65;
-    const ETH_OFFSET: u16 = DATA_START;
-    const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
-    const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+    let ETH_OFFSET: u16 = data_start;
+    let SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
+    let MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
 
     let offsets = SecpSignatureOffsets {
         signature_offset: SIGN_OFFSET as u16,
@@ -36,7 +35,7 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize) ->
 
     let bin_offsets = bincode::serialize(&offsets).unwrap();
 
-    instruction_data.push(1);
+    instruction_data.push(NUMBER_OF_SIGNATURES);
     instruction_data.extend(&bin_offsets);
 
     instruction_data
