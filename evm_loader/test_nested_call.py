@@ -5,15 +5,11 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from eth_utils import abi
 from web3.auto import w3
 from eth_keys import keys
-from sha3 import keccak_256
-
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-# evm_loader_id = os.environ.get("EVM_LOADER")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
-evm_loader_id = "9nGiPNHYtMv2XbEChiCfJYzbavCHwMVcrCN3GGLu8qLF"
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+evm_loader_id = os.environ.get("EVM_LOADER")
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -46,6 +42,8 @@ class EventTest(unittest.TestCase):
         print ('contract_caller_eth', cls.reId_caller_eth.hex())
         print ('contract_reciever', cls.reId_reciever)
         print ('contract_receiver_eth', cls.reId_reciever_eth.hex())
+        print ('contract_recover', cls.reId_recover)
+        print ('contract_recover_eth', cls.reId_recover_eth.hex())
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -78,7 +76,7 @@ class EventTest(unittest.TestCase):
 
 
     def test_callFoo(self):
-        func_name = abi.function_signature_to_4byte_selector('testCallFoo(address)')
+        func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
         result = self.call_signed(input=data)
         self.assertEqual(result['meta']['err'], None)
@@ -112,25 +110,36 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    def test_backend_call_inner(self):
+    def test_ecrecover(self):
         tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
               'nonce': getTransactionCount(http_client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())
         _trx = Trx.fromString(signed_tx.rawTransaction)
         sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
-        pub = sig.recover_public_key_from_msg_hash(_trx.hash())
 
         func_name = abi.function_signature_to_4byte_selector('callRecover(address,address,bytes32,bytes)')
         data = (func_name +
                 bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()) +
                 bytes.fromhex("%024x" % 0x0 + self.reId_recover_eth.hex()) +
                 _trx.hash() +
-                bytes.fromhex("%062x" % 0x0 + "60") +
+                bytes.fromhex("%062x" % 0x0 + "80") +
                 bytes.fromhex("%062x" % 0x0 + "41") +
                 sig.to_bytes()
                 )
         result = self.call_signed(input=data)
-        print(result)
 
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2) # TODO: why not 1?
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+
+        #  emit Recovered(address);
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
+        self.assertEqual(data[1:21], self.reId_recover_eth)
+        count_topics = int().from_bytes(data[21:29], 'little')
+        self.assertEqual(count_topics, 1)
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Recovered(address)'))
+        self.assertEqual(data[61:93], bytes.fromhex("%024x" %0x0 + self.caller_ether.hex()))
 
