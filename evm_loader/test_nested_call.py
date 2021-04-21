@@ -84,13 +84,13 @@ class EventTest(unittest.TestCase):
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
 
-        #  emit Received(msg.sender, msg.value, _message);
+        #  emit Foo(msg.sender, msg.value, _message);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_reciever_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
         self.assertEqual(count_topics, 1)
-        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Received(address,uint256,string)'))
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Foo(address,uint256,string)'))
         self.assertEqual(data[61:93], bytes.fromhex("%024x" %0x0 + self.reId_caller_eth.hex()))
         self.assertEqual(data[93:125], bytes.fromhex("%064x" %0x0))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "60"))
@@ -98,13 +98,13 @@ class EventTest(unittest.TestCase):
         s = "call foo".encode("utf-8")
         self.assertEqual(data[189:221], bytes.fromhex('{:0<64}'.format(s.hex())))
 
-        # emit Response(success, data);
+        # emit Result(success, data);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_caller_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
         self.assertEqual(count_topics, 1)
-        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Response(bool,bytes)'))
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result(bool,bytes)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + "01"))
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
@@ -128,10 +128,9 @@ class EventTest(unittest.TestCase):
                 sig.to_bytes()
                 )
         result = self.call_signed(input=data)
-
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2) # TODO: why not 1?
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
 
         #  emit Recovered(address);
@@ -143,3 +142,26 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Recovered(address)'))
         self.assertEqual(data[61:93], bytes.fromhex("%024x" %0x0 + self.caller_ether.hex()))
 
+        # emit Response_recovery_signer(success, data));
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
+        self.assertEqual(data[1:21], self.reId_reciever_eth)
+        count_topics = int().from_bytes(data[21:29], 'little')
+        self.assertEqual(count_topics, 1)
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Response_recovery_signer(bool,bytes)'))
+        self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + "01"))
+        self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
+        self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
+        self.assertEqual(data[157:189], bytes.fromhex("%024x" %0x0 + self.caller_ether.hex()))
+
+        #  emit Result(success, data);
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
+        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
+        self.assertEqual(data[1:21], self.reId_caller_eth)
+        count_topics = int().from_bytes(data[21:29], 'little')
+        self.assertEqual(count_topics, 1)
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result(bool,bytes)'))
+        self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + "01"))
+        self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
+        self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
+        self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
