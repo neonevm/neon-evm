@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 use std::rc::Rc;
-use evm_runtime::{return_value_to_memory};
+use evm_runtime::{save_return_value};
 
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
@@ -342,7 +342,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 };
                 self.runtime.pop();
                 if let Some(runtime) = self.runtime.last_mut(){
-                    let val =  return_value_to_memory(
+                    let val =  save_return_value(
                         runtime,
                         reason,
                         call_return_value,
