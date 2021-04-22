@@ -78,7 +78,7 @@ class DeployTest(unittest.TestCase):
 
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2programAddress(cls.caller_ether)
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -105,8 +105,8 @@ class DeployTest(unittest.TestCase):
 
         # Create contract address from (caller, nonce)
         contract_eth = keccak_256(pack([self.caller_ether, trx_count or None])).digest()[-20:]
-        (contract_sol, contract_nonce) = self.loader.ether2programAddress(contract_eth)
-        (code_sol, code_nonce) = self.loader.ether2program(contract_eth)
+        (contract_sol, contract_nonce) = self.loader.ether2program(contract_eth)
+        (code_sol, code_nonce) = self.loader.ether2seed(contract_eth)
         print("contract_eth", contract_eth.hex())
         print("contract_sol", contract_sol, contract_nonce)
         print("code_sol", code_sol)

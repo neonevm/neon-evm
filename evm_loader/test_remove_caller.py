@@ -44,7 +44,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("code id: ", cls.contract_code)
 
         cls.caller_ether = solana2ether(cls.acc.get_acc().public_key())
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2programAddress(cls.caller_ether)
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")

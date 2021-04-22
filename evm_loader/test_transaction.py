@@ -39,7 +39,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("code id: ", cls.contract_code)
 
         cls.eth_caller = EthAccount.from_key(cls.acc.get_acc().secret_key())
-        cls.sol_caller = cls.loader.ether2programAddress(cls.eth_caller.address)[0]
+        cls.sol_caller = cls.loader.ether2program(cls.eth_caller.address)[0]
         print("Caller:", cls.eth_caller.address, cls.sol_caller)
         if getBalance(cls.sol_caller) == 0:
             cls.loader.createEtherAccount(cls.eth_caller.address)

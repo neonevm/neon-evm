@@ -178,7 +178,7 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        (sol, nonce) = self.ether2programAddress(ether)
+        (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
         base = self.acc.get_acc().public_key()
@@ -200,7 +200,7 @@ class EvmLoader:
         return sol
 
 
-    def ether2program(self, ether):
+    def ether2seed(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
@@ -209,7 +209,7 @@ class EvmLoader:
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
 
-    def ether2programAddress(self, ether):
+    def ether2program(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
@@ -222,15 +222,15 @@ class EvmLoader:
         info = http_client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
-    def deployChecked(self, location,  creator=None):
+    def deployChecked(self, location, creator=None):
         from web3 import Web3
         if creator is None:
             creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
         with open(location, mode='rb') as file:
             fileHash = Web3.keccak(file.read())
             ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-        program = self.ether2programAddress(ether)
-        code = self.ether2program(ether)
+        program = self.ether2program(ether)
+        code = self.ether2seed(ether)
         info = http_client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)
