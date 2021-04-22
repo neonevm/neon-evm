@@ -1,5 +1,5 @@
 use crate::{
-    account_data::{AccountData, AccountType, ContractData},
+    account_data::{Account, AccountData, Contract},
     hamt::Hamt,
     utils::{keccak256_digest, u256_to_h256},
 };
@@ -17,14 +17,14 @@ use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct SolidityAccount<'a> {
-    account_data: AccountData,
+    account_data: Account,
     solana_address: &'a Pubkey,
     code_data: Option<(u32, Rc<RefCell<&'a mut [u8]>>)>,
     lamports: u64,
 }
 
 impl<'a> SolidityAccount<'a> {
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(u32, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
+    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: Account, code_data: Option<(u32, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
         debug_print!("  SolidityAccount::new");
         Ok(Self{account_data, solana_address, code_data, lamports})
     }
@@ -48,7 +48,7 @@ impl<'a> SolidityAccount<'a> {
             let some_data = self.code_data.as_ref().unwrap().1.clone();
             let data = some_data.borrow();
             let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            f(&data[ContractData::SIZE..ContractData::SIZE+code_size])
+            f(&data[Contract::SIZE..Contract::SIZE+code_size])
         } else {
             f(&[])
         }
@@ -71,7 +71,7 @@ impl<'a> SolidityAccount<'a> {
             let mut data = some_data.borrow_mut();
             debug_print!("Storage data borrowed");
             let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            let mut hamt = Hamt::new(&mut data[ContractData::SIZE+code_size..], false)?;
+            let mut hamt = Hamt::new(&mut data[Contract::SIZE+code_size..], false)?;
             Ok(f(&mut hamt))
         } else {
             Err(ProgramError::UninitializedAccount)
@@ -142,8 +142,8 @@ impl<'a> SolidityAccount<'a> {
                 return Err(ProgramError::NotEnoughAccountKeys);
             };
             let code_data = self.code_data.as_ref().unwrap().1.clone();
-            let mut contract_data = match AccountType::unpack(&code_data.borrow())? {
-                AccountType::ContractData(acc) => acc,
+            let mut contract_data = match AccountData::unpack(&code_data.borrow())? {
+                AccountData::Contract(acc) => acc,
                 _ => return Err(ProgramError::InvalidAccountData),
             };
             if contract_data.code_size != 0 {
@@ -154,7 +154,7 @@ impl<'a> SolidityAccount<'a> {
             debug_print!("Write contract header");
             contract_data.pack(&mut code_data)?;
             debug_print!("Write code");
-            code_data[ContractData::SIZE..ContractData::SIZE+code.len()].copy_from_slice(&code);
+            code_data[Contract::SIZE..Contract::SIZE+code.len()].copy_from_slice(&code);
             debug_print!("Code written");
         }
 
@@ -165,15 +165,15 @@ impl<'a> SolidityAccount<'a> {
         let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
         if reset_storage || exist_items {
             debug_print!("Update storage");
-            let contract_data = match AccountType::unpack(&self.code_data.as_ref().unwrap().1.borrow())? {
-                AccountType::ContractData(acc) => acc,
+            let contract_data = match AccountData::unpack(&self.code_data.as_ref().unwrap().1.borrow())? {
+                AccountData::Contract(acc) => acc,
                 _ => return Err(ProgramError::InvalidAccountData),
             };
             let code_size = contract_data.code_size as usize;
             if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
 
             let mut code_data = self.code_data.as_ref().unwrap().1.borrow_mut();
-            let mut storage = Hamt::new(&mut code_data[ContractData::SIZE+code_size..], reset_storage)?;
+            let mut storage = Hamt::new(&mut code_data[Contract::SIZE+code_size..], reset_storage)?;
             debug_print!("Storage initialized");
             for (key, value) in storage_iter {
                 debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());

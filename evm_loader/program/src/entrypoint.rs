@@ -20,7 +20,7 @@ use solana_program::{
 use crate::{
 //    bump_allocator::BumpAllocator,
     instruction::{EvmInstruction, on_return, on_event},
-    account_data::{AccountData, AccountType, ContractData},
+    account_data::{Account, AccountData, Contract},
     account_storage::ProgramAccountStorage, 
     solana_backend::SolanaBackend,    
     solidity_account::SolidityAccount,
@@ -135,7 +135,7 @@ fn process_instruction<'a>(
 
             if code_account.is_some() {
                 let data = code_account.unwrap().data.borrow();
-                if data[0] != AccountType::EMPTY_TAG {
+                if data[0] != AccountData::EMPTY_TAG {
                     debug_print!("expected expected empty account for code");
                     return Err(ProgramError::InvalidAccountData);
                 }
@@ -143,7 +143,7 @@ fn process_instruction<'a>(
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, account_info.key, lamports, AccountData::SIZE as u64, program_id),
+                &create_account(funding_info.key, account_info.key, lamports, Account::SIZE as u64, program_id),
                 &accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
@@ -153,11 +153,11 @@ fn process_instruction<'a>(
             } else {
                 zero_key
             };
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key};
+            let account_data = Account {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key};
             account_data.pack(&mut account_info.data.borrow_mut())?;
 
             if code_account.is_some() {
-                let contract_data = ContractData {owner: *account_info.key, code_size: 0u32};
+                let contract_data = Contract {owner: *account_info.key, code_size: 0u32};
                 contract_data.pack(&mut code_account.unwrap().data.borrow_mut())?;
             }
 
@@ -170,8 +170,8 @@ fn process_instruction<'a>(
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
-            let base_info_data = match AccountType::unpack(&base_info.data.borrow())? {
-                AccountType::AccountData(acc) => acc,
+            let base_info_data = match AccountData::unpack(&base_info.data.borrow())? {
+                AccountData::Account(acc) => acc,
                 _ => return Err(ProgramError::InvalidAccountData),
             };
             let caller = SolidityAccount::new(base_info.key, (*base_info.lamports.borrow()).clone(), base_info_data, None)?;
@@ -213,7 +213,7 @@ fn process_instruction<'a>(
             let (unsigned_msg, signature) = {
                 let data = trx_info.data.borrow();
                 let (acc_type, rest) = data.split_at(1);
-                if acc_type[0] != AccountType::EMPTY_TAG {
+                if acc_type[0] != AccountData::EMPTY_TAG {
                     return Err(ProgramError::InvalidAccountData);
                 }
                 let (signature, rest) = rest.split_at(65);
@@ -456,16 +456,16 @@ fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], i
 fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
     let mut data = account_info.data.borrow_mut();
 
-    let account_data = AccountType::unpack(&data)?;
+    let account_data = AccountData::unpack(&data)?;
     let header_size: usize = match account_data {
-        AccountType::ContractData(acc) => {
+        AccountData::Contract(acc) => {
             if acc.code_size != 0 {
                 return Err(ProgramError::InvalidAccountData);
             }
-            ContractData::SIZE
+            Contract::SIZE
         },
-        AccountType::AccountData(_) => return Err(ProgramError::InvalidAccountData),
-        AccountType::Empty => 1,
+        AccountData::Account(_) => return Err(ProgramError::InvalidAccountData),
+        AccountData::Empty => 1,
     };
 
     let offset = header_size + offset as usize;
@@ -503,7 +503,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
         let code_data = {
             let data = program_code.data.borrow();
-            let (_contract_header, rest) = data.split_at(ContractData::SIZE);
+            let (_contract_header, rest) = data.split_at(Contract::SIZE);
             let (code_len, rest) = rest.split_at(8);
             let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
             let (code, _rest) = rest.split_at(code_len as usize);

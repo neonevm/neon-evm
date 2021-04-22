@@ -1,5 +1,5 @@
 use crate::{
-    account_data::AccountType,
+    account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
 };
@@ -46,8 +46,8 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             if account.owner == program_id {
-                let account_data = match AccountType::unpack(&account.data.borrow())? {
-                    AccountType::AccountData(acc) => acc,
+                let account_data = match AccountData::unpack(&account.data.borrow())? {
+                    AccountData::Account(acc) => acc,
                     _ => return Err(ProgramError::InvalidAccountData),
                 };
                 let code_data = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
@@ -65,8 +65,8 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
                     skip_next = true;
                     let code_data = account_infos[i+1].data.clone();
-                    let contract_data = match AccountType::unpack(&code_data.borrow())? {
-                        AccountType::ContractData(acc) => acc,
+                    let contract_data = match AccountData::unpack(&code_data.borrow())? {
+                        AccountData::Contract(acc) => acc,
                         _ => return Err(ProgramError::InvalidAccountData),
                     };
                     Some((contract_data.code_size, code_data))
