@@ -35,6 +35,49 @@ impl<'a> SolidityAccount<'a> {
 
     pub fn get_nonce(&self) -> u64 {self.account_data.trx_count}
 
+    fn code<U, F>(&self, f: F) -> U
+    where F: FnOnce(&[u8]) -> U {
+        /*if let AccountData::Account{code_size,..} = self.account_data {
+            if code_size > 0 {
+                let data = self.account_info.data.borrow();
+                let offset = AccountData::size();
+                return f(&data[offset..offset+code_size as usize])
+            }
+        }*/
+        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
+            let some_data = self.code_data.as_ref().unwrap().1.clone();
+            let data = some_data.borrow();
+            let code_size = self.code_data.as_ref().unwrap().0 as usize;
+            f(&data[ContractData::SIZE..ContractData::SIZE+code_size])
+        } else {
+            f(&[])
+        }
+    }
+
+    fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
+    where F: FnOnce(&mut Hamt) -> U {
+        /*if let AccountData::Account{code_size,..} = self.account_data {
+            if code_size > 0 {
+                let mut data = self.account_info.data.borrow_mut();
+                debug_print!("Storage data borrowed");
+                let offset = AccountData::size() + code_size as usize;
+                let mut hamt = Hamt::new(&mut data[offset..], false)?;
+                return Ok(f(&mut hamt));
+            }
+        }
+        Err(ProgramError::UninitializedAccount)*/
+        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
+            let some_data = self.code_data.as_ref().unwrap().1.clone();
+            let mut data = some_data.borrow_mut();
+            debug_print!("Storage data borrowed");
+            let code_size = self.code_data.as_ref().unwrap().0 as usize;
+            let mut hamt = Hamt::new(&mut data[ContractData::SIZE+code_size..], false)?;
+            Ok(f(&mut hamt))
+        } else {
+            Err(ProgramError::UninitializedAccount)
+        }
+    }
+
     pub fn get_solana_address(&self) -> Pubkey {
         *self.solana_address
     }
@@ -140,48 +183,5 @@ impl<'a> SolidityAccount<'a> {
 
         debug_print!("Account updated");
         Ok(())
-    }
-
-    fn code<U, F>(&self, f: F) -> U
-    where F: FnOnce(&[u8]) -> U {
-        /*if let AccountData::Account{code_size,..} = self.account_data {
-            if code_size > 0 {
-                let data = self.account_info.data.borrow();
-                let offset = AccountData::size();
-                return f(&data[offset..offset+code_size as usize])
-            }
-        }*/
-        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
-            let some_data = self.code_data.as_ref().unwrap().1.clone();
-            let data = some_data.borrow();
-            let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            f(&data[ContractData::SIZE..ContractData::SIZE+code_size])
-        } else {
-            f(&[])
-        }
-    }
-
-    fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
-    where F: FnOnce(&mut Hamt) -> U {
-        /*if let AccountData::Account{code_size,..} = self.account_data {
-            if code_size > 0 {
-                let mut data = self.account_info.data.borrow_mut();
-                debug_print!("Storage data borrowed");
-                let offset = AccountData::size() + code_size as usize;
-                let mut hamt = Hamt::new(&mut data[offset..], false)?;
-                return Ok(f(&mut hamt));
-            }
-        }
-        Err(ProgramError::UninitializedAccount)*/
-        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
-            let some_data = self.code_data.as_ref().unwrap().1.clone();
-            let mut data = some_data.borrow_mut();
-            debug_print!("Storage data borrowed");
-            let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            let mut hamt = Hamt::new(&mut data[ContractData::SIZE+code_size..], false)?;
-            Ok(f(&mut hamt))
-        } else {
-            Err(ProgramError::UninitializedAccount)
-        }
     }
 }
