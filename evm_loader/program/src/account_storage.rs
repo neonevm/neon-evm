@@ -1,5 +1,5 @@
 use crate::{
-    account_data::AccountType,
+    account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
 };
@@ -29,14 +29,14 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("account_storage::new");
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
-        
+
         let mut contract_id: H160 = H160::zero();
         let mut caller_id: H160 = H160::zero();
 
         let mut skip_next: bool = false;
         let mut contract: bool = true;
         let mut caller: bool = true;
-        for (i, account) in (&account_infos).iter().enumerate() {
+        for (i, account_info) in (&account_infos).iter().enumerate() {
             debug_print!("{}", &i);
 
             if skip_next {
@@ -45,9 +45,9 @@ impl<'a> ProgramAccountStorage<'a> {
                 continue;
             }
 
-            if account.owner == program_id {
-                let account_data = match AccountType::unpack(&account.data.borrow())? {
-                    AccountType::AccountData(acc) => acc,
+            if account_info.owner == program_id {
+                let account_data = match AccountData::unpack(&account_info.data.borrow())? {
+                    AccountData::Account(acc) => acc,
                     _ => return Err(ProgramError::InvalidAccountData),
                 };
                 let code_data = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
@@ -55,7 +55,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     None
                 } else {
                     debug_print!("code_account != Pubkey::new_from_array([0u8; 32])");
-                    debug_print!("account key:  {}", &account.key.to_string());
+                    debug_print!("account key:  {}", &account_info.key.to_string());
                     debug_print!("code account: {}", &account_data.code_account.to_string());
                     if account_infos.len() < i+2 {
                         return Err(ProgramError::NotEnoughAccountKeys)
@@ -65,13 +65,13 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
                     skip_next = true;
                     let code_data = account_infos[i+1].data.clone();
-                    let contract_data = match AccountType::unpack(&code_data.borrow())? {
-                        AccountType::ContractData(acc) => acc,
+                    let code_acc = match AccountData::unpack(&code_data.borrow())? {
+                        AccountData::Contract(acc) => acc,
                         _ => return Err(ProgramError::InvalidAccountData),
                     };
-                    Some((contract_data.code_size, code_data))
+                    Some((code_acc, code_data))
                 };
-                let sol_account = SolidityAccount::new(account.key, (*account.lamports.borrow()).clone(), account_data, code_data)?;
+                let sol_account = SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, code_data)?;
                 aliases.push((sol_account.get_ether(), i));
 
                 if contract {

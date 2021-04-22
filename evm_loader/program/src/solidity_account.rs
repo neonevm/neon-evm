@@ -1,5 +1,5 @@
 use crate::{
-    account_data::{AccountData, AccountType, ContractData},
+    account_data::{AccountData, Account, Contract},
     hamt::Hamt,
     utils::{keccak256_digest, u256_to_h256},
 };
@@ -17,14 +17,14 @@ use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub struct SolidityAccount<'a> {
-    account_data: AccountData,
+    account_data: Account,
     solana_address: &'a Pubkey,
-    code_data: Option<(u32, Rc<RefCell<&'a mut [u8]>>)>,
+    code_data: Option<(Contract, Rc<RefCell<&'a mut [u8]>>)>,
     lamports: u64,
 }
 
 impl<'a> SolidityAccount<'a> {
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(u32, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
+    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: Account, code_data: Option<(Contract, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
         debug_print!("  SolidityAccount::new");
         Ok(Self{account_data, solana_address, code_data, lamports})
     }
@@ -39,15 +39,13 @@ impl<'a> SolidityAccount<'a> {
         *self.solana_address
     }
 
-    pub fn get_seeds(&self) -> (H160, u8) {
-        (self.account_data.ether, self.account_data.nonce)
-    }
+    pub fn get_seeds(&self) -> (H160, u8) { (self.account_data.ether, self.account_data.nonce) }
     
     pub fn basic(&self) -> Basic {
-        Basic {
-            balance: self.lamports.into(),
-            nonce: U256::from(self.account_data.trx_count),
-        }
+        Basic { 
+            balance: self.lamports.into(), 
+            nonce: U256::from(self.account_data.trx_count), }
+        
     }
     
     pub fn code_hash(&self) -> H256 {
@@ -93,44 +91,57 @@ impl<'a> SolidityAccount<'a> {
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
         self.account_data.trx_count = nonce.as_u64();
+
+        let mut code_size = match &self.code_data {
+            Some((acc, _code)) => acc.code_size,
+            _ => 0,
+        };
+
         if let Some(code) = code {
+            debug_print!("Write contract");
             if self.code_data.is_none() {
                 debug_print!("Expected code account");
                 return Err(ProgramError::NotEnoughAccountKeys);
             };
-            let code_data = self.code_data.as_ref().unwrap().1.clone();
-            let mut contract_data = match AccountType::unpack(&code_data.borrow())? {
-                AccountType::ContractData(acc) => acc,
-                _ => return Err(ProgramError::InvalidAccountData),
-            };
+
+            let mut code_data = self.code_data.as_ref().unwrap().1.borrow_mut();
+            let mut contract_data = self.code_data.as_ref().unwrap().0.clone();
+
             if contract_data.code_size != 0 {
                 return Err(ProgramError::AccountAlreadyInitialized);
             };
+
             contract_data.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
-            let mut code_data = code_data.borrow_mut();
+            code_size = contract_data.code_size;
+
             debug_print!("Write contract header");
+            let contract_data = AccountData::Contract(contract_data);
             contract_data.pack(&mut code_data)?;
             debug_print!("Write code");
-            code_data[ContractData::SIZE..ContractData::SIZE+code.len()].copy_from_slice(&code);
+            code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(&code);
             debug_print!("Code written");
         }
 
-        debug_print!("Write account data");
-        self.account_data.pack(&mut data)?;
+        debug_print!("Write account data");        
+        let account_data = AccountData::Account(self.account_data.clone()); 
+        account_data.pack(&mut data)?;
 
         let mut storage_iter = storage_items.into_iter().peekable();
         let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
         if reset_storage || exist_items {
             debug_print!("Update storage");
-            let contract_data = match AccountType::unpack(&self.code_data.as_ref().unwrap().1.borrow())? {
-                AccountType::ContractData(acc) => acc,
-                _ => return Err(ProgramError::InvalidAccountData),
+            if self.code_data.is_none() {
+                debug_print!("Expected code account");
+                return Err(ProgramError::NotEnoughAccountKeys);
             };
-            let code_size = contract_data.code_size as usize;
-            if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
 
             let mut code_data = self.code_data.as_ref().unwrap().1.borrow_mut();
-            let mut storage = Hamt::new(&mut code_data[ContractData::SIZE+code_size..], reset_storage)?;
+            let contract_data = &self.code_data.as_ref().unwrap().0;
+
+            if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+
+            let contract_data = AccountData::Contract(contract_data.clone());
+            let mut storage = Hamt::new(&mut code_data[contract_data.size()+(code_size as usize)..], reset_storage)?;
             debug_print!("Storage initialized");
             for (key, value) in storage_iter {
                 debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
@@ -151,11 +162,17 @@ impl<'a> SolidityAccount<'a> {
                 return f(&data[offset..offset+code_size as usize])
             }
         }*/
-        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
-            let some_data = self.code_data.as_ref().unwrap().1.clone();
-            let data = some_data.borrow();
-            let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            f(&data[ContractData::SIZE..ContractData::SIZE+code_size])
+        if self.code_data.is_none() {
+            return f(&[])
+        }
+
+        let contract_data = &self.code_data.as_ref().unwrap().0;
+        let code_size = contract_data.code_size as usize;
+        let contract_data = AccountData::Contract(contract_data.clone());
+
+        if code_size > 0 {
+            let data = self.code_data.as_ref().unwrap().1.borrow();
+            f(&data[contract_data.size()..contract_data.size()+code_size])
         } else {
             f(&[])
         }
@@ -173,12 +190,18 @@ impl<'a> SolidityAccount<'a> {
             }
         }
         Err(ProgramError::UninitializedAccount)*/
-        if self.code_data.is_some() && self.code_data.as_ref().unwrap().0 > 0 {
-            let some_data = self.code_data.as_ref().unwrap().1.clone();
-            let mut data = some_data.borrow_mut();
+        if self.code_data.is_none() {
+            return Err(ProgramError::UninitializedAccount)
+        }
+
+        let contract_data = &self.code_data.as_ref().unwrap().0;
+        let code_size = contract_data.code_size as usize;
+        let contract_data = AccountData::Contract(contract_data.clone());
+
+        if code_size > 0 {
+            let mut data = self.code_data.as_ref().unwrap().1.borrow_mut();
             debug_print!("Storage data borrowed");
-            let code_size = self.code_data.as_ref().unwrap().0 as usize;
-            let mut hamt = Hamt::new(&mut data[ContractData::SIZE+code_size..], false)?;
+            let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size..], false)?;
             Ok(f(&mut hamt))
         } else {
             Err(ProgramError::UninitializedAccount)
