@@ -273,14 +273,14 @@ impl AccountStorage for EmulatorAccountStorage {
                     Err(_) => return d(),
                 };
                 if acc.code_account.is_some() {
-                    let contract_data = match AccountType::unpack(&acc.account.data) {
+                    let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
+                    let contract_data = match AccountType::unpack(&code_data) {
                         Ok(acc_data) => match acc_data {
                             AccountType::ContractData(acc) => acc,
                             _ => return d(),
                         },
                         Err(_) => return d(),
                     };
-                    let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
                     let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data.code_size, code_data))).unwrap();
                     f(&account)
