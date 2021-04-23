@@ -1,13 +1,14 @@
-use ethereum_types::{Address, U256};
+use primitive_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use solana_program::{
-    entrypoint::ProgramResult, instruction::Instruction, program_error::ProgramError,
+use solana_program::{ 
+    sysvar::instructions::{load_current_index, load_instruction_at},
+    account_info::AccountInfo,
+    entrypoint::{ ProgramResult },
+    program_error::{ProgramError},
     secp256k1_program
 };
-use std::borrow::Cow;
-use std::error::Error;
-use std::convert::TryFrom;
+use std::convert::Into;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -48,12 +49,41 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, da
     instruction_data
 }
 
+pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
+{
+    let current_instruction = load_current_index(&sysvar_info.try_borrow_data()?);
+    let index = current_instruction - 1;
+
+    match load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
+        Ok(instr) => {
+            if secp256k1_program::check_id(&instr.program_id) {
+                let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
+                if reference_instruction != instr.data {
+                    debug_print!("wrong keccak instruction data");
+                    debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                    debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+            } else {
+                return Err(ProgramError::IncorrectProgramId);
+            }
+        },
+        Err(err) => {
+            debug_print!("ERR");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+    }
+
+    Ok(())
+}
+
+
 #[derive(Debug)]
 pub struct UnsignedTransaction {
     pub nonce: u64,
     pub gas_price: U256,
     pub gas_limit: U256,
-    pub to: Option<Address>,
+    pub to: Option<H160>,
     pub value: U256,
     pub call_data: Vec<u8>,
     pub chain_id: U256,
@@ -90,7 +120,7 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Option<Address>, Vec<u8>) {
+pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
     let tx: Result<UnsignedTransaction, _> = rlp::decode(&raw_tx);
     let tx = tx.unwrap();
 

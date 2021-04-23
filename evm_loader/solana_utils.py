@@ -288,12 +288,11 @@ def wallet_path():
     cmd = 'solana --url {} config get'.format(solana_url)
     try:
         res =  subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        res = res.splitlines()[-1]
         substr = "Keypair Path: "
-        if not res.startswith(substr):
-            raise Exception("cannot get keypair path")
-        path = res[len(substr):]
-        return path.strip()
+        for line in res.splitlines():
+            if line.startswith(substr):
+                return line[len(substr):].strip()
+        raise Exception("cannot get keypair path")
     except subprocess.CalledProcessError as err:
         import sys
         print("ERR: solana error {}".format(err))

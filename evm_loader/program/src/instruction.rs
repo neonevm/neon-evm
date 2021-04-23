@@ -150,11 +150,7 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
-    Continue {
-        step_count: u64
-    },
-
-    FinalizeCallFromRawEthereumTX {}
+    Continue {},
 }
 
 
@@ -267,12 +263,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg}
             },
             10 => {
-                let (step_count, _rest) = rest.split_at(8);
-                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::Continue {step_count}
-            },
-            11 => {
-                EvmInstruction::FinalizeCallFromRawEthereumTX {}
+                EvmInstruction::Continue {}
             },
 
             _ => return Err(InvalidInstructionData),
