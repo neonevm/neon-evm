@@ -25,6 +25,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo build-bpf
+RUN cd ../emulator && cargo build --release
 # Build evm_loader_no_logs
 RUN sed -i 's/\(name = \)"evm-loader"/\1"evm-loader-no-logs"/' Cargo.toml && \
     cargo build-bpf --no-default-features --features custom-heap
@@ -62,6 +63,7 @@ COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/evm_loader/program/target/deploy/evm_loader_no_logs.so /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/emulator/target/release/emulator /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
