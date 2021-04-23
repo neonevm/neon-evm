@@ -74,17 +74,6 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_11_finalize_partial_call(self, storage_account, evm_instruction):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0B") + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -125,18 +114,21 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 3, instruction))
+        trx.add(self.sol_instr_09_partial_call(storage, 10, instruction))
         http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_10_continue(storage, 2, instruction))
-        http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        while (True):
+            print("Continue")
+            trx = Transaction()
+            trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
+            trx.add(self.sol_instr_10_continue(storage, 50, instruction))
+            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(self.sol_instr_11_finalize_partial_call(storage, instruction))
-        return http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if (data[0] == 6):
+                    return result
+
 
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
