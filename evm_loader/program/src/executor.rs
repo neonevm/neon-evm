@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 use std::rc::Rc;
-use evm_runtime::{call_result_save, create_result_save};
+use evm_runtime::{save_return_value, save_created_address};
 use evm::{ExternalOpcode};
 
 use primitive_types::{H160, H256, U256};
@@ -8,6 +8,7 @@ use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backe
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use std::mem;
 use sha3::{Keccak256, Digest};
+use std::borrow::BorrowMut;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -272,10 +273,15 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+pub enum RuntimeReason {
+    Call,
+    Create(H160)
+}
 
 pub struct Machine<'config, B: Backend> {
     executor: Executor<'config, B>,
-    runtime: Vec<evm::Runtime<'config>>
+    runtime: Vec<(evm::Runtime<'config>, Option<RuntimeReason>)>
 }
 
 
@@ -332,20 +338,20 @@ impl<'config, B: Backend> Machine<'config, B> {
         let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
 
         let runtime = evm::Runtime::new(Rc::new(code), Rc::new(input), context, &self.executor.config);
-        self.runtime.push(runtime);
+        self.runtime.push((runtime, None));
     }
 
     pub fn step(&mut self) -> Result<(), ExitReason> {
 
         enum modify<'a>{
             none,
-            add(evm::Runtime<'a>),
+            add((evm::Runtime<'a>, Option<RuntimeReason>)),
             remove(ExitReason),
         }
         let mut runtime_modify = modify::none;
         let runtime_cnt = self.runtime.len();
         if let Some(runtime) = self.runtime.last_mut() {
-            match runtime.step(&mut self.executor) {
+            match runtime.0.step(&mut self.executor) {
                 Ok(()) => {},
                 Err(capture) => match capture {
                     Capture::Exit(reason) => {
@@ -388,8 +394,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                                 interrupt.context,
                                 &self.executor.config
                             );
-                            runtime.set_external_opcode(Some(ExternalOpcode::Call));
-                            runtime_modify = modify::add(runtime);
+                            runtime_modify = modify::add((runtime, Some(RuntimeReason::Call)));
                         },
                         Resolve::Create(interrupt, resolve) =>{
                             mem::forget(resolve);
@@ -405,9 +410,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                                 interrupt.context,
                                 &self.executor.config
                             );
-                            runtime.set_external_opcode(Some(ExternalOpcode::Create));
-                            runtime.set_external_opcode_address(Some(interrupt.address));
-                            runtime_modify = modify::add(runtime);
+                            runtime_modify = modify::add((runtime, Some(RuntimeReason::Create(interrupt.address))));
                         },
                         _ => {
                             debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: _");
@@ -419,55 +422,50 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
 
         match runtime_modify {
-            modify::remove(reason) => {
+            modify::remove(exit_reason) => {
                 let mut return_value = Vec::new();
-                let mut external_opcode: Option<ExternalOpcode> = None;
-                let mut external_opcode_address: Option<H160> = None;
+                let mut runtime_reason: Option<RuntimeReason> = None;
                 if let Some(runtime) = self.runtime.last(){
-                    return_value = runtime.machine().return_value();
-                    external_opcode = runtime.get_external_opcode();
-                    external_opcode_address = runtime.get_external_opcode_address();
+                    return_value = runtime.0.machine().return_value();
+                    runtime_reason = runtime.1;
                 };
                 self.runtime.pop();
 
                 if let Some(runtime) = self.runtime.last_mut(){
-                    match external_opcode {
-                        Some(ExternalOpcode::Call) => {
-                            let val =  call_result_save(
-                                runtime,
-                                reason,
+                    match runtime_reason {
+                        Some(RuntimeReason::Call) => {
+                            let val =  save_return_value(
+                                runtime.0.borrow_mut(),
+                                exit_reason,
                                 return_value,
                                 &self.executor
                             );
                             // TODO check val
                         },
-                        Some(ExternalOpcode::Create) => {
+                        Some(RuntimeReason::Create(created_address)) => {
                             if let Some(limit) = self.executor.config.create_contract_limit {
                                 if return_value.len() > limit {
                                     debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
                                     self.executor.state.exit_discard().unwrap();
                                     return Err((ExitError::CreateContractLimit.into()))
                                     // TODO: may be continue ?
-                                    // reson = ExitReason::Error(ExitError::CreateContractLimit);
                                 }
                             }
-                            if let Some(created_address) = external_opcode_address{
-                                self.executor.state.set_code(created_address, return_value.clone());
-                                let val =  create_result_save(
-                                    runtime,
-                                    reason,
-                                    Some(created_address),
-                                    return_value,
-                                    &self.executor );
-                                // TODO check val
-                            }
+                            self.executor.state.set_code(created_address, return_value.clone());
+                            let val =  save_created_address(
+                                runtime.0.borrow_mut(),
+                                exit_reason,
+                                Some(created_address),
+                                return_value,
+                                &self.executor );
+                            // TODO check val
                         },
-                        _ => {}
+                        None => {}
                     }
                 }
             },
-            modify::add(runtime) => {
-                self.runtime.push(runtime);
+            modify::add(vm) => {
+                self.runtime.push(vm);
             },
             modify::none => {},
         }
@@ -494,7 +492,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     #[must_use]
     pub fn return_value(&self) -> Vec<u8> {
         if let Some(runtime) = self.runtime.last() {
-            return runtime.machine().return_value();
+            return runtime.0.machine().return_value();
         }
 
         Vec::new()
