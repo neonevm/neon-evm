@@ -1,11 +1,13 @@
 use std::convert::Infallible;
 use std::rc::Rc;
-use evm_runtime::{save_return_value};
+use evm_runtime::{call_result_save, create_result_save};
+use evm::{ExternalOpcode};
 
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use std::mem;
+use sha3::{Keccak256, Digest};
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -20,6 +22,9 @@ fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
+fn keccak256_digest(data: &[u8]) -> H256 {
+    H256::from_slice(Keccak256::digest(&data).as_slice())
+}
 
 struct CallInterrupt {
     code_address : H160,
@@ -27,7 +32,11 @@ struct CallInterrupt {
     context: evm::Context,
 }
 
-struct CreateInterrupt {}
+struct CreateInterrupt {
+    init_code: Vec<u8>,
+    context: evm::Context,
+    address: H160
+}
 
 struct Executor<'config, B: Backend> {
     state: ExecutorState<B>,
@@ -152,7 +161,63 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         init_code: Vec<u8>,
         target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        Capture::Trap(CreateInterrupt{})
+
+        if let Some(depth) = self.state.metadata().depth() {
+            if depth + 1 > self.config.call_stack_limit {
+                return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
+            }
+        }
+        // TODO: check
+        // if self.balance(caller) < value {
+        //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
+        // }
+
+        // Get the create address from given scheme.
+        let address =
+            match scheme {
+                evm::CreateScheme::Create2 { caller, code_hash, salt } => {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&[0xff]);
+                    hasher.input(&caller[..]);
+                    hasher.input(&salt[..]);
+                    hasher.input(&code_hash[..]);
+                    H256::from_slice(hasher.result().as_slice()).into()
+                },
+                evm::CreateScheme::Legacy { caller } => {
+                    let nonce = self.state.basic(caller).nonce;
+                    let mut stream = rlp::RlpStream::new_list(2);
+                    stream.append(&caller);
+                    stream.append(&nonce);
+                    //H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
+                    keccak256_digest(&stream.out()).into()
+                },
+                evm::CreateScheme::Fixed(naddress) => {
+                    naddress
+                },
+            };
+
+        // self.state.create(&scheme, &address);
+        // TODO: may be increment caller's nonce after runtime creation or success execution?
+        self.state.inc_nonce(caller);
+
+        // if let code= self.state.code(address) {
+        //     if code.len() != 0 {
+        //         // let _ = self.merge_fail(substate);
+        //         return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+        //     }
+        // }
+
+        // if self.state.basic(address).nonce  > U256::zero() {
+        //     return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+        // }
+
+        let context = evm::Context {
+            address,
+            caller,
+            apparent_value: value,
+        };
+
+        Capture::Trap(CreateInterrupt{init_code, context, address})
     }
 
     fn call(
@@ -317,12 +382,31 @@ impl<'config, B: Backend> Machine<'config, B> {
                             self.executor.state.enter(u64::max_value(), false);
                             self.executor.state.touch(interrupt.code_address);
 
-                            let runtime = evm::Runtime::new(
+                            let mut runtime = evm::Runtime::new(
                                 Rc::new(code),
                                 Rc::new(interrupt.input),
                                 interrupt.context,
                                 &self.executor.config
                             );
+                            runtime.set_external_opcode(Some(ExternalOpcode::Call));
+                            runtime_modify = modify::add(runtime);
+                        },
+                        Resolve::Create(interrupt, resolve) =>{
+                            mem::forget(resolve);
+                            self.executor.state.enter(u64::max_value(), false);
+                            // self.executor.state.touch(interrupt.address);
+                            // if self.executor.config.create_increase_nonce {
+                            //     self.executor.state.inc_nonce(interrupt.address);
+                            // }
+
+                            let mut runtime = evm::Runtime::new(
+                                Rc::new(interrupt.init_code),
+                                Rc::new(Vec::new()),
+                                interrupt.context,
+                                &self.executor.config
+                            );
+                            runtime.set_external_opcode(Some(ExternalOpcode::Create));
+                            runtime.set_external_opcode_address(Some(interrupt.address));
                             runtime_modify = modify::add(runtime);
                         },
                         _ => {
@@ -336,19 +420,50 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         match runtime_modify {
             modify::remove(reason) => {
-                let mut call_return_value = Vec::new();
+                let mut return_value = Vec::new();
+                let mut external_opcode: Option<ExternalOpcode> = None;
+                let mut external_opcode_address: Option<H160> = None;
                 if let Some(runtime) = self.runtime.last(){
-                    call_return_value = runtime.machine().return_value();
+                    return_value = runtime.machine().return_value();
+                    external_opcode = runtime.get_external_opcode();
+                    external_opcode_address = runtime.get_external_opcode_address();
                 };
                 self.runtime.pop();
+
                 if let Some(runtime) = self.runtime.last_mut(){
-                    let val =  save_return_value(
-                        runtime,
-                        reason,
-                        call_return_value,
-                        &self.executor
-                    );
-                    // TODO check val
+                    match external_opcode {
+                        Some(ExternalOpcode::Call) => {
+                            let val =  call_result_save(
+                                runtime,
+                                reason,
+                                return_value,
+                                &self.executor
+                            );
+                            // TODO check val
+                        },
+                        Some(ExternalOpcode::Create) => {
+                            if let Some(limit) = self.executor.config.create_contract_limit {
+                                if return_value.len() > limit {
+                                    debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
+                                    self.executor.state.exit_discard().unwrap();
+                                    return Err((ExitError::CreateContractLimit.into()))
+                                    // TODO: may be continue ?
+                                    // reson = ExitReason::Error(ExitError::CreateContractLimit);
+                                }
+                            }
+                            if let Some(created_address) = external_opcode_address{
+                                self.executor.state.set_code(created_address, return_value.clone());
+                                let val =  create_result_save(
+                                    runtime,
+                                    reason,
+                                    Some(created_address),
+                                    return_value,
+                                    &self.executor );
+                                // TODO check val
+                            }
+                        },
+                        _ => {}
+                    }
                 }
             },
             modify::add(runtime) => {

@@ -9,7 +9,9 @@ from eth_keys import keys
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
+# evm_loader_id = "Gw3fK17P5HsZ3titT139SnmBF9cwuYEBb4zwUUgfT2Ua"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -38,31 +40,36 @@ class EventTest(unittest.TestCase):
         (cls.reId_caller, cls.reId_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
         (cls.reId_reciever, cls.reId_reciever_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
         (cls.reId_recover, cls.reId_recover_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_create_caller, cls.reId_create_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"Create_Caller.binary", solana2ether(cls.acc.public_key()))
         print ('contract_caller', cls.reId_caller)
         print ('contract_caller_eth', cls.reId_caller_eth.hex())
         print ('contract_reciever', cls.reId_reciever)
         print ('contract_receiver_eth', cls.reId_reciever_eth.hex())
         print ('contract_recover', cls.reId_recover)
         print ('contract_recover_eth', cls.reId_recover_eth.hex())
+        print ('contract_create_caller', cls.reId_create_caller)
+        print ('contract_create_caller_eth', cls.reId_create_caller_eth.hex())
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def sol_instr_05(self, evm_instruction):
+    def sol_instr_05(self, evm_instruction, contract):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
-                                       AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_create_caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def call_signed(self, input):
+    def call_signed(self, input, contract):
         tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
             'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
@@ -70,7 +77,7 @@ class EventTest(unittest.TestCase):
         assert (from_addr == self.caller_ether)
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(self.sol_instr_05(from_addr + sign + msg))
+        trx.add(self.sol_instr_05(from_addr + sign + msg, contract))
         return http_client.send_transaction(trx, self.acc,
                                      opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
@@ -78,7 +85,7 @@ class EventTest(unittest.TestCase):
     def test_callFoo(self):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
-        result = self.call_signed(input=data)
+        result = self.call_signed(input=data, contract=self.reId_caller)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
@@ -127,7 +134,7 @@ class EventTest(unittest.TestCase):
                 bytes.fromhex("%062x" % 0x0 + "41") +
                 sig.to_bytes()
                 )
-        result = self.call_signed(input=data)
+        result = self.call_signed(input=data, contract=self.reId_caller)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
@@ -165,3 +172,11 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
+
+    # def test_create_opcode(self):
+    #     func_name = abi.function_signature_to_4byte_selector('call()')
+    #     result = self.call_signed(input=func_name, contract=self.reId_create_caller)
+    #     self.assertEqual(result['meta']['err'], None)
+    #     self.assertEqual(len(result['meta']['innerInstructions']), 1)
+    #     self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
+    #     self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
