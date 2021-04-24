@@ -9,7 +9,7 @@ use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use evm_loader::{
-    account_data::AccountType,
+    account_data::AccountData,
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
 };
@@ -123,9 +123,9 @@ impl EmulatorAccountStorage {
                     eprintln!("Account data len {}", acc.data.len());
                     eprintln!("Account owner {}", acc.owner.to_string());
 
-                    let account_data = match AccountType::unpack(&acc.data) {
+                    let account_data = match AccountData::unpack(&acc.data) {
                         Ok(acc_data) => match acc_data {
-                            AccountType::AccountData(acc) => acc,
+                            AccountData::Account(acc) => acc,
                             _ => return false,
                         },
                         Err(_) => return false,
@@ -226,9 +226,9 @@ impl EmulatorAccountStorage {
             };
             arr.push(AccountJSON{address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()), writable: acc.writable, new: false, key: solana_address.to_string()});
             if acc.code_account.is_some() {
-                let code_key = match AccountType::unpack(&acc.account.data) {
+                let code_key = match AccountData::unpack(&acc.account.data) {
                     Ok(acc_data) => match acc_data {
-                        AccountType::AccountData(acc) => acc.code_account,
+                        AccountData::Account(acc) => acc.code_account,
                         _ => Pubkey::new_from_array([0u8; 32]),
                     },
                     Err(_) => Pubkey::new_from_array([0u8; 32]),
@@ -265,18 +265,18 @@ impl AccountStorage for EmulatorAccountStorage {
         match accounts.get(&address) {
             None => d(),
             Some(acc) => {
-                let account_data = match AccountType::unpack(&acc.account.data) {
+                let account_data = match AccountData::unpack(&acc.account.data) {
                     Ok(acc_data) => match acc_data {
-                        AccountType::AccountData(acc) => acc,
+                        AccountData::Account(acc) => acc,
                         _ => return d(),
                     },
                     Err(_) => return d(),
                 };
                 if acc.code_account.is_some() {
                     let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
-                    let contract_data = match AccountType::unpack(&code_data) {
+                    let contract_data = match AccountData::unpack(&code_data) {
                         Ok(acc_data) => match acc_data {
-                            AccountType::ContractData(acc) => acc,
+                            AccountData::Contract(acc) => acc,
                             _ => return d(),
                         },
                         Err(_) => return d(),

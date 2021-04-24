@@ -234,7 +234,7 @@ pub fn on_return(
     status: u8,
     result: &Vec<u8>
 ) -> Result<Instruction, ProgramError> {
-    let mut data = Vec::new();
+    let mut data = Vec::with_capacity(2 + result.len());
     data.push(6u8);
     data.push(status);
     data.extend(result);
