@@ -444,18 +444,17 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
     let mut data = account_info.data.borrow_mut();
 
     let account_data = AccountData::unpack(&data)?;
-    let header_size: usize = match account_data {
+    match account_data {
         AccountData::Contract(ref acc) => {
             if acc.code_size != 0 {
                 return Err(ProgramError::InvalidAccountData);
             }
-            account_data.size()
         },
         AccountData::Account(_) => return Err(ProgramError::InvalidAccountData),
-        AccountData::Empty => account_data.size(),
+        AccountData::Empty => (),
     };
 
-    let offset = header_size + offset as usize;
+    let offset = account_data.size() + offset as usize;
     if data.len() < offset + bytes.len() {
         debug_print!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
