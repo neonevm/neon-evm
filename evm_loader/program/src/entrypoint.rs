@@ -492,7 +492,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             let data = program_code.data.borrow();
             let contract_info_data = AccountData::unpack(&data)?;
             match contract_info_data {
-                AccountData::Empty => (),
+                AccountData::Contract (..) => (),
                 _ => return Err(ProgramError::InvalidAccountData),
             };
 
