@@ -5,13 +5,15 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from eth_utils import abi
 from web3.auto import w3
 from eth_keys import keys
+from web3 import Web3
+
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "FVM179dfPgVftPYmB4vYmN2mzRiRyxFyGjsFkhWywcXe"
+# evm_loader_id = "FVM179dfPgVftPYmB4vYmN2mzRiRyxFyGjsFkhWywcXe"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -50,6 +52,12 @@ class EventTest(unittest.TestCase):
         print ('contract_create_caller', cls.reId_create_caller)
         print ('contract_create_caller_eth', cls.reId_create_caller_eth.hex())
 
+        with open(CONTRACTS_DIR+"Create_Receiver.binary", mode='rb') as file:
+            fileHash = Web3.keccak(file.read())
+            ether = bytes(Web3.keccak(b'\xff' + cls.reId_create_caller_eth + bytes() + fileHash)[-20:])
+        (cls.create2_address, _) = cls.loader.ether2programAddress(ether)
+        print ("create2_address", cls.create2_address)
+
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
@@ -65,6 +73,7 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.create2_address, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -173,10 +182,12 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
 
-    # def test_create_opcode(self):
-    #     func_name = abi.function_signature_to_4byte_selector('call()')
-    #     result = self.call_signed(input=func_name, contract=self.reId_create_caller)
-    #     self.assertEqual(result['meta']['err'], None)
-    #     self.assertEqual(len(result['meta']['innerInstructions']), 1)
-    #     self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
-    #     self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+
+    def test_create2_opcode(self):
+        func_name = abi.function_signature_to_4byte_selector('creator()')
+        result = self.call_signed(input=func_name, contract=self.reId_create_caller)
+        print(result)
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
