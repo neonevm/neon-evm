@@ -74,7 +74,7 @@ impl AccountData {
 }
 
 impl Account {
-    pub const SIZE: usize = 20+1+8+32+32;
+    const SIZE: usize = 20+1+8+32+32;
 
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Account::SIZE];
