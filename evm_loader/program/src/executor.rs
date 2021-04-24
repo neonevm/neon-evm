@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 use std::rc::Rc;
 use evm_runtime::{save_return_value, save_created_address};
-use evm::{ExternalOpcode};
 
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
@@ -197,20 +196,20 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                 },
             };
 
-        // self.state.create(&scheme, &address);
+        self.state.create(&scheme, &address);
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
 
-        // if let code= self.state.code(address) {
-        //     if code.len() != 0 {
-        //         // let _ = self.merge_fail(substate);
-        //         return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
-        //     }
-        // }
+        if let code= self.state.code(address) {
+            if code.len() != 0 {
+                // let _ = self.merge_fail(substate);
+                return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+            }
+        }
 
-        // if self.state.basic(address).nonce  > U256::zero() {
-        //     return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
-        // }
+        if self.state.basic(address).nonce  > U256::zero() {
+            return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+        }
 
         let context = evm::Context {
             address,
@@ -365,14 +364,14 @@ impl<'config, B: Backend> Machine<'config, B> {
                                     runtime_modify = modify::remove(reason.clone());
                                 }
                             },
-                            ExitReason::Error(_) => {
-                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
-                                self.executor.state.exit_discard().unwrap();
-                                return Err(reason.clone());
-                            },
                             ExitReason::Revert(_) => {
                                 debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
                                 self.executor.state.exit_revert().unwrap();
+                                return Err(reason.clone());
+                            },
+                            ExitReason::Error(_) => {
+                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
+                                self.executor.state.exit_discard().unwrap();
                                 return Err(reason.clone());
                             },
                             ExitReason::Fatal(_) => {
@@ -400,10 +399,10 @@ impl<'config, B: Backend> Machine<'config, B> {
                         Resolve::Create(interrupt, resolve) =>{
                             mem::forget(resolve);
                             self.executor.state.enter(u64::max_value(), false);
-                            // self.executor.state.touch(interrupt.address);
-                            // if self.executor.config.create_increase_nonce {
-                            //     self.executor.state.inc_nonce(interrupt.address);
-                            // }
+                            self.executor.state.touch(interrupt.address);
+                            if self.executor.config.create_increase_nonce {
+                                self.executor.state.inc_nonce(interrupt.address);
+                            }
 
                             let mut runtime = evm::Runtime::new(
                                 Rc::new(interrupt.init_code),

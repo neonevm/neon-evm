@@ -8,10 +8,10 @@ from eth_keys import keys
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
-# evm_loader_id = "Du5eaCq1rNMHgSyUdtummEK2zWUEwydH3xgN4uh6gR5A"
+evm_loader_id = "GsN8XgD4cqzCRhvprYNqrDMZErYSKp4wtFFGNudn338B"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
