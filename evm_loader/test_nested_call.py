@@ -41,6 +41,7 @@ class EventTest(unittest.TestCase):
         (cls.reId_reciever, cls.reId_reciever_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
         (cls.reId_recover, cls.reId_recover_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
         (cls.reId_create_caller, cls.reId_create_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"Create_Caller.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_revert, cls.reId_revert_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Revert.binary", solana2ether(cls.acc.public_key()))
         print ('reId_contract_caller', cls.reId_caller)
         print ('reId_contract_caller_eth', cls.reId_caller_eth.hex())
         print ('reId_contract_reciever', cls.reId_reciever)
@@ -49,6 +50,8 @@ class EventTest(unittest.TestCase):
         print ('reId_contract_recover_eth', cls.reId_recover_eth.hex())
         print ('reId_contract_create_caller', cls.reId_create_caller)
         print ('reId_contract_create_caller_eth', cls.reId_create_caller_eth.hex())
+        print ('reId_contract_revert', cls.reId_revert)
+        print ('reId_contract_revert_eth', cls.reId_revert_eth.hex())
 
         with open(CONTRACTS_DIR+"Create_Receiver.binary", mode='rb') as file:
             fileHash = Web3.keccak(file.read())
@@ -73,6 +76,7 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -213,3 +217,24 @@ class EventTest(unittest.TestCase):
         self.assertEqual(count_topics, 1)
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
+
+    def test_nested_revert(self):
+        func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
+        data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
+        result = self.call_signed(input=data, contract=self.reId_caller)
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)  # TODO: why not 1?
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+
+        #  emit Result(success, data);
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
+        self.assertEqual(data[1:21], self.reId_caller_eth)
+        count_topics = int().from_bytes(data[21:29], 'little')
+        self.assertEqual(count_topics, 1)
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result(bool,bytes)'))
+        self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + "00")) # result false
+        self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
+        self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "00"))
+
