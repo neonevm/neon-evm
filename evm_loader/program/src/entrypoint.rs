@@ -598,31 +598,17 @@ fn do_call<'a>(
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        // let config = evm::Config::istanbul();
-        // let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-        // debug_print!("Executor initialized");
-
-        // let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
-        let executor_state = ExecutorState::new(ExecutorMetadata::new(), backend);
-        let mut executor = Machine::new(executor_state);
-
+        let config = evm::Config::istanbul();
+        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
         debug_print!("Executor initialized");
 
-        debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
-        debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
-
-        executor.call_begin(caller_ether.0, contract_ether, instruction_data.to_vec(), u64::max_value());
-        let exit_reason = executor.execute();
-        let result = executor.return_value();
-
+        let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
 
         debug_print!("Call done");
 
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            // let (applies, logs) = executor.deconstruct();
-            let executor_state = executor.into_state();
-            let (mut backend, (applies, logs)) = executor_state.deconstruct();
+            let (applies, logs) = executor.deconstruct();
             (exit_reason, result, Some((applies, logs)))
         } else {
             (exit_reason, result, None)
