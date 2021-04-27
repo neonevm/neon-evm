@@ -6,7 +6,7 @@ use crate::{
 use evm::backend::Apply;
 use primitive_types::{H160, H256, U256};
 use solana_program::{
-    account_info::AccountInfo,
+    account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
@@ -33,66 +33,54 @@ impl<'a> ProgramAccountStorage<'a> {
         let mut contract_id: H160 = H160::zero();
         let mut caller_id: H160 = H160::zero();
 
-        let mut skip_next: bool = false;
-        let mut contract: bool = true;
-        let mut caller: bool = true;
-        for (i, account_info) in (&account_infos).iter().enumerate() {
-            debug_print!("{}", &i);
+        let account_info_iter = &mut account_infos.iter();
+        let mut index: usize = 0;
 
-            if skip_next {
-                skip_next = false;
-                accounts.push(None);
-                continue;
-            }
-
+        while let Ok(account_info) = next_account_info(account_info_iter) {
             if account_info.owner == program_id {
                 let account_data = AccountData::unpack(&account_info.data.borrow())?;
-                let account = match account_data {
-                    AccountData::Account(ref acc) => acc,
-                    _ => return Err(ProgramError::InvalidAccountData),
-                };
+                let account = AccountData::get_account(&account_data)?;
+
                 let code_data = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
-                    debug_print!("code_account == Pubkey::new_from_array([0u8; 32])");
+                    debug_print!("Common account");
+
+                    if caller_id == H160::zero() {
+                        caller_id = account.ether;
+                        debug_print!("caller id: {}", &caller_id.to_string());
+                    }
+
                     None
                 } else {
-                    debug_print!("code_account != Pubkey::new_from_array([0u8; 32])");
-                    debug_print!("account key:  {}", &account_info.key.to_string());
-                    debug_print!("code account: {}", &account.code_account.to_string());
-                    if account_infos.len() < i+2 {
-                        return Err(ProgramError::NotEnoughAccountKeys)
+                    debug_print!("Contract account");
+
+                    if contract_id == H160::zero() {
+                        contract_id = account.ether;
+                        debug_print!("contract id: {}", &contract_id.to_string());
                     }
-                    if *account_infos[i+1].key != account.code_account {
+
+                    let code_info = next_account_info(account_info_iter)?;
+                    if *code_info.key != account.code_account {
                         return Err(ProgramError::InvalidAccountData)
                     }
-                    skip_next = true;
-                    let code_data = account_infos[i+1].data.clone();
+
+                    let code_data = code_info.data.clone();
                     let code_acc = AccountData::unpack(&code_data.borrow())?;
-                    match code_acc {
-                        AccountData::Contract(_) => (),
-                        _ => return Err(ProgramError::InvalidAccountData),
-                    };
+                    AccountData::get_contract(&code_acc)?;
+
                     Some((code_acc, code_data))
                 };
+
                 let sol_account = SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, code_data)?;
-                aliases.push((sol_account.get_ether(), i));
 
-                if contract {
-                    contract = false;
-                    contract_id = sol_account.get_ether();
-                    debug_print!("contract id: {}", &contract_id.to_string());
-                } else if caller {
-                    caller = false;
-                    caller_id = sol_account.get_ether();
-                    debug_print!("caller id: {}", &caller_id.to_string());
-                }
-
+                aliases.push((sol_account.get_ether(), index));
                 accounts.push(Some(sol_account));
-            } else {
-                accounts.push(None);
+                index += 1;
             }
         }
+
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
+
         Ok(Self {
             accounts: accounts,
             aliases: RefCell::new(aliases),
