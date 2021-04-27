@@ -1,6 +1,14 @@
 use primitive_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
+use solana_program::{ 
+    sysvar::instructions::{load_current_index, load_instruction_at},
+    account_info::AccountInfo,
+    entrypoint::{ ProgramResult },
+    program_error::{ProgramError},
+    secp256k1_program
+};
+use std::convert::Into;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -13,16 +21,15 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize) -> Vec<u8> {
+pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, data_start: u16) -> Vec<u8> {
     let mut instruction_data = vec![];
 
-    const CHECK_COUNT: u8 = 1;
-    const DATA_START: u16 = 1;
+    const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
     const SIGN_SIZE: u16 = 65;
-    const ETH_OFFSET: u16 = DATA_START;
-    const SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
-    const MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+    let ETH_OFFSET: u16 = data_start;
+    let SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
+    let MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
 
     let offsets = SecpSignatureOffsets {
         signature_offset: SIGN_OFFSET as u16,
@@ -36,11 +43,40 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize) ->
 
     let bin_offsets = bincode::serialize(&offsets).unwrap();
 
-    instruction_data.push(1);
+    instruction_data.push(NUMBER_OF_SIGNATURES);
     instruction_data.extend(&bin_offsets);
 
     instruction_data
 }
+
+pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
+{
+    let current_instruction = load_current_index(&sysvar_info.try_borrow_data()?);
+    let index = current_instruction - 1;
+
+    match load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
+        Ok(instr) => {
+            if secp256k1_program::check_id(&instr.program_id) {
+                let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
+                if reference_instruction != instr.data {
+                    debug_print!("wrong keccak instruction data");
+                    debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
+                    debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+            } else {
+                return Err(ProgramError::IncorrectProgramId);
+            }
+        },
+        Err(err) => {
+            debug_print!("ERR");
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+    }
+
+    Ok(())
+}
+
 
 #[derive(Debug)]
 pub struct UnsignedTransaction {

@@ -197,12 +197,11 @@ def make_instruction_data_from_tx(instruction, private_key=None):
     else:
         raise Exception("function gets ")   
 
-def make_keccak_instruction_data(check_instruction_index, msg_len):  
+def make_keccak_instruction_data(check_instruction_index, msg_len, data_start = 1):  
     if check_instruction_index > 255 and check_instruction_index < 0:
         raise Exception("Invalid index for instruction - {}".format(check_instruction_index))
 
     check_count = 1
-    data_start = 1
     eth_address_size = 20
     signature_size = 65
     eth_address_offset = data_start

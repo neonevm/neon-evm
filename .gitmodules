@@ -1,4 +1,4 @@
 [submodule "evm_loader/rust-evm"]
 	path = evm_loader/rust-evm
 	url = https://github.com/Cyber-Core/evm.git
-	branch = evm_deconstruct_return_not_iterators
+	branch = evm_integration

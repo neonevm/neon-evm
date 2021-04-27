@@ -131,6 +131,15 @@ pub enum EvmInstruction<'a> {
         /// Data
         data: &'a [u8],
     },
+
+    PartialCallFromRawEthereumTX {
+        step_count: u64,
+        from_addr: &'a [u8],
+        sign: &'a [u8],
+        unsigned_msg: &'a [u8],
+    },
+
+    Continue {},
 }
 
 
@@ -221,6 +230,16 @@ impl<'a> EvmInstruction<'a> {
             },
             8 => {
                 EvmInstruction::ExecuteTrxFromAccountData
+            },
+            9 => {
+                let (step_count, rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (from_addr, rest) = rest.split_at(20);
+                let (sign, unsigned_msg) = rest.split_at(65);
+                EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg}
+            },
+            10 => {
+                EvmInstruction::Continue {}
             },
 
             _ => return Err(InvalidInstructionData),
