@@ -402,6 +402,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
@@ -416,6 +417,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
@@ -677,8 +679,8 @@ fn do_partial_call<'a>(
     let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
+        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
 
         debug_print!("   caller: {}", &caller_ether.0.to_string());
         debug_print!(" contract: {}", &contract_ether.to_string());
@@ -765,7 +767,7 @@ fn do_continue<'a>(
     };
 
     if let Some((applies, logs)) = applies_logs {
-        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
         account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
@@ -773,7 +775,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result)
+    invoke_on_return(&program_id, &accounts, exit_reason, &result)
 }
 
 fn invoke_on_return<'a>(

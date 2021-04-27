@@ -35,9 +35,9 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId_caller, cls.reId_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_reciever, cls.reId_reciever_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_recover, cls.reId_recover_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_caller, cls.reId_caller_eth, cls.reId_caller_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_reciever, cls.reId_reciever_eth, cls.reId_reciever_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_recover, cls.reId_recover_eth, cls.reId_recover_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
         print ('contract_caller', cls.reId_caller)
         print ('contract_caller_eth', cls.reId_caller_eth.hex())
         print ('contract_reciever', cls.reId_reciever)
@@ -54,10 +54,13 @@ class EventTest(unittest.TestCase):
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -165,3 +168,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
+
+if __name__ == '__main__':
+    unittest.main()
