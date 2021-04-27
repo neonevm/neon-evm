@@ -71,6 +71,34 @@ impl AccountData {
             _ => return 1,
         }
     }
+
+    pub fn get_account(&self) -> Result<&Account, ProgramError>  {
+        match self {
+            AccountData::Account(ref acc) => Ok(acc),
+            _ => return Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    pub fn get_mut_account(&mut self) -> Result<&mut Account, ProgramError>  {
+        match self {
+            AccountData::Account(ref mut acc) => Ok(acc),
+            _ => return Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
+        match self {
+            AccountData::Contract(ref acc) => Ok(acc),
+            _ => return Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    pub fn get_mut_contract(&mut self) -> Result<&mut Contract, ProgramError>  {
+        match self {
+            AccountData::Contract(ref mut acc) => Ok(acc),
+            _ => return Err(ProgramError::InvalidAccountData),
+        }
+    }
 }
 
 impl Account {
