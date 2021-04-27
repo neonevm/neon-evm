@@ -46,27 +46,29 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             if account_info.owner == program_id {
-                let account_data = match AccountData::unpack(&account_info.data.borrow())? {
-                    AccountData::Account(acc) => acc,
+                let account_data = AccountData::unpack(&account_info.data.borrow())?;
+                let account = match account_data {
+                    AccountData::Account(ref acc) => acc,
                     _ => return Err(ProgramError::InvalidAccountData),
                 };
-                let code_data = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
+                let code_data = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
                     debug_print!("code_account == Pubkey::new_from_array([0u8; 32])");
                     None
                 } else {
                     debug_print!("code_account != Pubkey::new_from_array([0u8; 32])");
                     debug_print!("account key:  {}", &account_info.key.to_string());
-                    debug_print!("code account: {}", &account_data.code_account.to_string());
+                    debug_print!("code account: {}", &account.code_account.to_string());
                     if account_infos.len() < i+2 {
                         return Err(ProgramError::NotEnoughAccountKeys)
                     }
-                    if *account_infos[i+1].key != account_data.code_account {
+                    if *account_infos[i+1].key != account.code_account {
                         return Err(ProgramError::InvalidAccountData)
                     }
                     skip_next = true;
                     let code_data = account_infos[i+1].data.clone();
-                    let code_acc = match AccountData::unpack(&code_data.borrow())? {
-                        AccountData::Contract(acc) => acc,
+                    let code_acc = AccountData::unpack(&code_data.borrow())?;
+                    match code_acc {
+                        AccountData::Contract(_) => (),
                         _ => return Err(ProgramError::InvalidAccountData),
                     };
                     Some((code_acc, code_data))

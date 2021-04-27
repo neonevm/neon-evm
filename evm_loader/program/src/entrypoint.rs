@@ -155,8 +155,9 @@ fn process_instruction<'a>(
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
-            let base_info_data = match AccountData::unpack(&base_info.data.borrow())? {
-                AccountData::Account(acc) => acc,
+            let base_info_data = AccountData::unpack(&base_info.data.borrow())?;
+            match base_info_data {
+                AccountData::Account(_) => (),
                 _ => return Err(ProgramError::InvalidAccountData),
             };
             let caller = SolidityAccount::new(base_info.key, (*base_info.lamports.borrow()).clone(), base_info_data, None)?;

@@ -267,7 +267,7 @@ impl AccountStorage for EmulatorAccountStorage {
             Some(acc) => {
                 let account_data = match AccountData::unpack(&acc.account.data) {
                     Ok(acc_data) => match acc_data {
-                        AccountData::Account(acc) => acc,
+                        AccountData::Account(_) => acc_data,
                         _ => return d(),
                     },
                     Err(_) => return d(),
@@ -276,7 +276,7 @@ impl AccountStorage for EmulatorAccountStorage {
                     let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
                     let contract_data = match AccountData::unpack(&code_data) {
                         Ok(acc_data) => match acc_data {
-                            AccountData::Contract(acc) => acc,
+                            AccountData::Contract(_) => acc_data,
                             _ => return d(),
                         },
                         Err(_) => return d(),
