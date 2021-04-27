@@ -120,3 +120,49 @@ impl Contract {
         Ok(Contract::HEADER_SIZE)
     }
 }
+
+
+#[derive(Debug, Clone)]
+pub struct Storage {
+    pub caller: H160,
+    pub nonce: u64,
+    pub accounts_len: usize,
+    pub executor_data_size: usize,
+    pub evm_data_size: usize
+}
+
+impl Storage {
+    pub const SIZE: usize = 20+8+8+8+8;
+
+    pub fn unpack(src: &[u8]) -> Result<(Self, &[u8]), ProgramError> {
+        if src.len() < Storage::SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let data = array_ref![src, 0, Storage::SIZE];
+        let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8];
+        Ok((Self {
+            caller: H160::from(*caller),
+            nonce: u64::from_le_bytes(*nonce),
+            accounts_len: usize::from_le_bytes(*accounts_len),
+            executor_data_size: usize::from_le_bytes(*executor_data_size),
+            evm_data_size: usize::from_le_bytes(*evm_data_size),
+        }, &src[Storage::SIZE..]))
+    }
+
+    pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
+        if dst.len() < Storage::SIZE {
+            return Err(ProgramError::AccountDataTooSmall);
+        }
+
+        let data = array_mut_ref![dst, 0, Storage::SIZE];
+        let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8];
+        *caller = self.caller.to_fixed_bytes();
+        *nonce = self.nonce.to_le_bytes();
+        *accounts_len = self.accounts_len.to_le_bytes();
+        *executor_data_size = self.executor_data_size.to_le_bytes();
+        *evm_data_size = self.evm_data_size.to_le_bytes();
+
+        Ok(Storage::SIZE)
+    }
+}

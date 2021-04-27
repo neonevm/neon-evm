@@ -6,6 +6,8 @@ use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use std::mem;
+use crate::storage_account::StorageAccount;
+use solana_program::program_error::ProgramError;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -221,19 +223,17 @@ impl<'config, B: Backend> Machine<'config, B> {
         Self{ executor, runtime: Vec::new() }
     }
 
-    pub fn save_into(&self, storage: &mut [u8]) {
-        let machine_data = bincode::serialize(&self.runtime).unwrap();
-        let executor_state_data = self.executor.state.save();
-        
-        bincode::serialize_into(storage, &(machine_data, executor_state_data)).unwrap();
+    pub fn save_into(&self, storage: &mut StorageAccount) {
+        storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
-    pub fn restore(storage: &[u8], backend: B) -> Self {
-        let (machine_data, state_data): (Vec<u8>, Vec<u8>) = bincode::deserialize(&storage).unwrap();
-        let state = ExecutorState::restore(&state_data, backend);
+    pub fn restore(storage: &StorageAccount, backend: B) -> Self {
+        let (runtime, substate) = storage.deserialize().unwrap();
+
+        let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state, config: evm::Config::default() };
-        Self{ executor, runtime: bincode::deserialize(&machine_data).unwrap() }
+        Self{ executor, runtime }
     }
 
     pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {

@@ -64,9 +64,9 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction):
+    def sol_instr_10_continue(self, storage_account, step_count):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
@@ -123,7 +123,7 @@ class EventTest(unittest.TestCase):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-            trx.add(self.sol_instr_10_continue(storage, 50, instruction))
+            trx.add(self.sol_instr_10_continue(storage, 50))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):

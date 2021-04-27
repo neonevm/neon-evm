@@ -27,7 +27,8 @@ use crate::{
     utils::{keccak256_digest, solidity_address},
     transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction, check_secp256k1_instruction},
     executor::{ Machine },
-    executor_state::{ ExecutorState, ExecutorMetadata }
+    executor_state::{ ExecutorState, ExecutorSubstate },
+    storage_account::{ StorageAccount }
 };
 use evm::{
     backend::{Backend},
@@ -400,7 +401,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
-            let _storage_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
@@ -410,30 +411,21 @@ fn process_instruction<'a>(
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            do_partial_call(program_id, step_count, accounts, trx.call_data, Some( (caller, trx.nonce) ))
+            let mut storage = StorageAccount::new(storage_info, caller, trx.nonce)?;
+            storage.write_accounts(accounts)?;
+
+            do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))
         },
-        EvmInstruction::Continue {} => {
+        EvmInstruction::Continue {step_count} => {
             let account_info_iter = &mut accounts.iter();
-            let _storage_info = next_account_info(account_info_iter)?;
-            let _program_info = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
 
-            let (step_count, from_addr, sign, unsigned_msg) = {
-                let (_tag, rest) = instruction_data.split_first().ok_or(ProgramError::InvalidInstructionData)?;
-                let (step_count, rest) = rest.split_at(8);
-                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(ProgramError::InvalidInstructionData)?;
-                let (from_addr, rest) = rest.split_at(20);
-                let (sign, unsigned_msg) = rest.split_at(65);
+            let mut storage = StorageAccount::restore(storage_info)?;
+            storage.check_accounts(accounts)?;
 
-                check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
+            let caller_and_nonce = storage.caller_and_nonce();
 
-                (step_count, from_addr, sign, unsigned_msg)
-            };
-
-            let caller = H160::from_slice(from_addr);
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_continue(program_id, step_count, accounts, Some((caller, trx.nonce)))
+            do_continue(&mut storage, program_id, step_count, &accounts[1..], Some(caller_and_nonce))
         },
     };
 
@@ -650,6 +642,7 @@ fn do_call<'a>(
 }
 
 fn do_partial_call<'a>(
+    storage: &mut StorageAccount,
     program_id: &Pubkey,
     step_count: u64,
     accounts: &'a [AccountInfo<'a>],
@@ -660,7 +653,6 @@ fn do_partial_call<'a>(
     debug_print!("do_partial_call");
 
     let account_info_iter = &mut accounts.iter();
-    let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
@@ -673,7 +665,6 @@ fn do_partial_call<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let accounts = &accounts[1..];
     let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
@@ -689,7 +680,7 @@ fn do_partial_call<'a>(
     let backend = SolanaBackend::new(&account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let executor_state = ExecutorState::new(ExecutorMetadata::new(), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -701,8 +692,7 @@ fn do_partial_call<'a>(
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
-    let mut storage = storage_info.try_borrow_mut_data()?;
-    executor.save_into(&mut storage);
+    executor.save_into(storage);
 
     debug_print!("partial call complete");
 
@@ -710,6 +700,7 @@ fn do_partial_call<'a>(
 }
 
 fn do_continue<'a>(
+    storage: &mut StorageAccount,
     program_id: &Pubkey,
     step_count: u64,
     accounts: &'a [AccountInfo<'a>],
@@ -719,7 +710,6 @@ fn do_continue<'a>(
     debug_print!("do_continue");
 
     let account_info_iter = &mut accounts.iter();
-    let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
@@ -728,23 +718,18 @@ fn do_continue<'a>(
         caller_info
     };
 
-    let accounts = &accounts[1..];
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        let mut executor = {
-            let storage = storage_info.try_borrow_data()?;
-            Machine::restore(&storage, backend)
-        };
+        let mut executor = Machine::restore(storage, backend);
         debug_print!("Executor restored");
 
         let exit_reason = match executor.execute_n_steps(step_count) {
             Ok(()) => {
-                let mut storage = storage_info.try_borrow_mut_data()?;
-                executor.save_into(&mut storage);
+                executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 return Ok(());
             }

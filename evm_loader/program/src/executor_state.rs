@@ -95,9 +95,9 @@ pub struct ExecutorSubstate {
 }
 
 impl ExecutorSubstate {
-    pub fn new(metadata: ExecutorMetadata) -> Self {
+    pub fn new() -> Self {
         Self {
-            metadata,
+            metadata: ExecutorMetadata::new(),
             parent: None,
             logs: Vec::new(),
             accounts: BTreeMap::new(),
@@ -624,22 +624,15 @@ impl<B: Backend> StackState for ExecutorState<B> {
 }
 
 impl<B: Backend> ExecutorState<B> {
-    pub fn new(metadata: ExecutorMetadata, backend: B) -> Self {
+    pub fn new(substate: ExecutorSubstate, backend: B) -> Self {
         Self {
             backend,
-            substate: ExecutorSubstate::new(metadata),
+            substate,
         }
     }
 
-    pub fn save(&self) -> Vec<u8> {
-        bincode::serialize(&self.substate).unwrap()
-    }
-
-    pub fn restore(data: &[u8], backend: B) -> Self {
-        Self {
-            backend,
-            substate: bincode::deserialize(data).unwrap()
-        }
+    pub fn substate(&self) -> &ExecutorSubstate {
+        &self.substate
     }
 
     #[must_use]
