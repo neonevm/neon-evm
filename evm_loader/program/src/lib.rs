@@ -15,7 +15,7 @@ pub mod entrypoint;
 //pub mod state;
 mod hamt;
 pub mod solana_backend;
-mod account_data;
+pub mod account_data;
 pub mod account_storage;
 pub mod solidity_account;
 mod instruction;

@@ -181,19 +181,18 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
-        seed = str(b58encode(bytes.fromhex(ether)))
         base = self.acc.get_acc().public_key()
-        trx.add(createAccountWithSeed(base, base, seed, 10**9, 65, PublicKey(self.loader_id)))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**0,
+            data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**9,
                 space=0,
                 ether=bytes.fromhex(ether),
                 nonce=nonce)),
             keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=base, is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
         result = http_client.send_transaction(trx, self.acc.get_acc(),
                 opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
@@ -201,16 +200,16 @@ class EvmLoader:
         return sol
 
 
-    def ether2program(self, ether):
+    def ether2seed(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        seed = str(b58encode(bytes.fromhex(ether)))
+        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
 
-    def ether2programAddress(self, ether):
+    def ether2program(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
@@ -223,22 +222,23 @@ class EvmLoader:
         info = http_client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
-    def deployChecked(self, location,  creator=None):
+    def deployChecked(self, location, creator=None):
         from web3 import Web3
         if creator is None:
             creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
         with open(location, mode='rb') as file:
             fileHash = Web3.keccak(file.read())
             ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
-        program = self.ether2programAddress(ether)
+        program = self.ether2program(ether)
+        code = self.ether2seed(ether)
         info = http_client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)
-            return (res['programId'], bytes.fromhex(res['ethereum'][2:]))
+            return (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return (program[0], ether)
+            return (program[0], ether, code[0])
 
 
 def getBalance(account):
@@ -250,11 +250,12 @@ def solana2ether(public_key):
 
 
 ACCOUNT_INFO_LAYOUT = cStruct(
+    "type" / Int8ul,
     "eth_acc" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
     "signer_acc" / Bytes(32),
-    "code_size" / Int32ul
+    "code_acc" / Bytes(32),
 )
 
 class AccountInfo(NamedTuple):
@@ -273,6 +274,7 @@ def getAccountData(client, account, expected_length):
 
     data = base64.b64decode(info['data'][0])
     if len(data) != expected_length:
+        print("len(data)({}) != expected_length({})".format(len(data), expected_length))
         raise Exception("Wrong data length for account data {}".format(account))
     return data
 
