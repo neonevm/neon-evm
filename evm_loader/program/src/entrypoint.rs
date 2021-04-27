@@ -402,6 +402,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
@@ -416,6 +417,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
