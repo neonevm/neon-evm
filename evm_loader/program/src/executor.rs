@@ -281,12 +281,13 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
-pub enum RuntimeImpl {
+pub enum CreateReason {
+    Root,
     Call,
-    Create(H160)
+    Create(H160),
 }
 
-type runtime_info<'config> = (evm::Runtime<'config>, Option<RuntimeImpl>);
+type runtime_info<'config> = (evm::Runtime<'config>, CreateReason);
 
 pub struct Machine<'config, B: Backend> {
     executor: Executor<'config, B>,
@@ -346,7 +347,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
 
         let runtime = evm::Runtime::new(Rc::new(code), Rc::new(input), context, &self.executor.config);
-        self.runtime.push((runtime, None));
+        self.runtime.push((runtime, CreateReason::Root));
     }
 
 
@@ -396,7 +397,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     info.context,
                     &self.executor.config
                 );
-                self.runtime.push((instance, Some(RuntimeImpl::Call)));
+                self.runtime.push((instance, CreateReason::Call));
                 return Ok(())
             },
             RuntimeApply::Create(info) => {
@@ -412,7 +413,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     info.context,
                     &self.executor.config
                 );
-                self.runtime.push((instance, Some(RuntimeImpl::Create(info.address))));
+                self.runtime.push((instance, CreateReason::Create(info.address)));
                 return Ok(())
             },
             RuntimeApply::Exit(exit_reason) => {
@@ -439,7 +440,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let mut return_value = Vec::new();
-                let mut implementation: Option<RuntimeImpl> = None;
+                let mut implementation = CreateReason::Root;
                 if let Some(runtime) = self.runtime.last(){
                     return_value = runtime.0.machine().return_value();
                     implementation = runtime.1;
@@ -448,7 +449,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
                 if let Some(runtime) = self.runtime.last_mut(){
                     match implementation {
-                        Some(RuntimeImpl::Call) => {
+                        CreateReason::Call => {
                             match  save_return_value(
                                 runtime.0.borrow_mut(),
                                 exit_reason,
@@ -463,7 +464,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                                 }
                             }
                         },
-                        Some(RuntimeImpl::Create(created_address)) => {
+                        CreateReason::Create(created_address) => {
                             if let Some(limit) = self.executor.config.create_contract_limit {
                                 if return_value.len() > limit {
                                     debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
@@ -487,8 +488,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                                 }
                             }
                         },
-                        None => {
-                            debug_print!("runtime.step: RuntimeApply::Exit, impl: NotSupported");
+                        CreateReason::Root => {
+                            debug_print!("runtime.step: RuntimeApply::Exit, impl: Root");
                             return Err(ExitReason::Fatal(ExitFatal::NotSupported));
                         }
                     }
