@@ -24,8 +24,8 @@ RUN cd /opt/memo/program && cargo build-bpf
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
-RUN cargo build-bpf
-RUN cd ../emulator && cargo build --release --features no-logs
+RUN cargo build-bpf --features no-logs
+RUN cd ../emulator && cargo build --release
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
