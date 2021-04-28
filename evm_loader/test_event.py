@@ -35,15 +35,17 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId, cls.reId_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"ReturnsEvents.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(CONTRACTS_DIR+"ReturnsEvents.binary", solana2ether(cls.acc.public_key()))
         print ('contract', cls.reId)
         print ('contract_eth', cls.reId_eth.hex())
+        print ('contract_code', cls.re_code)
 
     def sol_instr_05(self, evm_instruction):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -56,6 +58,7 @@ class EventTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -68,6 +71,7 @@ class EventTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),

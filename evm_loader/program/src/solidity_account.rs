@@ -1,5 +1,5 @@
 use crate::{
-    account_data::AccountData,
+    account_data::{AccountData, Account, Contract},
     hamt::Hamt,
     utils::{keccak256_digest, u256_to_h256},
 };
@@ -19,26 +19,23 @@ use std::convert::TryInto;
 pub struct SolidityAccount<'a> {
     account_data: AccountData,
     solana_address: &'a Pubkey,
-    data: Rc<RefCell<&'a mut [u8]>>,
+    code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>,
     lamports: u64,
 }
 
 impl<'a> SolidityAccount<'a> {
-    pub fn new(solana_address: &'a Pubkey, data: Rc<RefCell<&'a mut [u8]>>, lamports: u64) -> Result<Self, ProgramError> {
+    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
         debug_print!("  SolidityAccount::new");
-        let data_b = data.borrow();
-        debug_print!("  Get data with length {}", &data_b.len());
-        let (account_data, _) = AccountData::unpack(&data_b)?;
-        Ok(Self{account_data, solana_address, data: data.clone(), lamports})
+        Ok(Self{account_data, solana_address, code_data, lamports})
     }
 
-    pub fn get_signer(&self) -> Pubkey {self.account_data.signer}
+    pub fn get_signer(&self) -> Pubkey {AccountData::get_account(&self.account_data).unwrap().signer}
 
-    pub fn get_ether(&self) -> H160 {self.account_data.ether}
+    pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
-    pub fn get_nonce(&self) -> u64 {self.account_data.trx_count}
+    pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
-    pub fn code<U, F>(&self, f: F) -> U
+    fn code<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
         /*if let AccountData::Account{code_size,..} = self.account_data {
             if code_size > 0 {
@@ -47,17 +44,23 @@ impl<'a> SolidityAccount<'a> {
                 return f(&data[offset..offset+code_size as usize])
             }
         }*/
-        if self.account_data.code_size > 0 {
-            let data = self.data.borrow();
-            let offset = AccountData::SIZE;
-            let code_size = self.account_data.code_size as usize;
-            f(&data[offset..offset + code_size])
+        if self.code_data.is_none() {
+            return f(&[])
+        }
+
+        let contract_data = &self.code_data.as_ref().unwrap().0;
+        let contract = AccountData::get_contract(&contract_data).unwrap();
+        let code_size = contract.code_size as usize;
+
+        if code_size > 0 {
+            let data = self.code_data.as_ref().unwrap().1.borrow();
+            f(&data[contract_data.size()..contract_data.size()+code_size])
         } else {
             f(&[])
         }
     }
 
-    pub fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
+    fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
     where F: FnOnce(&mut Hamt) -> U {
         /*if let AccountData::Account{code_size,..} = self.account_data {
             if code_size > 0 {
@@ -69,16 +72,56 @@ impl<'a> SolidityAccount<'a> {
             }
         }
         Err(ProgramError::UninitializedAccount)*/
-        if self.account_data.code_size > 0 {
-            let mut data = self.data.borrow_mut();
+        if self.code_data.is_none() {
+            return Err(ProgramError::UninitializedAccount)
+        }
+
+        let contract_data = &self.code_data.as_ref().unwrap().0;
+        let contract = AccountData::get_contract(&contract_data)?;
+        let code_size = contract.code_size as usize;
+
+        if code_size > 0 {
+            let mut data = self.code_data.as_ref().unwrap().1.borrow_mut();
             debug_print!("Storage data borrowed");
-            let code_size = self.account_data.code_size as usize;
-            let offset = AccountData::SIZE + code_size;
-            let mut hamt = Hamt::new(&mut data[offset..], false)?;
+            let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size..], false)?;
             Ok(f(&mut hamt))
         } else {
             Err(ProgramError::UninitializedAccount)
         }
+    }
+
+    pub fn get_solana_address(&self) -> Pubkey {
+        *self.solana_address
+    }
+
+    pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
+    
+    pub fn basic(&self) -> Basic {
+        Basic { 
+            balance: self.lamports.into(), 
+            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), }
+        
+    }
+    
+    pub fn code_hash(&self) -> H256 {
+        self.code(|d| {
+            debug_print!("{}", &hex::encode(&d[0..32]));
+            keccak256_digest(d)
+        })
+    }
+    
+    pub fn code_size(&self) -> usize {
+        self.code(|d| d.len())
+    }
+    
+    pub fn get_code(&self) -> Vec<u8> {
+        self.code(|d| d.into())
+    }
+    
+    pub fn get_storage(&self, index: &H256) -> H256 {
+        let index = index.as_fixed_bytes().into();
+        let value = self.storage(|storage| storage.find(index)).unwrap_or_default();
+        if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
     }
 
     pub fn update<I>(
@@ -102,72 +145,62 @@ impl<'a> SolidityAccount<'a> {
             AccountData::Foreign => 0,
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
-        self.account_data.trx_count = nonce.as_u64();
+        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce.as_u64();
+
         if let Some(code) = code {
-            if self.account_data.code_size != 0 {
-                return Err(ProgramError::AccountAlreadyInitialized);
-            };
-            self.account_data.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
-            debug_print!("Write code");
-            data[AccountData::SIZE..AccountData::SIZE + code.len()].copy_from_slice(&code);
-            debug_print!("Code written");
+            debug_print!("Write contract");
+            match self.code_data {
+                Some((ref mut contract_data, ref mut code_data)) => {
+                    let mut code_data = code_data.borrow_mut();
+                    let contract = AccountData::get_mut_contract(contract_data)?;
+        
+                    if contract.code_size != 0 {
+                        return Err(ProgramError::AccountAlreadyInitialized);
+                    };
+                    contract.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
+        
+                    debug_print!("Write contract header");
+                    contract_data.pack(&mut code_data)?;
+                    debug_print!("Write code");
+                    code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(&code);
+                    debug_print!("Code written");
+                },
+                None => {
+                    debug_print!("Expected code account");
+                    return Err(ProgramError::NotEnoughAccountKeys);
+                }
+            }
         }
 
-        debug_print!("Write account data");
+        debug_print!("Write account data");        
         self.account_data.pack(&mut data)?;
 
         let mut storage_iter = storage_items.into_iter().peekable();
         let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
         if reset_storage || exist_items {
             debug_print!("Update storage");
-            let code_size = self.account_data.code_size as usize;
-            if code_size == 0 {return Err(ProgramError::UninitializedAccount);};
-
-            let mut storage = Hamt::new(&mut data[AccountData::SIZE + code_size..], reset_storage)?;
-            debug_print!("Storage initialized");
-            for (key, value) in storage_iter {
-                debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
+            match self.code_data {
+                Some((ref contract_data, ref mut code_data)) => {
+                    let mut code_data = code_data.borrow_mut();
+        
+                    let contract = AccountData::get_contract(&contract_data)?;
+                    if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+        
+                    let mut storage = Hamt::new(&mut code_data[contract_data.size()+(contract.code_size as usize)..], reset_storage)?;
+                    debug_print!("Storage initialized");
+                    for (key, value) in storage_iter {
+                        debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                        storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
+                    }
+                },
+                None => {
+                    debug_print!("Expected code account");
+                    return Err(ProgramError::NotEnoughAccountKeys);
+                }
             }
         }
 
         debug_print!("Account updated");
         Ok(())
-    }
-
-    pub fn get_solana_address(&self) -> Pubkey {
-        *self.solana_address
-    }
-
-    pub fn get_seeds(&self) -> (H160, u8) {
-        (self.account_data.ether, self.account_data.nonce)
-    }
-    
-    pub fn basic(&self) -> Basic {
-        Basic {
-            balance: self.lamports.into(),
-            nonce: U256::from(self.account_data.trx_count),
-        }
-    }
-    
-    pub fn code_hash(&self) -> H256 {
-        self.code(|d| {
-            debug_print!("{}", &hex::encode(&d[0..32]));
-            keccak256_digest(d)
-        })
-    }
-    
-    pub fn code_size(&self) -> usize {
-        self.code(|d| d.len())
-    }
-    
-    pub fn get_code(&self) -> Vec<u8> {
-        self.code(|d| d.into())
-    }
-    
-    pub fn get_storage(&self, index: &H256) -> H256 {
-        let index = index.as_fixed_bytes().into();
-        let value = self.storage(|storage| storage.find(index)).unwrap_or_default();
-        if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
     }
 }

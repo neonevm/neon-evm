@@ -106,8 +106,10 @@ class DeployTest(unittest.TestCase):
         # Create contract address from (caller, nonce)
         contract_eth = keccak_256(pack([self.caller_ether, trx_count or None])).digest()[-20:]
         (contract_sol, contract_nonce) = self.loader.ether2program(contract_eth)
+        (code_sol, code_nonce) = self.loader.ether2seed(contract_eth)
         print("contract_eth", contract_eth.hex())
         print("contract_sol", contract_sol, contract_nonce)
+        print("code_sol", code_sol)
 
         # Read content of solidity contract
         with open(CONTRACTS_DIR+"ERC20Wrapper.binary", "br") as f:
@@ -147,29 +149,31 @@ class DeployTest(unittest.TestCase):
             confirm_transaction(http_client, rcpt)
             print("confirmed:", rcpt)
 
-        # Create contract account & execute deploy transaction
-        trx = Transaction()
         base = self.acc.public_key()
-        seed = str(b58encode(contract_eth))
-        trx.add(createAccountWithSeed(base, base, seed, 10**9, 65+len(msg)+2048, PublicKey(evm_loader_id)))
+        seed = b58encode(contract_eth).decode('utf8')
+        # Execute deploy transaction
+        trx = Transaction()
+        trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
-            data=bytes.fromhex('66000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**0,
-                space=len(msg)+2048,
+            data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**9,
+                space=0,
                 ether=contract_eth,
                 nonce=contract_nonce)),
             keys=[
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                #AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('08'),
             keys=[
                 AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))

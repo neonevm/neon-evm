@@ -25,10 +25,11 @@ pub enum EvmInstruction<'a> {
     ///
     /// # Account references
     ///   0. [WRITE] The account to prepare for execution
-    ///   1. [WRITE] Caller (Ether account)
-    ///   2. [SIGNER] Signer for Ether account
-    ///   3. [] Clock sysvar
-    ///   4. [] Rent sysvar
+    ///   1. [WRITE] Contract code account (Code account)
+    ///   2. [WRITE] Caller (Ether account)
+    ///   3. [SIGNER] Signer for Ether account
+    ///   4. [] Clock sysvar
+    ///   5. [] Rent sysvar
     ///   ... other Ether accounts
     Finalize,
 
@@ -45,26 +46,8 @@ pub enum EvmInstruction<'a> {
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
     ///   1. [WRITE] New account (program_address(ether, nonce))
+    ///   2. (for contract creation) [WRITE] Code account for new contract account
     CreateAccount {
-        /// Number of lamports to transfer to the new account
-        lamports: u64,
-
-        /// Number of bytes of memory to allocate
-        space: u64,
-
-        /// Ethereum address of account
-        ether: H160,
-
-        /// Nonce for create valid program_address from ethereum address
-        nonce: u8,
-    },
-
-    ///
-    /// Create Ethereum account (create program_address account and write data)
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] New account (program_address(ether, nonce))
-    CreateAccount2 {
         /// Number of lamports to transfer to the new account
         lamports: u64,
 
@@ -103,16 +86,19 @@ pub enum EvmInstruction<'a> {
 
     /// Call Ethereum-contract action
     /// # Account references
-    ///   0. [WRITE] Contract for execution (Ether account)
-    ///   1. [WRITE] Caller (Ether account)
-    ///   2. [SIGNER] Signer for caller
-    ///   3. [] Clock sysvar
+    ///   0. [WRITE] Contract account for execution (Ether account)
+    ///   1. [WRITE] Contract code account (Code account)
+    ///   2. [WRITE] Caller (Ether account)
+    ///   3. [SIGNER] Signer for caller
+    ///   4. [] Clock sysvar
     ///   ... other Ether accounts
     Call {
         /// Call data
         bytes: &'a [u8],
     },
 
+    /// Call Ethereum-contract action from raw transaction data
+    /// # Account references same as in Call
     CallFromRawEthereumTX {
         /// Call data
         from_addr: &'a [u8],
@@ -120,16 +106,19 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
+    /// Call Ethereum-contract action from raw transaction data
+    /// # Account references same as in Call
     CheckEtheriumTX {
         /// Call data
         from_addr: &'a [u8],
         sign: &'a [u8],
         unsigned_msg: &'a [u8],
     },
+
     /// Called action return
     OnReturn {
         /// Contract execution status 
-        /// Success - 1 otherwise 0
+        /// Success - 0x11, 0x12 or 0x13 otherwise Error
         status: u8,
         /// Returned data
         bytes: &'a [u8],
@@ -185,19 +174,6 @@ impl<'a> EvmInstruction<'a> {
                 let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
-            },
-            102 => {
-                let (_, rest) = rest.split_at(3);
-                let (lamports, rest) = rest.split_at(8);
-                let (space, rest) = rest.split_at(8);
-
-                let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-
-                let (ether, rest) = rest.split_at(20);
-                let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
-                let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
-                EvmInstruction::CreateAccount2 {lamports, space, ether, nonce: *nonce}
             },
             3 => {
                 EvmInstruction::Call {bytes: rest}
@@ -275,15 +251,17 @@ impl<'a> EvmInstruction<'a> {
 pub fn on_return(
     myself_program_id: &Pubkey,
     status: u8,
-    mut result: Vec<u8>
+    result: &Vec<u8>
 ) -> Result<Instruction, ProgramError> {
-    result.insert(0, status);
-    result.insert(0, 6u8);
+    let mut data = Vec::with_capacity(2 + result.len());
+    data.push(6u8);
+    data.push(status);
+    data.extend(result);
 
     Ok(Instruction {
         program_id: *myself_program_id,
         accounts: [].to_vec(),
-        data: result,
+        data: data,
     })
 }
 

@@ -20,7 +20,7 @@ use solana_program::{
 use crate::{
 //    bump_allocator::BumpAllocator,
     instruction::{EvmInstruction, on_return, on_event},
-    account_data::AccountData,
+    account_data::{AccountData, Account, Contract},
     account_storage::ProgramAccountStorage, 
     solana_backend::SolanaBackend,    
     solidity_account::SolidityAccount,
@@ -113,50 +113,41 @@ fn process_instruction<'a>(
     debug_print!("Instruction parsed");
 
     let result = match instruction {
-        EvmInstruction::CreateAccount {lamports, space, ether, nonce} => {
+        EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
             let funding_info = next_account_info(account_info_iter)?;
-            let program_info = next_account_info(account_info_iter)?;
+            let account_info = next_account_info(account_info_iter)?;
 
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
-            if expected_address != *program_info.key {
+            if expected_address != *account_info.key {
+                debug_print!("expected_address != *program_info.key");
                 return Err(ProgramError::InvalidArgument);
             };
 
+            let code_account_key = {
+                let program_code = next_account_info(account_info_iter)?;
+                if program_code.owner == program_id {
+                    let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0u32} );
+                    contract_data.pack(&mut program_code.data.borrow_mut())?;
+    
+                    *program_code.key
+                } else {
+                    Pubkey::new_from_array([0u8; 32])
+                }
+            };
+
+            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key} );
+
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64 + space, program_id),
+                &create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
                 &accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
-            
-            let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_size: 0u32};
-            account_data.pack(&mut data)?;
-            Ok(())
-        },
-        EvmInstruction::CreateAccount2 {lamports, space, ether, nonce} => {
-            let funding_info = next_account_info(account_info_iter)?;
-            let program_info = next_account_info(account_info_iter)?;
 
-            debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
+            account_data.pack(&mut account_info.data.borrow_mut())?;
 
-            //let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
-            //if expected_address != *program_info.key {
-            //    return Err(ProgramError::InvalidArgument);
-            //};
-
-            //let program_seeds = [ether.as_bytes(), &[nonce]];
-            //invoke_signed(
-            //    &create_account(funding_info.key, program_info.key, lamports, AccountData::SIZE as u64 + space, program_id),
-            //    &accounts, &[&program_seeds[..]]
-            //)?;
-            //debug_print!("create_account done");
-            
-            let mut data = program_info.data.borrow_mut();
-            let account_data = AccountData {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_size: 0u32};
-            account_data.pack(&mut data)?;
             Ok(())
         },
         EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner} => {
@@ -166,10 +157,14 @@ fn process_instruction<'a>(
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
             if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
-            let caller = SolidityAccount::new(base_info.key, base_info.data.clone(), (*base_info.lamports.borrow()).clone())?;
+            let base_info_data = AccountData::unpack(&base_info.data.borrow())?;
+            match base_info_data {
+                AccountData::Account(_) => (),
+                _ => return Err(ProgramError::InvalidAccountData),
+            };
+            let caller = SolidityAccount::new(base_info.key, (*base_info.lamports.borrow()).clone(), base_info_data, None)?;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
-
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
             debug_print!("{}", &lamports.to_string());
@@ -183,11 +178,12 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Write {offset, bytes} => {
-            let program_info = next_account_info(account_info_iter)?;
-            if program_info.owner != program_id {
+            let account_info = next_account_info(account_info_iter)?;
+            if account_info.owner != program_id {
                 return Err(ProgramError::InvalidArgument);
             }
-            do_write(program_info, offset, &bytes)
+
+            do_write(account_info, offset, &bytes)
         },
         EvmInstruction::Finalize => {
             do_finalize(program_id, accounts)
@@ -196,13 +192,20 @@ fn process_instruction<'a>(
             do_call(program_id, accounts, &bytes, None)
         },
         EvmInstruction::ExecuteTrxFromAccountData => {
+            debug_print!("Execute transaction from account data");
+
             let account_info_iter = &mut accounts.iter();
             let trx_info = next_account_info(account_info_iter)?;
-            //let caller_info = next_account_info(account_info_iter)?;
 
             let (unsigned_msg, signature) = {
                 let data = trx_info.data.borrow();
-                let (_unused, rest) = data.split_at(AccountData::SIZE);
+                let account_info_data = AccountData::unpack(&data)?;
+                match account_info_data {
+                    AccountData::Empty => (),
+                    _ => return Err(ProgramError::InvalidAccountData),
+                };
+
+                let (acc_header, rest) = data.split_at(account_info_data.size());
                 let (signature, rest) = rest.split_at(65);
                 let (trx_len, rest) = rest.split_at(8);
                 let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
@@ -216,10 +219,10 @@ fn process_instruction<'a>(
             }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..], accounts.last().unwrap())?;
     
             let (exit_reason, result, applies_logs) = {
-                let caller = account_storage.get_account_by_index(1).ok_or(ProgramError::InvalidArgument)?;  
+                let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;  
                 if caller.get_nonce() != nonce {
                     debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
                     return Err(ProgramError::InvalidInstructionData);
@@ -267,13 +270,14 @@ fn process_instruction<'a>(
                 }
             }
 
-            invoke_on_return(&program_id, &accounts, exit_reason, result)?;
+            invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
 
             Ok(())
         },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
+            let program_code = next_account_info(account_info_iter)?;
             let caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
             let clock_info = next_account_info(account_info_iter)?;
@@ -296,7 +300,7 @@ fn process_instruction<'a>(
                     }
                 },
                 Err(err) => {
-                    debug_print!("ERR");                    
+                    debug_print!("ERR");
                     return Err(ProgramError::MissingRequiredSignature);
                 }
             }
@@ -313,6 +317,7 @@ fn process_instruction<'a>(
         EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg} => {    
             let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
+            let program_code = next_account_info(account_info_iter)?;
             let caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
             let clock_info = next_account_info(account_info_iter)?;
@@ -385,6 +390,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
@@ -399,6 +405,7 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let _storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
@@ -475,14 +482,26 @@ fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], i
     Err(ProgramError::InvalidInstructionData)
 }
 
-fn do_write(program_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
-    let mut data = program_info.data.borrow_mut();
-    let offset = offset as usize;
-    if data.len() < offset+AccountData::SIZE + bytes.len() {
+fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
+    let mut data = account_info.data.borrow_mut();
+
+    let account_data = AccountData::unpack(&data)?;
+    match account_data {
+        AccountData::Contract(ref acc) => {
+            if acc.code_size != 0 {
+                return Err(ProgramError::InvalidAccountData);
+            }
+        },
+        AccountData::Account(_) => return Err(ProgramError::InvalidAccountData),
+        AccountData::Empty => (),
+    };
+
+    let offset = account_data.size() + offset as usize;
+    if data.len() < offset + bytes.len() {
         debug_print!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
     }
-    data[offset+AccountData::SIZE..offset+AccountData::SIZE + bytes.len()].copy_from_slice(&bytes);
+    data[offset .. offset+bytes.len()].copy_from_slice(&bytes);
     Ok(())
 }
 
@@ -491,23 +510,18 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?
     } else {
         caller_info
     };
-    let clock_info = next_account_info(account_info_iter)?;
-    let rent_info = next_account_info(account_info_iter)?;
-
-    if program_info.owner != program_id {
-        return Err(ProgramError::InvalidArgument);
-    }
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
-    
+    let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
+
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
@@ -516,8 +530,14 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         debug_print!("  executor initialized");
 
         let code_data = {
-            let data = program_info.data.borrow();
-            let (_unused, rest) = data.split_at(AccountData::SIZE);
+            let data = program_code.data.borrow();
+            let contract_info_data = AccountData::unpack(&data)?;
+            match contract_info_data {
+                AccountData::Contract (..) => (),
+                _ => return Err(ProgramError::InvalidAccountData),
+            };
+
+            let (_contract_header, rest) = data.split_at(contract_info_data.size());
             let (code_len, rest) = rest.split_at(8);
             let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
             let (code, _rest) = rest.split_at(code_len as usize);
@@ -525,7 +545,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         };
     
         // let program_account = SolidityAccount::new(program_info)?;
-    
         debug_print!("Execute transact_create");
         let exit_reason = executor.transact_create2(
                 caller_ether.0,
@@ -553,7 +572,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result)?;
+    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
     
     Ok(())
 }
@@ -569,24 +588,19 @@ fn do_call<'a>(
 
     let account_info_iter = &mut accounts.iter();
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?
     } else {
         caller_info
     };
-    // let sysvar_info = next_account_info(account_info_iter)?;
-    // let clock_info = next_account_info(account_info_iter)?;
-
-    if program_info.owner != program_id {
-        return Err(ProgramError::InvalidArgument);
-    }
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
+        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
 
         debug_print!("   caller: {}", &caller_ether.0.to_string());
         debug_print!(" contract: {}", &contract_ether.to_string());
@@ -625,7 +639,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result)?;
+    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
 
     Ok(())
 }
@@ -643,6 +657,7 @@ fn do_partial_call<'a>(
     let account_info_iter = &mut accounts.iter();
     let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?
@@ -658,8 +673,8 @@ fn do_partial_call<'a>(
     let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
     let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.get_account_by_index(0).ok_or(ProgramError::InvalidArgument)?.get_ether();
+        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
 
         debug_print!("   caller: {}", &caller_ether.0.to_string());
         debug_print!(" contract: {}", &contract_ether.to_string());
@@ -702,6 +717,7 @@ fn do_continue<'a>(
     let account_info_iter = &mut accounts.iter();
     let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?
@@ -746,7 +762,7 @@ fn do_continue<'a>(
     };
 
     if let Some((applies, logs)) = applies_logs {
-        let caller_ether = get_ether_address(program_id, account_storage.get_account_by_index(1), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
+        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
         account_storage.apply(applies, false, Some(caller_ether))?;
         debug_print!("Applies done");
         for log in logs {
@@ -754,14 +770,14 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, result)
+    invoke_on_return(&program_id, &accounts, exit_reason, &result)
 }
 
 fn invoke_on_return<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
-    result: Vec<u8>,) -> ProgramResult
+    result: &Vec<u8>,) -> ProgramResult
 {    
     let exit_status = match exit_reason {
         ExitReason::Succeed(success_code) => { 
@@ -805,7 +821,7 @@ fn invoke_on_return<'a>(
 
     debug_print!("{}", &hex::encode(&result));
 
-    let ix = on_return(program_id, exit_status, result).unwrap();
+    let ix = on_return(program_id, exit_status, &result).unwrap();
     invoke(
         &ix,
         &accounts

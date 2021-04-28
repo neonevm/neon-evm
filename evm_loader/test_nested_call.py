@@ -38,11 +38,11 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId_caller, cls.reId_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_reciever, cls.reId_reciever_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_recover, cls.reId_recover_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_create_caller, cls.reId_create_caller_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"Create_Caller.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_revert, cls.reId_revert_eth) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Revert.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_caller, cls.reId_caller_eth, cls.reId_caller_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_reciever, cls.reId_reciever_eth, cls.reId_reciever_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_recover, cls.reId_recover_eth, cls.reId_recover_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_create_caller, cls.reId_create_caller_eth, cls.reId_create_caller_code) = cls.loader.deployChecked(CONTRACTS_DIR+"Create_Caller.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_revert, cls.reId_revert_eth, cls.reId_revert_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Revert.binary", solana2ether(cls.acc.public_key()))
         print ('reId_contract_caller', cls.reId_caller)
         print ('reId_contract_caller_eth', cls.reId_caller_eth.hex())
         print ('reId_contract_reciever', cls.reId_reciever)
@@ -57,7 +57,7 @@ class EventTest(unittest.TestCase):
         with open(CONTRACTS_DIR+"Create_Receiver.binary", mode='rb') as file:
             fileHash = Web3.keccak(file.read())
             cls.reId_create_receiver_eth = bytes(Web3.keccak(b'\xff' + cls.reId_create_caller_eth + bytes(32) + fileHash)[-20:])
-        (cls.reId_create_receiver, _) = cls.loader.ether2programAddress(cls.reId_create_receiver_eth)
+        (cls.reId_create_receiver, _) = cls.loader.ether2program(cls.reId_create_receiver_eth)
         print ("reId_create_receiver", cls.reId_create_receiver)
         print ("reId_create_receiver_eth", cls.reId_create_receiver_eth.hex())
 
@@ -65,38 +65,46 @@ class EventTest(unittest.TestCase):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract):
+    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction, contract):
+    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction, contract, code):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -111,7 +119,7 @@ class EventTest(unittest.TestCase):
 
         return storage
 
-    def call_partial_signed(self, input, contract):
+    def call_partial_signed(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 1, 'gas': 1, 'gasPrice': 1,
             'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
@@ -123,14 +131,14 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 500, instruction, contract))
+        trx.add(self.sol_instr_09_partial_call(storage, 400, instruction, contract, code))
         http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-            trx.add(self.sol_instr_10_continue(storage, 50, instruction, contract))
+            trx.add(self.sol_instr_10_continue(storage, 400, instruction, contract, code))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
@@ -139,23 +147,10 @@ class EventTest(unittest.TestCase):
                     return result
 
 
-    def call_signed(self, input, contract):
-        tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
-
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(self.sol_instr_05(from_addr + sign + msg, contract))
-        return http_client.send_transaction(trx, self.acc,
-                                     opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-
     def test_callFoo(self):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
-        result = self.call_partial_signed(input=data, contract=self.reId_caller)
+        result = self.call_partial_signed(input=data, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
@@ -205,7 +200,7 @@ class EventTest(unittest.TestCase):
                 sig.to_bytes()
                 )
         # result = self.call_signed(input=data, contract=self.reId_caller)
-        result = self.call_partial_signed(input=data, contract=self.reId_caller)
+        result = self.call_partial_signed(input=data, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
@@ -247,7 +242,7 @@ class EventTest(unittest.TestCase):
 
     def test_create2_opcode(self):
         func_name = abi.function_signature_to_4byte_selector('creator()')
-        result = self.call_partial_signed(input=func_name, contract=self.reId_create_caller)
+        result = self.call_partial_signed(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -280,7 +275,7 @@ class EventTest(unittest.TestCase):
     def test_nested_revert(self):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
-        result = self.call_partial_signed(input=data, contract=self.reId_caller)
+        result = self.call_partial_signed(input=data, contract=self.reId_caller, code=self.reId_caller_code)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
