@@ -16,10 +16,10 @@ use std::{
 };
 
 pub struct ProgramAccountStorage<'a> {
-    accounts: Vec<Option<SolidityAccount<'a>>>,
+    accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
-    account_infos: &'a [AccountInfo<'a>],
+    account_metas: Vec<&'a AccountInfo<'a>>,
     contract_id: H160,
     caller_id: H160,
 }
@@ -29,6 +29,7 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("account_storage::new");
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
+        let mut account_metas = Vec::with_capacity(account_infos.len());
 
         let mut contract_id: H160 = H160::zero();
         let mut caller_id: H160 = H160::zero();
@@ -73,7 +74,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 let sol_account = SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, code_data)?;
 
                 aliases.push((sol_account.get_ether(), index));
-                accounts.push(Some(sol_account));
+                accounts.push(sol_account);
+                account_metas.push(account_info);
                 index += 1;
             }
         }
@@ -85,7 +87,7 @@ impl<'a> ProgramAccountStorage<'a> {
             accounts: accounts,
             aliases: RefCell::new(aliases),
             clock_account,
-            account_infos: account_infos,
+            account_metas: account_metas,
             contract_id: contract_id,
             caller_id: caller_id,
         })
@@ -115,7 +117,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
     fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
         if let Some(pos) = self.find_account(address) {
-            self.accounts[pos].as_ref()
+            Some(&self.accounts[pos])
         } else {
             None
         }
@@ -140,8 +142,8 @@ impl<'a> ProgramAccountStorage<'a> {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
-                        let account = self.accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
-                        let account_info = &self.account_infos[pos];
+                        let account = &mut self.accounts[pos];
+                        let account_info = &self.account_metas[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
                 }
