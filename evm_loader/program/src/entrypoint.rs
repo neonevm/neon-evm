@@ -689,8 +689,8 @@ fn do_partial_call<'a>(
 
     debug_print!("Executor initialized");
 
-    debug_print!(&("   caller: ".to_owned() + &caller_ether.0.to_string()));
-    debug_print!(&(" contract: ".to_owned() + &contract_ether.to_string()));
+    debug_print!("   caller: {}", &caller_ether.0.to_string());
+    debug_print!(" contract: {}", &contract_ether.to_string());
 
     executor.call_begin(caller_ether.0, contract_ether, instruction_data, u64::max_value());
     executor.execute_n_steps(step_count).unwrap();

@@ -12,11 +12,11 @@ edition = "2018"
 exclude = ["js/**"]
 
 [features]
-evm_debug = []
+no-logs = []
 no-entrypoint = []
 test-bpf = []
 custom-heap = []
-default = ["custom-heap", "evm_debug"]
+default = ["custom-heap"]
 
 [dependencies]
 solana-program = { version = "1.6.4", default_features = false }
