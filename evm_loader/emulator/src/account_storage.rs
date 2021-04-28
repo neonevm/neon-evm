@@ -267,7 +267,7 @@ impl AccountStorage for EmulatorAccountStorage {
             Some(acc) => {
                 let account_data = match AccountData::unpack(&acc.account.data) {
                     Ok(acc_data) => match acc_data {
-                        AccountData::Account(acc) => acc,
+                        AccountData::Account(_) => acc_data,
                         _ => return d(),
                     },
                     Err(_) => return d(),
@@ -276,13 +276,13 @@ impl AccountStorage for EmulatorAccountStorage {
                     let mut code_data = acc.code_account.as_ref().unwrap().data.clone();
                     let contract_data = match AccountData::unpack(&code_data) {
                         Ok(acc_data) => match acc_data {
-                            AccountData::Contract(acc) => acc,
+                            AccountData::Contract(_) => acc_data,
                             _ => return d(),
                         },
                         Err(_) => return d(),
                     };
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data.code_size, code_data))).unwrap();
+                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data, code_data))).unwrap();
                     f(&account)
                 } else {
                     let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, None).unwrap();
