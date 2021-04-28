@@ -14,12 +14,8 @@ done
 solana airdrop 1000
 solana account $ACCOUNT
 
-echo "Run tests with EVM Loader logs"
+echo "Run tests for EVM Loader"
 export EVM_LOADER=$(solana-deploy deploy evm_loader.so | tail -n 1 | python3 -c 'import sys, json; data=json.load(sys.stdin); print(data["programId"]);')
-python3 -m unittest discover -v -p 'test*.py'
-
-echo "Run tests without EVM Loader logs"
-export EVM_LOADER=$(solana-deploy deploy evm_loader_no_logs.so | tail -n 1 | python3 -c 'import sys, json; data=json.load(sys.stdin); print(data["programId"]);')
 python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"

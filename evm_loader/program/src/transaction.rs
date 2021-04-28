@@ -60,8 +60,8 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
                 let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
                 if reference_instruction != instr.data {
                     debug_print!("wrong keccak instruction data");
-                    debug_print!(&("instruction: ".to_owned() + &hex::encode(&instr.data)));    
-                    debug_print!(&("reference: ".to_owned() + &hex::encode(&reference_instruction)));    
+                    debug_print!("instruction: {}", &hex::encode(&instr.data));
+                    debug_print!("reference: {}", &hex::encode(&reference_instruction));
                     return Err(ProgramError::InvalidInstructionData);
                 }
             } else {
