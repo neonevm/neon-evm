@@ -657,6 +657,7 @@ fn do_partial_call<'a>(
     let account_info_iter = &mut accounts.iter();
     let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?
@@ -716,6 +717,7 @@ fn do_continue<'a>(
     let account_info_iter = &mut accounts.iter();
     let storage_info = next_account_info(account_info_iter)?;
     let program_info = next_account_info(account_info_iter)?;
+    let program_code = next_account_info(account_info_iter)?;
     let caller_info = next_account_info(account_info_iter)?;
     let signer_info = if caller_info.owner == program_id {
         next_account_info(account_info_iter)?

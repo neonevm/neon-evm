@@ -28,6 +28,7 @@ system = "11111111111111111111111111111111"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
+
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 http_client = Client(solana_url)
 path_to_solana = 'solana'
