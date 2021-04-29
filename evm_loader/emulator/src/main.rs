@@ -13,24 +13,22 @@ use std::str::FromStr;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let (solana_url, base_account, evm_loader, contract_id, caller_id, data) = if args.len() == 7 {
+    let (solana_url, evm_loader, contract_id, caller_id, data) = if args.len() == 6 {
         let solana_url = args[1].to_string();
-        let base_account = Pubkey::from_str(&args[2].to_string()).unwrap();
-        let evm_loader = Pubkey::from_str(&args[3].to_string()).unwrap();
-        let contract_id = H160::from_str(&make_clean_hex(&args[4])).unwrap();
-        let caller_id = H160::from_str(&make_clean_hex(&args[5])).unwrap();
-        let data = hex::decode(&make_clean_hex(&args[6])).unwrap();
-
-        (solana_url, base_account, evm_loader, contract_id, caller_id, data)
-    } else if args.len() == 6 {        
-        let solana_url = "http://localhost:8899".to_string();
-        let base_account = Pubkey::from_str(&args[1].to_string()).unwrap();
         let evm_loader = Pubkey::from_str(&args[2].to_string()).unwrap();
         let contract_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
         let caller_id = H160::from_str(&make_clean_hex(&args[4])).unwrap();
         let data = hex::decode(&make_clean_hex(&args[5])).unwrap();
 
-        (solana_url, base_account, evm_loader, contract_id, caller_id, data)
+        (solana_url, evm_loader, contract_id, caller_id, data)
+    } else if args.len() == 5 {
+        let solana_url = "http://localhost:8899".to_string();
+        let evm_loader = Pubkey::from_str(&args[1].to_string()).unwrap();
+        let contract_id = H160::from_str(&make_clean_hex(&args[2])).unwrap();
+        let caller_id = H160::from_str(&make_clean_hex(&args[3])).unwrap();
+        let data = hex::decode(&make_clean_hex(&args[4])).unwrap();
+
+        (solana_url, evm_loader, contract_id, caller_id, data)
     } else {
         eprintln!("{} SOLANA_URL BASE_ACCOUNT EVM_LOADER CONTRACT_ID CALLER_ID DATA", &args[0].to_string());
         eprintln!("or for local cluster");
@@ -38,7 +36,7 @@ fn main() {
         return;
     };
 
-    let account_storage = EmulatorAccountStorage::new(solana_url, base_account, evm_loader, contract_id, caller_id);
+    let account_storage = EmulatorAccountStorage::new(solana_url, evm_loader, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, None);
