@@ -35,6 +35,17 @@ contract nested_call_Recover{
     }
 }
 
+contract nested_call_Revert{
+    event Revert_called();
+
+    function foo_revert() public returns (uint256){
+        emit Revert_called();
+        require(2>3, 'revert');
+        return 1;
+    }
+}
+
+
 contract nested_call_Receiver {
     event Foo(address caller, uint amount, string message);
     event Response_recovery_signer(bool success, bytes a);
@@ -69,4 +80,9 @@ contract nested_call_Caller {
          emit Result(success, res);
     }
 
+
+    function callRevert(address revert_addr) public{
+        (bool success, bytes memory data ) = revert_addr.call(abi.encodeWithSignature("foo_revert()"));
+        emit Result(success, data);
+    }
 }

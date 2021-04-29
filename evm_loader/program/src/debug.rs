@@ -1,15 +1,15 @@
 
-#[cfg(all(target_arch = "bpf", feature = "evm_debug"))]
+#[cfg(all(target_arch = "bpf", not(feature = "no-logs")))]
 macro_rules! debug_print {
     ($( $args:expr ),*) => { solana_program::msg!( $( $args ),* ) }
 }
 
-#[cfg(all(not(target_arch = "bpf"), feature = "evm_debug"))]
+#[cfg(all(not(target_arch = "bpf"), not(feature = "no-logs")))]
 macro_rules! debug_print {
     ($( $args:expr ),*) => { eprintln!( $( $args ),* ) }
 }
 
-#[cfg(not(feature = "evm_debug"))]
+#[cfg(feature = "no-logs")]
 macro_rules! debug_print {
     ($( $args:expr ),*) => {}
 }

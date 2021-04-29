@@ -1,13 +1,15 @@
 use std::convert::Infallible;
 use std::rc::Rc;
-use evm_runtime::{save_return_value};
+use evm_runtime::{save_return_value, save_created_address, Control};
 
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
-use std::mem;
 use crate::storage_account::StorageAccount;
+use std::mem;
 use solana_program::program_error::ProgramError;
+use sha3::{Keccak256, Digest};
+use std::borrow::BorrowMut;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -22,6 +24,9 @@ fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
+fn keccak256_digest(data: &[u8]) -> H256 {
+    H256::from_slice(Keccak256::digest(&data).as_slice())
+}
 
 struct CallInterrupt {
     code_address : H160,
@@ -29,7 +34,18 @@ struct CallInterrupt {
     context: evm::Context,
 }
 
-struct CreateInterrupt {}
+struct CreateInterrupt {
+    init_code: Vec<u8>,
+    context: evm::Context,
+    address: H160
+}
+
+enum RuntimeApply{
+    Continue,
+    Call(CallInterrupt),
+    Create(CreateInterrupt),
+    Exit(ExitReason),
+}
 
 struct Executor<'config, B: Backend> {
     state: ExecutorState<B>,
@@ -151,10 +167,67 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         caller: H160,
         scheme: evm::CreateScheme,
         value: U256,
-        init_code: &Vec<u8>,
+        init_code_: &Vec<u8>,
         target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        Capture::Trap(CreateInterrupt{})
+
+        if let Some(depth) = self.state.metadata().depth() {
+            if depth + 1 > self.config.call_stack_limit {
+                return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
+            }
+        }
+        // TODO: check
+        // if self.balance(caller) < value {
+        //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
+        // }
+
+        // Get the create address from given scheme.
+        let address =
+            match scheme {
+                evm::CreateScheme::Create2 { caller, code_hash, salt } => {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&[0xff]);
+                    hasher.input(&caller[..]);
+                    hasher.input(&salt[..]);
+                    hasher.input(&code_hash[..]);
+                    H256::from_slice(hasher.result().as_slice()).into()
+                },
+                evm::CreateScheme::Legacy { caller } => {
+                    let nonce = self.state.basic(caller).nonce;
+                    let mut stream = rlp::RlpStream::new_list(2);
+                    stream.append(&caller);
+                    stream.append(&nonce);
+                    //H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
+                    keccak256_digest(&stream.out()).into()
+                },
+                evm::CreateScheme::Fixed(naddress) => {
+                    naddress
+                },
+            };
+
+        self.state.create(&scheme, &address);
+        // TODO: may be increment caller's nonce after runtime creation or success execution?
+        self.state.inc_nonce(caller);
+
+        if let code= self.state.code(address) {
+            if code.len() != 0 {
+                // let _ = self.merge_fail(substate);
+                return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+            }
+        }
+
+        if self.state.basic(address).nonce  > U256::zero() {
+            return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
+        }
+
+        let context = evm::Context {
+            address,
+            caller,
+            apparent_value: value,
+        };
+
+        let init_code:Vec<u8> = init_code_.clone();
+        Capture::Trap(CreateInterrupt{init_code, context, address})
     }
 
     fn call(
@@ -209,12 +282,19 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+pub enum CreateReason {
+    Root,
+    Call,
+    Create(H160),
+}
+
+type runtime_info<'config> = (evm::Runtime<'config>, CreateReason);
 
 pub struct Machine<'config, B: Backend> {
     executor: Executor<'config, B>,
-    runtime: Vec<evm::Runtime<'config>>
+    runtime: Vec<runtime_info<'config>>
 }
-
 
 impl<'config, B: Backend> Machine<'config, B> {
 
@@ -267,96 +347,159 @@ impl<'config, B: Backend> Machine<'config, B> {
         let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
 
         let runtime = evm::Runtime::new(Rc::new(code), Rc::new(input), context, &self.executor.config);
-        self.runtime.push(runtime);
+        self.runtime.push((runtime, CreateReason::Root));
+    }
+
+
+    pub fn step_opcode(&mut self) -> RuntimeApply {
+        if let Some(runtime) = self.runtime.last_mut() {
+            match runtime.0.step(&mut self.executor) {
+                Ok(()) => {return RuntimeApply::Continue},
+                Err(capture) =>
+                    match capture {
+                        Capture::Exit(reason) => {return RuntimeApply::Exit(reason)},
+                        Capture::Trap(interrupt) =>
+                            match interrupt {
+                                Resolve::Call(interrupt, resolve) => {
+                                    mem::forget(resolve);
+                                    return RuntimeApply::Call(interrupt);
+                                },
+                                Resolve::Create(interrupt, resolve) => {
+                                    mem::forget(resolve);
+                                    return RuntimeApply::Create(interrupt);
+                                },
+                                _ => {
+                                    debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: _");
+                                    return RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported));
+                                }
+                        }
+                }
+            }
+        }
+        else{
+            debug_print!("runtime.step: Err, runtime not found");
+            return RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported));
+        }
     }
 
     pub fn step(&mut self) -> Result<(), ExitReason> {
 
-        enum modify<'a>{
-            none,
-            add(evm::Runtime<'a>),
-            remove(ExitReason),
-        }
-        let mut runtime_modify = modify::none;
-        let runtime_cnt = self.runtime.len();
-        if let Some(runtime) = self.runtime.last_mut() {
-            match runtime.step(&mut self.executor) {
-                Ok(()) => {},
-                Err(capture) => match capture {
-                    Capture::Exit(reason) => {
-                        match &reason {
-                            ExitReason::Succeed(res) => {
-                                self.executor.state.exit_commit().unwrap();
-                                if (runtime_cnt == 1){
-                                    return Err(reason.clone());
-                                } else{
-                                    runtime_modify = modify::remove(reason.clone());
-                                }
-                            },
-                            ExitReason::Error(_) => {
-                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
-                                self.executor.state.exit_discard().unwrap();
-                                return Err(reason.clone());
-                            },
-                            ExitReason::Revert(_) => {
-                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
-                                self.executor.state.exit_revert().unwrap();
-                                return Err(reason.clone());
-                            },
-                            ExitReason::Fatal(_) => {
-                                debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
-                                self.executor.state.exit_discard().unwrap();
-                                return Err(reason.clone());
-                            }
-                        }
-                    },
-                    Capture::Trap(interrupt) => match interrupt{
-                        Resolve::Call(interrupt, resolve) =>{
-                            mem::forget(resolve);
-                            let code = self.executor.code(interrupt.code_address);
-                            self.executor.state.enter(u64::max_value(), false);
-                            self.executor.state.touch(interrupt.code_address);
+        match self.step_opcode(){
+            RuntimeApply::Continue => {return Ok(())},
+            RuntimeApply::Call(info) => {
+                let code = self.executor.code(info.code_address);
+                self.executor.state.enter(u64::max_value(), false);
+                self.executor.state.touch(info.code_address);
 
-                            let runtime = evm::Runtime::new(
-                                Rc::new(code),
-                                Rc::new(interrupt.input),
-                                interrupt.context,
-                                &self.executor.config
-                            );
-                            runtime_modify = modify::add(runtime);
+                let mut instance = evm::Runtime::new(
+                    Rc::new(code),
+                    Rc::new(info.input),
+                    info.context,
+                    &self.executor.config
+                );
+                self.runtime.push((instance, CreateReason::Call));
+                return Ok(())
+            },
+            RuntimeApply::Create(info) => {
+                self.executor.state.enter(u64::max_value(), false);
+                self.executor.state.touch(info.address);
+                if self.executor.config.create_increase_nonce {
+                    self.executor.state.inc_nonce(info.address);
+                }
+
+                let mut instance = evm::Runtime::new(
+                    Rc::new(info.init_code),
+                    Rc::new(Vec::new()),
+                    info.context,
+                    &self.executor.config
+                );
+                self.runtime.push((instance, CreateReason::Create(info.address)));
+                return Ok(())
+            },
+            RuntimeApply::Exit(exit_reason) => {
+                match &exit_reason {
+                    ExitReason::Succeed(res) => {
+                        self.executor.state.exit_commit().unwrap();
+                    },
+                    ExitReason::Revert(_) => {
+                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
+                        self.executor.state.exit_revert().unwrap();
+                    },
+                    ExitReason::Error(_) => {
+                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
+                        self.executor.state.exit_discard().unwrap();
+                    },
+                    ExitReason::Fatal(_) => {
+                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
+                        self.executor.state.exit_discard().unwrap();
+                    }
+                }
+
+                if (self.runtime.len() <= 1){
+                    return Err(exit_reason);
+                }
+
+                let mut return_value = Vec::new();
+                let mut implementation = CreateReason::Root;
+                if let Some(runtime) = self.runtime.last(){
+                    return_value = runtime.0.machine().return_value();
+                    implementation = runtime.1;
+                };
+                self.runtime.pop();
+
+                if let Some(runtime) = self.runtime.last_mut(){
+                    match implementation {
+                        CreateReason::Call => {
+                            match  save_return_value(
+                                runtime.0.borrow_mut(),
+                                exit_reason,
+                                return_value,
+                                &self.executor
+                            ){
+                                Control::Continue => {return Ok(())},
+                                Control::Exit(e) => {return Err(e.into())},
+                                _ => {
+                                    debug_print!("runtime.step: RuntimeApply::Exit, impl::Call, save_return_value: NotSupported");
+                                    return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                }
+                            }
                         },
-                        _ => {
-                            debug_print!("runtime.step: Err, capture Capture::Trap(interrupt), interrupt: _");
+                        CreateReason::Create(created_address) => {
+                            if let Some(limit) = self.executor.config.create_contract_limit {
+                                if return_value.len() > limit {
+                                    debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
+                                    self.executor.state.exit_discard().unwrap();
+                                    return Err((ExitError::CreateContractLimit.into()))
+                                }
+                            }
+                            self.executor.state.set_code(created_address, return_value.clone());
+                            match  save_created_address(
+                                runtime.0.borrow_mut(),
+                                exit_reason,
+                                Some(created_address),
+                                return_value,
+                                &self.executor
+                            ){
+                                Control::Continue => {return Ok(())},
+                                Control::Exit(e) => {return Err(e.into())},
+                                _ => {
+                                    debug_print!("runtime.step: RuntimeApply::Exit, impl::Create, save_return_value: NotSupported");
+                                    return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                }
+                            }
+                        },
+                        CreateReason::Root => {
+                            debug_print!("runtime.step: RuntimeApply::Exit, impl: Root");
                             return Err(ExitReason::Fatal(ExitFatal::NotSupported));
                         }
                     }
                 }
-            }
-        }
-
-        match runtime_modify {
-            modify::remove(reason) => {
-                let mut call_return_value = Vec::new();
-                if let Some(runtime) = self.runtime.last(){
-                    call_return_value = runtime.machine().return_value();
-                };
-                self.runtime.pop();
-                if let Some(runtime) = self.runtime.last_mut(){
-                    let val =  save_return_value(
-                        runtime,
-                        reason,
-                        call_return_value,
-                        &self.executor
-                    );
-                    // TODO check val
+                else{
+                    debug_print!("runtime.step: Err, runtime.last_mut() error");
+                    return Err(ExitReason::Fatal(ExitFatal::NotSupported));
                 }
             },
-            modify::add(runtime) => {
-                self.runtime.push(runtime);
-            },
-            modify::none => {},
         }
-        return Ok(());
     }
 
 
@@ -379,7 +522,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     #[must_use]
     pub fn return_value(&self) -> Vec<u8> {
         if let Some(runtime) = self.runtime.last() {
-            return runtime.machine().return_value();
+            return runtime.0.machine().return_value();
         }
 
         Vec::new()
