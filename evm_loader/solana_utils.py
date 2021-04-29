@@ -256,6 +256,8 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "trx_count" / Bytes(8),
     "signer_acc" / Bytes(32),
     "code_acc" / Bytes(32),
+    "is_blocked" / Int8ul,
+    "blocked_by" / Bytes(32),
 )
 
 class AccountInfo(NamedTuple):

@@ -138,7 +138,7 @@ fn process_instruction<'a>(
                 }
             };
 
-            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key} );
+            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key, blocked: None} );
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
@@ -400,21 +400,27 @@ fn process_instruction<'a>(
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut storage = StorageAccount::new(storage_info, caller, trx.nonce)?;
-            storage.write_accounts(accounts)?;
+            let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
 
-            do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))
+            do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))?;
+
+            storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::Continue {step_count} => {
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
 
             let mut storage = StorageAccount::restore(storage_info)?;
-            storage.check_accounts(accounts)?;
+            storage.check_accounts(program_id, accounts)?;
 
-            let caller_and_nonce = storage.caller_and_nonce();
+            let caller_and_nonce = storage.caller_and_nonce()?;
 
-            do_continue(&mut storage, program_id, step_count, &accounts[1..], Some(caller_and_nonce))
+            let exit_reason = do_continue(&mut storage, program_id, step_count, &accounts[1..], Some(caller_and_nonce))?;
+            if exit_reason != None {
+                storage.unblock_accounts_and_destroy(program_id, accounts)?;
+            }
+
+            Ok(())
         },
     };
 
@@ -484,6 +490,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
             }
         },
         AccountData::Account(_) => return Err(ProgramError::InvalidAccountData),
+        AccountData::Storage(_) => return Err(ProgramError::InvalidAccountData),
         AccountData::Empty => (),
     };
 
@@ -699,7 +706,7 @@ fn do_continue<'a>(
     step_count: u64,
     accounts: &'a [AccountInfo<'a>],
     from_info: Option<(H160, u64)>,
-) -> ProgramResult
+) -> Result<Option<ExitReason>, ProgramError>
 {
     debug_print!("do_continue");
 
@@ -725,7 +732,7 @@ fn do_continue<'a>(
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
-                return Ok(());
+                return Ok(None);
             }
             Err(reason) => reason
         };
@@ -752,7 +759,9 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, &result)
+    invoke_on_return(&program_id, &accounts, exit_reason.clone(), &result)?;
+
+    Ok(Some(exit_reason))
 }
 
 fn invoke_on_return<'a>(
