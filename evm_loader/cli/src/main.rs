@@ -68,11 +68,11 @@ fn emulate(solana_url: String, evm_loader: Pubkey, contract_id: H160, caller_id:
     account_storage.get_used_accounts(&status, &result);
 }
 
-fn make_clean_hex(in_str: &str) -> String {
+fn make_clean_hex<'a>(in_str: &'a str) -> &'a str {
     if &in_str[..2] == "0x" {
-        in_str[2..].to_string()
+        &in_str[2..]
     } else {        
-        in_str.to_string()
+        &in_str
     }
 }
 
@@ -93,14 +93,14 @@ fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 // Return hexdata for an argument
 fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
     matches.value_of(name).map(|value| {
-        hex::decode(value).unwrap()
+        hex::decode(&make_clean_hex(value)).unwrap()
     })
 }
 
 // Return an error if string cannot be parsed as a hexdata
 fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    hex::decode(string.as_ref()).map(|_| ())
+    hex::decode(&make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -202,7 +202,7 @@ fn main() {
                     eprintln!("Need specify evm_loader");
                     exit(1);
                 });
-        println!("evm_loader: {:?}", evm_loader);
+        eprintln!("evm_loader: {:?}", evm_loader);
 
         match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {

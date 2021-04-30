@@ -1,5 +1,5 @@
 [package]
-name = "emulator"
+name = "neon-cli"
 version = "0.1.0"
 authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
 edition = "2018"
