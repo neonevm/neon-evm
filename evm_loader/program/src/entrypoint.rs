@@ -275,6 +275,114 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::ExecuteTrxFromAccountDataIterative{} =>{
+            debug_print!("Execute iterative transaction from account data");
+            let account_info_iter = &mut accounts.iter();
+            let storage_info = next_account_info(account_info_iter)?;
+            let holder_info = next_account_info(account_info_iter)?;
+            let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
+            let _caller_info = next_account_info(account_info_iter)?;
+            // let sysvar_info = next_account_info(account_info_iter)?;
+
+            // check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
+
+            // let caller = H160::from_slice(from_addr);
+            // let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+            // let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
+
+            // do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))?;
+
+            // storage.block_accounts(program_id, accounts);
+
+            /////////////////////////////////////////////
+
+            // let account_info_iter = &mut accounts.iter();
+            // let trx_info = next_account_info(account_info_iter)?;
+
+            let (unsigned_msg, signature) = {
+                let data = holder_info.data.borrow();
+                let account_info_data = AccountData::unpack(&data)?;
+                match account_info_data {
+                    AccountData::Empty => (),
+                    _ => return Err(ProgramError::InvalidAccountData),
+                };
+
+                let (acc_header, rest) = data.split_at(account_info_data.size());
+                let (signature, rest) = rest.split_at(65);
+                let (trx_len, rest) = rest.split_at(8);
+                let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+                let (trx, _rest) = rest.split_at(trx_len as usize);
+                (trx.to_vec(), signature.to_vec())
+            };
+            let (nonce, to, data) = get_data(&unsigned_msg);
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!("{}", e);
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[2..], accounts.last().unwrap())?;
+
+            let (exit_reason, result, applies_logs) = {
+                let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
+                if caller.get_nonce() != nonce {
+                    debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+                let caller_ether = caller.get_ether();
+
+                let mut storage = StorageAccount::new(storage_info, accounts, caller_ether, trx.nonce)?;
+
+
+                let backend = SolanaBackend::new(&account_storage, Some(accounts));
+                debug_print!("  backend initialized");
+
+                if trx.chain_id != backend.chain_id() {
+                    debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+
+                let config = evm::Config::istanbul();
+                let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+                debug_print!("Executor initialized");
+
+                let exit_reason = match to {
+                    None => {
+                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
+                    },
+                    Some(contract) => {
+                        debug_print!("Not supported");
+                        ExitReason::Fatal(ExitFatal::NotSupported)
+                    },
+                };
+
+                if exit_reason.is_succeed() {
+                    debug_print!("Succeed execution");
+                    let (applies, logs) = executor.deconstruct();
+                    (exit_reason, Vec::new(), Some((applies, logs)))
+                } else {
+                    (exit_reason, Vec::new(), None)
+                }
+            };
+
+            if applies_logs.is_some() {
+                let (applies, logs) = applies_logs.unwrap();
+
+                account_storage.apply(applies, false, None)?;
+                debug_print!("Applies done");
+                for log in logs {
+                    invoke(&on_event(program_id, log)?, &accounts)?;
+                }
+            }
+
+            invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
+
+            Ok(())
+        },
+
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
