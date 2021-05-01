@@ -10,6 +10,7 @@ use std::mem;
 use solana_program::program_error::ProgramError;
 use sha3::{Keccak256, Digest};
 use std::borrow::BorrowMut;
+use solana_program::entrypoint::ProgramResult;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -350,6 +351,36 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((runtime, CreateReason::Root));
     }
 
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64){
+
+        let scheme = evm::CreateScheme::Legacy {
+            caller: caller,
+        };
+
+        self.executor.state.enter(u64::max_value(), false);
+
+        match self.executor.create(caller, scheme, U256::zero(),&code, None ){
+            Capture::Exit((reason, address, return_data)) => {
+                debug_print!("create_begin() error ");
+            },
+            Capture::Trap(info) => {
+                self.executor.state.touch(info.address);
+                if self.executor.config.create_increase_nonce {
+                    self.executor.state.inc_nonce(info.address);
+                }
+
+                let mut instance = evm::Runtime::new(
+                    Rc::new(info.init_code),
+                    Rc::new(Vec::new()),
+                    info.context,
+                    &self.executor.config
+                );
+                self.runtime.push((instance, CreateReason::Root));
+            },
+        }
+
+    }
+
 
     pub fn step_opcode(&mut self) -> RuntimeApply {
         if let Some(runtime) = self.runtime.last_mut() {
@@ -419,6 +450,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             RuntimeApply::Exit(exit_reason) => {
                 match &exit_reason {
                     ExitReason::Succeed(res) => {
+                        debug_print!(" step_opcode: ExitReason::Succeed(res)");
                         self.executor.state.exit_commit().unwrap();
                     },
                     ExitReason::Revert(_) => {
@@ -436,6 +468,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 if (self.runtime.len() <= 1){
+                    debug_print!(" step_opcode: runtime.len() <= 1");
+
                     return Err(exit_reason);
                 }
 
@@ -515,6 +549,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         for i in 0..n {
             self.step()?;
         }
+        debug_print!(" execute_n_steps OK returned ");
 
         Ok(())
     }

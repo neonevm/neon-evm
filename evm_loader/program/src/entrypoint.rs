@@ -283,23 +283,12 @@ fn process_instruction<'a>(
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
-            // let sysvar_info = next_account_info(account_info_iter)?;
-
-            // check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
-
-            // let caller = H160::from_slice(from_addr);
-            // let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-
-            // let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
 
             // do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))?;
 
             // storage.block_accounts(program_id, accounts);
 
             /////////////////////////////////////////////
-
-            // let account_info_iter = &mut accounts.iter();
-            // let trx_info = next_account_info(account_info_iter)?;
 
             let (unsigned_msg, signature) = {
                 let data = holder_info.data.borrow();
@@ -326,59 +315,50 @@ fn process_instruction<'a>(
 
             let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[2..], accounts.last().unwrap())?;
 
-            let (exit_reason, result, applies_logs) = {
-                let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
-                if caller.get_nonce() != nonce {
-                    debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
-                    return Err(ProgramError::InvalidInstructionData);
-                }
-                let caller_ether = caller.get_ether();
+            // let (exit_reason, result, applies_logs) = {
+            let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
+            if caller.get_nonce() != nonce {
+                debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let caller_ether = caller.get_ether();
+            // let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
+            debug_print!("   caller: {}", &caller_ether.to_string());
+            // debug_print!(" contract: {}", &contract_ether.to_string());
+            let mut storage = StorageAccount::new(storage_info, accounts, caller_ether, trx.nonce)?;
 
-                let mut storage = StorageAccount::new(storage_info, accounts, caller_ether, trx.nonce)?;
+            let backend = SolanaBackend::new(&account_storage, Some(accounts));
+            debug_print!("  backend initialized");
 
-
-                let backend = SolanaBackend::new(&account_storage, Some(accounts));
-                debug_print!("  backend initialized");
-
-                if trx.chain_id != backend.chain_id() {
-                    debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
-                    return Err(ProgramError::InvalidInstructionData);
-                }
-
-                let config = evm::Config::istanbul();
-                let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-                debug_print!("Executor initialized");
-
-                let exit_reason = match to {
-                    None => {
-                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
-                    },
-                    Some(contract) => {
-                        debug_print!("Not supported");
-                        ExitReason::Fatal(ExitFatal::NotSupported)
-                    },
-                };
-
-                if exit_reason.is_succeed() {
-                    debug_print!("Succeed execution");
-                    let (applies, logs) = executor.deconstruct();
-                    (exit_reason, Vec::new(), Some((applies, logs)))
-                } else {
-                    (exit_reason, Vec::new(), None)
-                }
-            };
-
-            if applies_logs.is_some() {
-                let (applies, logs) = applies_logs.unwrap();
-
-                account_storage.apply(applies, false, None)?;
-                debug_print!("Applies done");
-                for log in logs {
-                    invoke(&on_event(program_id, log)?, &accounts)?;
-                }
+            if trx.chain_id != backend.chain_id() {
+                debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
+                return Err(ProgramError::InvalidInstructionData);
             }
 
-            invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
+            let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+            let mut executor = Machine::new(executor_state);
+
+            debug_print!("Executor initialized");
+
+            executor.create_begin(caller_ether, data, u64::max_value());
+            // match (){
+            //     Err(_) => {return Err(ProgramError::InvalidInstructionData) },
+            //     _ => {}
+            // }
+
+            // executor.execute_n_steps(50).unwrap();
+            match(executor.execute_n_steps(500)){
+                Ok(_) => {},
+                Err(reason) => {}
+            };
+
+            debug_print!("save");
+
+            executor.save_into(&mut storage);
+
+            debug_print!("partial call complete");
+
+            storage.block_accounts(program_id, accounts);
 
             Ok(())
         },
