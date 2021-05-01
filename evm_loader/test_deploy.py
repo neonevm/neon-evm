@@ -15,7 +15,7 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "CXEjhbsbcmvFCGZAZqhZSsxbwSo8fkwLPmBDP1UDxiEC"
 # evm_loader_id = "yb3WeCZJwQSpGdYC7uVcToQr2nxSbhxkJpXJrrWr8cj"
-evm_loader_id = "2Pt35QrApEyWA1keT232tzYsG4UvYQBZ2LwcY6TwX29V"
+evm_loader_id = "FJZgdeqYcQUHvJ3UjH1AisyD1JnLbwHkFm3zLJbVtCff"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -256,7 +256,7 @@ class DeployTest(unittest.TestCase):
         print("Begin")
         trx = Transaction()
         # trx.add(self.sol_instr_11_partial_call(storage, 10, holder, contract_sol, code_sol))
-        TransactionInstruction(program_id=self.loader.loader_id,
+        trx.add(TransactionInstruction(program_id=self.loader.loader_id,
                                # data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
                                data=bytearray.fromhex("0b"),
                                keys=[
@@ -267,7 +267,7 @@ class DeployTest(unittest.TestCase):
                                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                    AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                               ])
+                               ]))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         print("result", result)
