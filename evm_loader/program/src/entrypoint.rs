@@ -22,7 +22,7 @@ use crate::{
     instruction::{EvmInstruction, on_return, on_event},
     account_data::{AccountData, Account, Contract},
     account_storage::ProgramAccountStorage, 
-    solana_backend::SolanaBackend,    
+    solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
     utils::{keccak256_digest, solidity_address},
     transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction, check_secp256k1_instruction},
@@ -520,8 +520,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, None).ok_or(ProgramError::InvalidArgument)?;
-
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
@@ -547,7 +545,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         // let program_account = SolidityAccount::new(program_info)?;
         debug_print!("Execute transact_create");
         let exit_reason = executor.transact_create2(
-                caller_ether.0,
+                account_storage.origin(),
                 U256::zero(),
                 &code_data,
                 H256::default(), usize::max_value()
@@ -616,7 +614,7 @@ fn do_call<'a>(
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
         debug_print!("Executor initialized");
 
-        let (exit_reason, result) = executor.transact_call(caller_ether.0, contract_ether, U256::zero(), instruction_data.to_vec(), usize::max_value());
+        let (exit_reason, result) = executor.transact_call(account_storage.origin(), account_storage.contract(), U256::zero(), instruction_data.to_vec(), usize::max_value());
 
         debug_print!("Call done");
 
@@ -672,16 +670,6 @@ fn do_partial_call<'a>(
     let accounts = &accounts[1..];
     let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
-
-        debug_print!("   caller: {}", &caller_ether.0.to_string());
-        debug_print!(" contract: {}", &contract_ether.to_string());
-
-        (caller_ether, contract_ether)
-    };
-
     let backend = SolanaBackend::new(&account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
@@ -690,10 +678,10 @@ fn do_partial_call<'a>(
 
     debug_print!("Executor initialized");
 
-    debug_print!("   caller: {}", &caller_ether.0.to_string());
-    debug_print!(" contract: {}", &contract_ether.to_string());
+    debug_print!("   caller: {}", &account_storage.origin().to_string());
+    debug_print!(" contract: {}", &account_storage.contract().to_string());
 
-    executor.call_begin(caller_ether.0, contract_ether, instruction_data, u64::max_value());
+    executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
