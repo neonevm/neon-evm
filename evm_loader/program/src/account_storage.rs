@@ -79,11 +79,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let caller_id = {
             let caller_info = next_account_info(account_info_iter)?;
-            let signer_info = if caller_info.owner == program_id {
-                next_account_info(account_info_iter)?
-            } else {
-                caller_info
-            };
 
             let caller_id: H160 = if caller_info.owner == program_id {
                 let account_data = AccountData::unpack(&caller_info.data.borrow())?;
@@ -91,14 +86,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
                 let caller_acc = SolidityAccount::new(caller_info.key, (*caller_info.lamports.borrow()).clone(), account_data, None)?;
 
-                if caller_acc.get_signer() != *signer_info.key || !signer_info.is_signer {
-                    debug_print!("Add valid account signer");
-                    debug_print!("   caller signer: {}", &caller_acc.get_signer().to_string());
-                    debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
-                    debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
-
-                    return Err(ProgramError::InvalidArgument);
-                }
                 let caller_id = caller_acc.get_ether();
                 push_account(caller_acc, caller_info);
 
