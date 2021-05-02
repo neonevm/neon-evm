@@ -520,6 +520,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
+    check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, None)?;
+
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
