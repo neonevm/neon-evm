@@ -596,15 +596,29 @@ fn do_call<'a>(
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
 
-    let (caller_ether, contract_ether) = {
-        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        let contract_ether = account_storage.get_contract_account().ok_or(ProgramError::InvalidArgument)?.get_ether();
+    if let Some((from, nonce)) = from_info {
+        let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
+        let caller_ether = caller.get_ether();
+        let caller_nonce = caller.get_nonce();
+    
+        if caller_ether != from {
+            debug_print!("Invalin caller account");
+            debug_print!("   caller addres: {}", &caller_ether.to_string());
+            debug_print!("     from addres: {}", &from.to_string());
+    
+            return Err(ProgramError::InvalidArgument);
+        }
+        if caller_nonce != nonce {
+            debug_print!("Invalin Ethereum transaction nonce");
+            debug_print!("     tx nonce: {}", &nonce.to_string());
+            debug_print!("    acc nonce: {}", &caller_nonce.to_string());
+    
+            return Err(ProgramError::InvalidArgument);
+        }
+    }
 
-        debug_print!("   caller: {}", &caller_ether.0.to_string());
-        debug_print!(" contract: {}", &contract_ether.to_string());
-
-        (caller_ether, contract_ether)
-    };
+    debug_print!("   caller: {}", &account_storage.origin().to_string());
+    debug_print!(" contract: {}", &account_storage.contract().to_string());
 
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
@@ -815,71 +829,6 @@ fn invoke_on_return<'a>(
     )?;
 
     Ok(())
-}
-
-fn get_ether_address<'a>(
-    program_id: &Pubkey,
-    caller_opt: Option<&SolidityAccount<'a>>,
-    caller_info: &'a AccountInfo<'a>,
-    signer_info: &'a AccountInfo<'a>,
-    from_info: Option<(H160, u64)>,
-) ->  Option<(H160, bool)>
-{
-    if caller_info.owner == program_id {
-        if caller_opt.is_some() {
-            let caller = caller_opt.unwrap();
-
-            let caller_signer = caller.get_signer();
-            let caller_ether = caller.get_ether();
-            let caller_nonce = caller.get_nonce();
-
-            if from_info.is_none() {
-                if caller_signer != *signer_info.key || !signer_info.is_signer {
-                    debug_print!("Add valid account signer");
-                    debug_print!("   caller signer: {}", &caller_signer.to_string());
-                    debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
-                    debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
-
-                    return None
-                }
-            } else {
-                let (from, nonce) = from_info.unwrap();
-                if caller_ether != from {
-                    debug_print!("Invalin caller account");
-                    debug_print!("   caller addres: {}", &caller_ether.to_string());
-                    debug_print!("     from addres: {}", &from.to_string());
-
-                    return None
-                }
-                if caller_nonce != nonce {
-                    debug_print!("Invalin Ethereum transaction nonce");
-                    debug_print!("     tx nonce: {}", &nonce.to_string());
-                    debug_print!("    acc nonce: {}", &caller_nonce.to_string());
-
-                    return None
-                }
-            }
-
-            Some ( ( caller_ether, true) )
-
-        } else {
-            None
-        }
-    } else {
-        if from_info.is_some() {
-            debug_print!("Sender must be Ethereum account. This method is not allowed for Solana accounts.");
-
-            return None
-        }
-        if !caller_info.is_signer {
-            debug_print!("Caller mast be signer");
-            debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
-
-            return None
-        }
-
-        Some ( ( keccak256_digest(&caller_info.key.to_bytes()).into(), false) )
-    }
 }
 
 // Pull in syscall stubs when building for non-BPF targets
