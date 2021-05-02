@@ -263,7 +263,7 @@ fn process_instruction<'a>(
             if applies_logs.is_some() {
                 let (applies, logs) = applies_logs.unwrap();
 
-                account_storage.apply(applies, false, None)?;
+                account_storage.apply(applies, false)?;
                 debug_print!("Applies done");
                 for log in logs {
                     invoke(&on_event(program_id, log)?, &accounts)?;
@@ -565,7 +565,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     if applies_logs.is_some() {
         let (applies, logs) = applies_logs.unwrap();
-        account_storage.apply(applies, false, Some(caller_ether))?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
@@ -632,7 +632,7 @@ fn do_call<'a>(
     if applies_logs.is_some() {
         let (applies, logs) = applies_logs.unwrap();
 
-        account_storage.apply(applies, false, Some(caller_ether))?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
@@ -762,8 +762,7 @@ fn do_continue<'a>(
     };
 
     if let Some((applies, logs)) = applies_logs {
-        let caller_ether = get_ether_address(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info).ok_or(ProgramError::InvalidArgument)?;
-        account_storage.apply(applies, false, Some(caller_ether))?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;

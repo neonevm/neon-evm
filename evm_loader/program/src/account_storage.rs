@@ -123,12 +123,11 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
+    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (H256, H256)>,
     {
-        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
         let system_account = SolanaBackend::<ProgramAccountStorage>::system_account();
         let system_account_ecrecover = SolanaBackend::<ProgramAccountStorage>::system_account_ecrecover();
 
@@ -136,9 +135,6 @@ impl<'a> ProgramAccountStorage<'a> {
             match apply {
                 Apply::Modify {address, basic, code, storage, reset_storage} => {
                     if (address == system_account) || (address == system_account_ecrecover) {
-                        continue;
-                    }
-                    if ether_addr.1 != true && address == ether_addr.0 {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
