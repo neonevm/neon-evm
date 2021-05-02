@@ -97,7 +97,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
                     debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
 
-                    return Err(ProgramError::NotEnoughAccountKeys);
+                    return Err(ProgramError::InvalidArgument);
                 }
                 let caller_id = caller_acc.get_ether();
                 push_account(caller_acc, caller_info);
@@ -108,7 +108,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     debug_print!("Caller mast be signer");
                     debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
 
-                    return Err(ProgramError::NotEnoughAccountKeys);
+                    return Err(ProgramError::InvalidArgument);
                 }
 
                 keccak256_digest(&caller_info.key.to_bytes()).into()
