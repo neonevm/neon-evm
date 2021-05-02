@@ -32,9 +32,8 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 
     /// 0. contract account info
     /// 1. contract code info
-    /// 2. caller or caller account info(ether account)
-    /// 3. signer for caller account info(if some)
-    /// 4. ... other accounts
+    /// 2. caller or caller account info(for ether account)
+    /// 3. ... other accounts
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], clock_account: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
