@@ -2,6 +2,7 @@ use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
+    utils::keccak256_digest,
 };
 use evm::backend::Apply;
 use primitive_types::{H160, H256, U256};
@@ -25,6 +26,15 @@ pub struct ProgramAccountStorage<'a> {
 }
 
 impl<'a> ProgramAccountStorage<'a> {
+    /// ProgramAccountStorage constructor
+    /// 
+    /// account_infos expectations: 
+    /// 
+    /// 0. contract account info
+    /// 1. contract code info
+    /// 2. caller or caller account info(ether account)
+    /// 3. signer for caller account info(if some)
+    /// 4. ... other accounts
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], clock_account: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
