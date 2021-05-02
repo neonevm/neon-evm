@@ -27,56 +27,106 @@ pub struct ProgramAccountStorage<'a> {
 impl<'a> ProgramAccountStorage<'a> {
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], clock_account: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
+
+        let account_info_iter = &mut account_infos.iter();
+
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
         let mut account_metas = Vec::with_capacity(account_infos.len());
 
-        let mut contract_id: H160 = H160::zero();
-        let mut caller_id: H160 = H160::zero();
+        let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>| {
+            aliases.push((sol_account.get_ether(), accounts.len()));
+            accounts.push(sol_account);
+            account_metas.push(account_info);
+        };
 
-        let account_info_iter = &mut account_infos.iter();
-        let mut index: usize = 0;
+        let construct_contract_account = |account_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
+        {
+            let account_data = AccountData::unpack(&account_info.data.borrow())?;
+            let account = account_data.get_account()?;
+    
+            if *code_info.key != account.code_account {
+                return Err(ProgramError::InvalidAccountData)
+            }
+    
+            let code_data = code_info.data.clone();
+            let code_acc = AccountData::unpack(&code_data.borrow())?;
+            code_acc.get_contract()?;
+    
+            Ok( SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, Some((code_acc, code_data)))? )
+        };
+
+        let contract_id = {
+            let program_info = next_account_info(account_info_iter)?;
+            let program_code = next_account_info(account_info_iter)?;
+
+            let contract_acc = construct_contract_account(program_info, program_code)?;
+            let contract_id = contract_acc.get_ether();
+            push_account(contract_acc, program_info);
+
+            contract_id
+        };
+
+        let caller_id = {
+            let caller_info = next_account_info(account_info_iter)?;
+            let signer_info = if caller_info.owner == program_id {
+                next_account_info(account_info_iter)?
+            } else {
+                caller_info
+            };
+
+            let caller_id: H160 = if caller_info.owner == program_id {
+                let account_data = AccountData::unpack(&caller_info.data.borrow())?;
+                account_data.get_account()?;
+
+                let caller_acc = SolidityAccount::new(caller_info.key, (*caller_info.lamports.borrow()).clone(), account_data, None)?;
+
+                if caller_acc.get_signer() != *signer_info.key || !signer_info.is_signer {
+                    debug_print!("Add valid account signer");
+                    debug_print!("   caller signer: {}", &caller_acc.get_signer().to_string());
+                    debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
+                    debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
+
+                    return Err(ProgramError::NotEnoughAccountKeys);
+                }
+                let caller_id = caller_acc.get_ether();
+                push_account(caller_acc, caller_info);
+
+                caller_id
+            } else {
+                if !caller_info.is_signer {
+                    debug_print!("Caller mast be signer");
+                    debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
+
+                    return Err(ProgramError::NotEnoughAccountKeys);
+                }
+
+                keccak256_digest(&caller_info.key.to_bytes()).into()
+            };
+
+            caller_id
+        };
 
         while let Ok(account_info) = next_account_info(account_info_iter) {
             if account_info.owner == program_id {
                 let account_data = AccountData::unpack(&account_info.data.borrow())?;
-                let account = AccountData::get_account(&account_data)?;
-
-                let code_data = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
-                    debug_print!("Common account");
-
-                    if caller_id == H160::zero() {
-                        caller_id = account.ether;
-                        debug_print!("caller id: {}", &caller_id.to_string());
-                    }
-
-                    None
-                } else {
-                    debug_print!("Contract account");
-
-                    if contract_id == H160::zero() {
-                        contract_id = account.ether;
-                        debug_print!("contract id: {}", &contract_id.to_string());
-                    }
-
-                    let code_info = next_account_info(account_info_iter)?;
-                    if *code_info.key != account.code_account {
-                        return Err(ProgramError::InvalidAccountData)
-                    }
-
-                    let code_data = code_info.data.clone();
-                    let code_acc = AccountData::unpack(&code_data.borrow())?;
-                    AccountData::get_contract(&code_acc)?;
-
-                    Some((code_acc, code_data))
+                let account = match account_data {
+                    AccountData::Account(ref acc) => acc,
+                    _ => { continue; },
                 };
 
-                let sol_account = SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, code_data)?;
+                let sol_account = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
+                    debug_print!("Common account");
 
-                aliases.push((sol_account.get_ether(), index));
-                accounts.push(sol_account);
-                account_metas.push(account_info);
-                index += 1;
+                    SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, None)?
+                } else {
+                    debug_print!("Contract account");
+                    let code_info = next_account_info(account_info_iter)?;
+
+                    construct_contract_account(account_info, code_info)?
+                };
+
+                push_account(sol_account, account_info);
             }
         }
 
