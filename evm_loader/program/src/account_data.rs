@@ -59,7 +59,11 @@ impl AccountData {
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < 1 { return Err(ProgramError::AccountDataTooSmall); }
         Ok(match self {
-            AccountData::Empty => 1,
+            AccountData::Empty => {
+                if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
+                dst[0] = AccountData::EMPTY_TAG;
+                (AccountData::Empty).size()
+            },
             AccountData::Account(acc) => {
                 if dst[0] != AccountData::ACCOUNT_TAG && dst[0] != AccountData::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
