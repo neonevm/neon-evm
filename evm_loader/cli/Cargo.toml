@@ -1,15 +1,18 @@
 [package]
-name = "emulator"
+name = "neon-cli"
 version = "0.1.0"
 authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
+clap = "2.33.3"
 evm-loader = { path = "../program", version = "2.0.8", default_features = false }
 evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
 solana-sdk = "1.5.14"
 solana-client = "1.5.14"
+solana-clap-utils = "1.5.14"
+solana-cli-config = "1.5.14"
 bs58 = "0.4.0"
 primitive-types = "0.7"
 hex = ""
