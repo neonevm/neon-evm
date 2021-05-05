@@ -7,6 +7,7 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from eth_utils import abi
 from sha3 import keccak_256
 from hashlib import sha256
+import rlp
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
@@ -16,11 +17,12 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "CXEjhbsbcmvFCGZAZqhZSsxbwSo8fkwLPmBDP1UDxiEC"
 # evm_loader_id = "yb3WeCZJwQSpGdYC7uVcToQr2nxSbhxkJpXJrrWr8cj"
 # evm_loader_id = "FJZgdeqYcQUHvJ3UjH1AisyD1JnLbwHkFm3zLJbVtCff"
-evm_loader_id = "B6ytskuNBHSNXZ8qeL7LPR7fGm9Cqzza1eb6CKdH7isL"
+# evm_loader_id = "EiCj6z8n1WztgE52kMk2C4Ax5vCAtciGF4jJBSvkrJJ1"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 system = "11111111111111111111111111111111"
+
 
 contract_name = "helloWorld.binary"
 # "ERC20Wrapper.binary"
@@ -178,7 +180,12 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
-        return (trx, holder, contract_sol, code_sol)
+
+        result = http_client.send_transaction(trx, self.acc,
+                        opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        print("result executeTrxFromAccountData:", result)
+
+        return (holder, contract_sol, code_sol)
 
 
     def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
@@ -186,8 +193,8 @@ class DeployTest(unittest.TestCase):
                                    # data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
                                    data=bytearray.fromhex("0b"),
                                    keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -203,8 +210,6 @@ class DeployTest(unittest.TestCase):
                                        AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -222,22 +227,22 @@ class DeployTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, holder, contract_sol, code_sol):
-        print("Storage")
-
+        print("call_partial_signed")
         storage = self.create_storage_account("001122334")
+        print("storage:", storage)
 
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call(storage, 10, holder, contract_sol, code_sol))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-        print(result)
+        print("sol_instr_11_partial_call", result)
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 50, holder, contract_sol, code_sol))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-            print(result)
+            print("sol_instr_10_continue:", result)
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -245,58 +250,20 @@ class DeployTest(unittest.TestCase):
                     return result
 
     def test_executeTrxFromAccountDataIterative(self):
-        (trx, holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
+        (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
+        print("test_executeTrxFromAccountDataIterative")
 
-        result = http_client.send_transaction(trx, self.acc,
-                        opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-        print ("!!!!!!!!!!!1")
-        print("result", result)
 
         result = self.call_partial_signed(holder, contract_sol, code_sol)
         print("result", result)
 
-    # def test_executeTrxFromAccountDataIterative_new(self):
-    #     (trx, holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
-    #
-    #     result = http_client.send_transaction(trx, self.acc,
-    #                     opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-    #     print("result", result)
-    #
-    #
-    #     storage = self.create_storage_account("00112233")
-    #
-    #     print("Begin")
-    #     trx = Transaction()
-    #     trx.add(self.sol_instr_11_partial_call(storage, 10, holder, contract_sol, code_sol))
-    #     # trx.add(TransactionInstruction(program_id=self.loader.loader_id,
-    #     #                        data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
-    #                            # data=bytearray.fromhex("0b"),
-    #                            # keys=[
-    #                            #     AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
-    #                            #     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-    #                            #     AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-    #                            #     AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
-    #                            #     AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-    #                            #     AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-    #                            #     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-    #                            # ]))
-    #     result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-    #
-    #     print("result", result)
-    #     while (True):
-    #         print("Continue")
-    #         trx = Transaction()
-    #         trx.add(self.sol_instr_10_continue(storage, 50))
-    #         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-    #
-    #         if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-    #             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-    #             if (data[0] == 6):
-    #                 return result
 
 
     def test_executeTrxFromAccountData(self):
-        (trx, holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
+        (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
+        print("test_executeTrxFromAccountData")
+
+        trx = Transaction()
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('08'),
             keys=[

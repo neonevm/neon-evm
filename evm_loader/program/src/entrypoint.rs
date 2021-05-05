@@ -278,12 +278,13 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterative{} =>{
             debug_print!("Execute iterative transaction from account data");
             let account_info_iter = &mut accounts.iter();
-            let storage_info = next_account_info(account_info_iter)?;
             let holder_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
 
+            let  accounts = &accounts[1..];
             // do_partial_call(&mut storage, program_id, step_count, &accounts[1..], trx.call_data, Some( (caller, trx.nonce) ))?;
 
             // storage.block_accounts(program_id, accounts);
@@ -313,7 +314,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[2..], accounts.last().unwrap())?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..], accounts.last().unwrap())?;
 
             // let (exit_reason, result, applies_logs) = {
             let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
@@ -347,7 +348,7 @@ fn process_instruction<'a>(
             // }
 
             // executor.execute_n_steps(50).unwrap();
-            match(executor.execute_n_steps(500)){
+            match(executor.execute_n_steps(50)){
                 Ok(_) => {},
                 Err(reason) => {}
             };
