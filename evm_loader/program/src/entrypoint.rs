@@ -219,7 +219,7 @@ fn process_instruction<'a>(
             }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..], accounts.last().unwrap())?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
     
             let (exit_reason, result, applies_logs) = {
                 let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;  
@@ -518,7 +518,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         caller_info
     };
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, None)?;
 
@@ -596,7 +596,7 @@ fn do_call<'a>(
         caller_info
     };
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
 
@@ -665,7 +665,7 @@ fn do_partial_call<'a>(
     }
 
     let accounts = &accounts[1..];
-    let account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
 
@@ -713,7 +713,7 @@ fn do_continue<'a>(
     };
 
     let accounts = &accounts[1..];
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts, accounts.last().unwrap())?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
 

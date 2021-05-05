@@ -10,7 +10,7 @@ use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
     program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar},
+    sysvar::{clock, clock::Clock, Sysvar},
 };
 use std::{
     cell::RefCell,
@@ -34,7 +34,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
     /// 3. ... other accounts
-    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], clock_account: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
         let account_info_iter = &mut account_infos.iter();
@@ -42,6 +42,8 @@ impl<'a> ProgramAccountStorage<'a> {
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
         let mut account_metas = Vec::with_capacity(account_infos.len());
+
+        let mut clock_account = None;
 
         let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>| {
             aliases.push((sol_account.get_ether(), accounts.len()));
@@ -123,7 +125,14 @@ impl<'a> ProgramAccountStorage<'a> {
                 };
 
                 push_account(sol_account, account_info);
+            } else if clock::check_id(account_info.key) {
+                debug_print!("Clock account {}", account_info.key);
+                clock_account = Some(account_info);
             }
+        }
+
+        if clock_account.is_none() {
+            return Err(ProgramError::NotEnoughAccountKeys);
         }
 
         debug_print!("Accounts was read");
@@ -132,7 +141,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(Self {
             accounts: accounts,
             aliases: RefCell::new(aliases),
-            clock_account,
+            clock_account: clock_account.unwrap(),
             account_metas: account_metas,
             contract_id: contract_id,
             caller_id: caller_id,
