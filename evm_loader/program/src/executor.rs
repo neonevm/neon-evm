@@ -355,7 +355,6 @@ impl<'config, B: Backend> Machine<'config, B> {
         let scheme = evm::CreateScheme::Legacy {
             caller: caller,
         };
-
         self.executor.state.enter(u64::max_value(), false);
 
         match self.executor.create(caller, scheme, U256::zero(),&code, None ){
@@ -378,7 +377,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
         }
-
     }
 
 

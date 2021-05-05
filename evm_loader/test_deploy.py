@@ -7,10 +7,8 @@ from hashlib import sha256
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "86MJ8dkP7nos2W19B2xrSwNMfn9psKHWaLB1pXHa96v4"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -182,8 +180,8 @@ class DeployTest(unittest.TestCase):
 
     def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   # data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
-                                   data=bytearray.fromhex("0b"),
+                                   data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
+                                   # data=bytearray.fromhex("0b"),
                                    keys=[
                                        AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
@@ -194,7 +192,7 @@ class DeployTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, holder, contract_sol, code_sol):
+    def sol_instr_10_continue(self, storage_account, step_count, contract_sol, code_sol):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
                                    keys=[
@@ -223,13 +221,13 @@ class DeployTest(unittest.TestCase):
 
         print("Begin")
         trx = Transaction()
-        trx.add(self.sol_instr_11_partial_call(storage, 10, holder, contract_sol, code_sol))
+        trx.add(self.sol_instr_11_partial_call(storage, 50, holder, contract_sol, code_sol))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 50, holder, contract_sol, code_sol))
+            trx.add(self.sol_instr_10_continue(storage, 50, contract_sol, code_sol))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
