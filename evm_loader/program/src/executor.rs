@@ -364,6 +364,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             },
             Capture::Trap(info) => {
                 self.executor.state.touch(info.address);
+                self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
                 }
@@ -433,6 +434,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             RuntimeApply::Create(info) => {
                 self.executor.state.enter(u64::max_value(), false);
                 self.executor.state.touch(info.address);
+                self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
                 }

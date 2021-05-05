@@ -1,23 +1,16 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, pack
-from eth_utils import abi
+from eth_tx_utils import  make_instruction_data_from_tx, pack
 from sha3 import keccak_256
 from hashlib import sha256
-import rlp
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
-# evm_loader_id = "CXEjhbsbcmvFCGZAZqhZSsxbwSo8fkwLPmBDP1UDxiEC"
-# evm_loader_id = "yb3WeCZJwQSpGdYC7uVcToQr2nxSbhxkJpXJrrWr8cj"
-# evm_loader_id = "FJZgdeqYcQUHvJ3UjH1AisyD1JnLbwHkFm3zLJbVtCff"
-# evm_loader_id = "EiCj6z8n1WztgE52kMk2C4Ax5vCAtciGF4jJBSvkrJJ1"
+evm_loader_id = "86MJ8dkP7nos2W19B2xrSwNMfn9psKHWaLB1pXHa96v4"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -165,7 +158,6 @@ class DeployTest(unittest.TestCase):
         trx = Transaction()
 
         trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))
-        print("trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))")
 
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
@@ -227,22 +219,18 @@ class DeployTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, holder, contract_sol, code_sol):
-        print("call_partial_signed")
         storage = self.create_storage_account("001122334")
-        print("storage:", storage)
 
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call(storage, 10, holder, contract_sol, code_sol))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-        print("sol_instr_11_partial_call", result)
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 50, holder, contract_sol, code_sol))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-            print("sol_instr_10_continue:", result)
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -251,12 +239,9 @@ class DeployTest(unittest.TestCase):
 
     def test_executeTrxFromAccountDataIterative(self):
         (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
-        print("test_executeTrxFromAccountDataIterative")
-
 
         result = self.call_partial_signed(holder, contract_sol, code_sol)
         print("result", result)
-
 
 
     def test_executeTrxFromAccountData(self):
