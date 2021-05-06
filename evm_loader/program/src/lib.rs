@@ -19,7 +19,7 @@ pub mod account_data;
 pub mod account_storage;
 pub mod solidity_account;
 mod storage_account;
-mod instruction;
+pub mod instruction;
 mod transaction;
 mod executor;
 mod executor_state;
