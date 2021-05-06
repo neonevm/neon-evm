@@ -109,21 +109,16 @@ class EventTest(unittest.TestCase):
 
         storage = self.create_storage_account(sign[:8].hex())
 
-        print("Cancel")
-        trx = Transaction()
-        trx.add(self.sol_instr_11_cancel(storage, 1000))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 1000, instruction))
+        trx.add(self.sol_instr_09_partial_call(storage, 10, instruction))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 1000))
+            trx.add(self.sol_instr_10_continue(storage, 10))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
@@ -133,7 +128,7 @@ class EventTest(unittest.TestCase):
 
             print("Cancel")
             trx = Transaction()
-            trx.add(self.sol_instr_11_cancel(storage, 1000))
+            trx.add(self.sol_instr_11_cancel(storage, 10))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
 
@@ -153,88 +148,35 @@ class EventTest(unittest.TestCase):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 1000, instruction))
+        trx.add(self.sol_instr_09_partial_call(storage, 10, instruction))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, 1000))
+        trx.add(self.sol_instr_10_continue(storage, 10))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         print("Cancel")
         trx = Transaction()
-        trx.add(self.sol_instr_11_cancel(storage, 1000))
+        trx.add(self.sol_instr_11_cancel(storage, 10))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         print("Begin2")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 1000, instruction))
+        trx.add(self.sol_instr_09_partial_call(storage, 10, instruction))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         while (True):
             print("Continue2")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 1000))
+            trx.add(self.sol_instr_10_continue(storage, 100))
             result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     return result
-
-            print("Cancel2")
-            trx = Transaction()
-            trx.add(self.sol_instr_11_cancel(storage, 1000))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-
-
-    def test_caseFailToRunOtherInstruction(self):
-        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
-        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-
-        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
-
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
-        instruction = from_addr + sign + msg
-
-        storage = self.create_storage_account(sign[:8].hex())
-
-        print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 1000, instruction))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-        print("Continue")
-        trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, 1000))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-        print("Begin2")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 1000, instruction))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-        while (True):
-            print("Continue2")
-            trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 1000))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
-
-            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-                if (data[0] == 6):
-                    return result
-
-            print("Cancel2")
-            trx = Transaction()
-            trx.add(self.sol_instr_11_cancel(storage, 1000))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
 
 if __name__ == '__main__':
