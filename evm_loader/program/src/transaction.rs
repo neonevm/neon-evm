@@ -1,14 +1,14 @@
 use primitive_types::{H160, U256};
 use serde::{Deserialize, Serialize};
-use sha3::{Digest, Keccak256};
 use solana_program::{ 
     sysvar::instructions::{load_current_index, load_instruction_at},
     account_info::AccountInfo,
     entrypoint::{ ProgramResult },
     program_error::{ProgramError},
-    secp256k1_program
+    secp256k1_program,
 };
 use std::convert::Into;
+use crate::utils::keccak256_digest;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -128,7 +128,7 @@ pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
 }
 
 pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), secp256k1::Error> {
-    let digest = Keccak256::digest(unsigned_trx);
+    let digest = keccak256_digest(unsigned_trx);
     let message = secp256k1::Message::parse_slice(&digest)?;
 
     let recovery_id = secp256k1::RecoveryId::parse(signature[64])?;

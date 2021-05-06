@@ -2,13 +2,14 @@ use std::convert::Infallible;
 use std::rc::Rc;
 use evm_runtime::{save_return_value, save_created_address, Control};
 
+use sha3::{Digest, Keccak256};
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use crate::storage_account::StorageAccount;
+use crate::utils::keccak256_h256;
 use std::mem;
 use solana_program::program_error::ProgramError;
-use sha3::{Keccak256, Digest};
 use std::borrow::BorrowMut;
 
 macro_rules! try_or_fail {
@@ -22,10 +23,6 @@ macro_rules! try_or_fail {
 
 fn l64(gas: u64) -> u64 {
     gas - gas / 64
-}
-
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
 }
 
 struct CallInterrupt {
@@ -197,8 +194,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                     let mut stream = rlp::RlpStream::new_list(2);
                     stream.append(&caller);
                     stream.append(&nonce);
-                    //H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
-                    keccak256_digest(&stream.out()).into()
+                    //H256::from_slice(keccak256_digest(&stream.out()).as_slice()).into()
+                    keccak256_h256(&stream.out()).into()
                 },
                 evm::CreateScheme::Fixed(naddress) => {
                     naddress

@@ -7,8 +7,8 @@ use core::mem;
 use evm::backend::{Apply, Backend, Basic, Log};
 use evm::{ExitError, Transfer};
 use primitive_types::{H160, H256, U256};
-use sha3::{Digest, Keccak256};
 use serde::{Serialize, Deserialize};
+use crate::utils::keccak256_digest;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -505,7 +505,7 @@ impl<B: Backend> Backend for ExecutorState<B> {
 
     fn code_hash(&self, address: H160) -> H256 {
         self.substate.known_code(address)
-            .map(|code| Keccak256::digest(&code))
+            .map(|code| keccak256_digest(&code))
             .map(|digest| H256::from_slice(digest.as_slice()))
             .unwrap_or(self.backend.code_hash(address))
     }

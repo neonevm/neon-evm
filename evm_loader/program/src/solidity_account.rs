@@ -1,7 +1,7 @@
 use crate::{
     account_data::{AccountData, Account, Contract},
     hamt::Hamt,
-    utils::{keccak256_digest, u256_to_h256},
+    utils::{keccak256_h256, u256_to_h256},
 };
 use evm::backend::Basic;
 use solana_program::{
@@ -106,7 +106,7 @@ impl<'a> SolidityAccount<'a> {
     pub fn code_hash(&self) -> H256 {
         self.code(|d| {
             debug_print!("{}", &hex::encode(&d[0..32]));
-            keccak256_digest(d)
+            keccak256_h256(d)
         })
     }
     
