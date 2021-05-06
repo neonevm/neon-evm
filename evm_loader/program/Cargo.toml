@@ -42,6 +42,9 @@ rlp = "0.4"
 bincode = ""
 evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 
+[target.'cfg(all(not(target_arch = "bpf"), not(feature = "no-logs")))'.dependencies]
+logs = "0.4"
+
 [dev-dependencies]
 rand = { version = "0.7.0"}
 solana-program-test = "1.6.4"
