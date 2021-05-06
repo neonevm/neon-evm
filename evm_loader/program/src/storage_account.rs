@@ -25,6 +25,7 @@ impl<'a> StorageAccount<'a> {
             );
             Ok(Self { info, data })
         } else {
+            debug_print!("storage account is not empty");
             Err(ProgramError::InvalidAccountData)
         }
     }
