@@ -662,7 +662,6 @@ fn do_partial_call<'a>(
         return Err(ProgramError::InvalidArgument);
     }
 
-    let accounts = &accounts[1..];
     let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
@@ -709,7 +708,6 @@ fn do_continue<'a>(
         caller_info
     };
 
-    let accounts = &accounts[1..];
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
