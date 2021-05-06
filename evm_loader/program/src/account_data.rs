@@ -136,7 +136,7 @@ impl AccountData {
 }
 
 impl Account {
-    const SIZE: usize = 20+1+8+32+32+1+32;
+    pub const SIZE: usize = 20+1+8+32+32+1+32;
 
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Account::SIZE];
@@ -177,7 +177,7 @@ impl Account {
 }
 
 impl Contract {
-    const SIZE: usize = 32+4;
+    pub const SIZE: usize = 32+4;
 
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Contract::SIZE];
