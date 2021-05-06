@@ -64,6 +64,8 @@ use solana_transaction_status::TransactionConfirmationStatus;
 
 use sha3::{Keccak256, Digest};
 
+use log::*;
+
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 const NUM_TPU_LEADERS: u64 = 2;
 
@@ -72,7 +74,6 @@ type CommandResult = Result<(), Error>;
 
 pub struct Config {
     rpc_client: RpcClient,
-    verbose: bool,
     evm_loader: Pubkey,
     fee_payer: Pubkey,
     signer: Box<dyn Signer>,
@@ -88,10 +89,10 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     
         let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::max_value());
     
-        eprintln!("Call done");
+        debug!("Call done");
         
         if exit_reason.is_succeed() {
-            eprintln!("Succeed execution");
+            debug!("Succeed execution");
             let (applies, logs) = executor.deconstruct();
             (exit_reason, result, Some((applies, logs)))
         } else {
@@ -99,14 +100,14 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         }
     };
 
-    eprintln!("Call done");
+    debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
             account_storage.apply(applies);
 
-            eprintln!("Applies done");
+            debug!("Applies done");
             "succeed".to_string()
         }
         ExitReason::Error(_) => "error".to_string(),
@@ -114,11 +115,11 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         ExitReason::Fatal(_) => "fatal".to_string(),
     };
 
-    eprintln!("{}", &status);
-    eprintln!("{}", &hex::encode(&result));
+    info!("{}", &status);
+    info!("{}", &hex::encode(&result));
 
     if !exit_reason.is_succeed() {
-        eprintln!("Not succeed execution");
+        debug!("Not succeed execution");
     }
 
     account_storage.get_used_accounts(&status, &result);
@@ -150,7 +151,7 @@ fn command_create_ether_account (
     space: u64
 ) -> CommandResult {
     let (solana_address, nonce) = Pubkey::find_program_address(&[ether_address.as_bytes()], &config.evm_loader);
-    println!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
+    debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let instruction = Instruction::new(
             config.evm_loader,
@@ -173,7 +174,7 @@ fn command_create_ether_account (
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 
     finalize_tx.try_sign(&[&*config.signer], blockhash)?;
-    println!("signed: {:x?}", finalize_tx);
+    debug!("signed: {:x?}", finalize_tx);
 
     config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
 
@@ -377,15 +378,14 @@ fn command_deploy(
 
     let program_data = read_program_data(program_location)?;
     let program_code_len = CONTRACT_HEADER_SIZE + program_data.len() + 2*1024;
-    let minimum_balance_program = config.rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_HEADER_SIZE)?;
-    let minimum_balance_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_len)?;
-    let minimum_caller_balance = config.rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_HEADER_SIZE)?;
+    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_HEADER_SIZE)?;
+    let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_len)?;
 
     let creator = &config.signer;
     let signers = [&*config.signer];
 
     let creator_ether: H160 = H256::from_slice(Keccak256::digest(&creator.pubkey().to_bytes()).as_slice()).into();
-    println!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
+    debug!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
 
     let (program_id, ether, nonce) = {
         let code_hash = Keccak256::digest(&program_data);
@@ -397,20 +397,20 @@ fn command_deploy(
         let ether: H160 = H256::from_slice(hasher.result().as_slice()).into();
         let seeds = [ether.as_bytes()];
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
-        println!("Creator: {}, code_hash: {}", &hex::encode(&creator.pubkey().to_bytes()), &hex::encode(code_hash.as_slice()));
+        debug!("Creator: {}, code_hash: {}", &hex::encode(&creator.pubkey().to_bytes()), &hex::encode(code_hash.as_slice()));
         (address, ether, nonce)
     };
 
-    println!("Create account: {} with {} {}", program_id, ether, nonce);  
+    debug!("Create account: {} with {} {}", program_id, ether, nonce);  
 
     let (program_code, program_seed) = {
         let seed = bs58::encode(&ether.to_fixed_bytes()).into_string();
-        println!("Code account seed {} and len {}", &seed, &seed.len());
+        debug!("Code account seed {} and len {}", &seed, &seed.len());
         let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
         (address, seed)
     };
 
-    println!("Create code account: {}", &program_code.to_string());
+    debug!("Create code account: {}", &program_code.to_string());
 
     let make_create_account_instruction = |acc: &Pubkey, ether: &H160, nonce: u8, balance: u64| {
         Instruction::new(
@@ -459,16 +459,16 @@ fn command_deploy(
         // if let Some(account) = config.rpc_client.get_account_with_commitment(&caller_id, config.commitment)?.value {
         //     // TODO Check caller account
         // } else {
-        //     instructions.push(make_create_account_instruction(&caller_id, &caller_ether, caller_nonce, minimum_caller_balance, 0));
+        //     instructions.push(make_create_account_instruction(&caller_id, &caller_ether, caller_nonce, minimum_balance_for_account, 0));
         // }
-        instructions.push(system_instruction::create_account_with_seed(&creator.pubkey(), &program_code, &creator.pubkey(), &program_seed, minimum_balance_code, program_code_len as u64, &config.evm_loader));
-        instructions.push(make_create_account_instruction(&program_id, &ether, nonce, minimum_balance_program));
+        instructions.push(system_instruction::create_account_with_seed(&creator.pubkey(), &program_code, &creator.pubkey(), &program_seed, minimum_balance_for_code, program_code_len as u64, &config.evm_loader));
+        instructions.push(make_create_account_instruction(&program_id, &ether, nonce, minimum_balance_for_account));
         instructions
     };
-    let balance_needed = minimum_balance_program + minimum_balance_code;
-    println!("Minimum balance: {}", balance_needed);
+    let balance_needed = minimum_balance_for_account + minimum_balance_for_code;
+    debug!("Minimum balance: {}", balance_needed);
 
-    //println!("Initialize instructions: {:x?}", initial_instructions);  
+    //debug!("Initialize instructions: {:x?}", initial_instructions);  
 
     let initial_message = Message::new(&initial_instructions, Some(&config.signer.pubkey()));
     let mut messages: Vec<&Message> = Vec::new();
@@ -507,7 +507,7 @@ fn command_deploy(
     )?;
 
     {  // Send initialize message
-        eprintln!("Creating or modifying program account");
+        debug!("Creating or modifying program account");
         let mut initial_transaction = Transaction::new_unsigned(initial_message);
         initial_transaction.try_sign(&signers, blockhash)?;
         config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
@@ -529,7 +529,7 @@ fn command_deploy(
             write_transactions.push(tx);
         }
     
-        eprintln!("Writing program data");
+        debug!("Writing program data");
         send_and_confirm_transactions_with_spinner(
             &config.rpc_client,
             write_transactions,
@@ -539,7 +539,7 @@ fn command_deploy(
         ).map_err(|err| {
             format!("Data writes to program account failed: {}", err)
         })?;
-        eprintln!("Writing program data done");
+        debug!("Writing program data done");
     }
 
     { // Send finalize message
@@ -549,7 +549,7 @@ fn command_deploy(
         let mut finalize_tx = Transaction::new_unsigned(finalize_message);
         finalize_tx.try_sign(&signers, blockhash)?;
     
-        eprintln!("Finalizing program account");
+        debug!("Finalizing program account");
         config.rpc_client
             .send_and_confirm_transaction_with_spinner_and_config(
                 &finalize_tx,
@@ -632,7 +632,8 @@ fn main() {
                 .long("verbose")
                 .takes_value(false)
                 .global(true)
-                .help("Show additional information"),
+                .multiple(true)
+                .help("Increase message verbosity"),
         )
         .arg(
             Arg::with_name("json_rpc_url")
@@ -741,6 +742,12 @@ fn main() {
         )
         .get_matches();
 
+        stderrlog::new()
+            .module(module_path!())
+            .verbosity(app_matches.occurrences_of("verbose") as usize)
+            .init()
+            .unwrap();
+
         let mut wallet_manager = None;
         let config = {
             let cli_config = if let Some(config_file) = app_matches.value_of("config_file") {
@@ -757,11 +764,9 @@ fn main() {
 
             let evm_loader = pubkey_of(&app_matches, "evm_loader")
                     .unwrap_or_else(|| {
-                        eprintln!("Need specify evm_loader");
+                        error!("Need specify evm_loader");
                         exit(1);
                     });
-
-            let verbose = app_matches.is_present("verbose");
 
             let (signer, fee_payer) = signer_from_path(
                 &app_matches,
@@ -776,13 +781,12 @@ fn main() {
                 (s, p)
             })
             .unwrap_or_else(|e| {
-                eprintln!("error: {}", e);
+                error!("{}", e);
                 exit(1);
             });
 
             Config {
                 rpc_client: RpcClient::new_with_commitment(json_rpc_url, CommitmentConfig::default()),
-                verbose,
                 evm_loader,
                 fee_payer,
                 signer,
@@ -820,7 +824,7 @@ fn main() {
         match result {
             Ok(()) => exit(0),
             Err(err) => {
-                eprintln!("error: {}", err);
+                error!("{}", err);
                 exit(1);
             }
         }
