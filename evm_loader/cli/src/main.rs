@@ -804,7 +804,6 @@ fn main() {
                 command_create_program_address(&config, &seed)
             }
             ("create-ether-account", Some(arg_matches)) => {
-                //let signers = vec![default_signer.signer_from_path(arg_matches, wallet_manager)?];
                 let ether = h160_of(&arg_matches, "ether").unwrap();
                 let lamports = value_t_or_exit!(arg_matches, "lamports", u64);
                 let space = value_t_or_exit!(arg_matches, "space", u64);

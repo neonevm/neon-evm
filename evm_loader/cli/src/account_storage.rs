@@ -46,8 +46,6 @@ pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
     new_accounts: RefCell<HashSet<H160>>,
     config: &'a Config,
-    //rpc_client: RpcClient,
-    //program_id: Pubkey,
     contract_id: H160,
     caller_id: H160,
     block_number: u64,
@@ -55,10 +53,8 @@ pub struct EmulatorAccountStorage<'a> {
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config,/*solana_url: String, program_id: Pubkey,*/ contract_id: H160, caller_id: H160) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160) -> EmulatorAccountStorage {
         eprintln!("backend::new");
-
-        //let rpc_client = RpcClient::new(solana_url);
 
         let slot = match config.rpc_client.get_slot() {
             Ok(slot) => {
@@ -88,8 +84,6 @@ impl<'a> EmulatorAccountStorage<'a> {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashSet::new()),
             config: config,
-            //rpc_client: rpc_client,
-            //program_id: program_id,
             contract_id: contract_id,
             caller_id: caller_id,
             block_number: slot,
