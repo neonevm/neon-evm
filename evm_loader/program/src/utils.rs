@@ -2,8 +2,12 @@ use sha3::{Digest, Keccak256};
 use primitive_types::{H160, H256, U256};
 use solana_program::pubkey::Pubkey;
 
-pub fn keccak256_digest(data: &[u8]) -> H256 {
+pub fn keccak256_h256(data: &[u8]) -> H256 {
     H256::from_slice(Keccak256::digest(&data).as_slice())
+}
+
+pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
+    Keccak256::digest(&data).to_vec()
 }
 
 pub fn u256_to_h256(value: U256) -> H256 {
