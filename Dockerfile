@@ -25,7 +25,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo build-bpf --features no-logs
-RUN cd ../emulator && cargo build --release
+RUN cd ../cli && cargo build --release
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
@@ -60,7 +60,7 @@ COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/emulator/target/release/emulator /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
