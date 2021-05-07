@@ -1,5 +1,5 @@
 use crate::{
-    account_data::{AccountData, Account, Contract},
+    account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_digest, u256_to_h256},
 };

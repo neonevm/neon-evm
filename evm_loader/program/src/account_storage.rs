@@ -2,102 +2,147 @@ use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
+    utils::keccak256_digest,
 };
 use evm::backend::Apply;
 use primitive_types::{H160, H256, U256};
 use solana_program::{
-    account_info::AccountInfo,
+    account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
     program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar},
+    sysvar::{clock, clock::Clock, Sysvar},
 };
 use std::{
     cell::RefCell,
 };
 
 pub struct ProgramAccountStorage<'a> {
-    accounts: Vec<Option<SolidityAccount<'a>>>,
+    accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
-    account_infos: &'a [AccountInfo<'a>],
+    account_metas: Vec<&'a AccountInfo<'a>>,
     contract_id: H160,
     caller_id: H160,
 }
 
 impl<'a> ProgramAccountStorage<'a> {
-    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], clock_account: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+    /// ProgramAccountStorage constructor
+    /// 
+    /// account_infos expectations: 
+    /// 
+    /// 0. contract account info
+    /// 1. contract code info
+    /// 2. caller or caller account info(for ether account)
+    /// 3. ... other accounts
+    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
+
+        let account_info_iter = &mut account_infos.iter();
+
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
+        let mut account_metas = Vec::with_capacity(account_infos.len());
 
-        let mut contract_id: H160 = H160::zero();
-        let mut caller_id: H160 = H160::zero();
+        let mut clock_account = None;
 
-        let mut skip_next: bool = false;
-        let mut contract: bool = true;
-        let mut caller: bool = true;
-        for (i, account_info) in (&account_infos).iter().enumerate() {
-            debug_print!("{}", &i);
+        let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>| {
+            aliases.push((sol_account.get_ether(), accounts.len()));
+            accounts.push(sol_account);
+            account_metas.push(account_info);
+        };
 
-            if skip_next {
-                skip_next = false;
-                accounts.push(None);
-                continue;
+        let construct_contract_account = |account_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
+        {
+            let account_data = AccountData::unpack(&account_info.data.borrow())?;
+            let account = account_data.get_account()?;
+    
+            if *code_info.key != account.code_account {
+                return Err(ProgramError::InvalidAccountData)
             }
+    
+            let code_data = code_info.data.clone();
+            let code_acc = AccountData::unpack(&code_data.borrow())?;
+            code_acc.get_contract()?;
+    
+            Ok( SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, Some((code_acc, code_data)))? )
+        };
 
+        let contract_id = {
+            let program_info = next_account_info(account_info_iter)?;
+            let program_code = next_account_info(account_info_iter)?;
+
+            let contract_acc = construct_contract_account(program_info, program_code)?;
+            let contract_id = contract_acc.get_ether();
+            push_account(contract_acc, program_info);
+
+            contract_id
+        };
+
+        let caller_id = {
+            let caller_info = next_account_info(account_info_iter)?;
+
+            let caller_id: H160 = if caller_info.owner == program_id {
+                let account_data = AccountData::unpack(&caller_info.data.borrow())?;
+                account_data.get_account()?;
+
+                let caller_acc = SolidityAccount::new(caller_info.key, (*caller_info.lamports.borrow()).clone(), account_data, None)?;
+
+                let caller_id = caller_acc.get_ether();
+                push_account(caller_acc, caller_info);
+
+                caller_id
+            } else {
+                if !caller_info.is_signer {
+                    debug_print!("Caller mast be signer");
+                    debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
+
+                    return Err(ProgramError::InvalidArgument);
+                }
+
+                keccak256_digest(&caller_info.key.to_bytes()).into()
+            };
+
+            caller_id
+        };
+
+        while let Ok(account_info) = next_account_info(account_info_iter) {
             if account_info.owner == program_id {
                 let account_data = AccountData::unpack(&account_info.data.borrow())?;
                 let account = match account_data {
                     AccountData::Account(ref acc) => acc,
-                    _ => return Err(ProgramError::InvalidAccountData),
+                    _ => { continue; },
                 };
-                let code_data = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
-                    debug_print!("code_account == Pubkey::new_from_array([0u8; 32])");
-                    None
+
+                let sol_account = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
+                    debug_print!("Common account");
+
+                    SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, None)?
                 } else {
-                    debug_print!("code_account != Pubkey::new_from_array([0u8; 32])");
-                    debug_print!("account key:  {}", &account_info.key.to_string());
-                    debug_print!("code account: {}", &account.code_account.to_string());
-                    if account_infos.len() < i+2 {
-                        return Err(ProgramError::NotEnoughAccountKeys)
-                    }
-                    if *account_infos[i+1].key != account.code_account {
-                        return Err(ProgramError::InvalidAccountData)
-                    }
-                    skip_next = true;
-                    let code_data = account_infos[i+1].data.clone();
-                    let code_acc = AccountData::unpack(&code_data.borrow())?;
-                    match code_acc {
-                        AccountData::Contract(_) => (),
-                        _ => return Err(ProgramError::InvalidAccountData),
-                    };
-                    Some((code_acc, code_data))
+                    debug_print!("Contract account");
+                    let code_info = next_account_info(account_info_iter)?;
+
+                    construct_contract_account(account_info, code_info)?
                 };
-                let sol_account = SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, code_data)?;
-                aliases.push((sol_account.get_ether(), i));
 
-                if contract {
-                    contract = false;
-                    contract_id = sol_account.get_ether();
-                    debug_print!("contract id: {}", &contract_id.to_string());
-                } else if caller {
-                    caller = false;
-                    caller_id = sol_account.get_ether();
-                    debug_print!("caller id: {}", &caller_id.to_string());
-                }
-
-                accounts.push(Some(sol_account));
-            } else {
-                accounts.push(None);
+                push_account(sol_account, account_info);
+            } else if clock::check_id(account_info.key) {
+                debug_print!("Clock account {}", account_info.key);
+                clock_account = Some(account_info);
             }
         }
+
+        if clock_account.is_none() {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        }
+
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
+
         Ok(Self {
             accounts: accounts,
             aliases: RefCell::new(aliases),
-            clock_account,
-            account_infos: account_infos,
+            clock_account: clock_account.unwrap(),
+            account_metas: account_metas,
             contract_id: contract_id,
             caller_id: caller_id,
         })
@@ -127,18 +172,17 @@ impl<'a> ProgramAccountStorage<'a> {
 
     fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
         if let Some(pos) = self.find_account(address) {
-            self.accounts[pos].as_ref()
+            Some(&self.accounts[pos])
         } else {
             None
         }
     }
 
-    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool, skip_addr: Option<(H160, bool)>) -> Result<(), ProgramError>
+    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (H256, H256)>,
     {
-        let ether_addr = skip_addr.unwrap_or_else(|| (H160::zero(), true));
         let system_account = SolanaBackend::<ProgramAccountStorage>::system_account();
         let system_account_ecrecover = SolanaBackend::<ProgramAccountStorage>::system_account_ecrecover();
 
@@ -148,12 +192,9 @@ impl<'a> ProgramAccountStorage<'a> {
                     if (address == system_account) || (address == system_account_ecrecover) {
                         continue;
                     }
-                    if ether_addr.1 != true && address == ether_addr.0 {
-                        continue;
-                    }
                     if let Some(pos) = self.find_account(&address) {
-                        let account = self.accounts[pos].as_mut().ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
-                        let account_info = &self.account_infos[pos];
+                        let account = &mut self.accounts[pos];
+                        let account_info = &self.account_metas[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
                 }
