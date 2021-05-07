@@ -655,6 +655,26 @@ fn main() {
                 .validator(is_valid_pubkey)
                 .help("Pubkey for evm_loader contract")
         )
+        .arg(
+            Arg::with_name("commitment")
+                .long("commitment")
+                .takes_value(true)
+                .possible_values(&[
+                    "processed",
+                    "confirmed",
+                    "finalized",
+                    "recent", // Deprecated as of v1.5.5
+                    "single", // Deprecated as of v1.5.5
+                    "singleGossip", // Deprecated as of v1.5.5
+                    "root", // Deprecated as of v1.5.5
+                    "max", // Deprecated as of v1.5.5
+                ])
+                .value_name("COMMITMENT_LEVEL")
+                .hide_possible_values(true)
+                .global(true)
+                .default_value("max")
+                .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
+        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
@@ -756,6 +776,8 @@ fn main() {
                 solana_cli_config::Config::default()
             };
 
+            let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
+
             let json_rpc_url = normalize_to_url_if_moniker(
                 app_matches
                     .value_of("json_rpc_url")
@@ -786,7 +808,7 @@ fn main() {
             });
 
             Config {
-                rpc_client: RpcClient::new_with_commitment(json_rpc_url, CommitmentConfig::default()),
+                rpc_client: RpcClient::new_with_commitment(json_rpc_url, commitment),
                 evm_loader,
                 fee_payer,
                 signer,
