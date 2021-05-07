@@ -66,9 +66,9 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_11_cancel(self, storage_account, step_count):
+    def sol_instr_12_cancel(self, storage_account, step_count):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0B"),
+                                   data=bytearray.fromhex("0C"),
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
@@ -110,7 +110,7 @@ class EventTest(unittest.TestCase):
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
         return result
 
-    def call_11_cancel(self, storage):
+    def call_12_cancel(self, storage):
         print("Cancel")
         trx = Transaction()
         trx.add(self.sol_instr_11_cancel(storage, 10))
@@ -132,7 +132,7 @@ class EventTest(unittest.TestCase):
 
         result = self.call_09_begin(storage, msg, instruction)
         result = self.call_10_continue(storage, 10)
-        result = self.call_11_cancel(storage)
+        result = self.call_12_cancel(storage)
             
         err = "invalid account data for instruction"
         with self.assertRaisesRegex(Exception,err):
@@ -155,7 +155,7 @@ class EventTest(unittest.TestCase):
 
         result = self.call_09_begin(storage, msg, instruction)
         result = self.call_10_continue(storage, 10)
-        result = self.call_11_cancel(storage)
+        result = self.call_12_cancel(storage)
         result = self.call_09_begin(storage, msg, instruction)
 
         while (True):
