@@ -173,10 +173,10 @@ impl ExecutorSubstate {
         let mut entering = Self {
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
-            logs: Vec::new(),
-            accounts: BTreeMap::new(),
-            storages: BTreeMap::new(),
-            deletes: BTreeSet::new(),
+            logs: self.logs.clone(),
+            accounts: self.accounts.clone(),
+            storages: self.storages.clone(),
+            deletes: self.deletes.clone(),
         };
         mem::swap(&mut entering, self);
 
@@ -188,7 +188,6 @@ impl ExecutorSubstate {
         mem::swap(&mut exited, self);
 
         self.metadata.swallow_commit(exited.metadata)?;
-        self.logs.append(&mut exited.logs);
 
         let mut resets = BTreeSet::new();
         for (address, account) in &exited.accounts {
@@ -202,13 +201,14 @@ impl ExecutorSubstate {
                 reset_keys.insert((*address, *key));
             }
         }
-        for (address, key) in reset_keys {
+        for (address, key) in reset_ke  ys {
             self.storages.remove(&(address, key));
         }
 
-        self.accounts.append(&mut exited.accounts);
-        self.storages.append(&mut exited.storages);
+        self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
+        self.storages = exited.storages;
+        self.accounts = exited.accounts;
 
         Ok(())
     }
