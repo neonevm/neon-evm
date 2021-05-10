@@ -201,7 +201,7 @@ impl ExecutorSubstate {
                 reset_keys.insert((*address, *key));
             }
         }
-        for (address, key) in reset_ke  ys {
+        for (address, key) in reset_keys {
             self.storages.remove(&(address, key));
         }
 
