@@ -4,7 +4,7 @@ use crate::account_storage::EmulatorAccountStorage;
 use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
-    account_data::{Account, Contract},
+    account_data::{AccountData, Account, Contract},
 };
 
 use evm::{executor::StackExecutor, ExitReason};
@@ -517,6 +517,9 @@ fn command_deploy(
         )?;
     }
 
+    println!("Account created");
+    command_get_ether_account_data(&config, &ether);
+
     {  // Send write message
         let (blockhash, _, last_valid_slot) = config.rpc_client
             .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
@@ -563,11 +566,111 @@ fn command_deploy(
             })?;
     }
 
+    println!("Contract finalized created");
+    command_get_ether_account_data(&config, &ether);
+
     println!("{}", json!({
         "programId": format!("{}", program_id),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", ether),
     }).to_string());
+    Ok(())
+}
+
+fn command_get_ether_account_data (
+    config: &Config,
+    ether_address: &H160,
+) -> CommandResult {
+
+    let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
+
+    match config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
+        Some(acc) => {
+            let account_data = match AccountData::unpack(&acc.data) {
+                Ok(acc_data) => match acc_data {
+                    AccountData::Account(acc) => acc,
+                    _ => {
+                        error!("Not Account in AccountData");
+                        return Ok(())
+                    },
+                },
+                Err(_) =>  {
+                    error!("AccountData unpack error");
+                    return Ok(())
+                },
+            };
+
+            let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
+                println!("Common ethereum account");
+                None
+            } else {
+                println!("Ethereum contract account");
+
+                match config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
+                    Some(acc) => {
+                        match AccountData::unpack(&acc.data) {
+                            Ok(acc_data) => match acc_data {
+                                AccountData::Contract(code_data) => {
+                                    Some((acc, code_data))
+                                }
+                                _ => {
+                                    error!("Not Contract in AccountData");
+                                    None
+                                }
+                            },
+                            Err(_) => {
+                                error!("AccountData unpack error");
+                                None
+                            }
+                        }
+                    },
+                    None => {
+                        error!("Contract code account not found");
+                        None
+                    }
+                }
+            };
+
+            {
+                println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+                println!("Solana address: {}", solana_address);
+
+                println!("Account fields");
+                println!("    ether: {}", &account_data.ether);
+                println!("    nonce: {}", &account_data.nonce);
+                println!("    trx_count: {}", &account_data.trx_count);
+                println!("    signer: {}", &account_data.signer);
+                println!("    code_account: {}", &account_data.code_account);
+                println!("    blocked: {}", &account_data.blocked.is_some());
+            
+                if let Some((code_acc, code_data)) = code_account {    
+                    println!("Contract fields");
+                    println!("    owner: {}", &code_data.owner);
+                    println!("    code_size: {}", &code_data.code_size);
+                    println!("    code as hex:");
+
+                    let code_size = code_data.code_size;
+                    let header = AccountData::size(&AccountData::Contract(code_data));
+                    let mut offset = header;
+                    while offset < ( code_size as usize + header) {
+                        let data_slice = &code_acc.data.as_slice();
+                        let remains = if code_size as usize + header - offset > 80 {
+                            80
+                        } else {
+                            code_size as usize + header - offset
+                        };
+
+                        println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
+                        offset += remains;
+                    }
+                }
+            }
+        },
+        None => {
+            error!("Account not found");
+        }
+    }
+
     Ok(())
 }
 
@@ -740,6 +843,19 @@ fn main() {
                         .help("/path/to/program.o"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("get-ether-account-data")
+                .about("Get values stored in associated with given address account data")
+                .arg(
+                    Arg::with_name("ether")
+                        .index(1)
+                        .value_name("ether")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
+                )
+        )
         .get_matches();
 
         stderrlog::new()
@@ -818,6 +934,11 @@ fn main() {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
                 command_deploy(&config, &program_location)
+            }
+            ("get-ether-account-data", Some(arg_matches)) => {
+                let ether = h160_of(&arg_matches, "ether").unwrap();
+
+                command_get_ether_account_data(&config, &ether)
             }
             _ => unreachable!(),
         };
