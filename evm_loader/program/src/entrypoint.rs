@@ -280,9 +280,6 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
 
             let  accounts = &accounts[1..];
 
@@ -301,13 +298,21 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-            let (nonce, to, data) = get_data(&unsigned_msg);
             if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
                 debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
             }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-
+            let nonce = trx.nonce;
+            let data = trx.call_data;
+            let to = trx.to;
+            match to{
+                Some(_) => {
+                    debug_print!("This is not deploy contract transaction");
+                    return Err(ProgramError::InvalidInstructionData);
+                },
+                None => {}
+            }
 
             let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..], accounts.last().unwrap())?;
 
@@ -339,8 +344,7 @@ fn process_instruction<'a>(
 
             debug_print!("save");
             executor.save_into(&mut storage);
-            storage.block_accounts(program_id, accounts);
-            Ok(())
+            storage.block_accounts(program_id, accounts)
         },
 
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
