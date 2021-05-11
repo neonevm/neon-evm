@@ -517,9 +517,6 @@ fn command_deploy(
         )?;
     }
 
-    println!("Account created");
-    command_get_ether_account_data(&config, &ether);
-
     {  // Send write message
         let (blockhash, _, last_valid_slot) = config.rpc_client
             .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
@@ -565,9 +562,6 @@ fn command_deploy(
                 format!("Finalizing program account failed: {}", e)
             })?;
     }
-
-    println!("Contract finalized created");
-    command_get_ether_account_data(&config, &ether);
 
     println!("{}", json!({
         "programId": format!("{}", program_id),
