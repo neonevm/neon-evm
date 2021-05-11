@@ -213,7 +213,7 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-            let (nonce, to, data) = get_data(&unsigned_msg);
+
             if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
                 debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
@@ -224,8 +224,8 @@ fn process_instruction<'a>(
     
             let (exit_reason, result, applies_logs) = {
                 let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;  
-                if caller.get_nonce() != nonce {
-                    debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
+                if caller.get_nonce() != trx.nonce {
+                    debug_print!("Invalid nonce: actual {}, expect {}", trx.nonce, caller.get_nonce());
                     return Err(ProgramError::InvalidInstructionData);
                 }
                 let caller_ether = caller.get_ether();
@@ -242,9 +242,9 @@ fn process_instruction<'a>(
                 let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
                 debug_print!("Executor initialized");
 
-                let exit_reason = match to {
+                let exit_reason = match trx.to {
                     None => {
-                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
+                        executor.transact_create(caller_ether, U256::zero(), trx.call_data, usize::max_value())
                     },
                     Some(contract) => {
                         debug_print!("Not supported");
@@ -547,7 +547,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let exit_reason = executor.transact_create2(
                 account_storage.origin(),
                 U256::zero(),
-                &code_data,
+                code_data,
                 H256::default(), usize::max_value()
             );
         debug_print!("  create2 done");   
