@@ -189,21 +189,21 @@ impl ExecutorSubstate {
 
         self.metadata.swallow_commit(exited.metadata)?;
 
-        let mut resets = BTreeSet::new();
-        for (address, account) in &exited.accounts {
-            if account.reset {
-                resets.insert(*address);
-            }
-        }
-        let mut reset_keys = BTreeSet::new();
-        for (address, key) in self.storages.keys() {
-            if resets.contains(&address) {
-                reset_keys.insert((*address, *key));
-            }
-        }
-        for (address, key) in reset_keys {
-            self.storages.remove(&(address, key));
-        }
+        // let mut resets = BTreeSet::new();
+        // for (address, account) in &exited.accounts {
+        //     if account.reset {
+        //         resets.insert(*address);
+        //     }
+        // }
+        // let mut reset_keys = BTreeSet::new();
+        // for (address, key) in self.storages.keys() {
+        //     if resets.contains(&address) {
+        //         reset_keys.insert((*address, *key));
+        //     }
+        // }
+        // for (address, key) in reset_keys {
+        //     self.storages.remove(&(address, key));
+        // }
 
         self.logs.append(&mut exited.logs);
         self.deletes.append(&mut exited.deletes);
