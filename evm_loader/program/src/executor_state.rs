@@ -173,10 +173,10 @@ impl ExecutorSubstate {
         let mut entering = Self {
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
-            logs: self.logs.clone(),
-            accounts: self.accounts.clone(),
-            storages: self.storages.clone(),
-            deletes: self.deletes.clone(),
+            logs: Vec::new(),
+            accounts: BTreeMap::new(),
+            storages: BTreeMap::new(),
+            deletes: BTreeSet::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -188,6 +188,7 @@ impl ExecutorSubstate {
         mem::swap(&mut exited, self);
 
         self.metadata.swallow_commit(exited.metadata)?;
+        self.logs.append(&mut exited.logs);
 
         // let mut resets = BTreeSet::new();
         // for (address, account) in &exited.accounts {
@@ -205,10 +206,9 @@ impl ExecutorSubstate {
         //     self.storages.remove(&(address, key));
         // }
 
-        self.logs.append(&mut exited.logs);
+        self.accounts.append(&mut exited.accounts);
+        self.storages.append(&mut exited.storages);
         self.deletes.append(&mut exited.deletes);
-        self.storages = exited.storages;
-        self.accounts = exited.accounts;
 
         Ok(())
     }
@@ -276,11 +276,11 @@ impl ExecutorSubstate {
             return Some(*value);
         }
 
-        if let Some(account) = self.accounts.get(&address) {
-            if account.reset {
-                return Some(H256::default());
-            }
-        }
+        // if let Some(account) = self.accounts.get(&address) {
+        //     if account.reset {
+        //         return Some(H256::default());
+        //     }
+        // }
 
         if let Some(parent) = self.parent.as_ref() {
             return parent.known_storage(address, key);
@@ -320,10 +320,10 @@ impl ExecutorSubstate {
             let account = self
                 .known_account(address)
                 .cloned()
-                .map(|mut v| {
-                    v.reset = false;
-                    v
-                })
+                // .map(|mut v| {
+                //     v.reset = false;
+                //     v
+                // })
                 .unwrap_or_else(|| ExecutorAccount {
                     basic: backend.basic(address),
                     code: None,
