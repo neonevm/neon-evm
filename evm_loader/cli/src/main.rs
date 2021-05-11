@@ -575,93 +575,52 @@ fn command_get_ether_account_data (
     config: &Config,
     ether_address: &H160,
 ) -> CommandResult {
+    match EmulatorAccountStorage::get_account_from_solana(&config, ether_address) {
+        Some((acc, code_account)) => {
+            let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
+            let account_data = AccountData::unpack(&acc.data).unwrap();
+            let account_data = AccountData::get_account(&account_data).unwrap();
 
-    let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
+            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+            println!("Solana address: {}", solana_address);
+    
+            println!("Account fields");
+            println!("    ether: {}", &account_data.ether);
+            println!("    nonce: {}", &account_data.nonce);
+            println!("    trx_count: {}", &account_data.trx_count);
+            println!("    signer: {}", &account_data.signer);
+            println!("    code_account: {}", &account_data.code_account);
+            println!("    blocked: {}", &account_data.blocked.is_some());
+        
+            if let Some(code_account) = code_account {
+                let code_data = AccountData::unpack(&code_account.data).unwrap();
+                let header = AccountData::size(&code_data);
+                let code_data = AccountData::get_contract(&code_data).unwrap();
 
-    match config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
-        Some(acc) => {
-            let account_data = match AccountData::unpack(&acc.data) {
-                Ok(acc_data) => match acc_data {
-                    AccountData::Account(acc) => acc,
-                    _ => {
-                        error!("Not Account in AccountData");
-                        return Ok(())
-                    },
-                },
-                Err(_) =>  {
-                    error!("AccountData unpack error");
-                    return Ok(())
-                },
-            };
-
-            let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
-                println!("Common ethereum account");
-                None
-            } else {
-                println!("Ethereum contract account");
-
-                match config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
-                    Some(acc) => {
-                        match AccountData::unpack(&acc.data) {
-                            Ok(acc_data) => match acc_data {
-                                AccountData::Contract(code_data) => {
-                                    Some((acc, code_data))
-                                }
-                                _ => {
-                                    error!("Not Contract in AccountData");
-                                    None
-                                }
-                            },
-                            Err(_) => {
-                                error!("AccountData unpack error");
-                                None
-                            }
-                        }
-                    },
-                    None => {
-                        error!("Contract code account not found");
-                        None
-                    }
-                }
-            };
-
-            {
-                println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
-                println!("Solana address: {}", solana_address);
-
-                println!("Account fields");
-                println!("    ether: {}", &account_data.ether);
-                println!("    nonce: {}", &account_data.nonce);
-                println!("    trx_count: {}", &account_data.trx_count);
-                println!("    signer: {}", &account_data.signer);
-                println!("    code_account: {}", &account_data.code_account);
-                println!("    blocked: {}", &account_data.blocked.is_some());
-            
-                if let Some((code_acc, code_data)) = code_account {    
-                    println!("Contract fields");
-                    println!("    owner: {}", &code_data.owner);
-                    println!("    code_size: {}", &code_data.code_size);
-                    println!("    code as hex:");
-
-                    let code_size = code_data.code_size;
-                    let header = AccountData::size(&AccountData::Contract(code_data));
-                    let mut offset = header;
-                    while offset < ( code_size as usize + header) {
-                        let data_slice = &code_acc.data.as_slice();
-                        let remains = if code_size as usize + header - offset > 80 {
-                            80
-                        } else {
-                            code_size as usize + header - offset
-                        };
-
-                        println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
-                        offset += remains;
-                    }
+                println!("Contract fields");
+                println!("    owner: {}", &code_data.owner);
+                println!("    code_size: {}", &code_data.code_size);
+                println!("    code as hex:");
+    
+                let code_size = code_data.code_size;
+                let mut offset = header;
+                while offset < ( code_size as usize + header) {
+                    let data_slice = &code_account.data.as_slice();
+                    let remains = if code_size as usize + header - offset > 80 {
+                        80
+                    } else {
+                        code_size as usize + header - offset
+                    };
+    
+                    println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
+                    offset += remains;
                 }
             }
+
+
         },
         None => {
-            error!("Account not found");
+            eprintln!("Account not found {}", &ether_address.to_string());
         }
     }
 

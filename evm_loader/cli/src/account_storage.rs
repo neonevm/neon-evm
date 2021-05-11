@@ -91,47 +91,61 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
+    pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, Option<Account>)> {
+        let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &config.evm_loader).0;
+        eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
+
+        match config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
+            Some(acc) => {
+                eprintln!("Account found");
+                eprintln!("Account data len {}", acc.data.len());
+                eprintln!("Account owner {}", acc.owner.to_string());
+
+                let account_data = match AccountData::unpack(&acc.data) {
+                    Ok(acc_data) => match acc_data {
+                        AccountData::Account(acc) => acc,
+                        _ => return None,
+                    },
+                    Err(_) => return None,
+                };
+
+                let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
+                    eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
+                    None
+                } else {
+                    eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
+                    eprintln!("account key:  {}", &solana_address.to_string());
+                    eprintln!("code account: {}", &account_data.code_account.to_string());
+
+                    match config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
+                        Some(acc) => {
+                            eprintln!("Account found");
+                            Some(acc)
+                        },
+                        None => {
+                            eprintln!("Account not found");
+                            None
+                        }
+                    }
+                };
+
+                Some((acc, code_account))
+            },
+            None => {
+                eprintln!("Account not found {}", &address.to_string());
+
+                None
+            }
+        }    
+    }
+
     fn create_acc_if_not_exists(&self, address: &H160) -> bool {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
-
-            let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
-            eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
-
-            match self.config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
-                Some(acc) => {
-                    eprintln!("Account found");
-                    eprintln!("Account data len {}", acc.data.len());
-                    eprintln!("Account owner {}", acc.owner.to_string());
-
-                    let account_data = match AccountData::unpack(&acc.data) {
-                        Ok(acc_data) => match acc_data {
-                            AccountData::Account(acc) => acc,
-                            _ => return false,
-                        },
-                        Err(_) => return false,
-                    };
-
-                    let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
-                        eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
-                        None
-                    } else {
-                        eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
-                        eprintln!("account key:  {}", &solana_address.to_string());
-                        eprintln!("code account: {}", &account_data.code_account.to_string());
-
-                        match self.config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
-                            Some(acc) => {
-                                eprintln!("Account found");
-                                Some(acc)
-                            },
-                            None => {
-                                eprintln!("Account not found");
-                                None
-                            }
-                        }
-                    };
+            match Self::get_account_from_solana(&self.config, address) {
+                Some((acc, code_account)) => {
+                    let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
 
                     accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address, code_account));
 
