@@ -314,7 +314,7 @@ fn process_instruction<'a>(
                 None => {}
             }
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..], accounts.last().unwrap())?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
 
             let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
             if caller.get_nonce() != nonce {

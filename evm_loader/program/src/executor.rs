@@ -355,7 +355,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         };
         self.executor.state.enter(u64::max_value(), false);
 
-        match self.executor.create(caller, scheme, U256::zero(),&code, None ){
+        match self.executor.create(caller, scheme, U256::zero(),code, None ){
             Capture::Exit((reason, address, return_data)) => {
                 debug_print!("create_begin() error ");
             },
@@ -367,8 +367,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let mut instance = evm::Runtime::new(
-                    Rc::new(info.init_code),
-                    Rc::new(Vec::new()),
+                    info.init_code,
+                    Vec::new(),
                     info.context,
                     &self.executor.config
                 );
