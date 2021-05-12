@@ -147,6 +147,10 @@ pub enum EvmInstruction<'a> {
     Continue {
         step_count: u64,
     },
+
+    ExecuteTrxFromAccountDataIterative {
+        step_count: u64,
+    },
 }
 
 
@@ -249,6 +253,11 @@ impl<'a> EvmInstruction<'a> {
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::Continue {step_count}
+            },
+            11 => {
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterative {step_count}
             },
 
             _ => return Err(InvalidInstructionData),
