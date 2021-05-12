@@ -190,25 +190,37 @@ impl ExecutorSubstate {
         self.metadata.swallow_commit(exited.metadata)?;
         self.logs.append(&mut exited.logs);
 
-        // let mut resets = BTreeSet::new();
-        // for (address, account) in &exited.accounts {
-        //     if account.reset {
-        //         resets.insert(*address);
-        //     }
-        // }
-        // let mut reset_keys = BTreeSet::new();
-        // for (address, key) in self.storages.keys() {
-        //     if resets.contains(&address) {
-        //         reset_keys.insert((*address, *key));
-        //     }
-        // }
-        // for (address, key) in reset_keys {
-        //     self.storages.remove(&(address, key));
-        // }
+        let mut resets = BTreeSet::new();
+        for (address, account) in &exited.accounts {
+            if account.reset {
+                resets.insert(*address);
+            }
+        }
+        let mut reset_keys = BTreeSet::new();
+        for (address, key) in self.storages.keys() {
+            if resets.contains(&address) {
+                reset_keys.insert((*address, *key));
+            }
+        }
+        for (address, key) in reset_keys {
+            self.storages.remove(&(address, key));
+        }
 
+        resets = BTreeSet::new();
+        for (address, account) in &self.accounts {
+            if account.reset {
+                resets.insert(*address);
+            }
+        }
         self.accounts.append(&mut exited.accounts);
         self.storages.append(&mut exited.storages);
         self.deletes.append(&mut exited.deletes);
+
+        for (address) in &resets {
+            if self.accounts.contains_key(address){
+                self.accounts.get_mut(&address).unwrap().reset = true;
+            }
+        }
 
         Ok(())
     }
@@ -276,11 +288,11 @@ impl ExecutorSubstate {
             return Some(*value);
         }
 
-        // if let Some(account) = self.accounts.get(&address) {
-        //     if account.reset {
-        //         return Some(H256::default());
-        //     }
-        // }
+        if let Some(account) = self.accounts.get(&address) {
+            if account.reset {
+                return Some(H256::default());
+            }
+        }
 
         if let Some(parent) = self.parent.as_ref() {
             return parent.known_storage(address, key);
@@ -320,10 +332,10 @@ impl ExecutorSubstate {
             let account = self
                 .known_account(address)
                 .cloned()
-                // .map(|mut v| {
-                //     v.reset = false;
-                //     v
-                // })
+                .map(|mut v| {
+                    v.reset = false;
+                    v
+                })
                 .unwrap_or_else(|| ExecutorAccount {
                     basic: backend.basic(address),
                     code: None,
