@@ -136,7 +136,7 @@ impl<'a> SolidityAccount<'a> {
     ) -> Result<(), ProgramError>
     where I: IntoIterator<Item = (H256, H256)> 
     {
-        println!("Update: {}, {}, {}, {:?} for {:?}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, self);
+        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
         **(*account_info.lamports).borrow_mut() = lamports;
 
