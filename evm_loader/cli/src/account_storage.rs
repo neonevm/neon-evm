@@ -200,6 +200,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         *acc.code_size.borrow_mut() = code.map(|v| v.len());
                     } else if let Some(acc) = new_accounts.get_mut(&address) {
                         *acc.code_size.borrow_mut() = code.map(|v| v.len());
+                        *acc.writable.borrow_mut() = true;
                     } else {
                         eprintln!("Account not found {}", &address.to_string());
                     }
@@ -244,7 +245,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
             arr.push(AccountJSON{
                     address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: false,
+                    writable: acc.writable,
                     new: true,
                     account: solana_address.to_string(),
                     contract: None,
