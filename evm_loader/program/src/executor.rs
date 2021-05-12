@@ -348,7 +348,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((runtime, CreateReason::Call));
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64){
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
 
         let scheme = evm::CreateScheme::Legacy {
             caller: caller,
@@ -358,6 +358,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         match self.executor.create(caller, scheme, U256::zero(),code, None ){
             Capture::Exit((reason, address, return_data)) => {
                 debug_print!("create_begin() error ");
+                return Err(ProgramError::InvalidInstructionData);
             },
             Capture::Trap(info) => {
                 self.executor.state.touch(info.address);
@@ -375,6 +376,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
         }
+        Ok(())
     }
 
 

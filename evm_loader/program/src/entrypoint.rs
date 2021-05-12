@@ -339,7 +339,10 @@ fn process_instruction<'a>(
 
             debug_print!("Executor initialized");
 
-            executor.create_begin(caller_ether, data, u64::max_value());
+            match (executor.create_begin(caller_ether, data, u64::max_value())){
+                Err(reason) => {return Err(reason)},
+                _ => {}
+            }
             executor.execute_n_steps(step_count).unwrap();
 
             debug_print!("save");
