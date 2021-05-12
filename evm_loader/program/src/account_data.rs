@@ -59,7 +59,11 @@ impl AccountData {
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.len() < 1 { return Err(ProgramError::AccountDataTooSmall); }
         Ok(match self {
-            AccountData::Empty => 1,
+            AccountData::Empty => {
+                if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
+                dst[0] = AccountData::EMPTY_TAG;
+                (AccountData::Empty).size()
+            },
             AccountData::Account(acc) => {
                 if dst[0] != AccountData::ACCOUNT_TAG && dst[0] != AccountData::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
@@ -136,7 +140,7 @@ impl AccountData {
 }
 
 impl Account {
-    const SIZE: usize = 20+1+8+32+32+1+32;
+    pub const SIZE: usize = 20+1+8+32+32+1+32;
 
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Account::SIZE];
@@ -177,7 +181,7 @@ impl Account {
 }
 
 impl Contract {
-    const SIZE: usize = 32+4;
+    pub const SIZE: usize = 32+4;
 
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Contract::SIZE];

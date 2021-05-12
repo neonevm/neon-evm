@@ -1,11 +1,15 @@
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Serializer, Deserialize};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::TryInto;
 use primitive_types::{H160, H256};
 use evm::backend::Log;
 
+fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    value.as_fixed_bytes().serialize(s)
+}
+
 /// Create a new account
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
@@ -33,14 +37,6 @@ pub enum EvmInstruction<'a> {
     ///   ... other Ether accounts
     Finalize,
 
-    /// Execute Ethereum transaction from account data
-    /// # Account references
-    ///   0. [] The account with transaction for execution
-    ///   1. [WRITE] Caller (Ether account)
-    ///   ... another accounts
-    ///   2. [] Clock sysvar
-    ExecuteTrxFromAccountData,
-
     ///
     /// Create Ethereum account (create program_address account and write data)
     /// # Account references
@@ -55,11 +51,33 @@ pub enum EvmInstruction<'a> {
         space: u64,
 
         /// Ethereum address of account
+        #[serde(serialize_with="serialize_h160")]
         ether: H160,
 
         /// Nonce for create valid program_address from ethereum address
         nonce: u8,
     },
+
+    /// Call Ethereum-contract action
+    /// # Account references
+    ///   0. [WRITE] Contract account for execution (Ether account)
+    ///   1. [WRITE] Contract code account (Code account)
+    ///   2. [WRITE] Caller (Ether account)
+    ///   3. [SIGNER] Signer for caller
+    ///   4. [] Clock sysvar
+    ///   ... other Ether accounts
+    Call {
+        /// Call data
+        bytes: &'a [u8],
+    },
+
+    /// Execute Ethereum transaction from account data
+    /// # Account references
+    ///   0. [] The account with transaction for execution
+    ///   1. [WRITE] Caller (Ether account)
+    ///   ... another accounts
+    ///   2. [] Clock sysvar
+    ExecuteTrxFromAccountData,
 
     ///
     /// Create ethereum account with seed
@@ -82,19 +100,6 @@ pub enum EvmInstruction<'a> {
 
         /// Owner program account address
         owner: Pubkey,
-    },
-
-    /// Call Ethereum-contract action
-    /// # Account references
-    ///   0. [WRITE] Contract account for execution (Ether account)
-    ///   1. [WRITE] Contract code account (Code account)
-    ///   2. [WRITE] Caller (Ether account)
-    ///   3. [SIGNER] Signer for caller
-    ///   4. [] Clock sysvar
-    ///   ... other Ether accounts
-    Call {
-        /// Call data
-        bytes: &'a [u8],
     },
 
     /// Call Ethereum-contract action from raw transaction data

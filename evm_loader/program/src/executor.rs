@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-use std::rc::Rc;
 use evm_runtime::{save_return_value, save_created_address, Control};
 
 use primitive_types::{H160, H256, U256};
@@ -168,7 +167,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         caller: H160,
         scheme: evm::CreateScheme,
         value: U256,
-        init_code_: &Vec<u8>,
+        init_code: Vec<u8>,
         target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
 
@@ -227,7 +226,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             apparent_value: value,
         };
 
-        let init_code:Vec<u8> = init_code_.clone();
         Capture::Trap(CreateInterrupt{init_code, context, address})
     }
 
@@ -342,11 +340,11 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
 
-
         let code = self.executor.code(code_address);
         let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
 
-        let runtime = evm::Runtime::new(Rc::new(code), Rc::new(input), context, &self.executor.config);
+        let runtime = evm::Runtime::new(code, input, context, &self.executor.config);
+
         self.runtime.push((runtime, CreateReason::Call));
     }
 
@@ -421,8 +419,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.executor.state.touch(info.code_address);
 
                 let mut instance = evm::Runtime::new(
-                    Rc::new(code),
-                    Rc::new(info.input),
+                    code,
+                    info.input,
                     info.context,
                     &self.executor.config
                 );
@@ -438,8 +436,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let mut instance = evm::Runtime::new(
-                    Rc::new(info.init_code),
-                    Rc::new(Vec::new()),
+                    info.init_code,
+                    Vec::new(),
                     info.context,
                     &self.executor.config
                 );
