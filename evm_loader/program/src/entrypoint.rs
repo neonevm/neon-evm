@@ -213,7 +213,7 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-            let (nonce, to, data) = get_data(&unsigned_msg);
+
             if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
                 debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
@@ -224,8 +224,8 @@ fn process_instruction<'a>(
     
             let (exit_reason, result, applies_logs) = {
                 let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;  
-                if caller.get_nonce() != nonce {
-                    debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
+                if caller.get_nonce() != trx.nonce {
+                    debug_print!("Invalid nonce: actual {}, expect {}", trx.nonce, caller.get_nonce());
                     return Err(ProgramError::InvalidInstructionData);
                 }
                 let caller_ether = caller.get_ether();
@@ -242,9 +242,9 @@ fn process_instruction<'a>(
                 let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
                 debug_print!("Executor initialized");
 
-                let exit_reason = match to {
+                let exit_reason = match trx.to {
                     None => {
-                        executor.transact_create(caller_ether, U256::zero(), &data, usize::max_value())
+                        executor.transact_create(caller_ether, U256::zero(), trx.call_data, usize::max_value())
                     },
                     Some(contract) => {
                         debug_print!("Not supported");
@@ -275,6 +275,81 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
+            debug_print!("Execute iterative transaction from account data");
+            let account_info_iter = &mut accounts.iter();
+            let holder_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
+
+            let  accounts = &accounts[1..];
+
+            let (unsigned_msg, signature) = {
+                let data = holder_info.data.borrow();
+                let account_info_data = AccountData::unpack(&data)?;
+                match account_info_data {
+                    AccountData::Empty => (),
+                    _ => return Err(ProgramError::InvalidAccountData),
+                };
+
+                let (acc_header, rest) = data.split_at(account_info_data.size());
+                let (signature, rest) = rest.split_at(65);
+                let (trx_len, rest) = rest.split_at(8);
+                let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+                let (trx, _rest) = rest.split_at(trx_len as usize);
+                (trx.to_vec(), signature.to_vec())
+            };
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!("{}", e);
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let nonce = trx.nonce;
+            let data = trx.call_data;
+            let to = trx.to;
+            match to{
+                Some(_) => {
+                    debug_print!("This is not deploy contract transaction");
+                    return Err(ProgramError::InvalidInstructionData);
+                },
+                None => {}
+            }
+
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
+
+            let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;
+            if caller.get_nonce() != nonce {
+                debug_print!("Invalid nonce: actual {}, expect {}", nonce, caller.get_nonce());
+                return Err(ProgramError::InvalidInstructionData);
+            }
+            let caller_ether = caller.get_ether();
+            debug_print!("   caller: {}", &caller_ether.to_string());
+
+            let mut storage = StorageAccount::new(storage_info, accounts, caller_ether, trx.nonce)?;
+
+            let backend = SolanaBackend::new(&account_storage, Some(accounts));
+            debug_print!("  backend initialized");
+
+            if trx.chain_id != backend.chain_id() {
+                debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
+                return Err(ProgramError::InvalidInstructionData);
+            }
+
+            let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+            let mut executor = Machine::new(executor_state);
+
+            debug_print!("Executor initialized");
+
+            match (executor.create_begin(caller_ether, data, u64::max_value())){
+                Err(reason) => {return Err(reason)},
+                _ => {}
+            }
+            executor.execute_n_steps(step_count).unwrap();
+
+            debug_print!("save");
+            executor.save_into(&mut storage);
+            storage.block_accounts(program_id, accounts)
+        },
+
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
@@ -558,7 +633,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let exit_reason = executor.transact_create2(
                 account_storage.origin(),
                 U256::zero(),
-                &code_data,
+                code_data,
                 H256::default(), usize::max_value()
             );
         debug_print!("  create2 done");   

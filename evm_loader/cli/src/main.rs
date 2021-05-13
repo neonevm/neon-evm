@@ -4,7 +4,7 @@ use crate::account_storage::EmulatorAccountStorage;
 use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
-    account_data::{Account, Contract},
+    account_data::{AccountData, Account, Contract},
 };
 
 use evm::{executor::StackExecutor, ExitReason};
@@ -571,6 +571,62 @@ fn command_deploy(
     Ok(())
 }
 
+fn command_get_ether_account_data (
+    config: &Config,
+    ether_address: &H160,
+) -> CommandResult {
+    match EmulatorAccountStorage::get_account_from_solana(&config, ether_address) {
+        Some((acc, code_account)) => {
+            let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
+            let account_data = AccountData::unpack(&acc.data).unwrap();
+            let account_data = AccountData::get_account(&account_data).unwrap();
+
+            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+            println!("Solana address: {}", solana_address);
+    
+            println!("Account fields");
+            println!("    ether: {}", &account_data.ether);
+            println!("    nonce: {}", &account_data.nonce);
+            println!("    trx_count: {}", &account_data.trx_count);
+            println!("    signer: {}", &account_data.signer);
+            println!("    code_account: {}", &account_data.code_account);
+            println!("    blocked: {}", &account_data.blocked.is_some());
+        
+            if let Some(code_account) = code_account {
+                let code_data = AccountData::unpack(&code_account.data).unwrap();
+                let header = AccountData::size(&code_data);
+                let code_data = AccountData::get_contract(&code_data).unwrap();
+
+                println!("Contract fields");
+                println!("    owner: {}", &code_data.owner);
+                println!("    code_size: {}", &code_data.code_size);
+                println!("    code as hex:");
+    
+                let code_size = code_data.code_size;
+                let mut offset = header;
+                while offset < ( code_size as usize + header) {
+                    let data_slice = &code_account.data.as_slice();
+                    let remains = if code_size as usize + header - offset > 80 {
+                        80
+                    } else {
+                        code_size as usize + header - offset
+                    };
+    
+                    println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
+                    offset += remains;
+                }
+            }
+
+
+        },
+        None => {
+            eprintln!("Account not found {}", &ether_address.to_string());
+        }
+    }
+
+    Ok(())
+}
+
 fn make_clean_hex<'a>(in_str: &'a str) -> &'a str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
@@ -654,6 +710,26 @@ fn main() {
                 .global(true)
                 .validator(is_valid_pubkey)
                 .help("Pubkey for evm_loader contract")
+        )
+        .arg(
+            Arg::with_name("commitment")
+                .long("commitment")
+                .takes_value(true)
+                .possible_values(&[
+                    "processed",
+                    "confirmed",
+                    "finalized",
+                    "recent", // Deprecated as of v1.5.5
+                    "single", // Deprecated as of v1.5.5
+                    "singleGossip", // Deprecated as of v1.5.5
+                    "root", // Deprecated as of v1.5.5
+                    "max", // Deprecated as of v1.5.5
+                ])
+                .value_name("COMMITMENT_LEVEL")
+                .hide_possible_values(true)
+                .global(true)
+                .default_value("max")
+                .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
         .subcommand(
             SubCommand::with_name("emulate")
@@ -740,6 +816,19 @@ fn main() {
                         .help("/path/to/program.o"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("get-ether-account-data")
+                .about("Get values stored in associated with given address account data")
+                .arg(
+                    Arg::with_name("ether")
+                        .index(1)
+                        .value_name("ether")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
+                )
+        )
         .get_matches();
 
         stderrlog::new()
@@ -755,6 +844,8 @@ fn main() {
             } else {
                 solana_cli_config::Config::default()
             };
+
+            let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
 
             let json_rpc_url = normalize_to_url_if_moniker(
                 app_matches
@@ -786,7 +877,7 @@ fn main() {
             });
 
             Config {
-                rpc_client: RpcClient::new_with_commitment(json_rpc_url, CommitmentConfig::default()),
+                rpc_client: RpcClient::new_with_commitment(json_rpc_url, commitment),
                 evm_loader,
                 fee_payer,
                 signer,
@@ -818,6 +909,11 @@ fn main() {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
                 command_deploy(&config, &program_location)
+            }
+            ("get-ether-account-data", Some(arg_matches)) => {
+                let ether = h160_of(&arg_matches, "ether").unwrap();
+
+                command_get_ether_account_data(&config, &ether)
             }
             _ => unreachable!(),
         };

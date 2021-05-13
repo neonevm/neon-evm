@@ -26,6 +26,7 @@ struct AccountJSON {
     contract: Option<String>,
     writable: bool,
     new: bool,
+    code_size: Option<usize>,
 }
 
 struct SolanaAccount {
@@ -33,18 +34,31 @@ struct SolanaAccount {
     code_account: Option<Account>,
     key: Pubkey,
     writable: bool,
+    code_size: Option<usize>,
+}
+
+struct SolanaNewAccount {
+    key: Pubkey,
+    writable: bool,
+    code_size: Option<usize>
 }
 
 impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>,) -> SolanaAccount {
+    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> SolanaAccount {
         eprintln!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account}
+        Self{account, key, writable: false, code_account, code_size: None}
+    }
+}
+
+impl SolanaNewAccount {
+    pub fn new(key: Pubkey) -> SolanaNewAccount {
+        Self{key, writable: false, code_size: None}
     }
 }
 
 pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
-    new_accounts: RefCell<HashSet<H160>>,
+    new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
     config: &'a Config,
     contract_id: H160,
     caller_id: H160,
@@ -82,7 +96,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         Self {
             accounts: RefCell::new(HashMap::new()),
-            new_accounts: RefCell::new(HashSet::new()),
+            new_accounts: RefCell::new(HashMap::new()),
             config: config,
             contract_id: contract_id,
             caller_id: caller_id,
@@ -91,57 +105,68 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
+    pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, Option<Account>)> {
+        let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &config.evm_loader).0;
+        eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
+
+        match config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
+            Some(acc) => {
+                eprintln!("Account found");
+                eprintln!("Account data len {}", acc.data.len());
+                eprintln!("Account owner {}", acc.owner.to_string());
+
+                let account_data = match AccountData::unpack(&acc.data) {
+                    Ok(acc_data) => match acc_data {
+                        AccountData::Account(acc) => acc,
+                        _ => return None,
+                    },
+                    Err(_) => return None,
+                };
+
+                let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
+                    eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
+                    None
+                } else {
+                    eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
+                    eprintln!("account key:  {}", &solana_address.to_string());
+                    eprintln!("code account: {}", &account_data.code_account.to_string());
+
+                    match config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
+                        Some(acc) => {
+                            eprintln!("Account found");
+                            Some(acc)
+                        },
+                        None => {
+                            eprintln!("Account not found");
+                            None
+                        }
+                    }
+                };
+
+                Some((acc, code_account))
+            },
+            None => {
+                eprintln!("Account not found {}", &address.to_string());
+
+                None
+            }
+        }    
+    }
+
     fn create_acc_if_not_exists(&self, address: &H160) -> bool {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
-
             let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
-            eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
-            match self.config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
-                Some(acc) => {
-                    eprintln!("Account found");
-                    eprintln!("Account data len {}", acc.data.len());
-                    eprintln!("Account owner {}", acc.owner.to_string());
-
-                    let account_data = match AccountData::unpack(&acc.data) {
-                        Ok(acc_data) => match acc_data {
-                            AccountData::Account(acc) => acc,
-                            _ => return false,
-                        },
-                        Err(_) => return false,
-                    };
-
-                    let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
-                        eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
-                        None
-                    } else {
-                        eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
-                        eprintln!("account key:  {}", &solana_address.to_string());
-                        eprintln!("code account: {}", &account_data.code_account.to_string());
-
-                        match self.config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
-                            Some(acc) => {
-                                eprintln!("Account found");
-                                Some(acc)
-                            },
-                            None => {
-                                eprintln!("Account not found");
-                                None
-                            }
-                        }
-                    };
-
+            match Self::get_account_from_solana(&self.config, address) {
+                Some((acc, code_account)) => {
                     accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address, code_account));
-
                     true
                 },
                 None => {
                     eprintln!("Account not found {}", &address.to_string());
-
-                    new_accounts.insert(address.clone());
-
+                    new_accounts.insert(address.clone(), SolanaNewAccount::new(solana_address));
                     false
                 }
             }
@@ -162,17 +187,19 @@ impl<'a> EmulatorAccountStorage<'a> {
                 I: IntoIterator<Item=(H256, H256)>,
     {             
         let mut accounts = self.accounts.borrow_mut(); 
+        let mut new_accounts = self.new_accounts.borrow_mut();
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code: _, storage: _, reset_storage} => {
-                    match accounts.get_mut(&address) {
-                        Some(acc) => {
-                            *acc.writable.borrow_mut() = true;
-                        },
-                        None => {
-                            eprintln!("Account not found {}", &address.to_string());
-                        },
+                Apply::Modify {address, basic, code, storage: _, reset_storage} => {
+                    if let Some(acc) = accounts.get_mut(&address) {
+                        *acc.writable.borrow_mut() = true;
+                        *acc.code_size.borrow_mut() = code.map(|v| v.len());
+                    } else if let Some(acc) = new_accounts.get_mut(&address) {
+                        *acc.code_size.borrow_mut() = code.map(|v| v.len());
+                        *acc.writable.borrow_mut() = true;
+                    } else {
+                        eprintln!("Account not found {}", &address.to_string());
                     }
                     eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance.as_u64(), &reset_storage.to_string());
                 },
@@ -205,19 +232,21 @@ impl<'a> EmulatorAccountStorage<'a> {
                     writable: acc.writable,
                     new: false,
                     account: solana_address.to_string(),
-                    contract: contract_address.map(|v| v.to_string())
+                    contract: contract_address.map(|v| v.to_string()),
+                    code_size: acc.code_size,
                 });
         }
 
         let new_accounts = self.new_accounts.borrow();
-        for address in new_accounts.iter() {
+        for (address, acc) in new_accounts.iter() {
             let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
             arr.push(AccountJSON{
                     address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: false,
+                    writable: acc.writable,
                     new: true,
                     account: solana_address.to_string(),
                     contract: None,
+                    code_size: acc.code_size,
                 });
         }    
 
