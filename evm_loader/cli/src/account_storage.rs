@@ -157,19 +157,16 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
+            let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
+
             match Self::get_account_from_solana(&self.config, address) {
                 Some((acc, code_account)) => {
-                    let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
-
                     accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address, code_account));
-
                     true
                 },
                 None => {
                     eprintln!("Account not found {}", &address.to_string());
-
                     new_accounts.insert(address.clone(), SolanaNewAccount::new(solana_address));
-
                     false
                 }
             }
