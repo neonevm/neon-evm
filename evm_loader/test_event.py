@@ -78,7 +78,7 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_12_cancel(self, storage_account, step_count):
+    def sol_instr_12_cancel(self, storage_account):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("0C"),
                                    keys=[
@@ -110,7 +110,7 @@ class EventTest(unittest.TestCase):
     def call_cancel(self, storage):
         print("Cancel")
         trx = Transaction()
-        trx.add(self.sol_instr_12_cancel(storage, 0))
+        trx.add(self.sol_instr_12_cancel(storage))
         result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
         return result
 
