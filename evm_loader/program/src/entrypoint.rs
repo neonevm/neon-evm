@@ -497,6 +497,17 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::Cancel => {
+            let account_info_iter = &mut accounts.iter();
+            let storage_info = next_account_info(account_info_iter)?;
+
+            let storage = StorageAccount::restore(storage_info)?;
+            storage.check_accounts(program_id, accounts)?;
+
+            storage.unblock_accounts_and_destroy(program_id, accounts)?;
+
+            Ok(())
+        },
     };
 
 /*    let result = if program_lamports == 0 {
