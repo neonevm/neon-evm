@@ -51,8 +51,8 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install openssl ca-certificates curl python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install solana web3 pysha3
-COPY solana-py.patch /tmp/
+COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
+RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
