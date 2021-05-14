@@ -30,7 +30,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
-        cls.loader = EvmLoader(solana_url, cls.acc)
+        cls.loader = EvmLoader( cls.acc)
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         program_and_code = cls.loader.deployChecked(
@@ -102,7 +102,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
 
-        err = "invalid program argument"
+        #err = "invalid program argument"
+        err = "Failed to send transaction"
         with self.assertRaisesRegex(Exception,err):
             result = http_client.send_transaction(trx, acc)
             print(result)

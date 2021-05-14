@@ -8,9 +8,7 @@ from hashlib import sha256
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "2XvPkS7KawfH6PsfkZtkgQr8V8SzN1tq9stjtmsVDZir"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -76,7 +74,7 @@ class DeployTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         wallet = WalletAccount(wallet_path())
-        cls.loader = EvmLoader(solana_url, wallet, evm_loader_id)
+        cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
         # Create ethereum account for user account
