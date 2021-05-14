@@ -30,6 +30,7 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
+EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", '../target/bpfel-unknown-unknown/release/evm_loader.so')
 http_client = Client(solana_url)
 path_to_solana = 'solana'
 
@@ -85,13 +86,16 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
 
 
 
-class SolanaCli:
-    def __init__(self, url, acc):
-        self.url = url
+class solana_cli:
+    def __init__(self, acc=None):
         self.acc = acc
 
     def call(self, arguments):
-        cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), self.url, arguments)
+        cmd = ""
+        if self.acc == None:
+            cmd = '{} --url {} {}'.format(path_to_solana, solana_url, arguments)
+        else:
+            cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -99,7 +103,15 @@ class SolanaCli:
             print("ERR: solana error {}".format(err))
             raise
 
-
+class neon_cli:
+    def call(self, arguments):
+        cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
+        try:
+            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
+        except subprocess.CalledProcessError as err:
+            import sys
+            print("ERR: neon-cli error {}".format(err))
+            raise
 
 class RandomAccount:
     def __init__(self, path=None):
@@ -152,24 +164,21 @@ class WalletAccount (RandomAccount):
 
 
 class EvmLoader:
-    def __init__(self, solana_url, acc, programId=EVM_LOADER):
+    def __init__(self, acc, programId=EVM_LOADER):
         if programId == None:
             print("Load EVM loader...")
-            cli = SolanaCli(solana_url, acc)
-            result = json.loads(cli.call('deploy {}'.format(EVM_LOADER_SO)))
+            result = json.loads(solana_cli(acc).call('deploy {}'.format(EVM_LOADER_SO)))
             programId = result['programId']
         EvmLoader.loader_id = programId
         print("Done\n")
 
-        self.solana_url = solana_url
         self.loader_id = EvmLoader.loader_id
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
 
-    def deploy(self, contract):
-        cli = SolanaCli(self.solana_url, self.acc)
-        output = cli.call("deploy --use-evm-loader {} {}".format(self.loader_id, contract))
+    def deploy(self, contract_path):
+        output = neon_cli().call("deploy --evm_loader {} {}".format(self.loader_id, contract_path))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
@@ -214,9 +223,8 @@ class EvmLoader:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else: ether = ether.hex()
-        cli = SolanaCli(self.solana_url, self.acc)
-        output = cli.call("create-program-address {} {}".format(ether, self.loader_id))
-        items = output.rstrip().split('  ')
+        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
+        items = output.rstrip().split(' ')
         return (items[0], int(items[1]))
 
     def checkAccount(self, solana):
@@ -290,15 +298,9 @@ def getTransactionCount(client, sol_account):
     return res
 
 def wallet_path():
-    cmd = 'solana --url {} config get'.format(solana_url)
-    try:
-        res =  subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        substr = "Keypair Path: "
-        for line in res.splitlines():
-            if line.startswith(substr):
-                return line[len(substr):].strip()
-        raise Exception("cannot get keypair path")
-    except subprocess.CalledProcessError as err:
-        import sys
-        print("ERR: solana error {}".format(err))
-        raise
+    res = solana_cli().call("config get")
+    substr = "Keypair Path: "
+    for line in res.splitlines():
+        if line.startswith(substr):
+            return line[len(substr):].strip()
+    raise Exception("cannot get keypair path")
