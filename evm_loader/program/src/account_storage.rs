@@ -181,7 +181,7 @@ impl<'a> ProgramAccountStorage<'a> {
     pub fn apply<A, I>(&mut self, values: A, delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
-        I: IntoIterator<Item = (H256, H256)>,
+        I: IntoIterator<Item = (U256, U256)>,
     {
         let system_account = SolanaBackend::<ProgramAccountStorage>::system_account();
         let system_account_ecrecover = SolanaBackend::<ProgramAccountStorage>::system_account_ecrecover();
