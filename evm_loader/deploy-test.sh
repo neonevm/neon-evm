@@ -15,7 +15,7 @@ solana airdrop 1000
 solana account $ACCOUNT
 
 echo "Run tests for EVM Loader"
-export EVM_LOADER=$(solana-deploy deploy evm_loader.so | sed '/Program Id:\([0-9A-Za-z]\+\)/,${s//\1/;b};$q1')
+export EVM_LOADER=$(solana-deploy deploy evm_loader.so | sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
 python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"
