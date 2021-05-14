@@ -8,6 +8,7 @@ http_client = Client(solana_url)
 evm_loader_id = os.environ.get("EVM_LOADER")
 owner_contract = os.environ.get("CONTRACT")
 contracts_dir = os.environ.get("CONTRACTS_DIR", "target/bpfel-unknown-unknown/release/")
+so_dir = "/opt/"
 user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 
 class SolanaCliTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class SolanaCliTests(unittest.TestCase):
         print(solana_cli().call('--version'))
 
     def test_solana_deploy(self):
-        contract = contracts_dir+'spl_memo.so'
+        contract = so_dir+'spl_memo.so'
         result = json.loads(solana_cli(self.acc).call('deploy --commitment max {}'.format(contract)))
         programId = result['programId']
 
