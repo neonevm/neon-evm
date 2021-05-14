@@ -42,7 +42,7 @@ RUN solc --output-dir . --bin *.sol && \
 
 # Define solana-image that contains utility
 FROM cybercoredev/solana:latest AS solana
-FROM cybercoredev/solana:v1.4.25-resources AS solana-deploy
+FROM cybercoredev/solana:v1.6.7-resources AS solana-deploy
 
 # Build target image
 FROM ubuntu:20.04 AS base
