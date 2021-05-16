@@ -2,12 +2,11 @@ use std::convert::Infallible;
 use std::rc::Rc;
 use evm_runtime::{save_return_value, save_created_address, Control};
 
-use sha3::{Digest, Keccak256};
 use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use crate::storage_account::StorageAccount;
-use crate::utils::keccak256_h256;
+use crate::utils::{keccak256_h256, keccak256_h256_v};
 use std::mem;
 use solana_program::program_error::ProgramError;
 use std::borrow::BorrowMut;
@@ -182,12 +181,13 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let address =
             match scheme {
                 evm::CreateScheme::Create2 { caller, code_hash, salt } => {
-                    let mut hasher = Keccak256::new();
-                    hasher.input(&[0xff]);
-                    hasher.input(&caller[..]);
-                    hasher.input(&salt[..]);
-                    hasher.input(&code_hash[..]);
-                    H256::from_slice(hasher.result().as_slice()).into()
+                    // let mut hasher = Keccak256::new();
+                    // hasher.input(&[0xff]);
+                    // hasher.input(&caller[..]);
+                    // hasher.input(&salt[..]);
+                    // hasher.input(&code_hash[..]);
+                    // H256::from_slice(hasher.result().as_slice()).into()
+                    keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
                 },
                 evm::CreateScheme::Legacy { caller } => {
                     let nonce = self.state.basic(caller).nonce;
