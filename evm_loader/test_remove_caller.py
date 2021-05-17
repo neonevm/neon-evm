@@ -15,7 +15,6 @@ from solana_utils import *
 import subprocess
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 http_client = Client(solana_url)
 
@@ -31,7 +30,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
-        cls.loader = EvmLoader(cls.acc, evm_loader_id)
+        cls.loader = EvmLoader( cls.acc)
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         program_and_code = cls.loader.deployChecked(
