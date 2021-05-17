@@ -148,6 +148,12 @@ pub enum EvmInstruction<'a> {
         step_count: u64,
     },
 
+    ExecuteTrxFromAccountDataIterative {
+        step_count: u64,
+    },
+
+    Cancel,
+
     KeccakSysCall,
 
     KeccakSHA3,
@@ -254,9 +260,17 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::Continue {step_count}
             },
+            11 => {
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterative {step_count}
+            },
+            12 => {
+                EvmInstruction::Cancel
+            },
 
             0xb1 => EvmInstruction::KeccakSysCall,
-        
+
             0xb2 => EvmInstruction::KeccakSHA3,
 
             _ => return Err(InvalidInstructionData),

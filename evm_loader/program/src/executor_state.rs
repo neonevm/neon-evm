@@ -206,9 +206,21 @@ impl ExecutorSubstate {
             self.storages.remove(&(address, key));
         }
 
+        resets = BTreeSet::new();
+        for (address, account) in &self.accounts {
+            if account.reset {
+                resets.insert(*address);
+            }
+        }
         self.accounts.append(&mut exited.accounts);
         self.storages.append(&mut exited.storages);
         self.deletes.append(&mut exited.deletes);
+
+        for (address) in &resets {
+            if self.accounts.contains_key(address){
+                self.accounts.get_mut(&address).unwrap().reset = true;
+            }
+        }
 
         Ok(())
     }
