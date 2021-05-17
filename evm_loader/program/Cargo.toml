@@ -30,7 +30,7 @@ primitive-types = { version = "0.7", default-features = false, features = ["serd
 evm = { path = "../rust-evm", version = "0.18.0", default_features = false, features = ["with-serde"] }
 hex = "0.4.2"
 bs58 = "0.3.1"
-# sha3 = { version = "0.8", default-features = false }
+sha3 = { version = "0.8", default-features = false }
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 #k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
 libsecp256k1 = { version = "0.3.5", default-features = false }

@@ -147,6 +147,10 @@ pub enum EvmInstruction<'a> {
     Continue {
         step_count: u64,
     },
+
+    KeccakSysCall,
+
+    KeccakSHA3,
 }
 
 
@@ -250,6 +254,10 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::Continue {step_count}
             },
+
+            0xb1 => EvmInstruction::KeccakSysCall,
+        
+            0xb2 => EvmInstruction::KeccakSHA3,
 
             _ => return Err(InvalidInstructionData),
         })

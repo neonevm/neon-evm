@@ -422,6 +422,32 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+
+
+        EvmInstruction::KeccakSysCall => {
+            // debug_print!("EvmInstruction::KeccakSysCall"); 
+            let account_info_iter = &mut accounts.iter();
+            let evm_loader_info = next_account_info(account_info_iter)?;
+
+            let hash = keccak256_h256(&evm_loader_info.data.borrow());
+
+            // debug_print!("evm_loader_hash: {}", &hash.to_string()); 
+
+            Ok(())
+        },
+        
+        EvmInstruction::KeccakSHA3 => {
+            // debug_print!("EvmInstruction::KeccakSHA3"); 
+            let account_info_iter = &mut accounts.iter();
+            let evm_loader_info = next_account_info(account_info_iter)?;
+
+            use sha3::{Keccak256, Digest};
+            let hash = H256::from_slice(Keccak256::digest(&evm_loader_info.data.borrow()).as_slice());
+
+            // debug_print!("evm_loader_hash: {}", &hash.to_string()); 
+
+            Ok(())
+        },
     };
 
 /*    let result = if program_lamports == 0 {
