@@ -27,8 +27,12 @@ class SolanaCliTests(unittest.TestCase):
 
     def test_solana_deploy(self):
         contract = so_dir+'spl_memo.so'
-        result = json.loads(solana_cli(self.acc).call('deploy --commitment max {}'.format(contract)))
-        programId = result['programId']
+        result = solana_cli(self.acc).call('deploy --commitment max {}'.format(contract))
+        substr = "Program Id: "
+        if result.startswith(substr):
+            programId = result[len(substr):].strip()
+        else:
+            raise Exception("solana deploy error: ", result)
 
         def send_memo_trx(data):
             trx = Transaction()
