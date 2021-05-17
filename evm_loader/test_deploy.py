@@ -46,7 +46,7 @@ def write_layout(offset, data):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type = SystemInstructionType.CreateAccountWithSeed,
+            instruction_type = SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),
