@@ -42,7 +42,7 @@ class SolanaCliTests(unittest.TestCase):
         trxId = send_memo_trx('hello')
         # confirm_transaction(http_client, trxId)
 
-        err = "Failed to send transaction"
+        err = "Transaction simulation failed: Error processing Instruction 0: invalid instruction data"
         with self.assertRaisesRegex(Exception, err):
             try:
               send_memo_trx(b'\xF0\x9F\x90\xff')

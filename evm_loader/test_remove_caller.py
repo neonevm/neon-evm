@@ -104,7 +104,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             ]))
 
         #err = "invalid program argument"
-        err = "Failed to send transaction"
+        err = "Transaction simulation failed: Error processing Instruction 0: invalid program argument"
         with self.assertRaisesRegex(Exception,err):
             result = http_client.send_transaction(trx, acc)
             print(result)
