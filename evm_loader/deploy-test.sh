@@ -21,7 +21,7 @@ echo "Run tests for EVM Loader"
 export EVM_LOADER=$(solana-deploy deploy evm_loader.so | sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
 if [ ${#EVM_LOADER} -eq 0 ]; then
   echo  "EVM_LOADER is not deployed"
-  exit 0
+  exit 1
 fi
 
 python3 -m unittest discover -v -p 'test*.py'
