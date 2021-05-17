@@ -78,17 +78,59 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
+    def sol_instr_12_cancel(self, storage_account):
+        return TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("0C"),
+                                   keys=[
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ])
+
+
+    def call_begin(self, storage, steps, msg, instruction):
+        print("Begin")
+        trx = Transaction()
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
+        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
+        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
+        return result
+
+    def call_continue(self, storage, steps):
+        print("Continue")
+        trx = Transaction()
+        trx.add(self.sol_instr_10_continue(storage, steps))
+        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
+        return result
+
+    def call_cancel(self, storage):
+        print("Cancel")
+        trx = Transaction()
+        trx.add(self.sol_instr_12_cancel(storage))
+        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
+        return result
+
+    def get_call_parameters(self, input):
+        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
+            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+        assert (from_addr == self.caller_ether)
+
+        return (from_addr, sign, msg)
+
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
     def call_signed(self, input):
-        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
         trx.add(self.sol_instr_05(from_addr + sign + msg))
@@ -107,26 +149,15 @@ class EventTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, input):
-        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
-
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
 
-        print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 10, instruction))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        self.call_begin(storage, 10, msg, instruction)
 
         while (True):
-            print("Continue")
-            trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 50))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            result = self.call_continue(storage, 50)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -278,6 +309,42 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0xb)) #sum
+
+
+    def test_caseFailAfterCancel(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[:8].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+        result = self.call_cancel(storage)
+            
+        err = "invalid account data for instruction"
+        with self.assertRaisesRegex(Exception,err):
+            result = self.call_continue(storage, 10)
+            print(result)
+
+
+    def test_caseSuccessRunOtherTransactionAfterCancel(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[:8].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+        result = self.call_cancel(storage)
+
+        self.call_partial_signed(input)
+
 
 if __name__ == '__main__':
     unittest.main()

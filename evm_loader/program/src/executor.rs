@@ -591,8 +591,17 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[must_use]
     pub fn return_value(&self) -> Vec<u8> {
+
         if let Some(runtime) = self.runtime.last() {
-            return runtime.0.machine().return_value();
+            let implementation = Some(runtime.1);
+            match implementation {
+                Some(CreateReason::Create(created_address)) => {
+                    return Vec::new();
+                },
+                _ => {
+                    return runtime.0.machine().return_value()
+                }
+            }
         }
 
         Vec::new()
