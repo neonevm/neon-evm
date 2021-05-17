@@ -19,6 +19,11 @@ echo "Run tests for EVM Loader"
 # Example output: `Program Id: 853qJy1Z8hfgHe194fVrYUbVDfx88ny7phSCHc481Fc6`
 # EVM_LOADER will be empty if the match fails.
 export EVM_LOADER=$(solana-deploy deploy evm_loader.so | sed '/Program Id: \([0-9A-Za-z]\+\)/,${s//\1/;b};s/^.*$//;$q1')
+if [ ${#EVM_LOADER} -eq 0 ]; then
+  echo  "EVM_LOADER is not deployed"
+  exit 0
+fi
+
 python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"
