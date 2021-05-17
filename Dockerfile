@@ -25,7 +25,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo build-bpf --features no-logs
-RUN cd ../cli && cargo build --release
+# RUN cd ../cli && cargo build --release
 
 # Build Solidity contracts
 FROM ethereum/solc:0.5.12 AS solc
@@ -42,7 +42,7 @@ RUN solc --output-dir . --bin *.sol && \
 
 # Define solana-image that contains utility
 FROM cybercoredev/solana:latest AS solana
-FROM cybercoredev/solana:v1.6.7-resources AS solana-deploy
+FROM cybercoredev/solana:9659c298d0deb0c17fac3414a1d24b33190a773f AS solana-deploy
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -60,7 +60,7 @@ COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
 
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
+# COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
