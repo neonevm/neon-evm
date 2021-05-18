@@ -57,10 +57,10 @@ RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patc
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/solana/bin/
+COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
 ENV CONTRACTS_DIR=/opt/solidity/
-ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
