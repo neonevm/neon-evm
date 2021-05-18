@@ -181,12 +181,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let address =
             match scheme {
                 evm::CreateScheme::Create2 { caller, code_hash, salt } => {
-                    // let mut hasher = Keccak256::new();
-                    // hasher.input(&[0xff]);
-                    // hasher.input(&caller[..]);
-                    // hasher.input(&salt[..]);
-                    // hasher.input(&code_hash[..]);
-                    // H256::from_slice(hasher.result().as_slice()).into()
                     keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
                 },
                 evm::CreateScheme::Legacy { caller } => {
@@ -194,7 +188,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                     let mut stream = rlp::RlpStream::new_list(2);
                     stream.append(&caller);
                     stream.append(&nonce);
-                    //H256::from_slice(keccak256_digest(&stream.out()).as_slice()).into()
                     keccak256_h256(&stream.out()).into()
                 },
                 evm::CreateScheme::Fixed(naddress) => {

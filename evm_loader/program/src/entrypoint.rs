@@ -433,7 +433,6 @@ fn process_instruction<'a>(
             let contract = contract.unwrap();
 
             let program_eth: H160 = keccak256_h256(&program_info.key.to_bytes()).into();
-            // let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into();
             
             debug_print!("caller: {}", &caller.to_string());    
             debug_print!("contract: {}", &contract.to_string());
