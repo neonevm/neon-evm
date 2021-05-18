@@ -6,9 +6,9 @@ steps:
 
   - wait
 
-#  - label: ":cop::skin-tone-2: deploy check"
-#    command: ".buildkite/steps/deploy-test.sh"
-#    timeout: 60
+  - label: ":cop::skin-tone-2: deploy check"
+    command: ".buildkite/steps/deploy-test.sh"
+    timeout: 60
 
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
