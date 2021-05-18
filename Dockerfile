@@ -41,8 +41,8 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM cybercoredev/solana:latest AS solana
-FROM cybercoredev/solana:v1.6.7-resources AS solana-deploy
+# FROM cybercoredev/solana:latest AS solana
+FROM cybercoredev/solana:v1.6.7-resources AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -56,8 +56,9 @@ RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 # COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=solana  /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/
+# COPY --from=solana  /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
+# COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/
+COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
