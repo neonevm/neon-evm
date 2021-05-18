@@ -18,14 +18,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
-            cli = SolanaCli(solana_url, cls.acc)
-            cli.call('airdrop 1000000')
+            solana_cli().call('airdrop 1000000')
             # tx = http_client.request_airdrop(cls.acc.get_acc().public_key(), 100000)
             # confirm_transaction(http_client, tx['result'])
             # balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
-        cls.loader = EvmLoader(solana_url, cls.acc, evm_loader_id)
+        cls.loader = EvmLoader(cls.acc, evm_loader_id)
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         program_and_code = cls.loader.deployChecked(
