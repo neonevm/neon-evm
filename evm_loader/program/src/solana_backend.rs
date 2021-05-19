@@ -14,7 +14,7 @@ use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
     solidity_account::SolidityAccount,
-    utils::{keccak256_h256, keccak256_digest},
+    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
 
 pub trait AccountStorage {
@@ -263,6 +263,14 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
             }
         }
+    }
+
+    fn keccak256_h256(&self, data: &[u8]) -> H256 {
+        keccak256_h256(data)
+    }
+
+    fn keccak256_h256_v(&self, data: &[&[u8]]) -> H256 {
+        keccak256_h256_v(data)
     }
 }
 

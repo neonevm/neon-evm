@@ -8,7 +8,7 @@ use evm::backend::{Apply, Backend, Basic, Log};
 use evm::{ExitError, Transfer};
 use primitive_types::{H160, H256, U256};
 use serde::{Serialize, Deserialize};
-use crate::utils::keccak256_h256;
+use crate::utils::{keccak256_h256, keccak256_h256_v};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -547,6 +547,14 @@ impl<B: Backend> Backend for ExecutorState<B> {
         take_stipend: bool,
     ) -> Option<evm::Capture<(evm::ExitReason, Vec<u8>), std::convert::Infallible>> {
         self.backend.call_inner(code_address, transfer, input, target_gas, is_static, take_l64, take_stipend)
+    }
+
+    fn keccak256_h256(&self, data: &[u8]) -> H256 {
+        keccak256_h256(data)
+    }
+
+    fn keccak256_h256_v(&self, data: &[&[u8]]) -> H256 {
+        keccak256_h256_v(data)
     }
 }
 

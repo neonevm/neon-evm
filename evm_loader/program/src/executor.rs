@@ -54,6 +54,10 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     type CallInterrupt = crate::executor::CallInterrupt;
     type CallFeedback = Infallible;
 
+    fn keccak256_h256(&self, data: &[u8]) -> H256 {
+        keccak256_h256(data)
+    }
+
     fn balance(&self, address: H160) -> U256 {
         self.state.basic(address).balance
     }
