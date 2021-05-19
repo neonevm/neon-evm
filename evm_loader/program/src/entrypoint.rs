@@ -533,7 +533,7 @@ fn process_instruction<'a>(
         }
     };*/
 
-    debug_print!("Total memory occupied: {}", &BumpAllocator::occupied());
+    solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
     result
 }
 
