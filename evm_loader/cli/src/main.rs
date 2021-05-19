@@ -34,6 +34,7 @@ use std::{
     env, str::FromStr,
     net::{SocketAddr, UdpSocket},
     process::exit,
+    sync::Arc,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -54,10 +55,10 @@ use solana_client::{
     rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::RpcLeaderSchedule,
+    tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_cli::{
     checks::{check_account_for_fee, check_account_for_spend_multiple_fees_with_commitment},
-    send_tpu::{get_leader_tpus, send_transaction_tpu},
 };
 use solana_cli_output::display::new_spinner_progress_bar;
 use solana_transaction_status::TransactionConfirmationStatus;
@@ -73,7 +74,8 @@ type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
 pub struct Config {
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>,
+    websocket_url: String,
     evm_loader: Pubkey,
     fee_payer: Pubkey,
     signer: Box<dyn Signer>,
@@ -199,7 +201,8 @@ fn read_program_data(program_location: &str) -> Result<Vec<u8>, Box<dyn std::err
 }
 
 fn send_and_confirm_transactions_with_spinner<T: Signers>(
-    rpc_client: &RpcClient,
+    rpc_client: Arc<RpcClient>,
+    websocket_url: &str,
     mut transactions: Vec<Transaction>,
     signer_keys: &T,
     commitment: CommitmentConfig,
@@ -207,39 +210,20 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 ) -> CommandResult {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
-    let mut leader_schedule: Option<RpcLeaderSchedule> = None;
-    let mut leader_schedule_epoch = 0;
-    let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let cluster_nodes = rpc_client.get_cluster_nodes().ok();
+
+    progress_bar.set_message("Finding leader nodes...");
+    let tpu_client = TpuClient::new(
+        rpc_client.clone(),
+        websocket_url,
+        TpuClientConfig::default(),
+    )?;
 
     loop {
-        progress_bar.set_message("Finding leader nodes...");
-        let epoch_info = rpc_client.get_epoch_info()?;
-        let mut slot = epoch_info.absolute_slot;
-        let mut last_epoch_fetch = Instant::now();
-        if epoch_info.epoch > leader_schedule_epoch || leader_schedule.is_none() {
-            leader_schedule = rpc_client.get_leader_schedule(Some(epoch_info.absolute_slot))?;
-            leader_schedule_epoch = epoch_info.epoch;
-        }
-
-        let mut tpu_addresses = get_leader_tpus(
-            min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
-            NUM_TPU_LEADERS,
-            leader_schedule.as_ref(),
-            cluster_nodes.as_ref(),
-        );
-
         // Send all transactions
         let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
-            if !tpu_addresses.is_empty() {
-                let wire_transaction =
-                    serialize(&transaction).expect("serialization should succeed");
-                for tpu_address in &tpu_addresses {
-                    send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
-                }
-            } else {
+            if !tpu_client.send_transaction(&transaction) {
                 let _result = rpc_client
                     .send_transaction_with_config(
                         &transaction,
@@ -259,22 +243,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
             // Throttle transactions to about 100 TPS
             sleep(Duration::from_millis(10));
-
-            // Update leader periodically
-            if last_epoch_fetch.elapsed() > Duration::from_millis(400) {
-                let epoch_info = rpc_client.get_epoch_info()?;
-                last_epoch_fetch = Instant::now();
-                tpu_addresses = get_leader_tpus(
-                    min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
-                    NUM_TPU_LEADERS,
-                    leader_schedule.as_ref(),
-                    cluster_nodes.as_ref(),
-                );
-            }
         }
 
         // Collect statuses for all the transactions, drop those that are confirmed
         loop {
+            let mut slot = 0;
             let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
@@ -316,22 +289,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 break;
             }
 
-            let epoch_info = rpc_client.get_epoch_info()?;
-            tpu_addresses = get_leader_tpus(
-                min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
-                NUM_TPU_LEADERS,
-                leader_schedule.as_ref(),
-                cluster_nodes.as_ref(),
-            );
-
             for transaction in pending_transactions.values() {
-                if !tpu_addresses.is_empty() {
-                    let wire_transaction =
-                        serialize(&transaction).expect("serialization should succeed");
-                    for tpu_address in &tpu_addresses {
-                        send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
-                    }
-                } else {
+                if !tpu_client.send_transaction(transaction) {
                     let _result = rpc_client
                         .send_transaction_with_config(
                             transaction,
@@ -531,7 +490,8 @@ fn command_deploy(
     
         debug!("Writing program data");
         send_and_confirm_transactions_with_spinner(
-            &config.rpc_client,
+            config.rpc_client.clone(),
+            &config.websocket_url,
             write_transactions,
             &signers,
             config.rpc_client.commitment(),
@@ -877,7 +837,8 @@ fn main() {
             });
 
             Config {
-                rpc_client: RpcClient::new_with_commitment(json_rpc_url, commitment),
+                rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
+                websocket_url: "".to_string(),
                 evm_loader,
                 fee_payer,
                 signer,
