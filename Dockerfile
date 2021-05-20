@@ -1,8 +1,8 @@
 # Install BPF SDK
-FROM solanalabs/rust:latest AS builder
+FROM solanalabs/rust:1.52.0 AS builder
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.4/install)" && \
-    /root/.local/share/solana/install/releases/1.6.4/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.9/install)" && \
+    /root/.local/share/solana/install/releases/1.6.9/solana-release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Build spl-token utility
@@ -41,7 +41,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM cybercoredev/solana:v1.6.7-resources AS solana
+FROM cybercoredev/solana:v1.6.9-resources AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
