@@ -153,10 +153,6 @@ pub enum EvmInstruction<'a> {
     },
 
     Cancel,
-
-    KeccakSysCall,
-
-    KeccakSHA3,
 }
 
 
@@ -268,11 +264,6 @@ impl<'a> EvmInstruction<'a> {
             12 => {
                 EvmInstruction::Cancel
             },
-
-            0xb1 => EvmInstruction::KeccakSysCall,
-
-            0xb2 => EvmInstruction::KeccakSHA3,
-
             _ => return Err(InvalidInstructionData),
         })
     }
