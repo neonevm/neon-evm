@@ -5,9 +5,9 @@ use primitive_types::{H160, H256, U256};
 use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use crate::storage_account::StorageAccount;
+use crate::utils::{keccak256_h256, keccak256_h256_v};
 use std::mem;
 use solana_program::program_error::ProgramError;
-use sha3::{Keccak256, Digest};
 use std::borrow::BorrowMut;
 use solana_program::entrypoint::ProgramResult;
 
@@ -22,10 +22,6 @@ macro_rules! try_or_fail {
 
 fn l64(gas: u64) -> u64 {
     gas - gas / 64
-}
-
-fn keccak256_digest(data: &[u8]) -> H256 {
-    H256::from_slice(Keccak256::digest(&data).as_slice())
 }
 
 struct CallInterrupt {
@@ -57,6 +53,10 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     type CreateFeedback = Infallible;
     type CallInterrupt = crate::executor::CallInterrupt;
     type CallFeedback = Infallible;
+
+    fn keccak256_h256(&self, data: &[u8]) -> H256 {
+        keccak256_h256(data)
+    }
 
     fn balance(&self, address: H160) -> U256 {
         self.state.basic(address).balance
@@ -185,20 +185,14 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let address =
             match scheme {
                 evm::CreateScheme::Create2 { caller, code_hash, salt } => {
-                    let mut hasher = Keccak256::new();
-                    hasher.input(&[0xff]);
-                    hasher.input(&caller[..]);
-                    hasher.input(&salt[..]);
-                    hasher.input(&code_hash[..]);
-                    H256::from_slice(hasher.result().as_slice()).into()
+                    keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
                 },
                 evm::CreateScheme::Legacy { caller } => {
                     let nonce = self.state.basic(caller).nonce;
                     let mut stream = rlp::RlpStream::new_list(2);
                     stream.append(&caller);
                     stream.append(&nonce);
-                    //H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
-                    keccak256_digest(&stream.out()).into()
+                    keccak256_h256(&stream.out()).into()
                 },
                 evm::CreateScheme::Fixed(naddress) => {
                     naddress

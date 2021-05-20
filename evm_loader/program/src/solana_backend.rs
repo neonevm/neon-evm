@@ -4,7 +4,6 @@ use evm::{
 };
 use core::convert::Infallible;
 use primitive_types::{H160, H256, U256};
-use sha3::{Digest, Keccak256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
@@ -15,7 +14,7 @@ use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
     solidity_account::SolidityAccount,
-    utils::keccak256_digest,
+    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
 
 pub trait AccountStorage {
@@ -31,7 +30,7 @@ pub trait AccountStorage {
     fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> { self.apply_to_account(address, || None, |account| Some(account.get_solana_address())) }
     fn exists(&self, address: &H160) -> bool { self.apply_to_account(address, || false, |_| true) }
     fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
-    fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_digest(&[]) , |account| account.code_hash()) }
+    fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_h256(&[]) , |account| account.code_hash()) }
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, || Vec::new(), |account| account.get_code()) }
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, || U256::zero(), |account| account.get_storage(index)) }
@@ -96,7 +95,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
         };
 
-        let mut address = Keccak256::digest(&public_key.serialize()[1..]);
+        let mut address = keccak256_digest(&public_key.serialize()[1..]);
         for i in 0..12 { address[i] = 0 }
         debug_print!("{}", &hex::encode(&address));
 
@@ -264,6 +263,14 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
             }
         }
+    }
+
+    fn keccak256_h256(&self, data: &[u8]) -> H256 {
+        keccak256_h256(data)
+    }
+
+    fn keccak256_h256_v(&self, data: &[&[u8]]) -> H256 {
+        keccak256_h256_v(data)
     }
 }
 

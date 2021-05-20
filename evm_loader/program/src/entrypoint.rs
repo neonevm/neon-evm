@@ -24,7 +24,7 @@ use crate::{
     account_storage::ProgramAccountStorage, 
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    utils::{keccak256_digest, solidity_address},
+    utils::keccak256_h256,
     transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction, check_secp256k1_instruction},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
@@ -385,8 +385,8 @@ fn process_instruction<'a>(
             let (nonce, contract, data) = get_data(unsigned_msg);
             let contract = contract.unwrap();
 
-            let program_eth: H160 = keccak256_digest(&program_info.key.to_bytes()).into();
-            let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into(); 
+            let program_eth: H160 = keccak256_h256(&program_info.key.to_bytes()).into();
+            let caller_eth: H160 = keccak256_h256(&caller_info.key.to_bytes()).into(); 
 
             do_call(program_id, accounts, &data, Some( (caller, nonce) ))
         },
@@ -432,8 +432,7 @@ fn process_instruction<'a>(
             let (nonce, contract, data) = get_data(unsigned_msg);
             let contract = contract.unwrap();
 
-            let program_eth: H160 = keccak256_digest(&program_info.key.to_bytes()).into();
-            // let caller_eth: H160 = keccak256_digest(&caller_info.key.to_bytes()).into();
+            let program_eth: H160 = keccak256_h256(&program_info.key.to_bytes()).into();
             
             debug_print!("caller: {}", &caller.to_string());    
             debug_print!("contract: {}", &contract.to_string());
