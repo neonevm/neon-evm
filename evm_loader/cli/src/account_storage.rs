@@ -184,7 +184,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     pub fn apply<A, I>(&self, values: A)
             where
                 A: IntoIterator<Item=Apply<I>>,
-                I: IntoIterator<Item=(H256, H256)>,
+                I: IntoIterator<Item=(U256, U256)>,
     {             
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut();

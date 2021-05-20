@@ -74,11 +74,11 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.code(address)
     }
 
-    fn storage(&self, address: H160, index: H256) -> H256 {
+    fn storage(&self, address: H160, index: U256) -> U256 {
         self.state.storage(address, index)
     }
 
-    fn original_storage(&self, address: H160, index: H256) -> H256 {
+    fn original_storage(&self, address: H160, index: U256) -> U256 {
         self.state.original_storage(address, index).unwrap_or_default()
     }
 
@@ -134,7 +134,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.deleted(address)
     }
 
-    fn set_storage(&mut self, address: H160, index: H256, value: H256) -> Result<(), ExitError> {
+    fn set_storage(&mut self, address: H160, index: U256, value: U256) -> Result<(), ExitError> {
         self.state.set_storage(address, index, value);
         Ok(())
     }
@@ -581,8 +581,17 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[must_use]
     pub fn return_value(&self) -> Vec<u8> {
+
         if let Some(runtime) = self.runtime.last() {
-            return runtime.0.machine().return_value();
+            let implementation = Some(runtime.1);
+            match implementation {
+                Some(CreateReason::Create(created_address)) => {
+                    return Vec::new();
+                },
+                _ => {
+                    return runtime.0.machine().return_value()
+                }
+            }
         }
 
         Vec::new()

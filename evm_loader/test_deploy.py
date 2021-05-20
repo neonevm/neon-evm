@@ -74,7 +74,7 @@ class DeployTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         wallet = WalletAccount(wallet_path())
-        cls.loader = EvmLoader(solana_url, wallet, evm_loader_id)
+        cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
         # Create ethereum account for user account

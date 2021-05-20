@@ -118,10 +118,9 @@ impl<'a> SolidityAccount<'a> {
         self.code(|d| d.into())
     }
     
-    pub fn get_storage(&self, index: &H256) -> H256 {
-        let index = index.as_fixed_bytes().into();
-        let value = self.storage(|storage| storage.find(index)).unwrap_or_default();
-        if let Some(v) = value {u256_to_h256(v)} else {H256::default()}
+    pub fn get_storage(&self, index: &U256) -> U256 {
+        let value = self.storage(|storage| storage.find(*index)).unwrap_or_default();
+        if let Some(v) = value { v } else { U256::zero() }
     }
 
     pub fn update<I>(
@@ -134,7 +133,7 @@ impl<'a> SolidityAccount<'a> {
         storage_items: I,
         reset_storage: bool,
     ) -> Result<(), ProgramError>
-    where I: IntoIterator<Item = (H256, H256)> 
+    where I: IntoIterator<Item = (U256, U256)> 
     {
         debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
@@ -190,7 +189,7 @@ impl<'a> SolidityAccount<'a> {
                     debug_print!("Storage initialized");
                     for (key, value) in storage_iter {
                         debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                        storage.insert(key.as_fixed_bytes().into(), value.as_fixed_bytes().into())?;
+                        storage.insert(key, value)?;
                     }
                 },
                 None => {

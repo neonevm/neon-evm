@@ -90,7 +90,7 @@ pub struct ExecutorSubstate {
     parent: Option<Box<ExecutorSubstate>>,
     logs: Vec<Log>,
     accounts: BTreeMap<H160, ExecutorAccount>,
-    storages: BTreeMap<(H160, H256), H256>,
+    storages: BTreeMap<(H160, U256), U256>,
     deletes: BTreeSet<H160>,
 }
 
@@ -120,10 +120,10 @@ impl ExecutorSubstate {
     pub fn deconstruct<B: Backend>(
         mut self,
         backend: &B,
-    ) -> (Vec::<Apply<BTreeMap<H256, H256>>>, Vec<Log>) {
+    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>) {
         assert!(self.parent.is_none());
 
-        let mut applies = Vec::<Apply<BTreeMap<H256, H256>>>::new();
+        let mut applies = Vec::<Apply<BTreeMap<U256, U256>>>::new();
 
         let mut addresses = BTreeSet::new();
 
@@ -283,14 +283,14 @@ impl ExecutorSubstate {
         None
     }
 
-    pub fn known_storage(&self, address: H160, key: H256) -> Option<H256> {
+    pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
             return Some(*value);
         }
 
         if let Some(account) = self.accounts.get(&address) {
             if account.reset {
-                return Some(H256::default());
+                return Some(U256::zero());
             }
         }
 
@@ -301,10 +301,10 @@ impl ExecutorSubstate {
         None
     }
 
-    pub fn known_original_storage(&self, address: H160, key: H256) -> Option<H256> {
+    pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
             if account.reset {
-                return Some(H256::default());
+                return Some(U256::zero());
             }
         }
 
@@ -353,7 +353,7 @@ impl ExecutorSubstate {
         self.account_mut(address, backend).basic.nonce += U256::one();
     }
 
-    pub fn set_storage(&mut self, address: H160, key: H256, value: H256) {
+    pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.storages.insert((address, key), value);
     }
 
@@ -454,9 +454,9 @@ pub trait StackState : Backend {
     fn deleted(&self, address: H160) -> bool;
 
     fn inc_nonce(&mut self, address: H160);
-    fn set_storage(&mut self, address: H160, key: H256, value: H256);
+    fn set_storage(&mut self, address: H160, key: U256, value: U256);
     fn reset_storage(&mut self, address: H160);
-    fn original_storage(&self, address: H160, key: H256) -> Option<H256>;
+    fn original_storage(&self, address: H160, key: U256) -> Option<U256>;
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
     fn set_deleted(&mut self, address: H160);
     fn set_code(&mut self, address: H160, code: Vec<u8>);
@@ -527,7 +527,7 @@ impl<B: Backend> Backend for ExecutorState<B> {
             .unwrap_or(self.backend.code_size(address))
     }
 
-    fn storage(&self, address: H160, key: H256) -> H256 {
+    fn storage(&self, address: H160, key: U256) -> U256 {
         self.substate
             .known_storage(address, key)
             .unwrap_or_else(|| self.backend.storage(address, key))
@@ -593,7 +593,7 @@ impl<B: Backend> StackState for ExecutorState<B> {
         self.substate.inc_nonce(address, &self.backend);
     }
 
-    fn set_storage(&mut self, address: H160, key: H256, value: H256) {
+    fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.substate.set_storage(address, key, value)
     }
 
@@ -601,7 +601,7 @@ impl<B: Backend> StackState for ExecutorState<B> {
         self.substate.reset_storage(address, &self.backend);
     }
 
-    fn original_storage(&self, address: H160, key: H256) -> Option<H256> {
+    fn original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.substate.known_original_storage(address, key) {
             return Some(value);
         }
@@ -649,7 +649,7 @@ impl<B: Backend> ExecutorState<B> {
     #[must_use]
     pub fn deconstruct(
         self,
-    ) -> (B, (Vec::<Apply<BTreeMap<H256, H256>>>, Vec<Log>)) {
+    ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>)) {
         let (applies, logs) = self.substate.deconstruct(&self.backend);
         (self.backend, (applies, logs))
     }
