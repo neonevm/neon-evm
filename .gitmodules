@@ -1,4 +1,4 @@
 [submodule "evm_loader/rust-evm"]
 	path = evm_loader/rust-evm
-	url = https://github.com/Cyber-Core/evm.git
+	url = https://github.com/neonlabsorg/evm.git
 	branch = evm_integration
