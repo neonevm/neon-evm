@@ -256,7 +256,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     fn pre_validate(
         &mut self,
         context: &evm::Context,
-        opcode: Result<evm::Opcode, evm::ExternalOpcode>,
+        opcode: evm::Opcode,
         stack: &evm::Stack,
     ) -> Result<(), ExitError> {
         // if let Some(cost) = gasometer::static_opcode_cost(opcode) {
