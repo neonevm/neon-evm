@@ -4,7 +4,7 @@ from spl.token.client import Token
 from solana_utils import *
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-http_client = Client(solana_url)
+client = Client(solana_url)
 evm_loader_id = os.environ.get("EVM_LOADER")
 owner_contract = os.environ.get("CONTRACT")
 contracts_dir = os.environ.get("CONTRACTS_DIR", "target/bpfel-unknown-unknown/release/")
@@ -16,8 +16,8 @@ class SolanaCliTests(unittest.TestCase):
     def setUpClass(cls):
         cls.acc = WalletAccount(wallet_path())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
-            tx = http_client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
+            tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10 * 10 ** 9)
+            confirm_transaction(client, tx['result'])
 
         print('Account:', cls.acc.get_acc().public_key(), bytes(cls.acc.get_acc().public_key()).hex())
         print('Private:', cls.acc.get_acc().secret_key())
@@ -40,7 +40,7 @@ class SolanaCliTests(unittest.TestCase):
                 TransactionInstruction(program_id=programId, data=data, keys=[
                     AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
                 ]))
-            res = http_client.send_transaction(trx, self.acc.get_acc())
+            res = send_transaction(client, trx, self.acc.get_acc())
             return res["result"]
 
         trxId = send_memo_trx('hello')
@@ -55,7 +55,7 @@ class SolanaCliTests(unittest.TestCase):
                 raise
 
 def checkAccount(self, account):
-    info = http_client.get_account_info(account)
+    info = client.get_account_info(account)
     print("checkAccount({}): {}".format(account, info))
 
 @unittest.skip("Need repair")
@@ -73,9 +73,9 @@ class EvmLoaderTests2(unittest.TestCase):
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
-            tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
+            tx = client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
+            confirm_transaction(client, tx['result'])
+            balance = client.get_balance(cls.acc.public_key())['result']['value']
             print("Done\n")
 
         if getBalance(cls.caller) == 0:
@@ -118,7 +118,7 @@ class EvmLoaderTests2(unittest.TestCase):
     def test_deploy_erc20wrapper(self):
         tokenId = PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         mintId = self.createMint(self.acc)
-        mint = Token(http_client, mintId, tokenId, self.acc)
+        mint = Token(client, mintId, tokenId, self.acc)
         print("Mint: {} -> 0x{}".format(mintId, bytes(mintId).hex()))
 
         erc20Id = self.loader.deployChecked("erc20wrapper.bin")["programId"]
@@ -144,9 +144,9 @@ class EvmLoaderTests2(unittest.TestCase):
 
 
         balanceAccount = self.loader.accountWithSeed(PublicKey(self.caller), seed, tokenId)
-        balance = http_client.get_balance(balanceAccount)['result']['value']
+        balance = client.get_balance(balanceAccount)['result']['value']
         if 0 == balance:
-            lamports = Token.get_min_balance_rent_for_exempt_for_account(http_client)
+            lamports = Token.get_min_balance_rent_for_exempt_for_account(client)
             trx = Transaction()
             trx.add(self.loader.createAccountWithSeed(self.acc, PublicKey(self.caller), seed, tokenId, lamports, 165))
             trx.add(TransactionInstruction(program_id=tokenId, data=bytes.fromhex('01'), keys=[
@@ -156,7 +156,7 @@ class EvmLoaderTests2(unittest.TestCase):
                     AccountMeta(pubkey=SYSVAR_RENT_PUBKEY, is_signer=False, is_writable=False),
                 ]))
 
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            result = send_transaction(client, trx, self.acc)["result"]
             print("createAccountWithSeed:", result)
 
         print("Balance {} {}: {}".format(
@@ -243,9 +243,9 @@ class EvmLoaderTests(unittest.TestCase):
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
-            tx = http_client.request_airdrop(cls.acc.public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
+            tx = client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
+            confirm_transaction(client, tx['result'])
+            balance = client.get_balance(cls.acc.public_key())['result']['value']
             print("Done\n")
 
         if getBalance(cls.caller) == 0:
@@ -268,7 +268,7 @@ class EvmLoaderTests(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc)
+        result = send_transaction(client, trx, self.acc)
 
     def test_call_changeOwner(self):
         data = bytearray.fromhex("03a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
@@ -279,7 +279,7 @@ class EvmLoaderTests(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey="6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r", is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc)
+        result = send_transaction(client, trx, self.acc)
 
 
     def test_call(self):
@@ -292,7 +292,7 @@ class EvmLoaderTests(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc)
+        result = send_transaction(client, trx, self.acc)
 
 
 if __name__ == '__main__':
