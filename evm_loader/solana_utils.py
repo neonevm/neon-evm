@@ -30,28 +30,8 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
-http_client = Client(solana_url)
+client = Client(solana_url)
 path_to_solana = 'solana'
-
-def confirm_transaction(client, tx_sig):
-    """Confirm a transaction."""
-    TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
-    elapsed_time = 0
-    while elapsed_time < TIMEOUT:
-        resp = client.get_confirmed_transaction(tx_sig)
-        if resp["result"]:
-#            print('Confirmed transaction:', resp)
-            break
-        sleep_time = 3
-        if not elapsed_time:
-            sleep_time = 7
-            time.sleep(sleep_time)
-        else:
-            time.sleep(sleep_time)
-        elapsed_time += sleep_time
-    if not resp["result"]:
-        raise RuntimeError("could not confirm transaction: ", tx_sig)
-    return resp
 
 def accountWithSeed(base, seed, program):
     print(type(base), type(seed), type(program))
@@ -203,8 +183,7 @@ class EvmLoader:
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc(),
-                opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
+        result = send_transaction(client, trx, self.acc.get_acc())
         print('result:', result)
         return sol
 
@@ -227,7 +206,7 @@ class EvmLoader:
         return (items[0], int(items[1]))
 
     def checkAccount(self, solana):
-        info = http_client.get_account_info(solana)
+        info = client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
     def deployChecked(self, location, creator=None):
@@ -239,7 +218,7 @@ class EvmLoader:
             ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
         program = self.ether2program(ether)
         code = self.ether2seed(ether)
-        info = http_client.get_account_info(program[0])
+        info = client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)
             return (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
@@ -250,7 +229,7 @@ class EvmLoader:
 
 
 def getBalance(account):
-    return http_client.get_balance(account)['result']['value']
+    return client.get_balance(account)['result']['value']
 
 def solana2ether(public_key):
     from web3 import Web3
@@ -303,3 +282,28 @@ def wallet_path():
         if line.startswith(substr):
             return line[len(substr):].strip()
     raise Exception("cannot get keypair path")
+
+
+def confirm_transaction(client, tx_sig, confirmations=1):
+    """Confirm a transaction."""
+    TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
+    elapsed_time = 0
+    while elapsed_time < TIMEOUT:
+        print('confirm_transaction for %s', tx_sig)
+        resp = client.get_signature_statuses([tx_sig])
+        print('confirm_transaction: %s', resp)
+        if resp["result"]:
+            status = resp['result']['value'][0]
+            if status and (status['confirmationStatus'] == 'finalized' or \
+               status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
+                return
+        sleep_time = 1
+        time.sleep(sleep_time)
+        elapsed_time += sleep_time
+    raise RuntimeError("could not confirm transaction: ", tx_sig)
+
+def send_transaction(client, trx, acc):
+    result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+    confirm_transaction(client, result["result"])
+    result = client.get_confirmed_transaction(result["result"])
+    return result

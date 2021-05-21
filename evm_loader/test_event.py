@@ -7,9 +7,11 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-http_client = Client(solana_url)
+client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
+# evm_loader_id = "CPPDtyGBEYVVRxDMFj675PJrQpg4jddZJ3o6JDMP6s23"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -97,27 +99,23 @@ class EventTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
         trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
-        return result
+        return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps):
         print("Continue")
         trx = Transaction()
         trx.add(self.sol_instr_10_continue(storage, steps))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
-        return result
+        return send_transaction(client, trx, self.acc)
 
     def call_cancel(self, storage):
         print("Cancel")
         trx = Transaction()
         trx.add(self.sol_instr_12_cancel(storage))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))
-        return result
+        return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input):
         tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
-
+            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
@@ -134,8 +132,7 @@ class EventTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
         trx.add(self.sol_instr_05(from_addr + sign + msg))
-        return http_client.send_transaction(trx, self.acc,
-                                     opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        return send_transaction(client, trx, self.acc)["result"]
 
     def create_storage_account(self, seed):
         storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
@@ -144,7 +141,7 @@ class EventTest(unittest.TestCase):
         if getBalance(storage) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            send_transaction(client, trx, self.acc)
 
         return storage
 
@@ -153,7 +150,6 @@ class EventTest(unittest.TestCase):
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
-
         self.call_begin(storage, 10, msg, instruction)
 
         while (True):
@@ -251,9 +247,9 @@ class EventTest(unittest.TestCase):
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
         tx1 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input1, 'chainId': 1}
+            'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 1}
         tx2 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller)+1, 'data': input2, 'chainId': 1}
+            'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 1}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())
         (from_addr2, sign2, msg2) = make_instruction_data_from_tx(tx2, self.acc.secret_key())
@@ -265,7 +261,8 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2))))
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+        result = send_transaction(client, trx, self.acc)["result"]
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
 
