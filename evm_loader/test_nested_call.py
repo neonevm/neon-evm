@@ -11,9 +11,9 @@ from web3 import Web3
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
+# evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
 
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
