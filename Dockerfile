@@ -1,8 +1,8 @@
 # Install BPF SDK
-FROM solanalabs/rust:latest AS builder
+FROM solanalabs/rust:1.52.0 AS builder
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.4/install)" && \
-    /root/.local/share/solana/install/releases/1.6.4/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.9/install)" && \
+    /root/.local/share/solana/install/releases/1.6.9/solana-release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Build spl-token utility
@@ -41,8 +41,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM cybercoredev/solana:latest AS solana
-FROM cybercoredev/solana:v1.4.25-resources AS solana-deploy
+FROM cybercoredev/solana:v1.6.9-resources AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -51,19 +50,17 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install openssl ca-certificates curl python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install solana web3 pysha3
-COPY solana-py.patch /tmp/
+COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
+RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=solana-deploy /opt/solana/bin/solana /opt/solana/bin/solana-deploy
-
 COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt
 COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
 ENV CONTRACTS_DIR=/opt/solidity/
-ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt

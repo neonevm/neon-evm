@@ -16,6 +16,7 @@ import subprocess
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+evm_loader_id = os.environ.get("EVM_LOADER")
 http_client = Client(solana_url)
 
 
@@ -30,7 +31,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
-        cls.loader = EvmLoader(solana_url, cls.acc)
+        cls.loader = EvmLoader(cls.acc, evm_loader_id)
         cls.evm_loader = cls.loader.loader_id
         print("evm loader id: ", cls.evm_loader)
         program_and_code = cls.loader.deployChecked(
@@ -102,7 +103,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
 
-        err = "invalid program argument"
+        #err = "invalid program argument"
+        err = "Transaction simulation failed: Error processing Instruction 0: invalid program argument"
         with self.assertRaisesRegex(Exception,err):
             result = http_client.send_transaction(trx, acc)
             print(result)

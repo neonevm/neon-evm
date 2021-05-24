@@ -2,7 +2,7 @@ use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
-    utils::keccak256_digest,
+    utils::keccak256_h256,
 };
 use evm::backend::Apply;
 use primitive_types::{H160, H256, U256};
@@ -99,7 +99,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     return Err(ProgramError::InvalidArgument);
                 }
 
-                keccak256_digest(&caller_info.key.to_bytes()).into()
+                keccak256_h256(&caller_info.key.to_bytes()).into()
             };
 
             caller_id

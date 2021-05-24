@@ -19,7 +19,7 @@ custom-heap = []
 default = ["custom-heap"]
 
 [dependencies]
-solana-program = { version = "=1.6.4", default_features = false }
+solana-program = { version = "1.6.9", default_features = false }
 num-derive = "0.3"
 num-traits = "0.2"
 remove_dir_all = "=0.5.0"
@@ -30,7 +30,6 @@ primitive-types = { version = "0.7", default-features = false, features = ["serd
 evm = { path = "../rust-evm", version = "0.18.0", default_features = false, features = ["with-serde"] }
 hex = "0.4.2"
 bs58 = "0.3.1"
-sha3 = { version = "0.8", default-features = false }
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 #k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
 libsecp256k1 = { version = "0.3.5", default-features = false }
@@ -47,8 +46,8 @@ logs = "0.4"
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
-solana-program-test = "1.6.4"
-solana-sdk = "1.6.4"
+solana-program-test = "1.6.9"
+solana-sdk = "1.6.9"
 
 [lib]
 crate-type = ["cdylib", "lib"]
