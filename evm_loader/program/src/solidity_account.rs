@@ -4,6 +4,7 @@ use crate::{
     utils::{keccak256_h256, u256_to_h256},
 };
 use evm::backend::Basic;
+use evm::Code;
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
@@ -114,8 +115,8 @@ impl<'a> SolidityAccount<'a> {
         self.code(|d| d.len())
     }
     
-    pub fn get_code(&self) -> Vec<u8> {
-        self.code(|d| d.into())
+    pub fn get_code(&self, account: H160) -> Code {
+        self.code(|d| Code::AccountRef{ ptr: d.as_ptr(), len: d.len(), account })
     }
     
     pub fn get_storage(&self, index: &U256) -> U256 {
