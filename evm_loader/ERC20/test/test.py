@@ -1,21 +1,8 @@
-from solana.rpc.api import Client
-from solana.account import Account
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.sysvar import *
-import unittest
-import time
-import os
-import json
 import base58
-import subprocess
 import unittest
-from eth_tx_utils import  make_keccak_instruction_data, Trx
-import base64
-from construct import Struct as cStruct
-from construct import Bytes, Int8ul, Int32ul
-from typing import NamedTuple
-from eth_keys import keys as eth_keys
+from eth_tx_utils import make_keccak_instruction_data, Trx
 from web3.auto import w3
+from solana_utils import *
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
