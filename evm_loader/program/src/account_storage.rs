@@ -201,7 +201,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         debug_print!("This is solana user, because {:?} == {:?}.", address, self.caller_id);
                     }
                     else {
-                        debug_print!("Not found account for {:?}.", address);
+                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
                     }
                 }
