@@ -25,6 +25,11 @@ WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
+COPY evm_loader/ERC20/src/*.sol /ERC20/
+WORKDIR /ERC20/
+RUN solc --output-dir . --bin *.sol && \
+    for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
+        ls -l
 
 # Define solana-image that contains utility
 FROM cybercoredev/solana:v1.6.9-resources AS solana
@@ -45,6 +50,12 @@ COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
+
+COPY --from=contracts /ERC20/ /opt/ERC20/
+COPY evm_loader/ERC20/test/* evm_loader/deploy-test.sh /opt/ERC20/
+RUN ln -s /opt/evm_loader.so /opt/ERC20/evm_loader.so
+RUN ln -s /opt/neon-cli /opt/ERC20/neon-cli
+ENV EVM_LOADER_PATH=/opt/evm_loader.so
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
