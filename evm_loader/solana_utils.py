@@ -3,6 +3,7 @@ from solana.rpc.api import Client
 from solana.rpc.types import TxOpts
 from solana.account import Account
 from solana.publickey import PublicKey
+from solana.rpc.commitment import Confirmed
 import time
 import os
 import subprocess
@@ -32,6 +33,24 @@ EVM_LOADER = os.environ.get("EVM_LOADER")
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
+
+def confirm_transaction(client, tx_sig, confirmations=1):
+    """Confirm a transaction."""
+    TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
+    elapsed_time = 0
+    while elapsed_time < TIMEOUT:
+        print('confirm_transaction for %s', tx_sig)
+        resp = client.get_signature_statuses([tx_sig])
+        print('confirm_transaction: %s', resp)
+        if resp["result"]:
+            status = resp['result']['value'][0]
+            if status and (status['confirmationStatus'] == 'finalized' or \
+               status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
+                return
+        sleep_time = 1
+        time.sleep(sleep_time)
+        elapsed_time += sleep_time
+    raise RuntimeError("could not confirm transaction: ", tx_sig)
 
 def accountWithSeed(base, seed, program):
     print(type(base), type(seed), type(program))
@@ -229,7 +248,7 @@ class EvmLoader:
 
 
 def getBalance(account):
-    return client.get_balance(account)['result']['value']
+    return client.get_balance(account, commitment = Confirmed)['result']['value']
 
 def solana2ether(public_key):
     from web3 import Web3
@@ -257,7 +276,7 @@ class AccountInfo(NamedTuple):
         return AccountInfo(cont.eth_acc, cont.trx_count)
 
 def getAccountData(client, account, expected_length):
-    info = client.get_account_info(account)['result']['value']
+    info = client.get_account_info(account, commitment = Confirmed)['result']['value']
     if info is None:
         raise Exception("Can't get information about {}".format(account))
 
@@ -282,25 +301,6 @@ def wallet_path():
         if line.startswith(substr):
             return line[len(substr):].strip()
     raise Exception("cannot get keypair path")
-
-
-def confirm_transaction(client, tx_sig, confirmations=1):
-    """Confirm a transaction."""
-    TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
-    elapsed_time = 0
-    while elapsed_time < TIMEOUT:
-        print('confirm_transaction for %s', tx_sig)
-        resp = client.get_signature_statuses([tx_sig])
-        print('confirm_transaction: %s', resp)
-        if resp["result"]:
-            status = resp['result']['value'][0]
-            if status and (status['confirmationStatus'] == 'finalized' or \
-               status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
-                return
-        sleep_time = 1
-        time.sleep(sleep_time)
-        elapsed_time += sleep_time
-    raise RuntimeError("could not confirm transaction: ", tx_sig)
 
 def send_transaction(client, trx, acc):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
