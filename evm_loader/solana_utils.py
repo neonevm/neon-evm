@@ -249,6 +249,42 @@ class EvmLoader:
             return (program[0], ether, code[0])
 
 
+    def createEtherAccountTrx(self,  ether,  code_acc=None):
+        if isinstance(ether, str):
+            if ether.startswith('0x'): ether = ether[2:]
+        else: ether = ether.hex()
+        (sol, nonce) = self.ether2program(ether)
+        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+        seed = b58encode(bytes.fromhex(ether))
+        base = self.acc.get_acc().public_key()
+        data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10**9,
+                space=0,
+                ether=bytes.fromhex(ether),
+                nonce=nonce))
+        trx = Transaction()
+        if code_acc is None:
+            trx.add(TransactionInstruction(
+                program_id=self.loader_id,
+                data=data,
+                keys=[
+                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                ]))
+        else:
+            trx.add(TransactionInstruction(
+                program_id=self.loader_id,
+                data=data,
+                keys=[
+                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                ]))
+        return (trx, sol)
+
+
 def getBalance(account):
     return http_client.get_balance(account)['result']['value']
 
