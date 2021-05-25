@@ -197,6 +197,13 @@ impl<'a> ProgramAccountStorage<'a> {
                         let account_info = &self.account_metas[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
+                    else if address == self.caller_id {
+                        debug_print!("This is solana user, because {:?} == {:?}.", address, self.caller_id);
+                    }
+                    else {
+                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
+                        return Err(ProgramError::NotEnoughAccountKeys);
+                    }
                 }
                 Apply::Delete { address: _ } => {}
             }

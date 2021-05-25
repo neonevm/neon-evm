@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
 
 use primitive_types::{H160, H256, U256};
-use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve};
+use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve, Code};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
@@ -74,7 +74,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.code_hash(address)
     }
 
-    fn code(&self, address: H160) -> Vec<u8> {
+    fn code(&self, address: H160) -> Code {
         self.state.code(address)
     }
 
@@ -256,7 +256,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     fn pre_validate(
         &mut self,
         context: &evm::Context,
-        opcode: Result<evm::Opcode, evm::ExternalOpcode>,
+        opcode: evm::Opcode,
         stack: &evm::Stack,
     ) -> Result<(), ExitError> {
         // if let Some(cost) = gasometer::static_opcode_cost(opcode) {
@@ -305,7 +305,16 @@ impl<'config, B: Backend> Machine<'config, B> {
         let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state, config: evm::Config::default() };
-        Self{ executor, runtime }
+
+        let mut s = Self{ executor, runtime };
+        s.finalize_restore();
+        s
+    }
+
+    fn finalize_restore(&mut self) {
+        for (runtime, _) in self.runtime.iter_mut() {
+            runtime.finalize_restore(&self.executor);
+        }
     }
 
     pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {
@@ -362,7 +371,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let mut instance = evm::Runtime::new(
-                    info.init_code,
+                    Code::Vec { code: info.init_code },
                     Vec::new(),
                     info.context,
                     &self.executor.config
@@ -432,7 +441,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let mut instance = evm::Runtime::new(
-                    info.init_code,
+                    Code::Vec{ code: info.init_code },
                     Vec::new(),
                     info.context,
                     &self.executor.config
