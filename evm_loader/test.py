@@ -25,35 +25,6 @@ class SolanaCliTests(unittest.TestCase):
     def test_solana_cli(self):
         print(solana_cli().call('--version'))
 
-    def test_solana_deploy(self):
-        contract = so_dir+'spl_memo.so'
-        result = solana_cli(self.acc).call('deploy --commitment max {}'.format(contract))
-        substr = "Program Id: "
-        if result.startswith(substr):
-            programId = result[len(substr):].strip()
-        else:
-            raise Exception("solana deploy error: ", result)
-
-        def send_memo_trx(data):
-            trx = Transaction()
-            trx.add(
-                TransactionInstruction(program_id=programId, data=data, keys=[
-                    AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-                ]))
-            res = http_client.send_transaction(trx, self.acc.get_acc())
-            return res["result"]
-
-        trxId = send_memo_trx('hello')
-        # confirm_transaction(http_client, trxId)
-
-        err = "Transaction simulation failed: Error processing Instruction 0: invalid instruction data"
-        with self.assertRaisesRegex(Exception, err):
-            try:
-              send_memo_trx(b'\xF0\x9F\x90\xff')
-            except Exception as e:
-                print("Exception:", e)
-                raise
-
 def checkAccount(self, account):
     info = http_client.get_account_info(account)
     print("checkAccount({}): {}".format(account, info))

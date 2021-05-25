@@ -5,20 +5,6 @@ RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.9/install)" && \
     /root/.local/share/solana/install/releases/1.6.9/solana-release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Build spl-token utility
-FROM builder AS token-cli-builder
-COPY ./token/ /opt/token/
-COPY ./associated-token-account /opt/associated-token-account
-WORKDIR /opt/token/cli
-RUN cargo build --release
-
-# Build spl-memo
-# Note: create stub Cargo.toml to speedup build
-FROM builder AS spl-memo-builder
-COPY ./memo/program/ /opt/memo/program/
-WORKDIR /opt/memo/program
-RUN cd /opt/memo/program && cargo build-bpf
-
 # Build evm_loader
 # Note: create stub Cargo.toml to speedup build
 FROM builder AS evm-loader-builder
@@ -55,10 +41,8 @@ RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=spl-memo-builder /opt/memo/program/target/deploy/spl_memo.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt
-COPY --from=token-cli-builder /opt/token/cli/target/release/spl-token /opt/solana/bin/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
