@@ -25,11 +25,19 @@ trap cleanup_docker EXIT
 sleep 10
 
 echo "Run tests..."
-cmd='python3 -m unittest discover -v --start-directory /opt/commun.contracts/scripts/'
+#docker run --rm --network evm_loader-deploy_test-net -ti \
+#     -e SOLANA_URL=http://solana:8899 \
+#     --workdir /opt/ \
+#     ${EXTRA_ARGS:-} \
+#     $EVM_LOADER_IMAGE 'deploy-test.sh'
+echo "Run tests return"
+
+echo "Run ERC20 tests..."
 docker run --rm --network evm_loader-deploy_test-net -ti \
      -e SOLANA_URL=http://solana:8899 \
+     --workdir /opt/ERC20/ \
      ${EXTRA_ARGS:-} \
-     $EVM_LOADER_IMAGE '/opt/deploy-test.sh'
-echo "Run tests return"
+     $EVM_LOADER_IMAGE 'deploy-test.sh'
+echo "Run ERC20 tests return"
 
 exit $?
