@@ -10,8 +10,8 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-evm_loader = os.environ.get("EVM_LOADER")
-path_to_evm_loader = '../../../target/bpfel-unknown-unknown/release/evm_loader.so'
+evm_loader_id = os.environ.get("EVM_LOADER")
+
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -61,19 +61,19 @@ def _getAccountData(client, account, expected_length, owner=None):
         raise Exception("Wrong data length for account data {}".format(account))
     return data
 
-
-class SolanaCli:
-    def __init__(self, url):
-        self.url = url
-
-    def call(self, arguments):
-        cmd = 'solana --url {} {}'.format(self.url, arguments)
-        try:
-            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        except subprocess.CalledProcessError as err:
-            import sys
-            print("ERR: solana error {}".format(err))
-            raise
+#
+# class SolanaCli:
+#     def __init__(self, url):
+#         self.url = url
+#
+#     def call(self, arguments):
+#         cmd = 'solana --url {} {}'.format(self.url, arguments)
+#         try:
+#             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
+#         except subprocess.CalledProcessError as err:
+#             import sys
+#             print("ERR: solana error {}".format(err))
+#             raise
 
 class SplToken:
     def __init__(self, url):
@@ -88,41 +88,7 @@ class SplToken:
             print("ERR: spl-token error {}".format(err))
             raise
 
-class EvmLoader:
-    loader_id = evm_loader
-
-    def __init__(self, solana_url, loader_id=None):
-        if not loader_id and not EvmLoader.loader_id:
-            print("Load EVM loader...")
-            cli = SolanaCli(solana_url)
-            contract = path_to_evm_loader
-            result = json.loads(cli.call('deploy {}'.format(contract)))
-            programId = result['programId']
-            EvmLoader.loader_id = programId
-            print("Done\n")
-
-        self.solana_url = solana_url
-        self.loader_id = loader_id or EvmLoader.loader_id
-        print("Evm loader program: {}".format(self.loader_id))
-
-    def deploy(self, contract):
-        cli = SolanaCli(self.solana_url)
-        output = cli.call("deploy --use-evm-loader {} {}".format(self.loader_id, contract))
-        print(type(output), output)
-        return json.loads(output.splitlines()[-1])
-
-    def createEtherAccount(self, ether):
-        cli = SolanaCli(self.solana_url)
-        output = cli.call("create-ether-account {} {} 1".format(self.loader_id, ether.hex()))
-        result = json.loads(output.splitlines()[-1])
-        return result["solana"]
-
-    def ether2program(self, ether):
-        cli = SolanaCli(self.solana_url)
-        output = cli.call("create-program-address {} {}".format(ether.hex(), self.loader_id))
-        items = output.rstrip().split('  ')
-        return (items[0], int(items[1]))
-
+class EvmLoaderERC20(EvmLoader):
     def deployERC20(self, location_hex, location_bin,  mintId, balance_erc20):
         ctor_init = str("%064x" % 0xa0) + \
                     str("%064x" % 0xe0) + \
@@ -152,31 +118,17 @@ def getBalance(account):
 class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.loader = EvmLoader(solana_url, evm_loader)
+        wallet = WalletAccount(wallet_path())
+        cls.loader = EvmLoaderERC20(wallet, evm_loader_id)
+        cls.acc = wallet.get_acc()
 
-        # Initialize user account
-        cli = SolanaCli(solana_url)
-        res = cli.call("config get")
-        res = res.splitlines()[-1]
-        substr = "Keypair Path: "
-        if not res.startswith(substr):
-            raise Exception("cannot get keypair path")
-        path = res[len(substr):]
-        with open(path.strip(), mode='r') as file:
-            pk = (file.read())
-            nums = list(map(int, pk.strip("[]").split(',')))
-            nums = nums[0:32]
-            values = bytes(nums)
-            cls.acc = Account(values)
-
-        cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
-        cls.caller_eth = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
-        (cls.caller, caller_nonce) = cls.loader.ether2program(cls.caller_eth)
+        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         info = http_client.get_account_info(cls.caller)
         if info['result']['value'] is None:
             print("Create solana caller account...")
-            caller = cls.loader.createEtherAccount(cls.caller_eth)
+            caller = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done")
             print("solana caller:", caller)
 
@@ -188,7 +140,7 @@ class EvmLoaderTests(unittest.TestCase):
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_eth.hex(), caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
     def createMint(self):
         spl = SplToken(solana_url)
@@ -442,7 +394,7 @@ class EvmLoaderTests(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(mintId)
         print ("create account balance_erc20:", balance_erc20)
 
-        deploy_result= self.loader.deployERC20("erc20_ctor_uninit.hex", "erc20.bin",  mintId, balance_erc20)
+        deploy_result= self.loader.deploy("erc20_ctor_uninit.hex", "erc20.bin",  mintId, balance_erc20)
         erc20Id = deploy_result["programId"]
         erc20Id_ether = bytearray.fromhex(deploy_result["ethereum"][2:])
 
