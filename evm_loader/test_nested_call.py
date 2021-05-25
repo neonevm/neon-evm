@@ -11,7 +11,9 @@ from web3 import Web3
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 evm_loader_id = os.environ.get("EVM_LOADER")
+# evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
 
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -61,6 +63,10 @@ class EventTest(unittest.TestCase):
         print ("reId_create_receiver", cls.reId_create_receiver)
         print ("reId_create_receiver_eth", cls.reId_create_receiver_eth.hex())
 
+        cls.reId_create_receiver_seed = b58encode(bytes.fromhex(cls.reId_create_receiver_eth.hex())).decode('utf8')
+        cls.reId_create_receiver_code_account = accountWithSeed(cls.acc.public_key(), cls.reId_create_receiver_seed, PublicKey(evm_loader_id))
+
+
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
@@ -81,6 +87,7 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -103,19 +110,20 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
     def create_storage_account(self, seed):
-        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(self.loader.loader_id))).digest())
+        storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
         print("Storage", storage)
 
         if getBalance(storage) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
 
         return storage
 
@@ -241,6 +249,24 @@ class EventTest(unittest.TestCase):
 
 
     def test_create2_opcode(self):
+        if http_client.get_balance(self.reId_create_receiver_code_account, commitment='recent')['result']['value'] == 0:
+            trx = Transaction()
+            trx.add(
+                createAccountWithSeed(self.acc.public_key(),
+                                      self.acc.public_key(),
+                                      self.reId_create_receiver_seed,
+                                      10 ** 9,
+                                      4096 + 4 * 1024,
+                                      PublicKey(evm_loader_id)))
+            res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
+        if http_client.get_balance(self.reId_create_receiver, commitment='recent')['result']['value'] == 0:
+            trx = Transaction()
+            trx.add(
+                self.loader.createEtherAccountTrx(self.reId_create_receiver_eth, self.reId_create_receiver_code_account)[0]
+            )
+            res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+
         func_name = abi.function_signature_to_4byte_selector('creator()')
         result = self.call_partial_signed(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
 
