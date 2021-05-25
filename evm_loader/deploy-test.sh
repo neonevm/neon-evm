@@ -24,6 +24,8 @@ if [ ${#EVM_LOADER} -eq 0 ]; then
   exit 1
 fi
 
+sleep 25   # Wait while evm_loader deploy finalized
+
 python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"
