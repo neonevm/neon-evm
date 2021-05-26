@@ -61,20 +61,6 @@ def _getAccountData(client, account, expected_length, owner=None):
         raise Exception("Wrong data length for account data {}".format(account))
     return data
 
-#
-# class SolanaCli:
-#     def __init__(self, url):
-#         self.url = url
-#
-#     def call(self, arguments):
-#         cmd = 'solana --url {} {}'.format(self.url, arguments)
-#         try:
-#             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
-#         except subprocess.CalledProcessError as err:
-#             import sys
-#             print("ERR: solana error {}".format(err))
-#             raise
-
 class SplToken:
     def __init__(self, url):
         self.url = url
@@ -191,7 +177,7 @@ class EvmLoaderTests(unittest.TestCase):
         trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
         eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v%2==0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
         keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
-        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+        evm_instruction = self.caller_ether + eth_sig + trx_rlp
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -240,7 +226,7 @@ class EvmLoaderTests(unittest.TestCase):
         trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
         eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v%2==0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
         keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
-        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+        evm_instruction = self.caller_ether + eth_sig + trx_rlp
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -276,7 +262,7 @@ class EvmLoaderTests(unittest.TestCase):
     def erc20_balance(self, erc20):
         input = bytearray.fromhex(
             "0370a08231" +
-            str("%024x" % 0) + self.caller_eth.hex()
+            str("%024x" % 0) + self.caller_ether.hex()
         )
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
@@ -315,7 +301,7 @@ class EvmLoaderTests(unittest.TestCase):
         trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
         eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v % 2 == 0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
         keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
-        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+        evm_instruction = self.caller_ether + eth_sig + trx_rlp
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -414,7 +400,7 @@ class EvmLoaderTests(unittest.TestCase):
         assert(self.erc20_balance( erc20Id) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.caller_eth)
+        self.erc20_deposit( acc_client,  deposit_amount*(10**9), erc20Id, balance_erc20, mintId, self.caller_ether)
         assert(self.tokenBalance(acc_client) == mint_amount-deposit_amount)
         assert(self.tokenBalance(balance_erc20) == deposit_amount)
         assert(self.erc20_balance( erc20Id) == deposit_amount*(10**9))
