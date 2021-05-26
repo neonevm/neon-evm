@@ -64,6 +64,7 @@ COPY --from=contracts /ERC20/ /opt/ERC20/
 COPY evm_loader/ERC20/test/* evm_loader/deploy-test.sh /opt/ERC20/
 RUN ln -s /opt/evm_loader.so /opt/ERC20/evm_loader.so
 RUN ln -s /opt/neon-cli /opt/ERC20/neon-cli
+RUN ln -s /opt/spl-token /opt/ERC20/spl-token
 ENV EVM_LOADER_PATH=/opt/evm_loader.so
 
 ENV CONTRACTS_DIR=/opt/solidity/
