@@ -14,7 +14,7 @@ RUN cargo build-bpf --features no-logs
 RUN cd ../cli && cargo build --release
 
 # Build Solidity contracts
-FROM ethereum/solc:0.5.12 AS solc
+FROM ethereum/solc:0.7.0 AS solc
 FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \

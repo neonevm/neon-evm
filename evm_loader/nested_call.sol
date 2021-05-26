@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.5.12;
 
 contract nested_call_Recover{
     event Recovered(address a);
