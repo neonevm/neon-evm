@@ -13,6 +13,7 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub basic: Basic,
+    #[serde(with = "serde_bytes")]
     pub code: Option<Vec<u8>>,
     pub reset: bool,
 }
