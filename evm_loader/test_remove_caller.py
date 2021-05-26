@@ -17,7 +17,7 @@ import subprocess
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
-http_client = Client(solana_url)
+client = Client(solana_url)
 
 
 class EvmLoaderTestsNewAccount(unittest.TestCase):
@@ -26,9 +26,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.acc = WalletAccount(wallet_path())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
-            tx = http_client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
+            tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
+            confirm_transaction(client, tx['result'])
+            balance = client.get_balance(cls.acc.get_acc().public_key())['result']['value']
             print("Done\n")
             
         cls.loader = EvmLoader(cls.acc, evm_loader_id)
@@ -65,7 +65,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=self.evm_loader, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc())
+        result = send_transaction(client, trx, self.acc.get_acc())
         print(result)
 
     def test_call_by_self(self):
@@ -79,7 +79,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=self.evm_loader, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc())
+        result = send_transaction(client, trx, self.acc.get_acc())
         print(result)
 
     def test_call_by_signer(self):
@@ -88,9 +88,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("acc:", acc.public_key())
         if getBalance(acc.public_key()) == 0:
             print("request_airdrop for ", acc.public_key())
-            tx = http_client.request_airdrop(acc.public_key(), 10*10**9)
-            confirm_transaction(http_client, tx['result'])
-            balance = http_client.get_balance(acc.public_key())['result']['value']
+            tx = client.request_airdrop(acc.public_key(), 10*10**9)
+            confirm_transaction(client, tx['result'])
+            balance = client.get_balance(acc.public_key())['result']['value']
             print("Done\n")
         call_hello = bytearray.fromhex("033917b3df")
         trx = Transaction().add(
@@ -106,7 +106,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         #err = "invalid program argument"
         err = "Transaction simulation failed: Error processing Instruction 0: invalid program argument"
         with self.assertRaisesRegex(Exception,err):
-            result = http_client.send_transaction(trx, acc)
+            result = send_transaction(client, trx, acc)
             print(result)
 
 

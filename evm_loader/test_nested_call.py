@@ -123,13 +123,13 @@ class EventTest(unittest.TestCase):
         if getBalance(storage) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
 
         return storage
 
     def call_partial_signed(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -140,14 +140,14 @@ class EventTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
         trx.add(self.sol_instr_09_partial_call(storage, 400, instruction, contract, code))
-        http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        send_transaction(client, trx, self.acc)
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
             trx.add(self.sol_instr_10_continue(storage, 400, instruction, contract, code))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            result = send_transaction(client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -192,7 +192,7 @@ class EventTest(unittest.TestCase):
 
     def test_ecrecover(self):
         tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
-              'nonce': getTransactionCount(http_client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
+              'nonce': getTransactionCount(client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())
         _trx = Trx.fromString(signed_tx.rawTransaction)

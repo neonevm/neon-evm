@@ -18,10 +18,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             print("request_airdrop for ", cls.acc.get_acc().public_key())
-            solana_cli().call('airdrop 1000000')
-            # tx = http_client.request_airdrop(cls.acc.get_acc().public_key(), 100000)
-            # confirm_transaction(http_client, tx['result'])
-            # balance = http_client.get_balance(cls.acc.get_acc().public_key())['result']['value']
+            tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
+            confirm_transaction(client, tx['result'])
             print("Done\n")
             
         cls.loader = EvmLoader(cls.acc, evm_loader_id)
@@ -49,7 +47,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'value': 1,
             'gas': 1,
             'gasPrice': 1,
-            'nonce': getTransactionCount(http_client, self.sol_caller),
+            'nonce': getTransactionCount(client, self.sol_caller),
             'data': '3917b3df',
             'chainId': 1
         }
@@ -71,7 +69,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=self.evm_loader, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
             ]))
-        result = http_client.send_transaction(trx, self.acc.get_acc(), opts=TxOpts(skip_confirmation=False))
+        result = send_transaction(client, trx, self.acc.get_acc())
 
     # def test_fail_on_no_signature(self):  
     #     tx_1 = {
@@ -105,7 +103,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
-    #     result = http_client.send_transaction(trx, self.acc.get_acc())
+    #     result = client.send_transaction(trx, self.acc.get_acc())
 
 
     # def test_check_wo_checks(self):  
@@ -133,7 +131,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
-    #     result = http_client.send_transaction(trx, self.acc.get_acc())
+    #     result = client.send_transaction(trx, self.acc.get_acc())
 
     # def test_raw_tx_wo_checks(self):  
     #     tx_2 = "0xf86180808094535d33341d2ddcc6411701b1cf7634535f1e8d1680843917b3df26a013a4d8875dfc46a489c2641af798ec566d57852b94743b234517b73e239a5a22a07586d01a8a1125be7108ee6580c225a622c9baa0938f4d08abe78556c8674d58"
@@ -152,7 +150,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
-    #     result = http_client.send_transaction(trx, self.acc.get_acc())
+    #     result = client.send_transaction(trx, self.acc.get_acc())
 
 
 if __name__ == '__main__':

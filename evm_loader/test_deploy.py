@@ -6,9 +6,10 @@ from sha3 import keccak_256
 from hashlib import sha256
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-http_client = Client(solana_url)
+client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
+
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -98,11 +99,11 @@ class DeployTest(unittest.TestCase):
         if getBalance(holder) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), "1236", 10**9, 128*1024, PublicKey(evm_loader_id)))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            result = send_transaction(client, trx, self.acc)
             print(result)
 
         # Get nonce for caller
-        trx_count = getTransactionCount(http_client, self.caller)
+        trx_count = getTransactionCount(client, self.caller)
 
         # Create contract address from (caller, nonce)
         contract_eth = keccak_256(pack([self.caller_ether, trx_count or None])).digest()[-20:]
@@ -143,11 +144,12 @@ class DeployTest(unittest.TestCase):
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 ]))
-            receipts.append(http_client.send_transaction(trx, self.acc)["result"])
+            receipts.append(client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=True,
+                                                                preflight_commitment="confirmed"))["result"])
             offset += len(part)
         print("receipts", receipts)
         for rcpt in receipts:
-            confirm_transaction(http_client, rcpt)
+            confirm_transaction(client, rcpt)
             print("confirmed:", rcpt)
 
         base = self.acc.public_key()
@@ -171,8 +173,7 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
             ]))
 
-        result = http_client.send_transaction(trx, self.acc,
-                        opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        result = send_transaction(client, trx, self.acc)["result"]
         print("result executeTrxFromAccountData:", result)
 
         return (holder, contract_sol, code_sol)
@@ -212,7 +213,7 @@ class DeployTest(unittest.TestCase):
         if getBalance(storage) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            send_transaction(client, trx, self.acc)
 
         return storage
 
@@ -222,13 +223,13 @@ class DeployTest(unittest.TestCase):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call(storage, 50, holder, contract_sol, code_sol))
-        result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        result = send_transaction(client, trx, self.acc)["result"]
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 50, contract_sol, code_sol))
-            result = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+            result = send_transaction(client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -257,8 +258,7 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
-        result = http_client.send_transaction(trx, self.acc,
-                        opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
+        result = send_transaction(client, trx, self.acc)["result"]
         print("result", result)
 
 if __name__ == '__main__':
