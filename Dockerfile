@@ -13,6 +13,14 @@ WORKDIR /opt/evm_loader/program
 RUN cargo build-bpf --features no-logs
 RUN cd ../cli && cargo build --release
 
+# Download and build spl-token
+FROM builder AS spl-token-builder
+ADD http://github.com/solana-labs/solana-program-library/archive/refs/tags/token-cli-v2.0.11.tar.gz /opt/
+RUN tar -xvf /opt/token-cli-v2.0.11.tar.gz
+WORKDIR /opt/solana-program-library-token-cli-v2.0.11/token/cli
+RUN cargo build --release
+RUN mv /opt/solana-program-library-token-cli-v2.0.11/target/release/spl-token /opt/
+
 # Build Solidity contracts
 FROM ethereum/solc:0.7.0 AS solc
 FROM ubuntu:20.04 AS contracts
@@ -42,7 +50,8 @@ RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patc
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt
+COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
+COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 
