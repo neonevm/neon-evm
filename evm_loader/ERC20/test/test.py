@@ -108,7 +108,9 @@ class EvmLoaderTests(unittest.TestCase):
         cls.loader = EvmLoaderERC20(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
-        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        cls.caller_ether_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
+        cls.caller_ether = bytes.fromhex(cls.caller_ether_pr_key.address[2:])
+        # cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         info = http_client.get_account_info(cls.caller)
