@@ -16,10 +16,10 @@ RUN cd ../cli && cargo build --release
 # Download and build spl-token
 FROM builder AS spl-token-builder
 ADD http://github.com/solana-labs/solana-program-library/archive/refs/tags/token-cli-v2.0.11.tar.gz /opt/
-RUN tar -xvf /opt/token-cli-v2.0.11.tar.gz
-WORKDIR /opt/solana-program-library-token-cli-v2.0.11/token/cli
-RUN cargo build --release
-RUN mv /opt/solana-program-library-token-cli-v2.0.11/target/release/spl-token /opt/
+RUN tar -xvf /opt/token-cli-v2.0.11.tar.gz && \
+    cd /opt/solana-program-library-token-cli-v2.0.11/token/cli && \
+    cargo build --release && \
+    cp /opt/solana-program-library-token-cli-v2.0.11/target/release/spl-token /opt/
 
 # Build Solidity contracts
 FROM ethereum/solc:0.7.0 AS solc
