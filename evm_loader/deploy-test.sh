@@ -2,7 +2,7 @@
 set -xeuo pipefail
 
 echo "Deploy test..."
-[-e evm_loader-deploy_test-net ] || solana-keygen new --no-passphrase
+[ -e evm_loader-deploy_test-net ] || solana-keygen new --no-passphrase --force
 ACCOUNT=$(solana address)
 
 solana config set --url $SOLANA_URL
