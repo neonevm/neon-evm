@@ -347,7 +347,7 @@ class EvmLoaderTests(unittest.TestCase):
 
     def erc20_balance_ext(self, erc20):
         input = bytearray.fromhex("0340b6674d")
-        print("input:", input)
+        print("input:", list(input))
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [

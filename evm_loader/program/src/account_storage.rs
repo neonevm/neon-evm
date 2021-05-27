@@ -57,6 +57,8 @@ impl<'a> ProgramAccountStorage<'a> {
             let account = account_data.get_account()?;
     
             if *code_info.key != account.code_account {
+                debug_print!("code_info.key: {:?}", *code_info.key);
+                debug_print!("account.code_account: {:?}", account.code_account);
                 return Err(ProgramError::InvalidAccountData)
             }
     
