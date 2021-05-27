@@ -138,21 +138,24 @@ class EvmLoaderTests(unittest.TestCase):
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
     @staticmethod
-    def createToken():
+    def createToken(owner=None):
         spl = SplToken(solana_url)
-        res = spl.call("create-token")
+        if owner is None:
+            res = spl.call("create-token")
+        else:
+            res = spl.call("create-token --owner {}".format(owner.get_path()))
         if not res.startswith("Creating token "):
             raise Exception("create token error")
         else:
             return res[15:59]
 
     @staticmethod
-    def createTokenAccount(token, acc2=None):
+    def createTokenAccount(token, owner=None):
         spl = SplToken(solana_url)
-        if acc2 is None:
+        if owner is None:
             res = spl.call("create-account {}".format(token))
         else:
-            res = spl.call("create-account {} {}".format(token, acc2.get_path()))
+            res = spl.call("create-account {} --owner {}".format(token, owner.get_path()))
         if not res.startswith("Creating account "):
             raise Exception("create account error %s" % res)
         else:
@@ -391,14 +394,20 @@ class EvmLoaderTests(unittest.TestCase):
             return res[13:]
 
     def test_erc20(self):
-        token = self.createToken()
-        time.sleep(20)
-        print("\ncreate token:", token)
-        balance_erc20 = self.createTokenAccount(token)
-        print("create account balance_erc20:", balance_erc20)
-        acc2 = RandomAccount()
-        acc_client = self.createTokenAccount(token, acc2)
-        print("create account acc_client:", acc_client)
+        wallet1 = RandomAccount()
+        print("wallet1:", wallet1.get_path(), wallet1.get_acc().public_key())
+        token = self.createToken(wallet1)
+        # time.sleep(20)
+        print("create token:", token)
+        acc_client = self.createTokenAccount(token, wallet1)
+        print('create account acc_client = {acc_client} for wallet1 = {wallet1}:'
+              .format(acc_client=acc_client, wallet1=wallet1.get_path()))
+
+        wallet2 = RandomAccount()
+        print("wallet2:", wallet2.get_path(), wallet2.get_acc().public_key())
+        balance_erc20 = self.createTokenAccount(token, wallet2)
+        print('create account balance_erc20 = {balance_erc20} for wallet2 = {wallet2}:'
+              .format(balance_erc20=balance_erc20, wallet2=wallet2.get_path()))
 
         deploy_result = self.loader.deploy_erc20("erc20_ctor_uninit.hex", "erc20.bin", token, balance_erc20)
         print(deploy_result)
