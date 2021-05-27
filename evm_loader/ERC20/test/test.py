@@ -397,7 +397,7 @@ class EvmLoaderTests(unittest.TestCase):
         wallet1 = RandomAccount()
         print("wallet1:", wallet1.get_path(), wallet1.get_acc().public_key())
         token = self.createToken(wallet1)
-        # time.sleep(20)
+        time.sleep(20)
         print("create token:", token)
         acc_client = self.createTokenAccount(token, wallet1)
         print('create account acc_client = {acc_client} for wallet1 = {wallet1}:'
