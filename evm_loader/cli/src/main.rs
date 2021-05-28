@@ -336,6 +336,7 @@ pub fn keccak256_h256(data: &[u8]) -> H256 {
 fn command_deploy(
     config: &Config,
     program_location: &str,
+    sender: Pubkey
 ) -> CommandResult {
 
     let ACCOUNT_HEADER_SIZE = 1+Account::SIZE;
@@ -353,19 +354,16 @@ fn command_deploy(
     let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
 
     let trx_count : u64;
-    match config.rpc_client.get_account_with_commitment(&creator.pubkey(), CommitmentConfig::confirmed()).unwrap().value {
-        Some(acc) => {
-            let account_data = match evm_loader::account_data::AccountData::unpack(&acc.data) {
-                Ok(acc_data) => match acc_data {
-                    AccountData::Account(acc) => acc,
-                    _ => return Err(format!("Caller has incorrect type").into())
-                },
-                Err(_) => return Err(format!("Caller unpack error").into())
-            };
-            trx_count = account_data.trx_count;
-        }
-        _ => return Err(format!("Caller get_account_with_commitment() error").into())
-    }
+    let data = config.rpc_client.get_account_data(&sender)?;
+    let account = match evm_loader::account_data::AccountData::unpack(&data) {
+        Ok(acc_data) =>
+            match acc_data {
+            AccountData::Account(acc) => acc,
+            _ => return Err(format!("Caller has incorrect type").into())
+        },
+        Err(_) => return Err(format!("Caller unpack error").into())
+    };
+    trx_count = account.trx_count;
 
     debug!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
     debug!("Creator trx_count: {} ", trx_count);
@@ -796,6 +794,14 @@ fn main() {
                         .required(true)
                         .help("/path/to/program.o"),
                 )
+                .arg(
+                    Arg::with_name("sender")
+                        .value_name("SENDER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("Solana pubkey of the sender"),
+                )
         )
         .subcommand(
             SubCommand::with_name("get-ether-account-data")
@@ -889,8 +895,11 @@ fn main() {
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+                let val = arg_matches.value_of("sender").unwrap().to_string();
+                let sender = Pubkey::from_str(&val).unwrap();
+                error!("sender {}", sender);
 
-                command_deploy(&config, &program_location)
+                command_deploy(&config, &program_location, sender)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(&arg_matches, "ether").unwrap();
