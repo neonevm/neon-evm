@@ -190,7 +190,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
-            do_call(program_id, accounts, &bytes, None)
+            do_call(program_id, accounts, bytes, None)
         },
         EvmInstruction::ExecuteTrxFromAccountData => {
             debug_print!("Execute transaction from account data");
@@ -388,7 +388,7 @@ fn process_instruction<'a>(
             let program_eth: H160 = keccak256_h256(&program_info.key.to_bytes()).into();
             let caller_eth: H160 = keccak256_h256(&caller_info.key.to_bytes()).into(); 
 
-            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
+            do_call(program_id, accounts, data, Some( (caller, nonce) ))
         },
         EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg} => {    
             let account_info_iter = &mut accounts.iter();
@@ -453,7 +453,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidAccountData);
             }    
 
-            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
+            do_call(program_id, accounts, data, Some( (caller, nonce) ))
         },
         EvmInstruction::OnReturn {status, bytes} => {
             Ok(())
@@ -663,7 +663,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 fn do_call<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
-    instruction_data: &[u8],
+    instruction_data: Vec<u8>,
     from_info: Option<(H160, u64)>,
 ) -> ProgramResult
 {
@@ -679,6 +679,10 @@ fn do_call<'a>(
         caller_info
     };
 
+    if program_info.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
@@ -690,26 +694,32 @@ fn do_call<'a>(
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+        let mut executor = Machine::new(executor_state);
+
         debug_print!("Executor initialized");
 
-        let (exit_reason, result) = executor.transact_call(account_storage.origin(), account_storage.contract(), U256::zero(), instruction_data.to_vec(), usize::max_value());
+        executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+
+        let exit_reason = match executor.execute_n_steps(u64::MAX) {
+            Ok(()) => return Err(ProgramError::InvalidInstructionData),
+            Err(reason) => reason
+        };
+        let result = executor.return_value();
 
         debug_print!("Call done");
 
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
+            let executor_state = executor.into_state();
+            let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)))
         } else {
             (exit_reason, result, None)
         }
     };
 
-    if applies_logs.is_some() {
-        let (applies, logs) = applies_logs.unwrap();
-
+    if let Some((applies, logs)) = applies_logs {
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -717,8 +727,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
-
+    invoke_on_return(&program_id, &accounts, exit_reason.clone(), &result)?;
     Ok(())
 }
 
