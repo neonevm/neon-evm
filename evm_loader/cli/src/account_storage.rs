@@ -1,5 +1,5 @@
 use evm::backend::Apply;
-use primitive_types::{H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey,

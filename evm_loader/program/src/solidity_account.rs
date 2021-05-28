@@ -4,13 +4,12 @@ use crate::{
     utils::{keccak256_h256, u256_to_h256},
 };
 use evm::backend::Basic;
-use evm::Code;
+use evm::{Code, H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
 };
-use primitive_types::{H160, H256, U256};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::convert::TryInto;

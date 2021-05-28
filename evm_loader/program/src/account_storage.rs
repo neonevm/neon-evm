@@ -5,7 +5,7 @@ use crate::{
     utils::keccak256_h256,
 };
 use evm::backend::Apply;
-use primitive_types::{H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
