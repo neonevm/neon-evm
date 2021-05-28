@@ -44,6 +44,8 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
+use solana_program::keccak::{hash, hashv};
+
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
@@ -327,6 +329,10 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     }
 }
 
+pub fn keccak256_h256(data: &[u8]) -> H256 {
+    H256::from(hash(&data).to_bytes())
+}
+
 fn command_deploy(
     config: &Config,
     program_location: &str,
@@ -344,19 +350,34 @@ fn command_deploy(
     let signers = [&*config.signer];
 
     let creator_ether: H160 = H256::from_slice(Keccak256::digest(&creator.pubkey().to_bytes()).as_slice()).into();
+    let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
+
+    let trx_count : u64;
+    match config.rpc_client.get_account_with_commitment(&creator.pubkey(), CommitmentConfig::confirmed()).unwrap().value {
+        Some(acc) => {
+            let account_data = match evm_loader::account_data::AccountData::unpack(&acc.data) {
+                Ok(acc_data) => match acc_data {
+                    AccountData::Account(acc) => acc,
+                    _ => return Err(format!("Caller has incorrect type").into())
+                },
+                Err(_) => return Err(format!("Caller unpack error").into())
+            };
+            trx_count = account_data.trx_count;
+        }
+        _ => return Err(format!("Caller get_account_with_commitment() error").into())
+    }
+
     debug!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
+    debug!("Creator trx_count: {} ", trx_count);
 
     let (program_id, ether, nonce) = {
-        let code_hash = Keccak256::digest(&program_data);
-        let mut hasher = Keccak256::new();
-        hasher.input(&[0xff]);
-        hasher.input(&creator_ether.as_bytes());
-        hasher.input(&[0u8; 32]);
-        hasher.input(&code_hash.as_slice());
-        let ether: H160 = H256::from_slice(hasher.result().as_slice()).into();
+        let trx_count_256 : U256 = U256::from(trx_count);
+        let mut stream = rlp::RlpStream::new_list(2);
+        stream.append(&creator_ether);
+        stream.append(&trx_count_256);
+        let ether : H160 = keccak256_h256(&stream.out()).into();
         let seeds = [ether.as_bytes()];
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
-        debug!("Creator: {}, code_hash: {}", &hex::encode(&creator.pubkey().to_bytes()), &hex::encode(code_hash.as_slice()));
         (address, ether, nonce)
     };
 
