@@ -629,11 +629,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     
         // let program_account = SolidityAccount::new(program_info)?;
         debug_print!("Execute transact_create");
-        let exit_reason = executor.transact_create2(
+        let exit_reason = executor.transact_create(
                 account_storage.origin(),
                 U256::zero(),
                 code_data,
-                H256::default(), usize::max_value()
+                usize::max_value()
             );
         debug_print!("  create2 done");   
         
