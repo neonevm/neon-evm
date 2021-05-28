@@ -3,6 +3,7 @@ import unittest
 from eth_tx_utils import make_keccak_instruction_data, Trx
 from web3.auto import w3
 from solana_utils import *
+from re import search
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -12,6 +13,28 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 evm_loader_id = os.environ.get("EVM_LOADER")
 
+""" Compile *.sol from src in https://remix.ethereum.org/ and you will get ERC20.json
+    This is a part of ERC20.json
+    methodIdentifiers:
+    {
+        "allowance(address,address)": "dd62ed3e",
+        "approve(address,uint256)": "095ea7b3",
+        "balanceOf(address)": "70a08231",
+        "balance_ext()": "40b6674d",
+        "decimals()": "313ce567",
+        "decreaseAllowance(address,uint256)": "a457c2d7",
+        "deposit(uint256,address,uint256,uint256)": "6f0372af",
+        "increaseAllowance(address,uint256)": "39509351",
+        "mint_id()": "e132a122",
+        "name()": "06fdde03",
+        "symbol()": "95d89b41",
+        "totalSupply()": "18160ddd",
+        "transfer(address,uint256)": "a9059cbb",
+        "transferFrom(address,address,uint256)": "23b872dd",
+        "withdraw(uint256,uint256)": "441a3e70"
+    }
+    To call a contract method use 'numbers' as a transaction data
+"""
 
 def confirm_transaction(client, tx_sig):
     """Confirm a transaction."""
@@ -155,7 +178,7 @@ class EvmLoaderTests(unittest.TestCase):
         if owner is None:
             res = spl.call("create-account {}".format(token))
         else:
-            res = spl.call("create-account {} --owner {}".format(token, owner.get_path()))
+            res = spl.call("create-account {} --owner {}".format(token, owner))
         if not res.startswith("Creating account "):
             raise Exception("create account error %s" % res)
         else:
@@ -338,7 +361,8 @@ class EvmLoaderTests(unittest.TestCase):
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
         print("erc20 transfer signature: {}".format(result["result"]["transaction"]["signatures"][0]))
-        res = messages[messages.index("Program log: Succeed") + 1]
+        res = messages[messages.index("Program %s failed" % evm_loader_id) + 1]
+        print(res)
         if not res.startswith("Program log: "):
             raise Exception("Invalid program logs: no result")
         else:
@@ -368,12 +392,12 @@ class EvmLoaderTests(unittest.TestCase):
         print("confirm_result:", confirm_result)
         log_messages = confirm_result["result"]["meta"]["logMessages"]
         print("log_messages:", log_messages)
-        res = log_messages[log_messages.index("Program log: Succeed") + 1]
+        res = log_messages[-1]
         print("res:", res)
-        if not res.startswith("Program log: "):
-            raise Exception("Invalid program logs: no result")
+        if any(search("Program %s failed" % evm_loader_id, lm) for lm in log_messages):
+            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
-            return res[13:]
+            return res
 
     def erc20_mint_id(self, erc20, erc20_code):
         input = bytearray.fromhex("03e132a122")
@@ -391,29 +415,56 @@ class EvmLoaderTests(unittest.TestCase):
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[messages.index("Program log: Succeed") + 1]
-        if not res.startswith("Program log: "):
-            raise Exception("Invalid program logs: no result")
+        res = messages[-1]
+        print("res:", res)
+        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
+            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
-            return res[13:]
+            return res
 
     def test_erc20(self):
         wallet1 = RandomAccount()
         print("wallet1:", wallet1.get_path(), wallet1.get_acc().public_key())
         token = self.createToken(wallet1)
-        time.sleep(20)
-        print("create token:", token)
-        acc_client = self.createTokenAccount(token, wallet1)
-        print('create account acc_client = {acc_client} for wallet1 = {wallet1}:'
+        # time.sleep(20)
+        print("wallet1: create token:", token)
+        acc_client = self.createTokenAccount(token, wallet1.get_path())
+        print('wallet1: create account acc_client = {acc_client} for wallet1 = {wallet1}:'
               .format(acc_client=acc_client, wallet1=wallet1.get_path()))
 
         wallet2 = RandomAccount()
-        print("wallet2:", wallet2.get_path(), wallet2.get_acc().public_key())
-        balance_erc20 = self.createTokenAccount(token, wallet2)
-        print('create account balance_erc20 = {balance_erc20} for wallet2 = {wallet2}:'
-              .format(balance_erc20=balance_erc20, wallet2=wallet2.get_path()))
+        wallet2.public_key = wallet2.get_acc().public_key()
+        print("wallet2.public_key:", wallet2.public_key)
+        wallet2.creator = solana2ether(wallet2.public_key)
+        print("wallet2.creator:", wallet2.creator.hex())
+        # (wallet2.caller, wallet2.nonce) = self.loader.ether2program(wallet2.creator)
+        (wallet2.caller, wallet2.nonce) = self.caller, 0
+        print("wallet2.caller:", wallet2.caller)
+        # print("wallet2.nonce:", wallet2.nonce)
+        wallet2.trx_count = getTransactionCount(client, wallet2.caller)
+        print("wallet2.trx_count:", wallet2.trx_count)
+        wallet2.nonce = bytes.fromhex(str("%032x" % wallet2.trx_count))
+        print("wallet2.nonce:", wallet2.nonce)
+        print("wallet2.caller:", bytes.fromhex(base58.b58decode(wallet2.caller).hex()))
+        wallet2.caller_and_nonce = bytes.fromhex(base58.b58decode(wallet2.caller).hex()) + wallet2.nonce
+        print("wallet2.caller_and_nonce:", wallet2.caller_and_nonce)
+        from web3 import Web3
+        wallet2.hash_result = bytes(Web3.keccak(wallet2.caller_and_nonce))
+        print("wallet2.hash_result:", wallet2.hash_result)
+        wallet2.erc20Id_precalculated = base58.b58encode(wallet2.hash_result).decode()
+        print("wallet2.erc20Id_precalculated:", wallet2.erc20Id_precalculated)
+        # program = self.load.ether2program(wallet2.erc20Id_precalculated)
+        # balance_erc20 = self.createTokenAccount(token, wallet2)
+        balance_erc20 = self.createTokenAccount(token, wallet2.erc20Id_precalculated)
+        print("balance_erc20:", balance_erc20)
+        print('create account balance_erc20 = {balance_erc20} for erc20Id = {erc20Id}:'
+              .format(balance_erc20=balance_erc20, erc20Id=wallet2.erc20Id_precalculated))
 
-        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex", "erc20.bin", token, balance_erc20, solana2ether(wallet2.get_acc().public_key()))
+        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
+                                                                        , "erc20.bin"
+                                                                        , token
+                                                                        , balance_erc20
+                                                                        , wallet2.creator)
 
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
@@ -422,8 +473,8 @@ class EvmLoaderTests(unittest.TestCase):
         print("erc20 balance_ext():", self.erc20_balance_ext(erc20Id, erc20_code))
         print("erc20 mint_id():", self.erc20_mint_id(erc20Id, erc20_code))
 
-        self.changeOwner(balance_erc20, erc20Id)
-        print("balance_erc20 owner changed to {}".format(erc20Id))
+        # self.changeOwner(balance_erc20, erc20Id)
+        # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
         self.tokenMint(token, acc_client, mint_amount)
         time.sleep(20)
@@ -432,7 +483,8 @@ class EvmLoaderTests(unittest.TestCase):
         assert (self.erc20_balance(erc20Id) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit(acc_client, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token, self.caller_eth)
+        self.erc20_deposit(acc_client, deposit_amount * (10 ** 9), erc20Id
+                           , erc20_code, balance_erc20, token, self.caller_eth)
         assert (self.tokenBalance(acc_client) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
         assert (self.erc20_balance(erc20Id) == deposit_amount * (10 ** 9))
