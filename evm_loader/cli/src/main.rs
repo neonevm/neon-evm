@@ -336,7 +336,7 @@ pub fn keccak256_h256(data: &[u8]) -> H256 {
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    sender: Pubkey
+    caller: Pubkey
 ) -> CommandResult {
 
     let ACCOUNT_HEADER_SIZE = 1+Account::SIZE;
@@ -354,7 +354,7 @@ fn command_deploy(
     let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
 
     let trx_count : u64;
-    let data = config.rpc_client.get_account_data(&sender)?;
+    let data = config.rpc_client.get_account_data(&caller)?;
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
@@ -416,7 +416,7 @@ fn command_deploy(
             &LoaderInstruction::Finalize,
             vec![AccountMeta::new(program_id, false),
                  AccountMeta::new(program_code, false),
-                //  AccountMeta::new(caller_id, false),
+                 AccountMeta::new(caller, false),
                  AccountMeta::new(creator.pubkey(), true),
                  AccountMeta::new(clock::id(), false),
                  AccountMeta::new(rent::id(), false),
@@ -795,12 +795,12 @@ fn main() {
                         .help("/path/to/program.o"),
                 )
                 .arg(
-                    Arg::with_name("sender")
-                        .value_name("SENDER")
+                    Arg::with_name("caller")
+                        .value_name("CALLER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_pubkey)
-                        .help("Solana pubkey of the sender"),
+                        .help("Solana pubkey of the caller"),
                 )
         )
         .subcommand(
@@ -895,11 +895,10 @@ fn main() {
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-                let val = arg_matches.value_of("sender").unwrap().to_string();
-                let sender = Pubkey::from_str(&val).unwrap();
-                error!("sender {}", sender);
+                let val = arg_matches.value_of("caller").unwrap().to_string();
+                let caller = Pubkey::from_str(&val).unwrap();
 
-                command_deploy(&config, &program_location, sender)
+                command_deploy(&config, &program_location, caller)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(&arg_matches, "ether").unwrap();
