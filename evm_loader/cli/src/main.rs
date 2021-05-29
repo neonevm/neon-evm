@@ -350,7 +350,6 @@ fn command_deploy(
     let creator = &config.signer;
     let signers = [&*config.signer];
 
-    let caller_ether: H160 = H256::from_slice(Keccak256::digest(&caller.to_bytes()).as_slice()).into();
     let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
 
     let trx_count : u64;
@@ -364,6 +363,7 @@ fn command_deploy(
         Err(_) => return Err(format!("Caller unpack error").into())
     };
     trx_count = account.trx_count;
+    let caller_ether = account.ether;
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller);
     debug!("Caller trx_count: {} ", trx_count);
