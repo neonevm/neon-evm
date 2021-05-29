@@ -35,7 +35,8 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(CONTRACTS_DIR+"ReturnsEvents.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"ReturnsEvents.binary", cls.caller, cls.caller_ether)
         print ('contract', cls.reId)
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)

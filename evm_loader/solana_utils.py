@@ -17,6 +17,9 @@ from base58 import b58encode
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
 from hashlib import sha256
+from sha3 import keccak_256
+import rlp
+
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -175,8 +178,8 @@ class EvmLoader:
         print("Evm loader program: {}".format(self.loader_id))
 
 
-    def deploy(self, contract_path):
-        output = neon_cli().call("deploy --evm_loader {} {}".format(self.loader_id, contract_path))
+    def deploy(self, contract_path, caller):
+        output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
@@ -228,24 +231,20 @@ class EvmLoader:
         info = client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
-    def deployChecked(self, location, creator=None):
-        from web3 import Web3
-        if creator is None:
-            creator = solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r")
-        with open(location, mode='rb') as file:
-            fileHash = Web3.keccak(file.read())
-            ether = bytes(Web3.keccak(b'\xff' + creator + bytes(32) + fileHash)[-20:])
+    def deployChecked(self, location, caller, caller_ether):
+        trx_count = getTransactionCount(client, caller)
+        ether = keccak_256(rlp.encode((caller_ether, trx_count))).digest()[-20:]
+
         program = self.ether2program(ether)
         code = self.ether2seed(ether)
         info = client.get_account_info(program[0])
         if info['result']['value'] is None:
-            res = self.deploy(location)
+            res = self.deploy(location, caller)
             return (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
             return (program[0], ether, code[0])
-
 
     def createEtherAccountTrx(self,  ether,  code_acc=None):
         if isinstance(ether, str):

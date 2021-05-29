@@ -40,11 +40,16 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId_caller, cls.reId_caller_eth, cls.reId_caller_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Caller.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_reciever, cls.reId_reciever_eth, cls.reId_reciever_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Receiver.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_recover, cls.reId_recover_eth, cls.reId_recover_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Recover.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_create_caller, cls.reId_create_caller_eth, cls.reId_create_caller_code) = cls.loader.deployChecked(CONTRACTS_DIR+"Create_Caller.binary", solana2ether(cls.acc.public_key()))
-        (cls.reId_revert, cls.reId_revert_eth, cls.reId_revert_code) = cls.loader.deployChecked(CONTRACTS_DIR+"nested_call_Revert.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId_caller, cls.reId_caller_eth, cls.reId_caller_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"nested_call_Caller.binary", cls.caller, cls.caller_ether)
+        (cls.reId_reciever, cls.reId_reciever_eth, cls.reId_reciever_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"nested_call_Receiver.binary", cls.caller, cls.caller_ether)
+        (cls.reId_recover, cls.reId_recover_eth, cls.reId_recover_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"nested_call_Recover.binary", cls.caller, cls.caller_ether)
+        (cls.reId_create_caller, cls.reId_create_caller_eth, cls.reId_create_caller_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"Create_Caller.binary", cls.caller, cls.caller_ether)
+        (cls.reId_revert, cls.reId_revert_eth, cls.reId_revert_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"nested_call_Revert.binary", cls.caller, cls.caller_ether)
         print ('reId_contract_caller', cls.reId_caller)
         print ('reId_contract_caller_eth', cls.reId_caller_eth.hex())
         print ('reId_contract_reciever', cls.reId_reciever)

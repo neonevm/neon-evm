@@ -36,7 +36,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("evm loader id: ", cls.evm_loader)
         program_and_code = cls.loader.deployChecked(
                 CONTRACTS_DIR+'helloWorld.binary',
-                solana2ether(cls.acc.get_acc().public_key())
+                cls.caller, cls.caller_ether
             )
         cls.owner_contract = program_and_code[0]
         cls.contract_code = program_and_code[2]

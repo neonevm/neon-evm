@@ -92,7 +92,7 @@ class EvmLoaderTests2(unittest.TestCase):
         mint = Token(client, mintId, tokenId, self.acc)
         print("Mint: {} -> 0x{}".format(mintId, bytes(mintId).hex()))
 
-        erc20Id = self.loader.deployChecked("erc20wrapper.bin")["programId"]
+        erc20Id = self.loader.deployChecked("erc20wrapper.bin", self.caller, self.caller_ether)["programId"]
         print("ERC20Wrapper program:", erc20Id)
         seed = "btc3"
         seedData = bytes(seed, 'utf8')
@@ -158,7 +158,7 @@ class EvmLoaderTests2(unittest.TestCase):
 
     def test_deployChecked(self):
         loader = EvmLoader(solana_url)
-        loader.deployChecked("erc20wrapper.bin")
+        loader.deployChecked("erc20wrapper.bin", self.caller, self.caller_ether)
 
 
 
@@ -227,7 +227,7 @@ class EvmLoaderTests(unittest.TestCase):
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        cls.contract = cls.loader.deployChecked(contracts_dir+"Owner.binary")["programId"]
+        cls.contract = cls.loader.deployChecked(contracts_dir+"Owner.binary", cls.caller, cls.caller_ether)["programId"]
         print("Contract:", cls.contract)
 
     def test_call_getOwner(self):
