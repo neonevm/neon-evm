@@ -179,6 +179,8 @@ class EvmLoader:
 
 
     def deploy(self, contract_path, caller):
+        cmd = "deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller)
+        print(cmd)
         output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
