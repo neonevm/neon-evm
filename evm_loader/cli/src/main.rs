@@ -350,7 +350,7 @@ fn command_deploy(
     let creator = &config.signer;
     let signers = [&*config.signer];
 
-    let creator_ether: H160 = H256::from_slice(Keccak256::digest(&creator.pubkey().to_bytes()).as_slice()).into();
+    let caller_ether: H160 = H256::from_slice(Keccak256::digest(&caller.to_bytes()).as_slice()).into();
     let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
 
     let trx_count : u64;
@@ -365,13 +365,13 @@ fn command_deploy(
     };
     trx_count = account.trx_count;
 
-    debug!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
-    debug!("Creator trx_count: {} ", trx_count);
+    debug!("Caller: ether {}, solana {}", caller_ether, caller);
+    debug!("Caller trx_count: {} ", trx_count);
 
     let (program_id, ether, nonce) = {
         let trx_count_256 : U256 = U256::from(trx_count);
         let mut stream = rlp::RlpStream::new_list(2);
-        stream.append(&creator_ether);
+        stream.append(&caller_ether);
         stream.append(&trx_count_256);
         let ether : H160 = keccak256_h256(&stream.out()).into();
         let seeds = [ether.as_bytes()];
