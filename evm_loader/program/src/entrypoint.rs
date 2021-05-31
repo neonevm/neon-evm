@@ -190,7 +190,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
-            do_call(program_id, accounts, bytes, None)
+            do_call(program_id, accounts, bytes.to_vec(), None)
         },
         EvmInstruction::ExecuteTrxFromAccountData => {
             debug_print!("Execute transaction from account data");
