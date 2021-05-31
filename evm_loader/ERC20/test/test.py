@@ -103,7 +103,7 @@ class SplToken:
 
 
 class EvmLoaderERC20(EvmLoader):
-    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, creator):
+    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, creator, caller):
         ctor_init = str("%064x" % 0xa0) + \
                     str("%064x" % 0xe0) + \
                     str("%064x" % 0x9) + \
@@ -118,7 +118,7 @@ class EvmLoaderERC20(EvmLoader):
             binary = bytearray.fromhex(hex.read() + ctor_init)
             with open(location_bin, mode='wb') as bin:
                 bin.write(binary)
-                return self.deployChecked(location_bin, creator)
+                return self.deployChecked(location_bin, creator, caller)
 
 
 def solana2ether(public_key):
@@ -133,21 +133,13 @@ def getBalance(account):
 class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        wallet = WalletAccount(wallet_path())
-        cls.loader = EvmLoaderERC20(wallet, evm_loader_id)
-        cls.acc = wallet.get_acc()
-
+        cls.wallet = RandomAccount()
+        cls.acc = cls.wallet.get_acc()
+        cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
+        # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
-        cls.caller_eth = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
-        # cls.caller_eth = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_eth)
-
-        info = http_client.get_account_info(cls.caller)
-        if info['result']['value'] is None:
-            print("Create solana caller account...")
-            caller = cls.loader.createEtherAccount(cls.caller_eth)
-            print("Done")
-            print("solana caller:", caller)
+        cls.caller_ether = solana2ether(cls.acc.public_key())
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
@@ -156,9 +148,31 @@ class EvmLoaderTests(unittest.TestCase):
             # balance = http_client.get_balance(cls.acc.public_key())['result']['value']
             print("Done\n")
 
+        info = http_client.get_account_info(cls.caller)
+        if info['result']['value'] is None:
+            print("Create solana caller account...")
+            caller = cls.loader.createEtherAccount(cls.caller_ether)
+            print("Done")
+            print("solana caller:", caller, 'cls.caller:', cls.caller)
+
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_eth.hex(), cls.caller_nonce, "->", cls.caller,
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
+        cls.caller_nonce = getTransactionCount(client, cls.caller)
+        print('cls.caller_nonce', cls.caller_nonce)
+
+        # precalculate erc20Id
+        nonce_bytes = bytes.fromhex(str("%032x" % cls.caller_nonce))
+        print("nonce_bytes:", nonce_bytes)
+        print("caller_bytes:", bytes.fromhex(base58.b58decode(cls.caller).hex()))
+        caller_and_nonce_bytes = bytes.fromhex(base58.b58decode(cls.caller).hex()) + nonce_bytes
+        print("caller_and_nonce_bytes:", caller_and_nonce_bytes)
+        from web3 import Web3
+        hash_result = bytes(Web3.keccak(caller_and_nonce_bytes))
+        print("hash_result:", hash_result)
+        cls.erc20Id_precalculated = base58.b58encode(hash_result).decode()
+        print("cls.erc20Id_precalculated:", cls.erc20Id_precalculated)
 
     @staticmethod
     def createToken(owner=None):
@@ -423,52 +437,32 @@ class EvmLoaderTests(unittest.TestCase):
             return res
 
     def test_erc20(self):
+        token = self.createToken(self.wallet)
+
         wallet1 = RandomAccount()
         print("wallet1:", wallet1.get_path(), wallet1.get_acc().public_key())
-        token = self.createToken(wallet1)
         # time.sleep(20)
         print("wallet1: create token:", token)
         acc_client = self.createTokenAccount(token, wallet1.get_path())
         print('wallet1: create account acc_client = {acc_client} for wallet1 = {wallet1}:'
               .format(acc_client=acc_client, wallet1=wallet1.get_path()))
 
-        wallet2 = RandomAccount()
-        wallet2.public_key = wallet2.get_acc().public_key()
-        print("wallet2.public_key:", wallet2.public_key)
-        wallet2.creator = solana2ether(wallet2.public_key)
-        print("wallet2.creator:", wallet2.creator.hex())
-        # (wallet2.caller, wallet2.nonce) = self.loader.ether2program(wallet2.creator)
-        (wallet2.caller, wallet2.nonce) = self.caller, 0
-        print("wallet2.caller:", wallet2.caller)
-        # print("wallet2.nonce:", wallet2.nonce)
-        wallet2.trx_count = getTransactionCount(client, wallet2.caller)
-        print("wallet2.trx_count:", wallet2.trx_count)
-        wallet2.nonce = bytes.fromhex(str("%032x" % wallet2.trx_count))
-        print("wallet2.nonce:", wallet2.nonce)
-        print("wallet2.caller:", bytes.fromhex(base58.b58decode(wallet2.caller).hex()))
-        wallet2.caller_and_nonce = bytes.fromhex(base58.b58decode(wallet2.caller).hex()) + wallet2.nonce
-        print("wallet2.caller_and_nonce:", wallet2.caller_and_nonce)
-        from web3 import Web3
-        wallet2.hash_result = bytes(Web3.keccak(wallet2.caller_and_nonce))
-        print("wallet2.hash_result:", wallet2.hash_result)
-        wallet2.erc20Id_precalculated = base58.b58encode(wallet2.hash_result).decode()
-        print("wallet2.erc20Id_precalculated:", wallet2.erc20Id_precalculated)
-        # program = self.load.ether2program(wallet2.erc20Id_precalculated)
-        # balance_erc20 = self.createTokenAccount(token, wallet2)
-        balance_erc20 = self.createTokenAccount(token, wallet2.erc20Id_precalculated)
+        balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
         print("balance_erc20:", balance_erc20)
         print('create account balance_erc20 = {balance_erc20} for erc20Id = {erc20Id}:'
-              .format(balance_erc20=balance_erc20, erc20Id=wallet2.erc20Id_precalculated))
+              .format(balance_erc20=balance_erc20, erc20Id=self.erc20Id_precalculated))
 
         (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
                                                                         , "erc20.bin"
                                                                         , token
                                                                         , balance_erc20
-                                                                        , wallet2.creator)
+                                                                        , self.caller_ether
+                                                                        , self.caller)
 
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
+        assert (self.erc20Id_precalculated == erc20Id)
         time.sleep(20)
         print("erc20 balance_ext():", self.erc20_balance_ext(erc20Id, erc20_code))
         print("erc20 mint_id():", self.erc20_mint_id(erc20Id, erc20_code))
