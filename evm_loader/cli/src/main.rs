@@ -349,11 +349,13 @@ fn command_deploy(
 
     let creator = &config.signer;
     let signers = [&*config.signer];
-
-    let acc_data = config.rpc_client.get_account_data(&creator.pubkey())?;
+    let data : Vec<u8>;
+    match config.rpc_client.get_account_with_commitment(&caller, CommitmentConfig::confirmed())?.value{
+        Some(acc) =>   data = acc.data,
+        _ => panic!("AccountNotFound: pubkey={}", &caller.to_string())
+    }
 
     let trx_count : u64;
-    let data = config.rpc_client.get_account_data(&caller)?;
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
