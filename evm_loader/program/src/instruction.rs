@@ -1,7 +1,7 @@
 use serde::{Serialize, Serializer, Deserialize};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::TryInto;
-use primitive_types::{H160, H256};
+use evm::{H160, H256};
 use evm::backend::Log;
 
 fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Serializer {

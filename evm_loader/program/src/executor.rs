@@ -1,8 +1,9 @@
 use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
-
-use primitive_types::{H160, H256, U256};
-use evm::{Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, backend::Backend, Resolve, Code};
+use evm::{
+    Capture, ExitError, ExitReason, ExitSucceed, ExitFatal, Handler, 
+    backend::Backend, Resolve, Code, H160, H256, U256
+};
 use crate::executor_state::{ StackState, ExecutorState, ExecutorMetadata };
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};

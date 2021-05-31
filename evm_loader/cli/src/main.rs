@@ -10,7 +10,7 @@ use evm_loader::{
 use evm::{executor::StackExecutor, ExitReason};
 use bincode::serialize;
 use hex;
-use primitive_types::{H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_sdk::{
     clock::Slot,
     commitment_config::CommitmentConfig,

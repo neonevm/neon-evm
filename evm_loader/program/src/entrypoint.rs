@@ -35,8 +35,8 @@ use evm::{
     executor::{StackExecutor},
     CreateScheme,
     ExitReason, ExitFatal, ExitError, ExitSucceed,
+    H160, U256, H256
 };
-use primitive_types::{H160, U256, H256};
 use std::cell::RefCell;
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 

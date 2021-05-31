@@ -1,9 +1,9 @@
 use evm::{
     backend::{Basic, Backend},
-    CreateScheme, Capture, Transfer, ExitReason, Code
+    CreateScheme, Capture, Transfer, ExitReason, Code,
+    H160, H256, U256
 };
 use core::convert::Infallible;
-use primitive_types::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,

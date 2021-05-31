@@ -5,8 +5,7 @@ use std::{
 };
 use core::mem;
 use evm::backend::{Apply, Backend, Basic, Log};
-use evm::{ExitError, Transfer, Code};
-use primitive_types::{H160, H256, U256};
+use evm::{ExitError, Transfer, Code, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 

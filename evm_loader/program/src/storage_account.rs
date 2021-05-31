@@ -1,7 +1,7 @@
 use crate::{
     account_data::{ Storage, AccountData }
 };
-use primitive_types::{ H160} ;
+use evm::{ H160 };
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
