@@ -4,7 +4,6 @@ from solana_utils import *
 from eth_tx_utils import  make_instruction_data_from_tx, pack
 from sha3 import keccak_256
 from hashlib import sha256
-import time
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -88,7 +87,6 @@ class DeployTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-            time.sleep(20)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
