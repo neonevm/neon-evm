@@ -42,7 +42,7 @@ use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
 
 
-const HEAP_LENGTH: usize = 1024*1024;
+const HEAP_LENGTH: usize = 256*1024;
 
 /// Developers can implement their own heap by defining their own
 /// `#[global_allocator]`.  The following implements a dummy for test purposes
@@ -214,10 +214,11 @@ fn process_instruction<'a>(
                 (trx.to_vec(), signature.to_vec())
             };
 
-            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+// TODO: Enable after #23 "Support syscall `ecrecover`"
+/*            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
                 debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
-            }
+            }*/
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
@@ -298,10 +299,11 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+// TODO: Enable after #23 "Support syscall `ecrecover`"
+/*            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
                 debug_print!("{}", e);
                 return Err(ProgramError::InvalidInstructionData);
-            }
+            }*/
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let nonce = trx.nonce;
             let data = trx.call_data;
