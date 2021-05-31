@@ -23,6 +23,8 @@ client = Client(solana_url)
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_remove_caller.py setUpClass")
+
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()

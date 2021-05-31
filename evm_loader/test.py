@@ -14,6 +14,8 @@ user = "6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"
 class SolanaCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest.py setUpClass")
+
         cls.acc = WalletAccount(wallet_path())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10 * 10 ** 9)

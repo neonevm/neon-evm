@@ -4,6 +4,7 @@ from solana_utils import *
 from eth_tx_utils import  make_instruction_data_from_tx, pack
 from sha3 import keccak_256
 from hashlib import sha256
+import time
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -74,6 +75,7 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
 class DeployTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_deploy.py setUpClass")
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -86,6 +88,7 @@ class DeployTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
+            time.sleep(20)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,

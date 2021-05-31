@@ -23,6 +23,8 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 class EventTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_nested_call.py setUpClass")
+
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()

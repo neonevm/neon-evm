@@ -14,6 +14,8 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_transaction.py setUpClass")
+
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
