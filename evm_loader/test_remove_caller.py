@@ -17,8 +17,6 @@ import subprocess
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
-evm_loader_id = "EAf2RoAVFGsj7f7Q4k5e9oXSRNeVGmwGXooa6Yx91KUM"
 client = Client(solana_url)
 
 
