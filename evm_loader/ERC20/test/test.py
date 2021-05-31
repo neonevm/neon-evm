@@ -4,6 +4,7 @@ from eth_tx_utils import make_keccak_instruction_data, Trx
 from web3.auto import w3
 from solana_utils import *
 from re import search
+import time
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
@@ -103,7 +104,7 @@ class SplToken:
 
 
 class EvmLoaderERC20(EvmLoader):
-    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, creator, caller):
+    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller, caller_ether):
         ctor_init = str("%064x" % 0xa0) + \
                     str("%064x" % 0xe0) + \
                     str("%064x" % 0x9) + \
@@ -118,7 +119,7 @@ class EvmLoaderERC20(EvmLoader):
             binary = bytearray.fromhex(hex.read() + ctor_init)
             with open(location_bin, mode='wb') as bin:
                 bin.write(binary)
-                return self.deployChecked(location_bin, creator, caller)
+                return self.deployChecked(location_bin, caller, caller_ether)
 
 
 def solana2ether(public_key):
@@ -139,7 +140,11 @@ class EvmLoaderTests(unittest.TestCase):
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = solana2ether(cls.acc.public_key())
+        # cls.caller_ether = bytes.fromhex('8880690cabd3805979cdc6f34ef8067c2906e444')
+        # cls.caller_ether = bytes.fromhex('8880690cabd3805979cdc6f34ef8067c2906e555')
+        print('cls.caller_ether:',  cls.caller_ether.hex())
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        print('cls.caller:',  cls.caller)
 
         if getBalance(cls.acc.public_key()) == 0:
             print("Create user account...")
@@ -155,23 +160,15 @@ class EvmLoaderTests(unittest.TestCase):
             print("Done")
             print("solana caller:", caller, 'cls.caller:', cls.caller)
 
+        cls.caller_nonce = getTransactionCount(client, cls.caller)
+
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        cls.caller_nonce = getTransactionCount(client, cls.caller)
-        print('cls.caller_nonce', cls.caller_nonce)
-
         # precalculate erc20Id
-        nonce_bytes = bytes.fromhex(str("%032x" % cls.caller_nonce))
-        print("nonce_bytes:", nonce_bytes)
-        print("caller_bytes:", bytes.fromhex(base58.b58decode(cls.caller).hex()))
-        caller_and_nonce_bytes = bytes.fromhex(base58.b58decode(cls.caller).hex()) + nonce_bytes
-        print("caller_and_nonce_bytes:", caller_and_nonce_bytes)
-        from web3 import Web3
-        hash_result = bytes(Web3.keccak(caller_and_nonce_bytes))
-        print("hash_result:", hash_result)
-        cls.erc20Id_precalculated = base58.b58encode(hash_result).decode()
+        erc20_id_ether = keccak_256(rlp.encode((cls.caller_ether, cls.caller_nonce))).digest()[-20:]
+        (cls.erc20Id_precalculated, _) = cls.loader.ether2program(erc20_id_ether)
         print("cls.erc20Id_precalculated:", cls.erc20Id_precalculated)
 
     @staticmethod
@@ -452,12 +449,15 @@ class EvmLoaderTests(unittest.TestCase):
         print('create account balance_erc20 = {balance_erc20} for erc20Id = {erc20Id}:'
               .format(balance_erc20=balance_erc20, erc20Id=self.erc20Id_precalculated))
 
+        # print('sleeping...')
+        # time.sleep(20)
+        # print('deploying...')
         (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
                                                                         , "erc20.bin"
                                                                         , token
                                                                         , balance_erc20
-                                                                        , self.caller_ether
-                                                                        , self.caller)
+                                                                        , self.caller
+                                                                        , self.caller_ether)
 
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
