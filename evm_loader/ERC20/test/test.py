@@ -134,14 +134,12 @@ def getBalance(account):
 class EvmLoaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.wallet = RandomAccount()
+        cls.wallet = RandomAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
         cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = solana2ether(cls.acc.public_key())
-        # cls.caller_ether = bytes.fromhex('8880690cabd3805979cdc6f34ef8067c2906e444')
-        # cls.caller_ether = bytes.fromhex('8880690cabd3805979cdc6f34ef8067c2906e555')
         print('cls.caller_ether:',  cls.caller_ether.hex())
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
         print('cls.caller:',  cls.caller)
@@ -435,23 +433,19 @@ class EvmLoaderTests(unittest.TestCase):
 
     def test_erc20(self):
         token = self.createToken(self.wallet)
-
-        wallet1 = RandomAccount()
-        print("wallet1:", wallet1.get_path(), wallet1.get_acc().public_key())
-        # time.sleep(20)
-        print("wallet1: create token:", token)
-        acc_client = self.createTokenAccount(token, wallet1.get_path())
-        print('wallet1: create account acc_client = {acc_client} for wallet1 = {wallet1}:'
-              .format(acc_client=acc_client, wallet1=wallet1.get_path()))
+        print("token:", token)
 
         balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
         print("balance_erc20:", balance_erc20)
-        print('create account balance_erc20 = {balance_erc20} for erc20Id = {erc20Id}:'
-              .format(balance_erc20=balance_erc20, erc20Id=self.erc20Id_precalculated))
+        print('create account balance_erc20 = {balance_erc20} for erc20Id_precalculated = {erc20Id_precalculated}:'
+              .format(balance_erc20=balance_erc20, erc20Id_precalculated=self.erc20Id_precalculated))
 
-        # print('sleeping...')
-        # time.sleep(20)
-        # print('deploying...')
+        client_wallet = RandomAccount()
+        print("client_wallet:", client_wallet.get_path(), client_wallet.get_acc().public_key())
+        client_acc = self.createTokenAccount(token, client_wallet.get_path())
+        print('client_wallet: create account client_acc = {client_acc} for client_wallet = {client_wallet}:'
+              .format(client_acc=client_acc, client_wallet=client_wallet.get_path()))
+
         (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
                                                                         , "erc20.bin"
                                                                         , token
@@ -463,48 +457,48 @@ class EvmLoaderTests(unittest.TestCase):
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
         assert (self.erc20Id_precalculated == erc20Id)
-        time.sleep(20)
+
         print("erc20 balance_ext():", self.erc20_balance_ext(erc20Id, erc20_code))
         print("erc20 mint_id():", self.erc20_mint_id(erc20Id, erc20_code))
 
         # self.changeOwner(balance_erc20, erc20Id)
         # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
-        self.tokenMint(token, acc_client, mint_amount)
+        self.tokenMint(token, client_acc, mint_amount)
         time.sleep(20)
-        assert (self.tokenBalance(acc_client) == mint_amount)
+        assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
         assert (self.erc20_balance(erc20Id) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit(acc_client, deposit_amount * (10 ** 9), erc20Id
+        self.erc20_deposit(client_acc, deposit_amount * (10 ** 9), erc20Id
                            , erc20_code, balance_erc20, token, self.caller_eth)
-        assert (self.tokenBalance(acc_client) == mint_amount - deposit_amount)
+        assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
         assert (self.erc20_balance(erc20Id) == deposit_amount * (10 ** 9))
-        self.erc20_withdraw(acc_client, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token)
-        assert (self.tokenBalance(acc_client) == mint_amount)
+        self.erc20_withdraw(client_acc, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token)
+        assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
         assert (self.erc20_balance(erc20Id) == 0)
 
     @unittest.skip("not for CI")
     def test_deposit(self):
         print("test_deposit")
-        acc_client = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
+        client_acc = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
         erc20Id = "2a5PhGUpnTsCgVL8TjZ5S3LU76pmUfVC5UBHre4yqs5a"
         balance_erc20 = "8VAcZVoXCQoXb74DGMftRpraMYqHK86qKZALmBopo36i"
         token = "8y9XyppKvAWyu2Ud4HEAH6jaEAcCCvE53wcmr92t9RJJ"
         receiver_erc20 = bytes.fromhex("0000000000000000000000000000000000000011")
-        self.erc20_deposit(acc_client, 900, erc20Id, balance_erc20, token, receiver_erc20)
+        self.erc20_deposit(client_acc, 900, erc20Id, balance_erc20, token, receiver_erc20)
 
     @unittest.skip("not for CI")
     def test_with_draw(self):
         print("test_withdraw")
-        acc_client = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
+        client_acc = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
         erc20Id = "2a5PhGUpnTsCgVL8TjZ5S3LU76pmUfVC5UBHre4yqs5a"
         balance_erc20 = "8VAcZVoXCQoXb74DGMftRpraMYqHK86qKZALmBopo36i"
         token = "8y9XyppKvAWyu2Ud4HEAH6jaEAcCCvE53wcmr92t9RJJ"
-        self.erc20_withdraw(acc_client, 10, erc20Id, balance_erc20, token)
+        self.erc20_withdraw(client_acc, 10, erc20Id, balance_erc20, token)
 
     @unittest.skip("not for CI")
     def test_balance_ext(self):
