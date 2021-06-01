@@ -648,37 +648,40 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             let (code, _rest) = rest.split_at(code_len as usize);
             code.to_vec()
         };
-    
-        // let program_account = SolidityAccount::new(program_info)?;
-        debug_print!("Execute transact_create");
-        let exit_reason = executor.transact_create2(
-                account_storage.origin(),
-                U256::zero(),
-                code_data,
-                H256::default(), usize::max_value()
-            );
-        debug_print!("  create2 done");   
-        
+
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+        let mut executor = Machine::new(executor_state);
+
+        debug_print!("Executor initialized");
+        match (executor.create_begin(account_storage.origin(), code_data, u64::max_value())){
+            Err(reason) => {return Err(reason)},
+            _ => {}
+        }
+        let exit_reason = match executor.execute_n_steps(u64::MAX) {
+            Ok(()) => return Err(ProgramError::InvalidInstructionData),
+            Err(reason) => reason
+        };
+        let result = executor.return_value();
+        debug_print!("Call done");
+
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
-            (exit_reason, Vec::new(), Some((applies, logs)))
+            let executor_state = executor.into_state();
+            let (_, (applies, logs)) = executor_state.deconstruct();
+            (exit_reason, result, Some((applies, logs)))
         } else {
-            (exit_reason, Vec::new(), None)
+            (exit_reason, result, None)
         }
-    }; 
+    };
 
-    if applies_logs.is_some() {
-        let (applies, logs) = applies_logs.unwrap();
+    if let Some((applies, logs)) = applies_logs {
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log)?, &accounts)?;
         }
     }
-
     invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
-    
     Ok(())
 }
 

@@ -44,6 +44,8 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
+use solana_program::keccak::{hash, hashv};
+
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
@@ -327,9 +329,14 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     }
 }
 
+pub fn keccak256_h256(data: &[u8]) -> H256 {
+    H256::from(hash(&data).to_bytes())
+}
+
 fn command_deploy(
     config: &Config,
     program_location: &str,
+    caller: Pubkey
 ) -> CommandResult {
 
     let ACCOUNT_HEADER_SIZE = 1+Account::SIZE;
@@ -342,21 +349,35 @@ fn command_deploy(
 
     let creator = &config.signer;
     let signers = [&*config.signer];
+    let data : Vec<u8>;
+    match config.rpc_client.get_account_with_commitment(&caller, CommitmentConfig::confirmed())?.value{
+        Some(acc) =>   data = acc.data,
+        _ => panic!("AccountNotFound: pubkey={}", &caller.to_string())
+    }
 
-    let creator_ether: H160 = H256::from_slice(Keccak256::digest(&creator.pubkey().to_bytes()).as_slice()).into();
-    debug!("Creator: ether {}, solana {}", creator_ether, creator.pubkey());
+    let trx_count : u64;
+    let account = match evm_loader::account_data::AccountData::unpack(&data) {
+        Ok(acc_data) =>
+            match acc_data {
+            AccountData::Account(acc) => acc,
+            _ => return Err(format!("Caller has incorrect type").into())
+        },
+        Err(_) => return Err(format!("Caller unpack error").into())
+    };
+    trx_count = account.trx_count;
+    let caller_ether = account.ether;
+
+    debug!("Caller: ether {}, solana {}", caller_ether, caller);
+    debug!("Caller trx_count: {} ", trx_count);
 
     let (program_id, ether, nonce) = {
-        let code_hash = Keccak256::digest(&program_data);
-        let mut hasher = Keccak256::new();
-        hasher.input(&[0xff]);
-        hasher.input(&creator_ether.as_bytes());
-        hasher.input(&[0u8; 32]);
-        hasher.input(&code_hash.as_slice());
-        let ether: H160 = H256::from_slice(hasher.result().as_slice()).into();
+        let trx_count_256 : U256 = U256::from(trx_count);
+        let mut stream = rlp::RlpStream::new_list(2);
+        stream.append(&caller_ether);
+        stream.append(&trx_count_256);
+        let ether : H160 = keccak256_h256(&stream.out()).into();
         let seeds = [ether.as_bytes()];
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
-        debug!("Creator: {}, code_hash: {}", &hex::encode(&creator.pubkey().to_bytes()), &hex::encode(code_hash.as_slice()));
         (address, ether, nonce)
     };
 
@@ -397,7 +418,7 @@ fn command_deploy(
             &LoaderInstruction::Finalize,
             vec![AccountMeta::new(program_id, false),
                  AccountMeta::new(program_code, false),
-                //  AccountMeta::new(caller_id, false),
+                 AccountMeta::new(caller, false),
                  AccountMeta::new(creator.pubkey(), true),
                  AccountMeta::new(clock::id(), false),
                  AccountMeta::new(rent::id(), false),
@@ -775,6 +796,14 @@ fn main() {
                         .required(true)
                         .help("/path/to/program.o"),
                 )
+                .arg(
+                    Arg::with_name("caller")
+                        .value_name("CALLER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("Solana pubkey of the caller"),
+                )
         )
         .subcommand(
             SubCommand::with_name("get-ether-account-data")
@@ -868,8 +897,10 @@ fn main() {
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+                let val = arg_matches.value_of("caller").unwrap().to_string();
+                let caller = Pubkey::from_str(&val).unwrap();
 
-                command_deploy(&config, &program_location)
+                command_deploy(&config, &program_location, caller)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(&arg_matches, "ether").unwrap();

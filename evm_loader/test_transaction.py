@@ -14,20 +14,29 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.acc = WalletAccount(wallet_path())
+        print("\ntest_transaction.py setUpClass")
 
-        if getBalance(cls.acc.get_acc().public_key()) == 0:
-            print("request_airdrop for ", cls.acc.get_acc().public_key())
-            tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10*10**9)
-            confirm_transaction(client, tx['result'])
+        wallet = WalletAccount(wallet_path())
+        cls.loader = EvmLoader(wallet, evm_loader_id)
+        cls.acc = wallet.get_acc()
+
+        # Create ethereum account for user account
+        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
+            _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-            
-        cls.loader = EvmLoader(cls.acc, evm_loader_id)
-        cls.evm_loader = cls.loader.loader_id
-        print("evm loader id: ", cls.evm_loader)
+
+        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
+              "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
         program_and_code = cls.loader.deployChecked(
                 CONTRACTS_DIR+'helloWorld.binary',
-                solana2ether(cls.acc.get_acc().public_key())
+                cls.caller,
+                cls.caller_ether
             )
         cls.owner_contract = program_and_code[0]
         cls.contract_code = program_and_code[2]
@@ -35,11 +44,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
 
-        cls.eth_caller = EthAccount.from_key(cls.acc.get_acc().secret_key())
-        cls.sol_caller = cls.loader.ether2program(cls.eth_caller.address)[0]
-        print("Caller:", cls.eth_caller.address, cls.sol_caller)
-        if getBalance(cls.sol_caller) == 0:
-            cls.loader.createEtherAccount(cls.eth_caller.address)
 
     def test_success_tx_send(self):  
         tx_1 = {
@@ -47,29 +51,29 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'value': 1,
             'gas': 1,
             'gasPrice': 1,
-            'nonce': getTransactionCount(client, self.sol_caller),
+            'nonce': getTransactionCount(client, self.caller),
             'data': '3917b3df',
             'chainId': 1
         }
         
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
         keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
-        trx_data = bytearray.fromhex(self.eth_caller.address[2:]) + sign + msg
+        trx_data = self.caller_ether + sign + msg
         
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-                AccountMeta(pubkey=self.sol_caller, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + trx_data, keys=[
+            TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.sol_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
-                AccountMeta(pubkey=self.evm_loader, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
             ]))
-        result = send_transaction(client, trx, self.acc.get_acc())
+        result = send_transaction(client, trx, self.acc)
 
     # def test_fail_on_no_signature(self):  
     #     tx_1 = {

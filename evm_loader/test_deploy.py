@@ -74,6 +74,7 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
 class DeployTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_deploy.py setUpClass")
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
