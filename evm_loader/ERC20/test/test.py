@@ -468,7 +468,6 @@ class EvmLoaderTests(unittest.TestCase):
         # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
         self.tokenMint(token, client_acc, mint_amount, self.wallet)
-        time.sleep(20)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
         assert (self.erc20_balance(erc20Id) == 0)
