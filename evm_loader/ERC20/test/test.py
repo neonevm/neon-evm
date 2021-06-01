@@ -148,7 +148,9 @@ class EvmLoaderTests(unittest.TestCase):
             print("Create user account...")
             tx = http_client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
             confirm_transaction(http_client, tx['result'])
-            # balance = http_client.get_balance(cls.acc.public_key())['result']['value']
+            time.sleep(3)
+            balance = http_client.get_balance(cls.acc.public_key())['result']['value']
+            print('balance:', balance)
             print("Done\n")
 
         info = http_client.get_account_info(cls.caller)
@@ -175,7 +177,7 @@ class EvmLoaderTests(unittest.TestCase):
         if owner is None:
             res = spl.call("create-token")
         else:
-            res = spl.call("create-token --owner {}".format(owner.get_path()))
+            res = spl.call("create-token --owner {}".format(owner))
         if not res.startswith("Creating token "):
             raise Exception("create token error")
         else:
@@ -188,6 +190,7 @@ class EvmLoaderTests(unittest.TestCase):
             res = spl.call("create-account {}".format(token))
         else:
             res = spl.call("create-account {} --owner {}".format(token, owner))
+        print('res:', res)
         if not res.startswith("Creating account "):
             raise Exception("create account error %s" % res)
         else:
@@ -202,15 +205,19 @@ class EvmLoaderTests(unittest.TestCase):
             raise Exception("change owner error")
 
     @staticmethod
-    def tokenMint(mint_id, recipient, amount):
+    def tokenMint(mint_id, recipient, amount, owner=None):
         spl = SplToken(solana_url)
-        res = spl.call("mint {} {} {}".format(mint_id, amount, recipient))
+        if owner is None:
+            res = spl.call("mint {} {} {}".format(mint_id, amount, recipient))
+        else:
+            res = spl.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner))
         print("minting {} tokens for {}".format(amount, recipient))
 
     @staticmethod
     def tokenBalance(acc):
         spl = SplToken(solana_url)
-        return int(spl.call("balance {}".format(acc)).rstrip())
+        res = spl.call("balance --address {}".format(acc))
+        return int(res.rstrip())
 
     def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
         input = "6f0372af" + \
@@ -311,15 +318,16 @@ class EvmLoaderTests(unittest.TestCase):
             else:
                 print("wirdraw Fail")
 
-    def erc20_balance(self, erc20):
+    def erc20_balance(self, erc20, erc20_code):
         input = bytearray.fromhex(
             "0370a08231" +
-            str("%024x" % 0) + self.caller_eth.hex()
+            str("%024x" % 0) + self.caller_ether.hex()
         )
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -328,14 +336,17 @@ class EvmLoaderTests(unittest.TestCase):
 
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
+        print("result:", result)
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[messages.index("Program log: Succeed") + 1]
-        if not res.startswith("Program log: "):
-            raise Exception("Invalid program logs: no result")
+        res = messages[-1]
+        print("res:", res)
+        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
+            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
-            return int(res[13:], 16)
+            return result
 
-    def erc20_transfer(self, erc20, eth_to, amount):
+
+    def erc20_transfer(self, erc20, erc20_code, eth_to, amount):
         input = bytearray.fromhex(
             "a9059cbb" +
             str("%024x" % 0) + eth_to +
@@ -352,7 +363,7 @@ class EvmLoaderTests(unittest.TestCase):
         trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
         eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v % 2 == 0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
         keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
-        evm_instruction = self.caller_eth + eth_sig + trx_rlp
+        evm_instruction = self.caller_ether + eth_sig + trx_rlp
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -361,6 +372,7 @@ class EvmLoaderTests(unittest.TestCase):
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -369,16 +381,13 @@ class EvmLoaderTests(unittest.TestCase):
         result = http_client.send_transaction(trx, self.acc)
         result = confirm_transaction(http_client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
-        print("erc20 transfer signature: {}".format(result["result"]["transaction"]["signatures"][0]))
-        res = messages[messages.index("Program %s failed" % evm_loader_id) + 1]
-        print(res)
-        if not res.startswith("Program log: "):
-            raise Exception("Invalid program logs: no result")
+        res = messages[-1]
+        print("res:", res)
+        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
+            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
-            if int(res[13:], 16) == 1:
-                print("transfer OK")
-            else:
-                print("transfer Fail")
+            return res
+
 
     def erc20_balance_ext(self, erc20, erc20_code):
         input = bytearray.fromhex("0340b6674d")
@@ -432,19 +441,13 @@ class EvmLoaderTests(unittest.TestCase):
             return res
 
     def test_erc20(self):
-        token = self.createToken(self.wallet)
+        token = self.createToken()
         print("token:", token)
 
-        balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
+        balance_erc20 = self.createTokenAccount(token)
         print("balance_erc20:", balance_erc20)
         print('create account balance_erc20 = {balance_erc20} for erc20Id_precalculated = {erc20Id_precalculated}:'
               .format(balance_erc20=balance_erc20, erc20Id_precalculated=self.erc20Id_precalculated))
-
-        client_wallet = RandomAccount()
-        print("client_wallet:", client_wallet.get_path(), client_wallet.get_acc().public_key())
-        client_acc = self.createTokenAccount(token, client_wallet.get_path())
-        print('client_wallet: create account client_acc = {client_acc} for client_wallet = {client_wallet}:'
-              .format(client_acc=client_acc, client_wallet=client_wallet.get_path()))
 
         (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
                                                                         , "erc20.bin"
@@ -452,7 +455,6 @@ class EvmLoaderTests(unittest.TestCase):
                                                                         , balance_erc20
                                                                         , self.caller
                                                                         , self.caller_ether)
-
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
@@ -461,25 +463,35 @@ class EvmLoaderTests(unittest.TestCase):
         print("erc20 balance_ext():", self.erc20_balance_ext(erc20Id, erc20_code))
         print("erc20 mint_id():", self.erc20_mint_id(erc20Id, erc20_code))
 
+        client_wallet = RandomAccount()
+        client_public_key = client_wallet.get_acc().public_key()
+        print("client public key:", client_public_key)
+        client_acc = self.createTokenAccount(token, client_public_key)
+
+        print('create account = {client_acc} for client public key = {client_public_key}:'
+              .format(client_acc=client_acc, client_public_key=client_public_key))
+
         # self.changeOwner(balance_erc20, erc20Id)
         # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
+        # self.tokenMint(token, balance_erc20, mint_amount, erc20Id)
         self.tokenMint(token, client_acc, mint_amount)
-        time.sleep(20)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
-        assert (self.erc20_balance(erc20Id) == 0)
+        erc20_balance = self.erc20_balance(erc20Id, erc20_code)
+        print('erc20_balance:', erc20_balance)
+        assert (erc20_balance == 0)
 
         deposit_amount = 1
         self.erc20_deposit(client_acc, deposit_amount * (10 ** 9), erc20Id
-                           , erc20_code, balance_erc20, token, self.caller_eth)
+                           , erc20_code, balance_erc20, token, self.caller_ether)
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
-        assert (self.erc20_balance(erc20Id) == deposit_amount * (10 ** 9))
+        assert (self.erc20_balance(erc20Id, erc20_code) == deposit_amount * (10 ** 9))
         self.erc20_withdraw(client_acc, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
-        assert (self.erc20_balance(erc20Id) == 0)
+        assert (self.erc20_balance(erc20Id, erc20_code) == 0)
 
     @unittest.skip("not for CI")
     def test_deposit(self):
