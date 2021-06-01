@@ -499,9 +499,31 @@ fn process_instruction<'a>(
         EvmInstruction::Cancel => {
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
+            let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let _sysvar_info = next_account_info(account_info_iter)?;
 
             let storage = StorageAccount::restore(storage_info)?;
             storage.check_accounts(program_id, accounts)?;
+
+            { // Increment nonce for caller on cancel
+                let mut caller_info_data = AccountData::unpack(&caller_info.data.borrow())?;
+                match caller_info_data {
+                    AccountData::Account(ref mut acc) => {
+                        let (caller, nonce) = storage.caller_and_nonce()?;
+                        if acc.ether != caller {
+                            return Err(ProgramError::InvalidAccountData);
+                        }
+                        if acc.trx_count != nonce {
+                            return Err(ProgramError::InvalidAccountData);
+                        }
+                        acc.trx_count += 1;
+                    },
+                    _ => return Err(ProgramError::InvalidAccountData),
+                };
+                caller_info_data.pack(&mut caller_info.data.borrow_mut())?;
+            }
 
             storage.unblock_accounts_and_destroy(program_id, accounts)?;
 
