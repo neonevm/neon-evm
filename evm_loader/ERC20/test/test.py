@@ -202,9 +202,12 @@ class EvmLoaderTests(unittest.TestCase):
             raise Exception("change owner error")
 
     @staticmethod
-    def tokenMint(mint_id, recipient, amount):
+    def tokenMint(mint_id, recipient, amount, owner=None):
         spl = SplToken(solana_url)
-        res = spl.call("mint {} {} {}".format(mint_id, amount, recipient))
+        if owner is None:
+            res = spl.call("mint {} {} {}".format(mint_id, amount, recipient))
+        else:
+            res = spl.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner.get_path()))
         print("minting {} tokens for {}".format(amount, recipient))
 
     @staticmethod
@@ -464,7 +467,7 @@ class EvmLoaderTests(unittest.TestCase):
         # self.changeOwner(balance_erc20, erc20Id)
         # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
-        self.tokenMint(token, client_acc, mint_amount)
+        self.tokenMint(token, client_acc, mint_amount, self.wallet)
         time.sleep(20)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
