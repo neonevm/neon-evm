@@ -19,7 +19,7 @@ from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
 from hashlib import sha256
 from sha3 import keccak_256
 import rlp
-
+import json
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -178,9 +178,8 @@ class EvmLoader:
         print("Evm loader program: {}".format(self.loader_id))
 
 
-    def deploy(self, contract_path, caller):
-        cmd = "deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller)
-        print(cmd)
+    def deploy(self, contract_path, caller = None):
+        print('deploy caller:', caller)
         output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
@@ -233,6 +232,7 @@ class EvmLoader:
         info = client.get_account_info(solana)
         print("checkAccount({}): {}".format(solana, info))
 
+
     def deployChecked(self, location, caller, caller_ether):
         trx_count = getTransactionCount(client, caller)
         ether = keccak_256(rlp.encode((caller_ether, trx_count))).digest()[-20:]
@@ -247,6 +247,7 @@ class EvmLoader:
             raise Exception("Invalid owner for account {}".format(program))
         else:
             return (program[0], ether, code[0])
+
 
     def createEtherAccountTrx(self,  ether,  code_acc=None):
         if isinstance(ether, str):
