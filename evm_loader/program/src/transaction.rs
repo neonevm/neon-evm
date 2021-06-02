@@ -8,7 +8,7 @@ use solana_program::{
     secp256k1_program,
 };
 use std::convert::Into;
-use crate::utils::keccak256_digest;
+use crate::utils::{keccak256_digest, ecrecover, EcrecoverError};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -127,17 +127,13 @@ pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
     (tx.nonce, tx.to, tx.call_data)
 }
 
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), secp256k1::Error> {
+pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, EcrecoverError> {
     let digest = keccak256_digest(unsigned_trx);
-    let message = secp256k1::Message::parse_slice(&digest)?;
 
-    let recovery_id = secp256k1::RecoveryId::parse(signature[64])?;
-    let signature = secp256k1::Signature::parse_slice(&signature[0..64])?;
+    let public_key = ecrecover(&digest, signature[64], &signature[0..64])?;
 
-    let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
-    if secp256k1::verify(&message, &signature, &public_key) {
-        Ok(())
-    } else {
-        Err(secp256k1::Error::InvalidSignature)
-    }
+    let address = keccak256_digest(&public_key.to_bytes());
+    let address = H160::from_slice(&address[12..32]);
+
+    Ok(address)
 }
