@@ -485,11 +485,10 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
 
-            let mut storage = match StorageAccount::restore(storage_info) {
-                Ok(storage) => storage,
-                Err(ProgramError::InvalidAccountData) => return Err(EvmLoaderError::StorageAccountUninitialized.into()),
-                Err(err) => return Err(err),
-            };
+            let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
+                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
+                else {err}
+            })?;
             storage.check_accounts(program_id, accounts)?;
 
             let caller_and_nonce = storage.caller_and_nonce()?;
