@@ -29,7 +29,7 @@ use crate::{
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
-    error::EVMLoaderError,
+    error::EvmLoaderError,
 };
 use evm::{
     backend::{Backend},
@@ -487,7 +487,7 @@ fn process_instruction<'a>(
 
             let mut storage = match StorageAccount::restore(storage_info) {
                 Ok(storage) => storage,
-                Err(ProgramError::InvalidAccountData) => return Err(EVMLoaderError::StorageAccountUninitialized.into()),
+                Err(ProgramError::InvalidAccountData) => return Err(EvmLoaderError::StorageAccountUninitialized.into()),
                 Err(err) => return Err(err),
             };
             storage.check_accounts(program_id, accounts)?;

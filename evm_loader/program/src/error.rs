@@ -6,7 +6,7 @@ use thiserror::Error;
 
 /// Errors that may be returned by the EVM Loader program.
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
-pub enum EVMLoaderError {
+pub enum EvmLoaderError {
     /// Storage Account is uninitialized.
     #[error("Storage Account is uninitialized")]
     StorageAccountUninitialized,
@@ -15,13 +15,13 @@ pub enum EVMLoaderError {
     SomeError,
 }
 
-impl From<EVMLoaderError> for ProgramError {
-    fn from(e: EVMLoaderError) -> Self {
+impl From<EvmLoaderError> for ProgramError {
+    fn from(e: EvmLoaderError) -> Self {
         ProgramError::Custom(e as u32)
     }
 }
 
-impl<T> DecodeError<T> for EVMLoaderError {
+impl<T> DecodeError<T> for EvmLoaderError {
     fn type_of() -> &'static str {
         "EVMLoaderError"
     }
