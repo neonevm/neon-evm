@@ -17,7 +17,7 @@ pub enum EVMLoaderError {
 
 impl From<EVMLoaderError> for ProgramError {
     fn from(e: EVMLoaderError) -> Self {
-        ProgramError::Custom(0xff00ff00 + (e as u32))
+        ProgramError::Custom(e as u32)
     }
 }
 
