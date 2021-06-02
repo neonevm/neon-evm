@@ -548,8 +548,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
         let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-        debug_print!("  executor initialized");
 
         let code_data = {
             let data = program_code.data.borrow();
