@@ -1,6 +1,6 @@
 import base58
 import unittest
-from eth_tx_utils import make_keccak_instruction_data, Trx
+from eth_tx_utils import make_keccak_instruction_data, Trx, make_instruction_data_from_tx
 from web3.auto import w3
 from solana_utils import *
 from re import search
@@ -109,7 +109,10 @@ class EvmLoaderTests(unittest.TestCase):
         cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
-        cls.caller_ether = solana2ether(cls.acc.public_key())
+        # cls.caller_ether = solana2ether(cls.acc.public_key())
+        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        # cls.caller_ether = cls.acc.public_key().to_canonical_address()
+
         print('cls.caller_ether:', cls.caller_ether.hex())
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
         print('cls.caller:', cls.caller)
@@ -188,49 +191,49 @@ class EvmLoaderTests(unittest.TestCase):
         return int(res.rstrip())
 
     def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
-        input = "6f0372af" + \
+        input_hex = "6f0372af" + \
                 base58.b58decode(payer).hex() + \
                 str("%024x" % 0) + receiver_erc20.hex() + \
                 self.acc.public_key()._key.hex() + \
                 "%064x" % amount
 
+        input = bytes.fromhex(input_hex)
+
         info = getAccountData(client, self.caller, ACCOUNT_INFO_LAYOUT.sizeof())
         caller_trx_cnt = int.from_bytes(AccountInfo.frombytes(info).trx_count, 'little')
 
-        trx_raw = {'to': solana2ether(erc20), 'value': 0, 'gas': 0, 'gasPrice': 0, 'nonce': caller_trx_cnt,
-                   'data': input, 'chainId': 1}
-        trx_signed = w3.eth.account.sign_transaction(trx_raw, self.caller_eth_pr_key.key)
-        trx_parsed = Trx.fromString(trx_signed.rawTransaction)
-        trx_rlp = trx_parsed.get_msg(trx_raw['chainId'])
-        eth_sig = eth_keys.Signature(vrs=[1 if trx_parsed.v % 2 == 0 else 0, trx_parsed.r, trx_parsed.s]).to_bytes()
-        keccak_instruction = make_keccak_instruction_data(1, len(trx_rlp))
-        evm_instruction = self.caller_ether + eth_sig + trx_rlp
+        trx_raw = {'to': solana2ether(erc20), 'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt-1,
+                   'data': input, 'chainId': 111}
 
-        trx = Transaction().add(
-            TransactionInstruction(program_id=keccakprog,
-                                   data=keccak_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
-                                   ])).add(
-            TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ]))
+        (from_address, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
+        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        evm_instruction = from_address + sign + msg
+        assert (from_address == self.caller_ether)
 
-        print('sleeping...')
-        time.sleep(11)
-        print('send_transaction:', input)
+        trx = Transaction()
+        trx.add(TransactionInstruction(program_id=keccakprog,
+                                       data=keccak_instruction,
+                                       keys=[
+                                           AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+                                       ]))
+        trx.add(TransactionInstruction(program_id=self.loader.loader_id,
+                                       data=bytearray.fromhex("05") + evm_instruction,
+                                       keys=[
+                                           AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                           AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
+                                           AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                           # AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+                                           AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+                                           AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                       ]))
+
+        print('send_transaction:', evm_instruction.hex())
         result = client.send_transaction(trx, self.acc)
         print('result:', result)
         result = confirm_transaction(client, result["result"])
