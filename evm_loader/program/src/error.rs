@@ -7,12 +7,12 @@ use thiserror::Error;
 /// Errors that may be returned by the EVM Loader program.
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
 pub enum EvmLoaderError {
+    /// Unknown Error.
+    #[error("Unknown error. Attention required.")]
+    UnknownError,
     /// Storage Account is uninitialized.
     #[error("Storage Account is uninitialized")]
     StorageAccountUninitialized,
-    /// SomeError.
-    #[error("Some error")]
-    SomeError,
 }
 
 impl From<EvmLoaderError> for ProgramError {
