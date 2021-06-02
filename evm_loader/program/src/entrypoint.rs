@@ -213,12 +213,11 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-
-// TODO: Enable after #23 "Support syscall `ecrecover`"
-/*            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
-                debug_print!("{}", e);
+            
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!("{:?}", e);
                 return Err(ProgramError::InvalidInstructionData);
-            }*/
+            }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
@@ -299,11 +298,10 @@ fn process_instruction<'a>(
                 let (trx, _rest) = rest.split_at(trx_len as usize);
                 (trx.to_vec(), signature.to_vec())
             };
-// TODO: Enable after #23 "Support syscall `ecrecover`"
-/*            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
-                debug_print!("{}", e);
+            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
+                debug_print!("{:?}", e);
                 return Err(ProgramError::InvalidInstructionData);
-            }*/
+            }
             let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let nonce = trx.nonce;
             let data = trx.call_data;

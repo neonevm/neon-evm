@@ -14,7 +14,7 @@ use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
     solidity_account::SolidityAccount,
-    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
+    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest, ecrecover},
 };
 
 pub trait AccountStorage {
@@ -77,25 +77,20 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("input: {}", &hex::encode(&input));
     
         if input.len() != 128 {
-            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
         }
 
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
-        let message = secp256k1::Message::parse(&msg);
+
         let v = U256::from(v).as_u32() as u8;
-        let signature = secp256k1::Signature::parse(&sig);
-        let recoveryId = match secp256k1::RecoveryId::parse_rpc(v) {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+        let recovery_id = v - 27;
+        let public_key = match ecrecover(&msg[..], recovery_id, &sig[..]) {
+            Ok(key) => key,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
-
-        let public_key = match secp256k1::recover(&message, &signature, &recoveryId) {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
-        };
-
-        let mut address = keccak256_digest(&public_key.serialize()[1..]);
+    
+        let mut address = keccak256_digest(&public_key.to_bytes());
         for i in 0..12 { address[i] = 0 }
         debug_print!("{}", &hex::encode(&address));
 
