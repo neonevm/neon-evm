@@ -108,6 +108,8 @@ fn process_instruction<'a>(
     instruction_data: &[u8],
 ) -> ProgramResult {
 
+    debug_print!("Instruction: {:?}", instruction_data);
+
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;

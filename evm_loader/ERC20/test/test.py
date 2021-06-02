@@ -114,14 +114,12 @@ class EvmLoaderTests(unittest.TestCase):
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
         print('cls.caller:', cls.caller)
 
-        if getBalance(cls.acc.public_key()) == 0:
-            print("Create user account...")
+        while getBalance(cls.acc.public_key()) == 0:
             tx = client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
             confirm_transaction(client, tx['result'])
-            time.sleep(3)
+            time.sleep(1)
             balance = client.get_balance(cls.acc.public_key())['result']['value']
             print('balance:', balance)
-            print("Done\n")
 
         info = client.get_account_info(cls.caller)
         if info['result']['value'] is None:
@@ -212,7 +210,7 @@ class EvmLoaderTests(unittest.TestCase):
             TransactionInstruction(program_id=keccakprog,
                                    data=keccak_instruction,
                                    keys=[
-                                       AccountMeta(pubkey=PublicKey(keccakprog), is_signer=True, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
                                    ])).add(
             TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("05") + evm_instruction,
@@ -221,16 +219,18 @@ class EvmLoaderTests(unittest.TestCase):
                                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ]))
 
-        print('send_transaction:', trx)
+        print('sleeping...')
+        time.sleep(11)
+        print('send_transaction:', input)
         result = client.send_transaction(trx, self.acc)
         print('result:', result)
         result = confirm_transaction(client, result["result"])
