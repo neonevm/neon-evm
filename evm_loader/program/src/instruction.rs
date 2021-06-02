@@ -71,14 +71,6 @@ pub enum EvmInstruction<'a> {
         bytes: &'a [u8],
     },
 
-    /// Execute Ethereum transaction from account data
-    /// # Account references
-    ///   0. [] The account with transaction for execution
-    ///   1. [WRITE] Caller (Ether account)
-    ///   ... another accounts
-    ///   2. [] Clock sysvar
-    ExecuteTrxFromAccountData,
-
     ///
     /// Create ethereum account with seed
     /// # Account references
@@ -240,9 +232,6 @@ impl<'a> EvmInstruction<'a> {
                     rest = rest2;
                 }
                 EvmInstruction::OnEvent {address, topics, data: rest}
-            },
-            8 => {
-                EvmInstruction::ExecuteTrxFromAccountData
             },
             9 => {
                 let (step_count, rest) = rest.split_at(8);

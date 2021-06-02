@@ -18,6 +18,8 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 class EventTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_event.py setUpClass")
+
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -35,7 +37,8 @@ class EventTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(CONTRACTS_DIR+"ReturnsEvents.binary", solana2ether(cls.acc.public_key()))
+        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"ReturnsEvents.binary", cls.caller, cls.caller_ether)
         print ('contract', cls.reId)
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
