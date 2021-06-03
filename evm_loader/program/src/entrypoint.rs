@@ -190,90 +190,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
-            do_call(program_id, accounts, &bytes, None)
-        },
-        EvmInstruction::ExecuteTrxFromAccountData => {
-            debug_print!("Execute transaction from account data");
-
-            let account_info_iter = &mut accounts.iter();
-            let trx_info = next_account_info(account_info_iter)?;
-
-            let (unsigned_msg, signature) = {
-                let data = trx_info.data.borrow();
-                let account_info_data = AccountData::unpack(&data)?;
-                match account_info_data {
-                    AccountData::Empty => (),
-                    _ => return Err(ProgramError::InvalidAccountData),
-                };
-
-                let (acc_header, rest) = data.split_at(account_info_data.size());
-                let (signature, rest) = rest.split_at(65);
-                let (trx_len, rest) = rest.split_at(8);
-                let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-                let (trx, _rest) = rest.split_at(trx_len as usize);
-                (trx.to_vec(), signature.to_vec())
-            };
-
-            if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
-                debug_print!("{}", e);
-                return Err(ProgramError::InvalidInstructionData);
-            }
-            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
-    
-            let (exit_reason, result, applies_logs) = {
-                let caller = account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?;  
-                if caller.get_nonce() != trx.nonce {
-                    debug_print!("Invalid nonce: actual {}, expect {}", trx.nonce, caller.get_nonce());
-                    return Err(ProgramError::InvalidInstructionData);
-                }
-                let caller_ether = caller.get_ether();
-        
-                let backend = SolanaBackend::new(&account_storage, Some(accounts));
-                debug_print!("  backend initialized");
-
-                if trx.chain_id != backend.chain_id() {
-                    debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
-                    return Err(ProgramError::InvalidInstructionData); 
-                }
-            
-                let config = evm::Config::istanbul();
-                let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-                debug_print!("Executor initialized");
-
-                let exit_reason = match trx.to {
-                    None => {
-                        executor.transact_create(caller_ether, U256::zero(), trx.call_data, usize::max_value())
-                    },
-                    Some(contract) => {
-                        debug_print!("Not supported");
-                        ExitReason::Fatal(ExitFatal::NotSupported)
-                    },
-                };
-
-                if exit_reason.is_succeed() {
-                    debug_print!("Succeed execution");
-                    let (applies, logs) = executor.deconstruct();
-                    (exit_reason, Vec::new(), Some((applies, logs)))
-                } else {
-                    (exit_reason, Vec::new(), None)
-                }
-            };      
-
-            if applies_logs.is_some() {
-                let (applies, logs) = applies_logs.unwrap();
-
-                account_storage.apply(applies, false)?;
-                debug_print!("Applies done");
-                for log in logs {
-                    invoke(&on_event(program_id, log)?, &accounts)?;
-                }
-            }
-
-            invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
-
-            Ok(())
+            do_call(program_id, accounts, bytes.to_vec(), None)
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
@@ -388,7 +305,7 @@ fn process_instruction<'a>(
             let program_eth: H160 = keccak256_h256(&program_info.key.to_bytes()).into();
             let caller_eth: H160 = keccak256_h256(&caller_info.key.to_bytes()).into(); 
 
-            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
+            do_call(program_id, accounts, data, Some( (caller, nonce) ))
         },
         EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg} => {    
             let account_info_iter = &mut accounts.iter();
@@ -453,7 +370,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidAccountData);
             }    
 
-            do_call(program_id, accounts, &data, Some( (caller, nonce) ))
+            do_call(program_id, accounts, data, Some( (caller, nonce) ))
         },
         EvmInstruction::OnReturn {status, bytes} => {
             Ok(())
@@ -631,8 +548,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
         let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
-        debug_print!("  executor initialized");
 
         let code_data = {
             let data = program_code.data.borrow();
@@ -688,7 +603,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 fn do_call<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
-    instruction_data: &[u8],
+    instruction_data: Vec<u8>,
     from_info: Option<(H160, u64)>,
 ) -> ProgramResult
 {
@@ -704,6 +619,10 @@ fn do_call<'a>(
         caller_info
     };
 
+    if program_info.owner != program_id {
+        return Err(ProgramError::InvalidArgument);
+    }
+
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     check_from_or_signer(program_id, account_storage.get_caller_account(), caller_info, signer_info, from_info)?;
@@ -715,26 +634,32 @@ fn do_call<'a>(
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+        let mut executor = Machine::new(executor_state);
+
         debug_print!("Executor initialized");
 
-        let (exit_reason, result) = executor.transact_call(account_storage.origin(), account_storage.contract(), U256::zero(), instruction_data.to_vec(), usize::max_value());
+        executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+
+        let exit_reason = match executor.execute_n_steps(u64::MAX) {
+            Ok(()) => return Err(ProgramError::InvalidInstructionData),
+            Err(reason) => reason
+        };
+        let result = executor.return_value();
 
         debug_print!("Call done");
 
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
+            let executor_state = executor.into_state();
+            let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)))
         } else {
             (exit_reason, result, None)
         }
     };
 
-    if applies_logs.is_some() {
-        let (applies, logs) = applies_logs.unwrap();
-
+    if let Some((applies, logs)) = applies_logs {
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -742,8 +667,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
-
+    invoke_on_return(&program_id, &accounts, exit_reason.clone(), &result)?;
     Ok(())
 }
 

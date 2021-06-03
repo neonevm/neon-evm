@@ -243,24 +243,5 @@ class DeployTest(unittest.TestCase):
         result = self.call_partial_signed(holder, contract_sol, code_sol)
         print("result", result)
 
-
-    def test_executeTrxFromAccountData(self):
-        (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
-        print("test_executeTrxFromAccountData")
-
-        trx = Transaction()
-        trx.add(TransactionInstruction(program_id=evm_loader_id,
-            data=bytes.fromhex('08'),
-            keys=[
-                AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-            ]))
-        result = send_transaction(client, trx, self.acc)["result"]
-        print("result", result)
-
 if __name__ == '__main__':
     unittest.main()
