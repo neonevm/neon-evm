@@ -195,7 +195,7 @@ class EvmLoaderTests(unittest.TestCase):
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
             value = data[2:]
             ret = int.from_bytes(value, "little")
-            print('erc20_deposit:', 'OK' if ret is not 0 else 'FAIL')
+            print('erc20_deposit:', 'OK' if ret != 0 else 'FAIL')
             return ret
 
     def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
@@ -246,7 +246,7 @@ class EvmLoaderTests(unittest.TestCase):
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
             value = data[2:]
             ret = int.from_bytes(value, "little")
-            print('erc20_withdraw:', 'OK' if ret is not 0 else 'FAIL')
+            print('erc20_withdraw:', 'OK' if ret != 0 else 'FAIL')
             return ret
 
     def erc20_balance(self, erc20, erc20_code):
