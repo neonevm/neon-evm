@@ -223,12 +223,12 @@ class EvmLoaderTests(unittest.TestCase):
                                            AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                           AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                                            AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                                           AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                        ]))
         s = 6
