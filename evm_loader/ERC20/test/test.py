@@ -1,3 +1,4 @@
+from enum import Enum
 import base58
 import unittest
 from eth_tx_utils import make_keccak_instruction_data, Trx, make_instruction_data_from_tx
@@ -12,6 +13,12 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
+
+
+class Mode(Enum):
+    NORMAL = 1
+    BEGIN = 2
+    CONTINUE = 3
 
 
 class SplToken:
@@ -141,7 +148,30 @@ class EvmLoaderTests(unittest.TestCase):
         res = spl.call("balance --address {}".format(acc))
         return int(res.rstrip())
 
-    def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
+    def create_storage_account(self, seed):
+        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
+        print("Storage", storage)
+
+        if getBalance(storage) == 0:
+            trx = Transaction()
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
+            send_transaction(client, trx, self.acc)
+        return storage
+
+    def erc20_deposit_iterative(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
+        storage = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
+                                     , Mode.BEGIN)
+
+        while True:
+            result = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
+                                        , Mode.CONTINUE, 50, storage)["result"]
+            if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']:
+                data = base58.b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if data[0] == 6:
+                    return result
+
+    def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20,
+                      mode=Mode.NORMAL, step_count=10, storage=None):
         input = bytes.fromhex(
             "6f0372af" +
             base58.b58decode(payer).hex() +
@@ -155,7 +185,15 @@ class EvmLoaderTests(unittest.TestCase):
                    'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
         keccak_input = make_keccak_instruction_data(1, len(msg))
-        evm_instruction = from_addr + sign + msg
+
+        trx_input = {
+            Mode.NORMAL: bytes.fromhex("05") + from_addr + sign + msg,
+            Mode.BEGIN: bytes.fromhex("09") + step_count.to_bytes(8, byteorder='little') + from_addr + sign + msg,
+            Mode.CONTINUE: bytes.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+        }[mode]
+
+        if mode is Mode.BEGIN:
+            storage = self.create_storage_account(sign[:8].hex())
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog,
@@ -165,7 +203,7 @@ class EvmLoaderTests(unittest.TestCase):
                                                    is_writable=False),
                                    ])).add(
             TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   data=trx_input,
                                    keys=[
                                        AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
@@ -182,6 +220,12 @@ class EvmLoaderTests(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         print(result)
+
+        if mode is Mode.BEGIN:
+            return storage
+        if mode is Mode.CONTINUE:
+            return result
+
         messages = result["result"]["meta"]["logMessages"]
         res = messages[-1]
         print('erc20_deposit:', res)
@@ -195,7 +239,7 @@ class EvmLoaderTests(unittest.TestCase):
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
             value = data[2:]
             ret = int.from_bytes(value, "little")
-            print('erc20_deposit:', 'OK' if ret is not 0 else 'FAIL')
+            print('erc20_deposit:', 'OK' if ret != 0 else 'FAIL')
             return ret
 
     def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
@@ -246,7 +290,7 @@ class EvmLoaderTests(unittest.TestCase):
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
             value = data[2:]
             ret = int.from_bytes(value, "little")
-            print('erc20_withdraw:', 'OK' if ret is not 0 else 'FAIL')
+            print('erc20_withdraw:', 'OK' if ret != 0 else 'FAIL')
             return ret
 
     def erc20_balance(self, erc20, erc20_code):
