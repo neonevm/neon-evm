@@ -436,8 +436,8 @@ class EvmLoaderTests(unittest.TestCase):
         print('create account balance_erc20 = {balance_erc20} for erc20Id_precalculated = {erc20Id_precalculated}:'
               .format(balance_erc20=balance_erc20, erc20Id_precalculated=self.erc20Id_precalculated))
 
-        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("erc20_ctor_uninit.hex"
-                                                                        , "erc20.bin"
+        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("ERC20.bin"
+                                                                        , "erc20.binary"
                                                                         , token
                                                                         , balance_erc20
                                                                         , self.caller

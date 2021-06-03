@@ -375,7 +375,7 @@ contract ERC20 is Context, IERC20 {
     function deposit ( uint256 from, address to, uint256 signer, uint amount) public returns (bool)
     {
         bytes memory signer_ = packMeta(true, false, signer);
-        transferExt(from, _balance_ext, signer_, amount);
+//        transferExt(from, _balance_ext, signer_, amount);
         _mint(to, amount);
         return true;    
     }
