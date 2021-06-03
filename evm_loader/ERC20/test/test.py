@@ -202,7 +202,7 @@ class EvmLoaderTests(unittest.TestCase):
         info = getAccountData(client, self.caller, ACCOUNT_INFO_LAYOUT.sizeof())
         caller_trx_cnt = int.from_bytes(AccountInfo.frombytes(info).trx_count, 'little')
 
-        trx_raw = {'to': solana2ether(erc20), 'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt-1,
+        trx_raw = {'to': solana2ether(erc20), 'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt-0,
                    'data': input, 'chainId': 111}
 
         (from_address, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
@@ -231,16 +231,21 @@ class EvmLoaderTests(unittest.TestCase):
                                            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                        ]))
-
+        s = 6
+        print('sleeping:', s, 's')
+        time.sleep(s)
         print('send_transaction:', evm_instruction.hex())
         result = client.send_transaction(trx, self.acc)
         print('result:', result)
         result = confirm_transaction(client, result["result"])
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[messages.index("Program log: Succeed") + 1]
-        if not res.startswith("Program log: "):
-            raise Exception("Invalid program logs: no result")
+        res = messages[-1]
+        print("res:", res)
+        if any(search("Program %s failed" % evm_loader_id, lm) for lm in messages):
+            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
+            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
+            print('src_data:', src_data)
             if int(res[13:], 16) == 1:
                 print("deposit OK")
             else:
