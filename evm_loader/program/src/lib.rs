@@ -6,7 +6,7 @@
 //! An ERC20-like Token program for the Solana blockchain
 #[macro_use]
 mod debug;
-// mod error;
+mod error;
 pub mod entrypoint;
 //pub mod error;
 //pub mod instruction;

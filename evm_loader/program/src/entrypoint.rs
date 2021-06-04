@@ -28,7 +28,8 @@ use crate::{
     transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction, check_secp256k1_instruction},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
-    storage_account::{ StorageAccount }
+    storage_account::{ StorageAccount },
+    error::EvmLoaderError,
 };
 use evm::{
     backend::{Backend},
@@ -401,7 +402,10 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
 
-            let mut storage = StorageAccount::restore(storage_info)?;
+            let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
+                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
+                else {err}
+            })?;
             storage.check_accounts(program_id, accounts)?;
 
             let caller_and_nonce = storage.caller_and_nonce()?;
