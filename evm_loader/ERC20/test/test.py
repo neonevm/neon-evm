@@ -28,22 +28,25 @@ class SplToken:
             raise
 
 
-def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller, caller_ether):
-    ctor_init = str("%064x" % 0xa0) + \
-                str("%064x" % 0xe0) + \
-                str("%064x" % 0x9) + \
-                base58.b58decode(balance_erc20).hex() + \
-                base58.b58decode(mintId).hex() + \
-                str("%064x" % 0x1) + \
-                str("77%062x" % 0x00) + \
-                str("%064x" % 0x1) + \
-                str("77%062x" % 0x00)
+class EvmLoaderERC20(EvmLoader):
+    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller):
+        ctor_init = str("%064x" % 0xa0) + \
+                    str("%064x" % 0xe0) + \
+                    str("%064x" % 0x9) + \
+                    base58.b58decode(balance_erc20).hex() + \
+                    base58.b58decode(mintId).hex() + \
+                    str("%064x" % 0x1) + \
+                    str("77%062x" % 0x00) + \
+                    str("%064x" % 0x1) + \
+                    str("77%062x" % 0x00)
 
-    with open(location_hex, mode='r') as hex:
-        binary = bytearray.fromhex(hex.read() + ctor_init)
-        with open(location_bin, mode='wb') as bin:
-            bin.write(binary)
-            return self.deploy(location_bin, caller)
+        with open(location_hex, mode='r') as hex:
+            binary = bytearray.fromhex(hex.read() + ctor_init)
+            with open(location_bin, mode='wb') as bin:
+                bin.write(binary)
+                res = self.deploy(location_bin, caller)
+                return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
+
 
 
 class ERC20test(unittest.TestCase):
@@ -51,6 +54,7 @@ class ERC20test(unittest.TestCase):
     def setUpClass(cls):
         cls.wallet = RandomAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
+        cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
@@ -59,7 +63,8 @@ class ERC20test(unittest.TestCase):
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
         print('cls.caller:', cls.caller)
 
-        while getBalance(cls.acc.public_key()) == 0:
+        balance = client.get_balance(cls.acc.public_key())['result']['value']
+        while balance == 0:
             tx = client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
             confirm_transaction(client, tx['result'])
             time.sleep(1)
@@ -359,12 +364,11 @@ class ERC20test(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
         print("balance_erc20:", balance_erc20)
 
-        (erc20Id, erc20Id_ether, erc20_code) = deploy_erc20("ERC20.bin"
-                                                            , "erc20.binary"
-                                                            , token
-                                                            , balance_erc20
-                                                            , self.caller
-                                                            , self.caller_ether)
+        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("ERC20.bin"
+                                                                        , "erc20.binary"
+                                                                        , token
+                                                                        , balance_erc20
+                                                                        , self.caller)
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
