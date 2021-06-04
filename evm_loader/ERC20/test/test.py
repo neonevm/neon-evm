@@ -301,12 +301,20 @@ class ERC20test(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ]))
         result = send_transaction(client, trx, self.acc)
+        print(result)
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[-1]
         if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
             raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
-            return res
+            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][1]['data']
+            data = base58.b58decode(src_data)
+            instruction = data[0]
+            self.assertEqual(instruction, 6)  # 6 means OnReturn
+            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+            value = data[2:]
+            ret = int.from_bytes(value, "little")
+            print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
+            return ret
 
     def erc20_balance_ext(self, erc20, erc20_code):
         input = bytearray.fromhex("0340b6674d")
@@ -436,8 +444,9 @@ class ERC20test(unittest.TestCase):
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20Id = "9EWuA4YE7ABVKQEg1CChcQdozi93w5kLjo8wn3ZB9NKy"
-        self.erc20_transfer(erc20Id, "0000000000000000000000000000000000000011", 0)
+        erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
+        erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
+        self.erc20_transfer(erc20_id, erc20_code, "0000000000000000000000000000000000000011", 0)
 
 
 if __name__ == '__main__':
