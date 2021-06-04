@@ -28,40 +28,29 @@ class SplToken:
             raise
 
 
-class EvmLoaderERC20(EvmLoader):
-    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller, caller_ether):
-        ctor_init = str("%064x" % 0xa0) + \
-                    str("%064x" % 0xe0) + \
-                    str("%064x" % 0x9) + \
-                    base58.b58decode(balance_erc20).hex() + \
-                    base58.b58decode(mintId).hex() + \
-                    str("%064x" % 0x1) + \
-                    str("77%062x" % 0x00) + \
-                    str("%064x" % 0x1) + \
-                    str("77%062x" % 0x00)
+def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller, caller_ether):
+    ctor_init = str("%064x" % 0xa0) + \
+                str("%064x" % 0xe0) + \
+                str("%064x" % 0x9) + \
+                base58.b58decode(balance_erc20).hex() + \
+                base58.b58decode(mintId).hex() + \
+                str("%064x" % 0x1) + \
+                str("77%062x" % 0x00) + \
+                str("%064x" % 0x1) + \
+                str("77%062x" % 0x00)
 
-        with open(location_hex, mode='r') as hex:
-            binary = bytearray.fromhex(hex.read() + ctor_init)
-            with open(location_bin, mode='wb') as bin:
-                bin.write(binary)
-                return self.deployChecked(location_bin, caller, caller_ether)
-
-
-def solana2ether(public_key):
-    from web3 import Web3
-    return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
+    with open(location_hex, mode='r') as hex:
+        binary = bytearray.fromhex(hex.read() + ctor_init)
+        with open(location_bin, mode='wb') as bin:
+            bin.write(binary)
+            return self.deploy(location_bin, caller)
 
 
-def getBalance(account):
-    return client.get_balance(account)['result']['value']
-
-
-class EvmLoaderTests(unittest.TestCase):
+class ERC20test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wallet = RandomAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
-        cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
@@ -183,8 +172,6 @@ class EvmLoaderTests(unittest.TestCase):
         result = send_transaction(client, trx, self.acc)
         print(result)
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[-1]
-        print('erc20_deposit:', res)
         if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
             raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
@@ -234,8 +221,6 @@ class EvmLoaderTests(unittest.TestCase):
         result = send_transaction(client, trx, self.acc)
         print(result)
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[-1]
-        print('erc20_withdraw:', res)
         if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
             raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
@@ -313,7 +298,6 @@ class EvmLoaderTests(unittest.TestCase):
         result = send_transaction(client, trx, self.acc)
         messages = result["result"]["meta"]["logMessages"]
         res = messages[-1]
-        print("res:", res)
         if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
             raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
@@ -334,8 +318,6 @@ class EvmLoaderTests(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         messages = result["result"]["meta"]["logMessages"]
-        res = messages[-1]
-        print("balance_ext", res)
         if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
             raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
         else:
@@ -377,12 +359,12 @@ class EvmLoaderTests(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
         print("balance_erc20:", balance_erc20)
 
-        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("ERC20.bin"
-                                                                        , "erc20.binary"
-                                                                        , token
-                                                                        , balance_erc20
-                                                                        , self.caller
-                                                                        , self.caller_ether)
+        (erc20Id, erc20Id_ether, erc20_code) = deploy_erc20("ERC20.bin"
+                                                            , "erc20.binary"
+                                                            , token
+                                                            , balance_erc20
+                                                            , self.caller
+                                                            , self.caller_ether)
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
@@ -393,9 +375,6 @@ class EvmLoaderTests(unittest.TestCase):
 
         client_acc = self.createTokenAccount(token)
 
-        # Remove changeOwner because of createTokenAccount(token, self.erc20Id_precalculated)
-        # self.changeOwner(balance_erc20, erc20Id)
-        # print("balance_erc20 owner changed to {}".format(erc20Id))
         mint_amount = 100
         self.tokenMint(token, client_acc, mint_amount)
         assert (self.tokenBalance(client_acc) == mint_amount)
