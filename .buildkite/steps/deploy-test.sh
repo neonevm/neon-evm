@@ -24,14 +24,6 @@ function cleanup_docker {
 trap cleanup_docker EXIT
 sleep 10
 
-echo "Run tests..."
-#docker run --rm --network evm_loader-deploy_test-net -ti \
-#     -e SOLANA_URL=http://solana:8899 \
-#     --workdir /opt/ \
-#     ${EXTRA_ARGS:-} \
-#     $EVM_LOADER_IMAGE 'deploy-test.sh'
-echo "Run tests return"
-
 echo "Run ERC20 tests..."
 docker run --rm --network evm_loader-deploy_test-net -ti \
      -e SOLANA_URL=http://solana:8899 \
@@ -39,5 +31,13 @@ docker run --rm --network evm_loader-deploy_test-net -ti \
      ${EXTRA_ARGS:-} \
      $EVM_LOADER_IMAGE 'deploy-test.sh'
 echo "Run ERC20 tests return"
+
+echo "Run tests..."
+docker run --rm --network evm_loader-deploy_test-net -ti \
+     -e SOLANA_URL=http://solana:8899 \
+     --workdir /opt/ \
+     ${EXTRA_ARGS:-} \
+     $EVM_LOADER_IMAGE 'deploy-test.sh'
+echo "Run tests return"
 
 exit $?
