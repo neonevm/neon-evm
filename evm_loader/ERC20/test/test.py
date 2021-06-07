@@ -1,6 +1,7 @@
 import base58
 import unittest
 from eth_tx_utils import make_keccak_instruction_data, Trx, make_instruction_data_from_tx
+from eth_utils import abi
 from web3.auto import w3
 from solana_utils import *
 from re import search
@@ -28,8 +29,7 @@ class SplToken:
             raise
 
 
-class EvmLoaderERC20(EvmLoader):
-    def deploy_erc20(self, location_hex, location_bin, mintId, balance_erc20, caller):
+def deploy_erc20(loader, location_hex, location_bin, mintId, balance_erc20, caller):
         ctor_init = str("%064x" % 0xa0) + \
                     str("%064x" % 0xe0) + \
                     str("%064x" % 0x9) + \
@@ -44,7 +44,7 @@ class EvmLoaderERC20(EvmLoader):
             binary = bytearray.fromhex(hex.read() + ctor_init)
             with open(location_bin, mode='wb') as bin:
                 bin.write(binary)
-                res = self.deploy(location_bin, caller)
+                res = loader.deploy(location_bin, caller)
                 return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
 
 
@@ -54,7 +54,8 @@ class ERC20test(unittest.TestCase):
     def setUpClass(cls):
         cls.wallet = RandomAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
-        cls.loader = EvmLoaderERC20(cls.wallet, evm_loader_id)
+        cls.loader = EvmLoader(cls.wallet, evm_loader_id)
+
         # Create ethereum account for user account
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
@@ -78,13 +79,13 @@ class ERC20test(unittest.TestCase):
             print("Done")
             print("solana caller:", caller, 'cls.caller:', cls.caller)
 
-        cls.caller_nonce = getTransactionCount(client, cls.caller)
+        cls.trx_count = getTransactionCount(client, cls.caller)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
+        print("Caller:", cls.caller_ether.hex(), cls.trx_count, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        erc20_id_ether = keccak_256(rlp.encode((cls.caller_ether, cls.caller_nonce))).digest()[-20:]
+        erc20_id_ether = keccak_256(rlp.encode((cls.caller_ether, cls.trx_count))).digest()[-20:]
         (cls.erc20Id_precalculated, _) = cls.loader.ether2program(erc20_id_ether)
         print("cls.erc20Id_precalculated:", cls.erc20Id_precalculated)
 
@@ -113,14 +114,6 @@ class ERC20test(unittest.TestCase):
             return res[17:61]
 
     @staticmethod
-    def changeOwner(acc, owner):
-        spl = SplToken(solana_url)
-        res = spl.call("authorize {} owner {}".format(acc, owner))
-        pos = res.find("New owner: ")
-        if owner != res[pos + 11:pos + 55]:
-            raise Exception("change owner error")
-
-    @staticmethod
     def tokenMint(mint_id, recipient, amount, owner=None):
         spl = SplToken(solana_url)
         if owner is None:
@@ -136,8 +129,8 @@ class ERC20test(unittest.TestCase):
         return int(res.rstrip())
 
     def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
-        input = bytes.fromhex(
-            "6f0372af" +
+        func_name = abi.function_signature_to_4byte_selector('deposit(uint256,address,uint256,uint256)')
+        input = func_name + bytes.fromhex(
             base58.b58decode(payer).hex() +
             str("%024x" % 0) + receiver_erc20.hex() +
             self.acc.public_key()._key.hex() +
@@ -176,23 +169,19 @@ class ERC20test(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         print(result)
-        messages = result["result"]["meta"]["logMessages"]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
-            data = base58.b58decode(src_data)
-            instruction = data[0]
-            self.assertEqual(instruction, 6)  # 6 means OnReturn
-            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            value = data[2:]
-            ret = int.from_bytes(value, "little")
-            print('erc20_deposit:', 'OK' if ret != 0 else 'FAIL')
-            return ret
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "little")
+        print('erc20_deposit:', 'OK' if ret != 0 else 'FAIL')
+        return ret
 
     def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
-        input = bytes.fromhex(
-            "441a3e70" +
+        func_name = abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
+        input = func_name + bytes.fromhex(
             base58.b58decode(receiver).hex() +
             "%064x" % amount
         )
@@ -225,23 +214,19 @@ class ERC20test(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         print(result)
-        messages = result["result"]["meta"]["logMessages"]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
-            data = base58.b58decode(src_data)
-            instruction = data[0]
-            self.assertEqual(instruction, 6)  # 6 means OnReturn
-            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            value = data[2:]
-            ret = int.from_bytes(value, "little")
-            print('erc20_withdraw:', 'OK' if ret != 0 else 'FAIL')
-            return ret
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "little")
+        print('erc20_withdraw:', 'OK' if ret != 0 else 'FAIL')
+        return ret
 
     def erc20_balance(self, erc20, erc20_code):
-        input = bytes.fromhex(
-            "0370a08231" +
+        func_name = abi.function_signature_to_4byte_selector('balanceOf(address)')
+        input = bytes.fromhex("03") + func_name + bytes.fromhex(
             str("%024x" % 0) +
             self.caller_ether.hex()
         )
@@ -259,22 +244,18 @@ class ERC20test(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         print(result)
-        messages = result["result"]["meta"]["logMessages"]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
-            data = base58.b58decode(src_data)
-            instruction = data[0]
-            self.assertEqual(instruction, 6)  # 6 means OnReturn
-            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            value = data[2:]
-            balance = int.from_bytes(value, "big")
-            return balance
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        balance = int.from_bytes(value, "big")
+        return balance
 
     def erc20_transfer(self, erc20, erc20_code, eth_to, amount):
-        input = bytearray.fromhex(
-            "a9059cbb" +
+        func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
+        input = func_name + bytearray.fromhex(
             str("%024x" % 0) + eth_to +
             "%064x" % amount
         )
@@ -302,22 +283,19 @@ class ERC20test(unittest.TestCase):
                                    ]))
         result = send_transaction(client, trx, self.acc)
         print(result)
-        messages = result["result"]["meta"]["logMessages"]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][1]['data']
-            data = base58.b58decode(src_data)
-            instruction = data[0]
-            self.assertEqual(instruction, 6)  # 6 means OnReturn
-            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            value = data[2:]
-            ret = int.from_bytes(value, "little")
-            print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
-            return ret
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "little")
+        print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
+        return ret
 
     def erc20_balance_ext(self, erc20, erc20_code):
-        input = bytearray.fromhex("0340b6674d")
+        func_name = abi.function_signature_to_4byte_selector('balance_ext()')
+        input = bytearray.fromhex("03") + func_name
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
@@ -330,22 +308,20 @@ class ERC20test(unittest.TestCase):
             ]))
 
         result = send_transaction(client, trx, self.acc)
-        messages = result["result"]["meta"]["logMessages"]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
-            data = base58.b58decode(src_data)
-            instruction = data[0]
-            self.assertEqual(instruction, 6)  # 6 means OnReturn
-            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            value = data[2:]
-            balance = int.from_bytes(value, "little")
-            print('balance_ext:', balance)
-            return balance
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        balance = int.from_bytes(value, "little")
+        print('balance_ext:', balance)
+        return balance
 
     def erc20_mint_id(self, erc20, erc20_code):
-        input = bytearray.fromhex("03e132a122")
+        func_name = abi.function_signature_to_4byte_selector('mint_id()')
+        input = bytearray.fromhex("03") + func_name
         trx = Transaction().add(
             TransactionInstruction(program_id=self.loader.loader_id, data=input, keys=
             [
@@ -372,11 +348,12 @@ class ERC20test(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(token, self.erc20Id_precalculated)
         print("balance_erc20:", balance_erc20)
 
-        (erc20Id, erc20Id_ether, erc20_code) = self.loader.deploy_erc20("ERC20.bin"
-                                                                        , "erc20.binary"
-                                                                        , token
-                                                                        , balance_erc20
-                                                                        , self.caller)
+        (erc20Id, erc20Id_ether, erc20_code) = deploy_erc20(self.loader
+                                                            , "ERC20.bin"
+                                                            , "erc20.binary"
+                                                            , token
+                                                            , balance_erc20
+                                                            , self.caller)
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
