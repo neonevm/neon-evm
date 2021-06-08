@@ -354,10 +354,8 @@ class ERC20test(unittest.TestCase):
         print("erc20_id:", erc20Id)
         print("erc20_id_ethereum:", erc20Id_ether.hex())
         print("erc20_code:", erc20_code)
+
         assert (self.erc20Id_precalculated == erc20Id)
-
-        time.sleep(10)
-
         assert(balance_erc20 == self.erc20_balance_ext(erc20Id, erc20_code).decode("utf-8"))
         assert(token == self.erc20_mint_id(erc20Id, erc20_code).decode("utf-8"))
 
