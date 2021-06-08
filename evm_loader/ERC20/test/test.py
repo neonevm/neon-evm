@@ -284,7 +284,7 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(instruction, 6)  # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
-        ret = int.from_bytes(value, "little")
+        ret = int.from_bytes(value, "big")
         print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
         return ret
 
@@ -310,9 +310,8 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(instruction, 6)  # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
-        balance = int.from_bytes(value, "little")
-        print('balance_ext:', balance)
-        return balance
+        balance_address = base58.b58encode(value)
+        return balance_address
 
     def erc20_mint_id(self, erc20, erc20_code):
         func_name = abi.function_signature_to_4byte_selector('mint_id()')
@@ -336,9 +335,8 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(instruction, 6)  # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
-        ret = int.from_bytes(value, "big")
-        assert 0 != ret, 'erc20_mint_id: FAIL'
-        return ret
+        mint_id = base58.b58encode(value)
+        return mint_id
 
     def test_erc20(self):
         token = self.createToken()
@@ -358,8 +356,10 @@ class ERC20test(unittest.TestCase):
         print("erc20_code:", erc20_code)
         assert (self.erc20Id_precalculated == erc20Id)
 
-        print("erc20 balance_ext():", self.erc20_balance_ext(erc20Id, erc20_code))
-        print("erc20 mint_id():", self.erc20_mint_id(erc20Id, erc20_code))
+        time.sleep(10)
+
+        assert(balance_erc20 == self.erc20_balance_ext(erc20Id, erc20_code).decode("utf-8"))
+        assert(token == self.erc20_mint_id(erc20Id, erc20_code).decode("utf-8"))
 
         client_acc = self.createTokenAccount(token)
 
