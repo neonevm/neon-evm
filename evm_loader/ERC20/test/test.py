@@ -4,8 +4,6 @@ from eth_tx_utils import make_keccak_instruction_data, Trx, make_instruction_dat
 from eth_utils import abi
 from web3.auto import w3
 from solana_utils import *
-from re import search
-import time
 
 tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
