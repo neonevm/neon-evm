@@ -52,7 +52,7 @@ def deploy_erc20(loader, location_hex, location_bin, mintId, balance_erc20, call
 class ERC20test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.wallet = RandomAccount(wallet_path())
+        cls.wallet = WalletAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
         cls.loader = EvmLoader(cls.wallet, evm_loader_id)
 
@@ -175,8 +175,8 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(instruction, 6)  # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
-        ret = int.from_bytes(value, "little")
-        print('erc20_deposit:', 'OK' if ret != 0 else 'FAIL')
+        ret = int.from_bytes(value, "big")
+        assert (ret != 0, 'erc20_deposit: FAIL')
         return ret
 
     def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
@@ -220,8 +220,8 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(instruction, 6)  # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
-        ret = int.from_bytes(value, "little")
-        print('erc20_withdraw:', 'OK' if ret != 0 else 'FAIL')
+        ret = int.from_bytes(value, "big")
+        assert (ret != 0, 'erc20_withdraw: FAIL')
         return ret
 
     def erc20_balance(self, erc20, erc20_code):
