@@ -64,13 +64,8 @@ class ERC20test(unittest.TestCase):
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
         print('cls.caller:', cls.caller)
 
-        balance = client.get_balance(cls.acc.public_key())['result']['value']
-        while balance == 0:
-            tx = client.request_airdrop(cls.acc.public_key(), 10 * 10 ** 9)
-            confirm_transaction(client, tx['result'])
-            time.sleep(1)
-            balance = client.get_balance(cls.acc.public_key())['result']['value']
-            print('balance:', balance)
+        balance = getBalance(cls.acc.public_key())
+        print('balance:', balance)
 
         info = client.get_account_info(cls.caller)
         if info['result']['value'] is None:
@@ -79,11 +74,11 @@ class ERC20test(unittest.TestCase):
             print("Done")
             print("solana caller:", caller, 'cls.caller:', cls.caller)
 
-        cls.trx_count = getTransactionCount(client, cls.caller)
-
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_ether.hex(), cls.trx_count, "->", cls.caller,
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
+        cls.trx_count = getTransactionCount(client, cls.caller)
 
         erc20_id_ether = keccak_256(rlp.encode((cls.caller_ether, cls.trx_count))).digest()[-20:]
         (cls.erc20Id_precalculated, _) = cls.loader.ether2program(erc20_id_ether)
@@ -176,7 +171,7 @@ class ERC20test(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
         ret = int.from_bytes(value, "big")
-        assert (ret != 0, 'erc20_deposit: FAIL')
+        assert 0 != ret, 'erc20_deposit: FAIL'
         return ret
 
     def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
@@ -221,7 +216,7 @@ class ERC20test(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         value = data[2:]
         ret = int.from_bytes(value, "big")
-        assert (ret != 0, 'erc20_withdraw: FAIL')
+        assert ret != 0, 'erc20_withdraw: FAIL'
         return ret
 
     def erc20_balance(self, erc20, erc20_code):
@@ -334,12 +329,16 @@ class ERC20test(unittest.TestCase):
             ]))
 
         result = send_transaction(client, trx, self.acc)
-        messages = result["result"]["meta"]["logMessages"]
-        res = messages[-1]
-        if any(search("Program %s failed" % evm_loader_id, m) for m in messages):
-            raise Exception("Invalid program logs: Program %s failed" % evm_loader_id)
-        else:
-            return res
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][0]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        self.assertEqual(instruction, 6)  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "big")
+        assert 0 != ret, 'erc20_mint_id: FAIL'
+        return ret
 
     def test_erc20(self):
         token = self.createToken()
