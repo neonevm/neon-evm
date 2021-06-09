@@ -1,3 +1,4 @@
+from enum import Enum
 import base58
 import unittest
 from eth_tx_utils import make_keccak_instruction_data, Trx, make_instruction_data_from_tx
