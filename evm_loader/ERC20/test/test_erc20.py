@@ -14,6 +14,12 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
+class Mode(Enum):
+    NORMAL = 1
+    BEGIN = 2
+    CONTINUE = 3
+
+
 class SplToken:
     def __init__(self, url):
         self.url = url
@@ -121,7 +127,8 @@ class ERC20test(unittest.TestCase):
         res = spl.call("balance --address {}".format(acc))
         return int(res.rstrip())
 
-    def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
+    def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20,
+                      mode=Mode.NORMAL, step_count=10, storage=None):
         func_name = abi.function_signature_to_4byte_selector('deposit(uint256,address,uint256,uint256)')
         input = func_name + bytes.fromhex(
             base58.b58decode(payer).hex() +
@@ -135,7 +142,15 @@ class ERC20test(unittest.TestCase):
                    'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
         keccak_input = make_keccak_instruction_data(1, len(msg))
-        evm_instruction = from_addr + sign + msg
+
+        trx_input = {
+            Mode.NORMAL: bytes.fromhex("05") + from_addr + sign + msg,
+            Mode.BEGIN: bytes.fromhex("09") + step_count.to_bytes(8, byteorder='little') + from_addr + sign + msg,
+            Mode.CONTINUE: bytes.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+        }[mode]
+
+        if mode is Mode.BEGIN:
+            storage = self.create_storage_account(sign[:8].hex())
 
         trx = Transaction().add(
             TransactionInstruction(program_id=keccakprog,
@@ -145,7 +160,7 @@ class ERC20test(unittest.TestCase):
                                                    is_writable=False),
                                    ])).add(
             TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   data=trx_input,
                                    keys=[
                                        AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
@@ -162,6 +177,12 @@ class ERC20test(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)
         print(result)
+
+        if mode is Mode.BEGIN:
+            return storage
+        if mode is Mode.CONTINUE:
+            return result
+
         src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
         data = base58.b58decode(src_data)
         instruction = data[0]
