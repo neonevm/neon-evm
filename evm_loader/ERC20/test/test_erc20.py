@@ -11,6 +11,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
 class SplToken:
@@ -344,7 +345,7 @@ class ERC20test(unittest.TestCase):
         print("balance_erc20:", balance_erc20)
 
         (erc20Id, erc20Id_ether, erc20_code) = deploy_erc20(self.loader
-                                                            , "ERC20.bin"
+                                                            , CONTRACTS_DIR+"ERC20.bin"
                                                             , "erc20.binary"
                                                             , token
                                                             , balance_erc20
