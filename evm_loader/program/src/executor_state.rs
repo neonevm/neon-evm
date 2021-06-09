@@ -75,6 +75,7 @@ impl ExecutorMetadata {
     //     &mut self.gasometer
     // }
 
+    #[allow(dead_code)]
     pub fn is_static(&self) -> bool {
         self.is_static
     }
@@ -216,7 +217,7 @@ impl ExecutorSubstate {
         self.storages.append(&mut exited.storages);
         self.deletes.append(&mut exited.deletes);
 
-        for (address) in &resets {
+        for address in &resets {
             if self.accounts.contains_key(address){
                 self.accounts.get_mut(&address).unwrap().reset = true;
             }
@@ -410,28 +411,6 @@ impl ExecutorSubstate {
         }
 
         Ok(())
-    }
-
-    // Only needed for jsontests.
-    pub fn withdraw<B: Backend>(
-        &mut self,
-        address: H160,
-        value: U256,
-        backend: &B,
-    ) -> Result<(), ExitError> {
-        let source = self.account_mut(address, backend);
-        if source.basic.balance < value {
-            return Err(ExitError::OutOfFund);
-        }
-        source.basic.balance -= value;
-
-        Ok(())
-    }
-
-    // Only needed for jsontests.
-    pub fn deposit<B: Backend>(&mut self, address: H160, value: U256, backend: &B) {
-        let target = self.account_mut(address, backend);
-        target.basic.balance = target.basic.balance.saturating_add(value);
     }
 
     pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
@@ -662,13 +641,5 @@ impl<B: Backend> ExecutorState<B> {
     ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>)) {
         let (applies, logs) = self.substate.deconstruct(&self.backend);
         (self.backend, (applies, logs))
-    }
-
-    pub fn withdraw(&mut self, address: H160, value: U256) -> Result<(), ExitError> {
-        self.substate.withdraw(address, value, &self.backend)
-    }
-
-    pub fn deposit(&mut self, address: H160, value: U256) {
-        self.substate.deposit(address, value, &self.backend)
     }
 }
