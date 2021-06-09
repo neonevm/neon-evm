@@ -55,8 +55,7 @@ COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
-COPY --from=contracts /ERC20/ /opt/ERC20/
-COPY evm_loader/ERC20/test/test.py /opt/test_erc20.py
+COPY evm_loader/ERC20/test/test_*.py /opt/
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
