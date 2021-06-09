@@ -28,13 +28,9 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/*.sol /opt/
+COPY evm_loader/ERC20/src/*.sol /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
-RUN solc --output-dir . --bin *.sol && \
-    for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
-        ls -l
-COPY evm_loader/ERC20/src/*.sol /ERC20/
-WORKDIR /ERC20/
 RUN solc --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
@@ -60,8 +56,7 @@ COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 COPY --from=contracts /ERC20/ /opt/ERC20/
-COPY evm_loader/ERC20/test/* evm_loader/deploy-test.sh /opt/ERC20/
-RUN ln -s /opt/evm_loader.so /opt/ERC20/evm_loader.so
+COPY evm_loader/ERC20/test/test.py /opt/test_erc20.py
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
