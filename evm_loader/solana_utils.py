@@ -8,8 +8,6 @@ import time
 import os
 import subprocess
 from typing import NamedTuple
-from construct import Bytes, Int8ul, Int32ul
-from construct import Struct as cStruct
 import json
 from eth_keys import keys as eth_keys
 import base64
@@ -19,7 +17,6 @@ from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
 from hashlib import sha256
 from sha3 import keccak_256
 import rlp
-
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -37,32 +34,35 @@ EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/re
 client = Client(solana_url)
 path_to_solana = 'solana'
 
-def confirm_transaction(client, tx_sig, confirmations=1):
+
+def confirm_transaction(http_client, tx_sig, confirmations=1):
     """Confirm a transaction."""
     TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
         print('confirm_transaction for %s', tx_sig)
-        resp = client.get_signature_statuses([tx_sig])
+        resp = http_client.get_signature_statuses([tx_sig])
         print('confirm_transaction: %s', resp)
         if resp["result"]:
             status = resp['result']['value'][0]
-            if status and (status['confirmationStatus'] == 'finalized' or \
-               status['confirmationStatus'] == 'confirmed' and status['confirmations'] >= confirmations):
+            if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
+                           and status['confirmations'] >= confirmations):
                 return
         sleep_time = 1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
 
+
 def accountWithSeed(base, seed, program):
     print(type(base), type(seed), type(program))
-    return PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
+
 
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type = SystemInstructionType.CreateAccountWithSeed,
+            instruction_type=SystemInstructionType.CreateAccountWithSeed,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),
@@ -73,7 +73,8 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
         )
     )
     print("createAccountWithSeed", data.hex())
-    created = accountWithSeed(base, seed, program) #PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    created = accountWithSeed(base, seed,
+                              program)  # PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
     print("created", created)
     return TransactionInstruction(
         keys=[
@@ -84,7 +85,6 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
         program_id=system,
         data=data
     )
-
 
 
 class solana_cli:
@@ -104,6 +104,7 @@ class solana_cli:
             print("ERR: solana error {}".format(err))
             raise
 
+
 class neon_cli:
     def call(self, arguments):
         cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
@@ -114,11 +115,12 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
+
 class RandomAccount:
     def __init__(self, path=None):
         if path == None:
             self.make_random_path()
-            print("New keypair file: {}".format(self.path))    
+            print("New keypair file: {}".format(self.path))
             self.generate_key()
         else:
             self.path = path
@@ -126,14 +128,12 @@ class RandomAccount:
         print('New Public key:', self.acc.public_key())
         print('Private:', self.acc.secret_key())
 
-
     def make_random_path(self):
         import calendar;
         import time;
         ts = calendar.timegm(time.gmtime())
         self.path = str(ts) + '.json'
         time.sleep(1)
-        
 
     def generate_key(self):
         cmd_generate = 'solana-keygen new --no-passphrase --outfile {}'.format(self.path)
@@ -156,12 +156,11 @@ class RandomAccount:
         return self.acc
 
 
-class WalletAccount (RandomAccount):
+class WalletAccount(RandomAccount):
     def __init__(self, path):
         self.path = path
         self.retrieve_keys()
         print('Wallet public key:', self.acc.public_key())
-
 
 
 class EvmLoader:
@@ -177,28 +176,26 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-
-    def deploy(self, contract_path, caller):
-        cmd = "deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller)
-        print(cmd)
+    def deploy(self, contract_path, caller=None):
+        print('deploy caller:', caller)
         output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
 
-
     def createEtherAccount(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
-        else: ether = ether.hex()
+        else:
+            ether = ether.hex()
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         trx = Transaction()
         base = self.acc.get_acc().public_key()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**9,
+            data=bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
+                lamports=10 ** 9,
                 space=0,
                 ether=bytes.fromhex(ether),
                 nonce=nonce)),
@@ -211,11 +208,11 @@ class EvmLoader:
         print('result:', result)
         return sol
 
-
     def ether2seed(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
-        else: ether = ether.hex()
+        else:
+            ether = ether.hex()
         seed = b58encode(bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
@@ -224,7 +221,8 @@ class EvmLoader:
     def ether2program(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
-        else: ether = ether.hex()
+        else:
+            ether = ether.hex()
         output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
         items = output.rstrip().split(' ')
         return (items[0], int(items[1]))
@@ -248,19 +246,20 @@ class EvmLoader:
         else:
             return (program[0], ether, code[0])
 
-    def createEtherAccountTrx(self,  ether,  code_acc=None):
+    def createEtherAccountTrx(self, ether, code_acc=None):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
-        else: ether = ether.hex()
+        else:
+            ether = ether.hex()
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         seed = b58encode(bytes.fromhex(ether))
         base = self.acc.get_acc().public_key()
-        data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**9,
-                space=0,
-                ether=bytes.fromhex(ether),
-                nonce=nonce))
+        data = bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
+            lamports=10 ** 9,
+            space=0,
+            ether=bytes.fromhex(ether),
+            nonce=nonce))
         trx = Transaction()
         if code_acc is None:
             trx.add(TransactionInstruction(
@@ -285,7 +284,8 @@ class EvmLoader:
 
 
 def getBalance(account):
-    return client.get_balance(account, commitment = Confirmed)['result']['value']
+    return client.get_balance(account, commitment=Confirmed)['result']['value']
+
 
 def solana2ether(public_key):
     from web3 import Web3
@@ -303,6 +303,7 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "blocked_by" / Bytes(32),
 )
 
+
 class AccountInfo(NamedTuple):
     eth_acc: eth_keys.PublicKey
     trx_count: int
@@ -312,8 +313,9 @@ class AccountInfo(NamedTuple):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
         return AccountInfo(cont.eth_acc, cont.trx_count)
 
+
 def getAccountData(client, account, expected_length):
-    info = client.get_account_info(account, commitment = Confirmed)['result']['value']
+    info = client.get_account_info(account, commitment=Confirmed)['result']['value']
     if info is None:
         raise Exception("Can't get information about {}".format(account))
 
@@ -331,6 +333,7 @@ def getTransactionCount(client, sol_account):
     print('getTransactionCount {}: {}'.format(sol_account, res))
     return res
 
+
 def wallet_path():
     res = solana_cli().call("config get")
     substr = "Keypair Path: "
@@ -338,6 +341,7 @@ def wallet_path():
         if line.startswith(substr):
             return line[len(substr):].strip()
     raise Exception("cannot get keypair path")
+
 
 def send_transaction(client, trx, acc):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
