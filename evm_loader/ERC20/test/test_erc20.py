@@ -54,6 +54,26 @@ def deploy_erc20(loader, location_hex, location_bin, mintId, balance_erc20, call
             return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
 
 
+def get_keccak_input(msg, mode=Mode.NORMAL):
+    keccak_input = {
+        Mode.NORMAL: make_keccak_instruction_data(1, len(msg)),
+        Mode.BEGIN: make_keccak_instruction_data(1, len(msg), 9),
+        Mode.CONTINUE: make_keccak_instruction_data(1, len(msg), 9),
+    }[mode]
+    print('keccak_input:', keccak_input.hex(), 'mode:', mode)
+    return keccak_input
+
+
+def get_trx_input(from_addr, sign, msg, step_count, mode=Mode.NORMAL):
+    trx_input = {
+        Mode.NORMAL: bytes.fromhex("05") + from_addr + sign + msg,
+        Mode.BEGIN: bytes.fromhex("09") + step_count.to_bytes(8, byteorder='little') + from_addr + sign + msg,
+        Mode.CONTINUE: bytes.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+    }[mode]
+    print('trx_input:', trx_input.hex())
+    return trx_input
+
+
 class ERC20test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -141,18 +161,18 @@ class ERC20test(unittest.TestCase):
 
     def erc20_deposit_iterative(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
         storage = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
-                                     , Mode.BEGIN)
+                                     , Mode.BEGIN, 600)
 
         while True:
             result = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
-                                        , Mode.CONTINUE, 50, storage)["result"]
+                                        , Mode.CONTINUE, 600, storage)["result"]
             if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']:
                 data = base58.b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if data[0] == 6:
                     return result
 
     def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20,
-                      mode=Mode.NORMAL, step_count=10, storage=None):
+                      mode=Mode.NORMAL, step_count=100, storage=None):
         func_name = abi.function_signature_to_4byte_selector('deposit(uint256,address,uint256,uint256)')
         input = func_name + bytes.fromhex(
             base58.b58decode(payer).hex() +
@@ -165,39 +185,43 @@ class ERC20test(unittest.TestCase):
         trx_raw = {'to': solana2ether(erc20), 'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt,
                    'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
-        keccak_input = make_keccak_instruction_data(1, len(msg))
-
-        trx_input = {
-            Mode.NORMAL: bytes.fromhex("05") + from_addr + sign + msg,
-            Mode.BEGIN: bytes.fromhex("09") + step_count.to_bytes(8, byteorder='little') + from_addr + sign + msg,
-            Mode.CONTINUE: bytes.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-        }[mode]
+        keccak_input = get_keccak_input(msg, mode)
+        trx_input = get_trx_input(from_addr, sign, msg, step_count, mode)
 
         if mode is Mode.BEGIN:
             storage = self.create_storage_account(sign[:8].hex())
 
-        trx = Transaction().add(
+        trx = Transaction();
+        if mode is Mode.BEGIN or mode is Mode.NORMAL:
+            trx.add(
             TransactionInstruction(program_id=keccakprog,
                                    data=keccak_input,
                                    keys=[
                                        AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False,
                                                    is_writable=False),
-                                   ])).add(
-            TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=trx_input,
-                                   keys=[
-                                       AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ]))
+
+        trx.add(
+        TransactionInstruction(program_id=self.loader.loader_id,
+                               data=trx_input,
+                               keys=[
+                                   AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=self.acc.public_key(), is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=tokenkeg, is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                               ]))
+
+        if mode is Mode.BEGIN:
+            trx.instructions[1].keys.insert(0, AccountMeta(pubkey=storage, is_signer=False, is_writable=True))
+        if mode is Mode.CONTINUE:
+            trx.instructions[0].keys.insert(0, AccountMeta(pubkey=storage, is_signer=False, is_writable=True))
 
         result = send_transaction(client, trx, self.acc)
         print(result)
@@ -217,7 +241,20 @@ class ERC20test(unittest.TestCase):
         assert 0 != ret, 'erc20_deposit: FAIL'
         return ret
 
-    def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
+    def erc20_withdraw_iterative(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id):
+        storage = self.erc20_withdraw(receiver, amount, erc20, erc20_code, balance_erc20, mint_id
+                                      , Mode.BEGIN, 600)
+
+        while True:
+            result = self.erc20_withdraw(receiver, amount, erc20, erc20_code, balance_erc20, mint_id
+                                         , Mode.CONTINUE, 600, storage)["result"]
+            if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']:
+                data = base58.b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if data[0] == 6:
+                    return result
+
+    def erc20_withdraw(self, receiver, amount, erc20, erc20_code, balance_erc20, mint_id
+                       , mode=Mode.NORMAL, step_count=100, storage=None):
         func_name = abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
         input = func_name + bytes.fromhex(
             base58.b58decode(receiver).hex() +
@@ -228,14 +265,26 @@ class ERC20test(unittest.TestCase):
         trx_raw = {'to': solana2ether(erc20), 'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt,
                    'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(trx_raw, self.acc.secret_key())
-        keccak_input = make_keccak_instruction_data(1, len(msg))
-        evm_instruction = from_addr + sign + msg
+        keccak_input = get_keccak_input(msg, mode)
+        trx_input = get_trx_input(from_addr, sign, msg, step_count, mode)
 
-        trx = Transaction().add(
-            TransactionInstruction(program_id=keccakprog, data=keccak_input, keys=[
-                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])).add(
+        if mode is Mode.BEGIN:
+            storage = self.create_storage_account(sign[:8].hex())
+
+
+        trx = Transaction();
+        if mode is Mode.BEGIN or mode is Mode.NORMAL:
+            trx.add(
+                TransactionInstruction(program_id=keccakprog,
+                                       data=keccak_input,
+                                       keys=[
+                                           AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False,
+                                                       is_writable=False),
+                                       ]))
+
+        trx.add(
             TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   data=trx_input,
                                    keys=[
                                        AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
@@ -250,8 +299,19 @@ class ERC20test(unittest.TestCase):
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ]))
 
+        if mode is Mode.BEGIN:
+            trx.instructions[1].keys.insert(0, AccountMeta(pubkey=storage, is_signer=False, is_writable=True))
+        if mode is Mode.CONTINUE:
+            trx.instructions[0].keys.insert(0, AccountMeta(pubkey=storage, is_signer=False, is_writable=True))
+
         result = send_transaction(client, trx, self.acc)
         print(result)
+
+        if mode is Mode.BEGIN:
+            return storage
+        if mode is Mode.CONTINUE:
+            return result
+
         src_data = result['result']['meta']['innerInstructions'][0]['instructions'][2]['data']
         data = base58.b58decode(src_data)
         instruction = data[0]
@@ -381,6 +441,7 @@ class ERC20test(unittest.TestCase):
         mint_id = base58.b58encode(value)
         return mint_id
 
+    # @unittest.skip("not for CI")
     def test_erc20(self):
         token = self.createToken()
         print("token:", token)
@@ -403,6 +464,7 @@ class ERC20test(unittest.TestCase):
         assert (token == self.erc20_mint_id(erc20Id, erc20_code).decode("utf-8"))
 
         client_acc = self.createTokenAccount(token)
+        print("client_acc:", client_acc)
 
         mint_amount = 100
         self.tokenMint(token, client_acc, mint_amount)
@@ -411,7 +473,7 @@ class ERC20test(unittest.TestCase):
         assert (self.erc20_balance(erc20Id, erc20_code) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit_iterative(client_acc, deposit_amount * (10 ** 9), erc20Id
+        self.erc20_deposit(client_acc, deposit_amount * (10 ** 9), erc20Id
                                      , erc20_code, balance_erc20, token, self.caller_ether)
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
@@ -422,14 +484,30 @@ class ERC20test(unittest.TestCase):
         assert (self.erc20_balance(erc20Id, erc20_code) == 0)
 
     @unittest.skip("not for CI")
+    def test_deposit_iterative(self):
+        print("test_deposit")
+        client_acc = "BPn4j4UzG4XFFgazYDhVt8wntoyaqRGJbfQPzFBwrBRj"
+        erc20_id = "3sKq5KwYzvwB1HAqwrKaohnXTthf5x2qdKhZkc1vGRWf"
+        erc20_code = '57JHWkEr7xEAcpgJd1F6x1X1mPF6kTffe9AAaamDvuE2'
+        balance_erc20 = "7KdAhUjt9nKgTsw4XjQja9FJ5wQao2JAgBjNfKmtFCJo"
+        token = "25AeYuTg2Uey4bYD6D5xjgEmoUXvbjQxZgEKF81p3NUN"
+        receiver_erc20 = bytes.fromhex("82374b4598cc62013cba24cf67f8fd38098aa011")
+        self.erc20_deposit_iterative(client_acc, 900, erc20_id, erc20_code, balance_erc20, token, receiver_erc20)
+        # storage = "6FSYWYck7YYcVS54L7r3uV2GNzKp91UFbN27Z5z95idJ"
+        # result = self.erc20_deposit(client_acc, 900, erc20_id, erc20_code, balance_erc20, token, receiver_erc20
+        #                             , Mode.CONTINUE, 500, storage)["result"]
+        # print('result:', result)
+
+    @unittest.skip("not for CI")
     def test_deposit(self):
         print("test_deposit")
-        client_acc = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
-        erc20Id = "2a5PhGUpnTsCgVL8TjZ5S3LU76pmUfVC5UBHre4yqs5a"
-        balance_erc20 = "8VAcZVoXCQoXb74DGMftRpraMYqHK86qKZALmBopo36i"
-        token = "8y9XyppKvAWyu2Ud4HEAH6jaEAcCCvE53wcmr92t9RJJ"
+        client_acc = "FzFxJHDaNG2tUUgmgTBjSuZEAA8JpCjmmPmuYN6xRfS2"
+        erc20_id = "7sYjkVQhod8Gbbedq2ozZTWCZiRt6cC7K3aKRqpzkLcU"
+        erc20_code = 'BhYqykTUWuUCGFKDoVV9aUVEih5Y1LMgRFqQ86YRx35u'
+        balance_erc20 = "FwNEpebVFsQ1j54zbrFhWgWVXVa9Xdf5bV94PJ7Du5pN"
+        token = "25AeYuTg2Uey4bYD6D5xjgEmoUXvbjQxZgEKF81p3NUN"
         receiver_erc20 = bytes.fromhex("0000000000000000000000000000000000000011")
-        self.erc20_deposit(client_acc, 900, erc20Id, balance_erc20, token, receiver_erc20)
+        self.erc20_deposit(client_acc, 900, erc20_id, erc20_code, balance_erc20, token, receiver_erc20)
 
     @unittest.skip("not for CI")
     def test_with_draw(self):
