@@ -66,9 +66,8 @@ class ERC20test(unittest.TestCase):
         balance = getBalance(cls.acc.public_key())
         print('balance:', balance)
 
-        info = client.get_account_info(cls.caller)
-        if info['result']['value'] is None:
-            print("Create solana caller account...")
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
             caller = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done")
             print("solana caller:", caller, 'cls.caller:', cls.caller)
