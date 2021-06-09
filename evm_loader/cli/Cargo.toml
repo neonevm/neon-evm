@@ -29,4 +29,5 @@ log = "0.4.11"
 stderrlog = "0.5.1"
 rlp = "0.5"
 solana-program = { version = "1.6.9", default_features = false }
-
+rand = "0.8"
+ethereum-types = "0.11.0"

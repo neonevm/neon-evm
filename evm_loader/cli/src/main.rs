@@ -18,7 +18,7 @@ use solana_sdk::{
     loader_instruction::LoaderInstruction,
     message::Message,
     pubkey::Pubkey,
-    signature::Signer,
+    signature::{Signer, Signature},
     signers::Signers,
     transaction::Transaction,
     system_program,
@@ -66,6 +66,8 @@ use solana_cli_output::display::new_spinner_progress_bar;
 use solana_transaction_status::TransactionConfirmationStatus;
 
 use sha3::{Keccak256, Digest};
+
+use rlp::RlpStream;
 
 use log::*;
 
@@ -333,11 +335,72 @@ pub fn keccak256_h256(data: &[u8]) -> H256 {
     H256::from(hash(&data).to_bytes())
 }
 
+pub fn keccak256(data: &[u8]) -> [u8; 32] {
+    hash(&data).to_bytes()
+}
+
+#[derive(Clone)]
+pub struct UnsignedTransaction {
+    pub from: H160,
+    pub to: Option<H160>,
+    pub nonce: U256,
+    pub gas: U256,
+    pub gas_price: U256,
+    pub value: U256,
+    pub data: Vec<u8>,
+}
+
+impl rlp::Encodable for UnsignedTransaction {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(6);
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        match self.to.as_ref() {
+            None => s.append(&""),
+            Some(addr) => s.append(addr),
+        };
+        s.append(&self.value);
+        s.append(&self.data);
+    }
+}
+
+fn create_account_with_seed(config: &Config, funding: &Pubkey, base: &Pubkey, seed: &str, len: u64) ->  Result<Pubkey, Error>
+{
+    let storage = Pubkey::create_with_seed(&base, &seed, &config.evm_loader).unwrap();
+
+    if config.rpc_client.get_account_with_commitment(&storage, config.rpc_client.commitment())?.value.is_none() {
+        let create_acc_instruction = system_instruction::create_account_with_seed(&funding, &storage, &base, &seed, 10u64.pow(9), len, &config.evm_loader);
+        send_transaction(config, &[create_acc_instruction])?;
+    }
+
+    Ok(storage)
+}
+
+fn send_transaction(
+    config: &Config,
+    instructions: &[Instruction]) -> Result<Signature, Error>
+{
+    let message = Message::new(instructions, Some(&config.signer.pubkey()));
+    let mut transaction = Transaction::new_unsigned(message);
+    let signers = [&*config.signer];
+    let (blockhash, _, _last_valid_slot) = config.rpc_client.get_recent_blockhash_with_commitment(config.rpc_client.commitment())?.value;
+    transaction.try_sign(&signers, blockhash)?;
+    Ok(config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &transaction,
+        config.rpc_client.commitment(),
+        RpcSendTransactionConfig::default()
+    )?)
+}
+
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    caller: Pubkey
+    _caller: Pubkey
 ) -> CommandResult {
+    let creator = &config.signer;
+    let signers = [&*config.signer];
+    let program_data = read_program_data(program_location)?;
 
     let ACCOUNT_HEADER_SIZE = 1+Account::SIZE;
     let CONTRACT_HEADER_SIZE = 1+Contract::SIZE;
@@ -347,12 +410,34 @@ fn command_deploy(
     let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_HEADER_SIZE)?;
     let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_len)?;
 
-    let creator = &config.signer;
-    let signers = [&*config.signer];
+    use secp256k1::{PublicKey, SecretKey};
+    use ethereum_types::{Address, U256};
+    let random_vec_32: [u8;32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2];
+    let caller_private = SecretKey::parse(&random_vec_32)?;
+    let caller_public = PublicKey::from_secret_key(&caller_private);
+    let pk_data = caller_public.serialize();
+    let sender = Keccak256::digest(&pk_data);
+    let caller_ether = Address::from_slice(&sender[..20]);
+    let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
+    if config.rpc_client.get_account_with_commitment(&caller_sol, config.rpc_client.commitment())?.value.is_none() {
+        let create_acc_instruction = Instruction::new(
+            config.evm_loader,
+            &(2u32, minimum_balance_for_account, 0 as u64, caller_ether.as_fixed_bytes(), caller_nonce),
+            vec![AccountMeta::new(creator.pubkey(), true),
+                 AccountMeta::new(caller_sol, false),
+                 AccountMeta::new_readonly(system_program::id(), false),]
+        );
+        send_transaction(config, &[create_acc_instruction])?;
+    }
+
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024 as u64)?;
+    
     let data : Vec<u8>;
-    match config.rpc_client.get_account_with_commitment(&caller, CommitmentConfig::confirmed())?.value{
+    match config.rpc_client.get_account_with_commitment(&caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) =>   data = acc.data,
-        _ => panic!("AccountNotFound: pubkey={}", &caller.to_string())
+        _ => panic!("AccountNotFound: pubkey={}", &caller_sol.to_string())
     }
 
     let trx_count : u64;
@@ -367,8 +452,33 @@ fn command_deploy(
     trx_count = account.trx_count;
     let caller_ether = account.ether;
 
-    debug!("Caller: ether {}, solana {}", caller_ether, caller);
-    debug!("Caller trx_count: {} ", trx_count);
+    let rlp_data = {
+        let tx = UnsignedTransaction {
+            from: caller_ether,
+            to: None,
+            nonce: trx_count.into(),
+            gas: 1.into(),
+            gas_price: 1.into(),
+            value: 0.into(),
+            data: program_data.clone(),
+        };
+        rlp::encode(&tx).to_vec()
+    };
+    
+    let msg = {
+        use secp256k1::{Message, sign};
+        let msg = Message::parse(&keccak256(rlp_data.as_slice()));
+        let (sig, rec) = sign(&msg, &caller_private);
+        
+        let mut msg = vec!(rec.serialize());
+        // msg.append(rec.serialize());
+        msg.extend(sig.serialize().iter().copied());
+        msg.extend((rlp_data.len() as u64).to_le_bytes().iter().copied());
+        msg.extend(rlp_data);
+        msg
+    };
+
+    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &"1236".to_string(), 128*1024 as u64)?;
 
     let (program_id, ether, nonce) = {
         let trx_count_256 : U256 = U256::from(trx_count);
@@ -380,18 +490,15 @@ fn command_deploy(
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
         (address, ether, nonce)
     };
-
     debug!("Create account: {} with {} {}", program_id, ether, nonce);  
-
     let (program_code, program_seed) = {
         let seed = bs58::encode(&ether.to_fixed_bytes()).into_string();
         debug!("Code account seed {} and len {}", &seed, &seed.len());
         let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
         (address, seed)
     };
-
-    debug!("Create code account: {}", &program_code.to_string());
-
+    debug!("Create code account: {}", &program_code.to_string());    
+    
     let make_create_account_instruction = |acc: &Pubkey, ether: &H160, nonce: u8, balance: u64| {
         Instruction::new(
             config.evm_loader,
@@ -403,31 +510,6 @@ fn command_deploy(
         )
     };
 
-    let make_write_instruction = |offset: u32, bytes: Vec<u8>| -> Instruction {
-        Instruction::new(
-            config.evm_loader,
-            &LoaderInstruction::Write {offset, bytes},
-            vec![AccountMeta::new(program_code, false),
-                 AccountMeta::new(creator.pubkey(), true)]
-        )
-    };
-
-    let make_finalize_instruction = || -> Instruction {
-        Instruction::new(
-            config.evm_loader,
-            &LoaderInstruction::Finalize,
-            vec![AccountMeta::new(program_id, false),
-                 AccountMeta::new(program_code, false),
-                 AccountMeta::new(caller, false),
-                 AccountMeta::new(creator.pubkey(), true),
-                 AccountMeta::new(clock::id(), false),
-                 AccountMeta::new(rent::id(), false),
-                 AccountMeta::new(config.evm_loader, false),
-                ]
-        )
-    };
-
-
     // Check program account to see if partial initialization has occurred
     let initial_instructions = if let Some(account) = config.rpc_client
         .get_account_with_commitment(&program_id, config.rpc_client.commitment())?
@@ -436,68 +518,29 @@ fn command_deploy(
         return Err(format!("Account already exist").into());
     } else {
         let mut instructions = Vec::new();
-        // if let Some(account) = config.rpc_client.get_account_with_commitment(&caller_id, config.commitment)?.value {
-        //     // TODO Check caller account
-        // } else {
-        //     instructions.push(make_create_account_instruction(&caller_id, &caller_ether, caller_nonce, minimum_balance_for_account, 0));
-        // }
         instructions.push(system_instruction::create_account_with_seed(&creator.pubkey(), &program_code, &creator.pubkey(), &program_seed, minimum_balance_for_code, program_code_len as u64, &config.evm_loader));
         instructions.push(make_create_account_instruction(&program_id, &ether, nonce, minimum_balance_for_account));
         instructions
     };
-    let balance_needed = minimum_balance_for_account + minimum_balance_for_code;
-    debug!("Minimum balance: {}", balance_needed);
+    send_transaction(config, &initial_instructions);
 
-    //debug!("Initialize instructions: {:x?}", initial_instructions);  
-
-    let initial_message = Message::new(&initial_instructions, Some(&config.signer.pubkey()));
-    let mut messages: Vec<&Message> = Vec::new();
-    messages.push(&initial_message);
+    let make_write_instruction = |offset: u32, bytes: Vec<u8>| -> Instruction {
+        Instruction::new(
+            config.evm_loader,
+            &LoaderInstruction::Write {offset, bytes},
+            vec![AccountMeta::new(holder, false),
+                 AccountMeta::new(creator.pubkey(), true)]
+        )
+    };
 
     let mut write_messages = vec![];
-
-    let mut code_len = Vec::new();
-    code_len.extend_from_slice(&(program_data.len() as u64).to_le_bytes());
-    let message = Message::new(&[make_write_instruction(0u32, code_len)], Some(&creator.pubkey()));
-    write_messages.push(message);
-
     // Write code
-    for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
-        let message = Message::new(&[make_write_instruction((8+i*DATA_CHUNK_SIZE) as u32, chunk.to_vec())], Some(&creator.pubkey()));
+    for (chunk, i) in program_data.chunks(1000).zip(0..) {
+        let message = Message::new(&[make_write_instruction((i*1000) as u32, chunk.to_vec())], Some(&creator.pubkey()));
         write_messages.push(message);
     }
-    let mut write_message_refs = vec![];
-    for message in write_messages.iter() {write_message_refs.push(message);}
-    messages.append(&mut write_message_refs);
-
-    let finalize_message = Message::new(&[make_finalize_instruction()], Some(&creator.pubkey()));
-    messages.push(&finalize_message);
-
-    let (blockhash, fee_calculator, _) = config.rpc_client
-        .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
-        .value;
-
-    check_account_for_spend_multiple_fees_with_commitment(
-        &config.rpc_client,
-        &config.signer.pubkey(),
-        balance_needed,
-        &fee_calculator,
-        &messages,
-        config.rpc_client.commitment(),
-    )?;
-
-    {  // Send initialize message
-        debug!("Creating or modifying program account");
-        let mut initial_transaction = Transaction::new_unsigned(initial_message);
-        initial_transaction.try_sign(&signers, blockhash)?;
-        config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &initial_transaction,
-            config.rpc_client.commitment(),
-            RpcSendTransactionConfig::default()
-        )?;
-    }
-
-    {  // Send write message
+    // Send write message
+    {
         let (blockhash, _, last_valid_slot) = config.rpc_client
             .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
             .value;
@@ -522,33 +565,48 @@ fn command_deploy(
         })?;
         debug!("Writing program data done");
     }
-
-    { // Send finalize message
-        let (blockhash, _, _) = config.rpc_client
-            .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
-            .value;
-        let mut finalize_tx = Transaction::new_unsigned(finalize_message);
-        finalize_tx.try_sign(&signers, blockhash)?;
     
-        debug!("Finalizing program account");
-        config.rpc_client
-            .send_and_confirm_transaction_with_spinner_and_config(
-                &finalize_tx,
-                config.rpc_client.commitment(),
-                RpcSendTransactionConfig {
-                    skip_preflight: true,
-                    ..RpcSendTransactionConfig::default()
-                },
-            ).map_err(|e| {
-                format!("Finalizing program account failed: {}", e)
-            })?;
+    let accounts = vec![AccountMeta::new(holder, false),
+                        AccountMeta::new(storage, false),
+                        AccountMeta::new(program_id, false),
+                        AccountMeta::new(program_code, false),
+                        AccountMeta::new(caller_sol, false),
+                        AccountMeta::new(config.evm_loader, false),
+                        AccountMeta::new(clock::id(), false),
+                        ];
+
+    let trx_from_account_data_instruction = Instruction::new(config.evm_loader, &(0x0bu8, 0u64), accounts);
+    send_transaction(config, &[trx_from_account_data_instruction])?;
+
+    let make_create_account_instruction = |acc: &Pubkey, ether: &H160, nonce: u8, balance: u64| {
+        Instruction::new(
+            config.evm_loader,
+            &(2u32, balance, 0 as u64, ether.as_fixed_bytes(), nonce),
+            vec![AccountMeta::new(creator.pubkey(), true),
+                 AccountMeta::new(*acc, false),
+                 AccountMeta::new(program_code, false),
+                 AccountMeta::new_readonly(system_program::id(), false),]
+        )
+    };
+
+    while true {    
+        let accounts = vec![AccountMeta::new(storage, false),
+                            AccountMeta::new(program_id, false),
+                            AccountMeta::new(program_code, false),
+                            AccountMeta::new(caller_sol, false),
+                            AccountMeta::new(config.evm_loader, false),
+                            AccountMeta::new(clock::id(), false)];
+        let continue_instruction  = Instruction::new(config.evm_loader, &(0x0au8, 400u64), accounts);
+        let signature = send_transaction(config, &[continue_instruction])?;
+        let results = config.rpc_client.get_signature_statuses(&[signature])?.value;
+        for result in results {
+            if result.is_some() {
+                println!("{:?}", result.unwrap());
+            }
+        }
     }
 
-    println!("{}", json!({
-        "programId": format!("{}", program_id),
-        "codeId": format!("{}", program_code),
-        "ethereum": format!("{:?}", ether),
-    }).to_string());
+
     Ok(())
 }
 
