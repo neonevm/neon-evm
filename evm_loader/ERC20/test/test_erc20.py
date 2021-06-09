@@ -473,12 +473,12 @@ class ERC20test(unittest.TestCase):
         assert (self.erc20_balance(erc20Id, erc20_code) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit(client_acc, deposit_amount * (10 ** 9), erc20Id
+        self.erc20_deposit_iterative(client_acc, deposit_amount * (10 ** 9), erc20Id
                                      , erc20_code, balance_erc20, token, self.caller_ether)
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
         assert (self.erc20_balance(erc20Id, erc20_code) == deposit_amount * (10 ** 9))
-        self.erc20_withdraw(client_acc, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token)
+        self.erc20_withdraw_iterative(client_acc, deposit_amount * (10 ** 9), erc20Id, erc20_code, balance_erc20, token)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
         assert (self.erc20_balance(erc20Id, erc20_code) == 0)
