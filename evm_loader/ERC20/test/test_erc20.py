@@ -36,23 +36,22 @@ class SplToken:
 
 
 def deploy_erc20(loader, location_hex, location_bin, mintId, balance_erc20, caller):
-        ctor_init = str("%064x" % 0xa0) + \
-                    str("%064x" % 0xe0) + \
-                    str("%064x" % 0x9) + \
-                    base58.b58decode(balance_erc20).hex() + \
-                    base58.b58decode(mintId).hex() + \
-                    str("%064x" % 0x1) + \
-                    str("77%062x" % 0x00) + \
-                    str("%064x" % 0x1) + \
-                    str("77%062x" % 0x00)
+    ctor_init = str("%064x" % 0xa0) + \
+                str("%064x" % 0xe0) + \
+                str("%064x" % 0x9) + \
+                base58.b58decode(balance_erc20).hex() + \
+                base58.b58decode(mintId).hex() + \
+                str("%064x" % 0x1) + \
+                str("77%062x" % 0x00) + \
+                str("%064x" % 0x1) + \
+                str("77%062x" % 0x00)
 
-        with open(location_hex, mode='r') as hex:
-            binary = bytearray.fromhex(hex.read() + ctor_init)
-            with open(location_bin, mode='wb') as bin:
-                bin.write(binary)
-                res = loader.deploy(location_bin, caller)
-                return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
-
+    with open(location_hex, mode='r') as hex:
+        binary = bytearray.fromhex(hex.read() + ctor_init)
+        with open(location_bin, mode='wb') as bin:
+            bin.write(binary)
+            res = loader.deploy(location_bin, caller)
+            return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
 
 
 class ERC20test(unittest.TestCase):
@@ -127,6 +126,30 @@ class ERC20test(unittest.TestCase):
         spl = SplToken(solana_url)
         res = spl.call("balance --address {}".format(acc))
         return int(res.rstrip())
+
+    def create_storage_account(self, seed):
+        storage = PublicKey(
+            sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
+        print("Storage", storage)
+
+        if getBalance(storage) == 0:
+            trx = Transaction()
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
+                                          PublicKey(evm_loader_id)))
+            send_transaction(client, trx, self.acc)
+        return storage
+
+    def erc20_deposit_iterative(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20):
+        storage = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
+                                     , Mode.BEGIN)
+
+        while True:
+            result = self.erc20_deposit(payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20
+                                        , Mode.CONTINUE, 50, storage)["result"]
+            if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']:
+                data = base58.b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if data[0] == 6:
+                    return result
 
     def erc20_deposit(self, payer, amount, erc20, erc20_code, balance_erc20, mint_id, receiver_erc20,
                       mode=Mode.NORMAL, step_count=10, storage=None):
@@ -366,7 +389,7 @@ class ERC20test(unittest.TestCase):
         print("balance_erc20:", balance_erc20)
 
         (erc20Id, erc20Id_ether, erc20_code) = deploy_erc20(self.loader
-                                                            , CONTRACTS_DIR+"ERC20.bin"
+                                                            , CONTRACTS_DIR + "ERC20.bin"
                                                             , "erc20.binary"
                                                             , token
                                                             , balance_erc20
@@ -376,8 +399,8 @@ class ERC20test(unittest.TestCase):
         print("erc20_code:", erc20_code)
 
         assert (self.erc20Id_precalculated == erc20Id)
-        assert(balance_erc20 == self.erc20_balance_ext(erc20Id, erc20_code).decode("utf-8"))
-        assert(token == self.erc20_mint_id(erc20Id, erc20_code).decode("utf-8"))
+        assert (balance_erc20 == self.erc20_balance_ext(erc20Id, erc20_code).decode("utf-8"))
+        assert (token == self.erc20_mint_id(erc20Id, erc20_code).decode("utf-8"))
 
         client_acc = self.createTokenAccount(token)
 
@@ -388,8 +411,8 @@ class ERC20test(unittest.TestCase):
         assert (self.erc20_balance(erc20Id, erc20_code) == 0)
 
         deposit_amount = 1
-        self.erc20_deposit(client_acc, deposit_amount * (10 ** 9), erc20Id
-                           , erc20_code, balance_erc20, token, self.caller_ether)
+        self.erc20_deposit_iterative(client_acc, deposit_amount * (10 ** 9), erc20Id
+                                     , erc20_code, balance_erc20, token, self.caller_ether)
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
         assert (self.erc20_balance(erc20Id, erc20_code) == deposit_amount * (10 ** 9))
