@@ -1,4 +1,3 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.rpc.api import Client
 from solana.rpc.types import TxOpts
 from solana.account import Account
@@ -297,7 +296,6 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "eth_acc" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
-    "signer_acc" / Bytes(32),
     "code_acc" / Bytes(32),
     "is_blocked" / Int8ul,
     "blocked_by" / Bytes(32),
