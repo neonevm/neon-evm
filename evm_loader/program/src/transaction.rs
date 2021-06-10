@@ -127,7 +127,7 @@ pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
     (tx.nonce, tx.to, tx.call_data)
 }
 
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), secp256k1::Error> {
+pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, secp256k1::Error> {
     let digest = keccak256_digest(unsigned_trx);
     let message = secp256k1::Message::parse_slice(&digest)?;
 
@@ -135,9 +135,8 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), 
     let signature = secp256k1::Signature::parse_slice(&signature[0..64])?;
 
     let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
-    if secp256k1::verify(&message, &signature, &public_key) {
-        Ok(())
-    } else {
-        Err(secp256k1::Error::InvalidSignature)
-    }
+    let address = keccak256_digest(&public_key.serialize()[1..]);
+    let address = H160::from_slice(&address[12..32]);
+
+    Ok(address)
 }

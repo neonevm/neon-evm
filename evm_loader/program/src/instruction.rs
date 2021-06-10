@@ -103,15 +103,6 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
-    /// Call Ethereum-contract action from raw transaction data
-    /// # Account references same as in Call
-    CheckEtheriumTX {
-        /// Call data
-        from_addr: &'a [u8],
-        sign: &'a [u8],
-        unsigned_msg: &'a [u8],
-    },
-
     /// Called action return
     OnReturn {
         /// Contract execution status 
@@ -208,11 +199,6 @@ impl<'a> EvmInstruction<'a> {
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
                 EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg}
-            },
-            0xa1 => {
-                let (from_addr, rest) = rest.split_at(20);
-                let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg}
             },
             6 => {
                 let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;
