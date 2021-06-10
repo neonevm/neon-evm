@@ -569,7 +569,6 @@ fn command_get_ether_account_data (
             println!("    ether: {}", &account_data.ether);
             println!("    nonce: {}", &account_data.nonce);
             println!("    trx_count: {}", &account_data.trx_count);
-            println!("    signer: {}", &account_data.signer);
             println!("    code_account: {}", &account_data.code_account);
             println!("    blocked: {}", &account_data.blocked.is_some());
         
