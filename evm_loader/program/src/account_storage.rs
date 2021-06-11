@@ -5,7 +5,7 @@ use crate::{
     utils::keccak256_h256,
 };
 use evm::backend::Apply;
-use evm::{H160, H256, U256};
+use evm::{H160,  U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
@@ -180,7 +180,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
