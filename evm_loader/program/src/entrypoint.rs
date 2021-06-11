@@ -286,7 +286,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
-            let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
+            let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
             check_ethereum_authority(
@@ -304,7 +304,7 @@ fn process_instruction<'a>(
             let mut storage = StorageAccount::restore(storage_info)?;
             storage.check_accounts(program_id, accounts)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
 
             let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, &accounts[1..])?;
             if exit_reason != None {
