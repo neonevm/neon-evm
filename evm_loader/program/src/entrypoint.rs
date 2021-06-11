@@ -26,9 +26,8 @@ use crate::{
     error::EvmLoaderError,
 };
 use evm::{
-    backend::{Backend},
     ExitReason, ExitFatal, ExitError, ExitSucceed,
-    H160,
+    H160, U256,
 };
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
@@ -215,31 +214,11 @@ fn process_instruction<'a>(
             let from_addr = verify_tx_signature(&signature, &unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
-                &from_addr, trx.nonce)?;
+                &from_addr, trx.nonce, &trx.chain_id)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
-            let backend = SolanaBackend::new(&account_storage, Some(accounts));
-            debug_print!("  backend initialized");
-
-            if trx.chain_id != backend.chain_id() {
-                debug_print!("Invalid chain id: actual {}, expect {}", trx.chain_id, backend.chain_id());
-                return Err(ProgramError::InvalidInstructionData);
-            }
-
-            let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
-            let mut executor = Machine::new(executor_state);
-
-            debug_print!("Executor initialized");
-
-            match executor.create_begin(from_addr, trx.call_data, u64::max_value()) {
-                Err(reason) => {return Err(reason)},
-                _ => {}
-            }
-            executor.execute_n_steps(step_count).unwrap();
-
-            debug_print!("save");
-            executor.save_into(&mut storage);
+            do_partial_create(&mut storage, step_count, &account_storage, &accounts, trx.call_data)?;
             storage.block_accounts(program_id, accounts)
         },
 
@@ -256,7 +235,7 @@ fn process_instruction<'a>(
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
-                &H160::from_slice(from_addr), trx.nonce)?;
+                &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
             do_call(program_id, &mut account_storage, accounts, trx.call_data)
         },
@@ -283,7 +262,7 @@ fn process_instruction<'a>(
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
-                &caller, trx.nonce)?;
+                &caller, trx.nonce, &trx.chain_id)?;
 
             do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data)?;
 
@@ -536,6 +515,35 @@ fn do_partial_call<'a>(
     Ok(())
 }
 
+fn do_partial_create<'a>(
+    storage: &mut StorageAccount,
+    step_count: u64,
+    account_storage: &ProgramAccountStorage,
+    accounts: &'a [AccountInfo<'a>],
+    instruction_data: Vec<u8>,
+) -> ProgramResult
+{
+    debug_print!("do_partial_create");
+
+    let backend = SolanaBackend::new(account_storage, Some(accounts));
+    debug_print!("  backend initialized");
+
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+    let mut executor = Machine::new(executor_state);
+
+    debug_print!("Executor initialized");
+
+    executor.create_begin(account_storage.origin(), instruction_data, u64::max_value())?;
+    executor.execute_n_steps(step_count).unwrap();
+
+    debug_print!("save");
+    executor.save_into(storage);
+
+    debug_print!("partial create complete");
+
+    Ok(())
+}
+
 fn do_continue<'a>(
     storage: &mut StorageAccount,
     program_id: &Pubkey,
@@ -648,7 +656,8 @@ fn invoke_on_return<'a>(
 fn check_ethereum_authority<'a>(
    sender: &SolidityAccount<'a>,
    recovered_address: &H160,
-   trx_nonce: u64
+   trx_nonce: u64,
+   chain_id: &U256,
 ) -> ProgramResult
 {
     if sender.get_ether() != *recovered_address {
@@ -664,6 +673,14 @@ fn check_ethereum_authority<'a>(
                 &trx_nonce.to_string());
         return Err(ProgramError::InvalidArgument);
     }
+
+    if SolanaBackend::<ProgramAccountStorage>::chain_id() != *chain_id {
+        debug_print!("Invalid chain_id: actual {}, expected {}",
+                &chain_id.to_string(),
+                &SolanaBackend::<ProgramAccountStorage>::chain_id().to_string());
+        return Err(ProgramError::InvalidArgument);
+    }
+
     Ok(())
 }
 

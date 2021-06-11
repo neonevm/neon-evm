@@ -120,13 +120,6 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
-    let tx: Result<UnsignedTransaction, _> = rlp::decode(&raw_tx);
-    let tx = tx.unwrap();
-
-    (tx.nonce, tx.to, tx.call_data)
-}
-
 pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, secp256k1::Error> {
     let digest = keccak256_digest(unsigned_trx);
     let message = secp256k1::Message::parse_slice(&digest)?;

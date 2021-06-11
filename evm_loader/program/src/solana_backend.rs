@@ -101,6 +101,8 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
         return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address.to_vec())));
     }
+
+    pub fn chain_id() -> U256 { U256::from(111) }
 }
 
 impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
@@ -116,7 +118,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
-    fn chain_id(&self) -> U256 { U256::from(111) }
+    fn chain_id(&self) -> U256 { Self::chain_id() }
 
     fn exists(&self, address: H160) -> bool {
         self.account_storage.exists(&address)
