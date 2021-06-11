@@ -1,4 +1,4 @@
-use serde::{Serialize, Serializer, Deserialize};
+use serde::{Serialize, Serializer};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::TryInto;
 use evm::{H160, H256};
@@ -186,7 +186,7 @@ impl<'a> EvmInstruction<'a> {
                 let (lamports, rest) = rest.split_at(8);
                 let (space, rest) = rest.split_at(8);
 
-                let (owner, rest) = rest.split_at(32);
+                let (owner, _rest) = rest.split_at(32);
                 let owner = Pubkey::new(owner);
 
                 let seed = seed.into();
@@ -211,7 +211,7 @@ impl<'a> EvmInstruction<'a> {
                 let (topics_cnt, mut rest) = rest.split_at(8);
                 let topics_cnt = topics_cnt.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let mut topics = Vec::new();
-                for i in 1..=topics_cnt {
+                for _ in 1..=topics_cnt {
                     let (topic, rest2) = rest.split_at(32);
                     let topic = H256::from_slice(&*topic);
                     topics.push(topic);

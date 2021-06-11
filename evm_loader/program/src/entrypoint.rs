@@ -9,13 +9,8 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
-    loader_instruction::LoaderInstruction,
     system_instruction::{create_account, create_account_with_seed},
-    sysvar::instructions::{load_current_index, load_instruction_at}, 
     program::{invoke_signed, invoke},
-    secp256k1_program,
-    instruction::Instruction,
-    sysvar::instructions,
 };
 use crate::{
 //    bump_allocator::BumpAllocator,
@@ -24,20 +19,17 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    utils::keccak256_h256,
-    transaction::{UnsignedTransaction, get_data, verify_tx_signature, make_secp256k1_instruction, check_secp256k1_instruction},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
-    storage_account::{ StorageAccount }
+    storage_account::{ StorageAccount },
+    error::EvmLoaderError,
 };
 use evm::{
     backend::{Backend},
-    executor::{StackExecutor},
-    CreateScheme,
     ExitReason, ExitFatal, ExitError, ExitSucceed,
-    H160, U256, H256
+    H160,
 };
-use std::cell::RefCell;
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
 
@@ -190,7 +182,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::Call {bytes} => {
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
-            if let Sender::Solana(addr) = account_storage.get_sender() {
+            if let Sender::Solana(_addr) = account_storage.get_sender() {
                 // Success execution
             } else {
                 debug_print!("This method should used with Solana sender");
@@ -240,7 +232,7 @@ fn process_instruction<'a>(
 
             debug_print!("Executor initialized");
 
-            match (executor.create_begin(from_addr, trx.call_data, u64::max_value())){
+            match executor.create_begin(from_addr, trx.call_data, u64::max_value()) {
                 Err(reason) => {return Err(reason)},
                 _ => {}
             }
@@ -251,7 +243,7 @@ fn process_instruction<'a>(
             storage.block_accounts(program_id, accounts)
         },
 
-        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign, unsigned_msg} => {
+        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
@@ -268,13 +260,13 @@ fn process_instruction<'a>(
 
             do_call(program_id, &mut account_storage, accounts, trx.call_data)
         },
-        EvmInstruction::OnReturn {status, bytes} => {
+        EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
         },
-        EvmInstruction::OnEvent {address, topics, data} => {
+        EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign: _, unsigned_msg} => {
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
@@ -301,7 +293,10 @@ fn process_instruction<'a>(
             let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
 
-            let mut storage = StorageAccount::restore(storage_info)?;
+            let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
+                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
+                else {err}
+            })?;
             storage.check_accounts(program_id, accounts)?;
 
             let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
@@ -348,29 +343,6 @@ fn process_instruction<'a>(
         },
     };
 
-/*    let result = if program_lamports == 0 {
-        do_create_account(program_id, accounts, instruction_data)
-    } else {
-        let account_type = {program_info.data.borrow()[0]};
-        if account_type == 0 {
-            let instruction: LoaderInstruction = limited_deserialize(instruction_data)
-                .map_err(|_| ProgramError::InvalidInstructionData)?;
-
-            match instruction {
-                LoaderInstruction::Write {offset, bytes} => {
-                    do_write(program_info, offset, &bytes)
-                },
-                LoaderInstruction::Finalize => {
-                    debug_print!("FinalizeInstruction");
-                    do_finalize(program_id, accounts, program_info)
-                },
-            }
-        } else {
-            debug_print!("Execute");
-            do_execute(program_id, accounts, instruction_data)
-        }
-    };*/
-
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
     result
 }
@@ -385,41 +357,13 @@ fn get_transaction_from_data(
             _ => return Err(ProgramError::InvalidAccountData),
     };
 
-    let (acc_header, rest) = data.split_at(account_info_data.size());
+    let (_header, rest) = data.split_at(account_info_data.size());
     let (signature, rest) = rest.split_at(65);
     let (trx_len, rest) = rest.split_at(8);
     let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
     let (trx, _rest) = rest.split_at(trx_len as usize);
 
     Ok((trx, signature))
-}
-
-fn do_create_account<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], instruction_data: &[u8]) -> ProgramResult {
-    debug_print!("initialize account");
-/*
-    // If account not initialized - we can only create it...
-    let instruction: EvmInstruction = limited_deserialize(instruction_data)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-    match instruction {
-        EvmInstruction::CreateAccount {lamports, space, ether, nonce } => {
-            let account_info_iter = &mut accounts.iter();
-            let program_info = next_account_info(account_info_iter)?;
-            let funding_info = next_account_info(account_info_iter)?;
-            let expected_address = Pubkey::create_program_address(&[&ether, &[nonce]], program_id)?;
-            if expected_address != *program_info.key {
-                return Err(ProgramError::InvalidArgument);
-            };
-            let empty_seeds = [];
-            let program_seeds = [&ether[..], &[nonce]];
-            invoke_signed(
-                &create_account(funding_info.key, program_info.key, lamports, space, program_id),
-                &accounts, &[&empty_seeds[..], &program_seeds[..]]
-            )?;
-            Ok(())
-        },
-        _ => {Err(ProgramError::InvalidInstructionData)}
-    }*/
-    Err(ProgramError::InvalidInstructionData)
 }
 
 fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
@@ -458,7 +402,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
-        let config = evm::Config::istanbul();
 
         let code_data = {
             let data = program_code.data.borrow();
@@ -479,14 +422,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        match (executor.create_begin(account_storage.origin(), code_data, u64::max_value())){
+        match executor.create_begin(account_storage.origin(), code_data, u64::max_value()) {
             Err(reason) => {return Err(reason)},
             _ => {}
         }
-        let exit_reason = match executor.execute_n_steps(u64::MAX) {
-            Ok(()) => return Err(ProgramError::InvalidInstructionData),
-            Err(reason) => reason
-        };
+        let exit_reason = executor.execute();
         let result = executor.return_value();
         debug_print!("Call done");
 

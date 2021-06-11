@@ -81,8 +81,6 @@ impl AccountData {
                 dst[0] = AccountData::STORAGE_TAG;
                 Storage::pack(acc, &mut dst[1..])
             },
-
-            _ => return Err(ProgramError::InvalidAccountData),
         })
     }
 

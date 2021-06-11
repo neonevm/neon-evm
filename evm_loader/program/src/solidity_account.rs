@@ -1,7 +1,7 @@
 use crate::{
     account_data::AccountData,
     hamt::Hamt,
-    utils::{keccak256_h256, u256_to_h256},
+    utils::{keccak256_h256},
 };
 use evm::backend::Basic;
 use evm::{Code, H160, H256, U256};

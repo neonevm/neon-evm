@@ -322,7 +322,7 @@ class EventTest(unittest.TestCase):
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
             
-        err = "invalid account data for instruction"
+        err = "custom program error: 0x1"
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
             print(result)

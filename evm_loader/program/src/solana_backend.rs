@@ -65,7 +65,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
 
     pub fn call_inner_ecrecover(&self,
-        code_address: H160,
+        _code_address: H160,
         _transfer: Option<Transfer>,
         input: Vec<u8>,
         _target_gas: Option<usize>,
@@ -85,12 +85,12 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         let message = secp256k1::Message::parse(&msg);
         let v = U256::from(v).as_u32() as u8;
         let signature = secp256k1::Signature::parse(&sig);
-        let recoveryId = match secp256k1::RecoveryId::parse_rpc(v) {
+        let recovery_id = match secp256k1::RecoveryId::parse_rpc(v) {
             Ok(value) => value,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
         };
 
-        let public_key = match secp256k1::recover(&message, &signature, &recoveryId) {
+        let public_key = match secp256k1::recover(&message, &signature, &recovery_id) {
             Ok(value) => value,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
         };

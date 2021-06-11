@@ -89,9 +89,9 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, None);
         let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let mut executor = StackExecutor::new(&backend, usize::MAX, &config);
     
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::max_value());
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::MAX);
     
         debug!("Call done");
         
@@ -540,7 +540,7 @@ fn command_deploy(
                     ..RpcSendTransactionConfig::default()
                 },
             ).map_err(|e| {
-                format!("Finalizing program account failed: {}", e)
+                format!("Finalizing program account failed: {:?}", e)
             })?;
     }
 

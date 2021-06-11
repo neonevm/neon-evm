@@ -5,7 +5,7 @@ use crate::{
     utils::keccak256_h256,
 };
 use evm::backend::Apply;
-use evm::{H160, H256, U256};
+use evm::{H160,  U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
@@ -67,6 +67,8 @@ impl<'a> ProgramAccountStorage<'a> {
             let account = account_data.get_account()?;
     
             if *code_info.key != account.code_account {
+                debug_print!("code_info.key: {:?}", *code_info.key);
+                debug_print!("account.code_account: {:?}", account.code_account);
                 return Err(ProgramError::InvalidAccountData)
             }
     
@@ -164,7 +166,7 @@ impl<'a> ProgramAccountStorage<'a> {
     pub fn get_caller_account(&self) -> Option<&SolidityAccount<'a>> {
         match self.sender {
             Sender::Ethereum(addr) => self.get_account(&addr),
-            Sender::Solana(addr) => None,
+            Sender::Solana(_addr) => None,
         }
     }
 
@@ -190,7 +192,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn apply<A, I>(&mut self, values: A, delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,

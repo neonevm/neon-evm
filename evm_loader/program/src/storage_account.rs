@@ -62,12 +62,10 @@ impl<'a> StorageAccount<'a> {
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {
-        let storage = AccountData::get_storage(&self.data)?;
-
         let (begin, end) = self.accounts_region()?;
 
         let account_data = self.info.try_borrow_data()?;
-        if (account_data.len() < end) {
+        if account_data.len() < end {
             return Err(ProgramError::AccountDataTooSmall);
         }
 
@@ -112,7 +110,7 @@ impl<'a> StorageAccount<'a> {
             let (begin, end) = self.accounts_region()?;
 
             let mut account_data = self.info.try_borrow_mut_data()?;
-            if (account_data.len() < end) {
+            if account_data.len() < end {
                 return Err(ProgramError::AccountDataTooSmall);
             }
 
@@ -147,7 +145,7 @@ impl<'a> StorageAccount<'a> {
         let mut account_data = self.info.try_borrow_mut_data()?;
         {
             let (start, mid, end) = self.storage_region()?;
-            if (account_data.len() < end) {
+            if account_data.len() < end {
                 return Err(ProgramError::AccountDataTooSmall);
             }
 
@@ -170,7 +168,7 @@ impl<'a> StorageAccount<'a> {
         let account_data = self.info.try_borrow_data()?;
 
         let (start, mid, end) = self.storage_region()?;
-        if (account_data.len() < end) {
+        if account_data.len() < end {
             return Err(ProgramError::AccountDataTooSmall);
         }
 

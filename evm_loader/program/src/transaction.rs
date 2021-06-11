@@ -27,16 +27,16 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, da
     const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
     const SIGN_SIZE: u16 = 65;
-    let ETH_OFFSET: u16 = data_start;
-    let SIGN_OFFSET: u16 = ETH_OFFSET + ETH_SIZE;
-    let MSG_OFFSET: u16 = SIGN_OFFSET + SIGN_SIZE;
+    let eth_offset: u16 = data_start;
+    let sign_offset: u16 = eth_offset + ETH_SIZE;
+    let msg_offset: u16 = sign_offset + SIGN_SIZE;
 
     let offsets = SecpSignatureOffsets {
-        signature_offset: SIGN_OFFSET as u16,
+        signature_offset: sign_offset as u16,
         signature_instruction_index: instruction_index as u8,
-        eth_address_offset: ETH_OFFSET as u16,
+        eth_address_offset: eth_offset as u16,
         eth_address_instruction_index: instruction_index as u8,
-        message_data_offset: MSG_OFFSET as u16,
+        message_data_offset: msg_offset as u16,
         message_data_size: message_len as u16,
         message_instruction_index: instruction_index as u8,
     };
@@ -68,7 +68,7 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
                 return Err(ProgramError::IncorrectProgramId);
             }
         },
-        Err(err) => {
+        Err(_) => {
             debug_print!("ERR");
             return Err(ProgramError::MissingRequiredSignature);
         }
