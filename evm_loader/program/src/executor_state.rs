@@ -4,8 +4,9 @@ use std::{
     vec::Vec
 };
 use core::mem;
+use evm::gasometer::Gasometer;
 use evm::backend::{Apply, Backend, Basic, Log};
-use evm::{ExitError, Transfer, Code, H160, H256, U256};
+use evm::{Code, Config, ExitError, Transfer, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
@@ -17,27 +18,28 @@ struct ExecutorAccount {
     pub reset: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutorMetadata {
-    // gasometer: Gasometer<'config>,
+#[derive(Serialize, Deserialize)]
+pub struct ExecutorMetadata<'config> {
+    gasometer: Gasometer<'config>,
     is_static: bool,
     depth: Option<usize>
 }
 
-impl ExecutorMetadata {
-    pub fn new() -> Self {
+impl<'config> ExecutorMetadata<'config> {
+    pub fn new(gas_limit: usize, config: &'config Config) -> Self {
         Self {
-            // gasometer: Gasometer::new(gas_limit, config),
+            gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
             depth: None
         }
     }
 
     pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
-        // self.gasometer.record_stipend(other.gasometer.gas())?;
-        // self.gasometer
-        //     .record_refund(other.gasometer.refunded_gas())?;
+	self.gasometer.record_stipend(other.gasometer.gas())?;
+        self.gasometer
+            .record_refund(other.gasometer.refunded_gas())?;
 
+	// The following fragment deleted in the mainstream code:
         // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
         //     let return_value = other.borrow().runtime().unwrap().machine().return_value();
         //     runtime.set_return_data(return_value);
@@ -47,7 +49,7 @@ impl ExecutorMetadata {
     }
 
     pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
-        // self.gasometer.record_stipend(other.gasometer.gas())?;
+        self.gasometer.record_stipend(other.gasometer.gas())?;
 
         Ok(())
     }
@@ -58,7 +60,7 @@ impl ExecutorMetadata {
 
     pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
-            // gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
+            gasometer: Gasometer::new(gas_limit as usize, self.gasometer.config()),
             is_static: is_static || self.is_static,
             depth: match self.depth {
                 None => Some(0),
@@ -67,13 +69,13 @@ impl ExecutorMetadata {
         }
     }
 
-    // pub fn gasometer(&self) -> &Gasometer {
-    //     &self.gasometer
-    // }
+    pub fn gasometer(&self) -> &Gasometer {
+        &self.gasometer
+    }
 
-    // pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-    //     &mut self.gasometer
-    // }
+    pub fn gasometer_mut(&mut self) -> &'config mut Gasometer {
+        &mut self.gasometer
+    }
 
     #[allow(dead_code)]
     pub fn is_static(&self) -> bool {
@@ -85,20 +87,20 @@ impl ExecutorMetadata {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExecutorSubstate {
-    metadata: ExecutorMetadata,
-    parent: Option<Box<ExecutorSubstate>>,
+#[derive(Serialize, Deserialize)]
+pub struct ExecutorSubstate<'config> {
+    metadata: ExecutorMetadata<'config>,
+    parent: Option<Box<ExecutorSubstate<'config>>>,
     logs: Vec<Log>,
     accounts: BTreeMap<H160, ExecutorAccount>,
     storages: BTreeMap<(H160, U256), U256>,
     deletes: BTreeSet<H160>,
 }
 
-impl ExecutorSubstate {
-    pub fn new() -> Self {
+impl<'config> ExecutorSubstate<'config> {
+    pub fn new(gas_limit: usize, config: &'config Config) -> Self {
         Self {
-            metadata: ExecutorMetadata::new(),
+            metadata: ExecutorMetadata::new(gas_limit, config),
             parent: None,
             logs: Vec::new(),
             accounts: BTreeMap::new(),
@@ -107,11 +109,11 @@ impl ExecutorSubstate {
         }
     }
 
-    pub fn metadata(&self) -> &ExecutorMetadata {
+    pub fn metadata(&self) -> &'config ExecutorMetadata {
         &self.metadata
     }
 
-    pub fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
+    pub fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
         &mut self.metadata
     }
 
@@ -446,12 +448,12 @@ pub trait StackState : Backend {
     fn touch(&mut self, address: H160);
 }
 
-pub struct ExecutorState<B: Backend> {
+pub struct ExecutorState<'config, B: Backend> {
     backend: B,
-    substate: ExecutorSubstate,
+    substate: ExecutorSubstate<'config>,
 }
 
-impl<B: Backend> Backend for ExecutorState<B> {
+impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
     fn gas_price(&self) -> U256 {
         self.backend.gas_price()
     }
@@ -539,12 +541,12 @@ impl<B: Backend> Backend for ExecutorState<B> {
     }
 }
 
-impl<B: Backend> StackState for ExecutorState<B> {
-    fn metadata(&self) -> &ExecutorMetadata {
+impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
+    fn metadata(&self) -> &'config ExecutorMetadata {
         self.substate.metadata()
     }
 
-    fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
+    fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
         self.substate.metadata_mut()
     }
 
@@ -623,8 +625,8 @@ impl<B: Backend> StackState for ExecutorState<B> {
     }
 }
 
-impl<B: Backend> ExecutorState<B> {
-    pub fn new(substate: ExecutorSubstate, backend: B) -> Self {
+impl<'config, B: Backend> ExecutorState<'config, B> {
+    pub fn new(substate: ExecutorSubstate<'config>, backend: B) -> Self {
         Self {
             backend,
             substate,

@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
 use evm::{
-    Capture, ExitError, ExitReason, ExitFatal, Handler, 
-    backend::Backend, Resolve, Code, H160, H256, U256
+    backend::Backend, gasometer, Capture, Code, ExitError, ExitFatal, ExitReason, Handler, Resolve,
+    H160, H256, U256,
 };
 use crate::executor_state::{ StackState, ExecutorState };
 use crate::storage_account::StorageAccount;
@@ -12,14 +12,14 @@ use solana_program::program_error::ProgramError;
 use std::borrow::BorrowMut;
 use solana_program::entrypoint::ProgramResult;
 
-macro_rules! try_or_fail {
-    ( $e:expr ) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => return e.into(),
-        }
-    }
-}
+//macro_rules! try_or_fail {
+//    ( $e:expr ) => {
+//        match $e {
+//            Ok(v) => v,
+//            Err(e) => return e.into(),
+//        }
+//    }
+//}
 
 fn l64(gas: u64) -> u64 {
     gas - gas / 64
@@ -45,7 +45,7 @@ enum RuntimeApply{
 }
 
 struct Executor<'config, B: Backend> {
-    state: ExecutorState<B>,
+    state: ExecutorState<'config, B>,
     config: &'config evm::Config,
 }
 
@@ -69,10 +69,10 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
     fn code_hash(&self, address: H160) -> H256 {
         if !self.exists(address) {
-            return H256::default()
-        }
-
-        self.state.code_hash(address)
+            H256::default()
+        } else {
+            self.state.code_hash(address)
+	}
     }
 
     fn code(&self, address: H160) -> Code {
@@ -88,7 +88,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::one() // U256::from(self.state.metadata().gasometer.gas())
+        U256::from(self.state.metadata().gasometer().gas()) // U256::one()
     }
 
     fn gas_price(&self) -> U256 {
@@ -169,7 +169,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        target_gas: Option<usize>,
+        _target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
 
         if let Some(depth) = self.state.metadata().depth() {
@@ -259,18 +259,26 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         opcode: evm::Opcode,
         stack: &evm::Stack,
     ) -> Result<(), ExitError> {
-        // if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-        //     self.state.metadata_mut().gasometer.record_cost(cost)?;
-        // } else {
-        //     let is_static = self.state.metadata().is_static;
-        //     let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
-        //         context.address, opcode, stack, is_static, &self.config, self
-        //     )?;
+	if let Some(cost) = gasometer::static_opcode_cost(opcode) {
+            self.state
+                .metadata_mut()
+                .gasometer_mut()
+                .record_cost(cost as usize)?;
+        } else {
+            let is_static = self.state.metadata().is_static();
+            let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
+                context.address,
+                opcode,
+                stack,
+                is_static,
+                &self.config,
+                self,
+            )?;
 
-        //     let gasometer = &mut self.state.metadata_mut().gasometer;
-
-        //     gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
-        // }
+            let gasometer = self.state.metadata_mut().gasometer_mut();
+            gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
+	}
+	
         Ok(())
     }
 }
@@ -290,7 +298,7 @@ pub struct Machine<'config, B: Backend> {
 
 impl<'config, B: Backend> Machine<'config, B> {
 
-    pub fn new(state: ExecutorState<B>) -> Self {
+    pub fn new(state: ExecutorState<'config, B>) -> Self {
         let executor = Executor { state, config: evm::Config::default() };
         Self{ executor, runtime: Vec::new() }
     }
@@ -317,30 +325,44 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
-    pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {
+    pub fn call_begin(
+	&mut self,
+        caller: H160,
+        code_address: H160,
+        input: Vec<u8>,
+        gas_limit: usize,
+        take_l64: bool,
+        estimate: bool,
+    ) {
         self.executor.state.inc_nonce(caller);
 
+	let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
+            //if self.executor.config.estimate { // no such field 'estimate'
+            if estimate {
+                let initial_after_gas = self.executor.state.metadata().gasometer().gas();
+                let diff = initial_after_gas as u64 - l64(initial_after_gas as u64);
+                self.executor
+                    .state
+                    .metadata_mut()
+                    .gasometer_mut()
+                    .record_cost(diff as usize)
+                    .ok();
+                self.executor.state.metadata().gasometer().gas()
+            } else {
+                l64(self.executor.state.metadata().gasometer().gas() as u64) as usize
+            }
+        } else {
+            self.executor.state.metadata().gasometer().gas()
+        };
 
-        // let after_gas = if take_l64 && self.config.call_l64_after_gas {
-        //     if self.config.estimate {
-        //         let initial_after_gas = self.state.metadata().gasometer.gas();
-        //         let diff = initial_after_gas - l64(initial_after_gas);
-        //         try_or_fail!(self.state.metadata_mut().gasometer.record_cost(diff));
-        //         self.state.metadata().gasometer.gas()
-        //     } else {
-        //         l64(self.state.metadata().gasometer.gas())
-        //     }
-        // } else {
-        //     self.state.metadata().gasometer.gas()
-        // };
-
-        // let mut gas_limit = min(gas_limit, after_gas);
-
-        // try_or_fail!(
-        //     self.state.metadata_mut().gasometer.record_cost(gas_limit)
-        // );
-
-        self.executor.state.enter(gas_limit, false);
+        let gas_limit = core::cmp::min(gas_limit, after_gas);
+	
+	//try_or_fail!(
+	//    self.executor.state.metadata_mut().gasometer().record_cost(gas_limit)
+	//);
+	self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit).ok();
+	
+        self.executor.state.enter(gas_limit as u64, false);
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
@@ -351,7 +373,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((runtime, CreateReason::Call));
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, _gas_limit: u64) -> ProgramResult {
 
         let scheme = evm::CreateScheme::Legacy {
             caller: caller,
@@ -605,7 +627,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Vec::new()
     }
 
-    pub fn into_state(self) -> ExecutorState<B> {
+    pub fn into_state(self) -> ExecutorState<'config, B> {
         self.executor.state
     }
 }

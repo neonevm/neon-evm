@@ -244,7 +244,8 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidInstructionData);
             }
 
-            let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+	    let config = evm::Config::default();
+            let executor_state = ExecutorState::new(ExecutorSubstate::new(usize::MAX, &config), backend);
             let mut executor = Machine::new(executor_state);
 
             debug_print!("Executor initialized");
@@ -453,7 +454,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code.to_vec()
         };
 
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+	let config = evm::Config::default();
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(usize::MAX, &config), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -520,12 +522,20 @@ fn do_call<'a>(
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+	let config = evm::Config::default();
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(usize::MAX, &config), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
 
-        executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+	executor.call_begin(
+            account_storage.origin(),
+            account_storage.contract(),
+            instruction_data,
+            usize::MAX, // gas_limit
+            true, // take_l64
+            false, // estimate
+        );
 
         let exit_reason = match executor.execute_n_steps(u64::MAX) {
             Ok(()) => return Err(ProgramError::InvalidInstructionData),
@@ -589,7 +599,8 @@ fn do_partial_call<'a>(
     let backend = SolanaBackend::new(&account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+    let config = evm::Config::default();
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(usize::MAX, &config), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -597,7 +608,14 @@ fn do_partial_call<'a>(
     debug_print!("   caller: {}", &account_storage.origin().to_string());
     debug_print!(" contract: {}", &account_storage.contract().to_string());
 
-    executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+    executor.call_begin(
+        account_storage.origin(),
+        account_storage.contract(),
+        instruction_data,
+        usize::MAX, // gas_limit
+        true, // take_l64
+        false, // estimate
+    );
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
