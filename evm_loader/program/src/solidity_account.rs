@@ -29,8 +29,6 @@ impl<'a> SolidityAccount<'a> {
         Ok(Self{account_data, solana_address, code_data, lamports})
     }
 
-    pub fn get_signer(&self) -> Pubkey {AccountData::get_account(&self.account_data).unwrap().signer}
-
     pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
