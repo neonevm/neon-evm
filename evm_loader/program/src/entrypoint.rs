@@ -212,7 +212,7 @@ fn process_instruction<'a>(
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
             let from_addr = verify_tx_signature(&signature, &unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
@@ -232,7 +232,7 @@ fn process_instruction<'a>(
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
             do_call(program_id, &mut account_storage, accounts, trx.call_data)
@@ -335,6 +335,7 @@ fn get_transaction_from_data(
     let (signature, rest) = rest.split_at(65);
     let (trx_len, rest) = rest.split_at(8);
     let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
+    let trx_len = usize::try_from(trx_len).map_err(|_| ProgramError::InvalidInstructionData)?;
     let (trx, _rest) = rest.split_at(trx_len as usize);
 
     Ok((trx, signature))
@@ -497,7 +498,7 @@ fn do_partial_call<'a>(
     debug_print!(" contract: {}", account_storage.contract());
 
     executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
-    executor.execute_n_steps(step_count).unwrap();
+    executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     debug_print!("save");
     executor.save_into(storage);

@@ -39,7 +39,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 0. contract account info
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
-    /// 3. ... other accounts (with clock_account in any place)
+    /// 3. ... other accounts (with `clock_account` in any place)
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -157,7 +157,7 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     pub fn get_sender(&self) -> &Sender {
-        return &self.sender
+        &self.sender
     }
 
     pub fn get_contract_account(&self) -> Option<&SolidityAccount<'a>> {
@@ -238,8 +238,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn contract(&self) -> H160 { self.contract_id }
     fn origin(&self) -> H160 {
         match self.sender {
-            Sender::Ethereum(value) => value,
-            Sender::Solana(value) => value,
+            Sender::Ethereum(value) | Sender::Solana(value) => value,
         }
     }
 
