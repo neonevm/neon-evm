@@ -161,8 +161,8 @@ fn process_instruction<'a>(
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
-            debug_print!("{}", &lamports.to_string());
-            debug_print!("{}", &space.to_string());
+            debug_print!("{}", lamports);
+            debug_print!("{}", space);
             invoke_signed(
                 &create_account_with_seed(funding_info.key, created_info.key, &base, &seed, lamports, space, &owner),
                 &accounts, &[&program_seeds[..]]
@@ -431,8 +431,8 @@ fn do_call<'a>(
 {
     debug_print!("do_call");
 
-    debug_print!("   caller: {}", &account_storage.origin().to_string());
-    debug_print!(" contract: {}", &account_storage.contract().to_string());
+    debug_print!("   caller: {}", account_storage.origin());
+    debug_print!(" contract: {}", account_storage.contract());
 
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
@@ -493,8 +493,8 @@ fn do_partial_call<'a>(
 
     debug_print!("Executor initialized");
 
-    debug_print!("   caller: {}", &account_storage.origin().to_string());
-    debug_print!(" contract: {}", &account_storage.contract().to_string());
+    debug_print!("   caller: {}", account_storage.origin());
+    debug_print!(" contract: {}", account_storage.contract());
 
     executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
     executor.execute_n_steps(step_count).unwrap();
@@ -655,22 +655,19 @@ fn check_ethereum_authority<'a>(
 {
     if sender.get_ether() != *recovered_address {
         debug_print!("Invalid sender: actual {}, recovered {}",
-                &sender.get_ether().to_string(),
-                &recovered_address.to_string());
+                sender.get_ether(), recovered_address);
         return Err(ProgramError::InvalidArgument);
     }
 
     if sender.get_nonce() != trx_nonce {
         debug_print!("Invalid Ethereum transaction nonce: acc {}, trx {}",
-                &sender.get_nonce().to_string(),
-                &trx_nonce.to_string());
+                sender.get_nonce(), trx_nonce);
         return Err(ProgramError::InvalidArgument);
     }
 
     if SolanaBackend::<ProgramAccountStorage>::chain_id() != *chain_id {
         debug_print!("Invalid chain_id: actual {}, expected {}",
-                &chain_id.to_string(),
-                &SolanaBackend::<ProgramAccountStorage>::chain_id().to_string());
+                chain_id, SolanaBackend::<ProgramAccountStorage>::chain_id());
         return Err(ProgramError::InvalidArgument);
     }
 

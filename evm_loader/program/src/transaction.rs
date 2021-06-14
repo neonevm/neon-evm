@@ -8,7 +8,7 @@ use solana_program::{
     secp256k1_program,
 };
 use std::convert::{Into, TryFrom};
-use crate::utils::keccak256_digest;
+use crate::utils::{keccak256_digest, keccak256_h256};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -129,8 +129,5 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160
     let signature = secp256k1::Signature::parse_slice(&signature[0..64])?;
 
     let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
-    let address = keccak256_digest(&public_key.serialize()[1..]);
-    let address = H160::from_slice(&address[12..32]);
-
-    Ok(address)
+    Ok(keccak256_h256(&public_key.serialize()[1..]).into())
 }
