@@ -16,24 +16,30 @@ use std::{
     cell::RefCell,
 };
 
+pub enum Sender {
+    Ethereum (H160),
+    Solana (H160),
+}
+
+#[allow(clippy::module_name_repetitions)]
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
     account_metas: Vec<&'a AccountInfo<'a>>,
     contract_id: H160,
-    caller_id: H160,
+    sender: Sender,
 }
 
 impl<'a> ProgramAccountStorage<'a> {
-    /// ProgramAccountStorage constructor
+    /// `ProgramAccountStorage` constructor
     /// 
-    /// account_infos expectations: 
+    /// `account_infos` expectations: 
     /// 
     /// 0. contract account info
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
-    /// 3. ... other accounts
+    /// 3. ... other accounts (with `clock_account` in any place)
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -53,6 +59,11 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let construct_contract_account = |account_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
         {
+            if account_info.owner != program_id || code_info.owner != program_id {
+                debug_print!("Invalid owner for program info/code");
+                return Err(ProgramError::InvalidArgument);
+            }
+
             let account_data = AccountData::unpack(&account_info.data.borrow())?;
             let account = account_data.get_account()?;
     
@@ -66,7 +77,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let code_acc = AccountData::unpack(&code_data.borrow())?;
             code_acc.get_contract()?;
     
-            Ok( SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, Some((code_acc, code_data)))? )
+            SolidityAccount::new(account_info.key, account_info.lamports(), account_data, Some((code_acc, code_data)))
         };
 
         let contract_id = {
@@ -80,31 +91,27 @@ impl<'a> ProgramAccountStorage<'a> {
             contract_id
         };
 
-        let caller_id = {
+        let sender = {
             let caller_info = next_account_info(account_info_iter)?;
 
-            let caller_id: H160 = if caller_info.owner == program_id {
+            if caller_info.owner == program_id {
                 let account_data = AccountData::unpack(&caller_info.data.borrow())?;
                 account_data.get_account()?;
 
-                let caller_acc = SolidityAccount::new(caller_info.key, (*caller_info.lamports.borrow()).clone(), account_data, None)?;
-
-                let caller_id = caller_acc.get_ether();
+                let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None)?;
+                let caller_address = caller_acc.get_ether();
                 push_account(caller_acc, caller_info);
-
-                caller_id
+                Sender::Ethereum(caller_address)
             } else {
                 if !caller_info.is_signer {
-                    debug_print!("Caller mast be signer");
+                    debug_print!("Caller must be signer");
                     debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
 
                     return Err(ProgramError::InvalidArgument);
                 }
 
-                keccak256_h256(&caller_info.key.to_bytes()).into()
-            };
-
-            caller_id
+                Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
+            }
         };
 
         while let Ok(account_info) = next_account_info(account_info_iter) {
@@ -115,10 +122,9 @@ impl<'a> ProgramAccountStorage<'a> {
                     _ => { continue; },
                 };
 
-                let sol_account = if account.code_account == Pubkey::new_from_array([0u8; 32]) {
-                    debug_print!("Common account");
-
-                    SolidityAccount::new(account_info.key, (*account_info.lamports.borrow()).clone(), account_data, None)?
+                let sol_account = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                    debug_print!("User account");
+                    SolidityAccount::new(account_info.key, account_info.lamports(), account_data, None)?
                 } else {
                     debug_print!("Contract account");
                     let code_info = next_account_info(account_info_iter)?;
@@ -146,8 +152,12 @@ impl<'a> ProgramAccountStorage<'a> {
             clock_account: clock_account.unwrap(),
             account_metas: account_metas,
             contract_id: contract_id,
-            caller_id: caller_id,
+            sender: sender,
         })
+    }
+
+    pub fn get_sender(&self) -> &Sender {
+        &self.sender
     }
 
     pub fn get_contract_account(&self) -> Option<&SolidityAccount<'a>> {
@@ -155,29 +165,26 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     pub fn get_caller_account(&self) -> Option<&SolidityAccount<'a>> {
-        self.get_account(&self.caller_id)
+        match self.sender {
+            Sender::Ethereum(addr) => self.get_account(&addr),
+            Sender::Solana(_addr) => None,
+        }
     }
 
     fn find_account(&self, address: &H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
-        match aliases.binary_search_by_key(&address, |v| &v.0) {
-            Ok(pos) => {
-                debug_print!("Found account for {} on position {}", &address.to_string(), &pos.to_string());
-                Some(aliases[pos].1)
-            }
-            Err(_) => {
-                debug_print!("Not found account for {}", &address.to_string());
-                None
-            }
+        if let Ok(pos) = aliases.binary_search_by_key(&address, |v| &v.0) {
+            debug_print!("Found account for {} on position {}", &address.to_string(), &pos.to_string());
+            Some(aliases[pos].1)
+        }
+        else {
+            debug_print!("Not found account for {}", &address.to_string());
+            None
         }
     }
 
     fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
-        if let Some(pos) = self.find_account(address) {
-            Some(&self.accounts[pos])
-        } else {
-            None
-        }
+        self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
     pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
@@ -199,10 +206,13 @@ impl<'a> ProgramAccountStorage<'a> {
                         let account_info = &self.account_metas[pos];
                         account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
-                    else if address == self.caller_id {
-                        debug_print!("This is solana user, because {:?} == {:?}.", address, self.caller_id);
-                    }
                     else {
+                        if let Sender::Solana(addr) = self.sender {
+                            if addr == address {
+                                debug_print!("This is solana user, because {:?} == {:?}.", address, addr);
+                                continue;
+                            }
+                        }
                         debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
                     }
@@ -226,7 +236,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn contract(&self) -> H160 { self.contract_id }
-    fn origin(&self) -> H160 { self.caller_id }
+    fn origin(&self) -> H160 {
+        match self.sender {
+            Sender::Ethereum(value) | Sender::Solana(value) => value,
+        }
+    }
 
     fn block_number(&self) -> U256 {
         let clock = &Clock::from_account_info(self.clock_account).unwrap();

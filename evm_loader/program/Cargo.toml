@@ -36,7 +36,7 @@ serde_bytes = "0.11"
 serde_derive = "1.0.103"
 impl-serde = "0.1"
 rlp = "0.5"
-bincode = ""
+bincode = "1.3.3"
 evm = { version = "0.18.0", path = "../rust-evm", default_features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 

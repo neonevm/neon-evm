@@ -34,6 +34,7 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
 	    self.gasometer.record_stipend(other.gasometer.gas())?;
         self.gasometer
@@ -48,12 +49,14 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
         self.gasometer.record_stipend(other.gasometer.gas())?;
 
         Ok(())
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
@@ -247,12 +250,9 @@ impl<'config> ExecutorSubstate<'config> {
     }
 
     fn known_account(&self, address: H160) -> Option<&ExecutorAccount> {
-        if let Some(account) = self.accounts.get(&address) {
-            Some(account)
-        } else if let Some(parent) = self.parent.as_ref() {
-            parent.known_account(address)
-        } else {
-            None
+        match self.accounts.get(&address) {
+            Some(account) => Some(account),
+            None => self.parent.as_ref().and_then(|parent| parent.known_account(address))
         }
     }
 
@@ -280,7 +280,7 @@ impl<'config> ExecutorSubstate<'config> {
                 return Some(
                     account.basic.balance == U256::zero()
                         && account.basic.nonce == U256::zero()
-                        && code.len() == 0,
+                        && code.is_empty(),
                 );
             }
         }
@@ -333,19 +333,19 @@ impl<'config> ExecutorSubstate<'config> {
     }
 
     fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut ExecutorAccount {
+        #[allow(clippy::map_entry)]
         if !self.accounts.contains_key(&address) {
-            let account = self
-                .known_account(address)
-                .cloned()
-                .map(|mut v| {
-                    v.reset = false;
-                    v
-                })
-                .unwrap_or_else(|| ExecutorAccount {
+            let account = self.known_account(address).cloned().map_or_else(
+                || ExecutorAccount {
                     basic: backend.basic(address),
                     code: None,
                     reset: false,
-                });
+                },
+                |mut v| {
+                    v.reset = false;
+                    v
+                },
+            );
             self.accounts.insert(address, account);
         }
 
@@ -396,7 +396,7 @@ impl<'config> ExecutorSubstate<'config> {
 
     pub fn transfer<B: Backend>(
         &mut self,
-        transfer: Transfer,
+        transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
         {
@@ -443,7 +443,7 @@ pub trait StackState : Backend {
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
     fn set_deleted(&mut self, address: H160);
     fn set_code(&mut self, address: H160, code: Vec<u8>);
-    fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError>;
+    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError>;
     fn reset_balance(&mut self, address: H160);
     fn touch(&mut self, address: H160);
 }
@@ -500,14 +500,12 @@ impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
 
     fn code_hash(&self, address: H160) -> H256 {
         self.substate.known_code(address)
-            .map(|code| keccak256_h256(&code))
-            .unwrap_or(self.backend.code_hash(address))
+            .map_or_else(|| self.backend.code_hash(address), |code| keccak256_h256(&code))
     }
 
     fn code_size(&self, address: H160) -> usize {
          self.substate.known_code(address)
-            .map(|code| code.len())
-            .unwrap_or(self.backend.code_size(address))
+            .map_or_else(|| self.backend.code_size(address), |code| code.len())
     }
 
     fn storage(&self, address: H160, key: U256) -> U256 {
@@ -612,7 +610,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
         self.substate.set_code(address, code, &self.backend)
     }
 
-    fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError> {
+    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
         self.substate.transfer(transfer, &self.backend)
     }
 
@@ -638,6 +636,7 @@ impl<'config, B: Backend> ExecutorState<'config, B> {
     }
 
     #[must_use]
+    #[allow(clippy::type_complexity)]
     pub fn deconstruct(
         self,
     ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>)) {

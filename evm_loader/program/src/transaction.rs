@@ -7,8 +7,8 @@ use solana_program::{
     program_error::{ProgramError},
     secp256k1_program,
 };
-use std::convert::Into;
-use crate::utils::keccak256_digest;
+use std::convert::{Into, TryFrom};
+use crate::utils::{keccak256_digest, keccak256_h256};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -21,9 +21,7 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, data_start: u16) -> Vec<u8> {
-    let mut instruction_data = vec![];
-
+pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
     const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
     const SIGN_SIZE: u16 = 65;
@@ -32,17 +30,18 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, da
     let msg_offset: u16 = sign_offset + SIGN_SIZE;
 
     let offsets = SecpSignatureOffsets {
-        signature_offset: sign_offset as u16,
-        signature_instruction_index: instruction_index as u8,
-        eth_address_offset: eth_offset as u16,
-        eth_address_instruction_index: instruction_index as u8,
-        message_data_offset: msg_offset as u16,
-        message_data_size: message_len as u16,
-        message_instruction_index: instruction_index as u8,
+        signature_offset: sign_offset,
+        signature_instruction_index: instruction_index,
+        eth_address_offset: eth_offset,
+        eth_address_instruction_index: instruction_index,
+        message_data_offset: msg_offset,
+        message_data_size: message_len,
+        message_instruction_index: instruction_index,
     };
 
     let bin_offsets = bincode::serialize(&offsets).unwrap();
 
+    let mut instruction_data = Vec::with_capacity(1 + bin_offsets.len());
     instruction_data.push(NUMBER_OF_SIGNATURES);
     instruction_data.extend(&bin_offsets);
 
@@ -51,27 +50,28 @@ pub fn make_secp256k1_instruction(instruction_index: u16, message_len: usize, da
 
 pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
 {
+    let message_len = u16::try_from(message_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+
     let current_instruction = load_current_index(&sysvar_info.try_borrow_data()?);
+    let current_instruction = u8::try_from(current_instruction).map_err(|_| ProgramError::InvalidInstructionData)?;
     let index = current_instruction - 1;
 
-    match load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
-        Ok(instr) => {
-            if secp256k1_program::check_id(&instr.program_id) {
-                let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
-                if reference_instruction != instr.data {
-                    debug_print!("wrong keccak instruction data");
-                    debug_print!("instruction: {}", &hex::encode(&instr.data));
-                    debug_print!("reference: {}", &hex::encode(&reference_instruction));
-                    return Err(ProgramError::InvalidInstructionData);
-                }
-            } else {
-                return Err(ProgramError::IncorrectProgramId);
+    if let Ok(instr) = load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
+        if secp256k1_program::check_id(&instr.program_id) {
+            let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
+            if reference_instruction != instr.data {
+                debug_print!("wrong keccak instruction data");
+                debug_print!("instruction: {}", &hex::encode(&instr.data));
+                debug_print!("reference: {}", &hex::encode(&reference_instruction));
+                return Err(ProgramError::InvalidInstructionData);
             }
-        },
-        Err(_) => {
-            debug_print!("ERR");
-            return Err(ProgramError::MissingRequiredSignature);
+        } else {
+            return Err(ProgramError::IncorrectProgramId);
         }
+    }
+    else {
+        debug_print!("ERR");
+        return Err(ProgramError::MissingRequiredSignature);
     }
 
     Ok(())
@@ -79,6 +79,7 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
 
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct UnsignedTransaction {
     pub nonce: u64,
     pub gas_price: U256,
@@ -120,14 +121,7 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn get_data(raw_tx: &[u8]) -> (u64, Option<H160>, Vec<u8>) {
-    let tx: Result<UnsignedTransaction, _> = rlp::decode(&raw_tx);
-    let tx = tx.unwrap();
-
-    (tx.nonce, tx.to, tx.call_data)
-}
-
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), secp256k1::Error> {
+pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, secp256k1::Error> {
     let digest = keccak256_digest(unsigned_trx);
     let message = secp256k1::Message::parse_slice(&digest)?;
 
@@ -135,9 +129,5 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<(), 
     let signature = secp256k1::Signature::parse_slice(&signature[0..64])?;
 
     let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
-    if secp256k1::verify(&message, &signature, &public_key) {
-        Ok(())
-    } else {
-        Err(secp256k1::Error::InvalidSignature)
-    }
+    Ok(keccak256_h256(&public_key.serialize()[1..]).into())
 }
