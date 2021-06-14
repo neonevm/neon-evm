@@ -35,11 +35,11 @@ impl<'config> ExecutorMetadata<'config> {
     }
 
     pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
-	self.gasometer.record_stipend(other.gasometer.gas())?;
+	    self.gasometer.record_stipend(other.gasometer.gas())?;
         self.gasometer
             .record_refund(other.gasometer.refunded_gas())?;
 
-	// The following fragment deleted in the mainstream code:
+    	// The following fragment deleted in the mainstream code:
         // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
         //     let return_value = other.borrow().runtime().unwrap().machine().return_value();
         //     runtime.set_return_data(return_value);

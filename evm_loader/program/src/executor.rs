@@ -12,14 +12,14 @@ use solana_program::program_error::ProgramError;
 use std::borrow::BorrowMut;
 use solana_program::entrypoint::ProgramResult;
 
-//macro_rules! try_or_fail {
-//    ( $e:expr ) => {
-//        match $e {
-//            Ok(v) => v,
-//            Err(e) => return e.into(),
-//        }
-//    }
-//}
+macro_rules! try_or_fail {
+    ( $e:expr ) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+    }
+}
 
 fn l64(gas: u64) -> u64 {
     gas - gas / 64
@@ -171,7 +171,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         init_code: Vec<u8>,
         _target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
@@ -325,18 +324,17 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
-    pub fn call_begin(
-	&mut self,
+    pub fn call_begin(&mut self,
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
         gas_limit: usize,
         take_l64: bool,
         estimate: bool,
-    ) {
+    ) -> Result<(), ExitError> {
         self.executor.state.inc_nonce(caller);
 
-	let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
+	    let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
             //if self.executor.config.estimate { // no such field 'estimate'
             if estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
@@ -356,12 +354,10 @@ impl<'config, B: Backend> Machine<'config, B> {
         };
 
         let gas_limit = core::cmp::min(gas_limit, after_gas);
-	
-	//try_or_fail!(
-	//    self.executor.state.metadata_mut().gasometer().record_cost(gas_limit)
-	//);
-	self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit).ok();
-	
+	    try_or_fail!(
+	        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
+	    );
+
         self.executor.state.enter(gas_limit as u64, false);
         self.executor.state.touch(code_address);
 
@@ -371,14 +367,14 @@ impl<'config, B: Backend> Machine<'config, B> {
         let runtime = evm::Runtime::new(code, input, context, &self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
+        Ok(())
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, _gas_limit: u64) -> ProgramResult {
-
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
         let scheme = evm::CreateScheme::Legacy {
             caller: caller,
         };
-        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.enter(gas_limit, false);
 
         match self.executor.create(caller, scheme, U256::zero(), code, None) {
             Capture::Exit(_) => {
@@ -403,7 +399,6 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
         Ok(())
     }
-
 
     fn step_opcode(&mut self) -> RuntimeApply {
         if let Some(runtime) = self.runtime.last_mut() {
@@ -488,7 +483,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                         self.executor.state.exit_discard().unwrap();
                     }
                 }
-
 
                 let (return_value, implementation) = {
                     if let Some(runtime) = self.runtime.last(){

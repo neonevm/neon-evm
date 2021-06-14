@@ -367,7 +367,7 @@ mod test {
 
         let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
 
-        let config = evm::Config::istanbul();
+        let config = evm::Config::default();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
@@ -447,7 +447,7 @@ mod test {
 
         let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
 
-        let config = evm::Config::istanbul();
+        let config = evm::Config::default();
         let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
