@@ -57,7 +57,7 @@ impl AccountData {
     }
 
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
-        if dst.len() < 1 { return Err(ProgramError::AccountDataTooSmall); }
+        if dst.is_empty() { return Err(ProgramError::AccountDataTooSmall); }
         Ok(match self {
             AccountData::Empty => {
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
@@ -90,49 +90,49 @@ impl AccountData {
             AccountData::Account(acc) => acc.size() + 1,
             AccountData::Contract(acc) => acc.size() + 1,
             AccountData::Storage(acc) => acc.size() + 1,
-            _ => return 1,
+            _ => 1,
         }
     }
 
     pub fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
             AccountData::Account(ref acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
     pub fn get_mut_account(&mut self) -> Result<&mut Account, ProgramError>  {
         match self {
             AccountData::Account(ref mut acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
     pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
             AccountData::Contract(ref acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
     pub fn get_mut_contract(&mut self) -> Result<&mut Contract, ProgramError>  {
         match self {
             AccountData::Contract(ref mut acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
     pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
             AccountData::Storage(ref acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
     pub fn get_mut_storage(&mut self) -> Result<&mut Storage, ProgramError>  {
         match self {
             AccountData::Storage(ref mut acc) => Ok(acc),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 }

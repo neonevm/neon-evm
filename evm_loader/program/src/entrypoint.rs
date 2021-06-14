@@ -4,7 +4,7 @@
 
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
@@ -95,6 +95,8 @@ static mut A: BumpAllocator = BumpAllocator;
 // 6. storage (all remaining space, if code_size not equal zero)
 
 entrypoint!(process_instruction);
+
+#[warn(clippy::too_many_lines)]
 fn process_instruction<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
@@ -106,6 +108,7 @@ fn process_instruction<'a>(
     let instruction = EvmInstruction::unpack(instruction_data)?;
     debug_print!("Instruction parsed");
 
+    #[allow(clippy::match_same_arms)]
     let result = match instruction {
         EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
             let funding_info = next_account_info(account_info_iter)?;
@@ -122,16 +125,16 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
-                    let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0u32} );
+                    let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
                     contract_data.pack(&mut program_code.data.borrow_mut())?;
     
                     *program_code.key
                 } else {
-                    Pubkey::new_from_array([0u8; 32])
+                    Pubkey::new_from_array([0_u8; 32])
                 }
             };
 
-            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0u64, signer: *funding_info.key, code_account: code_account_key, blocked: None} );
+            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0_u64, signer: *funding_info.key, code_account: code_account_key, blocked: None} );
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
@@ -156,7 +159,7 @@ fn process_instruction<'a>(
                 AccountData::Account(_) => (),
                 _ => return Err(ProgramError::InvalidAccountData),
             };
-            let caller = SolidityAccount::new(base_info.key, (*base_info.lamports.borrow()).clone(), base_info_data, None)?;
+            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None)?;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
@@ -187,7 +190,6 @@ fn process_instruction<'a>(
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
-            let account_info_iter = &mut accounts.iter();
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
 
@@ -205,7 +207,8 @@ fn process_instruction<'a>(
                 let (signature, rest) = rest.split_at(65);
                 let (trx_len, rest) = rest.split_at(8);
                 let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-                let (trx, _rest) = rest.split_at(trx_len as usize);
+                let trx_len = usize::try_from(trx_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+                let (trx, _rest) = rest.split_at(trx_len);
                 (trx.to_vec(), signature.to_vec())
             };
             if let Err(e) = verify_tx_signature(&signature, &unsigned_msg) {
@@ -216,12 +219,9 @@ fn process_instruction<'a>(
             let nonce = trx.nonce;
             let data = trx.call_data;
             let to = trx.to;
-            match to{
-                Some(_) => {
-                    debug_print!("This is not deploy contract transaction");
-                    return Err(ProgramError::InvalidInstructionData);
-                },
-                None => {}
+            if to.is_some() {
+                debug_print!("This is not deploy contract transaction");
+                return Err(ProgramError::InvalidInstructionData);
             }
 
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
@@ -249,10 +249,7 @@ fn process_instruction<'a>(
 
             debug_print!("Executor initialized");
 
-            match executor.create_begin(caller_ether, data, u64::max_value()) {
-                Err(reason) => {return Err(reason)},
-                _ => {}
-            }
+            executor.create_begin(caller_ether, data, u64::max_value())?;
             executor.execute_n_steps(step_count).unwrap();
 
             debug_print!("save");
@@ -261,13 +258,12 @@ fn process_instruction<'a>(
         },
 
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
-            let account_info_iter = &mut accounts.iter();
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
 
             let caller = H160::from_slice(from_addr);
             let (nonce, _contract, data) = get_data(unsigned_msg);
@@ -275,13 +271,12 @@ fn process_instruction<'a>(
             do_call(program_id, accounts, data, Some( (caller, nonce) ))
         },
         EvmInstruction::CheckEtheriumTX {from_addr, sign: _, unsigned_msg} => {    
-            let account_info_iter = &mut accounts.iter();
             let program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
 
             let caller = H160::from_slice(from_addr);
             let (nonce, contract, data) = get_data(unsigned_msg);
@@ -317,14 +312,13 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign: _, unsigned_msg} => {
-            let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
 
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -336,7 +330,6 @@ fn process_instruction<'a>(
             storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::Continue {step_count} => {
-            let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
 
             let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
@@ -355,7 +348,6 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Cancel => {
-            let account_info_iter = &mut accounts.iter();
             let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
@@ -398,14 +390,13 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
     let account_data = AccountData::unpack(&data)?;
     match account_data {
-        AccountData::Contract(ref acc) => {
-            if acc.code_size != 0 {
-                return Err(ProgramError::InvalidAccountData);
-            }
+        AccountData::Account(_) | AccountData::Storage(_) => {
+            return Err(ProgramError::InvalidAccountData);
         },
-        AccountData::Account(_) => return Err(ProgramError::InvalidAccountData),
-        AccountData::Storage(_) => return Err(ProgramError::InvalidAccountData),
-        AccountData::Empty => (),
+        AccountData::Contract(acc) if acc.code_size != 0 => {
+            return Err(ProgramError::InvalidAccountData);
+        },
+        AccountData::Contract(_) | AccountData::Empty => { },
     };
 
     let offset = account_data.size() + offset as usize;
@@ -449,7 +440,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             let (_contract_header, rest) = data.split_at(contract_info_data.size());
             let (code_len, rest) = rest.split_at(8);
             let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-            let (code, _rest) = rest.split_at(code_len as usize);
+            let code_len = usize::try_from(code_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let (code, _rest) = rest.split_at(code_len);
             code.to_vec()
         };
 
@@ -457,10 +449,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        match executor.create_begin(account_storage.origin(), code_data, u64::max_value()) {
-            Err(reason) => {return Err(reason)},
-            _ => {}
-        }
+        executor.create_begin(account_storage.origin(), code_data, u64::max_value())?;
         let exit_reason = executor.execute();
         let result = executor.return_value();
         debug_print!("Call done");
@@ -479,7 +468,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log)?, &accounts)?;
+            invoke(&on_event(program_id, log), &accounts)?;
         }
     }
     invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
@@ -549,11 +538,11 @@ fn do_call<'a>(
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log)?, &accounts)?;
+            invoke(&on_event(program_id, log), &accounts)?;
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason.clone(), &result)?;
+    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
     Ok(())
 }
 
@@ -665,7 +654,7 @@ fn do_continue<'a>(
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log)?, &accounts)?;
+            invoke(&on_event(program_id, log), &accounts)?;
         }
     }
 
@@ -678,7 +667,8 @@ fn invoke_on_return<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
-    result: &Vec<u8>,) -> ProgramResult
+    result: &[u8],
+) -> ProgramResult
 {    
     let exit_status = match exit_reason {
         ExitReason::Succeed(success_code) => { 
@@ -722,7 +712,7 @@ fn invoke_on_return<'a>(
 
     debug_print!("{}", &hex::encode(&result));
 
-    let ix = on_return(program_id, exit_status, &result).unwrap();
+    let ix = on_return(program_id, exit_status, &result);
     invoke(
         &ix,
         &accounts
@@ -740,24 +730,12 @@ fn check_from_or_signer<'a>(
 ) ->  ProgramResult
 {
     if caller_info.owner == program_id {
-        if caller_opt.is_some() {
-            let caller = caller_opt.unwrap();
-
+        if let Some(caller) = caller_opt {
             let caller_signer = caller.get_signer();
             let caller_ether = caller.get_ether();
             let caller_nonce = caller.get_nonce();
 
-            if from_info.is_none() {
-                if caller_signer != *signer_info.key || !signer_info.is_signer {
-                    debug_print!("Add valid account signer");
-                    debug_print!("   caller signer: {}", &caller_signer.to_string());
-                    debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
-                    debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
-
-                    return Err(ProgramError::InvalidArgument);
-                }
-            } else {
-                let (from, nonce) = from_info.unwrap();
+            if let Some((from, nonce)) = from_info {
                 if caller_ether != from {
                     debug_print!("Invalid caller account");
                     debug_print!("   caller addres: {}", &caller_ether.to_string());
@@ -772,6 +750,14 @@ fn check_from_or_signer<'a>(
 
                     return Err(ProgramError::InvalidArgument);
                 }
+            }
+            else if caller_signer != *signer_info.key || !signer_info.is_signer {
+                debug_print!("Add valid account signer");
+                debug_print!("   caller signer: {}", &caller_signer.to_string());
+                debug_print!("   signer pubkey: {}", &signer_info.key.to_string());
+                debug_print!("is signer signer: {}", &signer_info.is_signer.to_string());
+
+                return Err(ProgramError::InvalidArgument);
             }
         } else {
             return Err(ProgramError::InvalidArgument);

@@ -151,12 +151,13 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
     fn mark_delete(&mut self, address: H160, target: H160) -> Result<(), ExitError> {
         let balance = self.balance(address);
-
-        self.state.transfer(evm::Transfer {
+        let transfer = evm::Transfer {
             source: address,
             target: target,
             value: balance,
-        })?;
+        };
+
+        self.state.transfer(&transfer)?;
         self.state.reset_balance(address);
         self.state.set_deleted(address);
 
@@ -241,8 +242,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
-                Capture::Exit((reason, _return_data)) => {
-                    return Capture::Exit((reason.clone(), _return_data.clone()))
+                Capture::Exit((reason, return_data)) => {
+                    return Capture::Exit((reason.clone(), return_data.clone()))
                 },
                 Capture::Trap(_interrupt) => {
                     unreachable!("not implemented");
@@ -312,7 +313,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     }
 
     fn finalize_restore(&mut self) {
-        for (runtime, _) in self.runtime.iter_mut() {
+        for (runtime, _) in &mut self.runtime {
             runtime.finalize_restore(&self.executor);
         }
     }
@@ -353,9 +354,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
 
-        let scheme = evm::CreateScheme::Legacy {
-            caller: caller,
-        };
+        let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(u64::max_value(), false);
 
         match self.executor.create(caller, scheme, U256::zero(), code, None) {
@@ -386,19 +385,19 @@ impl<'config, B: Backend> Machine<'config, B> {
     fn step_opcode(&mut self) -> RuntimeApply {
         if let Some(runtime) = self.runtime.last_mut() {
             match runtime.0.step(&mut self.executor) {
-                Ok(()) => {return RuntimeApply::Continue},
+                Ok(()) => { RuntimeApply::Continue },
                 Err(capture) =>
                     match capture {
-                        Capture::Exit(reason) => {return RuntimeApply::Exit(reason)},
+                        Capture::Exit(reason) => { RuntimeApply::Exit(reason) },
                         Capture::Trap(interrupt) =>
                             match interrupt {
                                 Resolve::Call(interrupt, resolve) => {
                                     mem::forget(resolve);
-                                    return RuntimeApply::Call(interrupt);
+                                    RuntimeApply::Call(interrupt)
                                 },
                                 Resolve::Create(interrupt, resolve) => {
                                     mem::forget(resolve);
-                                    return RuntimeApply::Create(interrupt);
+                                    RuntimeApply::Create(interrupt)
                                 },
                         }
                 }
@@ -406,14 +405,15 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
         else{
             debug_print!("runtime.step: Err, runtime not found");
-            return RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported));
+            RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported))
         }
     }
 
+    #[warn(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
 
         match self.step_opcode(){
-            RuntimeApply::Continue => {return Ok(())},
+            RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {
                 let code = self.executor.code(info.code_address);
                 self.executor.state.enter(u64::max_value(), false);
@@ -426,7 +426,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     &self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Call));
-                return Ok(())
+                Ok(())
             },
             RuntimeApply::Create(info) => {
                 self.executor.state.enter(u64::max_value(), false);
@@ -443,7 +443,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     &self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Create(info.address)));
-                return Ok(())
+                Ok(())
             },
             RuntimeApply::Exit(exit_reason) => {
                 let mut exit_success = false;
@@ -493,21 +493,21 @@ impl<'config, B: Backend> Machine<'config, B> {
                                     return_value,
                                     &self.executor
                                 ){
-                                    Control::Continue => {return Ok(())},
-                                    Control::Exit(e) => {return Err(e.into())},
+                                    Control::Continue => { Ok(()) },
+                                    Control::Exit(e) => { Err(e) },
                                     _ => {
                                         debug_print!("runtime.step: RuntimeApply::Exit, impl::Call, save_return_value: NotSupported");
-                                        return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
                                     }
                                 }
                             }
                             else{
                                 debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
                             }
                         }
                         else{
-                            return Err(exit_reason);
+                            Err(exit_reason)
                         }
 
                     },
@@ -542,26 +542,26 @@ impl<'config, B: Backend> Machine<'config, B> {
                                     return_value,
                                     &self.executor
                                 ){
-                                    Control::Continue => {return Ok(())},
-                                    Control::Exit(e) => {return Err(e.into())},
+                                    Control::Continue => { Ok(()) },
+                                    Control::Exit(e) => { Err(e) },
                                     _ => {
                                         debug_print!("runtime.step: RuntimeApply::Exit, impl::Create, save_return_value: NotSupported");
-                                        return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
                                     }
                                 }
                             }
                             else{
                                 debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
                             }
                         }
                         else{
-                            return Err(actual_reason);
+                            Err(actual_reason)
                         }
                     },
                     _ => {
                         debug_print!("runtime.step: RuntimeApply::Exit, impl: _");
-                        return Err(ExitReason::Fatal(ExitFatal::NotSupported));
+                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
                     }
                 }
 
