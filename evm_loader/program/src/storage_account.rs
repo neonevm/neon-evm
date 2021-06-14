@@ -8,7 +8,7 @@ use solana_program::{
     program_error::ProgramError,
 };
 use serde::{ Serialize, de::DeserializeOwned };
-
+use std::convert::TryInto;
 
 pub struct StorageAccount<'a> {
     info: &'a AccountInfo<'a>,
@@ -83,7 +83,7 @@ impl<'a> StorageAccount<'a> {
             return Err(ProgramError::NotEnoughAccountKeys);
         }
 
-        let keys = accounts.iter().map(|a| a.unsigned_key().clone());
+        let keys = accounts.iter().map(|a| *a.unsigned_key());
         if !self.accounts()?.into_iter().eq(keys) {
             return Err(ProgramError::NotEnoughAccountKeys);
         }
@@ -127,7 +127,7 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
-                account.blocked = Some(self.info.unsigned_key().clone());
+                account.blocked = Some(*self.info.unsigned_key());
                 AccountData::pack(&AccountData::Account(account), &mut data)?;
             }
         }
@@ -138,8 +138,14 @@ impl<'a> StorageAccount<'a> {
     pub fn serialize<T: Serialize, E: Serialize>(&mut self, evm_data: &T, executor_data: &E) -> Result<(), ProgramError> {
         {
             let storage = AccountData::get_mut_storage(&mut self.data)?;
-            storage.evm_data_size = bincode::serialized_size(&evm_data).map_err(|_| ProgramError::InvalidInstructionData)? as usize;
-            storage.executor_data_size = bincode::serialized_size(&executor_data).map_err(|_| ProgramError::InvalidInstructionData)? as usize;
+            storage.evm_data_size = bincode::serialized_size(&evm_data)
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+                .try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?;
+            storage.executor_data_size = bincode::serialized_size(&executor_data)
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+                .try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?;
         }
         
         let mut account_data = self.info.try_borrow_mut_data()?;

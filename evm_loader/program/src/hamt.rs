@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation, clippy::similar_names)]
+
 use evm::U256;
 use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
@@ -42,7 +44,7 @@ impl<'a> Hamt<'a> {
         }
 
         if reset {
-            data[0..header_len].copy_from_slice(&vec![0u8; header_len]);
+            data[0..header_len].copy_from_slice(&vec![0_u8; header_len]);
             let last_used_ptr = array_mut_ref![data, 0, 4];
             *last_used_ptr = (header_len as u32).to_le_bytes();
             Ok(Hamt {data: data, last_used: header_len as u32, used: 0, item_count: 0})
@@ -57,10 +59,10 @@ impl<'a> Hamt<'a> {
     }
 
     fn allocate_item(&mut self, item_type: u8) -> Result<u32, ProgramError> {
-        let free_pos = item_type as u32 * size_of::<u32>() as u32;
+        let free_pos = u32::from(item_type) * (size_of::<u32>() as u32);
         let size:u32 = match item_type {
             0 => (256+256)/8,
-            _ => (4+item_type as u32 * 4),
+            _ => (4 + u32::from(item_type) * 4),
         };
         if item_type < 32 && item_type > 0 {
             let item_pos = self.restore_u32(free_pos);
@@ -82,11 +84,11 @@ impl<'a> Hamt<'a> {
     }
 
     fn release_item(&mut self, item_type: u8, item_pos: u32) {
-        let free_pos = item_type as u32 * size_of::<u32>() as u32;
+        let free_pos = u32::from(item_type) * (size_of::<u32>() as u32);
         if item_type >= 32 || item_type == 0 {panic!("Release unreleased items");};
         let size:u32 = match item_type {
             0 => (256+256)/8,
-            _ => (4+item_type as u32 * 4),
+            _ => (4 + u32::from(item_type) * 4),
         };
         self.save_u32(item_pos, self.restore_u32(free_pos));
         self.save_u32(free_pos, item_pos);
@@ -134,13 +136,10 @@ impl<'a> Hamt<'a> {
 
     fn get_item(&self, pos: u32) -> ItemType {
         let d = self.restore_u32(pos);
-        if d == 0 {
-            return ItemType::Empty;
-        }
-        if d & 1 == 1 {
-            return ItemType::Item {pos: d & !1};
-        } else {
-            return ItemType::Array {pos: d & !1};
+        match d {
+            0 => ItemType::Empty,
+            n if n & 1 == 1 => ItemType::Item {pos: n & !1},
+            n => ItemType::Array {pos: n & !1}
         }
     }
 
@@ -148,7 +147,7 @@ impl<'a> Hamt<'a> {
         let (key, tag) = (key >> 5, key.low_u32() & 0b11111);
         let ptr_pos = 32*4 + tag * 4;
         let res = self.insert_item(ptr_pos, key, value);
-        if let Ok(_) = res {self.item_count += 1;};
+        if res.is_ok() {self.item_count += 1;};
         res
     }
 
@@ -163,30 +162,31 @@ impl<'a> Hamt<'a> {
                 if old_key == key {
                     self.save_value(pos+size_of::<U256>() as u32, &value);
                     return Ok(());
-                } else {
-                    let mut ptr_pos = ptr_pos;
-                    let (mut old_key, mut old_tag) = (old_key >> 5, old_key.low_u32() & 0b11111);
-                    let (mut new_key, mut new_tag) = (key >> 5, key.low_u32() & 0b11111);
-                    loop {
-                        if old_tag != new_tag {break;}
-                        let array_pos = self.allocate_item(1)?;
-
-                        self.save_u32(array_pos, 1<<old_tag);
-                        self.save_u32(ptr_pos, array_pos);
-                        ptr_pos = array_pos+4;
-                        old_tag = old_key.low_u32() & 0b11111; old_key = old_key >> 5;
-                        new_tag = new_key.low_u32() & 0b11111; new_key = new_key >> 5;
-                    }
-
-                    let item_pos = self.place_item(new_key, value)?;
-                    self.save_value(pos, &(old_key));
-
-                    let tags = (1 << old_tag) | (1 << new_tag);
-                    let (item1_pos, item2_pos) = if old_tag < new_tag {(pos|1, item_pos)} else {(item_pos, pos|1)};
-
-                    let array_pos = self.place_items2(tags, item1_pos, item2_pos)?;
-                    self.save_u32(ptr_pos, array_pos);
                 }
+
+                let mut ptr_pos = ptr_pos;
+                let (mut old_key, mut old_tag) = (old_key >> 5, old_key.low_u32() & 0b11111);
+                let (mut new_key, mut new_tag) = (key >> 5, key.low_u32() & 0b11111);
+                loop {
+                    if old_tag != new_tag {break;}
+                    let array_pos = self.allocate_item(1)?;
+
+                    self.save_u32(array_pos, 1<<old_tag);
+                    self.save_u32(ptr_pos, array_pos);
+                    ptr_pos = array_pos+4;
+                    old_tag = old_key.low_u32() & 0b11111; old_key >>= 5;
+                    new_tag = new_key.low_u32() & 0b11111; new_key >>= 5;
+                }
+
+                let item_pos = self.place_item(new_key, value)?;
+                self.save_value(pos, &(old_key));
+
+                let tags = (1 << old_tag) | (1 << new_tag);
+                let (item1_pos, item2_pos) = if old_tag < new_tag {(pos|1, item_pos)} else {(item_pos, pos|1)};
+
+                let array_pos = self.place_items2(tags, item1_pos, item2_pos)?;
+                self.save_u32(ptr_pos, array_pos);
+                
                 return Ok(());
             },
             ItemType::Array{pos} => {
@@ -225,24 +225,24 @@ impl<'a> Hamt<'a> {
     fn find_item(&self, ptr_pos: u32, key: U256) -> Option<U256> {
         match self.get_item(ptr_pos) {
             ItemType::Empty => {
-                return None;
+                None
             },
             ItemType::Item{pos} => {
                 let old_key = self.restore_value(pos);
                 if old_key == key {
                     Some(self.restore_value(pos+size_of::<U256>() as u32))
                 } else {
-                    return None;
+                    None
                 }
             },
             ItemType::Array{pos} => {
                 let (key, tag) = (key >> 5, key.low_u32() & 0b11111);
                 let tags = self.restore_u32(pos);
                 if tags & (1 << tag) == 0 {
-                    return None;
+                    None
                 } else {
                     let shift = (tags & ((1 << tag)-1)).count_ones();
-                    return self.find_item(pos+4 + shift*4, key);
+                    self.find_item(pos+4 + shift*4, key)
                 }
             },
         }

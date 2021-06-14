@@ -1,6 +1,6 @@
 use serde::{Serialize, Serializer};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use evm::{H160, H256};
 use evm::backend::Log;
 
@@ -10,6 +10,7 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
 
 /// Create a new account
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
@@ -151,7 +152,8 @@ impl<'a> EvmInstruction<'a> {
                 let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (bytes, _) = rest.split_at(length as usize);
+                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
+                let (bytes, _) = rest.split_at(length);
                 EvmInstruction::Write {offset, bytes}
             },
             1 => {
@@ -248,27 +250,27 @@ impl<'a> EvmInstruction<'a> {
 pub fn on_return(
     myself_program_id: &Pubkey,
     status: u8,
-    result: &Vec<u8>
-) -> Result<Instruction, ProgramError> {
+    result: &[u8]
+) -> Instruction {
     let mut data = Vec::with_capacity(2 + result.len());
-    data.push(6u8);
+    data.push(6_u8);
     data.push(status);
     data.extend(result);
 
-    Ok(Instruction {
+    Instruction {
         program_id: *myself_program_id,
-        accounts: [].to_vec(),
-        data: data,
-    })
+        accounts: Vec::new(),
+        data,
+    }
 }
 
 /// Creates a `OnEvent` instruction.
 pub fn on_event(
     myself_program_id: &Pubkey,
     log: Log
-) -> Result<Instruction, ProgramError> {
+) -> Instruction {
     let mut data = Vec::new();
-    data.insert(0, 7u8);
+    data.insert(0, 7_u8);
 
     data.extend_from_slice(log.address.as_bytes());
 
@@ -279,9 +281,9 @@ pub fn on_event(
 
     data.extend(&log.data);
 
-    Ok(Instruction {
+    Instruction {
         program_id: *myself_program_id,
-        accounts: [].to_vec(),
+        accounts: Vec::new(),
         data,
-    })
+    }
 }
