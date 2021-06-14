@@ -445,16 +445,18 @@ fn do_call<'a>(
 	    let config = evm::Config::default();
         let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, &config), backend);
         let mut executor = Machine::new(executor_state);
+
         debug_print!("Executor initialized");
 
-	    if let Err(_) = executor.call_begin(
+	    if let Err(e) = executor.call_begin(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
             gas_limit,
-            true, // take_l64
+            false, // take_l64
             false, // estimate
         ) {
+            debug_print!("{:?}", e);
             return Err(ProgramError::InvalidInstructionData);
         }
 
@@ -511,8 +513,14 @@ fn do_partial_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let r = executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, gas_limit, false, false);
-    if let Err(e) = r {
+    if let Err(e) = executor.call_begin(
+        account_storage.origin(),
+        account_storage.contract(),
+        instruction_data,
+        gas_limit,
+        false, // take_l64
+        false, // estimate
+    ) {
         debug_print!("{:?}", e);
         return Err(ProgramError::InvalidInstructionData);
     }
