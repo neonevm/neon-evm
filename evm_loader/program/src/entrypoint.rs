@@ -258,7 +258,7 @@ fn process_instruction<'a>(
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
             do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data)?;
