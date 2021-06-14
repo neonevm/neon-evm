@@ -22,10 +22,11 @@ class ERC20:
     def __init__(self, contract_account, contract_code_account, ethereum_id=None):
         self.contract_account = contract_account
         self.contract_code_account = contract_code_account
-        self.ethereum_id = ethereum_id
         print("erc20_id:", self.contract_account)
-        print("erc20_id_ethereum:", self.ethereum_id.hex())
         print("erc20_code:", self.contract_code_account)
+        if ethereum_id is not None:
+            self.ethereum_id = ethereum_id
+            print("erc20_id_ethereum:", self.ethereum_id.hex())
         self.caller_ether = None
         self.neon_evm_client = None
 
@@ -106,7 +107,7 @@ class ERC20:
         assert(data[1] < 0xd0)  # less 0xd0 - success
         value = data[2:]
         ret = int.from_bytes(value, "big")
-        assert 0 != ret, 'erc20_deposit2: FAIL'
+        assert 0 != ret, 'erc20.deposit: FAIL'
         return ret
 
     def withdraw(self, receiver, amount, balance_erc20, mint_id):
@@ -131,9 +132,28 @@ class ERC20:
         assert(data[1] < 0xd0)  # less 0xd0 - success
         value = data[2:]
         ret = int.from_bytes(value, "big")
-        assert ret != 0, 'erc20_withdraw: FAIL'
+        assert ret != 0, 'erc20.withdraw: FAIL'
         return ret
 
+    def transfer(self, recipient, amount):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
+        trx_data = func_name + bytearray.fromhex(
+            str("%024x" % 0) + recipient +
+            "%064x" % amount
+        )
+        ethereum_transaction.prepare(trx_data)
+        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "big")
+        print('erc20.transfer:', 'OK' if ret != 0 else 'FAIL')
+        return ret
 
 def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, caller) -> ERC20:
     ctor_init = str("%064x" % 0xa0) + \
@@ -372,25 +392,6 @@ class ERC20test(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         return storage
 
-    def erc20_transfer(self, ethereum_transaction, eth_to, amount):
-        func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
-        trx_data = func_name + bytearray.fromhex(
-            str("%024x" % 0) + eth_to +
-            "%064x" % amount
-        )
-        ethereum_transaction.prepare(trx_data)
-        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        ret = int.from_bytes(value, "big")
-        print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
-        return ret
-
 
     # @unittest.skip("not for CI")
     def test_erc20(self):
@@ -493,8 +494,8 @@ class ERC20test(unittest.TestCase):
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
-        erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
+        erc20_id = '6asyvW5rw6SC6VqddwCmsgmr2SVmRK66NmkCc3kZWa5C'
+        erc20_code = 'BdbM3g1uN7u5qxiNcet1aRq36hzwyTqiCfkmkqo9Ezk'
         erc20 = ERC20(erc20_id, erc20_code)
         erc20.set_caller(self.caller_ether)
         erc20.set_neon_evm_client(self.neon_evm_client)
