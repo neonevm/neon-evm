@@ -230,7 +230,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
@@ -256,7 +256,7 @@ fn process_instruction<'a>(
             let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or_else(|| ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
