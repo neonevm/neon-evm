@@ -1,6 +1,6 @@
-use serde::{Serialize, Serializer, Deserialize};
+use serde::{Serialize, Serializer};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use evm::{H160, H256};
 use evm::backend::Log;
 
@@ -10,6 +10,7 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
 
 /// Create a new account
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
@@ -103,15 +104,6 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
-    /// Call Ethereum-contract action from raw transaction data
-    /// # Account references same as in Call
-    CheckEtheriumTX {
-        /// Call data
-        from_addr: &'a [u8],
-        sign: &'a [u8],
-        unsigned_msg: &'a [u8],
-    },
-
     /// Called action return
     OnReturn {
         /// Contract execution status 
@@ -160,7 +152,8 @@ impl<'a> EvmInstruction<'a> {
                 let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (bytes, _) = rest.split_at(length as usize);
+                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
+                let (bytes, _) = rest.split_at(length);
                 EvmInstruction::Write {offset, bytes}
             },
             1 => {
@@ -195,7 +188,7 @@ impl<'a> EvmInstruction<'a> {
                 let (lamports, rest) = rest.split_at(8);
                 let (space, rest) = rest.split_at(8);
 
-                let (owner, rest) = rest.split_at(32);
+                let (owner, _rest) = rest.split_at(32);
                 let owner = Pubkey::new(owner);
 
                 let seed = seed.into();
@@ -209,11 +202,6 @@ impl<'a> EvmInstruction<'a> {
                 let (sign, unsigned_msg) = rest.split_at(65);
                 EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg}
             },
-            0xa1 => {
-                let (from_addr, rest) = rest.split_at(20);
-                let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::CheckEtheriumTX {from_addr, sign, unsigned_msg}
-            },
             6 => {
                 let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::OnReturn {status, bytes}
@@ -225,7 +213,7 @@ impl<'a> EvmInstruction<'a> {
                 let (topics_cnt, mut rest) = rest.split_at(8);
                 let topics_cnt = topics_cnt.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let mut topics = Vec::new();
-                for i in 1..=topics_cnt {
+                for _ in 1..=topics_cnt {
                     let (topic, rest2) = rest.split_at(32);
                     let topic = H256::from_slice(&*topic);
                     topics.push(topic);
@@ -262,27 +250,27 @@ impl<'a> EvmInstruction<'a> {
 pub fn on_return(
     myself_program_id: &Pubkey,
     status: u8,
-    result: &Vec<u8>
-) -> Result<Instruction, ProgramError> {
+    result: &[u8]
+) -> Instruction {
     let mut data = Vec::with_capacity(2 + result.len());
-    data.push(6u8);
+    data.push(6_u8);
     data.push(status);
     data.extend(result);
 
-    Ok(Instruction {
+    Instruction {
         program_id: *myself_program_id,
-        accounts: [].to_vec(),
-        data: data,
-    })
+        accounts: Vec::new(),
+        data,
+    }
 }
 
 /// Creates a `OnEvent` instruction.
 pub fn on_event(
     myself_program_id: &Pubkey,
     log: Log
-) -> Result<Instruction, ProgramError> {
+) -> Instruction {
     let mut data = Vec::new();
-    data.insert(0, 7u8);
+    data.insert(0, 7_u8);
 
     data.extend_from_slice(log.address.as_bytes());
 
@@ -293,9 +281,9 @@ pub fn on_event(
 
     data.extend(&log.data);
 
-    Ok(Instruction {
+    Instruction {
         program_id: *myself_program_id,
-        accounts: [].to_vec(),
+        accounts: Vec::new(),
         data,
-    })
+    }
 }
