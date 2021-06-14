@@ -61,9 +61,9 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub fn spit_child(&self, gas_limit: usize, is_static: bool) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit as usize, self.gasometer.config()),
+            gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
             depth: match self.depth {
                 None => Some(0),
@@ -175,7 +175,7 @@ impl<'config> ExecutorSubstate<'config> {
         (applies, self.logs)
     }
 
-    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+    pub fn enter(&mut self, gas_limit: usize, is_static: bool) {
         let mut entering = Self {
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
@@ -428,7 +428,7 @@ pub trait StackState : Backend {
     fn metadata(&self) -> &ExecutorMetadata;
     fn metadata_mut(&mut self) -> &mut ExecutorMetadata;
 
-    fn enter(&mut self, gas_limit: u64, is_static: bool);
+    fn enter(&mut self, gas_limit: usize, is_static: bool);
     fn exit_commit(&mut self) -> Result<(), ExitError>;
     fn exit_revert(&mut self) -> Result<(), ExitError>;
     fn exit_discard(&mut self) -> Result<(), ExitError>;
@@ -548,7 +548,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
         self.substate.metadata_mut()
     }
 
-    fn enter(&mut self, gas_limit: u64, is_static: bool) {
+    fn enter(&mut self, gas_limit: usize, is_static: bool) {
         self.substate.enter(gas_limit, is_static)
     }
 

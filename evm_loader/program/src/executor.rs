@@ -359,7 +359,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 	        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
 	    );
 
-        self.executor.state.enter(gas_limit as u64, false);
+        self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
@@ -371,7 +371,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: usize) -> ProgramResult {
         let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(gas_limit, false);
 
@@ -428,12 +428,12 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[warn(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
-
+        let gas_limit = self.executor.state.block_gas_limit().as_usize();
         match self.step_opcode(){
             RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {
                 let code = self.executor.code(info.code_address);
-                self.executor.state.enter(u64::max_value(), false);
+                self.executor.state.enter(gas_limit, false);
                 self.executor.state.touch(info.code_address);
 
                 let instance = evm::Runtime::new(
@@ -446,7 +446,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 Ok(())
             },
             RuntimeApply::Create(info) => {
-                self.executor.state.enter(u64::max_value(), false);
+                self.executor.state.enter(gas_limit, false);
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
@@ -528,7 +528,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
                     },
                     Some(CreateReason::Create(created_address)) => {
-                        let mut commit =  true;
+                        let mut commit = true;
                         let mut actual_reason = exit_reason;
                         let mut actual_address:Option<H160> = None;
 
