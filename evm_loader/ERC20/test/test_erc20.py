@@ -229,7 +229,6 @@ class ERC20test(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -294,7 +293,6 @@ class ERC20test(unittest.TestCase):
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -319,7 +317,6 @@ class ERC20test(unittest.TestCase):
             [
                 AccountMeta(pubkey=erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
