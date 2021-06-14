@@ -16,7 +16,126 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
-def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, caller):
+class ERC20:
+    """Encapsulate the all data of the ERC20 ethereum contract."""
+
+    def __init__(self, contract_account, contract_code_account, ethereum_id=None):
+        self.contract_account = contract_account
+        self.contract_code_account = contract_code_account
+        self.ethereum_id = ethereum_id
+        print("erc20_id:", self.contract_account)
+        print("erc20_id_ethereum:", self.ethereum_id.hex())
+        print("erc20_code:", self.contract_code_account)
+        self.caller_ether = None
+        self.neon_evm_client = None
+
+    def set_caller(self, caller_ether):
+        self.caller_ether = caller_ether
+
+    def set_neon_evm_client(self, neon_evm_client):
+        self.neon_evm_client = neon_evm_client
+
+    def balance_ext(self):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        ethereum_transaction.prepare(abi.function_signature_to_4byte_selector('balance_ext()'))
+        result = self.neon_evm_client.send_ethereum_trx_single(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        balance_address = base58.b58encode(value)
+        return balance_address
+
+    def mint_id(self):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        ethereum_transaction.prepare(abi.function_signature_to_4byte_selector('mint_id()'))
+        result = self.neon_evm_client.send_ethereum_trx_single(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        mint_id = base58.b58encode(value)
+        return mint_id
+
+    def balance(self):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        func_name = abi.function_signature_to_4byte_selector('balanceOf(address)')
+        trx_data = func_name + bytes.fromhex(
+            str("%024x" % 0) +
+            ethereum_transaction.ether_caller.hex()
+        )
+        ethereum_transaction.prepare(trx_data)
+        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        balance = int.from_bytes(value, "big")
+        return balance
+
+    def deposit(self, payer, receiver_erc20, amount, balance_erc20, mint_id, signer):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        func_name = abi.function_signature_to_4byte_selector('deposit(uint256,address,uint256,uint256)')
+        trx_data = func_name + bytes.fromhex(
+            base58.b58decode(payer).hex() +
+            str("%024x" % 0) + receiver_erc20.hex() +
+            signer.hex() +
+            "%064x" % amount
+        )
+        ethereum_transaction.prepare(trx_data, [
+            AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
+        ])
+        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "big")
+        assert 0 != ret, 'erc20_deposit2: FAIL'
+        return ret
+
+    def withdraw(self, receiver, amount, balance_erc20, mint_id):
+        ethereum_transaction = EthereumTransaction(self.caller_ether, self.contract_account, self.contract_code_account)
+        func_name = abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
+        trx_data = func_name + bytes.fromhex(
+            base58.b58decode(receiver).hex() +
+            "%064x" % amount
+        )
+        ethereum_transaction.prepare(trx_data, [
+            AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
+        ])
+        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
+        print(result)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        data = base58.b58decode(src_data)
+        instruction = data[0]
+        assert(instruction == 6)  # 6 means OnReturn
+        assert(data[1] < 0xd0)  # less 0xd0 - success
+        value = data[2:]
+        ret = int.from_bytes(value, "big")
+        assert ret != 0, 'erc20_withdraw: FAIL'
+        return ret
+
+
+def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, caller) -> ERC20:
     ctor_init = str("%064x" % 0xa0) + \
                 str("%064x" % 0xe0) + \
                 str("%064x" % 0x9) + \
@@ -26,13 +145,12 @@ def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, cal
                 str("77%062x" % 0x00) + \
                 str("%064x" % 0x1) + \
                 str("77%062x" % 0x00)
-
     with open(location_hex, mode='r') as hex:
         binary = bytearray.fromhex(hex.read() + ctor_init)
         with open(location_bin, mode='wb') as bin:
             bin.write(binary)
             res = loader.deploy(location_bin, caller)
-            return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
+            return ERC20(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 
 class SplToken:
@@ -91,10 +209,10 @@ class NeonEvmClient:
             return self.send_ethereum_trx_iterative(ethereum_transaction)
 
     def create_solana_ether_caller(self, ethereum_transaction):
-        (_, __) = self.evm_loader.ether2program(ethereum_transaction.ether_caller)
+        caller = self.evm_loader.ether2program(ethereum_transaction.ether_caller)[0]
         if ethereum_transaction.solana_ether_caller is None \
-                or _ != ethereum_transaction.solana_ether_caller:
-            ethereum_transaction.solana_ether_caller = _
+                or ethereum_transaction.solana_ether_caller != caller:
+            ethereum_transaction.solana_ether_caller = caller
         if getBalance(ethereum_transaction.solana_ether_caller) == 0:
             print("Create solana ether caller account...")
             ethereum_transaction.solana_ether_caller = \
@@ -129,18 +247,18 @@ class NeonEvmClient:
         print('create_trx with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
-            [
-                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
-            ]))
+        [
+            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+        ]))
         trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
-            [
-                AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=ethereum_transaction.solana_ether_caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
-            ]))
+        [
+            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction.solana_ether_caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+        ]))
         return trx
 
     def send_neon_transaction(self, evm_trx_data, ethereum_transaction, need_storage=False) -> types.RPCResponse:
@@ -200,7 +318,7 @@ class ERC20test(unittest.TestCase):
 
         cls.trx_count = getTransactionCount(client, cls.caller)
         erc20_id_ether = keccak_256(rlp.encode((cls.caller_ether, cls.trx_count))).digest()[-20:]
-        (cls.erc20_id_precalculated, _) = cls.loader.ether2program(erc20_id_ether)
+        cls.erc20_id_precalculated = cls.loader.ether2program(erc20_id_ether)[0]
         print("erc20_id_precalculated:", cls.erc20_id_precalculated)
 
     @staticmethod
@@ -254,75 +372,7 @@ class ERC20test(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         return storage
 
-    def erc20_deposit(self, ethereum_transaction, payer, amount, balance_erc20, mint_id, receiver_erc20):
-        func_name = abi.function_signature_to_4byte_selector('deposit(uint256,address,uint256,uint256)')
-        trx_data = func_name + bytes.fromhex(
-            base58.b58decode(payer).hex() +
-            str("%024x" % 0) + receiver_erc20.hex() +
-            self.acc.public_key()._key.hex() +
-            "%064x" % amount
-        )
-        ethereum_transaction.prepare(trx_data, [
-            AccountMeta(pubkey=payer, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
-        ])
-        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        ret = int.from_bytes(value, "big")
-        assert 0 != ret, 'erc20_deposit2: FAIL'
-        return ret
-
-    def erc20_withdraw(self, ethereum_transaction, receiver, amount, balance_erc20, mint_id):
-        func_name = abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
-        trx_data = func_name + bytes.fromhex(
-            base58.b58decode(receiver).hex() +
-            "%064x" % amount
-        )
-        ethereum_transaction.prepare(trx_data, [
-            AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=mint_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
-        ])
-        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        ret = int.from_bytes(value, "big")
-        assert ret != 0, 'erc20_withdraw: FAIL'
-        return ret
-
-    def erc20_balance(self, ethereum_transaction):
-        func_name = abi.function_signature_to_4byte_selector('balanceOf(address)')
-        trx_data = func_name + bytes.fromhex(
-            str("%024x" % 0) +
-            ethereum_transaction.ether_caller.hex()
-        )
-        ethereum_transaction.prepare(trx_data)
-        result = self.neon_evm_client.send_ethereum_trx(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][0]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        balance = int.from_bytes(value, "big")
-        return balance
-
-    def erc20_transfer2(self, ethereum_transaction, eth_to, amount):
+    def erc20_transfer(self, ethereum_transaction, eth_to, amount):
         func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
         trx_data = func_name + bytearray.fromhex(
             str("%024x" % 0) + eth_to +
@@ -341,31 +391,6 @@ class ERC20test(unittest.TestCase):
         print('erc20_transfer:', 'OK' if ret != 0 else 'FAIL')
         return ret
 
-    def erc20_balance_ext(self, ethereum_transaction):
-        ethereum_transaction.prepare(abi.function_signature_to_4byte_selector('balance_ext()'))
-        result = self.neon_evm_client.send_ethereum_trx_single(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        balance_address = base58.b58encode(value)
-        return balance_address
-
-    def erc20_mint_id(self, ethereum_transaction):
-        ethereum_transaction.prepare(abi.function_signature_to_4byte_selector('mint_id()'))
-        result = self.neon_evm_client.send_ethereum_trx_single(ethereum_transaction)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        self.assertEqual(instruction, 6)  # 6 means OnReturn
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        value = data[2:]
-        mint_id = base58.b58encode(value)
-        return mint_id
 
     # @unittest.skip("not for CI")
     def test_erc20(self):
@@ -375,21 +400,20 @@ class ERC20test(unittest.TestCase):
         balance_erc20 = self.createTokenAccount(token, self.erc20_id_precalculated)
         print("balance_erc20:", balance_erc20)
 
-        (erc20_id, erc20Id_ether, erc20_code) = deploy_erc20(self.loader,
-                                                             CONTRACTS_DIR + "ERC20.bin",
-                                                             "erc20.binary",
-                                                             token,
-                                                             balance_erc20,
-                                                             self.caller)
-        print("erc20_id:", erc20_id)
-        print("erc20_id_ethereum:", erc20Id_ether.hex())
-        print("erc20_code:", erc20_code)
+        erc20 = deploy_erc20(self.loader,
+                             CONTRACTS_DIR + "ERC20.bin",
+                             "erc20.binary",
+                             token,
+                             balance_erc20,
+                             self.caller)
 
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
+        assert (self.erc20_id_precalculated == erc20.contract_account)
 
-        assert (self.erc20_id_precalculated == erc20_id)
-        assert (balance_erc20 == self.erc20_balance_ext(ethereum_transaction).decode("utf-8"))
-        assert (token == self.erc20_mint_id(ethereum_transaction).decode("utf-8"))
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
+
+        assert (balance_erc20 == erc20.balance_ext().decode("utf-8"))
+        assert (token == erc20.mint_id().decode("utf-8"))
 
         client_acc = self.createTokenAccount(token)
         print("client_acc:", client_acc)
@@ -398,70 +422,83 @@ class ERC20test(unittest.TestCase):
         self.tokenMint(token, client_acc, mint_amount)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
-        assert (self.erc20_balance(ethereum_transaction) == 0)
+        assert (erc20.balance() == 0)
 
         deposit_amount = 1
-        self.erc20_deposit(ethereum_transaction,
-                           client_acc, deposit_amount * (10 ** 9), balance_erc20, token, self.caller_ether)
+        erc20.deposit(client_acc, self.caller_ether, deposit_amount * (10 ** 9),
+                      balance_erc20, token, self.acc.public_key()._key)
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
-        assert (self.erc20_balance(ethereum_transaction) == deposit_amount * (10 ** 9))
-        self.erc20_withdraw(ethereum_transaction, client_acc, deposit_amount * (10 ** 9), balance_erc20, token)
+        assert (erc20.balance() == deposit_amount * (10 ** 9))
+        erc20.withdraw(client_acc, deposit_amount * (10 ** 9), balance_erc20, token)
         assert (self.tokenBalance(client_acc) == mint_amount)
         assert (self.tokenBalance(balance_erc20) == 0)
-        assert (self.erc20_balance(ethereum_transaction) == 0)
+        assert (erc20.balance() == 0)
 
     @unittest.skip("not for CI")
     def test_deposit(self):
         print("test_deposit")
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
         client_acc = "FzFxJHDaNG2tUUgmgTBjSuZEAA8JpCjmmPmuYN6xRfS2"
         balance_erc20 = "FwNEpebVFsQ1j54zbrFhWgWVXVa9Xdf5bV94PJ7Du5pN"
         token = "25AeYuTg2Uey4bYD6D5xjgEmoUXvbjQxZgEKF81p3NUN"
         receiver_erc20 = bytes.fromhex("0000000000000000000000000000000000000011")
-        self.erc20_deposit(ethereum_transaction, client_acc, 900, balance_erc20, token, receiver_erc20)
+        signer = self.acc.public_key()._key
+        erc20.deposit(client_acc, receiver_erc20, 900, balance_erc20, token, signer)
 
     @unittest.skip("not for CI")
     def test_with_draw(self):
         print("test_withdraw")
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
         client_acc = "297MLscTY5SC4pwpPzTaFQBY4ndHdY1h5jC5FG18RMg2"
         balance_erc20 = "8VAcZVoXCQoXb74DGMftRpraMYqHK86qKZALmBopo36i"
         token = "8y9XyppKvAWyu2Ud4HEAH6jaEAcCCvE53wcmr92t9RJJ"
-        self.erc20_withdraw(ethereum_transaction, client_acc, 10, balance_erc20, token)
+        erc20.withdraw(client_acc, 10, balance_erc20, token)
 
     @unittest.skip("not for CI")
     def test_balance_ext(self):
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
-        print(self.erc20_balance_ext(ethereum_transaction))
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
+        print(erc20.balance_ext())
 
     @unittest.skip("not for CI")
     def test_mint_id(self):
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
-        print(self.erc20_mint_id(ethereum_transaction))
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
+        print(erc20.mint_id())
 
     @unittest.skip("not for CI")
     def test_balance(self):
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
-        print(self.erc20_balance(ethereum_transaction))
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
+        print(erc20.balance())
 
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
         erc20_id = 'JZsZZrB7BBpxVR1SckTQrJ63rETuSJzN3HacPfr2gVt'
         erc20_code = 'EwkHSJ2x254LAbxkYru19VaMdh7tDP54Lt99wXbPMzyy'
-        ethereum_transaction = EthereumTransaction(self.caller_ether, erc20_id, erc20_code)
-        self.erc20_transfer2(ethereum_transaction, "0000000000000000000000000000000000000011", 0)
+        erc20 = ERC20(erc20_id, erc20_code)
+        erc20.set_caller(self.caller_ether)
+        erc20.set_neon_evm_client(self.neon_evm_client)
+        erc20.transfer("0000000000000000000000000000000000000011", 0)
 
 
 if __name__ == '__main__':
