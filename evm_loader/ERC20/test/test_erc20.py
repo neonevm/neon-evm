@@ -321,9 +321,9 @@ class ERC20test(unittest.TestCase):
         cls.ethereum_caller = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.ethereum_caller)
 
-        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.ethereum_caller.hex(), cls.caller_nonce, "->", cls.caller,
-              "({})".format(bytes(PublicKey(cls.caller)).hex()))
+        print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))
+        print('Ethereum Caller: {}-{}'.format(cls.ethereum_caller.hex(), cls.caller_nonce))
+        print('Solana Caller: {} ({})'.format(cls.caller, bytes(PublicKey(cls.caller)).hex()))
 
         cls.trx_count = getTransactionCount(client, cls.caller)
         erc20_id_ether = keccak_256(rlp.encode((cls.ethereum_caller, cls.trx_count))).digest()[-20:]
@@ -476,8 +476,8 @@ class ERC20test(unittest.TestCase):
     @unittest.skip("not for CI")
     def test_tranfer(self):
         print("test_transfer")
-        erc20_id = '6asyvW5rw6SC6VqddwCmsgmr2SVmRK66NmkCc3kZWa5C'
-        erc20_code = 'BdbM3g1uN7u5qxiNcet1aRq36hzwyTqiCfkmkqo9Ezk'
+        erc20_id = '5XVDY4xspYNLDvmshYtkGSi9QgqCb6aZ6w7W7cUMpzsy'
+        erc20_code = 'ARUHVJE4zYws6cj8ThFNdVCQS1hafQi4zZiLc87NoDfF'
         erc20 = ERC20(erc20_id, erc20_code)
         erc20.set_neon_evm_client(self.neon_evm_client)
         erc20.transfer(self.ethereum_caller, "0000000000000000000000000000000000000011", 0)
