@@ -427,7 +427,6 @@ fn command_deploy(
     _caller: Pubkey
 ) -> CommandResult {
     use secp256k1::{PublicKey, SecretKey};
-    use ethereum_types::{Address, U256};
 
     let account_header_size = 1+Account::SIZE;
     let contract_header_size = 1+Contract::SIZE;
@@ -461,7 +460,7 @@ fn command_deploy(
         debug!("Caller account not found");
         let create_acc_instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &(2u32, minimum_balance_for_account, 0 as u64, caller_ether.as_fixed_bytes(), caller_nonce),
+            &(2u32, minimum_balance_for_account, 0u64, caller_ether.as_fixed_bytes(), caller_nonce),
             vec![AccountMeta::new(creator.pubkey(), true),
                  AccountMeta::new(caller_sol, false),
                  AccountMeta::new_readonly(system_program::id(), false),]
@@ -484,9 +483,9 @@ fn command_deploy(
             Ok(acc_data) =>
                 match acc_data {
                 AccountData::Account(acc) => acc,
-                _ => return Err(format!("Caller has incorrect type").into())
+                _ => return Err("Caller has incorrect type".to_string().into())
             },
-            Err(_) => return Err(format!("Caller unpack error").into())
+            Err(_) => return Err("Caller unpack error".to_string().into())
         };
         trx_count = account.trx_count;
         debug!("trx_count = {}", trx_count);
@@ -519,7 +518,7 @@ fn command_deploy(
     let make_create_account_instruction = |acc: &Pubkey, ether: &H160, nonce: u8, balance: u64| {
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(2u32, balance, 0 as u64, ether.as_fixed_bytes(), nonce),
+            &(2u32, balance, 0u64, ether.as_fixed_bytes(), nonce),
             vec![AccountMeta::new(creator.pubkey(), true),
                  AccountMeta::new(*acc, false),
                  AccountMeta::new(program_code, false),
@@ -530,7 +529,7 @@ fn command_deploy(
     // Check program account to see if partial initialization has occurred
     if let Some(_account) = config.rpc_client.get_account_with_commitment(&program_id, config.rpc_client.commitment())?.value
     {
-        return Err(format!("Account already exist").into());
+        return Err("Account already exist".to_string().into());
         // debug!("Account already exist");
     } else {
         let mut instructions = Vec::new();
@@ -570,7 +569,7 @@ fn command_deploy(
             sign(&msg, &caller_private)
         };
 
-        let mut msg : Vec<u8> = vec!();
+        let mut msg : Vec<u8> = Vec::new();
         msg.extend(sig.serialize().iter().copied());
         msg.push(rec.serialize());
         msg.extend((rlp_data.len() as u64).to_le_bytes().iter().copied());
@@ -580,7 +579,7 @@ fn command_deploy(
     };
 
     // Create holder account (if not exists)
-    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &"1236".to_string(), 128*1024 as u64)?;
+    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &"1236".to_string(), 128*1024u64)?;
 
     // Write code to holder account
     debug!("Write code");
@@ -627,7 +626,7 @@ fn command_deploy(
         use rand::Rng;
         let mut rng = rand::thread_rng();
         debug!("Create storage account");
-        let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024 as u64)?;
+        let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024u64)?;
         debug!("storage = {}", storage);
         storage
     };
