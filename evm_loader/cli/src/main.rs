@@ -425,9 +425,11 @@ fn send_transaction(
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    _caller: Pubkey
+    caller: Pubkey
 ) -> CommandResult {
     use secp256k1::{PublicKey, SecretKey};
+
+    sleep(Duration::from_secs(25));
 
     let account_header_size = 1+Account::SIZE;
     let contract_header_size = 1+Contract::SIZE;
@@ -441,7 +443,7 @@ fn command_deploy(
     let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_len)?;
 
     // Create ethereum caller private key from sign of array by signer
-    let (caller_private, caller_ether, caller_sol, caller_nonce) = {
+    let (caller_private, caller_ether, caller_sol, _caller_nonce) = {
         let caller_private = {
             let private_bytes : [u8; 64] = {
                 match &config.keypair {
@@ -464,19 +466,9 @@ fn command_deploy(
         (caller_private, caller_ether, caller_sol, caller_nonce)
     };
 
-    // Create caller account (if not exists)
-    if config.rpc_client.get_account_with_commitment(&caller_sol, config.rpc_client.commitment())?.value.is_none() {
-        debug!("Caller account not found");
-        let create_acc_instruction = Instruction::new_with_bincode(
-            config.evm_loader,
-            &(2u32, minimum_balance_for_account, 0u64, caller_ether.as_fixed_bytes(), caller_nonce),
-            vec![AccountMeta::new(creator.pubkey(), true),
-                 AccountMeta::new(caller_sol, false),
-                 AccountMeta::new_readonly(system_program::id(), false),]
-        );
-        send_transaction(config, &[create_acc_instruction])?;
-    } else {
-        debug!("Caller account found");
+    if caller_sol != caller
+    {
+        return Err("Could not acquire caller account private key".to_string().into());
     }
 
     // Get caller nonce
