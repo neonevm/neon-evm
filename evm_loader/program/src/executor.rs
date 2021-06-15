@@ -1,8 +1,8 @@
 use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
 use evm::{
-    backend::Backend, gasometer, Capture, Code, ExitError, ExitFatal, ExitReason, Handler, Resolve,
-    H160, H256, U256,
+    Capture, ExitError, ExitReason, ExitFatal, Handler,
+    backend::Backend, Resolve, H160, H256, U256, gasometer,
 };
 use crate::executor_state::{ StackState, ExecutorState };
 use crate::storage_account::StorageAccount;
@@ -75,7 +75,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 	}
     }
 
-    fn code(&self, address: H160) -> Code {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
     }
 
@@ -205,7 +205,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.inc_nonce(caller);
 
         let existing_code = self.state.code(address);
-        if existing_code.len() != 0 {
+        if !existing_code.is_empty() {
             // let _ = self.merge_fail(substate);
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }
@@ -313,16 +313,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state, config: evm::Config::default() };
-
-        let mut s = Self{ executor, runtime };
-        s.finalize_restore();
-        s
-    }
-
-    fn finalize_restore(&mut self) {
-        for (runtime, _) in &mut self.runtime {
-            runtime.finalize_restore(&self.executor);
-        }
+        Self{ executor, runtime }
     }
 
     pub fn call_begin(&mut self,
@@ -388,7 +379,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let instance = evm::Runtime::new(
-                    Code::Vec { code: info.init_code },
+                    info.init_code,
                     Vec::new(),
                     info.context,
                     &self.executor.config
@@ -454,7 +445,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let instance = evm::Runtime::new(
-                    Code::Vec{ code: info.init_code },
+                    info.init_code,
                     Vec::new(),
                     info.context,
                     &self.executor.config

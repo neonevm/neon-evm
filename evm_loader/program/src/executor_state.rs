@@ -6,7 +6,7 @@ use std::{
 use core::mem;
 use evm::gasometer::Gasometer;
 use evm::backend::{Apply, Backend, Basic, Log};
-use evm::{Code, Config, ExitError, Transfer, H160, H256, U256};
+use evm::{ExitError, Transfer, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
@@ -26,7 +26,7 @@ pub struct ExecutorMetadata<'config> {
 }
 
 impl<'config> ExecutorMetadata<'config> {
-    pub fn new(gas_limit: usize, config: &'config Config) -> Self {
+    pub fn new(gas_limit: usize, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
@@ -101,7 +101,7 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
-    pub fn new(gas_limit: usize, config: &'config Config) -> Self {
+    pub fn new(gas_limit: usize, config: &'config evm::Config) -> Self {
         Self {
             metadata: ExecutorMetadata::new(gas_limit, config),
             parent: None,
@@ -260,10 +260,8 @@ impl<'config> ExecutorSubstate<'config> {
         self.known_account(address).map(|acc| acc.basic.clone())
     }
 
-    pub fn known_code(&self, address: H160) -> Option<Code> {
-        self.known_account(address).and_then(
-            |acc| acc.code.clone().map(|code| Code::Vec{code})
-        )
+    pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
+        self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
     pub fn known_empty(&self, address: H160) -> Option<bool> {
@@ -492,7 +490,7 @@ impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
             .unwrap_or_else(|| self.backend.basic(address))
     }
 
-    fn code(&self, address: H160) -> Code {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.substate
             .known_code(address)
             .unwrap_or_else(|| self.backend.code(address))
