@@ -18,7 +18,7 @@ use solana_sdk::{
     loader_instruction::LoaderInstruction,
     message::Message,
     pubkey::Pubkey,
-    signature::{Signer, Signature},
+    signature::{Keypair, Signer, Signature},
     signers::Signers,
     transaction::Transaction,
     system_program,
@@ -49,7 +49,7 @@ use solana_program::keccak::{hash, hashv};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
-    keypair::{signer_from_path},
+    keypair::{signer_from_path, keypair_from_path},
 };
 
 use solana_client::{
@@ -83,6 +83,7 @@ pub struct Config {
     evm_loader: Pubkey,
     fee_payer: Pubkey,
     signer: Box<dyn Signer>,
+    keypair: Option<Keypair>,
 }
 
 fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) -> CommandResult {
@@ -442,9 +443,17 @@ fn command_deploy(
     // Create ethereum caller private key from sign of array by signer
     let (caller_private, caller_ether, caller_sol, caller_nonce) = {
         let caller_private = {
-            let random_vec_32: [u8;32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2];
+            let private_bytes : [u8; 64] = {
+                match &config.keypair {
+                    Some(keypair) => keypair.to_bytes(),
+                    None => {
+                        let random_vec_32: [u8;32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2];
+                        <[u8; 64]>::from(config.signer.sign_message(&random_vec_32))
+                    },
+                }
+            };
             let mut sign_arr: [u8;32] = Default::default();
-            sign_arr.clone_from_slice(&<[u8; 64]>::from(config.signer.sign_message(&random_vec_32))[..32]);
+            sign_arr.clone_from_slice(&private_bytes[..32]);
             SecretKey::parse(&sign_arr)?
         };
         let caller_public = PublicKey::from_secret_key(&caller_private);
@@ -1013,12 +1022,22 @@ fn main() {
                 exit(1);
             });
 
+            let keypair = keypair_from_path(
+                &app_matches,
+                app_matches
+                    .value_of("fee_payer")
+                    .unwrap_or(&cli_config.keypair_path),
+                "fee_payer",
+                true,
+            ).ok();
+
             Config {
                 rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
                 websocket_url: "".to_string(),
                 evm_loader,
                 fee_payer,
                 signer,
+                keypair,
             }
         };
 
