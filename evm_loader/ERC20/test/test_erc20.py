@@ -67,7 +67,7 @@ class ERC20:
             ether_caller, self.contract_account, self.contract_code_account,
             abi.function_signature_to_4byte_selector('balanceOf(address)')
             + bytes.fromhex(str("%024x" % 0) + ether_caller.hex()))
-        result = self.neon_evm_client.send_ethereum_trx(ether_trx)
+        result = self.neon_evm_client.send_ethereum_trx_single(ether_trx)
         print(result)
         src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
         data = base58.b58decode(src_data)
@@ -183,15 +183,15 @@ class SplToken:
 class EthereumTransaction:
     """Encapsulate the all data of an ethereum transaction that should be executed."""
 
-    def __init__(self, ether_caller, contract_account, contract_code_account, trx_data, trx_account_metas, steps=500):
+    def __init__(self, ether_caller, contract_account, contract_code_account, trx_data, account_metas=None, steps=500):
         self.ether_caller = ether_caller
         self.contract_account = contract_account
         self.contract_code_account = contract_code_account
         self.trx_data = trx_data
-        self.trx_account_metas = trx_account_metas
+        self.trx_account_metas = account_metas
         self.iterative_steps = steps
-        self.__solana_ether_caller = None  # is created in NeonEvmClient.__create_instruction_data_from_tx
-        self.__storage = None  # is created in NeonEvmClient.__send_neon_transaction
+        self._solana_ether_caller = None  # is created in NeonEvmClient.__create_instruction_data_from_tx
+        self._storage = None  # is created in NeonEvmClient.__send_neon_transaction
 
 
 class ExecuteMode(Enum):
@@ -239,14 +239,14 @@ class NeonEvmClient:
 
     def __create_solana_ether_caller(self, ethereum_transaction):
         caller = self.evm_loader.ether2program(ethereum_transaction.ether_caller)[0]
-        if ethereum_transaction.__solana_ether_caller is None \
-                or ethereum_transaction.__solana_ether_caller != caller:
-            ethereum_transaction.__solana_ether_caller = caller
-        if getBalance(ethereum_transaction.__solana_ether_caller) == 0:
+        if ethereum_transaction._solana_ether_caller is None \
+                or ethereum_transaction._solana_ether_caller != caller:
+            ethereum_transaction._solana_ether_caller = caller
+        if getBalance(ethereum_transaction._solana_ether_caller) == 0:
             print("Create solana ether caller account...")
-            ethereum_transaction.__solana_ether_caller = \
+            ethereum_transaction._solana_ether_caller = \
                 self.evm_loader.createEtherAccount(ethereum_transaction.ether_caller)
-        print("Solana ether caller account:", ethereum_transaction.__solana_ether_caller)
+        print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
 
     def __create_storage_account(self, seed):
         storage = PublicKey(
@@ -266,7 +266,7 @@ class NeonEvmClient:
 
     def __create_instruction_data_from_tx(self, ethereum_transaction):
         self.__create_solana_ether_caller(ethereum_transaction)
-        caller_trx_cnt = getTransactionCount(client, ethereum_transaction.__solana_ether_caller)
+        caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
         trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
                    'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt,
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
@@ -283,7 +283,7 @@ class NeonEvmClient:
         [
             AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction.__solana_ether_caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
@@ -296,10 +296,10 @@ class NeonEvmClient:
         data = evm_trx_data + from_address + sign + msg
         trx = self.__create_trx(ethereum_transaction, keccak_data, data)
         if need_storage:
-            if ethereum_transaction.__storage is None:
-                ethereum_transaction.__storage = self.__create_storage_account(sign[:8].hex())
+            if ethereum_transaction._storage is None:
+                ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
             trx.instructions[-1].keys \
-                .insert(0, AccountMeta(pubkey=ethereum_transaction.__storage, is_signer=False, is_writable=True))
+                .insert(0, AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True))
         if ethereum_transaction.trx_account_metas is not None:
             trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
         trx.instructions[-1].keys \
