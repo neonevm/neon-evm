@@ -339,6 +339,10 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
     hash(&data).to_bytes()
 }
 
+pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
+    hash(&data).to_bytes().to_vec()
+}
+
 #[derive(Debug)]
 pub struct UnsignedTransaction {
     pub nonce: u64,
@@ -425,15 +429,15 @@ fn command_deploy(
     use secp256k1::{PublicKey, SecretKey};
     use ethereum_types::{Address, U256};
 
-    let ACCOUNT_HEADER_SIZE = 1+Account::SIZE;
-    let CONTRACT_HEADER_SIZE = 1+Contract::SIZE;
+    let account_header_size = 1+Account::SIZE;
+    let contract_header_size = 1+Contract::SIZE;
 
     let creator = &config.signer;
     let signers = [&*config.signer];
     let program_data = read_program_data(program_location)?;
 
-    let program_code_len = CONTRACT_HEADER_SIZE + program_data.len() + 2*1024;
-    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_HEADER_SIZE)?;
+    let program_code_len = contract_header_size + program_data.len() + 2*1024;
+    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(account_header_size)?;
     let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_len)?;
 
     // Create ethereum caller private key from sign of array by signer
@@ -445,11 +449,7 @@ fn command_deploy(
             SecretKey::parse(&sign_arr)?
         };
         let caller_public = PublicKey::from_secret_key(&caller_private);
-        let caller_ether = {
-            let pk_data = caller_public.serialize();
-            let sender = Keccak256::digest(&pk_data);
-            Address::from_slice(&sender[..20])
-        };
+        let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
         let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
         debug!("caller_sol = {}", caller_sol);
         debug!("caller_ether = {}", caller_ether);
