@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
 use evm::{
     Capture, ExitError, ExitReason, ExitFatal, Handler, 
-    backend::Backend, Resolve, Code, H160, H256, U256
+    backend::Backend, Resolve, H160, H256, U256
 };
 use crate::executor_state::{ StackState, ExecutorState };
 use crate::storage_account::StorageAccount;
@@ -75,7 +75,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.code_hash(address)
     }
 
-    fn code(&self, address: H160) -> Code {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
     }
 
@@ -306,16 +306,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state, config: evm::Config::default() };
-
-        let mut s = Self{ executor, runtime };
-        s.finalize_restore();
-        s
-    }
-
-    fn finalize_restore(&mut self) {
-        for (runtime, _) in &mut self.runtime {
-            runtime.finalize_restore(&self.executor);
-        }
+        Self{ executor, runtime }
     }
 
     pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {
@@ -370,7 +361,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let instance = evm::Runtime::new(
-                    Code::Vec { code: info.init_code },
+                    info.init_code,
                     Vec::new(),
                     info.context,
                     &self.executor.config
@@ -437,7 +428,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 let instance = evm::Runtime::new(
-                    Code::Vec{ code: info.init_code },
+                    info.init_code,
                     Vec::new(),
                     info.context,
                     &self.executor.config
