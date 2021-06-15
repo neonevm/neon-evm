@@ -206,7 +206,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         self.state.inc_nonce(caller);
 
         let existing_code = self.state.code(address);
-        if existing_code.len() != 0 {
+        if !existing_code.is_empty() {
             // let _ = self.merge_fail(substate);
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }

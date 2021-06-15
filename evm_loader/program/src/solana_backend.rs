@@ -33,8 +33,8 @@ pub trait AccountStorage {
     fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
     fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_h256(&[]) , |account| account.code_hash()) }
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
-    fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, || Vec::new(), |account| account.get_code()) }
-    fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, || U256::zero(), |account| account.get_storage(index)) }
+    fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
+    fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(&address, || None, |account| Some(account.get_seeds())) }
 }
 
