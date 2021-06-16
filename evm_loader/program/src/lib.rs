@@ -1,5 +1,6 @@
 // #![deny(missing_docs)] // TODO #106 Write missing docs
 //#![forbid(unsafe_code)]
+#![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![allow(

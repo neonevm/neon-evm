@@ -12,18 +12,18 @@ use solana_program::program_error::ProgramError;
 use std::borrow::BorrowMut;
 use solana_program::entrypoint::ProgramResult;
 
-macro_rules! try_or_fail {
-    ( $e:expr ) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => return e.into(),
-        }
-    }
-}
+// macro_rules! try_or_fail {
+//     ( $e:expr ) => {
+//         match $e {
+//             Ok(v) => v,
+//             Err(e) => return e.into(),
+//         }
+//     }
+// }
 
-fn l64(gas: u64) -> u64 {
-    gas - gas / 64
-}
+// fn l64(gas: u64) -> u64 {
+//     gas - gas / 64
+// }
 
 struct CallInterrupt {
     code_address : H160,
@@ -170,7 +170,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        target_gas: Option<usize>,
+        _target_gas: Option<usize>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
 
         if let Some(depth) = self.state.metadata().depth() {
@@ -256,9 +256,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
     fn pre_validate(
         &mut self,
-        context: &evm::Context,
-        opcode: evm::Opcode,
-        stack: &evm::Stack,
+        _context: &evm::Context,
+        _opcode: evm::Opcode,
+        _stack: &evm::Stack,
     ) -> Result<(), ExitError> {
         // if let Some(cost) = gasometer::static_opcode_cost(opcode) {
         //     self.state.metadata_mut().gasometer.record_cost(cost)?;
@@ -346,7 +346,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
 
         let scheme = evm::CreateScheme::Legacy { caller };
-        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.enter(gas_limit, false);
 
         match self.executor.create(caller, scheme, U256::zero(), code, None) {
             Capture::Exit(_) => {

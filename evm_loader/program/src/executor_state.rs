@@ -34,7 +34,7 @@ impl ExecutorMetadata {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
+    pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
         // self.gasometer
         //     .record_refund(other.gasometer.refunded_gas())?;
@@ -48,7 +48,7 @@ impl ExecutorMetadata {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
+    pub fn swallow_revert(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
 
         Ok(())
@@ -59,7 +59,7 @@ impl ExecutorMetadata {
         Ok(())
     }
 
-    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub fn spit_child(&self, _gas_limit: u64, is_static: bool) -> Self {
         Self {
             // gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
