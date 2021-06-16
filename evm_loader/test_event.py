@@ -248,9 +248,9 @@ class EventTest(unittest.TestCase):
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
         tx1 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 1}
+            'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 111}
         tx2 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
-            'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 1}
+            'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 111}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())
         (from_addr2, sign2, msg2) = make_instruction_data_from_tx(tx2, self.acc.secret_key())
@@ -322,7 +322,7 @@ class EventTest(unittest.TestCase):
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
             
-        err = "invalid account data for instruction"
+        err = "custom program error: 0x1"
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
             print(result)

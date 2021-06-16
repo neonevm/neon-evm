@@ -326,3 +326,5 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "00"))
 
+if __name__ == '__main__':
+    unittest.main()

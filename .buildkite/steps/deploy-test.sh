@@ -25,11 +25,10 @@ trap cleanup_docker EXIT
 sleep 10
 
 echo "Run tests..."
-cmd='python3 -m unittest discover -v --start-directory /opt/commun.contracts/scripts/'
 docker run --rm --network evm_loader-deploy_test-net -ti \
      -e SOLANA_URL=http://solana:8899 \
      ${EXTRA_ARGS:-} \
-     $EVM_LOADER_IMAGE '/opt/deploy-test.sh'
+     $EVM_LOADER_IMAGE 'deploy-test.sh'
 echo "Run tests return"
 
 exit $?
