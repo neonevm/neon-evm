@@ -96,7 +96,7 @@ impl rlp::Decodable for UnsignedTransaction {
             return Err(rlp::DecoderError::RlpIncorrectListLen);
         }
 
-        let tx = UnsignedTransaction {
+        let tx = Self {
             nonce: rlp.val_at(0)?,
             gas_price: rlp.val_at(1)?,
             gas_limit: rlp.val_at(2)?,

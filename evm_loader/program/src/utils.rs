@@ -4,15 +4,15 @@ use solana_program::keccak::{hash, hashv};
 use std::convert::TryFrom;
 
 pub fn keccak256_h256(data: &[u8]) -> H256 {
-    H256::from(hash(&data).to_bytes())
+    H256::from(hash(data).to_bytes())
 }
 
 pub fn keccak256_h256_v(data: &[&[u8]]) -> H256 {
-    H256::from(hashv(&data).to_bytes())
+    H256::from(hashv(data).to_bytes())
 }
 
 pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
-    hash(&data).to_bytes().to_vec()
+    hash(data).to_bytes().to_vec()
 }
 
 pub fn u256_to_h256(value: U256) -> H256 {
@@ -44,7 +44,7 @@ impl Secp256k1Pubkey {
         )
     }
 
-    pub fn to_bytes(self) -> [u8; 64] {
+    pub fn to_bytes(&self) -> [u8; 64] {
         self.0
     }
 }

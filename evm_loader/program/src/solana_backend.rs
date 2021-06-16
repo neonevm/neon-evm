@@ -35,7 +35,7 @@ pub trait AccountStorage {
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
-    fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(&address, || None, |account| Some(account.get_seeds())) }
+    fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
 }
 
 pub struct SolanaBackend<'a, 's, S> {
@@ -78,7 +78,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
 
-        let v = U256::from(v).as_u32() as u8;
+        let v: u8 = U256::from(v).as_u32().try_into().unwrap();
         let recovery_id = v - 27;
         let public_key = match ecrecover(&msg[..], recovery_id, &sig[..]) {
             Ok(key) => key,
@@ -206,14 +206,14 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                         let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
                         result = invoke_signed(
                             &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
+                            self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
                         );
 
                     }
                     None => {
                         result = invoke_signed(
                             &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos.unwrap(), &[&contract_seeds[..]]
+                            self.account_infos.unwrap(), &[&contract_seeds[..]]
                         );
                     }
                 }
@@ -246,7 +246,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 };
 
                 let (_, seed) = input.split_at(66);
-                let seed = if let Ok(seed) = std::str::from_utf8(&seed) {seed}
+                let seed = if let Ok(seed) = std::str::from_utf8(seed) {seed}
                 else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
 
                 let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed, &owner) {pubkey}
