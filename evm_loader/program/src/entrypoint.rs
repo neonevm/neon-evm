@@ -204,10 +204,6 @@ fn process_instruction<'a>(
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            if trx.to.is_some() {
-                debug_print!("This is not deploy contract transaction");
-                return Err(ProgramError::InvalidInstructionData);
-            }
 
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
@@ -217,7 +213,13 @@ fn process_instruction<'a>(
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
-            do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
+            if trx.to.is_some() {
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
+            }
+            else{
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
+            }
+
             storage.block_accounts(program_id, accounts)
         },
 
