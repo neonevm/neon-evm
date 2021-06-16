@@ -13,7 +13,7 @@ use hex;
 use evm::{H160, H256, U256};
 use solana_sdk::{
     clock::Slot,
-    commitment_config::CommitmentConfig,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
     instruction::{AccountMeta, Instruction},
     loader_instruction::LoaderInstruction,
     message::Message,
@@ -54,7 +54,7 @@ use solana_clap_utils::{
 
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
+    rpc_config::{RpcSendTransactionConfig, RpcConfirmedTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::RpcLeaderSchedule,
     tpu_client::{TpuClient, TpuClientConfig},
@@ -380,13 +380,13 @@ fn create_account_with_seed(
     seed: &str, 
     len: u64
 ) -> Result<Pubkey, Error> {
-    let storage = Pubkey::create_with_seed(&base, &seed, &config.evm_loader).unwrap();
+    let created_account = Pubkey::create_with_seed(&base, &seed, &config.evm_loader).unwrap();
 
-    if config.rpc_client.get_account_with_commitment(&storage, config.rpc_client.commitment())?.value.is_none() {
+    if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Account not found");
         let create_acc_instruction = system_instruction::create_account_with_seed(
             &funding,
-            &storage,
+            &created_account,
             &base,
             &seed,
             10u64.pow(9),
@@ -398,7 +398,7 @@ fn create_account_with_seed(
         debug!("Account found");
     }
 
-    Ok(storage)
+    Ok(created_account)
 }
 
 fn send_transaction(
@@ -409,14 +409,17 @@ fn send_transaction(
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
     let (blockhash, _, _last_valid_slot) = config.rpc_client
-        .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
+        .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
         .value;
     transaction.try_sign(&signers, blockhash)?;
 
     let tx_sig = config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &transaction,
-        config.rpc_client.commitment(),
-        RpcSendTransactionConfig::default()
+        CommitmentConfig::confirmed(),
+        RpcSendTransactionConfig {
+            preflight_commitment: Some(CommitmentLevel::Confirmed),
+            ..RpcSendTransactionConfig::default()
+        },
     )?;
 
     Ok(tx_sig)
@@ -428,8 +431,6 @@ fn command_deploy(
     caller: Pubkey
 ) -> CommandResult {
     use secp256k1::{PublicKey, SecretKey};
-
-    sleep(Duration::from_secs(25));
 
     let account_header_size = 1+Account::SIZE;
     let contract_header_size = 1+Contract::SIZE;
@@ -474,7 +475,7 @@ fn command_deploy(
     // Get caller nonce
     let trx_count = {
         let data : Vec<u8>;
-        match config.rpc_client.get_account_with_commitment(&caller_sol, config.rpc_client.commitment())?.value{
+        match config.rpc_client.get_account_with_commitment(&caller_sol, CommitmentConfig::confirmed())?.value{
             Some(acc) =>   data = acc.data,
             _ => panic!("AccountNotFound: pubkey = {}", &caller_sol.to_string())
         }
@@ -516,19 +517,8 @@ fn command_deploy(
     };
     debug!("Create code account: {}", &program_code.to_string());
 
-    let make_create_account_instruction = |acc: &Pubkey, ether: &H160, nonce: u8, balance: u64| {
-        Instruction::new_with_bincode(
-            config.evm_loader,
-            &(2u32, balance, 0u64, ether.as_fixed_bytes(), nonce),
-            vec![AccountMeta::new(creator.pubkey(), true),
-                 AccountMeta::new(*acc, false),
-                 AccountMeta::new(program_code, false),
-                 AccountMeta::new_readonly(system_program::id(), false),]
-        )
-    };
-
     // Check program account to see if partial initialization has occurred
-    if let Some(_account) = config.rpc_client.get_account_with_commitment(&program_id, config.rpc_client.commitment())?.value
+    if let Some(_account) = config.rpc_client.get_account_with_commitment(&program_id, CommitmentConfig::confirmed())?.value
     {
         return Err("Account already exist".to_string().into());
         // debug!("Account already exist");
@@ -543,7 +533,15 @@ fn command_deploy(
             program_code_len as u64, 
             &config.evm_loader)
         );
-        instructions.push(make_create_account_instruction(&program_id, &program_ether, program_nonce, minimum_balance_for_account));
+        instructions.push(Instruction::new_with_bincode(
+            config.evm_loader,
+            &(2u32, minimum_balance_for_account, 0u64, program_ether.as_fixed_bytes(), program_nonce),
+            vec![AccountMeta::new(creator.pubkey(), true),
+                 AccountMeta::new(program_id, false),
+                 AccountMeta::new(program_code, false),
+                 AccountMeta::new_readonly(system_program::id(), false),]
+            )
+        );
 
         send_transaction(config, &instructions)?;
     };
@@ -600,7 +598,7 @@ fn command_deploy(
     // Send write message
     {
         let (blockhash, _, last_valid_slot) = config.rpc_client
-            .get_recent_blockhash_with_commitment(config.rpc_client.commitment())?
+            .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
             .value;
 
         let mut write_transactions = vec![];
@@ -616,7 +614,7 @@ fn command_deploy(
             &config.websocket_url,
             write_transactions,
             &signers,
-            config.rpc_client.commitment(),
+            CommitmentConfig::confirmed(),
             last_valid_slot,
         ).map_err(|err| format!("Data writes to program account failed: {}", err))?;
         debug!("Writing program data done");
@@ -660,7 +658,13 @@ fn command_deploy(
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 
-        let result = config.rpc_client.get_confirmed_transaction(&signature, UiTransactionEncoding::Json)?;
+        let result = config.rpc_client.get_confirmed_transaction_with_config(
+            &signature, 
+            RpcConfirmedTransactionConfig {
+                commitment: Some(CommitmentConfig::confirmed()),
+                encoding: Some(UiTransactionEncoding::Json),
+            },
+        )?;
         let mut return_value : Option<Vec<u8>> = None;
         if let EncodedTransaction::Json(transaction) = result.transaction.transaction {
             if let UiMessage::Raw(message) = transaction.message {
