@@ -356,7 +356,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let code = self.executor.code(code_address);
         let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
 
-        let runtime = evm::Runtime::new(code, input, context, &self.executor.config);
+        let runtime = evm::Runtime::new(code, input, context, self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
         Ok(())
@@ -382,7 +382,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     info.init_code,
                     Vec::new(),
                     info.context,
-                    &self.executor.config
+                    self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
@@ -431,7 +431,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     code,
                     info.input,
                     info.context,
-                    &self.executor.config
+                    self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Call));
                 Ok(())
@@ -448,7 +448,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                     info.init_code,
                     Vec::new(),
                     info.context,
-                    &self.executor.config
+                    self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Create(info.address)));
                 Ok(())

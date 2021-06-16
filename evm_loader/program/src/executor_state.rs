@@ -204,7 +204,7 @@ impl<'config> ExecutorSubstate<'config> {
         }
         let mut reset_keys = BTreeSet::new();
         for (address, key) in self.storages.keys() {
-            if resets.contains(&address) {
+            if resets.contains(address) {
                 reset_keys.insert((*address, *key));
             }
         }
@@ -224,7 +224,7 @@ impl<'config> ExecutorSubstate<'config> {
 
         for address in &resets {
             if self.accounts.contains_key(address){
-                self.accounts.get_mut(&address).unwrap().reset = true;
+                self.accounts.get_mut(address).unwrap().reset = true;
             }
         }
 
