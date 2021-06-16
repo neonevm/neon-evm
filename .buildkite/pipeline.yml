@@ -25,4 +25,4 @@ steps:
 
   - label: ":floppy_disk: publish image"
     command: ".buildkite/steps/publish-image.sh"
-    branches: "master develop ci-* v*.*.*"
+    branches: "master develop testnet ci-* v*.*.*"
