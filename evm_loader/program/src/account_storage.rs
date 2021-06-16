@@ -204,7 +204,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let account_info = &self.account_metas[pos];
-                        account.update(&account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
                     }
                     else {
                         if let Sender::Solana(addr) = self.sender {
