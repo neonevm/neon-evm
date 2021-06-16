@@ -340,7 +340,7 @@ class ERC20test(unittest.TestCase):
         if not res.startswith("Creating token "):
             raise Exception("create token error")
         else:
-            return res[15:59]
+            return res.split()[2]
 
     @staticmethod
     def createTokenAccount(token, owner=None):
@@ -352,7 +352,7 @@ class ERC20test(unittest.TestCase):
         if not res.startswith("Creating account "):
             raise Exception("create account error %s" % res)
         else:
-            return res[17:61]
+            return res.split()[2]
 
     @staticmethod
     def tokenMint(mint_id, recipient, amount, owner=None):
