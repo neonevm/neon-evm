@@ -136,7 +136,7 @@ fn process_instruction<'a>(
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
                 &create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
-                &accounts, &[&program_seeds[..]]
+                accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
 
@@ -164,8 +164,8 @@ fn process_instruction<'a>(
             debug_print!("{}", lamports);
             debug_print!("{}", space);
             invoke_signed(
-                &create_account_with_seed(funding_info.key, created_info.key, &base, &seed, lamports, space, &owner),
-                &accounts, &[&program_seeds[..]]
+                &create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
+                accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account_with_seed done");
 
@@ -177,7 +177,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_write(account_info, offset, &bytes)
+            do_write(account_info, offset, bytes)
         },
         EvmInstruction::Finalize => {
             do_finalize(program_id, accounts)
@@ -203,21 +203,21 @@ fn process_instruction<'a>(
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
-            let trx: UnsignedTransaction = rlp::decode(&unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
                 debug_print!("This is not deploy contract transaction");
                 return Err(ProgramError::InvalidInstructionData);
             }
 
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
-            let from_addr = verify_tx_signature(&signature, &unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
+            let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
-            do_partial_create(&mut storage, step_count, &account_storage, &accounts, trx.call_data)?;
+            do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
             storage.block_accounts(program_id, accounts)
         },
 
@@ -325,7 +325,7 @@ fn get_transaction_from_data(
     data: &[u8]
 ) -> Result<(&[u8], &[u8]), ProgramError>
 {
-    let account_info_data = AccountData::unpack(&data)?;
+    let account_info_data = AccountData::unpack(data)?;
     match account_info_data {
         AccountData::Empty => (),
             _ => return Err(ProgramError::InvalidAccountData),
@@ -360,7 +360,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
         debug_print!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
     }
-    data[offset .. offset+bytes.len()].copy_from_slice(&bytes);
+    data[offset .. offset+bytes.len()].copy_from_slice(bytes);
     Ok(())
 }
 
@@ -416,10 +416,10 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log), &accounts)?;
+            invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, &result)?;
     Ok(())
 }
 
@@ -468,11 +468,11 @@ fn do_call<'a>(
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log), &accounts)?;
+            invoke(&on_event(program_id, log), accounts)?;
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, &result)?;
     Ok(())
 }
 
@@ -580,11 +580,11 @@ fn do_continue<'a>(
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
-            invoke(&on_event(program_id, log), &accounts)?;
+            invoke(&on_event(program_id, log), accounts)?;
         }
     }
 
-    invoke_on_return(&program_id, &accounts, exit_reason.clone(), &result)?;
+    invoke_on_return(program_id, accounts, exit_reason.clone(), &result)?;
 
     Ok(Some(exit_reason))
 }
@@ -638,10 +638,10 @@ fn invoke_on_return<'a>(
 
     debug_print!("{}", &hex::encode(&result));
 
-    let ix = on_return(program_id, exit_status, &result);
+    let ix = on_return(program_id, exit_status, result);
     invoke(
         &ix,
-        &accounts
+        accounts
     )?;
 
     Ok(())
