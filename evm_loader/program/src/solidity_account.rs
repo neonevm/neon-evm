@@ -126,6 +126,7 @@ impl<'a> SolidityAccount<'a> {
     pub fn update<I>(
         &mut self,
         account_info: &'a AccountInfo<'a>,
+        #[allow(unused_variables)]
         solidity_address: H160,
         nonce: U256,
         lamports: u64,
