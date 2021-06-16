@@ -47,7 +47,7 @@ impl<'a> SolidityAccount<'a> {
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
-        let contract = AccountData::get_contract(&contract_data).unwrap();
+        let contract = AccountData::get_contract(contract_data).unwrap();
         let code_size = contract.code_size as usize;
 
         if code_size > 0 {
@@ -75,7 +75,7 @@ impl<'a> SolidityAccount<'a> {
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
-        let contract = AccountData::get_contract(&contract_data)?;
+        let contract = AccountData::get_contract(contract_data)?;
         let code_size = contract.code_size as usize;
 
         if code_size > 0 {
@@ -122,7 +122,7 @@ impl<'a> SolidityAccount<'a> {
             .unwrap_or_else(U256::zero)
     }
 
-    #[warn(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn update<I>(
         &mut self,
         account_info: &'a AccountInfo<'a>,
@@ -160,7 +160,7 @@ impl<'a> SolidityAccount<'a> {
                 debug_print!("Write contract header");
                 contract_data.pack(&mut code_data)?;
                 debug_print!("Write code");
-                code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(&code);
+                code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(code);
                 debug_print!("Code written");
             }
             else {
@@ -179,7 +179,7 @@ impl<'a> SolidityAccount<'a> {
             if let Some((ref contract_data, ref mut code_data)) = self.code_data {
                 let mut code_data = code_data.borrow_mut();
     
-                let contract = AccountData::get_contract(&contract_data)?;
+                let contract = AccountData::get_contract(contract_data)?;
                 if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
     
                 let mut storage = Hamt::new(&mut code_data[contract_data.size()+(contract.code_size as usize)..], reset_storage)?;
