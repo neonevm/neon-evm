@@ -93,7 +93,7 @@ static mut A: BumpAllocator = BumpAllocator;
 
 entrypoint!(process_instruction);
 
-#[warn(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 fn process_instruction<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
