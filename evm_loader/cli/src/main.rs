@@ -556,7 +556,7 @@ fn command_deploy(
                 gas_price: 1.into(),
                 value: 0.into(),
                 data: program_data,
-                chain_id: 111.into(),
+                chain_id: 111.into(), // Will fixed in #61 issue
             };
 
             rlp::encode(&tx).to_vec()
