@@ -205,9 +205,11 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos");
-                for info in self.account_infos.unwrap() {
-                    debug_print!("  {}", info.key);
-                };
+                if !self.account_infos.is_none() {
+                    for info in self.account_infos.unwrap() {
+                        debug_print!("  {}", info.key);
+                    }
+                }
                 let result : solana_program::entrypoint::ProgramResult;
                 match self.account_storage.seeds(&self.account_storage.origin()) {
                     Some((sender_eth, sender_nonce)) => {
