@@ -192,6 +192,9 @@ class EthereumTransaction:
         self.iterative_steps = steps
         self._solana_ether_caller = None  # is created in NeonEvmClient.__create_instruction_data_from_tx
         self._storage = None  # is created in NeonEvmClient.__send_neon_transaction
+        print('trx_data:', self.trx_data.hex())
+        if self.trx_account_metas is not None:
+            print('trx_account_metas:', *self.trx_account_metas, sep='\n')
 
 
 class ExecuteMode(Enum):
@@ -320,6 +323,11 @@ class ERC20test(unittest.TestCase):
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.ethereum_caller = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.ethereum_caller)
+
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
+            cls.loader.createEtherAccount(cls.ethereum_caller)
+            print("Done\n")
 
         print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))
         print('Ethereum Caller: {}-{}'.format(cls.ethereum_caller.hex(), cls.caller_nonce))
