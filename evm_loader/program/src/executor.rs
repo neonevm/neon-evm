@@ -417,7 +417,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
-    #[warn(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
         let gas_limit = self.executor.state.block_gas_limit().as_usize();
         match self.step_opcode(){

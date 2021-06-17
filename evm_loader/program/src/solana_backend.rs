@@ -117,7 +117,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         self.account_storage.block_timestamp()
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
-    fn block_gas_limit(&self) -> U256 { U256::zero() }
+    fn block_gas_limit(&self) -> U256 { U256::from(usize::MAX) }
     fn chain_id(&self) -> U256 { Self::chain_id() }
 
     fn exists(&self, address: H160) -> bool {
@@ -139,6 +139,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         self.account_storage.storage(&address, &index)
     }
 
+    #[allow(unused_variables)]
     fn create(&self, scheme: &CreateScheme, address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = scheme {
             debug_print!("CreateScheme2 {} from {} {} {} {}", &hex::encode(address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt), "" /*dummy arg for use correct message function*/);
@@ -207,6 +208,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos");
+                #[allow(unused_variables)]
                 for info in self.account_infos.unwrap() {
                     debug_print!("  {}", info.key);
                 };
@@ -227,6 +229,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                         );
                     }
                 }
+                #[allow(unused_variables)]
                 if let Err(err) = result {
                     debug_print!("result: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
