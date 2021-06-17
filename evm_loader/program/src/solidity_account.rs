@@ -1,10 +1,10 @@
 use crate::{
     account_data::AccountData,
     hamt::Hamt,
-    utils::{keccak256_h256, u256_to_h256},
+    utils::{keccak256_h256},
 };
 use evm::backend::Basic;
-use evm::{Code, H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
@@ -29,8 +29,6 @@ impl<'a> SolidityAccount<'a> {
         Ok(Self{account_data, solana_address, code_data, lamports})
     }
 
-    pub fn get_signer(&self) -> Pubkey {AccountData::get_account(&self.account_data).unwrap().signer}
-
     pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
@@ -49,7 +47,7 @@ impl<'a> SolidityAccount<'a> {
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
-        let contract = AccountData::get_contract(&contract_data).unwrap();
+        let contract = AccountData::get_contract(contract_data).unwrap();
         let code_size = contract.code_size as usize;
 
         if code_size > 0 {
@@ -77,7 +75,7 @@ impl<'a> SolidityAccount<'a> {
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
-        let contract = AccountData::get_contract(&contract_data)?;
+        let contract = AccountData::get_contract(contract_data)?;
         let code_size = contract.code_size as usize;
 
         if code_size > 0 {
@@ -114,15 +112,17 @@ impl<'a> SolidityAccount<'a> {
         self.code(|d| d.len())
     }
     
-    pub fn get_code(&self, account: H160) -> Code {
-        self.code(|d| Code::AccountRef{ ptr: d.as_ptr(), len: d.len(), account })
+    pub fn get_code(&self) -> Vec<u8> {
+        self.code(|d| d.into())
     }
     
     pub fn get_storage(&self, index: &U256) -> U256 {
-        let value = self.storage(|storage| storage.find(*index)).unwrap_or_default();
-        if let Some(v) = value { v } else { U256::zero() }
+        self.storage(|storage| storage.find(*index))
+            .unwrap_or_default()
+            .unwrap_or_else(U256::zero)
     }
 
+    #[warn(clippy::too_many_arguments)]
     pub fn update<I>(
         &mut self,
         account_info: &'a AccountInfo<'a>,
@@ -135,7 +135,7 @@ impl<'a> SolidityAccount<'a> {
     ) -> Result<(), ProgramError>
     where I: IntoIterator<Item = (U256, U256)> 
     {
-        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if let Some(_) = code {"Exist"} else {"Empty"}, reset_storage);
+        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code.is_some() {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
         **(*account_info.lamports).borrow_mut() = lamports;
 
@@ -148,26 +148,24 @@ impl<'a> SolidityAccount<'a> {
 
         if let Some(code) = code {
             debug_print!("Write contract");
-            match self.code_data {
-                Some((ref mut contract_data, ref mut code_data)) => {
-                    let mut code_data = code_data.borrow_mut();
-                    let contract = AccountData::get_mut_contract(contract_data)?;
-        
-                    if contract.code_size != 0 {
-                        return Err(ProgramError::AccountAlreadyInitialized);
-                    };
-                    contract.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
-        
-                    debug_print!("Write contract header");
-                    contract_data.pack(&mut code_data)?;
-                    debug_print!("Write code");
-                    code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(&code);
-                    debug_print!("Code written");
-                },
-                None => {
-                    debug_print!("Expected code account");
-                    return Err(ProgramError::NotEnoughAccountKeys);
-                }
+            if let Some((ref mut contract_data, ref mut code_data)) = self.code_data {
+                let mut code_data = code_data.borrow_mut();
+                let contract = AccountData::get_mut_contract(contract_data)?;
+    
+                if contract.code_size != 0 {
+                    return Err(ProgramError::AccountAlreadyInitialized);
+                };
+                contract.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
+    
+                debug_print!("Write contract header");
+                contract_data.pack(&mut code_data)?;
+                debug_print!("Write code");
+                code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(code);
+                debug_print!("Code written");
+            }
+            else {
+                debug_print!("Expected code account");
+                return Err(ProgramError::NotEnoughAccountKeys);
             }
         }
 
@@ -175,27 +173,25 @@ impl<'a> SolidityAccount<'a> {
         self.account_data.pack(&mut data)?;
 
         let mut storage_iter = storage_items.into_iter().peekable();
-        let exist_items = if let Some(_) = storage_iter.peek() {true} else {false};
+        let exist_items = matches!(storage_iter.peek(), Some(_));
         if reset_storage || exist_items {
             debug_print!("Update storage");
-            match self.code_data {
-                Some((ref contract_data, ref mut code_data)) => {
-                    let mut code_data = code_data.borrow_mut();
-        
-                    let contract = AccountData::get_contract(&contract_data)?;
-                    if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
-        
-                    let mut storage = Hamt::new(&mut code_data[contract_data.size()+(contract.code_size as usize)..], reset_storage)?;
-                    debug_print!("Storage initialized");
-                    for (key, value) in storage_iter {
-                        debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                        storage.insert(key, value)?;
-                    }
-                },
-                None => {
-                    debug_print!("Expected code account");
-                    return Err(ProgramError::NotEnoughAccountKeys);
+            if let Some((ref contract_data, ref mut code_data)) = self.code_data {
+                let mut code_data = code_data.borrow_mut();
+    
+                let contract = AccountData::get_contract(contract_data)?;
+                if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+    
+                let mut storage = Hamt::new(&mut code_data[contract_data.size()+(contract.code_size as usize)..], reset_storage)?;
+                debug_print!("Storage initialized");
+                for (key, value) in storage_iter {
+                    debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                    storage.insert(key, value)?;
                 }
+            }
+            else {
+                debug_print!("Expected code account");
+                return Err(ProgramError::NotEnoughAccountKeys);
             }
         }
 

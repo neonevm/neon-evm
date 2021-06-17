@@ -65,20 +65,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         result = send_transaction(client, trx, self.acc)
         print(result)
 
-    def test_call_by_self(self):
-        call_hello = bytearray.fromhex("033917b3df")
-        trx = Transaction().add(
-            TransactionInstruction(program_id=self.loader.loader_id, data=call_hello, keys=[
-                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            ]))
-        result = send_transaction(client, trx, self.acc)
-        print(result)
-
     def test_call_by_signer(self):
         # Check that another account can't use Ethereum address
         acc = Account()

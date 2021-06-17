@@ -1,7 +1,15 @@
 // #![deny(missing_docs)] // TODO #106 Write missing docs
 //#![forbid(unsafe_code)]
-
-
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(
+    clippy::redundant_field_names,
+    clippy::must_use_candidate,
+    clippy::unused_self,
+    clippy::use_self,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::missing_const_for_fn
+)]
 
 //! An ERC20-like Token program for the Solana blockchain
 #[macro_use]
