@@ -4,7 +4,10 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
-    commitment_config::CommitmentConfig
+    commitment_config::CommitmentConfig,
+    account_info::AccountInfo,
+    entrypoint::ProgramResult,
+    program::invoke_signed,
 };
 use serde_json::json;
 use serde::{Deserialize, Serialize};
@@ -18,6 +21,7 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell; 
 use std::rc::Rc;
 use crate::Config;
+use solana_program::instruction::Instruction;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct AccountJSON {
@@ -300,4 +304,33 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_number(&self) -> U256 { self.block_number.into() }
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
+
+    fn external_call(
+        &self,
+        instruction: &Instruction,
+        account_infos: &[AccountInfo]
+    ) -> ProgramResult {
+        eprintln!("emulate external_call");
+        Ok(())
+        // let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
+        // let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
+        //
+        // match self.seeds(&self.origin()) {
+        //     Some((sender_eth, sender_nonce)) => {
+        //         let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+        //         invoke_signed(
+        //             instruction,
+        //             account_infos,
+        //             &[&sender_seeds[..], &contract_seeds[..]]
+        //         )
+        //     }
+        //     None => {
+        //         invoke_signed(
+        //             instruction,
+        //             &account_infos,
+        //             &[&contract_seeds[..]]
+        //         )
+        //     }
+        // }
+    }
 }

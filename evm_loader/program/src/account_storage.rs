@@ -9,8 +9,11 @@ use evm::{H160, H256, U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
+    instruction::{Instruction, AccountMeta},
     program_error::ProgramError,
     sysvar::{clock, clock::Clock, Sysvar},
+    program::invoke_signed,
+    entrypoint::ProgramResult,
 };
 use std::{
     cell::RefCell,
@@ -236,5 +239,32 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn block_timestamp(&self) -> U256 {
         let clock = &Clock::from_account_info(self.clock_account).unwrap();
         clock.unix_timestamp.into()
+    }
+
+    fn external_call(
+        &self,
+        instruction: &Instruction,
+        account_infos: &[AccountInfo]
+    ) -> ProgramResult {
+        let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
+        let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
+
+        match self.seeds(&self.origin()) {
+            Some((sender_eth, sender_nonce)) => {
+                let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                invoke_signed(
+                    instruction,
+                    account_infos,
+                    &[&sender_seeds[..], &contract_seeds[..]]
+                )
+            }
+            None => {
+                invoke_signed(
+                    instruction,
+                    &account_infos,
+                    &[&contract_seeds[..]]
+                )
+            }
+        }
     }
 }

@@ -44,7 +44,10 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
-use solana_program::keccak::{hash, hashv};
+use solana_program::{
+    keccak::{hash, hashv},
+    account_info::AccountInfo
+};
 
 use solana_clap_utils::{
     input_parsers::pubkey_of,
@@ -87,7 +90,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(&account_storage, None);
+        let mut accounts : Vec<AccountInfo> = Vec::new();
+        let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::MAX, &config);
     

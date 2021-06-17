@@ -9,6 +9,7 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     program::invoke_signed,
+    entrypoint::ProgramResult,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -35,6 +36,7 @@ pub trait AccountStorage {
     fn code(&self, address: &H160) -> Code { self.apply_to_account(address, || Code::Vec{ code: Vec::new() }, |account| account.get_code(*address)) }
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, || U256::zero(), |account| account.get_storage(index)) }
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(&address, || None, |account| Some(account.get_seeds())) }
+    fn external_call(&self, instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
 pub struct SolanaBackend<'a, 's, S> {
@@ -204,29 +206,18 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let (contract_eth, contract_nonce) = self.account_storage.seeds(&self.account_storage.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
-                debug_print!("account_infos");
+                debug_print!("account_infos[");
                 if !self.account_infos.is_none() {
                     for info in self.account_infos.unwrap() {
                         debug_print!("  {}", info.key);
                     }
                 }
-                let result : solana_program::entrypoint::ProgramResult;
-                match self.account_storage.seeds(&self.account_storage.origin()) {
-                    Some((sender_eth, sender_nonce)) => {
-                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
-                        );
+                debug_print!("]");
 
-                    }
-                    None => {
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            &self.account_infos.unwrap(), &[&contract_seeds[..]]
-                        );
-                    }
-                }
+                let result = self.account_storage.external_call(
+                    &Instruction { program_id, accounts, data: input.to_vec() },
+                    &self.account_infos.unwrap(),
+                );
                 if let Err(err) = result {
                     debug_print!("result: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
