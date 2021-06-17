@@ -53,7 +53,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller),
             'data': '3917b3df',
-            'chainId': 1
+            'chainId': 111
         }
         
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())

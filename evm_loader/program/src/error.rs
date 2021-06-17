@@ -6,6 +6,7 @@ use thiserror::Error;
 
 /// Errors that may be returned by the EVM Loader program.
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+#[allow(clippy::module_name_repetitions)]
 pub enum EvmLoaderError {
     /// Unknown Error.
     #[error("Unknown error. Attention required.")]

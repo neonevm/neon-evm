@@ -1,6 +1,6 @@
 use evm::{
     backend::{Basic, Backend},
-    CreateScheme, Capture, Transfer, ExitReason, Code,
+    CreateScheme, Capture, Transfer, ExitReason,
     H160, H256, U256
 };
 use core::convert::Infallible;
@@ -18,6 +18,7 @@ use crate::{
     utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
 
+#[allow(clippy::redundant_closure_for_method_calls)]
 pub trait AccountStorage {
     fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
@@ -33,9 +34,9 @@ pub trait AccountStorage {
     fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
     fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_h256(&[]) , |account| account.code_hash()) }
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
-    fn code(&self, address: &H160) -> Code { self.apply_to_account(address, || Code::Vec{ code: Vec::new() }, |account| account.get_code(*address)) }
-    fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, || U256::zero(), |account| account.get_storage(index)) }
-    fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(&address, || None, |account| Some(account.get_seeds())) }
+    fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
+    fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
+    fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
     fn external_call(&self, instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
@@ -59,50 +60,51 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
 
     pub fn system_account() -> H160 {
-        H160::from_slice(&[0xffu8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8])
+        H160::from_slice(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
     }
 
     pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0x01u8])
+        H160::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01])
     }
 
     pub fn call_inner_ecrecover(&self,
-        code_address: H160,
-        _transfer: Option<Transfer>,
-        input: Vec<u8>,
-        _target_gas: Option<usize>,
-        _is_static: bool,
-        _take_l64: bool,
-        _take_stipend: bool,
+        input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         debug_print!("ecrecover");
         debug_print!("input: {}", &hex::encode(&input));
     
         if input.len() != 128 {
-            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])));
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
         }
 
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
-        let message = secp256k1::Message::parse(&msg);
-        let v = U256::from(v).as_u32() as u8;
-        let signature = secp256k1::Signature::parse(&sig);
-        let recoveryId = match secp256k1::RecoveryId::parse_rpc(v) {
+        let message = secp256k1::Message::parse(msg);
+
+        let signature = secp256k1::Signature::parse(sig);
+
+        let v: u8 = match U256::from_big_endian(v).try_into() {
             Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
+        };
+        let recovery_id = match secp256k1::RecoveryId::parse_rpc(v) {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
 
-        let public_key = match secp256k1::recover(&message, &signature, &recoveryId) {
+        let public_key = match secp256k1::recover(&message, &signature, &recovery_id) {
             Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 20])))
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
 
         let mut address = keccak256_digest(&public_key.serialize()[1..]);
-        for i in 0..12 { address[i] = 0 }
+        address[0..12].fill(0);
         debug_print!("{}", &hex::encode(&address));
 
-        return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address.to_vec())));
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
     }
+
+    pub fn chain_id() -> U256 { U256::from(111) }
 }
 
 impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
@@ -118,7 +120,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
     fn block_gas_limit(&self) -> U256 { U256::zero() }
-    fn chain_id(&self) -> U256 { U256::from(111) }
+    fn chain_id(&self) -> U256 { Self::chain_id() }
 
     fn exists(&self, address: H160) -> bool {
         self.account_storage.exists(&address)
@@ -132,16 +134,17 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     fn code_size(&self, address: H160) -> usize {
         self.account_storage.code_size(&address)
     }
-    fn code(&self, address: H160) -> Code {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.account_storage.code(&address)
     }
     fn storage(&self, address: H160, index: U256) -> U256 {
         self.account_storage.storage(&address, &index)
     }
 
-    fn create(&self, _scheme: &CreateScheme, _address: &H160) {
-        if let CreateScheme::Create2 {caller, code_hash, salt} = _scheme {
-            debug_print!("CreateScheme2 {} from {} {} {} {}", &hex::encode(_address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt), "" /*dummy arg for use correct message function*/);
+    #[allow(unused_variables)]
+    fn create(&self, scheme: &CreateScheme, address: &H160) {
+        if let CreateScheme::Create2 {caller, code_hash, salt} = scheme {
+            debug_print!("CreateScheme2 {} from {} {} {} {}", &hex::encode(address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt), "" /*dummy arg for use correct message function*/);
         } else {
             debug_print!("Call create");
         }
@@ -160,7 +163,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if self.is_ecrecover_address(&code_address) {
-            return self.call_inner_ecrecover(code_address, _transfer, input, _target_gas, _is_static, _take_l64, _take_stipend);
+            return self.call_inner_ecrecover(&input);
         }
 
         if !self.is_solana_address(&code_address) {
@@ -184,13 +187,13 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 for i in 0..acc_length {
                     let data = array_ref![input, 35*i as usize, 35];
                     let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
-                    let pubkey = if translate[0] != 0 {
+                    let pubkey = if translate[0] == 0 {
+                        Pubkey::new(pubkey)
+                    } else {
                         match self.account_storage.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {
-                            Some(key) => key.clone(),
+                            Some(key) => key,
                             None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                         }
-                    } else {
-                        Pubkey::new(pubkey)
                     };
                     accounts.push(AccountMeta {
                         is_signer: signer[0] != 0,
@@ -207,53 +210,71 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
                 debug_print!("account_infos[");
-                if !self.account_infos.is_none() {
-                    for info in self.account_infos.unwrap() {
-                        debug_print!("  {}", info.key);
-                    }
-                }
+                #[allow(unused_variables)]
+                for info in self.account_infos.unwrap() {
+                    debug_print!("  {}", info.key);
+                };
                 debug_print!("]");
 
-                let result = self.account_storage.external_call(
-                    &Instruction { program_id, accounts, data: input.to_vec() },
-                    &self.account_infos.unwrap(),
-                );
+                let result : solana_program::entrypoint::ProgramResult;
+                match self.account_storage.seeds(&self.account_storage.origin()) {
+                    Some((sender_eth, sender_nonce)) => {
+                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                        result = invoke_signed(
+                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
+                            self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
+                        );
+
+                    }
+                    None => {
+                        result = invoke_signed(
+                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
+                            self.account_infos.unwrap(), &[&contract_seeds[..]]
+                        );
+                    }
+                }
+
+                #[allow(unused_variables)]
                 if let Err(err) = result {
                     debug_print!("result: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
-                return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())));
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())))
             },
             1 => {
                 let data = array_ref![input, 0, 66];
                 let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
 
-                let base = if tr_base[0] != 0 {
+                let base = if tr_base[0] == 0 {
+                    Pubkey::new(base)
+                } else {
                     match self.account_storage.get_account_solana_address(&H160::from_slice(&base[12..])) {
-                        Some(key) => key.clone(),
+                        Some(key) => key,
                         None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                     }
-                } else {Pubkey::new(base)};
+                };
 
-                let owner = if tr_owner[0] != 0 {
+                let owner = if tr_owner[0] == 0 {
+                    Pubkey::new(owner)
+                } else {
                     match self.account_storage.get_account_solana_address(&H160::from_slice(&owner[12..])) {
-                        Some(key) => key.clone(),
+                        Some(key) => key,
                         None => { return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))); },
                     }
-                } else {Pubkey::new(owner)};
+                };
 
                 let (_, seed) = input.split_at(66);
-                let seed = if let Ok(seed) = std::str::from_utf8(&seed) {seed}
+                let seed = if let Ok(seed) = std::str::from_utf8(seed) {seed}
                 else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
 
-                let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed.into(), &owner) {pubkey}
+                let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed, &owner) {pubkey}
                 else {return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));};
 
                 debug_print!("result: {}", &hex::encode(pubkey.as_ref()));
-                return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec())));
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec())))
             },
             _ => {
-                return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
+                Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())))
             }
         }
     }

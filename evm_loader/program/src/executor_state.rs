@@ -5,7 +5,7 @@ use std::{
 };
 use core::mem;
 use evm::backend::{Apply, Backend, Basic, Log};
-use evm::{ExitError, Transfer, Code, H160, H256, U256};
+use evm::{ExitError, Transfer, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
@@ -33,7 +33,8 @@ impl ExecutorMetadata {
         }
     }
 
-    pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
         // self.gasometer
         //     .record_refund(other.gasometer.refunded_gas())?;
@@ -46,17 +47,19 @@ impl ExecutorMetadata {
         Ok(())
     }
 
-    pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn swallow_revert(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
 
         Ok(())
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
-    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub fn spit_child(&self, _gas_limit: u64, is_static: bool) -> Self {
         Self {
             // gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
@@ -75,6 +78,7 @@ impl ExecutorMetadata {
     //     &mut self.gasometer
     // }
 
+    #[allow(dead_code)]
     pub fn is_static(&self) -> bool {
         self.is_static
     }
@@ -198,7 +202,7 @@ impl ExecutorSubstate {
         }
         let mut reset_keys = BTreeSet::new();
         for (address, key) in self.storages.keys() {
-            if resets.contains(&address) {
+            if resets.contains(address) {
                 reset_keys.insert((*address, *key));
             }
         }
@@ -216,9 +220,9 @@ impl ExecutorSubstate {
         self.storages.append(&mut exited.storages);
         self.deletes.append(&mut exited.deletes);
 
-        for (address) in &resets {
+        for address in &resets {
             if self.accounts.contains_key(address){
-                self.accounts.get_mut(&address).unwrap().reset = true;
+                self.accounts.get_mut(address).unwrap().reset = true;
             }
         }
 
@@ -244,12 +248,9 @@ impl ExecutorSubstate {
     }
 
     fn known_account(&self, address: H160) -> Option<&ExecutorAccount> {
-        if let Some(account) = self.accounts.get(&address) {
-            Some(account)
-        } else if let Some(parent) = self.parent.as_ref() {
-            parent.known_account(address)
-        } else {
-            None
+        match self.accounts.get(&address) {
+            Some(account) => Some(account),
+            None => self.parent.as_ref().and_then(|parent| parent.known_account(address))
         }
     }
 
@@ -257,10 +258,8 @@ impl ExecutorSubstate {
         self.known_account(address).map(|acc| acc.basic.clone())
     }
 
-    pub fn known_code(&self, address: H160) -> Option<Code> {
-        self.known_account(address).and_then(
-            |acc| acc.code.clone().map(|code| Code::Vec{code})
-        )
+    pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
+        self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
     pub fn known_empty(&self, address: H160) -> Option<bool> {
@@ -277,7 +276,7 @@ impl ExecutorSubstate {
                 return Some(
                     account.basic.balance == U256::zero()
                         && account.basic.nonce == U256::zero()
-                        && code.len() == 0,
+                        && code.is_empty(),
                 );
             }
         }
@@ -330,19 +329,19 @@ impl ExecutorSubstate {
     }
 
     fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut ExecutorAccount {
+        #[allow(clippy::map_entry)]
         if !self.accounts.contains_key(&address) {
-            let account = self
-                .known_account(address)
-                .cloned()
-                .map(|mut v| {
-                    v.reset = false;
-                    v
-                })
-                .unwrap_or_else(|| ExecutorAccount {
+            let account = self.known_account(address).cloned().map_or_else(
+                || ExecutorAccount {
                     basic: backend.basic(address),
                     code: None,
                     reset: false,
-                });
+                },
+                |mut v| {
+                    v.reset = false;
+                    v
+                },
+            );
             self.accounts.insert(address, account);
         }
 
@@ -393,7 +392,7 @@ impl ExecutorSubstate {
 
     pub fn transfer<B: Backend>(
         &mut self,
-        transfer: Transfer,
+        transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
         {
@@ -410,28 +409,6 @@ impl ExecutorSubstate {
         }
 
         Ok(())
-    }
-
-    // Only needed for jsontests.
-    pub fn withdraw<B: Backend>(
-        &mut self,
-        address: H160,
-        value: U256,
-        backend: &B,
-    ) -> Result<(), ExitError> {
-        let source = self.account_mut(address, backend);
-        if source.basic.balance < value {
-            return Err(ExitError::OutOfFund);
-        }
-        source.basic.balance -= value;
-
-        Ok(())
-    }
-
-    // Only needed for jsontests.
-    pub fn deposit<B: Backend>(&mut self, address: H160, value: U256, backend: &B) {
-        let target = self.account_mut(address, backend);
-        target.basic.balance = target.basic.balance.saturating_add(value);
     }
 
     pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
@@ -462,7 +439,7 @@ pub trait StackState : Backend {
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
     fn set_deleted(&mut self, address: H160);
     fn set_code(&mut self, address: H160, code: Vec<u8>);
-    fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError>;
+    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError>;
     fn reset_balance(&mut self, address: H160);
     fn touch(&mut self, address: H160);
 }
@@ -511,7 +488,7 @@ impl<B: Backend> Backend for ExecutorState<B> {
             .unwrap_or_else(|| self.backend.basic(address))
     }
 
-    fn code(&self, address: H160) -> Code {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.substate
             .known_code(address)
             .unwrap_or_else(|| self.backend.code(address))
@@ -519,14 +496,12 @@ impl<B: Backend> Backend for ExecutorState<B> {
 
     fn code_hash(&self, address: H160) -> H256 {
         self.substate.known_code(address)
-            .map(|code| keccak256_h256(&code))
-            .unwrap_or(self.backend.code_hash(address))
+            .map_or_else(|| self.backend.code_hash(address), |code| keccak256_h256(&code))
     }
 
     fn code_size(&self, address: H160) -> usize {
          self.substate.known_code(address)
-            .map(|code| code.len())
-            .unwrap_or(self.backend.code_size(address))
+            .map_or_else(|| self.backend.code_size(address), |code| code.len())
     }
 
     fn storage(&self, address: H160, key: U256) -> U256 {
@@ -631,7 +606,7 @@ impl<B: Backend> StackState for ExecutorState<B> {
         self.substate.set_code(address, code, &self.backend)
     }
 
-    fn transfer(&mut self, transfer: Transfer) -> Result<(), ExitError> {
+    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
         self.substate.transfer(transfer, &self.backend)
     }
 
@@ -657,18 +632,11 @@ impl<B: Backend> ExecutorState<B> {
     }
 
     #[must_use]
+    #[allow(clippy::type_complexity)]
     pub fn deconstruct(
         self,
     ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>)) {
         let (applies, logs) = self.substate.deconstruct(&self.backend);
         (self.backend, (applies, logs))
-    }
-
-    pub fn withdraw(&mut self, address: H160, value: U256) -> Result<(), ExitError> {
-        self.substate.withdraw(address, value, &self.backend)
-    }
-
-    pub fn deposit(&mut self, address: H160, value: U256) {
-        self.substate.deposit(address, value, &self.backend)
     }
 }

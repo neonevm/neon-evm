@@ -225,7 +225,7 @@ class EvmLoader:
             ether = ether.hex()
         output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
         items = output.rstrip().split(' ')
-        return (items[0], int(items[1]))
+        return items[0], int(items[1])
 
     def checkAccount(self, solana):
         info = client.get_account_info(solana)
@@ -240,11 +240,11 @@ class EvmLoader:
         info = client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location, caller)
-            return (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+            return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return (program[0], ether, code[0])
+            return program[0], ether, code[0]
 
     def createEtherAccountTrx(self, ether, code_acc=None):
         if isinstance(ether, str):
@@ -297,7 +297,6 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "eth_acc" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
-    "signer_acc" / Bytes(32),
     "code_acc" / Bytes(32),
     "is_blocked" / Int8ul,
     "blocked_by" / Bytes(32),
