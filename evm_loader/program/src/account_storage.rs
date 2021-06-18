@@ -9,7 +9,7 @@ use evm::{H160,  U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
-    instruction::{Instruction, AccountMeta},
+    instruction::Instruction,
     program_error::ProgramError,
     sysvar::{clock, clock::Clock, Sysvar},
     program::invoke_signed,
