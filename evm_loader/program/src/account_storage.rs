@@ -275,7 +275,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             None => {
                 invoke_signed(
                     instruction,
-                    &account_infos,
+                    account_infos,
                     &[&contract_seeds[..]]
                 )
             }
