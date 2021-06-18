@@ -102,7 +102,7 @@ class ERC20:
         value = data[2:]
         ret = int.from_bytes(value, "big")
         assert 0 != ret, 'erc20.deposit: FAIL'
-        return ret
+        return ether_trx.trx_data
 
     def withdraw(self, ether_caller, receiver, amount, balance_erc20, mint_id):
         ether_trx = EthereumTransaction(
@@ -421,8 +421,25 @@ class ERC20test(unittest.TestCase):
         assert (erc20.balance(self.ethereum_caller) == 0)
 
         deposit_amount = 1
-        erc20.deposit(self.ethereum_caller, client_acc, self.ethereum_caller, deposit_amount * (10 ** 9),
-                      balance_erc20, token, self.acc.public_key()._key)
+        deposit_trx_data = erc20.deposit(self.ethereum_caller, client_acc, self.ethereum_caller,
+                                         deposit_amount * (10 ** 9), balance_erc20, token,
+                                         self.acc.public_key()._key)
+
+        # check deposit emulation
+        print('\nCheck deposit emulation:')
+        print('ethereum_caller:', self.ethereum_caller.hex())
+        print('erc20.ethereum_id:', erc20.ethereum_id.hex())
+        print('deposit_trx_data:', deposit_trx_data.hex())
+        args = self.ethereum_caller.hex() + ' ' + erc20.ethereum_id.hex() + ' ' + deposit_trx_data.hex()
+        cli = neon_cli()
+        cli_result = cli.emulate(evm_loader_id, args)
+        print('cli_result:', cli_result)
+        emulate_result = json.loads(cli_result)
+        print('emulate_result:', emulate_result)
+        assert (emulate_result["exit_status"] == 'succeed')
+        assert(int(emulate_result['result']) == 1)
+        print('deposit emulation: OK\n')
+
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
         assert (erc20.balance(self.ethereum_caller) == deposit_amount * (10 ** 9))
@@ -444,7 +461,6 @@ class ERC20test(unittest.TestCase):
         receiver_erc20 = bytes.fromhex("0000000000000000000000000000000000000011")
         signer = self.acc.public_key()._key
         erc20.deposit(self.ethereum_caller, client_acc, receiver_erc20, 900, balance_erc20, token, signer)
-        # neon-cli --commitment=recent --evm_loader C9ABG3zJH1e9NBS2VdbWC3XMEkrJY26wwv16XCxnu3DG --url http://127.0.0.1:8899 emulate 3b92c7998e9031b17a611f3215867f8de59d069e c2dc392a09f4a445b9d33e6797390d5c509c5376 6f0372af84a3e82fd1ea32a50dfc5f4b0a5bdff692e4b741aea571680ba4d940488441d60000000000000000000000001503ca0884fc77f41880cbe8c8305228bf4bc661ef26cfb33a0fd4865291846f6cf4ae0a5af2860d8758ef69d2f7409f04b24d25000000000000000000000000000000000000000000000000000000003b9aca00
 
     @unittest.skip("not for CI")
     def test_with_draw(self):

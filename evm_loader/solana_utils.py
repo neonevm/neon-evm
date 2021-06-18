@@ -115,6 +115,21 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
+    def emulate(self, loader_id, arguments):
+        cmd = 'neon-cli  --commitment=recent --evm_loader {} --url {} emulate {}'.format(loader_id,
+                                                                                         solana_url,
+                                                                                         arguments)
+        print('cmd:', cmd)
+        try:
+            output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+            without_empty_lines = os.linesep.join([s for s in output.splitlines() if s])
+            last_line = without_empty_lines.splitlines()[-1]
+            return last_line
+        except subprocess.CalledProcessError as err:
+            import sys
+            print("ERR: neon-cli error {}".format(err))
+            raise
+
 
 class RandomAccount:
     def __init__(self, path=None):
