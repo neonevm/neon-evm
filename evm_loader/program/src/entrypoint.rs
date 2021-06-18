@@ -31,8 +31,6 @@ use evm::{
 };
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
-
-
 const HEAP_LENGTH: usize = 1024*1024;
 
 /// Developers can implement their own heap by defining their own
@@ -191,7 +189,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), usize::MAX)
+            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), u64::MAX)
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
@@ -214,10 +212,10 @@ fn process_instruction<'a>(
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_usize())?;
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())?;
             }
             else{
-                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_usize())?;
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())?;
             }
 
             storage.block_accounts(program_id, accounts)
@@ -237,7 +235,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.gas_limit.as_usize())
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -263,7 +261,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx.gas_limit.as_usize())?;
+            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx.gas_limit.as_u64())?;
 
             storage.block_accounts(program_id, accounts)
         },
@@ -395,7 +393,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code.to_vec()
         };
 
-        let gas_limit = usize::MAX;
+        let gas_limit = u64::MAX;
 	    let config = evm::Config::default();
         let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
         let mut executor = Machine::new(executor_state);
@@ -432,7 +430,7 @@ fn do_call<'a>(
     account_storage: &mut ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
-    gas_limit: usize,
+    gas_limit: u64,
 ) -> ProgramResult
 {
     debug_print!("do_call");
@@ -498,7 +496,7 @@ fn do_partial_call<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
-    gas_limit: usize,
+    gas_limit: u64,
 ) -> ProgramResult
 {
     debug_print!("do_partial_call");
@@ -543,7 +541,7 @@ fn do_partial_create<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
-    gas_limit: usize,
+    gas_limit: u64,
 ) -> ProgramResult
 {
     debug_print!("do_partial_create");

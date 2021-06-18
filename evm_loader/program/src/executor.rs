@@ -172,7 +172,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<usize>,
+        _target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
@@ -230,7 +230,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        target_gas: Option<usize>,
+        target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
@@ -265,7 +265,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             self.state
                 .metadata_mut()
                 .gasometer_mut()
-                .record_cost(cost as usize)?;
+                .record_cost(cost)?;
         } else {
             let is_static = self.state.metadata().is_static();
             let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
@@ -322,7 +322,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
-        gas_limit: usize,
+        gas_limit: u64,
         take_l64: bool,
         estimate: bool,
     ) -> Result<(), ExitError> {
@@ -332,16 +332,16 @@ impl<'config, B: Backend> Machine<'config, B> {
             //if self.executor.config.estimate { // no such field 'estimate' in Config
             if estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
-                let diff = initial_after_gas as u64 - l64(initial_after_gas as u64);
+                let diff = initial_after_gas - l64(initial_after_gas);
                 self.executor
                     .state
                     .metadata_mut()
                     .gasometer_mut()
-                    .record_cost(diff as usize)
+                    .record_cost(diff)
                     .ok();
                 self.executor.state.metadata().gasometer().gas()
             } else {
-                l64(self.executor.state.metadata().gasometer().gas() as u64) as usize
+                l64(self.executor.state.metadata().gasometer().gas())
             }
         } else {
             self.executor.state.metadata().gasometer().gas()
@@ -364,7 +364,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: usize) -> ProgramResult {
+    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
         let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(gas_limit, false);
 
@@ -421,7 +421,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[allow(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
-        let gas_limit = self.executor.state.block_gas_limit().as_usize();
+        let gas_limit = self.executor.state.block_gas_limit().as_u64();
         match self.step_opcode(){
             RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {

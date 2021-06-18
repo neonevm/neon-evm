@@ -26,7 +26,7 @@ pub struct ExecutorMetadata<'config> {
 }
 
 impl<'config> ExecutorMetadata<'config> {
-    pub fn new(gas_limit: usize, config: &'config evm::Config) -> Self {
+    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
@@ -61,7 +61,7 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    pub fn split_child(&self, gas_limit: usize, is_static: bool) -> Self {
+    pub fn split_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
@@ -101,7 +101,7 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
-    pub fn new(gas_limit: usize, config: &'config evm::Config) -> Self {
+    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             metadata: ExecutorMetadata::new(gas_limit, config),
             parent: None,
@@ -175,7 +175,7 @@ impl<'config> ExecutorSubstate<'config> {
         (applies, self.logs)
     }
 
-    pub fn enter(&mut self, gas_limit: usize, is_static: bool) {
+    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         let mut entering = Self {
             metadata: self.metadata.split_child(gas_limit, is_static),
             parent: None,
@@ -426,7 +426,7 @@ pub trait StackState : Backend {
     fn metadata(&self) -> &ExecutorMetadata;
     fn metadata_mut(&mut self) -> &mut ExecutorMetadata;
 
-    fn enter(&mut self, gas_limit: usize, is_static: bool);
+    fn enter(&mut self, gas_limit: u64, is_static: bool);
     fn exit_commit(&mut self) -> Result<(), ExitError>;
     fn exit_revert(&mut self) -> Result<(), ExitError>;
     fn exit_discard(&mut self) -> Result<(), ExitError>;
@@ -520,7 +520,7 @@ impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        target_gas: Option<usize>,
+        target_gas: Option<u64>,
         is_static: bool,
         take_l64: bool,
         take_stipend: bool,
@@ -546,7 +546,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
         self.substate.metadata_mut()
     }
 
-    fn enter(&mut self, gas_limit: usize, is_static: bool) {
+    fn enter(&mut self, gas_limit: u64, is_static: bool) {
         self.substate.enter(gas_limit, is_static)
     }
 
