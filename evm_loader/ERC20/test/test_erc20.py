@@ -444,6 +444,7 @@ class ERC20test(unittest.TestCase):
         receiver_erc20 = bytes.fromhex("0000000000000000000000000000000000000011")
         signer = self.acc.public_key()._key
         erc20.deposit(self.ethereum_caller, client_acc, receiver_erc20, 900, balance_erc20, token, signer)
+        # neon-cli --commitment=recent --evm_loader C9ABG3zJH1e9NBS2VdbWC3XMEkrJY26wwv16XCxnu3DG --url http://127.0.0.1:8899 emulate 3b92c7998e9031b17a611f3215867f8de59d069e c2dc392a09f4a445b9d33e6797390d5c509c5376 6f0372af84a3e82fd1ea32a50dfc5f4b0a5bdff692e4b741aea571680ba4d940488441d60000000000000000000000001503ca0884fc77f41880cbe8c8305228bf4bc661ef26cfb33a0fd4865291846f6cf4ae0a5af2860d8758ef69d2f7409f04b24d25000000000000000000000000000000000000000000000000000000003b9aca00
 
     @unittest.skip("not for CI")
     def test_with_draw(self):

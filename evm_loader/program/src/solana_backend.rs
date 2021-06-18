@@ -8,7 +8,6 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
-    program::invoke_signed,
     entrypoint::ProgramResult,
 };
 use std::convert::TryInto;
@@ -206,9 +205,6 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 debug_print!("{}", &hex::encode(&input));
 
-                let (contract_eth, contract_nonce) = self.account_storage.seeds(&self.account_storage.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-                let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
-
                 debug_print!("account_infos[");
                 #[allow(unused_variables)]
                 for info in self.account_infos.unwrap() {
@@ -216,23 +212,10 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 };
                 debug_print!("]");
 
-                let result : solana_program::entrypoint::ProgramResult;
-                match self.account_storage.seeds(&self.account_storage.origin()) {
-                    Some((sender_eth, sender_nonce)) => {
-                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
-                        );
-
-                    }
-                    None => {
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&contract_seeds[..]]
-                        );
-                    }
-                }
+                let result = self.account_storage.external_call(
+                    &Instruction { program_id, accounts, data: input.to_vec() },
+                    &self.account_infos.unwrap(),
+                );
 
                 #[allow(unused_variables)]
                 if let Err(err) = result {
