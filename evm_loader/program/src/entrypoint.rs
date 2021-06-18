@@ -397,7 +397,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
         let gas_limit = usize::MAX;
 	    let config = evm::Config::default();
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, &config), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -445,7 +445,7 @@ fn do_call<'a>(
         debug_print!("  backend initialized");
 
 	    let config = evm::Config::default();
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, &config), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -507,7 +507,7 @@ fn do_partial_call<'a>(
     debug_print!("  backend initialized");
 
     let config = evm::Config::default();
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, &config), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -552,7 +552,7 @@ fn do_partial_create<'a>(
     debug_print!("  backend initialized");
 
     let config = evm::Config::default();
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, &config), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");

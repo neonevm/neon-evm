@@ -89,7 +89,7 @@ impl AccountData {
             AccountData::Account(acc) => acc.size() + 1,
             AccountData::Contract(acc) => acc.size() + 1,
             AccountData::Storage(acc) => acc.size() + 1,
-            _ => 1,
+            AccountData::Empty => 1,
         }
     }
 

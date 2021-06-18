@@ -1,16 +1,18 @@
+use std::borrow::BorrowMut;
 use std::convert::Infallible;
-use evm_runtime::{save_return_value, save_created_address, Control};
+use std::mem;
+
 use evm::{
-    Capture, ExitError, ExitReason, ExitFatal, Handler,
-    backend::Backend, Resolve, H160, H256, U256, gasometer,
+    backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
+    gasometer, H160, H256, Handler, Resolve, U256,
 };
-use crate::executor_state::{ StackState, ExecutorState };
+use evm_runtime::{Control, save_created_address, save_return_value};
+use solana_program::entrypoint::ProgramResult;
+use solana_program::program_error::ProgramError;
+
+use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
-use std::mem;
-use solana_program::program_error::ProgramError;
-use std::borrow::BorrowMut;
-use solana_program::entrypoint::ProgramResult;
 
 macro_rules! try_or_fail {
     ( $e:expr ) => {
@@ -68,11 +70,11 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 
     fn code_hash(&self, address: H160) -> H256 {
-        if !self.exists(address) {
-            H256::default()
-        } else {
+        if self.exists(address) {
             self.state.code_hash(address)
-	}
+        } else {
+            H256::default()
+        }
     }
 
     fn code(&self, address: H160) -> Vec<u8> {
@@ -271,7 +273,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                 opcode,
                 stack,
                 is_static,
-                &self.config,
+                self.config,
                 self,
             )?;
 
