@@ -448,15 +448,14 @@ fn do_call<'a>(
 
         debug_print!("Executor initialized");
 
-	    if let Err(e) = executor.call_begin(
+	    if executor.call_begin(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
             gas_limit,
             false, // take_l64
             false, // estimate
-        ) {
-            debug_print!("{:?}", e);
+        ).is_err() {
             return Err(ProgramError::InvalidInstructionData);
         }
 
@@ -513,15 +512,14 @@ fn do_partial_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    if let Err(e) = executor.call_begin(
+    if executor.call_begin(
         account_storage.origin(),
         account_storage.contract(),
         instruction_data,
         gas_limit,
         false, // take_l64
         false, // estimate
-    ) {
-        debug_print!("{:?}", e);
+    ).is_err() {
         return Err(ProgramError::InvalidInstructionData);
     }
 
