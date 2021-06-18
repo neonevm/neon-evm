@@ -214,7 +214,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
 
                 let result = self.account_storage.external_call(
                     &Instruction { program_id, accounts, data: input.to_vec() },
-                    &self.account_infos.unwrap(),
+                    self.account_infos.unwrap(),
                 );
 
                 #[allow(unused_variables)]
