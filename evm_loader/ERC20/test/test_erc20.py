@@ -310,6 +310,21 @@ class NeonEvmClient:
         return send_transaction(client, trx, self.solana_wallet)
 
 
+def check_deposit_emulation(sender, contract, trx_data):
+    print('\nCheck deposit emulation:')
+    print('sender:', sender)
+    print('contract:', contract)
+    print('trx_data:', trx_data)
+    cli = neon_cli()
+    cli_result = cli.emulate(evm_loader_id, sender + ' ' + contract + ' ' + trx_data)
+    print('cli_result:', cli_result)
+    emulate_result = json.loads(cli_result)
+    print('emulate_result:', emulate_result)
+    assert (emulate_result["exit_status"] == 'succeed')
+    assert(int(emulate_result['result']) == 1)
+    print('deposit emulation: OK\n')
+
+
 class ERC20test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -425,20 +440,9 @@ class ERC20test(unittest.TestCase):
                                          deposit_amount * (10 ** 9), balance_erc20, token,
                                          self.acc.public_key()._key)
 
-        # check deposit emulation
-        print('\nCheck deposit emulation:')
-        print('ethereum_caller:', self.ethereum_caller.hex())
-        print('erc20.ethereum_id:', erc20.ethereum_id.hex())
-        print('deposit_trx_data:', deposit_trx_data.hex())
-        args = self.ethereum_caller.hex() + ' ' + erc20.ethereum_id.hex() + ' ' + deposit_trx_data.hex()
-        cli = neon_cli()
-        cli_result = cli.emulate(evm_loader_id, args)
-        print('cli_result:', cli_result)
-        emulate_result = json.loads(cli_result)
-        print('emulate_result:', emulate_result)
-        assert (emulate_result["exit_status"] == 'succeed')
-        assert(int(emulate_result['result']) == 1)
-        print('deposit emulation: OK\n')
+        check_deposit_emulation(self.ethereum_caller.hex(),
+                                erc20.ethereum_id.hex(),
+                                deposit_trx_data.hex())
 
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
