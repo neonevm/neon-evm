@@ -191,7 +191,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec())
+            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), usize::MAX)
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
@@ -237,7 +237,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            do_call(program_id, &mut account_storage, accounts, trx.call_data)
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.gas_limit.as_usize())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -432,6 +432,7 @@ fn do_call<'a>(
     account_storage: &mut ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    gas_limit: usize,
 ) -> ProgramResult
 {
     debug_print!("do_call");
@@ -439,7 +440,6 @@ fn do_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let gas_limit = usize::MAX;
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");

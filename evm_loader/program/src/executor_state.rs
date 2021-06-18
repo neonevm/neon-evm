@@ -61,7 +61,7 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    pub fn spit_child(&self, gas_limit: usize, is_static: bool) -> Self {
+    pub fn split_child(&self, gas_limit: usize, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
@@ -177,7 +177,7 @@ impl<'config> ExecutorSubstate<'config> {
 
     pub fn enter(&mut self, gas_limit: usize, is_static: bool) {
         let mut entering = Self {
-            metadata: self.metadata.spit_child(gas_limit, is_static),
+            metadata: self.metadata.split_child(gas_limit, is_static),
             parent: None,
             logs: Vec::new(),
             accounts: BTreeMap::new(),
