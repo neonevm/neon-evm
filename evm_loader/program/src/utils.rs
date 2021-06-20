@@ -1,4 +1,4 @@
-//! EVMLoader helper functions
+//! `EVMLoader` helper functions
 
 use evm::{H160, H256, U256};
 use solana_program::pubkey::Pubkey;
