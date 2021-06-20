@@ -1,3 +1,4 @@
+//! `EvmInstruction` serrialization/deserrialization
 use serde::{Serialize, Serializer};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::{TryInto, TryFrom};
@@ -8,7 +9,7 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
     value.as_fixed_bytes().serialize(s)
 }
 
-/// Create a new account
+/// `EvmInstruction` serrialized in instruction data
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub enum EvmInstruction<'a> {
@@ -20,6 +21,7 @@ pub enum EvmInstruction<'a> {
     Write {
         /// Offset at which to write the given bytes
         offset: u32,
+        /// Data to write
         bytes: &'a [u8],
     },
 
@@ -60,7 +62,7 @@ pub enum EvmInstruction<'a> {
     },
 
     /// Call Ethereum-contract action
-    /// # Account references
+    /// ### Account references
     ///   0. [WRITE] Contract account for execution (Ether account)
     ///   1. [WRITE] Contract code account (Code account)
     ///   2. [WRITE] Caller (Ether account)
@@ -96,11 +98,13 @@ pub enum EvmInstruction<'a> {
     },
 
     /// Call Ethereum-contract action from raw transaction data
-    /// # Account references same as in Call
+    /// #### Account references same as in Call
     CallFromRawEthereumTX {
-        /// Call data
+        /// Ethereum transaction sender address
         from_addr: &'a [u8],
+        /// Ethereum transaction sign
         sign: &'a [u8],
+        /// Unsigned ethereum transaction
         unsigned_msg: &'a [u8],
     },
 
@@ -115,32 +119,53 @@ pub enum EvmInstruction<'a> {
 
     /// Called action event
     OnEvent {
+        /// Address
         address: H160,
+        /// Topics
         topics: Vec<H256>,
         /// Data
         data: &'a [u8],
     },
 
+    /// Partial call Ethereum-contract action from raw transaction data
+    /// ### Account references
+    ///   0. [WRITE] storage account
+    ///   1. ... Account references same as in Call
     PartialCallFromRawEthereumTX {
+        /// Steps of ethereum contract to execute
         step_count: u64,
+        /// Ethereum transaction sender address
         from_addr: &'a [u8],
+        /// Ethereum transaction sign
         sign: &'a [u8],
+        /// Unsigned ethereum transaction
         unsigned_msg: &'a [u8],
     },
 
+    /// Partial call Ethereum-contract action from raw transaction data
+    /// ### Account references same as in PartialCallFromRawEthereumTX
     Continue {
+        /// Steps of ethereum contract to execute
         step_count: u64,
     },
 
+    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
     ExecuteTrxFromAccountDataIterative {
+        /// Steps of ethereum contract to execute
         step_count: u64,
     },
 
+    /// Partial call Ethereum-contract action from raw transaction data
+    /// ### Account references same as in PartialCallFromRawEthereumTX
     Cancel,
 }
 
 
 impl<'a> EvmInstruction<'a> {
+    /// Unpack `EvmInstruction`
+    /// ```
+    /// let instruction = EvmInstruction::unpack(instruction_data)?;
+    /// ```
     pub fn unpack(input: &'a[u8]) -> Result<Self, ProgramError> {
         use ProgramError::InvalidInstructionData;
 

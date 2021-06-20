@@ -1,4 +1,4 @@
-// #![deny(missing_docs)] // TODO #106 Write missing docs
+#![deny(missing_docs)]
 //#![forbid(unsafe_code)]
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
@@ -17,11 +17,6 @@
 mod debug;
 mod error;
 pub mod entrypoint;
-//pub mod error;
-//pub mod instruction;
-//pub mod native_mint;
-//pub mod processor;
-//pub mod state;
 mod hamt;
 pub mod solana_backend;
 pub mod account_data;

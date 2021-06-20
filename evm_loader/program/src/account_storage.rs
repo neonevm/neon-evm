@@ -1,3 +1,4 @@
+//! `AccountStorage` for solana program realisation
 use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
@@ -16,11 +17,15 @@ use std::{
     cell::RefCell,
 };
 
+/// Sender
 pub enum Sender {
+    /// Ethereum account addres
     Ethereum (H160),
+    /// Solana account ethereum addres
     Solana (H160),
 }
 
+/// `AccountStorage` for solana program realisation
 #[allow(clippy::module_name_repetitions)]
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
@@ -156,14 +161,17 @@ impl<'a> ProgramAccountStorage<'a> {
         })
     }
 
+    /// Get sender address
     pub fn get_sender(&self) -> &Sender {
         &self.sender
     }
 
+    /// Get contract `SolidityAccount`
     pub fn get_contract_account(&self) -> Option<&SolidityAccount<'a>> {
         self.get_account(&self.contract_id)
     }
 
+    /// Get caller `SolidityAccount`
     pub fn get_caller_account(&self) -> Option<&SolidityAccount<'a>> {
         match self.sender {
             Sender::Ethereum(addr) => self.get_account(&addr),
@@ -187,6 +195,7 @@ impl<'a> ProgramAccountStorage<'a> {
         self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
+    /// Apply contact execution results
     pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,

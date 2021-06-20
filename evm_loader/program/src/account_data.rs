@@ -1,3 +1,4 @@
+//! Structures stored in account data
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use evm::H160;
 use solana_program::{
@@ -5,35 +6,55 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
+/// Ethereum account data
 #[derive(Debug,Clone)]
 pub struct Account {
+    /// Ethereum adress
     pub ether: H160,
+    /// Solana account nonce
     pub nonce: u8,
+    /// Ethereum account nonce
     pub trx_count: u64,
+    /// Address of solana account that stores code data (for cotract accounts) of Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
+    /// Ethereum adress
     pub blocked: Option<Pubkey>
 }
 
+/// Ethereum contract data account
 #[derive(Debug,Clone)]
 pub struct Contract {
+    /// Solana account with ethereum account data asociated with this code data
     pub owner: Pubkey,
+    /// Contract code size
     pub code_size: u32,
 }
 
+/// Storage data account to store execution metainfo between steps for iterative execution
 #[derive(Debug,Clone)]
 pub struct Storage {
+    /// Ethereum transaction caller address
     pub caller: H160,
+    /// Ethereum transaction caller nonce
     pub nonce: u64,
+    /// Stored accounts length
     pub accounts_len: usize,
+    /// Stored executor data size
     pub executor_data_size: usize,
+    /// Stored evm data size
     pub evm_data_size: usize
 }
 
+/// Structured data stored in account data
 #[derive(Debug,Clone)]
 pub enum AccountData {
+    /// Ethereum account data
     Account(Account),
+    /// Ethereum contract data account
     Contract(Contract),
+    /// Storage data
     Storage(Storage),
+    /// Empty account data
     Empty
 }
 
@@ -43,6 +64,16 @@ impl AccountData {
     const CONTRACT_TAG: u8 = 2;
     const STORAGE_TAG: u8 = 3;
 
+    /// Unpack `AccountData` from Solana account data
+    /// ```
+    /// let caller_info_data = AccountData::unpack(&account_info.data.borrow())?;
+    /// match caller_info_data {
+    ///     AccountData::Account(acc) => ...,
+    ///     AccountData::Contract(acc) => ...,
+    ///     AccountData::Storage(acc) => ...,
+    ///     Empty => ...,
+    /// }
+    /// ```
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (&tag, rest) = input.split_first().ok_or(ProgramError::InvalidAccountData)?;
         Ok(match tag {
@@ -55,6 +86,12 @@ impl AccountData {
         })
     }
 
+
+    /// Serrialize `AccountData` into Solana's account data
+    /// ```
+    /// let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
+    /// contract_data.pack(&mut program_code.data.borrow_mut())?;
+    /// ```
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.is_empty() { return Err(ProgramError::AccountDataTooSmall); }
         Ok(match self {
@@ -84,6 +121,7 @@ impl AccountData {
         })
     }
 
+    /// Get `AccountData` struct size
     pub fn size(&self) -> usize {
         match self {
             AccountData::Account(acc) => acc.size() + 1,
@@ -93,6 +131,7 @@ impl AccountData {
         }
     }
 
+    /// Get `Account` struct  reference from `AccountData` if it is stored in
     pub fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
             AccountData::Account(ref acc) => Ok(acc),
@@ -100,6 +139,7 @@ impl AccountData {
         }
     }
 
+    /// Get mutable `Account` struct reference from `AccountData` if it is stored in
     pub fn get_mut_account(&mut self) -> Result<&mut Account, ProgramError>  {
         match self {
             AccountData::Account(ref mut acc) => Ok(acc),
@@ -107,6 +147,7 @@ impl AccountData {
         }
     }
 
+    /// Get `Contract` struct  reference from `AccountData` if it is stored in
     pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
             AccountData::Contract(ref acc) => Ok(acc),
@@ -114,6 +155,7 @@ impl AccountData {
         }
     }
 
+    /// Get mutable `Contract` struct reference from `AccountData` if it is stored in
     pub fn get_mut_contract(&mut self) -> Result<&mut Contract, ProgramError>  {
         match self {
             AccountData::Contract(ref mut acc) => Ok(acc),
@@ -121,6 +163,7 @@ impl AccountData {
         }
     }
 
+    /// Get `Storage` struct  reference from `AccountData` if it is stored in
     pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
             AccountData::Storage(ref acc) => Ok(acc),
@@ -128,6 +171,7 @@ impl AccountData {
         }
     }
 
+    /// Get mutable `Storage` struct reference from `AccountData` if it is stored in
     pub fn get_mut_storage(&mut self) -> Result<&mut Storage, ProgramError>  {
         match self {
             AccountData::Storage(ref mut acc) => Ok(acc),
@@ -137,8 +181,10 @@ impl AccountData {
 }
 
 impl Account {
+    /// Account stuct serrialized size
     pub const SIZE: usize = 20+1+8+32+1+32;
 
+    /// Deserrialize `Account` struct from input data
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Account::SIZE];
         let (ether, nonce, trx_count, code_account, is_blocked, blocked_by) = array_refs![data, 20, 1, 8, 32, 1, 32];
@@ -152,6 +198,7 @@ impl Account {
         }
     }
 
+    /// Serrialize `Account` struct into given destination
     pub fn pack(acc: &Account, dst: &mut [u8]) -> usize {
         let data = array_mut_ref![dst, 0, Account::SIZE];
         let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst) = 
@@ -170,14 +217,17 @@ impl Account {
         Account::SIZE
     }
 
+    /// Get `Account` struct size
     pub fn size(&self) -> usize {
         Account::SIZE
     }
 }
 
 impl Contract {
+    /// Contract stuct serrialized size
     pub const SIZE: usize = 32+4;
 
+    /// Deserrialize `Contract` struct from input data
     pub fn unpack(input: &[u8]) -> Self {
         let data = array_ref![input, 0, Contract::SIZE];
         let (owner, code_size) = array_refs![data, 32, 4];
@@ -188,6 +238,7 @@ impl Contract {
         }
     }
 
+    /// Serrialize `Contract` struct into given destination
     pub fn pack(acc: &Contract, dst: &mut [u8]) -> usize {
         let data = array_mut_ref![dst, 0, Contract::SIZE];
         let (owner_dst, code_size_dst) = 
@@ -197,14 +248,17 @@ impl Contract {
         Contract::SIZE
     }
 
+    /// Get `Contract` struct size
     pub fn size(&self) -> usize {
         Contract::SIZE
     }
 }
 
 impl Storage {
+    /// Storage stuct serrialized size
     const SIZE: usize = 20+8+8+8+8;
 
+    /// Deserrialize `Storage` struct from input data
     pub fn unpack(src: &[u8]) -> Self {
         let data = array_ref![src, 0, Storage::SIZE];
         let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8];
@@ -218,6 +272,7 @@ impl Storage {
         }
     }
 
+    /// Serrialize `Storage` struct into given destination
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         let data = array_mut_ref![dst, 0, Storage::SIZE];
         let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8];
@@ -230,6 +285,7 @@ impl Storage {
         Storage::SIZE
     }
 
+    /// Get `Storage` struct size
     pub fn size(&self) -> usize {
         Storage::SIZE
     }
