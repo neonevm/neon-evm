@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Account storage
-/// Trait to acces account info
+/// Trait to access account info
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub trait AccountStorage {
     /// Apply function to given account

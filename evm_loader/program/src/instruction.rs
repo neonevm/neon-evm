@@ -9,7 +9,7 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
     value.as_fixed_bytes().serialize(s)
 }
 
-/// `EvmInstruction` serrialized in instruction data
+/// `EvmInstruction` serialized in instruction data
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub enum EvmInstruction<'a> {
@@ -79,7 +79,7 @@ pub enum EvmInstruction<'a> {
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
     ///   1. [WRITE] New account (create_with_seed(base, seed, owner)
-    ///   2. [] Base (program_addres(ether, nonce))
+    ///   2. [] Base (program_address(ether, nonce))
     CreateAccountWithSeed {
         /// Base public key
         base: Pubkey,
@@ -166,6 +166,9 @@ impl<'a> EvmInstruction<'a> {
     /// ```
     /// let instruction = EvmInstruction::unpack(instruction_data)?;
     /// ```
+    /// # Errors
+    ///
+    /// Will return `ProgramError::InvalidInstructionData` if can't parse `input`
     pub fn unpack(input: &'a[u8]) -> Result<Self, ProgramError> {
         use ProgramError::InvalidInstructionData;
 

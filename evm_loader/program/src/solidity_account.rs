@@ -30,17 +30,23 @@ impl<'a> SolidityAccount<'a> {
     /// ```
     /// let account_data = AccountData::unpack(&caller_info.data.borrow())?;
     /// account_data.get_account()?;
-    /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None)?;
+    /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
     /// ```
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
+    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
         debug_print!("  SolidityAccount::new");
-        Ok(Self{account_data, solana_address, code_data, lamports})
+        Self{account_data, solana_address, code_data, lamports}
     }
 
     /// Get ethereum account address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
     /// Get ethereum account nonce
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
     fn code<U, F>(&self, f: F) -> U
@@ -104,9 +110,15 @@ impl<'a> SolidityAccount<'a> {
     }
 
     /// Get solana account seeds
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
 
     /// Get ethereum account basic info
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn basic(&self) -> Basic {
         Basic { 
             balance: self.lamports.into(), 
@@ -140,6 +152,13 @@ impl<'a> SolidityAccount<'a> {
     }
 
     /// Update account data
+    /// # Errors
+    ///
+    /// Will return: 
+    /// `ProgramError::AccountAlreadyInitialized` if trying to save code to account that already have code
+    /// `ProgramError::AccountDataTooSmall` if trying to save code to account with not enough data space
+    /// `ProgramError::NotEnoughAccountKeys` if didn't find code account
+    /// `ProgramError::UninitializedAccount` if code account have `code_size` equal 0
     #[allow(clippy::too_many_arguments)]
     pub fn update<I>(
         &mut self,
