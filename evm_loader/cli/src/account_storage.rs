@@ -283,10 +283,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                         Err(_) => return d(),
                     };
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data, code_data))).unwrap();
+                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data, code_data)));
                     f(&account)
                 } else {
-                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, None).unwrap();
+                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, None);
                     f(&account)
                 }
             },
