@@ -106,9 +106,9 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     let (exit_reason, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, None);
         let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::MAX, &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
     
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::MAX);
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
     
         debug!("Call done");
         
@@ -269,7 +269,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         // Collect statuses for all the transactions, drop those that are confirmed
         loop {
             let mut slot = 0;
-            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
+            let pending_signatures = pending_transactions.keys().copied().collect::<Vec<_>>();
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
             {
