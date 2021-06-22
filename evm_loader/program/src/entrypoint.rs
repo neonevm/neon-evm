@@ -448,16 +448,14 @@ fn do_call<'a>(
 
         debug_print!("Executor initialized");
 
-	    if executor.call_begin(
+	    executor.call_begin(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
             gas_limit,
             false, // take_l64
             false, // estimate
-        ).is_err() {
-            return Err(ProgramError::InvalidInstructionData);
-        }
+        ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let exit_reason = match executor.execute_n_steps(u64::MAX) {
             Ok(()) => return Err(ProgramError::InvalidInstructionData),
@@ -512,16 +510,14 @@ fn do_partial_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    if executor.call_begin(
+    executor.call_begin(
         account_storage.origin(),
         account_storage.contract(),
         instruction_data,
         gas_limit,
         false, // take_l64
         false, // estimate
-    ).is_err() {
-        return Err(ProgramError::InvalidInstructionData);
-    }
+    ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;
 
