@@ -109,7 +109,7 @@ class ERC20:
             ether_caller, self.contract_account, self.contract_code_account,
             abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
             + bytes.fromhex(base58.b58decode(receiver).hex()
-                            +"%064x" % amount),
+                            + "%064x" % amount),
             [
                 AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
@@ -310,7 +310,7 @@ class NeonEvmClient:
         return send_transaction(client, trx, self.solana_wallet)
 
 
-def check_deposit_emulation(sender, contract, trx_data):
+def check_deposit_emulation(sender, contract, trx_data, accounts_should_be):
     print('\nCheck deposit emulation:')
     print('sender:', sender)
     print('contract:', contract)
@@ -321,7 +321,16 @@ def check_deposit_emulation(sender, contract, trx_data):
     emulate_result = json.loads(cli_result)
     print('emulate_result:', emulate_result)
     assert (emulate_result["exit_status"] == 'succeed')
-    assert(int(emulate_result['result']) == 1)
+    assert (int(emulate_result['result']) == 1)
+    print('accounts_should_be:', accounts_should_be)
+    accounts_not_found = len(accounts_should_be)
+    for item in emulate_result["accounts"]:
+        checking_account = [item["account"], item["address"], item["contract"]]
+        exists = checking_account in accounts_should_be
+        print('checking_account:', checking_account, exists)
+        accounts_not_found -= exists
+    print('accounts_not_found:', accounts_not_found)
+    assert (accounts_not_found == 0)
     print('deposit emulation: OK\n')
 
 
@@ -442,7 +451,10 @@ class ERC20test(unittest.TestCase):
 
         check_deposit_emulation(self.ethereum_caller.hex(),
                                 erc20.ethereum_id.hex(),
-                                deposit_trx_data.hex())
+                                deposit_trx_data.hex(),
+                                [[erc20.contract_account, '0x' + erc20.ethereum_id.hex(), erc20.contract_code_account],
+                                 [self.caller, '0x' + self.ethereum_caller.hex(), None]
+                                 ])
 
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)
