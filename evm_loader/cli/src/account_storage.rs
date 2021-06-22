@@ -1,6 +1,5 @@
 use evm::backend::Apply;
-use evm::{H160, H256, U256};
-use solana_client::rpc_client::RpcClient;
+use evm::{H160, U256};
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
@@ -11,7 +10,7 @@ use solana_sdk::{
 };
 use serde_json::json;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use evm_loader::{
     account_data::AccountData,
     solana_backend::AccountStorage,
@@ -42,24 +41,26 @@ struct SolanaAccount {
 }
 
 struct SolanaNewAccount {
+    #[allow(unused)]
     key: Pubkey,
     writable: bool,
     code_size: Option<usize>
 }
 
 impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> SolanaAccount {
+    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         eprintln!("SolanaAccount::new");
         Self{account, key, writable: false, code_account, code_size: None}
     }
 }
 
 impl SolanaNewAccount {
-    pub fn new(key: Pubkey) -> SolanaNewAccount {
+    pub fn new(key: Pubkey) -> Self {
         Self{key, writable: false, code_size: None}
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
     new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
@@ -74,28 +75,23 @@ impl<'a> EmulatorAccountStorage<'a> {
     pub fn new(config: &'a Config, contract_id: H160, caller_id: H160) -> EmulatorAccountStorage {
         eprintln!("backend::new");
 
-        let slot = match config.rpc_client.get_slot() {
-            Ok(slot) => {
-                eprintln!("Got slot");
-                eprintln!("Slot {}", slot);
-                slot
-            },
-            Err(_) => {
-                eprintln!("Get slot error");
-                0
-            }
+        let slot = if let Ok(slot) = config.rpc_client.get_slot() {
+            eprintln!("Got slot");
+            eprintln!("Slot {}", slot);
+            slot
+        }
+        else {
+            eprintln!("Get slot error");
+            0
         };
-    
-        let timestamp = match config.rpc_client.get_block_time(slot) {
-            Ok(timestamp) => {
-                eprintln!("Got timestamp");
-                eprintln!("timestamp {}", timestamp);
-                timestamp
-            },
-            Err(_) => {
-                eprintln!("Get timestamp error");
-                0
-            }
+
+        let timestamp = if let Ok(timestamp) = config.rpc_client.get_block_time(slot) {
+            eprintln!("Got timestamp");
+            eprintln!("timestamp {}", timestamp);
+            timestamp
+        } else {
+            eprintln!("Get timestamp error");
+            0
         };
 
         Self {
@@ -113,48 +109,44 @@ impl<'a> EmulatorAccountStorage<'a> {
         let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &config.evm_loader).0;
         eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
-        match config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::recent()).unwrap().value {
-            Some(acc) => {
-                eprintln!("Account found");
-                eprintln!("Account data len {}", acc.data.len());
-                eprintln!("Account owner {}", acc.owner.to_string());
+        if let Some(acc) = config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::processed()).unwrap().value {
+            eprintln!("Account found");
+            eprintln!("Account data len {}", acc.data.len());
+            eprintln!("Account owner {}", acc.owner.to_string());
 
-                let account_data = match AccountData::unpack(&acc.data) {
-                    Ok(acc_data) => match acc_data {
-                        AccountData::Account(acc) => acc,
-                        _ => return None,
-                    },
-                    Err(_) => return None,
-                };
+            let account_data = match AccountData::unpack(&acc.data) {
+                Ok(acc_data) => match acc_data {
+                    AccountData::Account(acc) => acc,
+                    _ => return None,
+                },
+                Err(_) => return None,
+            };
 
-                let code_account = if account_data.code_account == Pubkey::new_from_array([0u8; 32]) {
-                    eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
-                    None
-                } else {
-                    eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
-                    eprintln!("account key:  {}", &solana_address.to_string());
-                    eprintln!("code account: {}", &account_data.code_account.to_string());
-
-                    match config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::recent()).unwrap().value {
-                        Some(acc) => {
-                            eprintln!("Account found");
-                            Some(acc)
-                        },
-                        None => {
-                            eprintln!("Account not found");
-                            None
-                        }
-                    }
-                };
-
-                Some((acc, code_account))
-            },
-            None => {
-                eprintln!("Account not found {}", &address.to_string());
-
+            let code_account = if account_data.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
                 None
-            }
-        }    
+            } else {
+                eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
+                eprintln!("account key:  {}", &solana_address.to_string());
+                eprintln!("code account: {}", &account_data.code_account.to_string());
+
+                if let Some(acc) = config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::processed()).unwrap().value {
+                    eprintln!("Account found");
+                    Some(acc)
+                }
+                else {
+                    eprintln!("Account not found");
+                    None
+                }
+            };
+
+            Some((acc, code_account))
+        }
+        else {
+            eprintln!("Account not found {}", &address.to_string());
+
+            None
+        }
     }
 
     fn create_acc_if_not_exists(&self, address: &H160) -> bool {
@@ -162,17 +154,14 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
             let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
-
-            match Self::get_account_from_solana(&self.config, address) {
-                Some((acc, code_account)) => {
-                    accounts.insert(address.clone(), SolanaAccount::new(acc, solana_address, code_account));
-                    true
-                },
-                None => {
-                    eprintln!("Account not found {}", &address.to_string());
-                    new_accounts.insert(address.clone(), SolanaNewAccount::new(solana_address));
-                    false
-                }
+            if let Some((acc, code_account)) = Self::get_account_from_solana(self.config, address) {
+                accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
+                true
+            }
+            else {
+                eprintln!("Account not found {}", &address.to_string());
+                new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+                false
             }
         } else {
             true
@@ -214,7 +203,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         };
     }
 
-    pub fn get_used_accounts(&self, status: &String, result: &std::vec::Vec<u8>)
+    pub fn get_used_accounts(&self, status: &str, result: &[u8])
     {
         let mut arr = Vec::new();
 
@@ -224,7 +213,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
             let contract_address = {
                 let addr = AccountData::unpack(&acc.account.data).unwrap().get_account().unwrap().code_account;
-                if addr == Pubkey::new_from_array([0u8; 32]) {
+                if addr == Pubkey::new_from_array([0_u8; 32]) {
                     None
                 } else {
                     Some(addr)
@@ -254,7 +243,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 });
         }    
 
-        let js = json!({"accounts": arr, "result": &hex::encode(&result), "exit_status": &status}).to_string();
+        let js = json!({"accounts": arr, "result": &hex::encode(&result), "exit_status": status}).to_string();
 
         println!("{}", js);
     }
@@ -267,7 +256,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     {
         self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
-        match accounts.get(&address) {
+        match accounts.get(address) {
             None => d(),
             Some(acc) => {
                 let account_data = match AccountData::unpack(&acc.account.data) {
