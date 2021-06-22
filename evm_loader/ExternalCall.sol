@@ -7,9 +7,9 @@ contract ExternalCall {
     uint256 private constant token_id = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9; // "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
     address private constant solana = 0xfF00000000000000000000000000000000000000;
 
-    function transferExt(uint256 token, uint256 from, uint256 to, uint amount) public {
+    function transferExt(uint256 token, uint256 from, uint256 to, uint amount, uint256 signer) public {
         uint64 val = reverse(amount);
-        bytes memory signer = packMeta(true, false, address(this));
+        bytes memory signer_ = packMeta(true, false, signer);
         bytes memory instruction_data = abi.encodePacked(
             uint8(0),    // external call
             token_id,    // token contract
@@ -17,7 +17,7 @@ contract ExternalCall {
             packMeta(false, true,  from),
             packMeta(false, false, token),
             packMeta(false, true,  to),
-            signer,
+            signer_,
             abi.encodePacked(
                 uint8(12),        // transferChecked
                 uint64(val),      // amount
