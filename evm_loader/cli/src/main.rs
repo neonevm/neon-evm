@@ -52,7 +52,7 @@ use clap::{
 };
 
 use solana_program::{
-    keccak::{hash, hashv},
+    keccak::{hash,},
     account_info::AccountInfo
 };
 
