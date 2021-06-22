@@ -16,8 +16,8 @@ pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
     /// # Account references
-    ///   0. [WRITE] Account to write to
-    ///   1. [SIGNER] Signer for Ether account
+    ///   0. \[WRITE\] Account to write to
+    ///   1. \[SIGNER\] Signer for Ether account
     Write {
         /// Offset at which to write the given bytes
         offset: u32,
@@ -31,12 +31,12 @@ pub enum EvmInstruction<'a> {
     /// bit of the account.
     ///
     /// # Account references
-    ///   0. [WRITE] The account to prepare for execution
-    ///   1. [WRITE] Contract code account (Code account)
-    ///   2. [WRITE] Caller (Ether account)
-    ///   3. [SIGNER] Signer for Ether account
-    ///   4. [] Clock sysvar
-    ///   5. [] Rent sysvar
+    ///   0. \[WRITE\] The account to prepare for execution
+    ///   1. \[WRITE\] Contract code account (Code account)
+    ///   2. \[WRITE\] Caller (Ether account)
+    ///   3. \[SIGNER\] Signer for Ether account
+    ///   4. \[\] Clock sysvar
+    ///   5. \[\] Rent sysvar
     ///   ... other Ether accounts
     Finalize,
 
@@ -44,8 +44,8 @@ pub enum EvmInstruction<'a> {
     /// Create Ethereum account (create program_address account and write data)
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] New account (program_address(ether, nonce))
-    ///   2. (for contract creation) [WRITE] Code account for new contract account
+    ///   1. \[WRITE\] New account (program_address(ether, nonce))
+    ///   2. (for contract creation) \[WRITE\] Code account for new contract account
     CreateAccount {
         /// Number of lamports to transfer to the new account
         lamports: u64,
@@ -63,11 +63,11 @@ pub enum EvmInstruction<'a> {
 
     /// Call Ethereum-contract action
     /// ### Account references
-    ///   0. [WRITE] Contract account for execution (Ether account)
-    ///   1. [WRITE] Contract code account (Code account)
-    ///   2. [WRITE] Caller (Ether account)
-    ///   3. [SIGNER] Signer for caller
-    ///   4. [] Clock sysvar
+    ///   0. \[WRITE\] Contract account for execution (Ether account)
+    ///   1. \[WRITE\] Contract code account (Code account)
+    ///   2. \[WRITE\] Caller (Ether account)
+    ///   3. \[SIGNER\] Signer for caller
+    ///   4. \[\] Clock sysvar
     ///   ... other Ether accounts
     Call {
         /// Call data
@@ -78,8 +78,8 @@ pub enum EvmInstruction<'a> {
     /// Create ethereum account with seed
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] New account (create_with_seed(base, seed, owner)
-    ///   2. [] Base (program_address(ether, nonce))
+    ///   1. \[WRITE\] New account (create_with_seed(base, seed, owner)
+    ///   2. \[\] Base (program_address(ether, nonce))
     CreateAccountWithSeed {
         /// Base public key
         base: Pubkey,
@@ -129,7 +129,7 @@ pub enum EvmInstruction<'a> {
 
     /// Partial call Ethereum-contract action from raw transaction data
     /// ### Account references
-    ///   0. [WRITE] storage account
+    ///   0. \[WRITE\] storage account
     ///   1. ... Account references same as in Call
     PartialCallFromRawEthereumTX {
         /// Steps of ethereum contract to execute
