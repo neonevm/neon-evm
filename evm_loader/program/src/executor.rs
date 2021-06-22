@@ -421,12 +421,11 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[allow(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
-        let gas_limit = self.executor.state.block_gas_limit().as_u64();
         match self.step_opcode(){
             RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {
                 let code = self.executor.code(info.code_address);
-                self.executor.state.enter(gas_limit, false);
+                self.executor.state.enter(u64::MAX, false);
                 self.executor.state.touch(info.code_address);
 
                 let instance = evm::Runtime::new(
@@ -439,7 +438,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 Ok(())
             },
             RuntimeApply::Create(info) => {
-                self.executor.state.enter(gas_limit, false);
+                self.executor.state.enter(u64::MAX, false);
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {

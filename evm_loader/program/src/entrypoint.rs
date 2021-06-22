@@ -211,11 +211,12 @@ fn process_instruction<'a>(
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())?;
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
-            else{
-                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())?;
+            else {
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
 
             storage.block_accounts(program_id, accounts)
@@ -235,7 +236,8 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.gas_limit.as_u64())
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -261,7 +263,8 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx.gas_limit.as_u64())?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx_gas_limit)?;
 
             storage.block_accounts(program_id, accounts)
         },
