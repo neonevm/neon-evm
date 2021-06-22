@@ -101,9 +101,9 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
-    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
+    pub fn new(gas_limit: u64) -> Self {
         Self {
-            metadata: ExecutorMetadata::new(gas_limit, config),
+            metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
             parent: None,
             logs: Vec::new(),
             accounts: BTreeMap::new(),

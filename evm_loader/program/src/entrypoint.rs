@@ -396,13 +396,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code.to_vec()
         };
 
-        let gas_limit = u64::MAX;
-	    let config = evm::Config::default();
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        executor.create_begin(account_storage.origin(), code_data, gas_limit)?;
+        executor.create_begin(account_storage.origin(), code_data, u64::MAX)?;
         let exit_reason = executor.execute();
         let result = executor.return_value();
         debug_print!("Call done");
@@ -445,8 +443,7 @@ fn do_call<'a>(
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-	    let config = evm::Config::default();
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -504,8 +501,7 @@ fn do_partial_call<'a>(
     let backend = SolanaBackend::new(account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let config = evm::Config::default();
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -546,8 +542,7 @@ fn do_partial_create<'a>(
     let backend = SolanaBackend::new(account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let config = evm::Config::default();
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit, config), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
