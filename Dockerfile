@@ -13,7 +13,9 @@ COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo clippy
 RUN cargo build-bpf --features no-logs
-RUN cd ../cli && cargo build --release
+WORKDIR /opt/evm_loader/cli
+RUN cargo clippy
+RUN cargo build --release
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
