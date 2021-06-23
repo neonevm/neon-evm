@@ -165,6 +165,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         init_code: Vec<u8>,
         target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
+        debug_print!("create target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
@@ -176,7 +177,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
-        let estimate = true;
+        let estimate = false;
         let after_gas = if self.config.call_l64_after_gas {
             if estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
@@ -249,10 +250,34 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
+        debug_print!("call target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
             }
+        }
+
+        let estimate = false;
+        let after_gas = if self.config.call_l64_after_gas {
+            if estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas_u64 = target_gas.unwrap_or(after_gas);
+
+        let gas_limit = core::cmp::min(after_gas, target_gas_u64);
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), Vec::new()));
         }
 
         let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
@@ -340,6 +365,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         gas_limit: u64,
         estimate: bool,
     ) -> Result<(), ExitError> {
+        debug_print!("call_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)?;
 
@@ -385,6 +411,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                         gas_limit: u64,
                         estimate: bool,
     ) -> ProgramResult {
+        debug_print!("create_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
