@@ -1,4 +1,4 @@
-// #![deny(missing_docs)] // TODO #106 Write missing docs
+#![deny(missing_docs)]
 //#![forbid(unsafe_code)]
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
@@ -7,8 +7,6 @@
     clippy::must_use_candidate,
     clippy::unused_self,
     clippy::use_self,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
     clippy::missing_const_for_fn
 )]
 
@@ -17,11 +15,6 @@
 mod debug;
 mod error;
 pub mod entrypoint;
-//pub mod error;
-//pub mod instruction;
-//pub mod native_mint;
-//pub mod processor;
-//pub mod state;
 mod hamt;
 pub mod solana_backend;
 pub mod account_data;
@@ -54,8 +47,6 @@ pub use solana_program;
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     #[test]
     fn test_evm_integration() {
     }
