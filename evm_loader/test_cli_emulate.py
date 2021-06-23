@@ -14,6 +14,7 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 class ExternalCall:
     """Encapsulate the all data of the ExternalCall ethereum contract."""
+
     def __init__(self, contract_account, contract_code_account, ethereum_id=None):
         self.contract_account = contract_account
         self.contract_code_account = contract_code_account
@@ -160,29 +161,24 @@ class ERC20test(unittest.TestCase):
         token = self.createToken()
         print("token:", token)
 
-        wallet2 = RandomAccount()
-        acc2 = wallet2.get_acc()
-
-        token_acc1 = self.createTokenAccount(token, wallet2.get_path())
-        # token_acc1 = self.createTokenAccount(token, self.contract.contract_account)
+        token_acc1 = self.createTokenAccount(token)
         print("token_acc1:", token_acc1)
 
-        token_acc2 = self.createTokenAccount(token)
+        token_acc2 = self.createTokenAccount(token, RandomAccount().get_path())
         print("token_acc2:", token_acc2)
 
         mint_amount = 100
-        self.tokenMint(token, token_acc2, mint_amount)
-        assert (self.tokenBalance(token_acc1) == 0)
-        assert (self.tokenBalance(token_acc2) == mint_amount)
+        self.tokenMint(token, token_acc1, mint_amount)
+        assert (self.tokenBalance(token_acc1) == mint_amount)
+        assert (self.tokenBalance(token_acc2) == 0)
 
         transfer_amount = 17
         trx_data = self.contract.transfer_ext(self.ethereum_caller,
-                                              token, token_acc2, token_acc1, transfer_amount * (10 ** 9),
-                                              acc2.public_key()._key)
-                                              # self.acc.public_key()._key)
+                                              token, token_acc1, token_acc2, transfer_amount * (10 ** 9),
+                                              self.acc.public_key()._key)
 
-        assert (self.tokenBalance(token_acc1) == transfer_amount)
-        assert (self.tokenBalance(token_acc2) == mint_amount - transfer_amount)
+        assert (self.tokenBalance(token_acc1) == mint_amount - transfer_amount)
+        assert (self.tokenBalance(token_acc2) == transfer_amount)
 
         check_deposit_emulation(self.ethereum_caller.hex(),
                                 self.contract.ethereum_id.hex(),
@@ -195,6 +191,9 @@ class ERC20test(unittest.TestCase):
                                      '0x' + self.ethereum_caller.hex(),
                                      None]
                                 ])
+        # no changes after emulate
+        assert (self.tokenBalance(token_acc1) == mint_amount - transfer_amount)
+        assert (self.tokenBalance(token_acc2) == transfer_amount)
 
 
 if __name__ == '__main__':
