@@ -27,14 +27,13 @@ class ExternalCall:
     def set_neon_evm_client(self, neon_evm_client):
         self.neon_evm_client = neon_evm_client
 
-    def transfer_ext(self, ether_caller, token, acc_from, acc_to, receiver, amount, signer):
+    def transfer_ext(self, ether_caller, token, acc_from, acc_to, amount, signer):
         ether_trx = EthereumTransaction(
             ether_caller, self.contract_account, self.contract_code_account,
-            abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint,uint256)')
+            abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint256,uint256)')
             + bytes.fromhex(base58.b58decode(token).hex()
                             + base58.b58decode(acc_from).hex()
-                            + str("%024x" % 0) + receiver.hex()
-                            # + base58.b58decode(acc_to).hex()
+                            + base58.b58decode(acc_to).hex()
                             + "%064x" % amount
                             + signer.hex()
                             ),
@@ -65,7 +64,7 @@ def check_deposit_emulation(sender, contract, trx_data, accounts_should_be):
     emulate_result = json.loads(cli_result)
     print('emulate_result:', emulate_result)
     assert (emulate_result["exit_status"] == 'succeed')
-    assert (int(emulate_result['result']) == 1)
+    assert (emulate_result['result'] == '')  # no type return from transferExt
     print('accounts_should_be:', accounts_should_be)
     accounts_not_found = len(accounts_should_be)
     for item in emulate_result["accounts"]:
@@ -178,7 +177,7 @@ class ERC20test(unittest.TestCase):
 
         transfer_amount = 17
         trx_data = self.contract.transfer_ext(self.ethereum_caller,
-                                              token, token_acc2, token_acc1, self.ethereum_caller, transfer_amount,
+                                              token, token_acc2, token_acc1, transfer_amount * (10 ** 9),
                                               self.acc.public_key()._key)
 
         assert (self.tokenBalance(token_acc1) == transfer_amount)
