@@ -422,8 +422,8 @@ class ERC20test(unittest.TestCase):
 
         deposit_amount = 1
         erc20.deposit(self.ethereum_caller, client_acc, self.ethereum_caller,
-                                         deposit_amount * (10 ** 9), balance_erc20, token,
-                                         self.acc.public_key()._key)
+                      deposit_amount * (10 ** 9), balance_erc20, token,
+                      self.acc.public_key()._key)
 
         assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
         assert (self.tokenBalance(balance_erc20) == deposit_amount)

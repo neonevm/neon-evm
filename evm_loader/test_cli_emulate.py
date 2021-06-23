@@ -160,11 +160,11 @@ class ERC20test(unittest.TestCase):
         token = self.createToken()
         print("token:", token)
 
-        # wallet2 = RandomAccount()
-        # acc2 = wallet2.get_acc()
+        wallet2 = RandomAccount()
+        acc2 = wallet2.get_acc()
 
-        # token_acc1 = self.createTokenAccount(token, wallet2.get_path())
-        token_acc1 = self.createTokenAccount(token, self.contract.contract_account)
+        token_acc1 = self.createTokenAccount(token, wallet2.get_path())
+        # token_acc1 = self.createTokenAccount(token, self.contract.contract_account)
         print("token_acc1:", token_acc1)
 
         token_acc2 = self.createTokenAccount(token)
@@ -178,7 +178,8 @@ class ERC20test(unittest.TestCase):
         transfer_amount = 17
         trx_data = self.contract.transfer_ext(self.ethereum_caller,
                                               token, token_acc2, token_acc1, transfer_amount * (10 ** 9),
-                                              self.acc.public_key()._key)
+                                              acc2.public_key()._key)
+                                              # self.acc.public_key()._key)
 
         assert (self.tokenBalance(token_acc1) == transfer_amount)
         assert (self.tokenBalance(token_acc2) == mint_amount - transfer_amount)

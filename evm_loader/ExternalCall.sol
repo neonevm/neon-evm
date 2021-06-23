@@ -9,8 +9,6 @@ contract ExternalCall {
 
     function transferExt(uint256 token, uint256 from, uint256 to, uint amount, uint256 signer) public {
         uint64 val = reverse(amount);
-//        bytes memory signer_ = packMeta(true, false, signer);
-        bytes memory signer_ = packMeta(true, false, address(this));
         bytes memory instruction_data = abi.encodePacked(
             uint8(0),    // external call
             token_id,    // token contract
@@ -18,7 +16,7 @@ contract ExternalCall {
             packMeta(false, true,  from),
             packMeta(false, false, token),
             packMeta(false, true,  to),
-            signer_,
+            packMeta(true, false, signer),
             abi.encodePacked(
                 uint8(12),        // transferChecked
                 uint64(val),      // amount
