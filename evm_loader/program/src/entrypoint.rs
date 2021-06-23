@@ -453,8 +453,8 @@ fn do_call<'a>(
             account_storage.contract(),
             instruction_data,
             gas_limit,
-            false, // take_l64
-            false, // estimate
+            true, // take_l64
+            true, // estimate
         ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let exit_reason = match executor.execute_n_steps(u64::MAX) {
@@ -514,8 +514,8 @@ fn do_partial_call<'a>(
         account_storage.contract(),
         instruction_data,
         gas_limit,
-        false, // take_l64
-        false, // estimate
+        true, // take_l64
+        true, // estimate
     ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;

@@ -279,7 +279,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
             let gasometer = self.state.metadata_mut().gasometer_mut();
             gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
-	}
+        }
 	
         Ok(())
     }
@@ -326,6 +326,9 @@ impl<'config, B: Backend> Machine<'config, B> {
         take_l64: bool,
         estimate: bool,
     ) -> Result<(), ExitError> {
+        let transaction_cost = gasometer::call_transaction_cost(&input);
+        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)?;
+
         self.executor.state.inc_nonce(caller);
 
 	    let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
@@ -365,6 +368,11 @@ impl<'config, B: Backend> Machine<'config, B> {
     }
 
     pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
+        let transaction_cost = gasometer::create_transaction_cost(&code);
+        self.executor.state.metadata_mut().gasometer_mut()
+            .record_transaction(transaction_cost)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
         let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(gas_limit, false);
 
@@ -421,7 +429,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     #[allow(clippy::too_many_lines)]
     pub fn step(&mut self) -> Result<(), ExitReason> {
-        match self.step_opcode(){
+        match self.step_opcode() {
             RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {
                 let code = self.executor.code(info.code_address);
