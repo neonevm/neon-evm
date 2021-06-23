@@ -1,4 +1,5 @@
 import unittest
+import solana
 from eth_utils import abi
 from web3.auto import w3
 from solana_utils import *
@@ -44,18 +45,18 @@ class ExternalCall:
                 AccountMeta(pubkey=token, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
             ])
-        result = self.neon_evm_client.send_ethereum_trx_single(ether_trx)
-        print(result)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        data = base58.b58decode(src_data)
-        instruction = data[0]
-        assert (instruction == 6)  # 6 means OnReturn
-        assert (data[1] < 0xd0)  # less 0xd0 - success
-        return ether_trx.trx_data
+        result = None
+        try:
+            result = self.neon_evm_client.send_ethereum_trx_single(ether_trx)
+            print(result)
+        except solana.rpc.api.SendTransactionError as err:
+            import sys
+            print("ERR: transfer_ext: {}".format(err))
+        return ether_trx.trx_data, result
 
 
-def check_deposit_emulation(sender, contract, trx_data, accounts_should_be):
-    print('\nCheck deposit emulation:')
+def emulate_external_call(sender, contract, trx_data):
+    print('\nEmulate external call:')
     print('sender:', sender)
     print('contract:', contract)
     print('trx_data:', trx_data)
@@ -64,21 +65,10 @@ def check_deposit_emulation(sender, contract, trx_data, accounts_should_be):
     print('cli_result:', cli_result)
     emulate_result = json.loads(cli_result)
     print('emulate_result:', emulate_result)
-    assert (emulate_result["exit_status"] == 'succeed')
-    assert (emulate_result['result'] == '')  # no type return from transferExt
-    print('accounts_should_be:', accounts_should_be)
-    accounts_not_found = len(accounts_should_be)
-    for item in emulate_result["accounts"]:
-        checking_account = [item["account"], item["address"], item["contract"]]
-        exists = checking_account in accounts_should_be
-        print('checking_account:', checking_account, exists)
-        accounts_not_found -= exists
-    print('accounts_not_found:', accounts_not_found)
-    assert (accounts_not_found == 0)
-    print('deposit emulation: OK\n')
+    return emulate_result
 
 
-class ERC20test(unittest.TestCase):
+class ExternalCalltest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wallet = WalletAccount(wallet_path())
@@ -105,6 +95,15 @@ class ERC20test(unittest.TestCase):
         res = cls.loader.deploy(CONTRACTS_DIR + "ExternalCall.binary", cls.caller)
         cls.contract = ExternalCall(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
         cls.contract.set_neon_evm_client(cls.neon_evm_client)
+
+        cls.token = cls.createToken()
+        print("token:", cls.token)
+
+        cls.token_acc1 = cls.createTokenAccount(cls.token)
+        print("token_acc1:", cls.token_acc1)
+
+        cls.token_acc2 = cls.createTokenAccount(cls.token, RandomAccount().get_path())
+        print("token_acc2:", cls.token_acc2)
 
     @staticmethod
     def createToken(owner=None):
@@ -157,43 +156,81 @@ class ERC20test(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         return storage
 
-    def test_cli_emulate(self):
-        token = self.createToken()
-        print("token:", token)
-
-        token_acc1 = self.createTokenAccount(token)
-        print("token_acc1:", token_acc1)
-
-        token_acc2 = self.createTokenAccount(token, RandomAccount().get_path())
-        print("token_acc2:", token_acc2)
-
+    def test_cli_emulate_success(self):
+        balance1 = self.tokenBalance(self.token_acc1)
+        balance2 = self.tokenBalance(self.token_acc2)
         mint_amount = 100
-        self.tokenMint(token, token_acc1, mint_amount)
-        assert (self.tokenBalance(token_acc1) == mint_amount)
-        assert (self.tokenBalance(token_acc2) == 0)
+        self.tokenMint(self.token, self.token_acc1, mint_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc2), balance2)
 
         transfer_amount = 17
-        trx_data = self.contract.transfer_ext(self.ethereum_caller,
-                                              token, token_acc1, token_acc2, transfer_amount * (10 ** 9),
-                                              self.acc.public_key()._key)
+        (trx_data, result) \
+            = self.contract.transfer_ext(self.ethereum_caller,
+                                         self.token, self.token_acc1, self.token_acc2, transfer_amount * (10 ** 9),
+                                         self.acc.public_key()._key)
+        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
+        self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
+        self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
 
-        assert (self.tokenBalance(token_acc1) == mint_amount - transfer_amount)
-        assert (self.tokenBalance(token_acc2) == transfer_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
 
-        check_deposit_emulation(self.ethereum_caller.hex(),
-                                self.contract.ethereum_id.hex(),
-                                trx_data.hex(),
-                                [
-                                    [self.contract.contract_account,
-                                     '0x' + self.contract.ethereum_id.hex(),
-                                     self.contract.contract_code_account],
-                                    [self.caller,
-                                     '0x' + self.ethereum_caller.hex(),
-                                     None]
-                                ])
-        # no changes after emulate
-        assert (self.tokenBalance(token_acc1) == mint_amount - transfer_amount)
-        assert (self.tokenBalance(token_acc2) == transfer_amount)
+        emulate_result = emulate_external_call(self.ethereum_caller.hex(),
+                                               self.contract.ethereum_id.hex(),
+                                               trx_data.hex())
+
+        self.assertEqual(emulate_result["exit_status"], 'succeed')
+        self.assertEqual(emulate_result['result'], '')  # no type return from transferExt
+
+        self.assertEqual(emulate_result["accounts"][0]["account"], self.contract.contract_account)
+        self.assertEqual(emulate_result["accounts"][0]["address"], '0x' + self.contract.ethereum_id.hex())
+        self.assertEqual(emulate_result["accounts"][0]["contract"], self.contract.contract_code_account)
+
+        self.assertEqual(emulate_result["accounts"][1]["account"], self.caller)
+        self.assertEqual(emulate_result["accounts"][1]["address"], '0x' + self.ethereum_caller.hex())
+
+        self.assertEqual(emulate_result["accounts"][2]["address"], '0xff00000000000000000000000000000000000000')
+
+        # no changes after the emulation
+        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
+
+    def test_cli_emulate_failure(self):
+        global trx_data
+        balance1 = self.tokenBalance(self.token_acc1)
+        balance2 = self.tokenBalance(self.token_acc2)
+        mint_amount = 100
+        self.tokenMint(self.token, self.token_acc1, mint_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc2), balance2)
+
+        transfer_amount = self.tokenBalance(self.token_acc1) + 1
+        (trx_data, result)\
+            = self.contract.transfer_ext(self.ethereum_caller,
+                                         self.token, self.token_acc1, self.token_acc2, transfer_amount * (10 ** 9),
+                                         self.acc.public_key()._key)
+        self.assertEqual(result, None)
+
+        emulate_result = emulate_external_call(self.ethereum_caller.hex(),
+                                               self.contract.ethereum_id.hex(),
+                                               trx_data.hex())
+
+        self.assertEqual(emulate_result["exit_status"], 'succeed')
+        self.assertEqual(emulate_result['result'], '')  # no type return from transferExt
+
+        self.assertEqual(emulate_result["accounts"][0]["account"], self.caller)
+        self.assertEqual(emulate_result["accounts"][0]["address"], '0x' + self.ethereum_caller.hex())
+
+        self.assertEqual(emulate_result["accounts"][1]["account"], self.contract.contract_account)
+        self.assertEqual(emulate_result["accounts"][1]["address"], '0x' + self.contract.ethereum_id.hex())
+        self.assertEqual(emulate_result["accounts"][1]["contract"], self.contract.contract_code_account)
+
+        self.assertEqual(emulate_result["accounts"][2]["address"], '0xff00000000000000000000000000000000000000')
+
+        # no changes after the emulation
+        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
+        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
 
 
 if __name__ == '__main__':
