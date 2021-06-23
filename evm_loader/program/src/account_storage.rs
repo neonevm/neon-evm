@@ -1,3 +1,4 @@
+//! `AccountStorage` for solana program realisation
 use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
@@ -19,11 +20,15 @@ use std::{
     cell::RefCell,
 };
 
+/// Sender
 pub enum Sender {
+    /// Ethereum account address
     Ethereum (H160),
+    /// Solana account ethereum address
     Solana (H160),
 }
 
+/// `AccountStorage` for solana program realization
 #[allow(clippy::module_name_repetitions)]
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
@@ -43,6 +48,13 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
     /// 3. ... other accounts (with `clock_account` in any place)
+    /// 
+    /// # Errors
+    ///
+    /// Will return: 
+    /// `ProgramError::InvalidArgument` if account in `account_infos` is wrong or in wrong place
+    /// `ProgramError::InvalidAccountData` if account's data doesn't meet requirements
+    /// `ProgramError::NotEnoughAccountKeys` if `account_infos` doesn't meet expectations
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -80,7 +92,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let code_acc = AccountData::unpack(&code_data.borrow())?;
             code_acc.get_contract()?;
     
-            SolidityAccount::new(account_info.key, account_info.lamports(), account_data, Some((code_acc, code_data)))
+            Ok(SolidityAccount::new(account_info.key, account_info.lamports(), account_data, Some((code_acc, code_data))))
         };
 
         let contract_id = {
@@ -101,7 +113,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 let account_data = AccountData::unpack(&caller_info.data.borrow())?;
                 account_data.get_account()?;
 
-                let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None)?;
+                let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
                 let caller_address = caller_acc.get_ether();
                 push_account(caller_acc, caller_info);
                 Sender::Ethereum(caller_address)
@@ -127,7 +139,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
                 let sol_account = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
                     debug_print!("User account");
-                    SolidityAccount::new(account_info.key, account_info.lamports(), account_data, None)?
+                    SolidityAccount::new(account_info.key, account_info.lamports(), account_data, None)
                 } else {
                     debug_print!("Contract account");
                     let code_info = next_account_info(account_info_iter)?;
@@ -142,9 +154,12 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        if clock_account.is_none() {
+        let clock_account = if let Some(clock_acc) = clock_account {
+            clock_acc
+        } else {
             return Err(ProgramError::NotEnoughAccountKeys);
-        }
+        };
+
 
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
@@ -152,21 +167,24 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(Self {
             accounts: accounts,
             aliases: RefCell::new(aliases),
-            clock_account: clock_account.unwrap(),
+            clock_account: clock_account,
             account_metas: account_metas,
             contract_id: contract_id,
             sender: sender,
         })
     }
 
+    /// Get sender address
     pub fn get_sender(&self) -> &Sender {
         &self.sender
     }
 
+    /// Get contract `SolidityAccount`
     pub fn get_contract_account(&self) -> Option<&SolidityAccount<'a>> {
         self.get_account(&self.contract_id)
     }
 
+    /// Get caller `SolidityAccount`
     pub fn get_caller_account(&self) -> Option<&SolidityAccount<'a>> {
         match self.sender {
             Sender::Ethereum(addr) => self.get_account(&addr),
@@ -190,6 +208,13 @@ impl<'a> ProgramAccountStorage<'a> {
         self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
+    /// Apply contact execution results
+    /// 
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
+    /// or `account.update` errors
     pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
