@@ -52,6 +52,7 @@ pub trait AccountStorage {
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
     /// Get account seeds
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
+    /// External call
     fn external_call(&self, _: &Instruction, _: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
