@@ -163,17 +163,41 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
             }
         }
+
         // TODO: check
         // if self.balance(caller) < value {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
+
+        let estimate = true;
+        let after_gas = if self.config.call_l64_after_gas {
+            if estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), None, Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+
+        let gas_limit = core::cmp::min(after_gas, target_gas);
+		if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), None, Vec::new()));
+        }
 
         // Get the create address from given scheme.
         let address =
@@ -314,7 +338,6 @@ impl<'config, B: Backend> Machine<'config, B> {
         code_address: H160,
         input: Vec<u8>,
         gas_limit: u64,
-        take_l64: bool,
         estimate: bool,
     ) -> Result<(), ExitError> {
         let transaction_cost = gasometer::call_transaction_cost(&input);
@@ -322,8 +345,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         self.executor.state.inc_nonce(caller);
 
-	    let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
-            //if self.executor.config.estimate { // no such field 'estimate' in Config
+	    let after_gas = if self.executor.config.call_l64_after_gas {
             if estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
@@ -361,7 +383,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                         caller: H160,
                         code: Vec<u8>,
                         gas_limit: u64,
-                        take_l64: bool,
                         estimate: bool,
     ) -> ProgramResult {
         let transaction_cost = gasometer::create_transaction_cost(&code);
@@ -369,8 +390,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             .record_transaction(transaction_cost)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
-            //if self.executor.config.estimate { // no such field 'estimate' in Config
+        let after_gas = if self.executor.config.call_l64_after_gas {
             if estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);

@@ -400,7 +400,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        executor.create_begin(account_storage.origin(), code_data, u64::MAX, true, true)?;
+        executor.create_begin(account_storage.origin(), code_data, u64::MAX, true)?;
         let exit_reason = executor.execute();
         let result = executor.return_value();
         debug_print!("Call done");
@@ -453,7 +453,6 @@ fn do_call<'a>(
             account_storage.contract(),
             instruction_data,
             gas_limit,
-            true, // take_l64
             true, // estimate
         ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
@@ -514,7 +513,6 @@ fn do_partial_call<'a>(
         account_storage.contract(),
         instruction_data,
         gas_limit,
-        true, // take_l64
         true, // estimate
     ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
@@ -547,7 +545,7 @@ fn do_partial_create<'a>(
 
     debug_print!("Executor initialized");
 
-    executor.create_begin(account_storage.origin(), instruction_data, gas_limit, true, true)?;
+    executor.create_begin(account_storage.origin(), instruction_data, gas_limit, true)?;
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
