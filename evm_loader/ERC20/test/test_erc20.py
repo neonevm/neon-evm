@@ -166,20 +166,6 @@ def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, cal
             return ERC20(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 
-class SplToken:
-    def __init__(self, url):
-        self.url = url
-
-    def call(self, arguments):
-        cmd = 'spl-token --url {} {}'.format(self.url, arguments)
-        try:
-            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        except subprocess.CalledProcessError as err:
-            import sys
-            print("ERR: spl-token error {}".format(err))
-            raise
-
-
 class EthereumTransaction:
     """Encapsulate the all data of an ethereum transaction that should be executed."""
 
