@@ -52,7 +52,6 @@ impl<'a> ProgramAccountStorage<'a> {
     /// `ProgramError::InvalidArgument` if account in `account_infos` is wrong or in wrong place
     /// `ProgramError::InvalidAccountData` if account's data doesn't meet requirements
     /// `ProgramError::NotEnoughAccountKeys` if `account_infos` doesn't meet expectations
-    #[allow(clippy::missing_panics_doc)]
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -152,9 +151,12 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        if clock_account.is_none() {
+        let clock_account = if let Some(clock_acc) = clock_account {
+            clock_acc
+        } else {
             return Err(ProgramError::NotEnoughAccountKeys);
-        }
+        };
+
 
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
@@ -162,7 +164,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(Self {
             accounts: accounts,
             aliases: RefCell::new(aliases),
-            clock_account: clock_account.unwrap(),
+            clock_account: clock_account,
             account_metas: account_metas,
             contract_id: contract_id,
             sender: sender,
