@@ -168,7 +168,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         } else {
             debug_print!("Call create");
         }
-    /*    let account = if let CreateScheme::Create2{salt,..} = scheme
+        /* let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         self.add_alias(address, &account);*/
     }

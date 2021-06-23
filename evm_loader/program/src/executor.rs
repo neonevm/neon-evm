@@ -14,15 +14,6 @@ use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
-macro_rules! try_or_fail {
-    ( $e:expr ) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        }
-    }
-}
-
 fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
@@ -351,9 +342,8 @@ impl<'config, B: Backend> Machine<'config, B> {
         };
 
         let gas_limit = core::cmp::min(gas_limit, after_gas);
-	    try_or_fail!(
-	        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-	    );
+        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
+            .map_err(|e| e)?;
 
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
@@ -367,10 +357,39 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
+    pub fn create_begin(&mut self,
+                        caller: H160,
+                        code: Vec<u8>,
+                        gas_limit: u64,
+                        take_l64: bool,
+                        estimate: bool,
+    ) -> ProgramResult {
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
+            //if self.executor.config.estimate { // no such field 'estimate' in Config
+            if estimate {
+                let initial_after_gas = self.executor.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                self.executor
+                    .state
+                    .metadata_mut()
+                    .gasometer_mut()
+                    .record_cost(diff)
+                    .ok();
+                self.executor.state.metadata().gasometer().gas()
+            } else {
+                l64(self.executor.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.executor.state.metadata().gasometer().gas()
+        };
+
+        let gas_limit = core::cmp::min(gas_limit, after_gas);
+        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let scheme = evm::CreateScheme::Legacy { caller };
