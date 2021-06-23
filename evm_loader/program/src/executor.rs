@@ -153,7 +153,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let balance = self.balance(address);
         let transfer = evm::Transfer {
             source: address,
-            target: target,
+            target,
             value: balance,
         };
 
@@ -336,7 +336,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
-        let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
+        let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
 
         let runtime = evm::Runtime::new(code, input, context, self.executor.config);
 

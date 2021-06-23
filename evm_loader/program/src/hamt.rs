@@ -47,14 +47,14 @@ impl<'a> Hamt<'a> {
             data[0..header_len].copy_from_slice(&vec![0_u8; header_len]);
             let last_used_ptr = array_mut_ref![data, 0, 4];
             *last_used_ptr = (header_len as u32).to_le_bytes();
-            Ok(Hamt {data: data, last_used: header_len as u32, used: 0, item_count: 0})
+            Ok(Hamt {data, last_used: header_len as u32, used: 0, item_count: 0})
         } else {
             let last_used_ptr = array_mut_ref![data, 0, 4];
             let last_used = u32::from_le_bytes(*last_used_ptr);
             if last_used < header_len as u32 {
                 return Err(ProgramError::InvalidAccountData);
             }
-            Ok(Hamt {data: data, last_used: last_used, used: 0, item_count: 0})
+            Ok(Hamt {data, last_used, used: 0, item_count: 0})
         }
     }
 
@@ -297,35 +297,35 @@ mod test {
 
     #[test]
     fn test_new() -> Result<(), ProgramError> {
-        let mut data = vec!(0u8; (1+32+32)*4 + 16*1024);
+        let mut data = vec!(0_u8; (1+32+32)*4 + 16*1024);
         let mut hamt = Hamt::new(&mut data, true).unwrap();
 
-        hamt.insert(U256::from(0x12345120u64), U256::from(0xabcdefu64))?;
-        hamt.insert(U256::from(0x22345120u64), U256::from(0xdeadbeafu64))?;
-        hamt.insert(U256::from(0x32445120u64), U256::from(0xeeeeeeeeeu64))?;
-//        let res = hamt.insert(U256::from(0x42345120u64), U256::from(0x555555555u64))?;
+        hamt.insert(U256::from(0x1234_5120_u64), U256::from(0xab_cdef_u64))?;
+        hamt.insert(U256::from(0x2234_5120_u64), U256::from(0xdead_beaf_u64))?;
+        hamt.insert(U256::from(0x3244_5120_u64), U256::from(0x000e_eeee_eeee_u64))?;
+//        let res = hamt.insert(U256::from(0x42345120_u64), U256::from(0x555555555_u64))?;
 //        println!("Second insert {:?}", res);
 
         for i in 0..32 {
-            hamt.insert(U256::from(0x32440002u64+i*32), U256::from(0x55500+i))?;
-            hamt.insert(U256::from(0x31423415u64+i*32), U256::from(0xeeee00+i))?;
-            hamt.insert(U256::from(0x31423415u64+i*32*0x60), U256::from(0xdead00+i))?;
+            hamt.insert(U256::from(0x3244_0002_u64+i*32), U256::from(0x55500+i))?;
+            hamt.insert(U256::from(0x3142_3415_u64+i*32), U256::from(0x00ee_ee00+i))?;
+            hamt.insert(U256::from(0x3142_3415_u64+i*32*0x60), U256::from(0x00de_ad00+i))?;
         }
 
         for i in 0..16 {
             hamt.insert(random_U256(), random_U256())?;
         }
 
-        println!("Find item: {:x?}", hamt.find(U256::from(0x32445121u64)));
-        println!("Find item: {:x}", hamt.find(U256::from(0x32445120u64)).unwrap());
+        println!("Find item: {:x?}", hamt.find(U256::from(0x3244_5121_u64)));
+        println!("Find item: {:x}", hamt.find(U256::from(0x3244_5120_u64)).unwrap());
 
         //println!("{:x?}", hamt.header);
         hamt.print();
 
         let item_size = hamt.item_count*(size_of::<U256>() as u32)*2;
         println!("items count {}, item_size {}, total size {}, used size {}", hamt.item_count, item_size, hamt.restore_u32(0), hamt.used);
-        println!("item size / total size = {}", 100f64 * hamt.restore_u32(0) as f64 / item_size as f64);
-        println!("item size / used size = {}", 100f64 * hamt.used as f64 / item_size as f64);
+        println!("item size / total size = {}", 100_f64 * hamt.restore_u32(0) as f64 / item_size as f64);
+        println!("item size / used size = {}", 100_f64 * hamt.used as f64 / item_size as f64);
 
 /*
         for i in 0..data.len()/(4*8) {
