@@ -1,3 +1,4 @@
+//! Solidity Account info manipulations
 use crate::{
     account_data::AccountData,
     hamt::Hamt,
@@ -14,7 +15,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::convert::TryInto;
 
-
+/// Solidity Account info
 #[derive(Debug, Clone)]
 pub struct SolidityAccount<'a> {
     account_data: AccountData,
@@ -24,13 +25,28 @@ pub struct SolidityAccount<'a> {
 }
 
 impl<'a> SolidityAccount<'a> {
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Result<Self, ProgramError> {
+    /// ### Create `SolidityAccount`
+    /// ## Example:
+    /// ```
+    /// let account_data = AccountData::unpack(&caller_info.data.borrow())?;
+    /// account_data.get_account()?;
+    /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
+    /// ```
+    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
         debug_print!("  SolidityAccount::new");
-        Ok(Self{account_data, solana_address, code_data, lamports})
+        Self{account_data, solana_address, code_data, lamports}
     }
 
+    /// Get ethereum account address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
+    /// Get ethereum account nonce
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
     fn code<U, F>(&self, f: F) -> U
@@ -88,40 +104,61 @@ impl<'a> SolidityAccount<'a> {
         }
     }
 
+    /// Get solana address
     pub fn get_solana_address(&self) -> Pubkey {
         *self.solana_address
     }
 
+    /// Get solana account seeds
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
-    
+
+    /// Get ethereum account basic info
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
     pub fn basic(&self) -> Basic {
         Basic { 
             balance: self.lamports.into(), 
             nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), }
         
     }
-    
+
+    /// Get code hash
     pub fn code_hash(&self) -> H256 {
         self.code(|d| {
             debug_print!("{}", &hex::encode(&d[0..32]));
             keccak256_h256(d)
         })
     }
-    
+
+    /// Get code size
     pub fn code_size(&self) -> usize {
         self.code(|d| d.len())
     }
-    
+
+    /// Get code data
     pub fn get_code(&self) -> Vec<u8> {
         self.code(|d| d.into())
     }
-    
+
+    /// Get storage record data
     pub fn get_storage(&self, index: &U256) -> U256 {
         self.storage(|storage| storage.find(*index))
             .unwrap_or_default()
             .unwrap_or_else(U256::zero)
     }
 
+    /// Update account data
+    /// # Errors
+    ///
+    /// Will return: 
+    /// `ProgramError::AccountAlreadyInitialized` if trying to save code to account that already have code
+    /// `ProgramError::AccountDataTooSmall` if trying to save code to account with not enough data space
+    /// `ProgramError::NotEnoughAccountKeys` if didn't find code account
+    /// `ProgramError::UninitializedAccount` if code account have `code_size` equal 0
     #[allow(clippy::too_many_arguments)]
     pub fn update<I>(
         &mut self,

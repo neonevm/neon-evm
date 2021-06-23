@@ -156,7 +156,7 @@ fn process_instruction<'a>(
                 AccountData::Account(_) => (),
                 _ => return Err(ProgramError::InvalidAccountData),
             };
-            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None)?;
+            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
