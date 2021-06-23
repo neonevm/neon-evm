@@ -53,6 +53,8 @@ pub trait AccountStorage {
     /// Get account seeds
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
     /// External call
+    /// # Errors
+    /// Will return `Err` if the external call returns err
     fn external_call(&self, _: &Instruction, _: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
