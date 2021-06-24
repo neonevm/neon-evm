@@ -152,13 +152,7 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         debug!("Not succeed execution");
     }
 
-    let sys = SolanaBackend::<EmulatorAccountStorage>::system_account();
-    eprintln!("backend.system_account={:?}", sys);
-    eprintln!("backend.system_account={:?}", SolanaBackend::<EmulatorAccountStorage>::is_system_address(&sys));
-    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts()
-        .into_iter()
-        // .filter(|acc| !acc.new)
-        .collect();
+    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
 
     let js = json!({"accounts": accounts, "result": &hex::encode(&result), "exit_status": status}).to_string();
 
