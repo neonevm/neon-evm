@@ -9,7 +9,6 @@ use solana_sdk::{
     entrypoint::ProgramResult,
     program::invoke_signed,
 };
-use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
 use evm_loader::{
@@ -236,7 +235,6 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
             if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(&address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
