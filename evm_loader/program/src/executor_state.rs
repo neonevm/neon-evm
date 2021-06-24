@@ -25,7 +25,7 @@ pub struct ExecutorMetadata {
 }
 
 impl ExecutorMetadata {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             // gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
@@ -33,7 +33,7 @@ impl ExecutorMetadata {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
         // self.gasometer
@@ -47,19 +47,19 @@ impl ExecutorMetadata {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_revert(&mut self, _other: Self) -> Result<(), ExitError> {
         // self.gasometer.record_stipend(other.gasometer.gas())?;
 
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
-    pub fn spit_child(&self, _gas_limit: u64, is_static: bool) -> Self {
+    pub const fn spit_child(&self, _gas_limit: u64, is_static: bool) -> Self {
         Self {
             // gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
@@ -79,11 +79,11 @@ impl ExecutorMetadata {
     // }
 
     #[allow(dead_code)]
-    pub fn is_static(&self) -> bool {
+    pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
-    pub fn depth(&self) -> Option<usize> {
+    pub const fn depth(&self) -> Option<usize> {
         self.depth
     }
 }
@@ -99,6 +99,7 @@ pub struct ExecutorSubstate {
 }
 
 impl ExecutorSubstate {
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new() -> Self {
         Self {
             metadata: ExecutorMetadata::new(),
@@ -110,7 +111,7 @@ impl ExecutorSubstate {
         }
     }
 
-    pub fn metadata(&self) -> &ExecutorMetadata {
+    pub const fn metadata(&self) -> &ExecutorMetadata {
         &self.metadata
     }
 

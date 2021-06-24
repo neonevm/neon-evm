@@ -9,6 +9,7 @@ use solana_sdk::{
     entrypoint::ProgramResult,
     program::invoke_signed,
 };
+use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
 use evm_loader::{
@@ -26,11 +27,11 @@ use evm_loader::solana_backend::SolanaBackend;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountJSON {
-    pub address: String,
+    address: String,
     account: String,
     contract: Option<String>,
     writable: bool,
-    pub new: bool,
+    new: bool,
     code_size: Option<usize>,
 }
 
@@ -43,7 +44,6 @@ struct SolanaAccount {
 }
 
 struct SolanaNewAccount {
-    #[allow(unused)]
     key: Pubkey,
     writable: bool,
     code_size: Option<usize>
@@ -57,7 +57,7 @@ impl SolanaAccount {
 }
 
 impl SolanaNewAccount {
-    pub fn new(key: Pubkey) -> Self {
+    pub const fn new(key: Pubkey) -> Self {
         Self{key, writable: false, code_size: None}
     }
 }
@@ -99,9 +99,9 @@ impl<'a> EmulatorAccountStorage<'a> {
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashMap::new()),
-            config: config,
-            contract_id: contract_id,
-            caller_id: caller_id,
+            config,
+            contract_id,
+            caller_id,
             block_number: slot,
             block_timestamp: timestamp,
         }
@@ -242,7 +242,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
                         new: true,
-                        account: solana_address.to_string(),
+                        account: acc.key.to_string(),
                         contract: None,
                         code_size: acc.code_size,
                 });

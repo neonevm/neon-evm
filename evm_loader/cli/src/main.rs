@@ -1,12 +1,5 @@
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(
-    clippy::redundant_field_names,
-    clippy::must_use_candidate,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::missing_const_for_fn
-)]
 
 mod account_storage;
 use crate::{
@@ -101,14 +94,13 @@ pub struct Config {
     rpc_client: Arc<RpcClient>,
     websocket_url: String,
     evm_loader: Pubkey,
-    #[allow(unused)]
-    fee_payer: Pubkey,
+    // #[allow(unused)]
+    // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
     keypair: Option<Keypair>,
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) -> CommandResult {
+fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) {
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs) = {
@@ -157,15 +149,12 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     let js = json!({"accounts": accounts, "result": &hex::encode(&result), "exit_status": status}).to_string();
 
     println!("{}", js);
-
-    Ok(())
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn command_create_program_address (
     config: &Config,
     seed: &str,
-) -> CommandResult {
+) {
     let strings = seed.split_whitespace().collect::<Vec<_>>();
     let mut seeds = vec![];
     let mut seeds_vec = vec![];
@@ -175,8 +164,6 @@ fn command_create_program_address (
     for i in &seeds_vec {seeds.push(&i[..]);}
     let (address,nonce) = Pubkey::find_program_address(&seeds, &config.evm_loader);
     println!("{} {}", address, nonce);
-
-    Ok(())
 }
 
 fn command_create_ether_account (
@@ -218,6 +205,7 @@ fn command_create_ether_account (
         "ether": hex::encode(ether_address),
         "nonce": nonce,
     }).to_string());
+
     Ok(())
 }
 
@@ -361,14 +349,17 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     }
 }
 
+#[must_use]
 pub fn keccak256_h256(data: &[u8]) -> H256 {
     H256::from(hash(data).to_bytes())
 }
 
+#[must_use]
 pub fn keccak256(data: &[u8]) -> [u8; 32] {
     hash(data).to_bytes()
 }
 
+#[must_use]
 pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
     hash(data).to_bytes().to_vec()
 }
@@ -796,11 +787,10 @@ fn command_deploy(
     Ok(())
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn command_get_ether_account_data (
     config: &Config,
     ether_address: &H160,
-) -> CommandResult {
+) {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         Some((acc, code_account)) => {
             let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
@@ -848,8 +838,6 @@ fn command_get_ether_account_data (
             eprintln!("Account not found {}", &ether_address.to_string());
         }
     }
-
-    Ok(())
 }
 
 fn make_clean_hex(in_str: &str) -> &str {
@@ -902,7 +890,7 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-
+                
             #[allow(clippy::option_if_let_else)]
             if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(config_file)
@@ -1080,7 +1068,7 @@ fn main() {
         let mut wallet_manager = None;
         let config = {
             let cli_config = app_matches.value_of("config_file").map_or_else(
-                solana_cli_config::Config::default,
+                solana_cli_config::Config::default, 
                 |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
             );
 
@@ -1098,7 +1086,7 @@ fn main() {
                         exit(1);
                     });
 
-            let (signer, fee_payer) = signer_from_path(
+            let (signer, _fee_payer) = signer_from_path(
                 &app_matches,
                 app_matches
                     .value_of("fee_payer")
@@ -1129,7 +1117,7 @@ fn main() {
                 rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
                 websocket_url: "".to_string(),
                 evm_loader,
-                fee_payer,
+                // fee_payer,
                 signer,
                 keypair,
             }
@@ -1142,12 +1130,16 @@ fn main() {
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data").unwrap();
 
-                command_emulate(&config, contract, sender, data)
+                command_emulate(&config, contract, sender, data);
+
+                Ok(())
             }
             ("create-program-address", Some(arg_matches)) => {
                 let seed = arg_matches.value_of("seed").unwrap().to_string();
 
-                command_create_program_address(&config, &seed)
+                command_create_program_address(&config, &seed);
+
+                Ok(())
             }
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
@@ -1166,7 +1158,9 @@ fn main() {
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
 
-                command_get_ether_account_data(&config, &ether)
+                command_get_ether_account_data(&config, &ether);
+
+                Ok(())
             }
             _ => unreachable!(),
         };

@@ -74,10 +74,12 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Self { account_storage, account_infos }
     }
 
+    #[allow(clippy::unused_self)]
     fn is_solana_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account()
     }
 
+    #[allow(clippy::unused_self)]
     fn is_ecrecover_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account_ecrecover()
     }
@@ -90,17 +92,20 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
 
     /// Get system account
+    #[must_use]
     pub fn system_account() -> H160 {
         H160::from_slice(&SYSTEM_ACCOUNT)
     }
 
     /// Get ecrecover system account
+    #[must_use]
     pub fn system_account_ecrecover() -> H160 {
         H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
     }
 
     /// Call inner ecrecover
-    pub fn call_inner_ecrecover(&self,
+    #[must_use]
+    pub fn call_inner_ecrecover(
         input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         debug_print!("ecrecover");
@@ -138,6 +143,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
 
     /// Get chain id
+    #[must_use]
     pub fn chain_id() -> U256 { U256::from(111) }
 }
 
@@ -197,7 +203,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if self.is_ecrecover_address(&code_address) {
-            return self.call_inner_ecrecover(&input);
+            return Self::call_inner_ecrecover(&input);
         }
 
         if !self.is_solana_address(&code_address) {
@@ -232,7 +238,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     accounts.push(AccountMeta {
                         is_signer: signer[0] != 0,
                         is_writable: writable[0] != 0,
-                        pubkey: pubkey,
+                        pubkey,
                     });
                     debug_print!("Acc: {}", pubkey);
                 };
@@ -332,14 +338,14 @@ mod test {
     
         fn get_owner() -> Vec<u8> {
             let mut v = Vec::new();
-            v.extend_from_slice(&0x893d20e8u32.to_be_bytes());
+            v.extend_from_slice(&0x893d_20e8_u32.to_be_bytes());
             v
         }
     
         fn change_owner(address: H160) -> Vec<u8> {
             let mut v = Vec::new();
-            v.extend_from_slice(&0xa6f9dae1u32.to_be_bytes());
-            v.extend_from_slice(&[0u8;12]);
+            v.extend_from_slice(&0xa6f9_dae1_u32.to_be_bytes());
+            v.extend_from_slice(&[0_u8;12]);
             v.extend_from_slice(&<[u8;20]>::from(address));
             v
         }
@@ -366,6 +372,7 @@ mod test {
 
     #[test]
     fn test_solidity_address() -> Result<(), ProgramError> {
+        use std::str::FromStr;
 //        let account = Pubkey::from_str("Bfj8CF5ywavXyqkkuKSXt5AVhMgxUJgHfQsQjPc1JKzj").unwrap();
         let account = Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap();
         let account = Pubkey::from_str("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r").unwrap();
@@ -466,9 +473,9 @@ mod test {
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &owner)));
-        accounts.push((Pubkey::new_rand(), false, Account::new(5423u64, 1024, &Pubkey::new_rand())));
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_rand(), false, Account::new(1234_u64, 0, &owner)));
+        accounts.push((Pubkey::new_rand(), false, Account::new(5423_u64, 1024, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_rand(), false, Account::new(1234_u64, 0, &Pubkey::new_rand())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 

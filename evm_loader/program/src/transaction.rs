@@ -79,7 +79,6 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
 
 
 #[derive(Debug)]
-#[allow(clippy::module_name_repetitions)]
 pub struct UnsignedTransaction {
     pub nonce: u64,
     pub gas_price: U256,

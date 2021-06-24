@@ -1,4 +1,5 @@
 //! Error types
+#![allow(clippy::use_self)]
 
 use num_derive::FromPrimitive;
 use solana_program::{decode_error::DecodeError, program_error::ProgramError};
@@ -6,7 +7,6 @@ use thiserror::Error;
 
 /// Errors that may be returned by the EVM Loader program.
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
-#[allow(clippy::module_name_repetitions)]
 pub enum EvmLoaderError {
     /// Unknown Error.
     #[error("Unknown error. Attention required.")]
@@ -18,7 +18,7 @@ pub enum EvmLoaderError {
 
 impl From<EvmLoaderError> for ProgramError {
     fn from(e: EvmLoaderError) -> Self {
-        ProgramError::Custom(e as u32)
+        Self::Custom(e as u32)
     }
 }
 
