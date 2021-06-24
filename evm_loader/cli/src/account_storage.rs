@@ -247,7 +247,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             }
         }
 
-        return arr;
+        arr
     }
 }
 
