@@ -68,12 +68,13 @@ def emulate_external_call(sender, contract, trx_data):
     return emulate_result
 
 
-class ExternalCalltest(unittest.TestCase):
+class EmulateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wallet = WalletAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
         cls.loader = EvmLoader(cls.wallet, evm_loader_id)
+        cls.spl_token = SplToken(solana_url)
 
         cls.neon_evm_client = NeonEvmClient(cls.acc, cls.loader)
         cls.neon_evm_client.set_execute_mode(ExecuteMode.ITERATIVE)
@@ -96,73 +97,35 @@ class ExternalCalltest(unittest.TestCase):
         cls.contract = ExternalCall(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
         cls.contract.set_neon_evm_client(cls.neon_evm_client)
 
-        cls.token = cls.createToken()
+        cls.token = cls.spl_token.create_token()
         print("token:", cls.token)
 
-        cls.token_acc1 = cls.createTokenAccount(cls.token)
+        cls.token_acc1 = cls.spl_token.create_token_account(cls.token)
         print("token_acc1:", cls.token_acc1)
 
-        cls.token_acc2 = cls.createTokenAccount(cls.token, RandomAccount().get_path())
+        cls.token_acc2 = cls.spl_token.create_token_account(cls.token, RandomAccount().get_path())
         print("token_acc2:", cls.token_acc2)
 
-    @staticmethod
-    def createToken(owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-token")
-        else:
-            res = spl.call("create-token --owner {}".format(owner))
-        if not res.startswith("Creating token "):
-            raise Exception("create token error")
-        else:
-            return res.split()[2]
+    def compare_tmpl_and_emulate_result(self, tmpl_json, emulate_result):
+        print('tmpl_json:', json.dumps(tmpl_json, sort_keys=True, indent=2, separators=(',', ': ')))
+        print('emulate_result:', json.dumps(emulate_result, sort_keys=True, indent=2, separators=(',', ': ')))
 
-    @staticmethod
-    def createTokenAccount(token, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-account {}".format(token))
-        else:
-            res = spl.call("create-account {} --owner {}".format(token, owner))
-        if not res.startswith("Creating account "):
-            raise Exception("create account error %s" % res)
-        else:
-            return res.split()[2]
+        self.assertEqual(tmpl_json["exit_status"], emulate_result["exit_status"])
+        self.assertEqual(tmpl_json['result'], emulate_result['result'])
 
-    @staticmethod
-    def tokenMint(mint_id, recipient, amount, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            spl.call("mint {} {} {}".format(mint_id, amount, recipient))
-        else:
-            spl.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner))
-        print("minting {} tokens for {}".format(amount, recipient))
+        left = map(lambda item: (item['account'], item['address'], item['contract']), tmpl_json['accounts'])
+        right = map(lambda item: (item['account'], item['address'], item['contract']), emulate_result['accounts'])
 
-    @staticmethod
-    def tokenBalance(acc):
-        spl = SplToken(solana_url)
-        res = spl.call("balance --address {}".format(acc))
-        return int(res.rstrip())
+        self.assertCountEqual(left, right)
+        self.assertSetEqual(set(left), set(right))
 
-    def create_storage_account(self, seed):
-        storage = PublicKey(
-            sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
-        print("Storage", storage)
-
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
-                                          PublicKey(evm_loader_id)))
-            send_transaction(client, trx, self.acc)
-        return storage
-
-    def test_cli_emulate_success(self):
-        balance1 = self.tokenBalance(self.token_acc1)
-        balance2 = self.tokenBalance(self.token_acc2)
+    def test_successful_cli_emulate(self):
+        balance1 = self.spl_token.balance(self.token_acc1)
+        balance2 = self.spl_token.balance(self.token_acc2)
         mint_amount = 100
-        self.tokenMint(self.token, self.token_acc1, mint_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc2), balance2)
+        self.spl_token.mint(self.token, self.token_acc1, mint_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
         transfer_amount = 17
         (trx_data, result) \
@@ -173,39 +136,56 @@ class ExternalCalltest(unittest.TestCase):
         self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
         self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
 
-        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
 
         emulate_result = emulate_external_call(self.ethereum_caller.hex(),
                                                self.contract.ethereum_id.hex(),
                                                trx_data.hex())
+        tmpl = """ {
+            "accounts": [
+                {
+                    "account": "CONTRACT_ACCOUNT",
+                    "address": "CONTRACT_ETHEREUM_ID",
+                    "code_size": null,
+                    "contract": "CONTRACT_CODE_ACCOUNT",
+                    "new": false,
+                    "writable": true
+                },
+                {
+                    "account": "ETHEREUM_CALLER_ACCOUNT",
+                    "address": "ETHEREUM_CALLER_ID",
+                    "code_size": null,
+                    "contract": null,
+                    "new": false,
+                    "writable": true
+                }
+            ],
+            "exit_status": "succeed",
+            "result": ""
+        }"""
+        tmpl = tmpl.replace('CONTRACT_ACCOUNT', self.contract.contract_account)
+        tmpl = tmpl.replace('CONTRACT_ETHEREUM_ID', '0x' + self.contract.ethereum_id.hex())
+        tmpl = tmpl.replace('CONTRACT_CODE_ACCOUNT', self.contract.contract_code_account)
+        tmpl = tmpl.replace('ETHEREUM_CALLER_ACCOUNT', self.caller)
+        tmpl = tmpl.replace('ETHEREUM_CALLER_ID', '0x' + self.ethereum_caller.hex())
+        tmpl_json = json.loads(tmpl)
 
-        self.assertEqual(emulate_result["exit_status"], 'succeed')
-        self.assertEqual(emulate_result['result'], '')  # no type return from transferExt
-
-        self.assertEqual(emulate_result["accounts"][0]["account"], self.contract.contract_account)
-        self.assertEqual(emulate_result["accounts"][0]["address"], '0x' + self.contract.ethereum_id.hex())
-        self.assertEqual(emulate_result["accounts"][0]["contract"], self.contract.contract_code_account)
-
-        self.assertEqual(emulate_result["accounts"][1]["account"], self.caller)
-        self.assertEqual(emulate_result["accounts"][1]["address"], '0x' + self.ethereum_caller.hex())
-
-        self.assertEqual(emulate_result["accounts"][2]["address"], '0xff00000000000000000000000000000000000000')
+        self.compare_tmpl_and_emulate_result(tmpl_json, emulate_result)
 
         # no changes after the emulation
-        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
 
-    def test_cli_emulate_failure(self):
-        global trx_data
-        balance1 = self.tokenBalance(self.token_acc1)
-        balance2 = self.tokenBalance(self.token_acc2)
+    def test_unsuccessful_cli_emulate(self):
+        balance1 = self.spl_token.balance(self.token_acc1)
+        balance2 = self.spl_token.balance(self.token_acc2)
         mint_amount = 100
-        self.tokenMint(self.token, self.token_acc1, mint_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc2), balance2)
+        self.spl_token.mint(self.token, self.token_acc1, mint_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
-        transfer_amount = self.tokenBalance(self.token_acc1) + 1
+        transfer_amount = self.spl_token.balance(self.token_acc1) + 1
         (trx_data, result)\
             = self.contract.transfer_ext(self.ethereum_caller,
                                          self.token, self.token_acc1, self.token_acc2, transfer_amount * (10 ** 9),
@@ -215,22 +195,40 @@ class ExternalCalltest(unittest.TestCase):
         emulate_result = emulate_external_call(self.ethereum_caller.hex(),
                                                self.contract.ethereum_id.hex(),
                                                trx_data.hex())
+        tmpl = """ {
+            "accounts": [
+                {
+                    "account": "CONTRACT_ACCOUNT",
+                    "address": "CONTRACT_ETHEREUM_ID",
+                    "code_size": null,
+                    "contract": "CONTRACT_CODE_ACCOUNT",
+                    "new": false,
+                    "writable": true
+                },
+                {
+                    "account": "ETHEREUM_CALLER_ACCOUNT",
+                    "address": "ETHEREUM_CALLER_ID",
+                    "code_size": null,
+                    "contract": null,
+                    "new": false,
+                    "writable": true
+                }
+            ],
+            "exit_status": "succeed",
+            "result": ""
+        }"""
+        tmpl = tmpl.replace('CONTRACT_ACCOUNT', self.contract.contract_account)
+        tmpl = tmpl.replace('CONTRACT_ETHEREUM_ID', '0x' + self.contract.ethereum_id.hex())
+        tmpl = tmpl.replace('CONTRACT_CODE_ACCOUNT', self.contract.contract_code_account)
+        tmpl = tmpl.replace('ETHEREUM_CALLER_ACCOUNT', self.caller)
+        tmpl = tmpl.replace('ETHEREUM_CALLER_ID', '0x' + self.ethereum_caller.hex())
+        tmpl_json = json.loads(tmpl)
 
-        self.assertEqual(emulate_result["exit_status"], 'succeed')
-        self.assertEqual(emulate_result['result'], '')  # no type return from transferExt
-
-        self.assertEqual(emulate_result["accounts"][0]["account"], self.caller)
-        self.assertEqual(emulate_result["accounts"][0]["address"], '0x' + self.ethereum_caller.hex())
-
-        self.assertEqual(emulate_result["accounts"][1]["account"], self.contract.contract_account)
-        self.assertEqual(emulate_result["accounts"][1]["address"], '0x' + self.contract.ethereum_id.hex())
-        self.assertEqual(emulate_result["accounts"][1]["contract"], self.contract.contract_code_account)
-
-        self.assertEqual(emulate_result["accounts"][2]["address"], '0xff00000000000000000000000000000000000000')
+        self.compare_tmpl_and_emulate_result(tmpl_json, emulate_result)
 
         # no changes after the emulation
-        self.assertEqual(self.tokenBalance(self.token_acc1), balance1 + mint_amount - transfer_amount)
-        self.assertEqual(self.tokenBalance(self.token_acc2), balance2 + transfer_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
+        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
 
 if __name__ == '__main__':
