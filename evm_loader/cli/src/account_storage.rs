@@ -235,7 +235,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(&address) {
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
