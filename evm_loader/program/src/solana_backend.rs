@@ -64,6 +64,9 @@ pub struct SolanaBackend<'a, 's, S> {
     account_infos: Option<&'a [AccountInfo<'a>]>,
 }
 
+static SYSTEM_ACCOUNT: [u8; 20] = [0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+static SYSTEM_ACCOUNT_ECRECOVER: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
+
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
     pub fn new(account_storage: &'s S, account_infos: Option<&'a [AccountInfo<'a>]>) -> Self {
@@ -79,14 +82,21 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         *code_address == Self::system_account_ecrecover()
     }
 
+    /// Is system address
+    pub fn is_system_address(address: &H160) -> bool {
+        *address == H160::from_slice(&SYSTEM_ACCOUNT)
+            ||
+            *address == H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
+    }
+
     /// Get system account
     pub fn system_account() -> H160 {
-        H160::from_slice(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        H160::from_slice(&SYSTEM_ACCOUNT)
     }
 
     /// Get ecrecover system account
     pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01])
+        H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
     }
 
     /// Call inner ecrecover
