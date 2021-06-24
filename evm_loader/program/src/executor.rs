@@ -177,9 +177,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
-        let estimate = false;
         let after_gas = if self.config.call_l64_after_gas {
-            if estimate {
+            if self.config.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
@@ -257,9 +256,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        let estimate = false;
         let after_gas = if self.config.call_l64_after_gas {
-            if estimate {
+            if self.config.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
@@ -363,7 +361,6 @@ impl<'config, B: Backend> Machine<'config, B> {
         code_address: H160,
         input: Vec<u8>,
         gas_limit: u64,
-        estimate: bool,
     ) -> Result<(), ExitError> {
         debug_print!("call_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::call_transaction_cost(&input);
@@ -372,7 +369,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.inc_nonce(caller);
 
 	    let after_gas = if self.executor.config.call_l64_after_gas {
-            if estimate {
+            if self.executor.config.estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 self.executor
@@ -409,7 +406,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                         caller: H160,
                         code: Vec<u8>,
                         gas_limit: u64,
-                        estimate: bool,
     ) -> ProgramResult {
         debug_print!("create_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::create_transaction_cost(&code);
@@ -418,7 +414,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let after_gas = if self.executor.config.call_l64_after_gas {
-            if estimate {
+            if self.executor.config.estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 self.executor
