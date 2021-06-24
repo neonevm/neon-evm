@@ -184,6 +184,33 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
+        /***
+        // This parameter should be true for create from another program
+        let take_l64 = true;
+
+        let after_gas = if take_l64 && self.config.call_l64_after_gas {
+            if self.config.estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), None, Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+
+        let gas_limit = core::cmp::min(target_gas, after_gas);
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), None, Vec::new()));
+        }
+        ***/
+
         // Get the create address from given scheme.
         let address =
             match scheme {
@@ -241,7 +268,42 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
+        // These parameters should be true for call from another program
+        let take_l64 = true;
+        let take_stipend = true;
+
+        /***
+        let after_gas = if take_l64 && self.config.call_l64_after_gas {
+            if self.config.estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+        let mut gas_limit = core::cmp::min(target_gas, after_gas);
+
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), Vec::new()));
+        }
+
+        if let Some(transfer) = transfer.as_ref() {
+            if take_stipend && transfer.value != U256::zero() {
+                gas_limit = gas_limit.saturating_add(self.config.call_stipend);
+            }
+        }
+        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
+        ***/
+
+        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, take_l64, take_stipend);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
