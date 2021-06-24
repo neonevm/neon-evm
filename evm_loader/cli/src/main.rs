@@ -9,7 +9,12 @@
 )]
 
 mod account_storage;
-use crate::account_storage::EmulatorAccountStorage;
+use crate::{
+    account_storage::{
+        EmulatorAccountStorage,
+        AccountJSON,
+    },
+};
 
 use evm_loader::{
     instruction::EvmInstruction,
@@ -147,7 +152,17 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         debug!("Not succeed execution");
     }
 
-    account_storage.get_used_accounts(&status, &result);
+    let sys = SolanaBackend::<EmulatorAccountStorage>::system_account();
+    eprintln!("backend.system_account={:?}", sys);
+    eprintln!("backend.system_account={:?}", SolanaBackend::<EmulatorAccountStorage>::is_system_address(&sys));
+    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts()
+        .into_iter()
+        // .filter(|acc| !acc.new)
+        .collect();
+
+    let js = json!({"accounts": accounts, "result": &hex::encode(&result), "exit_status": status}).to_string();
+
+    println!("{}", js);
 
     Ok(())
 }

@@ -1,5 +1,6 @@
 use evm::backend::Apply;
 use evm::{H160, U256};
+#[allow(unused)]
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
@@ -8,7 +9,6 @@ use solana_sdk::{
     entrypoint::ProgramResult,
     program::invoke_signed,
 };
-use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
 use evm_loader::{
@@ -20,15 +20,17 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell; 
 use std::rc::Rc;
 use crate::Config;
+#[allow(unused)]
 use solana_program::instruction::Instruction;
+use evm_loader::solana_backend::SolanaBackend;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct AccountJSON {
-    address: String,
+pub struct AccountJSON {
+    pub address: String,
     account: String,
     contract: Option<String>,
     writable: bool,
-    new: bool,
+    pub new: bool,
     code_size: Option<usize>,
 }
 
@@ -203,7 +205,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         };
     }
 
-    pub fn get_used_accounts(&self, status: &str, result: &[u8])
+    pub fn get_used_accounts(&self) -> Vec<AccountJSON>
     {
         let mut arr = Vec::new();
 
@@ -219,33 +221,35 @@ impl<'a> EmulatorAccountStorage<'a> {
                     Some(addr)
                 }
             };
-            
-            arr.push(AccountJSON{
-                    address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: acc.writable,
-                    new: false,
-                    account: solana_address.to_string(),
-                    contract: contract_address.map(|v| v.to_string()),
-                    code_size: acc.code_size,
+
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(&address) {
+                arr.push(AccountJSON{
+                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
+                        writable: acc.writable,
+                        new: false,
+                        account: solana_address.to_string(),
+                        contract: contract_address.map(|v| v.to_string()),
+                        code_size: acc.code_size,
                 });
+            }
         }
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
             let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
-            arr.push(AccountJSON{
-                    address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: acc.writable,
-                    new: true,
-                    account: solana_address.to_string(),
-                    contract: None,
-                    code_size: acc.code_size,
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(&address) {
+                arr.push(AccountJSON{
+                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
+                        writable: acc.writable,
+                        new: true,
+                        account: solana_address.to_string(),
+                        contract: None,
+                        code_size: acc.code_size,
                 });
-        }    
+            }
+        }
 
-        let js = json!({"accounts": arr, "result": &hex::encode(&result), "exit_status": status}).to_string();
-
-        println!("{}", js);
+        return arr;
     }
 }
 
