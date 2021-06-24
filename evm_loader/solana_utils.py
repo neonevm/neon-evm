@@ -58,6 +58,10 @@ def accountWithSeed(base, seed, program):
     print(type(base), type(seed), type(program))
     return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
 
+def accountWithSeed1(base, seed, program):
+    print(type(base), type(seed), type(program))
+    return PublicKey(sha256(bytes(base) + bytes(seed) + bytes(program)).digest())
+
 
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
