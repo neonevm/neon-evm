@@ -26,7 +26,6 @@ pub enum Sender {
 }
 
 /// `AccountStorage` for solana program realization
-#[allow(clippy::module_name_repetitions)]
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
@@ -162,17 +161,17 @@ impl<'a> ProgramAccountStorage<'a> {
         aliases.sort_by_key(|v| v.0);
 
         Ok(Self {
-            accounts: accounts,
+            accounts,
             aliases: RefCell::new(aliases),
-            clock_account: clock_account,
-            account_metas: account_metas,
-            contract_id: contract_id,
-            sender: sender,
+            clock_account,
+            account_metas,
+            contract_id,
+            sender,
         })
     }
 
     /// Get sender address
-    pub fn get_sender(&self) -> &Sender {
+    pub const fn get_sender(&self) -> &Sender {
         &self.sender
     }
 
