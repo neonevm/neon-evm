@@ -14,7 +14,7 @@ use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
-fn l64(gas: u64) -> u64 {
+const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
@@ -146,7 +146,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let balance = self.balance(address);
         let transfer = evm::Transfer {
             source: address,
-            target: target,
+            target,
             value: balance,
         };
 
@@ -394,7 +394,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
-        let context = evm::Context{address: code_address, caller: caller, apparent_value: U256::zero()};
+        let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
 
         let runtime = evm::Runtime::new(code, input, context, self.executor.config);
 

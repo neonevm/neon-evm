@@ -32,6 +32,7 @@ impl<'a> SolidityAccount<'a> {
     /// account_data.get_account()?;
     /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
     /// ```
+    #[must_use]
     pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
         debug_print!("  SolidityAccount::new");
         Self{account_data, solana_address, code_data, lamports}
@@ -41,12 +42,14 @@ impl<'a> SolidityAccount<'a> {
     /// # Panics
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
     pub fn get_ether(&self) -> H160 {AccountData::get_account(&self.account_data).unwrap().ether}
 
     /// Get ethereum account nonce
     /// # Panics
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
     fn code<U, F>(&self, f: F) -> U
@@ -105,7 +108,8 @@ impl<'a> SolidityAccount<'a> {
     }
 
     /// Get solana address
-    pub fn get_solana_address(&self) -> Pubkey {
+    #[must_use]
+    pub const fn get_solana_address(&self) -> Pubkey {
         *self.solana_address
     }
 
@@ -113,12 +117,14 @@ impl<'a> SolidityAccount<'a> {
     /// # Panics
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
 
     /// Get ethereum account basic info
     /// # Panics
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
     pub fn basic(&self) -> Basic {
         Basic { 
             balance: self.lamports.into(), 
@@ -127,6 +133,7 @@ impl<'a> SolidityAccount<'a> {
     }
 
     /// Get code hash
+    #[must_use]
     pub fn code_hash(&self) -> H256 {
         self.code(|d| {
             debug_print!("{}", &hex::encode(&d[0..32]));
@@ -135,11 +142,13 @@ impl<'a> SolidityAccount<'a> {
     }
 
     /// Get code size
+    #[must_use]
     pub fn code_size(&self) -> usize {
         self.code(|d| d.len())
     }
 
     /// Get code data
+    #[must_use]
     pub fn get_code(&self) -> Vec<u8> {
         self.code(|d| d.into())
     }

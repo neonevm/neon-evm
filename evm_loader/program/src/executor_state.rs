@@ -26,7 +26,7 @@ pub struct ExecutorMetadata<'config> {
 }
 
 impl<'config> ExecutorMetadata<'config> {
-    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
+    pub const fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
@@ -56,12 +56,12 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
-    pub fn split_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub const fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
@@ -72,7 +72,7 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
-    pub fn gasometer(&self) -> &Gasometer {
+    pub const fn gasometer(&self) -> &Gasometer {
         &self.gasometer
     }
 
@@ -81,11 +81,11 @@ impl<'config> ExecutorMetadata<'config> {
     }
 
     #[allow(dead_code)]
-    pub fn is_static(&self) -> bool {
+    pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
-    pub fn depth(&self) -> Option<usize> {
+    pub const fn depth(&self) -> Option<usize> {
         self.depth
     }
 }
@@ -101,6 +101,7 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(gas_limit: u64) -> Self {
         Self {
             metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
@@ -112,7 +113,7 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
-    pub fn metadata(&self) -> &'config ExecutorMetadata {
+    pub const fn metadata(&self) -> &'config ExecutorMetadata {
         &self.metadata
     }
 
@@ -177,7 +178,7 @@ impl<'config> ExecutorSubstate<'config> {
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         let mut entering = Self {
-            metadata: self.metadata.split_child(gas_limit, is_static),
+            metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
             logs: Vec::new(),
             accounts: BTreeMap::new(),

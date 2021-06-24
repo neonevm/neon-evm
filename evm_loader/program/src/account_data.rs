@@ -81,10 +81,10 @@ impl AccountData {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (&tag, rest) = input.split_first().ok_or(ProgramError::InvalidAccountData)?;
         Ok(match tag {
-            AccountData::EMPTY_TAG => AccountData::Empty,
-            AccountData::ACCOUNT_TAG => AccountData::Account( Account::unpack(rest) ),
-            AccountData::CONTRACT_TAG => AccountData::Contract( Contract::unpack(rest) ),
-            AccountData::STORAGE_TAG => AccountData::Storage( Storage::unpack(rest) ),
+            Self::EMPTY_TAG => Self::Empty,
+            Self::ACCOUNT_TAG => Self::Account( Account::unpack(rest) ),
+            Self::CONTRACT_TAG => Self::Contract( Contract::unpack(rest) ),
+            Self::STORAGE_TAG => Self::Storage( Storage::unpack(rest) ),
 
             _ => return Err(ProgramError::InvalidAccountData),
         })
@@ -104,38 +104,39 @@ impl AccountData {
     pub fn pack(&self, dst: &mut [u8]) -> Result<usize, ProgramError> {
         if dst.is_empty() { return Err(ProgramError::AccountDataTooSmall); }
         Ok(match self {
-            AccountData::Empty => {
+            Self::Empty => {
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
-                dst[0] = AccountData::EMPTY_TAG;
-                (AccountData::Empty).size()
+                dst[0] = Self::EMPTY_TAG;
+                (Self::Empty).size()
             },
-            AccountData::Account(acc) => {
-                if dst[0] != AccountData::ACCOUNT_TAG && dst[0] != AccountData::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
+            Self::Account(acc) => {
+                if dst[0] != Self::ACCOUNT_TAG && dst[0] != Self::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
-                dst[0] = AccountData::ACCOUNT_TAG;
+                dst[0] = Self::ACCOUNT_TAG;
                 Account::pack(acc, &mut dst[1..])
             },
-            AccountData::Contract(acc) => {
-                if dst[0] != AccountData::CONTRACT_TAG && dst[0] != AccountData::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
+            Self::Contract(acc) => {
+                if dst[0] != Self::CONTRACT_TAG && dst[0] != Self::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
-                dst[0] = AccountData::CONTRACT_TAG;
+                dst[0] = Self::CONTRACT_TAG;
                 Contract::pack(acc, &mut dst[1..])
             },
-            AccountData::Storage(acc) => {
-                if dst[0] != AccountData::STORAGE_TAG && dst[0] != AccountData::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
+            Self::Storage(acc) => {
+                if dst[0] != Self::STORAGE_TAG && dst[0] != Self::EMPTY_TAG { return Err(ProgramError::InvalidAccountData); }
                 if dst.len() < self.size() { return Err(ProgramError::AccountDataTooSmall); }
-                dst[0] = AccountData::STORAGE_TAG;
+                dst[0] = Self::STORAGE_TAG;
                 Storage::pack(acc, &mut dst[1..])
             },
         })
     }
 
     /// Get `AccountData` struct size
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         match self {
-            AccountData::Account(acc) => acc.size() + 1,
-            AccountData::Contract(acc) => acc.size() + 1,
-            AccountData::Storage(acc) => acc.size() + 1,
+            Self::Account(_acc) => Account::size() + 1,
+            Self::Contract(_acc) => Contract::size() + 1,
+            Self::Storage(_acc) => Storage::size() + 1,
             AccountData::Empty => 1,
         }
     }
@@ -145,9 +146,9 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Account` struct
-    pub fn get_account(&self) -> Result<&Account, ProgramError>  {
+    pub const fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
-            AccountData::Account(ref acc) => Ok(acc),
+            Self::Account(ref acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -159,7 +160,7 @@ impl AccountData {
     /// `ProgramError::InvalidAccountData` if doesn't contain `Account` struct
     pub fn get_mut_account(&mut self) -> Result<&mut Account, ProgramError>  {
         match self {
-            AccountData::Account(ref mut acc) => Ok(acc),
+            Self::Account(ref mut acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -169,9 +170,9 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Contract` struct
-    pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
+    pub const fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
-            AccountData::Contract(ref acc) => Ok(acc),
+            Self::Contract(ref acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -183,7 +184,7 @@ impl AccountData {
     /// `ProgramError::InvalidAccountData` if doesn't contain `Contract` struct
     pub fn get_mut_contract(&mut self) -> Result<&mut Contract, ProgramError>  {
         match self {
-            AccountData::Contract(ref mut acc) => Ok(acc),
+            Self::Contract(ref mut acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -193,9 +194,9 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
+    pub const fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
-            AccountData::Storage(ref acc) => Ok(acc),
+            Self::Storage(ref acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -207,7 +208,7 @@ impl AccountData {
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
     pub fn get_mut_storage(&mut self) -> Result<&mut Storage, ProgramError>  {
         match self {
-            AccountData::Storage(ref mut acc) => Ok(acc),
+            Self::Storage(ref mut acc) => Ok(acc),
             _ => Err(ProgramError::InvalidAccountData),
         }
     }
@@ -218,11 +219,13 @@ impl Account {
     pub const SIZE: usize = 20+1+8+32+1+32;
 
     /// Deserialize `Account` struct from input data
+    #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Account::SIZE];
         let (ether, nonce, trx_count, code_account, is_blocked, blocked_by) = array_refs![data, 20, 1, 8, 32, 1, 32];
 
-        Account {
+        Self {
             ether: H160::from_slice(&*ether),
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
@@ -232,7 +235,8 @@ impl Account {
     }
 
     /// Serialize `Account` struct into given destination
-    pub fn pack(acc: &Account, dst: &mut [u8]) -> usize {
+    pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
         let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst) = 
                 mut_array_refs![data, 20, 1, 8, 32, 1, 32];
@@ -247,12 +251,13 @@ impl Account {
             is_blocked_dst[0] = 0;
         }
 
-        Account::SIZE
+        Self::SIZE
     }
 
     /// Get `Account` struct size
-    pub fn size(&self) -> usize {
-        Account::SIZE
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
     }
 }
 
@@ -261,29 +266,33 @@ impl Contract {
     pub const SIZE: usize = 32+4;
 
     /// Deserialize `Contract` struct from input data
+    #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Contract::SIZE];
         let (owner, code_size) = array_refs![data, 32, 4];
 
-        Contract {
+        Self {
             owner: Pubkey::new_from_array(*owner),
             code_size: u32::from_le_bytes(*code_size),
         }
     }
 
     /// Serialize `Contract` struct into given destination
-    pub fn pack(acc: &Contract, dst: &mut [u8]) -> usize {
+    pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Contract::SIZE];
         let (owner_dst, code_size_dst) = 
                 mut_array_refs![data, 32, 4];
         owner_dst.copy_from_slice(acc.owner.as_ref());
         *code_size_dst = acc.code_size.to_le_bytes();
-        Contract::SIZE
+        Self::SIZE
     }
 
     /// Get `Contract` struct size
-    pub fn size(&self) -> usize {
-        Contract::SIZE
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
     }
 }
 
@@ -292,7 +301,9 @@ impl Storage {
     const SIZE: usize = 20+8+8+8+8;
 
     /// Deserialize `Storage` struct from input data
+    #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Storage::SIZE];
         let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8];
         
@@ -307,6 +318,7 @@ impl Storage {
 
     /// Serialize `Storage` struct into given destination
     pub fn pack(&self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Storage::SIZE];
         let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8];
         *caller = self.caller.to_fixed_bytes();
@@ -315,11 +327,12 @@ impl Storage {
         *executor_data_size = self.executor_data_size.to_le_bytes();
         *evm_data_size = self.evm_data_size.to_le_bytes();
 
-        Storage::SIZE
+        Self::SIZE
     }
 
     /// Get `Storage` struct size
-    pub fn size(&self) -> usize {
-        Storage::SIZE
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
     }
 }

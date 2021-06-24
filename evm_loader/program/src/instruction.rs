@@ -11,7 +11,6 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
 
 /// `EvmInstruction` serialized in instruction data
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
-#[allow(clippy::module_name_repetitions)]
 pub enum EvmInstruction<'a> {
     /// Write program data into an account
     ///
@@ -275,6 +274,7 @@ impl<'a> EvmInstruction<'a> {
 }
 
 /// Creates a `OnReturn` instruction.
+#[must_use]
 pub fn on_return(
     myself_program_id: &Pubkey,
     status: u8,
@@ -293,6 +293,7 @@ pub fn on_return(
 }
 
 /// Creates a `OnEvent` instruction.
+#[must_use]
 pub fn on_event(
     myself_program_id: &Pubkey,
     log: Log

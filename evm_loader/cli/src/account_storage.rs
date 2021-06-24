@@ -37,7 +37,6 @@ struct SolanaAccount {
 }
 
 struct SolanaNewAccount {
-    #[allow(unused)]
     key: Pubkey,
     writable: bool,
     code_size: Option<usize>
@@ -51,7 +50,7 @@ impl SolanaAccount {
 }
 
 impl SolanaNewAccount {
-    pub fn new(key: Pubkey) -> Self {
+    pub const fn new(key: Pubkey) -> Self {
         Self{key, writable: false, code_size: None}
     }
 }
@@ -93,9 +92,9 @@ impl<'a> EmulatorAccountStorage<'a> {
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashMap::new()),
-            config: config,
-            contract_id: contract_id,
-            caller_id: caller_id,
+            config,
+            contract_id,
+            caller_id,
             block_number: slot,
             block_timestamp: timestamp,
         }
@@ -228,12 +227,11 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
             arr.push(AccountJSON{
                     address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                     writable: acc.writable,
                     new: true,
-                    account: solana_address.to_string(),
+                    account: acc.key.to_string(),
                     contract: None,
                     code_size: acc.code_size,
                 });

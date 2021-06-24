@@ -41,6 +41,8 @@ pub struct BumpAllocator;
 impl BumpAllocator {
     /// Get occupied memory
     #[inline]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn occupied() -> usize {
         const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
         const TOP_ADDRESS: usize = HEAP_START_ADDRESS + HEAP_LENGTH;
