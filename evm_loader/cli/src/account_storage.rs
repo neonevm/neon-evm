@@ -221,7 +221,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 }
             };
 
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(&address) {
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
