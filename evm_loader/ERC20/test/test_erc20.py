@@ -172,6 +172,7 @@ class ERC20test(unittest.TestCase):
         cls.wallet = WalletAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
         cls.loader = EvmLoader(cls.wallet, evm_loader_id)
+        cls.spl_token = SplToken(solana_url)
         cls.neon_evm_client = NeonEvmClient(cls.acc, cls.loader)
         cls.neon_evm_client.set_execute_mode(ExecuteMode.ITERATIVE)
 
@@ -194,63 +195,12 @@ class ERC20test(unittest.TestCase):
         cls.erc20_id_precalculated = cls.loader.ether2program(erc20_id_ether)[0]
         print("erc20_id_precalculated:", cls.erc20_id_precalculated)
 
-    @staticmethod
-    def createToken(owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-token")
-        else:
-            res = spl.call("create-token --owner {}".format(owner))
-        if not res.startswith("Creating token "):
-            raise Exception("create token error")
-        else:
-            return res.split()[2]
-
-    @staticmethod
-    def createTokenAccount(token, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-account {}".format(token))
-        else:
-            res = spl.call("create-account {} --owner {}".format(token, owner))
-        if not res.startswith("Creating account "):
-            raise Exception("create account error %s" % res)
-        else:
-            return res.split()[2]
-
-    @staticmethod
-    def tokenMint(mint_id, recipient, amount, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            spl.call("mint {} {} {}".format(mint_id, amount, recipient))
-        else:
-            spl.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner))
-        print("minting {} tokens for {}".format(amount, recipient))
-
-    @staticmethod
-    def tokenBalance(acc):
-        spl = SplToken(solana_url)
-        res = spl.call("balance --address {}".format(acc))
-        return int(res.rstrip())
-
-    def create_storage_account(self, seed):
-        storage = PublicKey(
-            sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
-        print("Storage", storage)
-
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
-                                          PublicKey(evm_loader_id)))
-            send_transaction(client, trx, self.acc)
-        return storage
-
     # @unittest.skip("not for CI")
     def test_erc20(self):
-        token = self.createToken()
+        token = self.spl_token.create_token()
         print("token:", token)
 
-        balance_erc20 = self.createTokenAccount(token, self.erc20_id_precalculated)
+        balance_erc20 = self.spl_token.create_token_account(token, self.erc20_id_precalculated)
         print("balance_erc20:", balance_erc20)
 
         erc20 = deploy_erc20(self.loader,
@@ -267,13 +217,13 @@ class ERC20test(unittest.TestCase):
         self.assertEqual(balance_erc20, erc20.balance_ext(self.ethereum_caller).decode("utf-8"))
         self.assertEqual(token, erc20.mint_id(self.ethereum_caller).decode("utf-8"))
 
-        client_acc = self.createTokenAccount(token)
+        client_acc = self.spl_token.create_token_account(token)
         print("client_acc:", client_acc)
 
         mint_amount = 100
-        self.tokenMint(token, client_acc, mint_amount)
-        self.assertEqual(self.tokenBalance(client_acc), mint_amount)
-        self.assertEqual(self.tokenBalance(balance_erc20), 0)
+        self.spl_token.mint(token, client_acc, mint_amount)
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), 0)
         self.assertEqual(erc20.balance(self.ethereum_caller), 0)
 
         deposit_amount = 1
@@ -281,13 +231,13 @@ class ERC20test(unittest.TestCase):
                       deposit_amount * (10 ** 9), balance_erc20, token,
                       self.acc.public_key()._key)
 
-        self.assertEqual(self.tokenBalance(client_acc), mint_amount - deposit_amount)
-        self.assertEqual(self.tokenBalance(balance_erc20), deposit_amount)
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount - deposit_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), deposit_amount)
         self.assertEqual(erc20.balance(self.ethereum_caller), deposit_amount * (10 ** 9))
 
         erc20.withdraw(self.ethereum_caller, client_acc, deposit_amount * (10 ** 9), balance_erc20, token)
-        self.assertEqual(self.tokenBalance(client_acc), mint_amount)
-        self.assertEqual(self.tokenBalance(balance_erc20), 0)
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), 0)
         self.assertEqual(erc20.balance(self.ethereum_caller), 0)
 
     @unittest.skip("not for CI")

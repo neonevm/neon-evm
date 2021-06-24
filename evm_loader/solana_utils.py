@@ -57,6 +57,37 @@ class SplToken:
             print("ERR: spl-token error {}".format(err))
             raise
 
+    def balance(self, acc):
+        res = self.call("balance --address {}".format(acc))
+        return int(res.rstrip())
+
+    def mint(self, mint_id, recipient, amount, owner=None):
+        if owner is None:
+            self.call("mint {} {} {}".format(mint_id, amount, recipient))
+        else:
+            self.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner))
+        print("minting {} tokens for {}".format(amount, recipient))
+
+    def create_token(self, owner=None):
+        if owner is None:
+            res = self.call("create-token")
+        else:
+            res = self.call("create-token --owner {}".format(owner))
+        if not res.startswith("Creating token "):
+            raise Exception("create token error")
+        else:
+            return res.split()[2]
+
+    def create_token_account(self, token, owner=None):
+        if owner is None:
+            res = self.call("create-account {}".format(token))
+        else:
+            res = self.call("create-account {} --owner {}".format(token, owner))
+        if not res.startswith("Creating account "):
+            raise Exception("create account error %s" % res)
+        else:
+            return res.split()[2]
+
 
 class EthereumTransaction:
     """Encapsulate the all data of an ethereum transaction that should be executed."""
