@@ -25,6 +25,14 @@ fn gas_used(gm: &Gasometer) -> u64 {
     tug - core::cmp::min(tug / 2, rg)
 }
 
+//fn total_gas_used(gm: &Gasometer) -> u64 {
+//    gm.total_used_gas()
+//}
+
+//fn refunded_gas(gm: &Gasometer) -> i64 {
+//    gm.refunded_gas()
+//}
+
 struct CallInterrupt {
     code_address : H160,
     input : Vec<u8>,
@@ -340,8 +348,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                 self,
             )?;
 
-            let gasometer = self.state.metadata_mut().gasometer_mut();
-            gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
+            self.state.metadata_mut().gasometer_mut().record_dynamic_cost(gas_cost, memory_cost)?;
         }
 
         debug_print!("Gas used: {}", gas_used(self.state.metadata().gasometer()));
@@ -567,10 +574,12 @@ impl<'config, B: Backend> Machine<'config, B> {
                     },
                     ExitReason::Error(_) => {
                         debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
+                        self.executor.state.metadata_mut().gasometer_mut().fail();
                         self.executor.state.exit_discard().unwrap();
                     },
                     ExitReason::Fatal(_) => {
                         debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
+                        self.executor.state.metadata_mut().gasometer_mut().fail();
                         self.executor.state.exit_discard().unwrap();
                     }
                 }
@@ -627,6 +636,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                             if let Some(limit) = self.executor.config.create_contract_limit {
                                 if return_value.len() > limit {
                                     debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
+                                    self.executor.state.metadata_mut().gasometer_mut().fail();
                                     self.executor.state.exit_discard().unwrap();
                                     actual_reason =  ExitReason::Error(ExitError::CreateContractLimit);
                                     commit = false;
