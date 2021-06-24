@@ -4,7 +4,7 @@ use std::mem;
 
 use evm::{
     backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
-    gasometer, H160, H256, Handler, Resolve, U256,
+    gasometer, gasometer::Gasometer, H160, H256, Handler, Resolve, U256,
 };
 use evm_runtime::{Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
@@ -16,6 +16,13 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 
 const fn l64(gas: u64) -> u64 {
     gas - gas / 64
+}
+
+#[allow(clippy::cast_sign_loss)]
+fn gas_used(gm: &Gasometer) -> u64 {
+    let tug = gm.total_used_gas();
+    let rg = gm.refunded_gas() as u64;
+    tug - core::cmp::min(tug / 2, rg)
 }
 
 struct CallInterrupt {
@@ -177,28 +184,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
-        let after_gas = if self.config.call_l64_after_gas {
-            if self.config.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), None, Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-
-        let gas_limit = core::cmp::min(after_gas, target_gas);
-		if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), None, Vec::new()));
-        }
-
         // Get the create address from given scheme.
         let address =
             match scheme {
@@ -256,28 +241,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        let after_gas = if self.config.call_l64_after_gas {
-            if self.config.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas_u64 = target_gas.unwrap_or(after_gas);
-
-        let gas_limit = core::cmp::min(after_gas, target_gas_u64);
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), Vec::new()));
-        }
-
         let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
@@ -299,7 +262,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         opcode: evm::Opcode,
         stack: &evm::Stack,
     ) -> Result<(), ExitError> {
-	if let Some(cost) = gasometer::static_opcode_cost(opcode) {
+        if let Some(cost) = gasometer::static_opcode_cost(opcode) {
             self.state
                 .metadata_mut()
                 .gasometer_mut()
@@ -318,7 +281,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             let gasometer = self.state.metadata_mut().gasometer_mut();
             gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
         }
-	
+
+        debug_print!("Gas used: {}", gas_used(self.state.metadata().gasometer()));
         Ok(())
     }
 }
@@ -366,18 +330,15 @@ impl<'config, B: Backend> Machine<'config, B> {
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)?;
 
-        self.executor.state.inc_nonce(caller);
+        // These parameters should be false for call_begin
+        let take_l64 = false;
 
-	    let after_gas = if self.executor.config.call_l64_after_gas {
+        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
             if self.executor.config.estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
-                self.executor
-                    .state
-                    .metadata_mut()
-                    .gasometer_mut()
-                    .record_cost(diff)
-                    .ok();
+                self.executor.state.metadata_mut().gasometer_mut().record_cost(diff)
+                    .map_err(|err| err)?;
                 self.executor.state.metadata().gasometer().gas()
             } else {
                 l64(self.executor.state.metadata().gasometer().gas())
@@ -387,8 +348,11 @@ impl<'config, B: Backend> Machine<'config, B> {
         };
 
         let gas_limit = core::cmp::min(gas_limit, after_gas);
+
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|e| e)?;
+            .map_err(|err| err)?;
+
+        self.executor.state.inc_nonce(caller);
 
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
@@ -399,6 +363,8 @@ impl<'config, B: Backend> Machine<'config, B> {
         let runtime = evm::Runtime::new(code, input, context, self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
+
+        debug_print!("Gas used: {}", gas_used(self.executor.state.metadata().gasometer()));
         Ok(())
     }
 
@@ -413,16 +379,15 @@ impl<'config, B: Backend> Machine<'config, B> {
             .record_transaction(transaction_cost)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-        let after_gas = if self.executor.config.call_l64_after_gas {
+        // This parameter should be false for create_begin
+        let take_l64 = false;
+
+        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
             if self.executor.config.estimate {
                 let initial_after_gas = self.executor.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
-                self.executor
-                    .state
-                    .metadata_mut()
-                    .gasometer_mut()
-                    .record_cost(diff)
-                    .ok();
+                self.executor.state.metadata_mut().gasometer_mut().record_cost(diff)
+                    .map_err(|_| ProgramError::InvalidInstructionData)?;
                 self.executor.state.metadata().gasometer().gas()
             } else {
                 l64(self.executor.state.metadata().gasometer().gas())
@@ -459,6 +424,8 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
         }
+
+        debug_print!("Gas used: {}", gas_used(self.executor.state.metadata().gasometer()));
         Ok(())
     }
 
