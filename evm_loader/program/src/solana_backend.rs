@@ -85,6 +85,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
 
     /// Is system address
+    #[must_use]
     pub fn is_system_address(address: &H160) -> bool {
         *address == H160::from_slice(&SYSTEM_ACCOUNT)
             ||
