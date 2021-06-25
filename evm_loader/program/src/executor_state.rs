@@ -26,7 +26,8 @@ pub struct ExecutorMetadata<'config> {
 }
 
 impl<'config> ExecutorMetadata<'config> {
-    pub const fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
             is_static: false,
@@ -61,7 +62,8 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    pub const fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
             is_static: is_static || self.is_static,
