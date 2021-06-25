@@ -9,7 +9,7 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
-    program::invoke_signed,
+    entrypoint::ProgramResult,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -52,6 +52,10 @@ pub trait AccountStorage {
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
     /// Get account seeds
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
+    /// External call
+    /// # Errors
+    /// Will return `Err` if the external call returns err
+    fn external_call(&self, _: &Instruction, _: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
 /// Solana Backend for rust evm
@@ -59,6 +63,9 @@ pub struct SolanaBackend<'a, 's, S> {
     account_storage: &'s S,
     account_infos: Option<&'a [AccountInfo<'a>]>,
 }
+
+static SYSTEM_ACCOUNT: [u8; 20] = [0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+static SYSTEM_ACCOUNT_ECRECOVER: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -77,16 +84,24 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         *code_address == Self::system_account_ecrecover()
     }
 
+    /// Is system address
+    #[must_use]
+    pub fn is_system_address(address: &H160) -> bool {
+        *address == H160::from_slice(&SYSTEM_ACCOUNT)
+            ||
+            *address == H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
+    }
+
     /// Get system account
     #[must_use]
     pub fn system_account() -> H160 {
-        H160::from_slice(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        H160::from_slice(&SYSTEM_ACCOUNT)
     }
 
     /// Get ecrecover system account
     #[must_use]
     pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01])
+        H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
     }
 
     /// Call inner ecrecover
@@ -232,31 +247,18 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 debug_print!("{}", &hex::encode(&input));
 
-                let (contract_eth, contract_nonce) = self.account_storage.seeds(&self.account_storage.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-                let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
-
-                debug_print!("account_infos");
+                debug_print!("account_infos[");
                 #[allow(unused_variables)]
                 for info in self.account_infos.unwrap() {
                     debug_print!("  {}", info.key);
                 };
-                let result : solana_program::entrypoint::ProgramResult;
-                match self.account_storage.seeds(&self.account_storage.origin()) {
-                    Some((sender_eth, sender_nonce)) => {
-                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
-                        );
+                debug_print!("]");
 
-                    }
-                    None => {
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&contract_seeds[..]]
-                        );
-                    }
-                }
+                let result = self.account_storage.external_call(
+                    &Instruction { program_id, accounts, data: input.to_vec() },
+                    self.account_infos.unwrap(),
+                );
+
                 #[allow(unused_variables)]
                 if let Err(err) = result {
                     debug_print!("result: {}", err);

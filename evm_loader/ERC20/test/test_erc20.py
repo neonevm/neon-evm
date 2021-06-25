@@ -102,14 +102,14 @@ class ERC20:
         value = data[2:]
         ret = int.from_bytes(value, "big")
         assert 0 != ret, 'erc20.deposit: FAIL'
-        return ret
+        return ether_trx.trx_data
 
     def withdraw(self, ether_caller, receiver, amount, balance_erc20, mint_id):
         ether_trx = EthereumTransaction(
             ether_caller, self.contract_account, self.contract_code_account,
             abi.function_signature_to_4byte_selector('withdraw(uint256,uint256)')
             + bytes.fromhex(base58.b58decode(receiver).hex()
-                            +"%064x" % amount),
+                            + "%064x" % amount),
             [
                 AccountMeta(pubkey=balance_erc20, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=receiver, is_signer=False, is_writable=True),
@@ -166,156 +166,13 @@ def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, cal
             return ERC20(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 
-class SplToken:
-    def __init__(self, url):
-        self.url = url
-
-    def call(self, arguments):
-        cmd = 'spl-token --url {} {}'.format(self.url, arguments)
-        try:
-            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
-        except subprocess.CalledProcessError as err:
-            import sys
-            print("ERR: spl-token error {}".format(err))
-            raise
-
-
-class EthereumTransaction:
-    """Encapsulate the all data of an ethereum transaction that should be executed."""
-
-    def __init__(self, ether_caller, contract_account, contract_code_account, trx_data, account_metas=None, steps=500):
-        self.ether_caller = ether_caller
-        self.contract_account = contract_account
-        self.contract_code_account = contract_code_account
-        self.trx_data = trx_data
-        self.trx_account_metas = account_metas
-        self.iterative_steps = steps
-        self._solana_ether_caller = None  # is created in NeonEvmClient.__create_instruction_data_from_tx
-        self._storage = None  # is created in NeonEvmClient.__send_neon_transaction
-        print('trx_data:', self.trx_data.hex())
-        if self.trx_account_metas is not None:
-            print('trx_account_metas:', *self.trx_account_metas, sep='\n')
-
-
-class ExecuteMode(Enum):
-    SINGLE = 0
-    ITERATIVE = 1
-
-
-class NeonEvmClient:
-    """Encapsulate the interaction logic with evm_loader to execute an ethereum transaction."""
-
-    def __init__(self, solana_wallet, evm_loader):
-        self.mode = ExecuteMode.SINGLE
-        self.solana_wallet = solana_wallet
-        self.evm_loader = evm_loader
-
-    def set_execute_mode(self, new_mode):
-        self.mode = ExecuteMode(new_mode)
-
-    def send_ethereum_trx(self, ethereum_transaction) -> types.RPCResponse:
-        assert (isinstance(ethereum_transaction, EthereumTransaction))
-        if self.mode is ExecuteMode.SINGLE:
-            return self.send_ethereum_trx_single(ethereum_transaction)
-        if self.mode is ExecuteMode.ITERATIVE:
-            return self.send_ethereum_trx_iterative(ethereum_transaction)
-
-    def send_ethereum_trx_iterative(self, ethereum_transaction) -> types.RPCResponse:
-        assert (isinstance(ethereum_transaction, EthereumTransaction))
-        self.__send_neon_transaction(bytes.fromhex("09") +
-                                     ethereum_transaction.iterative_steps.to_bytes(8, byteorder='little'),
-                                     ethereum_transaction, need_storage=True)
-        while True:
-            result = self.__send_neon_transaction(bytes.fromhex("0A") +
-                                                  ethereum_transaction.iterative_steps.to_bytes(8, byteorder='little'),
-                                                  ethereum_transaction, need_storage=True)
-            if result['result']['meta']['innerInstructions'] \
-                    and result['result']['meta']['innerInstructions'][0]['instructions']:
-                data = base58.b58decode(result['result']['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-                if data[0] == 6:
-                    ethereum_transaction.__storage = None
-                    return result
-
-    def send_ethereum_trx_single(self, ethereum_transaction) -> types.RPCResponse:
-        assert (isinstance(ethereum_transaction, EthereumTransaction))
-        return self.__send_neon_transaction(bytes.fromhex("05"), ethereum_transaction)
-
-    def __create_solana_ether_caller(self, ethereum_transaction):
-        caller = self.evm_loader.ether2program(ethereum_transaction.ether_caller)[0]
-        if ethereum_transaction._solana_ether_caller is None \
-                or ethereum_transaction._solana_ether_caller != caller:
-            ethereum_transaction._solana_ether_caller = caller
-        if getBalance(ethereum_transaction._solana_ether_caller) == 0:
-            print("Create solana ether caller account...")
-            ethereum_transaction._solana_ether_caller = \
-                self.evm_loader.createEtherAccount(ethereum_transaction.ether_caller)
-        print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
-
-    def __create_storage_account(self, seed):
-        storage = PublicKey(
-            sha256(bytes(self.solana_wallet.public_key())
-                   + bytes(seed, 'utf8')
-                   + bytes(PublicKey(self.evm_loader.loader_id))).digest())
-        print("Storage", storage)
-
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.solana_wallet.public_key(),
-                                          self.solana_wallet.public_key(),
-                                          seed, 10 ** 9, 128 * 1024,
-                                          PublicKey(evm_loader_id)))
-            send_transaction(client, trx, self.solana_wallet)
-        return storage
-
-    def __create_instruction_data_from_tx(self, ethereum_transaction):
-        self.__create_solana_ether_caller(ethereum_transaction)
-        caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
-        trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
-                   'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt,
-                   'data': ethereum_transaction.trx_data, 'chainId': 111}
-        return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
-
-    def __create_trx(self, ethereum_transaction, keccak_data, data):
-        print('create_trx with keccak:', keccak_data.hex(), 'and data:', data.hex())
-        trx = Transaction()
-        trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
-        [
-            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
-        ]))
-        trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
-        [
-            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
-        ]))
-        return trx
-
-    def __send_neon_transaction(self, evm_trx_data, ethereum_transaction, need_storage=False) -> types.RPCResponse:
-        (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
-        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 1)
-        data = evm_trx_data + from_address + sign + msg
-        trx = self.__create_trx(ethereum_transaction, keccak_data, data)
-        if need_storage:
-            if ethereum_transaction._storage is None:
-                ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
-            trx.instructions[-1].keys \
-                .insert(0, AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True))
-        if ethereum_transaction.trx_account_metas is not None:
-            trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
-        trx.instructions[-1].keys \
-            .append(AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False))
-        return send_transaction(client, trx, self.solana_wallet)
-
-
 class ERC20test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wallet = WalletAccount(wallet_path())
         cls.acc = cls.wallet.get_acc()
         cls.loader = EvmLoader(cls.wallet, evm_loader_id)
+        cls.spl_token = SplToken(solana_url)
         cls.neon_evm_client = NeonEvmClient(cls.acc, cls.loader)
         cls.neon_evm_client.set_execute_mode(ExecuteMode.ITERATIVE)
 
@@ -338,63 +195,12 @@ class ERC20test(unittest.TestCase):
         cls.erc20_id_precalculated = cls.loader.ether2program(erc20_id_ether)[0]
         print("erc20_id_precalculated:", cls.erc20_id_precalculated)
 
-    @staticmethod
-    def createToken(owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-token")
-        else:
-            res = spl.call("create-token --owner {}".format(owner))
-        if not res.startswith("Creating token "):
-            raise Exception("create token error")
-        else:
-            return res.split()[2]
-
-    @staticmethod
-    def createTokenAccount(token, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            res = spl.call("create-account {}".format(token))
-        else:
-            res = spl.call("create-account {} --owner {}".format(token, owner))
-        if not res.startswith("Creating account "):
-            raise Exception("create account error %s" % res)
-        else:
-            return res.split()[2]
-
-    @staticmethod
-    def tokenMint(mint_id, recipient, amount, owner=None):
-        spl = SplToken(solana_url)
-        if owner is None:
-            spl.call("mint {} {} {}".format(mint_id, amount, recipient))
-        else:
-            spl.call("mint {} {} {} --owner {}".format(mint_id, amount, recipient, owner))
-        print("minting {} tokens for {}".format(amount, recipient))
-
-    @staticmethod
-    def tokenBalance(acc):
-        spl = SplToken(solana_url)
-        res = spl.call("balance --address {}".format(acc))
-        return int(res.rstrip())
-
-    def create_storage_account(self, seed):
-        storage = PublicKey(
-            sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
-        print("Storage", storage)
-
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
-                                          PublicKey(evm_loader_id)))
-            send_transaction(client, trx, self.acc)
-        return storage
-
     # @unittest.skip("not for CI")
     def test_erc20(self):
-        token = self.createToken()
+        token = self.spl_token.create_token()
         print("token:", token)
 
-        balance_erc20 = self.createTokenAccount(token, self.erc20_id_precalculated)
+        balance_erc20 = self.spl_token.create_token_account(token, self.erc20_id_precalculated)
         print("balance_erc20:", balance_erc20)
 
         erc20 = deploy_erc20(self.loader,
@@ -404,32 +210,35 @@ class ERC20test(unittest.TestCase):
                              balance_erc20,
                              self.caller)
 
-        assert (self.erc20_id_precalculated == erc20.contract_account)
+        self.assertEqual(self.erc20_id_precalculated, erc20.contract_account)
 
         erc20.set_neon_evm_client(self.neon_evm_client)
 
-        assert (balance_erc20 == erc20.balance_ext(self.ethereum_caller).decode("utf-8"))
-        assert (token == erc20.mint_id(self.ethereum_caller).decode("utf-8"))
+        self.assertEqual(balance_erc20, erc20.balance_ext(self.ethereum_caller).decode("utf-8"))
+        self.assertEqual(token, erc20.mint_id(self.ethereum_caller).decode("utf-8"))
 
-        client_acc = self.createTokenAccount(token)
+        client_acc = self.spl_token.create_token_account(token)
         print("client_acc:", client_acc)
 
         mint_amount = 100
-        self.tokenMint(token, client_acc, mint_amount)
-        assert (self.tokenBalance(client_acc) == mint_amount)
-        assert (self.tokenBalance(balance_erc20) == 0)
-        assert (erc20.balance(self.ethereum_caller) == 0)
+        self.spl_token.mint(token, client_acc, mint_amount)
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), 0)
+        self.assertEqual(erc20.balance(self.ethereum_caller), 0)
 
         deposit_amount = 1
-        erc20.deposit(self.ethereum_caller, client_acc, self.ethereum_caller, deposit_amount * (10 ** 9),
-                      balance_erc20, token, self.acc.public_key()._key)
-        assert (self.tokenBalance(client_acc) == mint_amount - deposit_amount)
-        assert (self.tokenBalance(balance_erc20) == deposit_amount)
-        assert (erc20.balance(self.ethereum_caller) == deposit_amount * (10 ** 9))
+        erc20.deposit(self.ethereum_caller, client_acc, self.ethereum_caller,
+                      deposit_amount * (10 ** 9), balance_erc20, token,
+                      self.acc.public_key()._key)
+
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount - deposit_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), deposit_amount)
+        self.assertEqual(erc20.balance(self.ethereum_caller), deposit_amount * (10 ** 9))
+
         erc20.withdraw(self.ethereum_caller, client_acc, deposit_amount * (10 ** 9), balance_erc20, token)
-        assert (self.tokenBalance(client_acc) == mint_amount)
-        assert (self.tokenBalance(balance_erc20) == 0)
-        assert (erc20.balance(self.ethereum_caller) == 0)
+        self.assertEqual(self.spl_token.balance(client_acc), mint_amount)
+        self.assertEqual(self.spl_token.balance(balance_erc20), 0)
+        self.assertEqual(erc20.balance(self.ethereum_caller), 0)
 
     @unittest.skip("not for CI")
     def test_deposit(self):
