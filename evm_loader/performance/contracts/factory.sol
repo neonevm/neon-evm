@@ -6,7 +6,8 @@ contract Factory{
 
     event Address(address a);
 
-    function create_erc20() public returns (address addr){
+    function create_erc20() public {
+        address addr;
         bytes memory bytecode = type(ERC20).creationCode;
         assembly {
                 addr := create(0, add(bytecode, 0x20), mload(bytecode))

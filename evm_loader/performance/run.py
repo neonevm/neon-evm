@@ -12,6 +12,7 @@ from eth_keys import keys as eth_keys
 import random
 import argparse
 from eth_utils import abi
+from base58 import b58decode
 
 
 #
@@ -29,33 +30,6 @@ evm_loader_id = "4XS7MwWXNjYjuTKo1KJN92MmSeM4Cw67eihEfcnzUZPP"
 # keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 
-#
-#
-#
-# #
-# def deploy_erc20(loader, caller, count=1):
-#     sum = 1000 * 10 ** 18
-#     print(str("%064x" % sum))
-#     ctor_init = str("%064x" % sum)
-#     eth_addr = []
-#     with open(CONTRACTS_DIR + "Factory.binary", mode='r') as hex:
-#         binary = bytearray.fromhex(hex.read() + ctor_init)
-#         with open("erc20.binary", mode='wb') as bin:
-#             bin.write(binary)
-#             for i in range(count):
-#                 res = loader.deploy("erc20.binary", caller)
-#                 eth_addr.append(res['ethereum'][2:])
-#             return eth_addr
-
-#
-# class Stage(Enum):
-#     deploy_erc20 = 1
-#     create_eth_acc = 2
-#     create_eth_trx = 3
-#     send_eth_trx = 4
-#     verify_trx = 5
-#
-#
 class PerformanceTest():
     @classmethod
     def setUpClass(cls):
@@ -63,7 +37,7 @@ class PerformanceTest():
 
         # wallet = WalletAccount(wallet_path())
         wallet = RandomAccount()
-        tx = client.request_airdrop(wallet.acc.public_key(), 10 * 10 ** 9)
+        tx = client.request_airdrop(wallet.acc.public_key(), 10000 * 10 ** 9)
         confirm_transaction(client, tx['result'])
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -103,6 +77,23 @@ class PerformanceTest():
 #     from os import sys, path
 #     sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
+
+def check_event(result, factory_eth, erc20_eth):
+    assert(result['meta']['err'] == None)
+    assert(len(result['meta']['innerInstructions']) == 2)
+    assert(len(result['meta']['innerInstructions'][1]['instructions']) == 2)
+    data = b58decode(result['meta']['innerInstructions'][1]['instructions'][1]['data'])
+    assert(data[:1] == b'\x06')  #  OnReturn
+    assert(data[1] == 0x11)  # 11 - Machine encountered an explict stop
+
+    data = b58decode(result['meta']['innerInstructions'][1]['instructions'][0]['data'])
+    assert(data[:1] == b'\x07')  # 7 means OnEvent
+    assert(data[1:21] == factory_eth)
+    assert(data[21:29] == bytes().fromhex('%016x' % 1)[::-1])  # topics len
+    assert(data[29:61] == abi.event_signature_to_log_topic('Address(address)'))  # topics
+    assert(data[61:93] == bytes().fromhex("%024x" % 0)+erc20_eth)  # sum
+
+
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
 parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx')
@@ -127,13 +118,13 @@ if args.step == "deploy":
 
 
     for  i in range(args.count):
-
+        print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
         erc20_ether = keccak_256(rlp.encode((factory_eth, trx_count))).digest()[-20:]
         erc20_id = instance.loader.ether2program(erc20_ether)[0]
         seed = b58encode(bytes.fromhex(erc20_ether.hex()))
-        erc20_code = accountWithSeed1(instance.acc.public_key(), seed, PublicKey(evm_loader_id))
+        erc20_code = accountWithSeed(instance.acc.public_key(), str(seed, 'utf8'), PublicKey(evm_loader_id))
         print("erc20_id:", erc20_id)
         print("erc20_eth:", erc20_ether.hex())
         print("erc20_code:", erc20_code)
@@ -150,9 +141,9 @@ if args.step == "deploy":
         )
         trx.add(instance.loader.createEtherAccountTrx(erc20_ether, erc20_code)[0])
 
-        result = send_transaction(client, trx, instance.acc)
-        print (result)
-        trx = Transaction()
+        # result = send_transaction(client, trx, instance.acc)
+        # print (result)
+        # trx = Transaction()
         trx.add(
             TransactionInstruction(
                 program_id=evm_loader_id,
@@ -160,13 +151,12 @@ if args.step == "deploy":
                 keys=[
                     AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
-                    # AccountMeta(pubkey=instance.caller, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
                     AccountMeta(pubkey=erc20_id, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
-        result = send_transaction(client, trx, instance.acc)
-        print(result)
+        res = send_transaction(client, trx, instance.acc)
+        check_event(res['result'], factory_eth, erc20_ether)
 
