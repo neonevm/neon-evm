@@ -18,6 +18,7 @@ const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
+#[allow(unused)]
 #[allow(clippy::cast_sign_loss)]
 fn gas_used(gm: &Gasometer) -> u64 {
     let tug = gm.total_used_gas();
@@ -172,15 +173,16 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn create(
         &mut self,
         caller: H160,
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        //debug_print!("create target_gas={:?}", target_gas);
+        debug_print!("create target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
