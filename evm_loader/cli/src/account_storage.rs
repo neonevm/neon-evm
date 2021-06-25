@@ -1,11 +1,14 @@
 use evm::backend::Apply;
 use evm::{H160, U256};
+#[allow(unused)]
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
-    commitment_config::CommitmentConfig
+    commitment_config::CommitmentConfig,
+    account_info::AccountInfo,
+    entrypoint::ProgramResult,
+    program::invoke_signed,
 };
-use serde_json::json;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
 use evm_loader::{
@@ -17,9 +20,12 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell; 
 use std::rc::Rc;
 use crate::Config;
+#[allow(unused)]
+use solana_program::instruction::Instruction;
+use evm_loader::solana_backend::SolanaBackend;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct AccountJSON {
+pub struct AccountJSON {
     address: String,
     account: String,
     contract: Option<String>,
@@ -198,7 +204,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         };
     }
 
-    pub fn get_used_accounts(&self, status: &str, result: &[u8])
+    pub fn get_used_accounts(&self) -> Vec<AccountJSON>
     {
         let mut arr = Vec::new();
 
@@ -214,32 +220,34 @@ impl<'a> EmulatorAccountStorage<'a> {
                     Some(addr)
                 }
             };
-            
-            arr.push(AccountJSON{
-                    address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: acc.writable,
-                    new: false,
-                    account: solana_address.to_string(),
-                    contract: contract_address.map(|v| v.to_string()),
-                    code_size: acc.code_size,
+
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+                arr.push(AccountJSON{
+                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
+                        writable: acc.writable,
+                        new: false,
+                        account: solana_address.to_string(),
+                        contract: contract_address.map(|v| v.to_string()),
+                        code_size: acc.code_size,
                 });
+            }
         }
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            arr.push(AccountJSON{
-                    address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
-                    writable: acc.writable,
-                    new: true,
-                    account: acc.key.to_string(),
-                    contract: None,
-                    code_size: acc.code_size,
+            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+                arr.push(AccountJSON{
+                        address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
+                        writable: acc.writable,
+                        new: true,
+                        account: acc.key.to_string(),
+                        contract: None,
+                        code_size: acc.code_size,
                 });
-        }    
+            }
+        }
 
-        let js = json!({"accounts": arr, "result": &hex::encode(&result), "exit_status": status}).to_string();
-
-        println!("{}", js);
+        arr
     }
 }
 
@@ -287,4 +295,33 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_number(&self) -> U256 { self.block_number.into() }
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
+
+    fn external_call(
+        &self,
+        instruction: &Instruction,
+        account_infos: &[AccountInfo]
+    ) -> ProgramResult {
+        eprintln!("emulate external_call");
+        // Ok(())
+        let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
+        let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
+
+        match self.seeds(&self.origin()) {
+            Some((sender_eth, sender_nonce)) => {
+                let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                invoke_signed(
+                    instruction,
+                    account_infos,
+                    &[&sender_seeds[..], &contract_seeds[..]]
+                )
+            }
+            None => {
+                invoke_signed(
+                    instruction,
+                    account_infos,
+                    &[&contract_seeds[..]]
+                )
+            }
+        }
+    }
 }

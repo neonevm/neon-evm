@@ -2,7 +2,12 @@
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 
 mod account_storage;
-use crate::account_storage::EmulatorAccountStorage;
+use crate::{
+    account_storage::{
+        EmulatorAccountStorage,
+        AccountJSON,
+    },
+};
 
 use evm_loader::{
     instruction::EvmInstruction,
@@ -44,7 +49,10 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
-use solana_program::keccak::{hash};
+use solana_program::{
+    keccak::{hash,},
+    account_info::AccountInfo
+};
 
 use solana_clap_utils::{
     input_parsers::pubkey_of,
@@ -96,7 +104,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs) = {
-        let backend = SolanaBackend::new(&account_storage, None);
+        let accounts : Vec<AccountInfo> = Vec::new();
+        let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, usize::MAX, &config);
     
@@ -135,7 +144,11 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         debug!("Not succeed execution");
     }
 
-    account_storage.get_used_accounts(&status, &result);
+    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
+
+    let js = json!({"accounts": accounts, "result": &hex::encode(&result), "exit_status": status}).to_string();
+
+    println!("{}", js);
 }
 
 fn command_create_program_address (
