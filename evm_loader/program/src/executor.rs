@@ -9,7 +9,6 @@ use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use std::mem;
 use solana_program::program_error::ProgramError;
-use std::borrow::BorrowMut;
 use solana_program::entrypoint::ProgramResult;
 
 // macro_rules! try_or_fail {
@@ -243,7 +242,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
-                    return Capture::Exit((reason.clone(), return_data.clone()))
+                    return Capture::Exit((*reason, return_data.clone()))
                 },
                 Capture::Trap(_interrupt) => {
                     unreachable!("not implemented");
@@ -373,227 +372,168 @@ impl<'config, B: Backend> Machine<'config, B> {
     }
 
 
-    fn step_opcode(&mut self) -> RuntimeApply {
-        if let Some(runtime) = self.runtime.last_mut() {
-            match runtime.0.step(&mut self.executor) {
-                Ok(()) => { RuntimeApply::Continue },
-                Err(capture) =>
-                    match capture {
-                        Capture::Exit(reason) => { RuntimeApply::Exit(reason) },
-                        Capture::Trap(interrupt) =>
-                            match interrupt {
-                                Resolve::Call(interrupt, resolve) => {
-                                    mem::forget(resolve);
-                                    RuntimeApply::Call(interrupt)
-                                },
-                                Resolve::Create(interrupt, resolve) => {
-                                    mem::forget(resolve);
-                                    RuntimeApply::Create(interrupt)
-                                },
-                        }
+    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
+        };
+
+        let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
+        match capture {
+            Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
+            Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
+            Capture::Trap(interrupt) => {
+                match interrupt {
+                    Resolve::Call(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Call(interrupt))
+                    },
+                    Resolve::Create(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Create(interrupt))
+                    },
                 }
             }
         }
-        else{
-            debug_print!("runtime.step: Err, runtime not found");
-            RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported))
+    }
+
+    fn apply_call(&mut self, interrupt: CallInterrupt) {
+        let code = self.executor.code(interrupt.code_address);
+        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.touch(interrupt.code_address);
+
+        let instance = evm::Runtime::new(
+            code,
+            interrupt.input,
+            interrupt.context,
+            self.executor.config
+        );
+        self.runtime.push((instance, CreateReason::Call));
+    }
+
+    fn apply_create(&mut self, interrupt: CreateInterrupt) {
+        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.touch(interrupt.address);
+        self.executor.state.reset_storage(interrupt.address);
+        if self.executor.config.create_increase_nonce {
+            self.executor.state.inc_nonce(interrupt.address);
+        }
+
+        let instance = evm::Runtime::new(
+            interrupt.init_code,
+            Vec::new(),
+            interrupt.context,
+            self.executor.config
+        );
+        self.runtime.push((instance, CreateReason::Create(interrupt.address)));
+    }
+
+    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), ExitReason> {
+        if reason.is_succeed() {
+            self.executor.state.exit_commit().map_err(ExitReason::from)?;
+        }
+
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return Err(reason)
+        };
+
+        let return_value = exited_runtime.machine().return_value();
+
+        match save_return_value(runtime, reason, return_value, &self.executor) {
+            Control::Continue => Ok(()),
+            Control::Exit(e) => Err(e),
+            _ => unreachable!()
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn step(&mut self) -> Result<(), ExitReason> {
+    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), ExitReason> {
 
-        match self.step_opcode(){
-            RuntimeApply::Continue => { Ok(()) },
-            RuntimeApply::Call(info) => {
-                let code = self.executor.code(info.code_address);
-                self.executor.state.enter(u64::max_value(), false);
-                self.executor.state.touch(info.code_address);
+        let return_value = exited_runtime.machine().return_value();
 
-                let instance = evm::Runtime::new(
-                    code,
-                    info.input,
-                    info.context,
-                    self.executor.config
-                );
-                self.runtime.push((instance, CreateReason::Call));
-                Ok(())
-            },
-            RuntimeApply::Create(info) => {
-                self.executor.state.enter(u64::max_value(), false);
-                self.executor.state.touch(info.address);
-                self.executor.state.reset_storage(info.address);
-                if self.executor.config.create_increase_nonce {
-                    self.executor.state.inc_nonce(info.address);
+        if reason.is_succeed() {
+            match self.executor.config.create_contract_limit {
+                Some(limit) if return_value.len() > limit => {
+                    self.executor.state.exit_discard().map_err(ExitReason::from)?;
+                    reason = ExitError::CreateContractLimit.into();
+                },
+                _ => {
+                    self.executor.state.exit_commit().map_err(ExitReason::from)?;
+                    self.executor.state.set_code(address, return_value);
                 }
+            };
+        }
 
-                let instance = evm::Runtime::new(
-                    info.init_code,
-                    Vec::new(),
-                    info.context,
-                    self.executor.config
-                );
-                self.runtime.push((instance, CreateReason::Create(info.address)));
-                Ok(())
-            },
-            RuntimeApply::Exit(exit_reason) => {
-                let mut exit_success = false;
-                match &exit_reason {
-                    ExitReason::Succeed(_) => {
-                        exit_success = true;
-                        debug_print!(" step_opcode: ExitReason::Succeed(_)");
-                        // self.executor.state.exit_commit().unwrap();
-                    },
-                    ExitReason::Revert(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
-                        self.executor.state.exit_revert().unwrap();
-                    },
-                    ExitReason::Error(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
-                        self.executor.state.exit_discard().unwrap();
-                    },
-                    ExitReason::Fatal(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
-                        self.executor.state.exit_discard().unwrap();
-                    }
-                }
-
-
-                let (return_value, implementation) = {
-                    if let Some(runtime) = self.runtime.last(){
-                        (runtime.0.machine().return_value(), Some(runtime.1))
-                    }
-                    else{
-                        debug_print!("runtime.step: Err, runtime not found");
-                        return Err(ExitReason::Fatal(ExitFatal::NotSupported));
-                    }
-                };
-
-                match implementation {
-                    Some(CreateReason::Call) => {
-                        if exit_success {
-                            self.executor.state.exit_commit().unwrap();
-                        }
-
-                        if self.runtime.len() > 1 {
-                            self.runtime.pop();
-                            if let Some(runtime) = self.runtime.last_mut(){
-                                match  save_return_value(
-                                    runtime.0.borrow_mut(),
-                                    exit_reason,
-                                    return_value,
-                                    &self.executor
-                                ){
-                                    Control::Continue => { Ok(()) },
-                                    Control::Exit(e) => { Err(e) },
-                                    _ => {
-                                        debug_print!("runtime.step: RuntimeApply::Exit, impl::Call, save_return_value: NotSupported");
-                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                                    }
-                                }
-                            }
-                            else{
-                                debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                            }
-                        }
-                        else{
-                            Err(exit_reason)
-                        }
-
-                    },
-                    Some(CreateReason::Create(created_address)) => {
-                        let mut commit =  true;
-                        let mut actual_reason = exit_reason;
-                        let mut actual_address:Option<H160> = None;
-
-                        if exit_success {
-                            if let Some(limit) = self.executor.config.create_contract_limit {
-                                if return_value.len() > limit {
-                                    debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
-                                    self.executor.state.exit_discard().unwrap();
-                                    actual_reason =  ExitReason::Error(ExitError::CreateContractLimit);
-                                    commit = false;
-                                }
-                            }
-                            if commit{
-                                self.executor.state.exit_commit().unwrap();
-                                self.executor.state.set_code(created_address, return_value.clone());
-                                actual_address = Some(created_address);
-                            }
-                        }
-
-                        if self.runtime.len() > 1 {
-                            self.runtime.pop();
-                            if let Some(runtime) = self.runtime.last_mut(){
-                                match  save_created_address(
-                                    runtime.0.borrow_mut(),
-                                    actual_reason,
-                                    actual_address,
-                                    return_value,
-                                    &self.executor
-                                ){
-                                    Control::Continue => { Ok(()) },
-                                    Control::Exit(e) => { Err(e) },
-                                    _ => {
-                                        debug_print!("runtime.step: RuntimeApply::Exit, impl::Create, save_return_value: NotSupported");
-                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                                    }
-                                }
-                            }
-                            else{
-                                debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                            }
-                        }
-                        else{
-                            Err(actual_reason)
-                        }
-                    },
-                    _ => {
-                        debug_print!("runtime.step: RuntimeApply::Exit, impl: _");
-                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                    }
-                }
-
-            },
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return Err(reason)
+        };
+        match save_created_address(runtime, reason, Some(address), &self.executor) {
+            Control::Continue => Ok(()),
+            Control::Exit(e) => Err(e),
+            _ => unreachable!()
         }
     }
 
+    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), ExitReason> {
+        match reason {
+            ExitReason::Succeed(_) => Ok(()),
+            ExitReason::Revert(_) => self.executor.state.exit_revert(),
+            ExitReason::Error(_) | ExitReason::Fatal(_) => self.executor.state.exit_discard(),
+            ExitReason::StepLimitReached => unreachable!()
+        }.map_err(ExitReason::from)?;
+
+        let (exited_runtime, create_reason) = match self.runtime.pop() {
+            Some((runtime, reason)) => (runtime, reason),
+            None => return Err(ExitFatal::NotSupported.into())
+        };
+
+        match create_reason {
+            CreateReason::Call => self.apply_exit_call(&exited_runtime, reason),
+            CreateReason::Create(address) => self.apply_exit_create(&exited_runtime, reason, address)
+        }
+    }
 
     pub fn execute(&mut self) -> ExitReason {
         loop {
-            if let Err(reason) = self.step() {
+            if let Err(reason) = self.execute_n_steps(u64::max_value()) {
                 return reason;
             }
         }
     }
 
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), ExitReason> {
-        for _ in 0..n {
-            self.step()?;
+        let mut steps = 0_u64;
+
+        while steps < n {
+            let (steps_executed, apply) = self.run(n - steps);
+            steps += steps_executed;
+
+            match apply {
+                RuntimeApply::Continue => {},
+                RuntimeApply::Call(info) => self.apply_call(info),
+                RuntimeApply::Create(info) => self.apply_create(info),
+                RuntimeApply::Exit(reason) => match self.apply_exit(reason) {
+                    Ok(()) => {},
+                    Err(reason) => return Err(reason)
+                }
+            }
         }
-        debug_print!(" execute_n_steps OK returned ");
 
         Ok(())
     }
 
     #[must_use]
     pub fn return_value(&self) -> Vec<u8> {
+        let (runtime, create_reason) = match self.runtime.last() {
+            Some((runtime, reason)) => (runtime, reason),
+            None => return Vec::new()
+        };
 
-        if let Some(runtime) = self.runtime.last() {
-            let implementation = Some(runtime.1);
-            match implementation {
-                Some(CreateReason::Create(_created_address)) => {
-                    return Vec::new();
-                },
-                _ => {
-                    return runtime.0.machine().return_value()
-                }
-            }
+        match create_reason {
+            CreateReason::Call => runtime.machine().return_value(),
+            CreateReason::Create(_) => Vec::new(),
         }
-
-        Vec::new()
     }
 
     pub fn into_state(self) -> ExecutorState<B> {

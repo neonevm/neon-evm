@@ -588,7 +588,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason.clone(), &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, &result)?;
 
     Ok(Some(exit_reason))
 }
@@ -625,7 +625,6 @@ fn invoke_on_return<'a>(
                 ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
                 ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
                 ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
-                ExitError::Other(_) => { debug_print!("Other normal errors."); 0xee},
             }
         },
         ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
@@ -635,9 +634,9 @@ fn invoke_on_return<'a>(
                 ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
                 ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
                 ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
-                ExitFatal::Other(_) => { debug_print!("Other fatal errors."); 0xf4},
             }
         },
+        ExitReason::StepLimitReached => { unreachable!() }
     };
 
     debug_print!("{}", &hex::encode(&result));
