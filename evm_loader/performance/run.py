@@ -17,6 +17,8 @@ evm_loader_id = "4XS7MwWXNjYjuTKo1KJN92MmSeM4Cw67eihEfcnzUZPP"
 # sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 # keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
+deploy_file = "deploy.json"
+
 
 class PerformanceTest():
     @classmethod
@@ -74,9 +76,8 @@ def get_filehash(factory, factory_code, factory_eth):
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
-    result = send_transaction(client, trx, instance.acc)
+    result = send_transaction(client, trx, instance.acc)['result']
 
-    print (result)
     assert(result['meta']['err'] == None)
     assert(len(result['meta']['innerInstructions']) == 1)
     assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)
@@ -88,7 +89,8 @@ def get_filehash(factory, factory_code, factory_eth):
     assert(data[:1] == b'\x07')  # 7 means OnEvent
     assert(data[1:21] == factory_eth)
     assert(data[21:29] == bytes().fromhex('%016x' % 1)[::-1])  # topics len
-    filehash = bytedata[61:93]
+    hash = data[61:93]
+    return hash
 
 
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -99,46 +101,27 @@ args = parser.parse_args()
 print(args.count)
 
 if args.step == "deploy":
-    # with open(CONTRACTS_DIR + "ERC20.binary", mode='br') as file:
-    #     content = file.read()
-    #     fileHash = Web3.keccak(content)
-    # factory_eth = bytes.fromhex("BB62F0C4494fdb8576Ae6c94bC4E9F1e6C95b287")
-    #
-    # print (fileHash.hex())
-    # fileHash = bytes.fromhex("12f42fb793a2bea87228e2e2619140f4b1d2e6c34fc5f35ffe1d163ed07c9d23")
-    # salt = bytes().fromhex("%064x" % 5)
-    # erc20_ether = bytes(Web3.keccak(b'\xff' + factory_eth + salt + fileHash)[-20:])
-    # erc20_ether = bytes(Web3.keccak(bytes.fromhex("ff") + factory_eth + salt + fileHash)[-20:])
-    # print ("erc20_ether", erc20_ether.hex())
-    # exit(0)
 
-    # print(args.step)
     instance = PerformanceTest()
     instance.setUpClass()
-
-    # print (CONTRACTS_DIR + "factory.binary")
 
     res = instance.loader.deploy(CONTRACTS_DIR + "Factory.binary", instance.caller)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
-    get_filehash(factory, factory_code);
-    exit(0)
+    erc20_filehash = get_filehash(factory, factory_code, factory_eth)
     print("factory", factory)
     print ("factory_eth", factory_eth.hex())
     print("factory_code", factory_code)
-    # call_create_erc20 = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20()')
-    call_create_erc20 = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('deploy()')
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20(bytes32)')
+    receipt_map = {}
 
-
-    receipt_list = []
     for  i in range(args.count):
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
-        salt = bytes().fromhex("%064x" % i)
-
-        erc20_ether = bytes(Web3.keccak(b'\xff' + factory_eth + salt + fileHash)[-20:])
-        # erc20_ether = keccak_256(rlp.encode((factory_eth, trx_count))).digest()[-20:]
+        salt = bytes().fromhex("%064x" % int(trx_count + i))
+        trx_data = func_name + salt
+        erc20_ether = bytes(Web3.keccak(b'\xff' + factory_eth + salt + erc20_filehash)[-20:])
 
         erc20_id = instance.loader.ether2program(erc20_ether)[0]
         seed = b58encode(bytes.fromhex(erc20_ether.hex()))
@@ -162,7 +145,7 @@ if args.step == "deploy":
         trx.add(
             TransactionInstruction(
                 program_id=evm_loader_id,
-                data=call_create_erc20,
+                data=trx_data,
                 keys=[
                     AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
@@ -172,14 +155,20 @@ if args.step == "deploy":
                     AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
-        # res = send_transaction(client, trx, instance.acc)
         res = client.send_transaction(trx, instance.acc,
                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
-        receipt_list.append(res["result"])
-        # check_event(res['result'], factory_eth, erc20_ether)
+        receipt_map[erc20_ether] = res["result"]
 
-    for i in range(args.count):
-        confirm_transaction(client, receipt_list[i])
-        result = client.get_confirmed_transaction(receipt_list[i])
-        check_event(receipt_list[i], factory_eth, erc20_ether)
+    for (erc20_ether, receipt) in receipt_map.items():
+        confirm_transaction(client, receipt)
+        result = client.get_confirmed_transaction(receipt)
+        check_event(result['result'], factory_eth, erc20_ether)
+
+    contracts = []
+    for (erc20_ether, receipt) in receipt_map.items():
+        print(erc20_ether.hex())
+        contracts.append(erc20_ether.hex())
+
+    with open(deploy_file, mode='w') as f:
+        f.write(json.dumps(contracts))
