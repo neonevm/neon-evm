@@ -428,37 +428,36 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((instance, CreateReason::Create(interrupt.address)));
     }
 
-    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), ExitReason> {
+    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
         if reason.is_succeed() {
-            self.executor.state.exit_commit().map_err(ExitReason::from)?;
+            self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+        }
+        
+        let return_value = exited_runtime.machine().return_value();
+        if self.runtime.is_empty() {
+            return Err((return_value, reason));
         }
 
-        let runtime = match self.runtime.last_mut() {
-            Some((runtime, _)) => runtime,
-            None => return Err(reason)
-        };
-
-        let return_value = exited_runtime.machine().return_value();
+        let (runtime, _) = self.runtime.last_mut().unwrap();
 
         match save_return_value(runtime, reason, return_value, &self.executor) {
             Control::Continue => Ok(()),
-            Control::Exit(e) => Err(e),
+            Control::Exit(reason) => Err((Vec::new(), reason)),
             _ => unreachable!()
         }
     }
 
-    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), ExitReason> {
-
+    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
         let return_value = exited_runtime.machine().return_value();
 
         if reason.is_succeed() {
             match self.executor.config.create_contract_limit {
                 Some(limit) if return_value.len() > limit => {
-                    self.executor.state.exit_discard().map_err(ExitReason::from)?;
+                    self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     reason = ExitError::CreateContractLimit.into();
                 },
                 _ => {
-                    self.executor.state.exit_commit().map_err(ExitReason::from)?;
+                    self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     self.executor.state.set_code(address, return_value);
                 }
             };
@@ -466,26 +465,26 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
-            None => return Err(reason)
+            None => return Err((Vec::new(), reason))
         };
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
-            Control::Exit(e) => Err(e),
+            Control::Exit(reason) => Err((Vec::new(), reason)),
             _ => unreachable!()
         }
     }
 
-    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), ExitReason> {
+    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
         match reason {
             ExitReason::Succeed(_) => Ok(()),
             ExitReason::Revert(_) => self.executor.state.exit_revert(),
             ExitReason::Error(_) | ExitReason::Fatal(_) => self.executor.state.exit_discard(),
             ExitReason::StepLimitReached => unreachable!()
-        }.map_err(ExitReason::from)?;
+        }.map_err(|e| (Vec::new(), ExitReason::from(e)))?;
 
         let (exited_runtime, create_reason) = match self.runtime.pop() {
             Some((runtime, reason)) => (runtime, reason),
-            None => return Err(ExitFatal::NotSupported.into())
+            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
         };
 
         match create_reason {
@@ -494,15 +493,15 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
-    pub fn execute(&mut self) -> ExitReason {
+    pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
         loop {
-            if let Err(reason) = self.execute_n_steps(u64::max_value()) {
-                return reason;
+            if let Err(result) = self.execute_n_steps(u64::max_value()) {
+                return result;
             }
         }
     }
 
-    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), ExitReason> {
+    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
         let mut steps = 0_u64;
 
         while steps < n {
@@ -515,25 +514,12 @@ impl<'config, B: Backend> Machine<'config, B> {
                 RuntimeApply::Create(info) => self.apply_create(info),
                 RuntimeApply::Exit(reason) => match self.apply_exit(reason) {
                     Ok(()) => {},
-                    Err(reason) => return Err(reason)
+                    Err((return_value, reason)) => return Err((return_value, reason))
                 }
             }
         }
 
         Ok(())
-    }
-
-    #[must_use]
-    pub fn return_value(&self) -> Vec<u8> {
-        let (runtime, create_reason) = match self.runtime.last() {
-            Some((runtime, reason)) => (runtime, reason),
-            None => return Vec::new()
-        };
-
-        match create_reason {
-            CreateReason::Call => runtime.machine().return_value(),
-            CreateReason::Create(_) => Vec::new(),
-        }
     }
 
     pub fn into_state(self) -> ExecutorState<B> {
