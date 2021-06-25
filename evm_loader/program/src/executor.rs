@@ -178,9 +178,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        target_gas: Option<u64>,
+        _target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        debug_print!("create target_gas={:?}", target_gas);
+        //debug_print!("create target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
