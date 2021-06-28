@@ -35,15 +35,17 @@ fn gas_used(gm: &Gasometer) -> u64 {
 //}
 
 struct CallInterrupt {
+    context: evm::Context,
     code_address : H160,
     input : Vec<u8>,
-    context: evm::Context,
+    gas_limit: u64,
 }
 
 struct CreateInterrupt {
-    init_code: Vec<u8>,
     context: evm::Context,
-    address: H160
+    address: H160,
+    init_code: Vec<u8>,
+    gas_limit: u64,
 }
 
 enum RuntimeApply{
@@ -173,7 +175,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         Ok(())
     }
 
-    #[allow(unused)]
     fn create(
         &mut self,
         caller: H160,
@@ -194,7 +195,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
-        /***
         // This parameter should be true for create from another program
         let take_l64 = true;
 
@@ -219,7 +219,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
             return Capture::Exit((e.into(), None, Vec::new()));
         }
-        ***/
 
         // Get the create address from given scheme.
         let address =
@@ -259,7 +258,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             apparent_value: value,
         };
 
-        Capture::Trap(CreateInterrupt{init_code, context, address})
+        Capture::Trap(CreateInterrupt{context, address, init_code, gas_limit})
     }
 
     fn call(
@@ -282,7 +281,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let take_l64 = true;
         let take_stipend = true;
 
-        /***
         let after_gas = if take_l64 && self.config.call_l64_after_gas {
             if self.config.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
@@ -310,10 +308,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                 gas_limit = gas_limit.saturating_add(self.config.call_stipend);
             }
         }
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
-        ***/
 
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, take_l64, take_stipend);
+        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
@@ -325,7 +321,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{code_address, input, context})
+        Capture::Trap(CallInterrupt{context, code_address, input, gas_limit})
     }
 
     fn pre_validate(
@@ -533,7 +529,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             RuntimeApply::Continue => { Ok(()) },
             RuntimeApply::Call(info) => {
                 let code = self.executor.code(info.code_address);
-                self.executor.state.enter(u64::MAX, false);
+                self.executor.state.enter(info.gas_limit, false);
                 self.executor.state.touch(info.code_address);
 
                 let instance = evm::Runtime::new(
@@ -546,7 +542,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 Ok(())
             },
             RuntimeApply::Create(info) => {
-                self.executor.state.enter(u64::MAX, false);
+                self.executor.state.enter(info.gas_limit, false);
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
@@ -565,7 +561,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             RuntimeApply::Exit(exit_reason) => {
                 let mut exit_success = false;
                 match &exit_reason {
-                    ExitReason::StepLimitReached => { unreachable!() },
+                    ExitReason::StepLimitReached => unreachable!(),
                     ExitReason::Succeed(_) => {
                         exit_success = true;
                         debug_print!(" step_opcode: ExitReason::Succeed(_)");

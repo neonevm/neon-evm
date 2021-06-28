@@ -616,7 +616,7 @@ fn invoke_on_return<'a>(
 ) -> ProgramResult
 {
     let exit_status = match exit_reason {
-        ExitReason::StepLimitReached => { unreachable!() },
+        ExitReason::StepLimitReached => unreachable!(),
         ExitReason::Succeed(success_code) => {
             debug_print!("Succeed");
             match success_code {
