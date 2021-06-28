@@ -327,6 +327,8 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         {
             let mut external_account_metas = self.external_account_metas.borrow_mut();
             external_account_metas.extend(instruction.accounts.iter().cloned());
+            let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
+            external_account_metas.insert(0,contract_meta);
         }
         eprintln!("external_call: external_account_metas: {:?}", self.external_account_metas);
 
