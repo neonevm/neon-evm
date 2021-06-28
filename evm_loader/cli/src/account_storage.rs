@@ -309,6 +309,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         match self.seeds(&self.origin()) {
             Some((sender_eth, sender_nonce)) => {
                 let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                // TODO: config.rpc_client.simulate_transaction(&solana_address, CommitmentConfig::processed()).unwrap().value {
                 invoke_signed(
                     instruction,
                     account_infos,
