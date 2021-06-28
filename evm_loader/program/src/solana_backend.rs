@@ -229,8 +229,6 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     let data = array_ref![input, 35*i as usize, 35];
                     let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
                     let pubkey = if translate[0] == 0 {
-                        debug_print!("Detect no translate account: {}-{:?}", i, pubkey);
-                        //     Add to AccountStorege as a solana account to return in AccountJson list
                         Pubkey::new(pubkey)
                     } else {
                         match self.account_storage.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {

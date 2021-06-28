@@ -23,6 +23,7 @@ use crate::Config;
 #[allow(unused)]
 use solana_program::instruction::Instruction;
 use evm_loader::solana_backend::SolanaBackend;
+use solana_program::instruction::AccountMeta;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountJSON {
@@ -32,6 +33,25 @@ pub struct AccountJSON {
     writable: bool,
     new: bool,
     code_size: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountMetaJSON {
+    /// An account's public key
+    pub pubkey: String,
+    /// True if an Instruction requires a Transaction signature matching `pubkey`.
+    pub is_signer: bool,
+    /// True if the `pubkey` can be loaded as a read-write account.
+    pub is_writable: bool,
+}
+impl From<AccountMeta> for AccountMetaJSON {
+    fn from(account_meta: AccountMeta) -> Self {
+        Self {
+            pubkey: bs58::encode(&account_meta.pubkey).into_string(),
+            is_signer: account_meta.is_signer,
+            is_writable: account_meta.is_writable,
+        }
+    }
 }
 
 struct SolanaAccount {
@@ -65,6 +85,7 @@ impl SolanaNewAccount {
 pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
     new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
+    pub external_account_metas: RefCell<Vec<AccountMeta>>,
     config: &'a Config,
     contract_id: H160,
     caller_id: H160,
@@ -98,6 +119,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashMap::new()),
+            external_account_metas: RefCell::new(vec![]),
             config,
             contract_id,
             caller_id,
@@ -302,7 +324,12 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         account_infos: &[AccountInfo]
     ) -> ProgramResult {
         eprintln!("emulate external_call");
-        // Ok(())
+        {
+            let mut external_account_metas = self.external_account_metas.borrow_mut();
+            external_account_metas.extend(instruction.accounts.iter().cloned());
+        }
+        eprintln!("external_call: external_account_metas: {:?}", self.external_account_metas);
+
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
         let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
 
