@@ -8,16 +8,18 @@ from web3 import Web3
 import argparse
 from eth_utils import abi
 from base58 import b58decode
+import random
 
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
 CONTRACTS_DIR = "contracts/"
 # evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "4XS7MwWXNjYjuTKo1KJN92MmSeM4Cw67eihEfcnzUZPP"
+evm_loader_id = "GWDnHTcNoryfBpLzRFvpicwfBHDJecRyw5Jq3Mo8P6RR"
 
 # sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 # keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-deploy_file = "deploy.json"
+contracts_file = "contracts.json"
+accounts_file = "accounts.json"
 
 
 class PerformanceTest():
@@ -98,7 +100,6 @@ parser.add_argument('--count', metavar="count of the transaction",  type=int,  h
 parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx')
 
 args = parser.parse_args()
-print(args.count)
 
 if args.step == "deploy":
 
@@ -115,7 +116,7 @@ if args.step == "deploy":
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20(bytes32)')
     receipt_map = {}
 
-    for  i in range(args.count):
+    for i in range(args.count):
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
@@ -170,5 +171,69 @@ if args.step == "deploy":
         print(erc20_ether.hex())
         contracts.append(erc20_ether.hex())
 
-    with open(deploy_file, mode='w') as f:
+    with open(contracts_file, mode='w') as f:
         f.write(json.dumps(contracts))
+
+elif args.step == "create_acc":
+
+    instance = PerformanceTest()
+    instance.setUpClass()
+
+    receipt_map = {}
+    for i in range(args.count):
+        ether = random.randbytes(20)
+        trx = Transaction()
+        (transaction, sol_account) = instance.loader.createEtherAccountTrx(ether)
+        trx.add(transaction)
+        res = client.send_transaction(trx, instance.acc,
+                                      opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+        receipt_map[(ether, sol_account)] = res["result"]
+
+    ether_accounts = []
+    for ((ether, sol_account), receipt) in receipt_map.items():
+        confirm_transaction(client, receipt)
+        result = client.get_confirmed_transaction(receipt)
+        print(ether.hex(), sol_account)
+        ether_accounts.append((ether.hex(), sol_account))
+
+    with open(accounts_file, mode='w') as f:
+        f.write(json.dumps(ether_accounts))
+#
+# elif args.step == "create_trx":
+#     with open(contracts_file, mode='r') as f:
+#         contracts = json.loads(f.read())
+#
+#     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+#
+#     trx = Transaction()
+#     for i in contracts:
+#         trx.add(
+#             TransactionInstruction(
+#                 program_id=evm_loader_id,
+#                 data=trx_data,
+#                 keys=[
+#                     AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
+#                     AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
+#                     AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
+#                     AccountMeta(pubkey=erc20_id, is_signer=False, is_writable=True),
+#                     AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
+#                     AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+#                     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+#             ]))
+#         res = client.send_transaction(trx, instance.acc,
+#                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+#
+#         receipt_map[erc20_ether] = res["result"]
+#
+#     for (erc20_ether, receipt) in receipt_map.items():
+#         confirm_transaction(client, receipt)
+#         result = client.get_confirmed_transaction(receipt)
+#         check_event(result['result'], factory_eth, erc20_ether)
+#
+#     contracts = []
+#     for (erc20_ether, receipt) in receipt_map.items():
+#         print(erc20_ether.hex())
+#         contracts.append(erc20_ether.hex())
+#
+#     with open(contracts_file, mode='w') as f:
+#         f.write(json.dumps(contracts))
