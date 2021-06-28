@@ -151,7 +151,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         .borrow()
         .iter()
         .cloned()
-        .map(|meta| AccountMetaJSON::from(meta)).collect();
+        .map(AccountMetaJSON::from)
+        .collect();
 
     let js = json!({
         "accounts": accounts,
