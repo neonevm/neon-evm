@@ -317,7 +317,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
-                    return Capture::Exit((reason.clone(), return_data.clone()))
+                    return Capture::Exit((*reason, return_data.clone()))
                 },
                 Capture::Trap(_interrupt) => {
                     unreachable!("not implemented");
@@ -565,6 +565,7 @@ impl<'config, B: Backend> Machine<'config, B> {
             RuntimeApply::Exit(exit_reason) => {
                 let mut exit_success = false;
                 match &exit_reason {
+                    ExitReason::StepLimitReached => { unreachable!() },
                     ExitReason::Succeed(_) => {
                         exit_success = true;
                         debug_print!(" step_opcode: ExitReason::Succeed(_)");
@@ -646,7 +647,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                             }
                             if commit{
                                 self.executor.state.exit_commit().unwrap();
-                                self.executor.state.set_code(created_address, return_value.clone());
+                                self.executor.state.set_code(created_address, return_value);
                                 actual_address = Some(created_address);
                             }
                         }
@@ -654,11 +655,11 @@ impl<'config, B: Backend> Machine<'config, B> {
                         if self.runtime.len() > 1 {
                             self.runtime.pop();
                             if let Some(runtime) = self.runtime.last_mut(){
-                                match  save_created_address(
+                                match save_created_address(
                                     runtime.0.borrow_mut(),
                                     actual_reason,
                                     actual_address,
-                                    return_value,
+                                    /*return_value,*/
                                     &self.executor
                                 ){
                                     Control::Continue => { Ok(()) },
