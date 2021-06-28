@@ -264,8 +264,6 @@ class EmulateTest(unittest.TestCase):
                                      is_writable=item['is_writable'])
                          for item in emulate_result['account_metas']]
 
-        # TODO: emulator should return this AccountMeta too?
-        account_metas.append(AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False))
         print('account_metas:', account_metas)
 
         result = self.contract.call(self.ethereum_caller, trx_data, account_metas)
