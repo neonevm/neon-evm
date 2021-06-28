@@ -49,7 +49,7 @@ class PerformanceTest():
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
 
-def check_event(result, factory_eth, erc20_eth):
+def check_address_event(result, factory_eth, erc20_eth):
     assert(result['meta']['err'] == None)
     assert(len(result['meta']['innerInstructions']) == 2)
     assert(len(result['meta']['innerInstructions'][1]['instructions']) == 2)
@@ -64,6 +64,22 @@ def check_event(result, factory_eth, erc20_eth):
     assert(data[29:61] == abi.event_signature_to_log_topic('Address(address)'))  # topics
     assert(data[61:93] == bytes().fromhex("%024x" % 0)+erc20_eth)  # sum
 
+def check_transfer_event(result, erc20_eth, to, sum):
+    assert(result['meta']['err'] == None)
+    assert(len(result['meta']['innerInstructions']) == 1)
+    assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)
+    data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+    assert(data[:1] == b'\x06')  #  OnReturn
+    assert(data[1] == 0x11)  # 11 - Machine encountered an explict stop
+
+    data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+    assert(data[:1] == b'\x07')  # 7 means OnEvent
+    assert(data[1:21] == bytes.fromhex(erc20_eth))
+    assert(data[21:29] == bytes().fromhex('%016x' % 3)[::-1])  # topics len
+    assert(data[29:61] == abi.event_signature_to_log_topic('Transfer(address,address,uint256)'))  # topics
+    assert(data[61:93] == bytes().fromhex("%064x" % 0))  # address(0)
+    assert(data[93:125] == bytes().fromhex("%024x" % 0) + bytes.fromhex(to))  # to
+    assert(data[125:157] == bytes().fromhex("%064x" % sum))  # value
 
 def get_filehash(factory, factory_code, factory_eth):
     trx = Transaction()
@@ -159,17 +175,14 @@ if args.step == "deploy":
         res = client.send_transaction(trx, instance.acc,
                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
-        receipt_map[erc20_ether] = res["result"]
-
-    for (erc20_ether, receipt) in receipt_map.items():
-        confirm_transaction(client, receipt)
-        result = client.get_confirmed_transaction(receipt)
-        check_event(result['result'], factory_eth, erc20_ether)
+        receipt_map[(str(erc20_id), erc20_ether, str(erc20_code))] = res["result"]
 
     contracts = []
-    for (erc20_ether, receipt) in receipt_map.items():
-        print(erc20_ether.hex())
-        contracts.append(erc20_ether.hex())
+    for ((erc20_id, erc20_ether, erc20_code), receipt) in receipt_map.items():
+        confirm_transaction(client, receipt)
+        result = client.get_confirmed_transaction(receipt)
+        check_address_event(result['result'], factory_eth, erc20_ether)
+        contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
 
     with open(contracts_file, mode='w') as f:
         f.write(json.dumps(contracts))
@@ -198,42 +211,46 @@ elif args.step == "create_acc":
 
     with open(accounts_file, mode='w') as f:
         f.write(json.dumps(ether_accounts))
-#
-# elif args.step == "create_trx":
-#     with open(contracts_file, mode='r') as f:
-#         contracts = json.loads(f.read())
-#
-#     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
-#
-#     trx = Transaction()
-#     for i in contracts:
-#         trx.add(
-#             TransactionInstruction(
-#                 program_id=evm_loader_id,
-#                 data=trx_data,
-#                 keys=[
-#                     AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
-#                     AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
-#                     AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
-#                     AccountMeta(pubkey=erc20_id, is_signer=False, is_writable=True),
-#                     AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-#                     AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-#                     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-#             ]))
-#         res = client.send_transaction(trx, instance.acc,
-#                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-#
-#         receipt_map[erc20_ether] = res["result"]
-#
-#     for (erc20_ether, receipt) in receipt_map.items():
-#         confirm_transaction(client, receipt)
-#         result = client.get_confirmed_transaction(receipt)
-#         check_event(result['result'], factory_eth, erc20_ether)
-#
-#     contracts = []
-#     for (erc20_ether, receipt) in receipt_map.items():
-#         print(erc20_ether.hex())
-#         contracts.append(erc20_ether.hex())
-#
-#     with open(contracts_file, mode='w') as f:
-#         f.write(json.dumps(contracts))
+
+elif args.step == "create_trx":
+    instance = PerformanceTest()
+    instance.setUpClass()
+
+    with open(contracts_file, mode='r') as f:
+        contracts = json.loads(f.read())
+    with open(accounts_file, mode='r') as f:
+        accounts = json.loads(f.read())
+
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+
+    receipt_map = {}
+    sum = 1000 * 10 ** 18
+    for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
+        for (acc_eth_hex, acc_sol) in accounts:
+            trx_data = func_name + \
+                       bytes().fromhex("%024x" % 0 + acc_eth_hex) + \
+                       bytes().fromhex("%064x" % sum)
+
+            trx = Transaction()
+            trx.add(
+                TransactionInstruction(
+                    program_id=evm_loader_id,
+                    data=trx_data,
+                    keys=[
+                        AccountMeta(pubkey=erc20_sol, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
+                        AccountMeta(pubkey=acc_sol, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                ]))
+            res = client.send_transaction(trx, instance.acc,
+                                             opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+
+            receipt_map[(erc20_eth_hex, acc_eth_hex)] = res["result"]
+
+    for ((erc20_eth_hex, acc_eth_hex), receipt) in receipt_map.items():
+        confirm_transaction(client, receipt)
+        res = client.get_confirmed_transaction(receipt)
+        check_transfer_event(res['result'], erc20_eth_hex, acc_eth_hex, sum)
+ 
