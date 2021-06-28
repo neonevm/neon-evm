@@ -329,6 +329,87 @@ def test_unsuccessful_cli_emulate(self):
     self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
     self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
+    tmpl_json = {
+        "account_metas": [
+            {
+                "pubkey": '' + tokenkeg,
+                "is_signer": False,
+                "is_writable": False,
+            },
+            {
+                "pubkey": '' + self.token,
+                "is_signer": False,
+                "is_writable": False,
+            },
+            {
+                "pubkey": '' + self.token_acc1,
+                "is_signer": False,
+                "is_writable": True,
+            },
+            {
+                "pubkey": '' + self.token_acc2,
+                "is_signer": False,
+                "is_writable": True,
+            },
+            {
+                "pubkey": str(self.acc.public_key()),
+                "is_signer": True,
+                "is_writable": False,
+            },
+        ],
+        "accounts": [
+            {
+                "account": '' + self.contract.contract_account,
+                "address": '0x' + self.contract.ethereum_id.hex(),
+                "code_size": None,
+                "contract": '' + self.contract.contract_code_account,
+                "new": False,
+                "writable": True,
+            },
+            {
+                "account": '' + self.caller,
+                "address": '0x' + self.ethereum_caller.hex(),
+                "code_size": None,
+                "contract": None,
+                "new": False,
+                "writable": True,
+            },
+        ],
+        "exit_status": "succeed",
+        "result": ""
+    }
+
+    trx_data = abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint256,uint256)') \
+               + bytes.fromhex(base58.b58decode(self.token).hex()
+                               + base58.b58decode(self.token_acc1).hex()
+                               + base58.b58decode(self.token_acc2).hex()
+                               + "%064x" % (transfer_amount * (10 ** 9))
+                               + bytes(self.acc.public_key()).hex()
+                               )
+
+    emulate_result = emulate_external_call(self.ethereum_caller.hex(),
+                                           self.contract.ethereum_id.hex(),
+                                           trx_data.hex())
+
+    self.compare_tmpl_and_emulate_result_2(tmpl_json, emulate_result)
+    # no changes after the emulation
+    self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
+    self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
+
+    account_metas = [AccountMeta(pubkey=item['pubkey'],
+                                 is_signer=item['is_signer'],
+                                 is_writable=item['is_writable'])
+                     for item in emulate_result['account_metas']]
+
+    print('account_metas:', account_metas)
+
+    result = self.contract.call(self.ethereum_caller, trx_data, account_metas)
+
+    self.assertEqual(result, None)
+
+    self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
+    self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
+
 
 if __name__ == '__main__':
     unittest.main()
