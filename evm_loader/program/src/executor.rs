@@ -3,7 +3,7 @@ use std::mem;
 
 use evm::{
     backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
-    gasometer, gasometer::Gasometer, H160, H256, Handler, Resolve, U256,
+    gasometer, H160, H256, Handler, Resolve, U256,
 };
 use evm_runtime::{Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
@@ -18,22 +18,6 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
-
-#[allow(unused)]
-#[allow(clippy::cast_sign_loss)]
-fn gas_used(gm: &Gasometer) -> u64 {
-    let tug = gm.total_used_gas();
-    let rg = gm.refunded_gas() as u64;
-    tug - core::cmp::min(tug / 2, rg)
-}
-
-//fn total_gas_used(gm: &Gasometer) -> u64 {
-//    gm.total_used_gas()
-//}
-
-//fn refunded_gas(gm: &Gasometer) -> i64 {
-//    gm.refunded_gas()
-//}
 
 struct CallInterrupt {
     context: evm::Context,
@@ -347,7 +331,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             self.state.metadata_mut().gasometer_mut().record_dynamic_cost(gas_cost, memory_cost)?;
         }
 
-        debug_print!("Gas used: {}", gas_used(self.state.metadata().gasometer()));
         Ok(())
     }
 }
@@ -413,7 +396,6 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         self.runtime.push((runtime, CreateReason::Call));
 
-        debug_print!("Gas used: {}", gas_used(self.executor.state.metadata().gasometer()));
         Ok(())
     }
 
@@ -459,7 +441,6 @@ impl<'config, B: Backend> Machine<'config, B> {
             },
         }
 
-        debug_print!("Gas used: {}", gas_used(self.executor.state.metadata().gasometer()));
         Ok(())
     }
 

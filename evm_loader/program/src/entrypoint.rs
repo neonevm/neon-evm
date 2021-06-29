@@ -378,7 +378,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -409,10 +409,11 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let executor_state = executor.into_state();
+            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, 0, result, None)
         }
     };
 
@@ -423,7 +424,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(program_id, accounts, exit_reason, &result)?;
+
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
     Ok(())
 }
 
@@ -440,7 +442,7 @@ fn do_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -463,10 +465,11 @@ fn do_call<'a>(
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let executor_state = executor.into_state();
+            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, 0, result, None)
         }
     };
 
@@ -478,7 +481,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
     Ok(())
 }
 
@@ -517,7 +520,6 @@ fn do_partial_call<'a>(
     executor.save_into(storage);
 
     debug_print!("partial call complete");
-
     Ok(())
 }
 
@@ -547,7 +549,6 @@ fn do_partial_create<'a>(
     executor.save_into(storage);
 
     debug_print!("partial create complete");
-
     Ok(())
 }
 
@@ -561,7 +562,7 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -582,10 +583,11 @@ fn do_continue<'a>(
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let executor_state = executor.into_state();
+            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, 0, result, None)
         }
     };
 
@@ -597,8 +599,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, &result)?;
-
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
     Ok(Some(exit_reason))
 }
 
@@ -606,6 +607,7 @@ fn invoke_on_return<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
+    used_gas: u64,
     result: &[u8],
 ) -> ProgramResult
 {
@@ -648,9 +650,11 @@ fn invoke_on_return<'a>(
         ExitReason::StepLimitReached => unreachable!(),
     };
 
-    debug_print!("{}", &hex::encode(&result));
+    debug_print!("exit status {}", exit_status);
+    debug_print!("used gas {}", used_gas);
+    debug_print!("result {}", &hex::encode(&result));
 
-    let ix = on_return(program_id, exit_status, result);
+    let ix = on_return(program_id, exit_status, used_gas, result);
     invoke(
         &ix,
         accounts
