@@ -124,7 +124,6 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
 
     debug!("Call done");
     let status = match exit_reason {
-        ExitReason::StepLimitReached => unreachable!(),
         ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
@@ -136,6 +135,7 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         ExitReason::Error(_) => "error".to_string(),
         ExitReason::Revert(_) => "revert".to_string(),
         ExitReason::Fatal(_) => "fatal".to_string(),
+        ExitReason::StepLimitReached => unreachable!(),
     };
 
     info!("{}", &status);

@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::convert::Infallible;
 use std::mem;
 
@@ -14,6 +13,8 @@ use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 
+/// "All but one 64th" operation.
+/// See also EIP-150.
 const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
@@ -195,10 +196,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
 
-        // This parameter should be true for create from another program
-        let take_l64 = true;
-
-        let after_gas = if take_l64 && self.config.call_l64_after_gas {
+        let after_gas = if self.config.call_l64_after_gas {
             if self.config.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
@@ -277,7 +275,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        // These parameters should be true for call from another program
+        // These parameters should be true for call from another contract
         let take_l64 = true;
         let take_stipend = true;
 
@@ -397,23 +395,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)?;
 
-        // These parameters should be false for call_begin
-        let take_l64 = false;
-
-        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
-            if self.executor.config.estimate {
-                let initial_after_gas = self.executor.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                self.executor.state.metadata_mut().gasometer_mut().record_cost(diff)
-                    .map_err(|err| err)?;
-                self.executor.state.metadata().gasometer().gas()
-            } else {
-                l64(self.executor.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.executor.state.metadata().gasometer().gas()
-        };
-
+        let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
 
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
@@ -446,24 +428,9 @@ impl<'config, B: Backend> Machine<'config, B> {
             .record_transaction(transaction_cost)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-        // This parameter should be false for create_begin
-        let take_l64 = false;
-
-        let after_gas = if take_l64 && self.executor.config.call_l64_after_gas {
-            if self.executor.config.estimate {
-                let initial_after_gas = self.executor.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                self.executor.state.metadata_mut().gasometer_mut().record_cost(diff)
-                    .map_err(|_| ProgramError::InvalidInstructionData)?;
-                self.executor.state.metadata().gasometer().gas()
-            } else {
-                l64(self.executor.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.executor.state.metadata().gasometer().gas()
-        };
-
+        let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
+
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
@@ -496,229 +463,154 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
-    fn step_opcode(&mut self) -> RuntimeApply {
-        if let Some(runtime) = self.runtime.last_mut() {
-            match runtime.0.step(&mut self.executor) {
-                Ok(()) => { RuntimeApply::Continue },
-                Err(capture) =>
-                    match capture {
-                        Capture::Exit(reason) => { RuntimeApply::Exit(reason) },
-                        Capture::Trap(interrupt) =>
-                            match interrupt {
-                                Resolve::Call(interrupt, resolve) => {
-                                    mem::forget(resolve);
-                                    RuntimeApply::Call(interrupt)
-                                },
-                                Resolve::Create(interrupt, resolve) => {
-                                    mem::forget(resolve);
-                                    RuntimeApply::Create(interrupt)
-                                },
-                        }
+    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
+        };
+
+        let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
+        match capture {
+            Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
+            Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
+            Capture::Trap(interrupt) => {
+                match interrupt {
+                    Resolve::Call(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Call(interrupt))
+                    },
+                    Resolve::Create(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Create(interrupt))
+                    },
                 }
             }
         }
-        else{
-            debug_print!("runtime.step: Err, runtime not found");
-            RuntimeApply::Exit(ExitReason::Fatal(ExitFatal::NotSupported))
+    }
+
+    fn apply_call(&mut self, interrupt: CallInterrupt) {
+        let code = self.executor.code(interrupt.code_address);
+        self.executor.state.enter(interrupt.gas_limit, false);
+        self.executor.state.touch(interrupt.code_address);
+
+        let instance = evm::Runtime::new(
+            code,
+            interrupt.input,
+            interrupt.context,
+            self.executor.config
+        );
+        self.runtime.push((instance, CreateReason::Call));
+    }
+
+    fn apply_create(&mut self, interrupt: CreateInterrupt) {
+        self.executor.state.enter(interrupt.gas_limit, false);
+        self.executor.state.touch(interrupt.address);
+        self.executor.state.reset_storage(interrupt.address);
+        if self.executor.config.create_increase_nonce {
+            self.executor.state.inc_nonce(interrupt.address);
+        }
+
+        let instance = evm::Runtime::new(
+            interrupt.init_code,
+            Vec::new(),
+            interrupt.context,
+            self.executor.config
+        );
+        self.runtime.push((instance, CreateReason::Create(interrupt.address)));
+    }
+
+    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+        if reason.is_succeed() {
+            self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+        }
+        
+        let return_value = exited_runtime.machine().return_value();
+        if self.runtime.is_empty() {
+            return Err((return_value, reason));
+        }
+
+        let (runtime, _) = self.runtime.last_mut().unwrap();
+
+        match save_return_value(runtime, reason, return_value, &self.executor) {
+            Control::Continue => Ok(()),
+            Control::Exit(reason) => Err((Vec::new(), reason)),
+            _ => unreachable!()
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn step(&mut self) -> Result<(), ExitReason> {
-        match self.step_opcode() {
-            RuntimeApply::Continue => { Ok(()) },
-            RuntimeApply::Call(info) => {
-                let code = self.executor.code(info.code_address);
-                self.executor.state.enter(info.gas_limit, false);
-                self.executor.state.touch(info.code_address);
+    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
+        let return_value = exited_runtime.machine().return_value();
 
-                let instance = evm::Runtime::new(
-                    code,
-                    info.input,
-                    info.context,
-                    self.executor.config
-                );
-                self.runtime.push((instance, CreateReason::Call));
-                Ok(())
-            },
-            RuntimeApply::Create(info) => {
-                self.executor.state.enter(info.gas_limit, false);
-                self.executor.state.touch(info.address);
-                self.executor.state.reset_storage(info.address);
-                if self.executor.config.create_increase_nonce {
-                    self.executor.state.inc_nonce(info.address);
-                }
-
-                let instance = evm::Runtime::new(
-                    info.init_code,
-                    Vec::new(),
-                    info.context,
-                    self.executor.config
-                );
-                self.runtime.push((instance, CreateReason::Create(info.address)));
-                Ok(())
-            },
-            RuntimeApply::Exit(exit_reason) => {
-                let mut exit_success = false;
-                match &exit_reason {
-                    ExitReason::StepLimitReached => unreachable!(),
-                    ExitReason::Succeed(_) => {
-                        exit_success = true;
-                        debug_print!(" step_opcode: ExitReason::Succeed(_)");
-                        // self.executor.state.exit_commit().unwrap();
-                    },
-                    ExitReason::Revert(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Revert(_)");
-                        self.executor.state.exit_revert().unwrap();
-                    },
-                    ExitReason::Error(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Error(_)");
-                        self.executor.state.metadata_mut().gasometer_mut().fail();
-                        self.executor.state.exit_discard().unwrap();
-                    },
-                    ExitReason::Fatal(_) => {
-                        debug_print!("runtime.step: Err, capture Capture::Exit(reason), reason:ExitReason::Fatal(_)");
-                        self.executor.state.metadata_mut().gasometer_mut().fail();
-                        self.executor.state.exit_discard().unwrap();
-                    }
-                }
-
-                let (return_value, implementation) = {
-                    if let Some(runtime) = self.runtime.last(){
-                        (runtime.0.machine().return_value(), Some(runtime.1))
-                    }
-                    else{
-                        debug_print!("runtime.step: Err, runtime not found");
-                        return Err(ExitReason::Fatal(ExitFatal::NotSupported));
-                    }
-                };
-
-                match implementation {
-                    Some(CreateReason::Call) => {
-                        if exit_success {
-                            self.executor.state.exit_commit().unwrap();
-                        }
-
-                        if self.runtime.len() > 1 {
-                            self.runtime.pop();
-                            if let Some(runtime) = self.runtime.last_mut(){
-                                match  save_return_value(
-                                    runtime.0.borrow_mut(),
-                                    exit_reason,
-                                    return_value,
-                                    &self.executor
-                                ){
-                                    Control::Continue => { Ok(()) },
-                                    Control::Exit(e) => { Err(e) },
-                                    _ => {
-                                        debug_print!("runtime.step: RuntimeApply::Exit, impl::Call, save_return_value: NotSupported");
-                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                                    }
-                                }
-                            }
-                            else{
-                                debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                            }
-                        }
-                        else{
-                            Err(exit_reason)
-                        }
-
-                    },
-                    Some(CreateReason::Create(created_address)) => {
-                        let mut commit = true;
-                        let mut actual_reason = exit_reason;
-                        let mut actual_address:Option<H160> = None;
-
-                        if exit_success {
-                            if let Some(limit) = self.executor.config.create_contract_limit {
-                                if return_value.len() > limit {
-                                    debug_print!("runtime.step: Err((ExitError::CreateContractLimit.into()))");
-                                    self.executor.state.metadata_mut().gasometer_mut().fail();
-                                    self.executor.state.exit_discard().unwrap();
-                                    actual_reason =  ExitReason::Error(ExitError::CreateContractLimit);
-                                    commit = false;
-                                }
-                            }
-                            if commit{
-                                self.executor.state.exit_commit().unwrap();
-                                self.executor.state.set_code(created_address, return_value);
-                                actual_address = Some(created_address);
-                            }
-                        }
-
-                        if self.runtime.len() > 1 {
-                            self.runtime.pop();
-                            if let Some(runtime) = self.runtime.last_mut(){
-                                match save_created_address(
-                                    runtime.0.borrow_mut(),
-                                    actual_reason,
-                                    actual_address,
-                                    /*return_value,*/
-                                    &self.executor
-                                ){
-                                    Control::Continue => { Ok(()) },
-                                    Control::Exit(e) => { Err(e) },
-                                    _ => {
-                                        debug_print!("runtime.step: RuntimeApply::Exit, impl::Create, save_return_value: NotSupported");
-                                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                                    }
-                                }
-                            }
-                            else{
-                                debug_print!("runtime.step: Err, runtime.last_mut() error");
-                                Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                            }
-                        }
-                        else{
-                            Err(actual_reason)
-                        }
-                    },
-                    _ => {
-                        debug_print!("runtime.step: RuntimeApply::Exit, impl: _");
-                        Err(ExitReason::Fatal(ExitFatal::NotSupported))
-                    }
-                }
-
-            },
-        }
-    }
-
-
-    pub fn execute(&mut self) -> ExitReason {
-        loop {
-            if let Err(reason) = self.step() {
-                return reason;
-            }
-        }
-    }
-
-    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), ExitReason> {
-        for _ in 0..n {
-            self.step()?;
-        }
-        debug_print!(" execute_n_steps OK returned ");
-
-        Ok(())
-    }
-
-    #[must_use]
-    pub fn return_value(&self) -> Vec<u8> {
-
-        if let Some(runtime) = self.runtime.last() {
-            let implementation = Some(runtime.1);
-            match implementation {
-                Some(CreateReason::Create(_created_address)) => {
-                    return Vec::new();
+        if reason.is_succeed() {
+            match self.executor.config.create_contract_limit {
+                Some(limit) if return_value.len() > limit => {
+                    self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+                    reason = ExitError::CreateContractLimit.into();
                 },
                 _ => {
-                    return runtime.0.machine().return_value()
+                    self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+                    self.executor.state.set_code(address, return_value);
+                }
+            };
+        }
+
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return Err((Vec::new(), reason))
+        };
+        match save_created_address(runtime, reason, Some(address), &self.executor) {
+            Control::Continue => Ok(()),
+            Control::Exit(reason) => Err((Vec::new(), reason)),
+            _ => unreachable!()
+        }
+    }
+
+    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+        match reason {
+            ExitReason::Succeed(_) => Ok(()),
+            ExitReason::Revert(_) => self.executor.state.exit_revert(),
+            ExitReason::Error(_) | ExitReason::Fatal(_) => self.executor.state.exit_discard(),
+            ExitReason::StepLimitReached => unreachable!()
+        }.map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+
+        let (exited_runtime, create_reason) = match self.runtime.pop() {
+            Some((runtime, reason)) => (runtime, reason),
+            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
+        };
+
+        match create_reason {
+            CreateReason::Call => self.apply_exit_call(&exited_runtime, reason),
+            CreateReason::Create(address) => self.apply_exit_create(&exited_runtime, reason, address)
+        }
+    }
+
+    pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
+        loop {
+            if let Err(result) = self.execute_n_steps(u64::max_value()) {
+                return result;
+            }
+        }
+    }
+
+    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
+        let mut steps = 0_u64;
+
+        while steps < n {
+            let (steps_executed, apply) = self.run(n - steps);
+            steps += steps_executed;
+
+            match apply {
+                RuntimeApply::Continue => {},
+                RuntimeApply::Call(info) => self.apply_call(info),
+                RuntimeApply::Create(info) => self.apply_create(info),
+                RuntimeApply::Exit(reason) => match self.apply_exit(reason) {
+                    Ok(()) => {},
+                    Err((return_value, reason)) => return Err((return_value, reason))
                 }
             }
         }
 
-        Vec::new()
+        Ok(())
     }
 
     pub fn into_state(self) -> ExecutorState<'config, B> {

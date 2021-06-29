@@ -403,8 +403,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
         debug_print!("Executor initialized");
         executor.create_begin(account_storage.origin(), code_data, u64::MAX)?;
-        let exit_reason = executor.execute();
-        let result = executor.return_value();
+        let (result, exit_reason) = executor.execute();
         debug_print!("Call done");
 
         if exit_reason.is_succeed() {
@@ -457,11 +456,7 @@ fn do_call<'a>(
             gas_limit,
         ).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-        let exit_reason = match executor.execute_n_steps(u64::MAX) {
-            Ok(()) => return Err(ProgramError::InvalidInstructionData),
-            Err(reason) => reason
-        };
-        let result = executor.return_value();
+        let (result, exit_reason) = executor.execute();
 
         debug_print!("Call done");
 
@@ -573,15 +568,14 @@ fn do_continue<'a>(
         let mut executor = Machine::restore(storage, backend);
         debug_print!("Executor restored");
 
-        let exit_reason = match executor.execute_n_steps(step_count) {
+        let (result, exit_reason) = match executor.execute_n_steps(step_count) {
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 return Ok(None);
             }
-            Err(reason) => reason
+            Err((result, reason)) => (result, reason)
         };
-        let result = executor.return_value();
 
         debug_print!("Call done");
 
@@ -616,7 +610,6 @@ fn invoke_on_return<'a>(
 ) -> ProgramResult
 {
     let exit_status = match exit_reason {
-        ExitReason::StepLimitReached => unreachable!(),
         ExitReason::Succeed(success_code) => {
             debug_print!("Succeed");
             match success_code {
@@ -652,6 +645,7 @@ fn invoke_on_return<'a>(
                 ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
             }
         },
+        ExitReason::StepLimitReached => unreachable!(),
     };
 
     debug_print!("{}", &hex::encode(&result));
