@@ -126,8 +126,8 @@ class EmulateTest(unittest.TestCase):
         self.assertSetEqual(set(left), set(right))
 
     def compare_account_metas(self, left_json, right_json):
-        left = map(lambda item: (item['pubkey'], item['is_signer'], item['is_writable']), left_json['account_metas'])
-        right = map(lambda item: (item['pubkey'], item['is_signer'], item['is_writable']), right_json['account_metas'])
+        left = map(lambda item: (item['pubkey'], item['is_signer'], item['is_writable']), left_json['solana_accounts'])
+        right = map(lambda item: (item['pubkey'], item['is_signer'], item['is_writable']), right_json['solana_accounts'])
 
         self.assertCountEqual(left, right)
         self.assertSetEqual(set(left), set(right))
@@ -199,7 +199,7 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
 
         tmpl_json = {
-            "account_metas": [
+            "solana_accounts": [
                 {
                     "pubkey": '' + tokenkeg,
                     "is_signer": False,
@@ -265,14 +265,14 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
 
-        account_metas = [AccountMeta(pubkey=item['pubkey'],
+        solana_accounts = [AccountMeta(pubkey=item['pubkey'],
                                      is_signer=item['is_signer'],
                                      is_writable=item['is_writable'])
-                         for item in emulate_result['account_metas']]
+                         for item in emulate_result['solana_accounts']]
 
-        print('account_metas:', account_metas)
+        print('solana_accounts:', solana_accounts)
 
-        result = self.contract.call(self.ethereum_caller, trx_data, account_metas)
+        result = self.contract.call(self.ethereum_caller, trx_data, solana_accounts)
 
         src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
         self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
@@ -330,7 +330,7 @@ def test_unsuccessful_cli_emulate(self):
     self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
     tmpl_json = {
-        "account_metas": [
+        "solana_accounts": [
             {
                 "pubkey": '' + tokenkeg,
                 "is_signer": False,
@@ -396,14 +396,14 @@ def test_unsuccessful_cli_emulate(self):
     self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
     self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
-    account_metas = [AccountMeta(pubkey=item['pubkey'],
+    solana_accounts = [AccountMeta(pubkey=item['pubkey'],
                                  is_signer=item['is_signer'],
                                  is_writable=item['is_writable'])
-                     for item in emulate_result['account_metas']]
+                     for item in emulate_result['solana_accounts']]
 
-    print('account_metas:', account_metas)
+    print('solana_accounts:', solana_accounts)
 
-    result = self.contract.call(self.ethereum_caller, trx_data, account_metas)
+    result = self.contract.call(self.ethereum_caller, trx_data, solana_accounts)
 
     self.assertEqual(result, None)
 
