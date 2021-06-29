@@ -9,7 +9,6 @@ use solana_sdk::{
     entrypoint::ProgramResult,
     program::invoke_signed,
     transaction::Transaction,
-    client_error,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
