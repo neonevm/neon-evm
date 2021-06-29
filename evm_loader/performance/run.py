@@ -182,7 +182,7 @@ def deploy_contracts(args):
                 instance.acc.public_key(),
                 str(seed, 'utf8'),
                 10 ** 9,
-                4000 + 4 * 1024,
+                20000,
                 PublicKey(evm_loader_id))
         )
         trx.add(instance.loader.createEtherAccountTrx(erc20_ether, erc20_code)[0])
@@ -245,9 +245,12 @@ def mint(accounts, contracts, acc):
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
 
     receipt_map = []
-    sum = args.count*1000 * 10 ** 18
+    sum = 1000 * 10 ** 18
+    count = 0
     for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
         for (acc_eth_hex, _, acc_sol) in accounts:
+            print (count)
+            count = count +1
             trx_data = func_name + \
                        bytes().fromhex("%024x" % 0 + acc_eth_hex) + \
                        bytes().fromhex("%064x" % sum)
@@ -269,6 +272,7 @@ def mint(accounts, contracts, acc):
                                              opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
             receipt_map.append((erc20_eth_hex, acc_eth_hex, res["result"]))
+
 
     for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_map:
         confirm_transaction(client, receipt)
