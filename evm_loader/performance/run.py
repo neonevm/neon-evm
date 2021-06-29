@@ -1,7 +1,5 @@
 from solana_utils import *
-
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, Trx
-# from eth_utils import abi
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
 from eth_keys import keys as eth_keys
 from web3 import Web3
@@ -26,14 +24,12 @@ accounts_file = "accounts.json"
 transactions_file = "transactions.json"
 
 
-
 class PerformanceTest():
     @classmethod
     def setUpClass(cls):
         print("\ntest_performance.py setUpClass")
 
         wallet = RandomAccount()
-        print("wallet.get_acc().public_key()", wallet.get_acc().public_key())
         tx = client.request_airdrop(wallet.get_acc().public_key(), 1000 * 10 ** 9, commitment=Confirmed)
         confirm_transaction(client, tx["result"])
 
@@ -127,6 +123,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key):
     assert (from_addr == caller_eth)
     return (from_addr, sign, msg)
 
+
 def sol_instr_keccak(keccak_instruction):
     return TransactionInstruction(
         program_id=keccakprog,
@@ -159,7 +156,7 @@ def deploy_contracts(args):
     print ("factory_eth", factory_eth.hex())
     print("factory_code", factory_code)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20(bytes32)')
-    receipt_map = []
+    receipt_list = []
 
     for i in range(args.count):
         print (" -- count", i)
@@ -204,10 +201,10 @@ def deploy_contracts(args):
         res = client.send_transaction(trx, instance.acc,
                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
-        receipt_map.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
+        receipt_list.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
 
     contracts = []
-    for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_map:
+    for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
         confirm_transaction(client, receipt)
         result = client.get_confirmed_transaction(receipt)
         check_address_event(result['result'], factory_eth, erc20_ether)
@@ -221,7 +218,7 @@ def create_accounts(args):
     instance = PerformanceTest()
     instance.setUpClass()
 
-    receipt_map = []
+    receipt_list = []
     for i in range(args.count):
         pr_key = w3.eth.account.from_key(random.randbytes(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
@@ -230,10 +227,10 @@ def create_accounts(args):
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
                                       opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-        receipt_map.append((acc_eth, acc_sol, pr_key.privateKey.hex()[2:], res['result']))
+        receipt_list.append((acc_eth, acc_sol, pr_key.privateKey.hex()[2:], res['result']))
 
     ether_accounts = []
-    for (acc_eth, acc_sol, pr_key_hex,  receipt) in receipt_map:
+    for (acc_eth, acc_sol, pr_key_hex,  receipt) in receipt_list:
         confirm_transaction(client, receipt)
         result = client.get_confirmed_transaction(receipt)
         print(acc_eth.hex(), acc_sol)
@@ -253,7 +250,7 @@ def create_accounts(args):
 def mint(accounts, contracts, acc):
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
 
-    receipt_map = []
+    receipt_list = []
     sum = 1000 * 10 ** 18
     count = 0
     for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
@@ -280,70 +277,13 @@ def mint(accounts, contracts, acc):
             res = client.send_transaction(trx, acc,
                                              opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
 
-            receipt_map.append((erc20_eth_hex, acc_eth_hex, res["result"]))
+            receipt_list.append((erc20_eth_hex, acc_eth_hex, res["result"]))
 
-
-    for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_map:
+    for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
         confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
         # print(res)
         check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
-
-
-def transfer(accounts, contracts, acc):
-    func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
-    count = 0
-    ia = iter(accounts)
-    ic = iter(contracts)
-
-    signed_trx = []
-    while count < args.count:
-        try:
-            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
-        except StopIteration as err:
-            ic = iter(contracts)
-            continue
-        try:
-            (acc_eth_hex1, pr_key_hex1, acc_sol1) = next(ia)
-        except StopIteration as err:
-            ia = iter(accounts)
-            (acc_eth_hex1, pr_key_hex1, acc_sol1) = next(ia)
-
-        (acc_eth_hex2, _, _) = accounts[random.randint(0, len(accounts)-1)]
-        if acc_eth_hex1 == acc_eth_hex2:
-            continue
-
-        pr_key = w3.eth.account.from_key(bytes.fromhex(pr_key_hex1))
-
-        count = count + 1
-        trx_data = func_name + \
-                   bytes().fromhex("%024x" % 0 + acc_eth_hex2) + \
-                   bytes().fromhex("%064x" % transfer_sum)
-        (from_addr, sign,  msg) = get_trx(
-            bytes().fromhex(erc20_eth_hex),
-            acc_sol1,
-            bytes().fromhex(acc_eth_hex1),
-            trx_data,
-            bytes.fromhex(pr_key_hex1)
-        )
-
-        trx = Transaction()
-        trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(sol_instr_05((from_addr + sign + msg), erc20_sol, erc20_code, acc_sol1))
-        try:
-            blockhash_resp = client.get_recent_blockhash()
-            if not blockhash_resp["result"]:
-                raise RuntimeError("failed to get recent blockhash")
-            recent_blockhash = Blockhash(blockhash_resp["result"]["value"]["blockhash"])
-        except Exception as err:
-            raise RuntimeError("failed to get recent blockhash") from err
-        trx.recent_blockhash = recent_blockhash
-        trx.sign(acc)
-        signed_trx.append((trx.serialize().hex(), erc20_eth_hex, acc_eth_hex1, acc_eth_hex2))
-
-
-    with open(transactions_file, mode='w') as f:
-        f.write(json.dumps(signed_trx))
 
 
 def create_transactions(args):
@@ -355,49 +295,119 @@ def create_transactions(args):
     with open(accounts_file, mode='r') as f:
         accounts = json.loads(f.read())
 
-    # erc20.transfer()
-    transfer(accounts, contracts, instance.acc)
+    func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
+    total = 0
+    ia = iter(accounts)
+    ic = iter(contracts)
+    eth_trx = []
+
+    while total < args.count:
+        try:
+            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
+        except StopIteration as err:
+            ic = iter(contracts)
+            continue
+        try:
+            (payer_eth, payer_prkey, payer_sol) = next(ia)
+        except StopIteration as err:
+            ia = iter(accounts)
+            (payer_eth, payer_prkey, payer_sol) = next(ia)
+
+        (receiver_eth, _, _) = accounts[random.randint(0, len(accounts)-1)]
+        if payer_eth == receiver_eth:
+            continue
+
+        total = total + 1
+        trx_data = func_name + \
+                   bytes().fromhex("%024x" % 0 + receiver_eth) + \
+                   bytes().fromhex("%064x" % transfer_sum)
+        (from_addr, sign,  msg) = get_trx(
+            bytes().fromhex(erc20_eth_hex),
+            payer_sol,
+            bytes().fromhex(payer_eth),
+            trx_data,
+            bytes.fromhex(payer_prkey)
+        )
+        trx = {}
+        trx['from_addr'] = from_addr.hex()
+        trx['sign'] = sign.hex()
+        trx['msg']  = msg.hex()
+        trx['erc20_sol'] = erc20_sol
+        trx['erc20_eth'] = erc20_eth_hex
+        trx['erc20_code'] = erc20_code
+        trx['payer_sol'] = payer_sol
+        trx['payer_eth'] = payer_eth
+        trx['receiver_eth'] = receiver_eth
+        eth_trx.append(trx)
+
+    with open(transactions_file, mode='w') as f:
+        f.write(json.dumps(eth_trx))
+
+def get_block_hash():
+    try:
+        blockhash_resp = client.get_recent_blockhash()
+        if not blockhash_resp["result"]:
+            raise RuntimeError("failed to get recent blockhash")
+        return (Blockhash(blockhash_resp["result"]["value"]["blockhash"]), time.time())
+    except Exception as err:
+        raise RuntimeError("failed to get recent blockhash") from err
 
 def send_transactions(args):
-    receipt_map = []
+    instance = PerformanceTest()
+    instance.setUpClass()
+
+    receipt_list = []
     count_err = 0
-    start = time.time()
 
     with open(transactions_file, mode='r') as f:
-        signed_trx = json.loads(f.read())
-    count = 0
-    for (trx_hex, erc20_eth_hex, acc_eth_hex1, acc_eth_hex2) in signed_trx:
-        try:
-            res = client.send_raw_transaction(bytes().fromhex(trx_hex),
-                                              opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-            receipt_map.append((erc20_eth_hex, acc_eth_hex1, acc_eth_hex2, res["result"]))
-        except Exception as err:
-            # print(err)
-            count_err = count_err + 1
+        eth_trx = json.loads(f.read())
 
-        count = count + 1
-        if count >= args.count:
+    (recent_blockhash, blockhash_time) = get_block_hash()
+    start = time.time()
+    total = 0
+    for rec in eth_trx:
+        total = total + 1
+        if total > args.count:
             break
+        if time.time() - blockhash_time > 5:
+            (recent_blockhash, blockhash_time) = get_block_hash()
 
-    for (erc20_eth_hex, acc_eth_hex1, acc_eth_hex2, receipt) in receipt_map:
+        from_addr = bytes.fromhex(rec['from_addr'])
+        sign = bytes.fromhex(rec['sign'])
+        msg = bytes.fromhex(rec['msg'])
+        trx = Transaction()
+        trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
+        trx.add(sol_instr_05((from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']))
+        trx.recent_blockhash = recent_blockhash
+        trx.sign(instance.acc)
+
+        try:
+            res = client.send_raw_transaction(trx.serialize(),
+                                              opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+        except Exception as err:
+            print(err)
+            count_err = count_err + 1
+            continue
+
+        receipt_list.append((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))
+
+    for (erc20_eth, payer_eth, receiver_eth, receipt) in receipt_list:
         confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
-        check_transfer_event(res['result'], erc20_eth_hex, acc_eth_hex1, acc_eth_hex2, transfer_sum, b'\x12')
+        check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
 
     end = time.time()
-    print("count", count)
-    print("count_err", count_err)
-    print("time", end-start, "sec" )
+    print("total:", total)
+    print("errors:", count_err)
+    print("time:", end-start, "sec" )
 
 
 
-# parse program args
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
 parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx')
 
 args = parser.parse_args()
-
 
 if args.step == "deploy":
     deploy_contracts(args)
