@@ -402,8 +402,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
         debug_print!("Executor initialized");
         executor.create_begin(account_storage.origin(), code_data, u64::max_value())?;
-        let exit_reason = executor.execute();
-        let result = executor.return_value();
+        let (result, exit_reason) = executor.execute();
         debug_print!("Call done");
 
         if exit_reason.is_succeed() {
@@ -450,11 +449,7 @@ fn do_call<'a>(
 
         executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
 
-        let exit_reason = match executor.execute_n_steps(u64::MAX) {
-            Ok(()) => return Err(ProgramError::InvalidInstructionData),
-            Err(reason) => reason
-        };
-        let result = executor.return_value();
+        let (result, exit_reason) = executor.execute();
 
         debug_print!("Call done");
 
@@ -558,15 +553,14 @@ fn do_continue<'a>(
         let mut executor = Machine::restore(storage, backend);
         debug_print!("Executor restored");
 
-        let exit_reason = match executor.execute_n_steps(step_count) {
+        let (result, exit_reason) = match executor.execute_n_steps(step_count) {
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 return Ok(None);
             }
-            Err(reason) => reason
+            Err((result, reason)) => (result, reason)
         };
-        let result = executor.return_value();
 
         debug_print!("Call done");
 
@@ -588,7 +582,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason.clone(), &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, &result)?;
 
     Ok(Some(exit_reason))
 }
@@ -625,7 +619,6 @@ fn invoke_on_return<'a>(
                 ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
                 ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
                 ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
-                ExitError::Other(_) => { debug_print!("Other normal errors."); 0xee},
             }
         },
         ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
@@ -635,9 +628,9 @@ fn invoke_on_return<'a>(
                 ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
                 ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
                 ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
-                ExitFatal::Other(_) => { debug_print!("Other fatal errors."); 0xf4},
             }
         },
+        ExitReason::StepLimitReached => { unreachable!() }
     };
 
     debug_print!("{}", &hex::encode(&result));
