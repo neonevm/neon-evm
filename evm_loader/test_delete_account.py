@@ -116,13 +116,34 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 self.sol_instr_call(trx_data_1, owner_contract, contract_code)
             )
 
-        result = send_transaction(client, trx, self.acc)
+        send_transaction(client, trx, self.acc)
 
         caller_balance_post = getBalance(self.caller)
         contract_balance_post = getBalance(owner_contract)
 
         self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre)
         self.assertEqual(contract_balance_post, 0)
+
+
+    def test_success_deletion(self):
+        (owner_contract, contract_code) = self.deploy_contract()
+
+        init_nonce = getTransactionCount(client, self.caller)
+        (trx_data_1, keccak_instruction_1) = self.make_transaction(owner_contract, init_nonce, 1)
+
+        trx = Transaction().add(
+                self.sol_instr_keccak(keccak_instruction_1)
+            ).add(
+                self.sol_instr_call(trx_data_1, owner_contract, contract_code)
+            )
+
+        send_transaction(client, trx, self.acc)
+
+        err = "Can't get information about"
+        with self.assertRaisesRegex(Exception,err):
+            nonce = getTransactionCount(client, owner_contract)
+            print(nonce)
+
 
 
 if __name__ == '__main__':
