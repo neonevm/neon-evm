@@ -29,12 +29,14 @@ class PerformanceTest():
     def setUpClass(cls):
         print("\ntest_performance.py setUpClass")
 
-        wallet = WalletAccount(wallet_path())
-        # wallet = RandomAccount()
-        # tx = client.request_airdrop(wallet.acc.public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
-        # send_transaction(client, tx, local.acc)
-        # confirm_transaction(client, tx['result'])
-        # result = client.get_confirmed_transaction(tx['result'])
+        wallet = RandomAccount()
+        print("wallet.get_acc().public_key()", wallet.get_acc().public_key())
+        tx = client.request_airdrop(wallet.get_acc().public_key(), 10000 * 10 ** 9, commitment=Confirmed)
+        confirm_transaction(client, tx["result"])
+
+        if getBalance(wallet.get_acc().public_key()) == 0:
+            print("request_airdrop error")
+            exit(0)
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
