@@ -343,7 +343,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
             external_account_metas.insert(0,contract_meta);
         }
-        eprintln!("external_call: external_account_metas: {:?}", self.solana_accounts);
+        eprintln!("external_call: solana_accounts: {:?}", self.solana_accounts);
 
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
         let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
