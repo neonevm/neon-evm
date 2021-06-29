@@ -1,6 +1,6 @@
 pragma solidity >=0.5.12;
 
-contract helloWorld {
+contract SelfDestructContract {
     string public text = "Hello World!";
 
     function callHelloWorld() public view returns (string memory) {
@@ -8,6 +8,6 @@ contract helloWorld {
     }
 
     function callSelfDestruct() public {
-        selfdestruct(msg.sender);
+        selfdestruct(address(uint160(msg.sender)));
     }
 }
