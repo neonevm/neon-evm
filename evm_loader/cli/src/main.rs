@@ -84,7 +84,7 @@ use secp256k1::SecretKey;
 use rlp::RlpStream;
 
 use log::{debug, error, info};
-use crate::account_storage::AccountMetaJSON;
+use crate::account_storage::SolanaAccountJSON;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -148,16 +148,16 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
 
     let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
 
-    let account_metas: Vec<AccountMetaJSON> = account_storage.external_account_metas
+    let solana_accounts: Vec<SolanaAccountJSON> = account_storage.solana_accounts
         .borrow()
         .iter()
         .cloned()
-        .map(AccountMetaJSON::from)
+        .map(SolanaAccountJSON::from)
         .collect();
 
     let js = json!({
         "accounts": accounts,
-        "account_metas": account_metas,
+        "solana_accounts": solana_accounts,
         "result": &hex::encode(&result),
         "exit_status": status
     }).to_string();
