@@ -36,7 +36,6 @@ pub struct ProgramAccountStorage<'a> {
     account_metas: Vec<&'a AccountInfo<'a>>,
     contract_id: H160,
     sender: Sender,
-    account_infos: &'a [AccountInfo<'a>]
 }
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -171,7 +170,6 @@ impl<'a> ProgramAccountStorage<'a> {
             account_metas,
             contract_id,
             sender,
-            account_infos
         })
     }
 
@@ -216,12 +214,6 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    /// 
-    /// # Panics
-    ///
-    /// Will return:
-    /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
-    /// or `account.update` errors
     pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
@@ -255,38 +247,12 @@ impl<'a> ProgramAccountStorage<'a> {
                     debug_print!("Going to delete address = {:?}.", address);
 
                     if let Some(pos) = self.find_account(&address) {
-                        let account = &mut self.accounts[pos];
                         let account_info = &self.account_metas[pos];
-
-                        let account_info_data = AccountData::unpack(&account_info.data.borrow())?;
-
-                        if let Ok(account_data) = account_info_data.get_account() {
-                            // do checks
-                            // move funds
-                            use solana_program::system_instruction;
-                            use solana_program::program::invoke;
-                            {
-                                let transfer_instruction = system_instruction::transfer(account_info.key, account_info.signer_key().unwrap(), account_info.lamports());
-                                invoke(
-                                    &transfer_instruction,
-                                    self.account_infos
-                                )?;
-                            }
-                            {
-                                for account in self.account_infos.iter() {
-                                    if *account.key == account_data.code_account {
-                                        let transfer_instruction = system_instruction::transfer(account_info.key, account_info.signer_key().unwrap(), account_info.lamports());
-                                        invoke(
-                                            &transfer_instruction,
-                                            self.account_infos
-                                        )?;
-                                    }
-                                }
-                            }
-                        } else {
-                            debug_print!("Only contract account could be deleted. account = {:?}.", account);
-                            return Err(ProgramError::InvalidAccountData);
-                        }
+                        debug_print!("Move funds from account");
+                        **account_info.lamports.borrow_mut() = 0;
+                        debug_print!("Mark account empty");
+                        let mut account_data = account_info.try_borrow_mut_data()?;
+                        AccountData::pack(&AccountData::Empty, &mut account_data)?;
                     } else {
                         debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
