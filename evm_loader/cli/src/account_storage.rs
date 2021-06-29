@@ -273,6 +273,41 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 }
 
+/// Simulate a list of transactions and filter out the ones that will fail
+fn simulate_transactions(
+    rpc_client: &RpcClient,
+    candidate_transactions: Vec<(Transaction, String)>,
+) -> client_error::Result<Vec<(Transaction, String)>> {
+    info!("Simulating {} transactions", candidate_transactions.len(),);
+    let mut simulated_transactions = vec![];
+    for (mut transaction, memo) in candidate_transactions {
+        transaction.message.recent_blockhash =
+            retry_rpc_operation(10, || rpc_client.get_recent_blockhash())?.0;
+
+        let sim_result = rpc_client.simulate_transaction_with_config(
+            &transaction,
+            RpcSimulateTransactionConfig {
+                sig_verify: false,
+                ..RpcSimulateTransactionConfig::default()
+            },
+        )?;
+        if sim_result.value.err.is_some() {
+            trace!(
+                "filtering out transaction due to simulation failure: {:?}: {}",
+                sim_result,
+                memo
+            );
+        } else {
+            simulated_transactions.push((transaction, memo))
+        }
+    }
+    info!(
+        "Successfully simulating {} transactions",
+        simulated_transactions.len()
+    );
+    Ok(simulated_transactions)
+}
+
 impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
@@ -339,11 +374,36 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             Some((sender_eth, sender_nonce)) => {
                 let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
                 // TODO: config.rpc_client.simulate_transaction(&solana_address, CommitmentConfig::processed()).unwrap().value {
+                // let mut transactions = vec![];
+                // transactions.push((
+                //     Transaction::new_unsigned(
+                //         Message::new(
+                //             [instruction].into_iter().cloned().collect(),
+                //             None),
+                //     ),
+                //     format!("Simulate external call with instruction: {:?}",
+                //             instruction)
+                // ));
+                // let create_transactions =
+                //     simulate_transactions(&*self.config.rpc_client, transactions)?;
+                // eprintln!("result of simulate_transactions: {:?}", create_transactions);
+                // let confirmations = transact(
+                //     &self.config.rpc_client,
+                //     config.dry_run,
+                //     create_transactions,
+                //     &config.authorized_staker,
+                // )?;
+                //
+                // if !process_confirmations(confirmations, None) {
+                //     eprintln!("external_call: Simulate transactions were failed.");
+                // }
+                //
                 invoke_signed(
                     instruction,
                     account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
                 )
+                // Ok(())
             }
             None => {
                 invoke_signed(
