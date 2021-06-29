@@ -8,6 +8,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     program::invoke_signed,
+    transaction::Transaction,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
@@ -15,15 +16,26 @@ use evm_loader::{
     account_data::AccountData,
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
+    solana_backend::SolanaBackend,
 };
-use std::borrow::BorrowMut;
-use std::cell::RefCell; 
-use std::rc::Rc;
+#[allow(unused)]
+use std::{
+    borrow::BorrowMut,
+    cell::RefCell,
+    rc::Rc
+};
 use crate::Config;
 #[allow(unused)]
-use solana_program::instruction::Instruction;
-use evm_loader::solana_backend::SolanaBackend;
-use solana_program::instruction::AccountMeta;
+use solana_program::{
+    instruction::Instruction,
+    instruction::AccountMeta,
+    message::Message,
+};
+#[allow(unused)]
+use solana_client::{
+    rpc_client::RpcClient,
+    rpc_config::RpcSimulateTransactionConfig,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountJSON {
@@ -36,7 +48,7 @@ pub struct AccountJSON {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct AccountMetaJSON {
+pub struct SolanaAccountJSON {
     /// An account's public key
     pub pubkey: String,
     /// True if an Instruction requires a Transaction signature matching `pubkey`.
@@ -44,7 +56,7 @@ pub struct AccountMetaJSON {
     /// True if the `pubkey` can be loaded as a read-write account.
     pub is_writable: bool,
 }
-impl From<AccountMeta> for AccountMetaJSON {
+impl From<AccountMeta> for SolanaAccountJSON {
     fn from(account_meta: AccountMeta) -> Self {
         Self {
             pubkey: bs58::encode(&account_meta.pubkey).into_string(),
@@ -85,7 +97,7 @@ impl SolanaNewAccount {
 pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
     new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
-    pub external_account_metas: RefCell<Vec<AccountMeta>>,
+    pub solana_accounts: RefCell<Vec<AccountMeta>>,
     config: &'a Config,
     contract_id: H160,
     caller_id: H160,
@@ -119,7 +131,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashMap::new()),
-            external_account_metas: RefCell::new(vec![]),
+            solana_accounts: RefCell::new(vec![]),
             config,
             contract_id,
             caller_id,
@@ -360,12 +372,12 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     ) -> ProgramResult {
         eprintln!("emulate external_call");
         {
-            let mut external_account_metas = self.external_account_metas.borrow_mut();
+            let mut external_account_metas = self.solana_accounts.borrow_mut();
             external_account_metas.extend(instruction.accounts.iter().cloned());
             let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
             external_account_metas.insert(0,contract_meta);
         }
-        eprintln!("external_call: external_account_metas: {:?}", self.external_account_metas);
+        eprintln!("external_call: solana_accounts: {:?}", self.solana_accounts);
 
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
         let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
