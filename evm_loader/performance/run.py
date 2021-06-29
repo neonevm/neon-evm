@@ -392,7 +392,7 @@ def send_transactions(args):
         receipt_list.append((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))
 
     for (erc20_eth, payer_eth, receiver_eth, receipt) in receipt_list:
-        confirm_transaction(client, receipt)
+        confirm_transaction(client, receipt, sleep_time=0.1)
         res = client.get_confirmed_transaction(receipt)
         check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
 

@@ -35,7 +35,7 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 
-def confirm_transaction(http_client, tx_sig, confirmations=1):
+def confirm_transaction(http_client, tx_sig, confirmations=1, sleep_time=1):
     """Confirm a transaction."""
     TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
     elapsed_time = 0
@@ -48,7 +48,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=1):
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
                            and status['confirmations'] >= confirmations):
                 return
-        sleep_time = 1
+        # sleep_time = 1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
