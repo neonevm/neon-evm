@@ -12,7 +12,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo clippy
-RUN cargo build-bpf
+RUN cargo build-bpf --features no-logs
 WORKDIR /opt/evm_loader/cli
 RUN cargo clippy
 RUN cargo build --release
@@ -46,7 +46,7 @@ FROM cybercoredev/solana:v1.6.9-resources AS solana
 FROM ubuntu:20.04 AS base
 WORKDIR /opt
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install openssl ca-certificates curl python3 python3-pip && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 COPY evm_loader/test_requirements.txt solana-py.patch /tmp/

@@ -532,7 +532,7 @@ fn do_partial_create<'a>(
     gas_limit: u64,
 ) -> ProgramResult
 {
-    debug_print!("do_partial_create");
+    debug_print!("do_partial_create gas_limit={}", gas_limit);
 
     let backend = SolanaBackend::new(account_storage, Some(accounts));
     debug_print!("  backend initialized");
