@@ -22,12 +22,40 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 contracts_file = "contracts.json"
 accounts_file = "accounts.json"
 transactions_file = "transactions.json"
+senders_file = "senders.json"
 
-
-class PerformanceTest():
+class init_senders():
     @classmethod
-    def setUpClass(cls):
-        print("\ntest_performance.py setUpClass")
+    def init(cls):
+        print("init_senders init")
+        with open(senders_file, mode='r') as f:
+            senders = json.loads(f.read())
+
+        cls.accounts = []
+        for (pub_key, pr_key) in senders:
+            cls.accounts.append(Account(bytes().fromhex(pr_key)))
+
+        if len(cls.accounts) == 0:
+            raise RuntimeError("solana senders is absent")
+        cls.current = 0
+
+    def next_acc(self):
+        self.current = self.current + 1
+        if self.current >= len(self.accounts):
+            self.current = 0
+        return self.accounts[self.current]
+
+    def send_transaction(self, trx):
+        res = client.send_transaction(trx, self.next_acc(),
+                                         opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+        return res['result']
+
+
+
+class init_wallet():
+    @classmethod
+    def init(cls):
+        print("\ntest_performance.py init")
 
         wallet = RandomAccount()
         tx = client.request_airdrop(wallet.get_acc().public_key(), 100000 * 10 ** 9, commitment=Confirmed)
@@ -145,8 +173,8 @@ def sol_instr_05(evm_instruction, contract, contract_code, caller):
                                ])
 
 def deploy_contracts(args):
-    instance = PerformanceTest()
-    instance.setUpClass()
+    instance = init_wallet()
+    instance.init()
 
     res = instance.loader.deploy(CONTRACTS_DIR + "Factory.binary", instance.caller)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
@@ -245,7 +273,7 @@ def mint_create(accounts, contracts, acc, sum):
     ia = iter(accounts)
     ic = iter(contracts)
 
-    total = 0;
+    total = 0
     if args.scheme == "one-to-one":
         while total < args.count:
             print("mint ", total)
@@ -262,7 +290,7 @@ def mint_create(accounts, contracts, acc, sum):
                 (payer_eth, _, payer_sol) = next(ia)
 
             receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
-            total = total + 1;
+            total = total + 1
     else:
         for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
             for (payer_eth, _, payer_sol) in accounts:
@@ -289,8 +317,8 @@ def mint(accounts, contracts, acc):
 
 
 def create_accounts(args):
-    instance = PerformanceTest()
-    instance.setUpClass()
+    instance = init_wallet()
+    instance.init()
 
     receipt_list = []
     for i in range(args.count):
@@ -323,8 +351,8 @@ def create_accounts(args):
 
 
 def create_transactions(args):
-    instance = PerformanceTest()
-    instance.setUpClass()
+    instance = init_wallet()
+    instance.init()
 
     with open(contracts_file, mode='r') as f:
         contracts = json.loads(f.read())
@@ -389,8 +417,10 @@ def get_block_hash():
         raise RuntimeError("failed to get recent blockhash") from err
 
 def send_transactions(args):
-    instance = PerformanceTest()
-    instance.setUpClass()
+    instance = init_wallet()
+    instance.init()
+    senders =init_senders()
+    senders.init()
 
     receipt_list = []
     count_err = 0
@@ -415,11 +445,12 @@ def send_transactions(args):
         trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
         trx.add(sol_instr_05((from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']))
         trx.recent_blockhash = recent_blockhash
-        trx.sign(instance.acc)
+        trx.sign(senders.next_acc())
 
         try:
+            print("send trx", total)
             res = client.send_raw_transaction(trx.serialize(),
-                                              opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+                                              opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed", skip_preflight = True))
         except Exception as err:
             print(err)
             count_err = count_err + 1
@@ -439,10 +470,34 @@ def send_transactions(args):
 
 
 
+def create_senders(args):
+    total = 0
+    acc_list = []
+    receipt_list = []
+
+    while total < args.count:
+        total = total + 1
+        acc = Account(random.randbytes(32))
+        tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
+        receipt_list.append((tx['result'], acc.secret_key().hex(), str(acc.public_key())))
+
+    for (receipt, pr_key, pub_key ) in receipt_list:
+        confirm_transaction(client, receipt, sleep_time=0.1)
+        if getBalance(pub_key) == 0:
+            print("request_airdrop error", acc.public_key())
+            exit(0)
+        acc_list.append((pub_key, pr_key))
+
+    with open(senders_file, mode="w") as f:
+        f.write(json.dumps(acc_list))
+
+
+
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
-parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx')
-parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-many (default), one-to-one')
+parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx, '
+                                                                          'create_sender')
+parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
 
 args = parser.parse_args()
 
@@ -454,5 +509,7 @@ elif args.step == "create_trx":
     create_transactions(args)
 elif args.step == "send_trx":
     send_transactions(args)
+elif args.step == "create_senders":
+    create_senders(args)
 
 
