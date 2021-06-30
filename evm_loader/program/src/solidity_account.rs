@@ -174,6 +174,7 @@ impl<'a> SolidityAccount<'a> {
         #[allow(unused_variables)]
         solidity_address: H160,
         nonce: U256,
+        #[allow(unused_variables)]
         lamports: u64,
         code: &Option<Vec<u8>>,
         storage_items: I,
