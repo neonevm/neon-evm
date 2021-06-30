@@ -12,7 +12,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo clippy
-RUN cargo build-bpf --release
+RUN cargo build-bpf
 WORKDIR /opt/evm_loader/cli
 RUN cargo clippy
 RUN cargo build --release
