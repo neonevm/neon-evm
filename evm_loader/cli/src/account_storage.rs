@@ -308,10 +308,8 @@ pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Res
                    }) = result
         {
             let can_retry = reqwest_error.is_timeout()
-                || reqwest_error
-                .status()
-                .map(|s| s == StatusCode::BAD_GATEWAY || s == StatusCode::GATEWAY_TIMEOUT)
-                .unwrap_or(false);
+                || reqwest_error.status()
+                .map_or(false,|s| s == StatusCode::BAD_GATEWAY || s == StatusCode::GATEWAY_TIMEOUT);
             if can_retry && retries > 0 {
                 eprintln!("RPC request timeout, {} retries remaining", retries);
                 retries -= 1;
