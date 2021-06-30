@@ -43,7 +43,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         balance_address = base58.b58encode(value)
         return balance_address
 
@@ -58,7 +58,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         mint_id = base58.b58encode(value)
         return mint_id
 
@@ -74,7 +74,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         balance = int.from_bytes(value, "big")
         return balance
 
@@ -99,7 +99,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         ret = int.from_bytes(value, "big")
         assert 0 != ret, 'erc20.deposit: FAIL'
         return ether_trx.trx_data
@@ -123,7 +123,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         ret = int.from_bytes(value, "big")
         assert ret != 0, 'erc20.withdraw: FAIL'
         return ret
@@ -142,7 +142,7 @@ class ERC20:
         instruction = data[0]
         assert (instruction == 6)  # 6 means OnReturn
         assert (data[1] < 0xd0)  # less 0xd0 - success
-        value = data[2:]
+        value = data[10:]
         ret = int.from_bytes(value, "big")
         print('erc20.transfer:', 'OK' if ret != 0 else 'FAIL')
         return ret

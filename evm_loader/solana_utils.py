@@ -180,7 +180,7 @@ class NeonEvmClient:
         self.__create_solana_ether_caller(ethereum_transaction)
         caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
         trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
-                   'value': 1, 'gas': 1, 'gasPrice': 1, 'nonce': caller_trx_cnt,
+                   'value': 1, 'gas': 9999999, 'gasPrice': 1, 'nonce': caller_trx_cnt,
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
