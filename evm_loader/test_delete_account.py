@@ -1,9 +1,7 @@
 from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
 import unittest
-import base58
-from eth_account import Account as EthAccount
+from eth_utils import abi
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
@@ -46,20 +44,26 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("code id: ", contract_code)
         return (owner_contract, contract_code)
 
-    def make_transaction(self, owner_contract, nonce, position):
+    def make_transactions(self, owner_contract, contract_code, nonce, position):
+        if nonce is None:
+            nonce = getTransactionCount(client, self.caller)
+
         tx = {
             'to': solana2ether(owner_contract),
             'value': 1,
             'gas': 1,
             'gasPrice': 1,
             'nonce': nonce,
-            'data': '183555f0',
+            'data': abi.function_signature_to_4byte_selector('callSelfDestruct()'),
             'chainId': 111
         }
         (_from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
         keccak_instruction = make_keccak_instruction_data(position, len(msg))
-        return (trx_data, keccak_instruction)
+        
+        keccak_tx = self.sol_instr_keccak(keccak_instruction)
+        call_tx = self.sol_instr_call(trx_data, owner_contract, contract_code)
+        return (keccak_tx, call_tx)
 
     def sol_instr_keccak(self, keccak_instruction):
         return  TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -77,23 +81,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 ])
 
 
-    def test_success_tx_send(self):
+    def test_fail_on_tx_after_delete(self):
+        # Check that contact accounts marked invalid on deletion and couldn't be used in same block
         (owner_contract, contract_code) = self.deploy_contract()
 
         init_nonce = getTransactionCount(client, self.caller)
-        (trx_data_1, keccak_instruction_1) = self.make_transaction(owner_contract, init_nonce, 1)
+        (keccak_tx_1, call_tx_1) = self.make_transactions(owner_contract, contract_code, init_nonce, 1)
         init_nonce += 1
-        (trx_data_2, keccak_instruction_2) = self.make_transaction(owner_contract, init_nonce, 3)
+        (keccak_tx_2, call_tx_2) = self.make_transactions(owner_contract, contract_code, init_nonce, 3)
 
-        trx = Transaction().add(
-                self.sol_instr_keccak(keccak_instruction_1)
-            ).add(
-                self.sol_instr_call(trx_data_1, owner_contract, contract_code)
-            ).add(
-                self.sol_instr_keccak(keccak_instruction_2)
-            ).add(
-                self.sol_instr_call(trx_data_2, owner_contract, contract_code)
-            )
+        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
         err = "invalid account data for instruction"
         with self.assertRaisesRegex(Exception,err):
@@ -101,43 +98,26 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print(result)
 
 
-    def test_funds_transfer(self):
+    def test_success_deletion(self):
         (owner_contract, contract_code) = self.deploy_contract()
-
-        init_nonce = getTransactionCount(client, self.caller)
-        (trx_data_1, keccak_instruction_1) = self.make_transaction(owner_contract, init_nonce, 1)
 
         caller_balance_pre = getBalance(self.caller)
         contract_balance_pre = getBalance(owner_contract)
+        code_balance_pre = getBalance(contract_code)
 
-        trx = Transaction().add(
-                self.sol_instr_keccak(keccak_instruction_1)
-            ).add(
-                self.sol_instr_call(trx_data_1, owner_contract, contract_code)
-            )
+        (keccak_tx_1, call_tx_1) = self.make_transactions(owner_contract, contract_code, None, 1)
+        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 )
 
         send_transaction(client, trx, self.acc)
 
         caller_balance_post = getBalance(self.caller)
         contract_balance_post = getBalance(owner_contract)
+        code_balance_post = getBalance(contract_code)
 
-        self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre)
+        # Check that lamports moved from code accounts to caller
+        self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre + code_balance_pre)
         self.assertEqual(contract_balance_post, 0)
-
-
-    def test_success_deletion(self):
-        (owner_contract, contract_code) = self.deploy_contract()
-
-        init_nonce = getTransactionCount(client, self.caller)
-        (trx_data_1, keccak_instruction_1) = self.make_transaction(owner_contract, init_nonce, 1)
-
-        trx = Transaction().add(
-                self.sol_instr_keccak(keccak_instruction_1)
-            ).add(
-                self.sol_instr_call(trx_data_1, owner_contract, contract_code)
-            )
-
-        send_transaction(client, trx, self.acc)
+        self.assertEqual(code_balance_post, 0)
 
         err = "Can't get information about"
         with self.assertRaisesRegex(Exception,err):

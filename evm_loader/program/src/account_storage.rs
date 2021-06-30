@@ -36,6 +36,7 @@ pub struct ProgramAccountStorage<'a> {
     account_metas: Vec<&'a AccountInfo<'a>>,
     contract_id: H160,
     sender: Sender,
+    account_infos: &'a [AccountInfo<'a>]
 }
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -170,6 +171,7 @@ impl<'a> ProgramAccountStorage<'a> {
             account_metas,
             contract_id,
             sender,
+            account_infos
         })
     }
 
@@ -248,11 +250,43 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     if let Some(pos) = self.find_account(&address) {
                         let account_info = &self.account_metas[pos];
+                        let caller_info = &self.account_metas[self.find_account(&self.origin()).ok_or(ProgramError::NotEnoughAccountKeys)?];
+                        let code_info = {
+                            let account_info_data = AccountData::unpack(&account_info.data.borrow())?;
+                            let account_data = if let Ok(account_data) = account_info_data.get_account() {
+                                account_data
+                            } else {
+                                debug_print!("Only account could be deleted. account = {:?}.", account_info_data);
+                                return Err(ProgramError::InvalidAccountData);
+                            };
+                            if let Some(code_info) = self.account_infos.iter().find(|account| *account.key == account_data.code_account) {
+                                code_info
+                            } else {
+                                debug_print!("Couldn't find code account = {:?}.", account_data.code_account);
+                                return Err(ProgramError::NotEnoughAccountKeys);
+                            }
+                        };
+
                         debug_print!("Move funds from account");
+                        let caller_info_starting_lamports = caller_info.lamports();
+                        **caller_info.lamports.borrow_mut() = caller_info_starting_lamports
+                            .checked_add(account_info.lamports())
+                            .ok_or(ProgramError::InsufficientFunds)?;
                         **account_info.lamports.borrow_mut() = 0;
-                        debug_print!("Mark account empty");
+
+                        debug_print!("Move funds from code");
+                        let caller_info_starting_lamports = caller_info.lamports();
+                        **caller_info.lamports.borrow_mut() = caller_info_starting_lamports
+                            .checked_add(code_info.lamports())
+                            .ok_or(ProgramError::InsufficientFunds)?;
+                        **code_info.lamports.borrow_mut() = 0;
+
+
+                        debug_print!("Mark accounts empty");
                         let mut account_data = account_info.try_borrow_mut_data()?;
                         AccountData::pack(&AccountData::Empty, &mut account_data)?;
+                        let mut code_data = code_info.try_borrow_mut_data()?;
+                        AccountData::pack(&AccountData::Empty, &mut code_data)?;
                     } else {
                         debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);

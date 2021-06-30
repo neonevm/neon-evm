@@ -183,7 +183,7 @@ impl<'a> SolidityAccount<'a> {
     {
         debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code.is_some() {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
-        **account_info.lamports.borrow_mut() = lamports;
+        // **account_info.lamports.borrow_mut() = lamports;
 
         /*let mut current_code_size = match self.account_data {
             AccountData::Empty => 0,

@@ -417,7 +417,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     };
 
     if let Some((applies, logs)) = applies_logs {
-        account_storage.apply(applies, true)?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
@@ -469,7 +469,7 @@ fn do_call<'a>(
     };
 
     if let Some((applies, logs)) = applies_logs {
-        account_storage.apply(applies, true)?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
@@ -581,7 +581,7 @@ fn do_continue<'a>(
     };
 
     if let Some((applies, logs)) = applies_logs {
-        account_storage.apply(applies, true)?;
+        account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;

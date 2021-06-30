@@ -8,6 +8,6 @@ contract SelfDestructContract {
     }
 
     function callSelfDestruct() public {
-        selfdestruct(address(uint160(msg.sender)));
+        selfdestruct(msg.sender);
     }
 }
