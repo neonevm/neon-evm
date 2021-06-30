@@ -12,7 +12,7 @@ from solana.blockhash import *
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
 CONTRACTS_DIR = "contracts/"
 # evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "634bKMgVZhw7JGCBLtngW7Lmaad7UDVQDkVbC3gfRmGr"
+evm_loader_id = "CcUVX7PAGmftm3pAE2po5idVsnAyYh953gM8DETSZ68R"
 chain_id = 111
 transfer_sum = 1
 
@@ -30,7 +30,7 @@ class PerformanceTest():
         print("\ntest_performance.py setUpClass")
 
         wallet = RandomAccount()
-        tx = client.request_airdrop(wallet.get_acc().public_key(), 1000 * 10 ** 9, commitment=Confirmed)
+        tx = client.request_airdrop(wallet.get_acc().public_key(), 100000 * 10 ** 9, commitment=Confirmed)
         confirm_transaction(client, tx["result"])
 
         if getBalance(wallet.get_acc().public_key()) == 0:
@@ -214,6 +214,80 @@ def deploy_contracts(args):
         f.write(json.dumps(contracts))
 
 
+def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
+
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+    trx_data = func_name + \
+               bytes().fromhex("%024x" % 0 + payer_eth) + \
+               bytes().fromhex("%064x" % sum)
+    trx = Transaction()
+    trx.add(
+        TransactionInstruction(
+            program_id=evm_loader_id,
+            data=trx_data,
+            keys=[
+                AccountMeta(pubkey=erc20_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
+                AccountMeta(pubkey=payer_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ]))
+    res = client.send_transaction(trx, acc,
+                                  opts=TxOpts(skip_confirmation=True, skip_preflight=True,
+                                              preflight_commitment="confirmed"))
+    return (erc20_eth_hex, payer_eth, res["result"])
+
+
+def mint_create(accounts, contracts, acc, sum):
+
+    receipt_list = []
+    ia = iter(accounts)
+    ic = iter(contracts)
+
+    total = 0;
+    if args.scheme == "one-to-one":
+        while total < args.count:
+            print("mint ", total)
+            try:
+                (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
+            except StopIteration as err:
+                ic = iter(contracts)
+                continue
+
+            try:
+                (payer_eth, _, payer_sol) = next(ia)
+            except StopIteration as err:
+                ia = iter(accounts)
+                (payer_eth, _, payer_sol) = next(ia)
+
+            receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
+            total = total + 1;
+    else:
+        for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
+            for (payer_eth, _, payer_sol) in accounts:
+                print("mint ", total)
+                receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
+                total = total + 1
+                if total >= args.count:
+                    return receipt_list
+    return receipt_list
+
+
+def mint_confirm(receipt_list, sum):
+    for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
+        confirm_transaction(client, receipt)
+        res = client.get_confirmed_transaction(receipt)
+        # print(res)
+        check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
+
+
+def mint(accounts, contracts, acc):
+    sum = 1000 * 10 ** 18
+    receipt_list = mint_create(accounts, contracts, acc, sum)
+    mint_confirm(receipt_list, sum)
+
+
 def create_accounts(args):
     instance = PerformanceTest()
     instance.setUpClass()
@@ -246,44 +320,6 @@ def create_accounts(args):
 
     # erc20.mint()
     mint(accounts, contracts, instance.acc)
-
-def mint(accounts, contracts, acc):
-    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
-
-    receipt_list = []
-    sum = 1000 * 10 ** 18
-    count = 0
-    for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
-        for (acc_eth_hex, _, acc_sol) in accounts:
-            print (count)
-            count = count +1
-            trx_data = func_name + \
-                       bytes().fromhex("%024x" % 0 + acc_eth_hex) + \
-                       bytes().fromhex("%064x" % sum)
-
-            trx = Transaction()
-            trx.add(
-                TransactionInstruction(
-                    program_id=evm_loader_id,
-                    data=trx_data,
-                    keys=[
-                        AccountMeta(pubkey=erc20_sol, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
-                        AccountMeta(pubkey=acc_sol, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                ]))
-            res = client.send_transaction(trx, acc,
-                                             opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
-
-            receipt_list.append((erc20_eth_hex, acc_eth_hex, res["result"]))
-
-    for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
-        confirm_transaction(client, receipt)
-        res = client.get_confirmed_transaction(receipt)
-        # print(res)
-        check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
 
 
 def create_transactions(args):
@@ -406,6 +442,7 @@ def send_transactions(args):
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
 parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx')
+parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-many (default), one-to-one')
 
 args = parser.parse_args()
 
