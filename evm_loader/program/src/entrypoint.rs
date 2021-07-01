@@ -406,14 +406,14 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let (result, exit_reason) = executor.execute();
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
-            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, 0, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
@@ -462,14 +462,14 @@ fn do_call<'a>(
 
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
-            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, 0, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
