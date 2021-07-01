@@ -373,16 +373,18 @@ impl<'config, B: Backend> Machine<'config, B> {
         code_address: H160,
         input: Vec<u8>,
         gas_limit: u64,
-    ) -> Result<(), ExitError> {
+    ) -> ProgramResult {
         debug_print!("call_begin gas_limit={}", gas_limit);
+
         let transaction_cost = gasometer::call_transaction_cost(&input);
-        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)?;
+        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
 
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|err| err)?;
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         self.executor.state.inc_nonce(caller);
 
