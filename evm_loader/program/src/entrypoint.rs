@@ -580,14 +580,14 @@ fn do_continue<'a>(
 
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
-            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
             let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, 0, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
