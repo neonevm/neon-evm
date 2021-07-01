@@ -337,7 +337,7 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - 2 * transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + 2 * transfer_amount)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_unsuccessful_cli_emulate(self):
         print('\n-----------------------------')
         print('test_unsuccessful_cli_emulate')
@@ -490,6 +490,7 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
+    @unittest.skip("a.i.")
     def test_emulate_external_call_by_rpc(self):
         print('\n---------------------------------')
         print('test_emulate_external_call_by_rpc')
@@ -517,7 +518,7 @@ class EmulateTest(unittest.TestCase):
                                            AccountMeta(pubkey=self.token_acc2, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
                                        ]))
-        trx.sign(self.acc)
+        # trx.sign(self.acc)
         trx.serialize()
         response = client.simulate_transaction(trx, commitment=Confirmed)
         print('response:', response)

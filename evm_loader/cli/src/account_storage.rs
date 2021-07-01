@@ -330,10 +330,12 @@ fn simulate_transaction(
             retry_rpc_operation(10, || rpc_client.get_recent_blockhash())?.0;
 
     eprintln!("t= {:?}", t,);
+    eprintln!("message_data {}", base64::encode(t.message_data()));
     let sim_result = rpc_client.simulate_transaction_with_config(
         &t,
         RpcSimulateTransactionConfig {
             sig_verify: false,
+            commitment: Option::from(CommitmentConfig::confirmed()),
             ..RpcSimulateTransactionConfig::default()
         },
     )?;
@@ -411,7 +413,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         eprintln!("external_call: instructions: {:?}", instructions);
         let msg = Message::new(
             &instructions,
-            None);
+            Some(&self.config.signer.pubkey()));
         eprintln!("external_call: msg: {:?}", msg);
         let transaction = Transaction::new_unsigned(msg,);
         eprintln!("external_call: transaction: {:?}", transaction);
