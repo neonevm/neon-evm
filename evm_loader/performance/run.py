@@ -23,12 +23,13 @@ contracts_file = "contracts.json"
 accounts_file = "accounts.json"
 transactions_file = "transactions.json"
 senders_file = "senders.json"
+verify_file = "verify.json"
 
 class init_senders():
     @classmethod
     def init(cls):
         print("init_senders init")
-        with open(senders_file, mode='r') as f:
+        with open(senders_file+args.postfix, mode='r') as f:
             senders = json.loads(f.read())
 
         cls.accounts = []
@@ -113,6 +114,7 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     assert(data[61:93] == bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_from))  # from
     assert(data[93:125] == bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_to))  # to
     assert(data[125:157] == bytes().fromhex("%064x" % sum))  # value
+    return True
 
 def get_filehash(factory, factory_code, factory_eth, acc):
     trx = Transaction()
@@ -238,7 +240,7 @@ def deploy_contracts(args):
         check_address_event(result['result'], factory_eth, erc20_ether)
         contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
 
-    with open(contracts_file, mode='w') as f:
+    with open(contracts_file+args.postfix,mode='w') as f:
         f.write(json.dumps(contracts))
 
 
@@ -338,12 +340,12 @@ def create_accounts(args):
         print(acc_eth.hex(), acc_sol)
         ether_accounts.append((acc_eth.hex(), pr_key_hex, acc_sol))
 
-    with open(accounts_file, mode='w') as f:
+    with open(accounts_file+args.postfix, mode='w') as f:
         f.write(json.dumps(ether_accounts))
 
-    with open(contracts_file, mode='r') as f:
+    with open(contracts_file+args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
-    with open(accounts_file, mode='r') as f:
+    with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
 
     # erc20.mint()
@@ -354,9 +356,9 @@ def create_transactions(args):
     instance = init_wallet()
     instance.init()
 
-    with open(contracts_file, mode='r') as f:
+    with open(contracts_file+args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
-    with open(accounts_file, mode='r') as f:
+    with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
 
     func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
@@ -404,7 +406,7 @@ def create_transactions(args):
         trx['receiver_eth'] = receiver_eth
         eth_trx.append(trx)
 
-    with open(transactions_file, mode='w') as f:
+    with open(transactions_file+args.postfix, mode='w') as f:
         f.write(json.dumps(eth_trx))
 
 def get_block_hash():
@@ -421,12 +423,13 @@ def send_transactions(args):
     instance.init()
     senders =init_senders()
     senders.init()
-
-    receipt_list = []
     count_err = 0
 
-    with open(transactions_file, mode='r') as f:
+    with open(transactions_file+args.postfix, mode='r') as f:
         eth_trx = json.loads(f.read())
+
+    v = open(verify_file+args.postfix, mode='w')
+    v = open(verify_file+args.postfix, mode='a')
 
     (recent_blockhash, blockhash_time) = get_block_hash()
     start = time.time()
@@ -455,13 +458,7 @@ def send_transactions(args):
             print(err)
             count_err = count_err + 1
             continue
-
-        receipt_list.append((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))
-
-    for (erc20_eth, payer_eth, receiver_eth, receipt) in receipt_list:
-        confirm_transaction(client, receipt, sleep_time=0.1)
-        res = client.get_confirmed_transaction(receipt)
-        check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
+        v.write(json.dumps((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))+"\n")
 
     end = time.time()
     print("total:", total)
@@ -469,6 +466,32 @@ def send_transactions(args):
     print("time:", end-start, "sec" )
 
 
+def verify_trx(args):
+    f = open(verify_file+args.postfix, 'r')
+    total = 0
+    event_error = 0
+    receipt_error = 0
+    for line in f:
+        total = total + 1
+        if total > args.count:
+            break
+        success = False
+        (erc20_eth, payer_eth, receiver_eth, receipt) = json.loads(line)
+        # confirm_transaction(client, receipt, sleep_time=0.1)
+        res = client.get_confirmed_transaction(receipt)
+        if res['result'] == None:
+            receipt_error = receipt_error + 1
+        else:
+            try:
+                success = check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
+            except AssertionError:
+                event_error = event_error + 1
+        print(success, res['result']['slot'])
+
+
+    print("\ntotal:", total)
+    print("event_error:", event_error)
+    print("receipt_error:", receipt_error)
 
 def create_senders(args):
     total = 0
@@ -488,7 +511,7 @@ def create_senders(args):
             exit(0)
         acc_list.append((pub_key, pr_key))
 
-    with open(senders_file, mode="w") as f:
+    with open(senders_file+args.postfix, mode="w") as f:
         f.write(json.dumps(acc_list))
 
 
@@ -498,6 +521,7 @@ parser.add_argument('--count', metavar="count of the transaction",  type=int,  h
 parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx, '
                                                                           'create_sender')
 parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
+parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..')
 
 args = parser.parse_args()
 
@@ -511,5 +535,7 @@ elif args.step == "send_trx":
     send_transactions(args)
 elif args.step == "create_senders":
     create_senders(args)
+elif args.step == "verify_trx":
+    verify_trx(args)
 
 
