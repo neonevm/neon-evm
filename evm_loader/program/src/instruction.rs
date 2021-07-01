@@ -284,7 +284,7 @@ pub fn on_return(
 ) -> Instruction {
     use core::mem;
 
-    let cap = mem::size_of::<u8>() + mem::size_of::<u64>() + result.len();
+    let cap = 2 * mem::size_of::<u8>() + mem::size_of::<u64>() + result.len();
     let mut data = Vec::with_capacity(cap);
     data.push(6_u8);
     data.push(status);
