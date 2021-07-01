@@ -8,6 +8,7 @@ from eth_utils import abi
 from base58 import b58decode
 import random
 from solana.blockhash import *
+import statistics
 
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
 CONTRACTS_DIR = "contracts/"
@@ -468,7 +469,10 @@ def send_transactions(args):
     (recent_blockhash, blockhash_time) = get_block_hash()
     start = time.time()
     total = 0
+    trx_times = []
+    cycle_times = []
     for rec in eth_trx:
+        cycle_start = time.time()
         total = total + 1
         if total > args.count:
             break
@@ -486,19 +490,25 @@ def send_transactions(args):
 
         try:
             print("send trx", total)
+            trx_start = time.time()
             res = client.send_raw_transaction(trx.serialize(),
                                               opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed", skip_preflight = True))
+            trx_end = time.time()
         except Exception as err:
             print(err)
             count_err = count_err + 1
             continue
         v.write(json.dumps((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))+"\n")
+        cycle_end = time.time()
+        trx_times.append(trx_end - trx_start)
+        cycle_times.append(cycle_end - cycle_start)
 
     end = time.time()
     print("total:", total)
     print("errors:", count_err)
     print("time:", end-start, "sec" )
-
+    print("avg send_raw_transaction time:  ", statistics.mean(trx_times), "sec")
+    print("avg cycle time:                 ", statistics.mean(cycle_times), "sec")
 
 def verify_trx(args):
     f = open(verify_file+args.postfix, 'r')
