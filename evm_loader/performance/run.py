@@ -46,12 +46,6 @@ class init_senders():
             self.current = 0
         return self.accounts[self.current]
 
-    def send_transaction(self, trx):
-        res = client.send_transaction(trx, self.next_acc(),
-                                         opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-        return res['result']
-
-
 
 class init_wallet():
     @classmethod
@@ -234,14 +228,28 @@ def deploy_contracts(args):
         receipt_list.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
 
     contracts = []
+    event_error = 0
+    receipt_error = 0
+    total = 0
     for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
+        total = total + 1
         confirm_transaction(client, receipt)
-        result = client.get_confirmed_transaction(receipt)
-        check_address_event(result['result'], factory_eth, erc20_ether)
-        contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
+        res = client.get_confirmed_transaction(receipt)
+        if res['result'] == None:
+            receipt_error = receipt_error + 1
+        else:
+            try:
+                check_address_event(res['result'], factory_eth, erc20_ether)
+                contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
+            except AssertionError:
+                event_error = event_error + 1
 
     with open(contracts_file+args.postfix,mode='w') as f:
         f.write(json.dumps(contracts))
+
+    print("\ntotal:", total)
+    print("event_error:", event_error)
+    print("receipt_error:", receipt_error)
 
 
 def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
@@ -269,7 +277,10 @@ def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, s
     return (erc20_eth_hex, payer_eth, res["result"])
 
 
-def mint_create(accounts, contracts, acc, sum):
+def mint_create(accounts, acc, sum):
+
+    with open(contracts_file+args.postfix, mode='r') as f:
+        contracts = json.loads(f.read())
 
     receipt_list = []
     ia = iter(accounts)
@@ -286,16 +297,16 @@ def mint_create(accounts, contracts, acc, sum):
                 continue
 
             try:
-                (payer_eth, _, payer_sol) = next(ia)
+                (payer_eth, payer_sol) = next(ia)
             except StopIteration as err:
                 ia = iter(accounts)
-                (payer_eth, _, payer_sol) = next(ia)
+                (payer_eth, payer_sol) = next(ia)
 
             receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
             total = total + 1
     else:
         for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
-            for (payer_eth, _, payer_sol) in accounts:
+            for (payer_eth, payer_sol) in accounts:
                 print("mint ", total)
                 receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
                 total = total + 1
@@ -305,24 +316,38 @@ def mint_create(accounts, contracts, acc, sum):
 
 
 def mint_confirm(receipt_list, sum):
+    event_error = 0
+    receipt_error = 0
+    total = 0
+    account_minted =[]
+
     for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
+        total = total + 1
         confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
-        # print(res)
-        check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
 
+        if res['result'] == None:
+            receipt_error = receipt_error + 1
+        else:
+            try:
+                check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
+                account_minted.append(acc_eth_hex)
+            except AssertionError:
+                event_error = event_error + 1
 
-def mint(accounts, contracts, acc):
+    return (account_minted, total, event_error, receipt_error)
+
+def mint(accounts, acc):
     sum = 1000 * 10 ** 18
-    receipt_list = mint_create(accounts, contracts, acc, sum)
-    mint_confirm(receipt_list, sum)
+    receipt_list = mint_create(accounts, acc, sum)
+    return mint_confirm(receipt_list, sum)
 
 
 def create_accounts(args):
     instance = init_wallet()
     instance.init()
 
-    receipt_list = []
+    receipt_list = {}
     for i in range(args.count):
         pr_key = w3.eth.account.from_key(random.randbytes(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
@@ -331,25 +356,34 @@ def create_accounts(args):
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
                                       opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-        receipt_list.append((acc_eth, acc_sol, pr_key.privateKey.hex()[2:], res['result']))
+        receipt_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:], res['result'])
 
     ether_accounts = []
-    for (acc_eth, acc_sol, pr_key_hex,  receipt) in receipt_list:
+    for (acc_eth_hex,  (acc_sol, pr_key_hex, receipt)) in receipt_list.items():
         confirm_transaction(client, receipt)
-        result = client.get_confirmed_transaction(receipt)
-        print(acc_eth.hex(), acc_sol)
-        ether_accounts.append((acc_eth.hex(), pr_key_hex, acc_sol))
-
-    with open(accounts_file+args.postfix, mode='w') as f:
-        f.write(json.dumps(ether_accounts))
-
-    with open(contracts_file+args.postfix, mode='r') as f:
-        contracts = json.loads(f.read())
-    with open(accounts_file+args.postfix, mode='r') as f:
-        accounts = json.loads(f.read())
+        res = client.get_confirmed_transaction(receipt)
+        if res['result'] == None:
+            print("createEtherAccount, get_confirmed_transaction() error")
+        else:
+            print(acc_eth_hex, acc_sol)
+            ether_accounts.append((acc_eth_hex, acc_sol))
 
     # erc20.mint()
-    mint(accounts, contracts, instance.acc)
+    (account_minted, total, event_error, receipt_error) = mint(ether_accounts, instance.acc)
+
+    to_file = []
+    for acc_eth_hex in account_minted:
+        (acc_sol, pr_key_hex, _) = receipt_list.get(acc_eth_hex)
+        to_file.append((acc_eth_hex, pr_key_hex, acc_sol))
+
+    print("\nmint total:", total)
+    print("mint event_error:", event_error)
+    print("mint receipt_error:", receipt_error)
+    print("total accounts:", len(to_file))
+
+    with open(accounts_file+args.postfix, mode='w') as f:
+        f.write(json.dumps(to_file))
+
 
 
 def create_transactions(args):
