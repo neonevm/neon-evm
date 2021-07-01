@@ -245,7 +245,7 @@ def deploy_contracts(args):
             except AssertionError:
                 event_error = event_error + 1
 
-    with open(contracts_file+args.postfix,mode='w') as f:
+    with open(contracts_file+args.postfix, mode='w') as f:
         f.write(json.dumps(contracts))
 
     print("\ntotal:", total)
@@ -396,11 +396,13 @@ def create_transactions(args):
     with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
 
+    transactions = open(transactions_file+args.postfix, mode='w')
+    transactions = open(transactions_file+args.postfix, mode='a')
+
     func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
     total = 0
     ia = iter(accounts)
     ic = iter(contracts)
-    eth_trx = []
 
     while total < args.count:
         try:
@@ -439,10 +441,8 @@ def create_transactions(args):
         trx['payer_sol'] = payer_sol
         trx['payer_eth'] = payer_eth
         trx['receiver_eth'] = receiver_eth
-        eth_trx.append(trx)
 
-    with open(transactions_file+args.postfix, mode='w') as f:
-        f.write(json.dumps(eth_trx))
+        transactions.write(json.dumps(trx)+"\n")
 
 def get_block_hash():
     try:
@@ -460,18 +460,19 @@ def send_transactions(args):
     senders.init()
     count_err = 0
 
-    with open(transactions_file+args.postfix, mode='r') as f:
-        eth_trx = json.loads(f.read())
+    eth_trx = open(transactions_file+args.postfix, mode='r')
 
-    v = open(verify_file+args.postfix, mode='w')
-    v = open(verify_file+args.postfix, mode='a')
+    verify = open(verify_file+args.postfix, mode='w')
+    verify = open(verify_file+args.postfix, mode='a')
 
     (recent_blockhash, blockhash_time) = get_block_hash()
     start = time.time()
     total = 0
     trx_times = []
     cycle_times = []
-    for rec in eth_trx:
+    for line in eth_trx:
+        rec = json.loads(line)
+
         cycle_start = time.time()
         total = total + 1
         if total > args.count:
@@ -498,7 +499,7 @@ def send_transactions(args):
             print(err)
             count_err = count_err + 1
             continue
-        v.write(json.dumps((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))+"\n")
+        verify.write(json.dumps((rec['erc20_eth'], rec['payer_eth'], rec['receiver_eth'], res["result"]))+"\n")
         cycle_end = time.time()
         trx_times.append(trx_end - trx_start)
         cycle_times.append(cycle_end - cycle_start)
@@ -511,11 +512,11 @@ def send_transactions(args):
     print("avg cycle time:                 ", statistics.mean(cycle_times), "sec")
 
 def verify_trx(args):
-    f = open(verify_file+args.postfix, 'r')
+    verify = open(verify_file+args.postfix, 'r')
     total = 0
     event_error = 0
     receipt_error = 0
-    for line in f:
+    for line in verify:
         total = total + 1
         if total > args.count:
             break
