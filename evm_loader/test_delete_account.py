@@ -51,7 +51,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         tx = {
             'to': solana2ether(owner_contract),
             'value': 1,
-            'gas': 1,
+            'gas': 9999999,
             'gasPrice': 1,
             'nonce': nonce,
             'data': abi.function_signature_to_4byte_selector('callSelfDestruct()'),
