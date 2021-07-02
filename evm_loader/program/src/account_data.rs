@@ -137,7 +137,7 @@ impl AccountData {
             Self::Account(_acc) => Account::size() + 1,
             Self::Contract(_acc) => Contract::size() + 1,
             Self::Storage(_acc) => Storage::size() + 1,
-            AccountData::Empty => 1,
+            Self::Empty => 1,
         }
     }
 
