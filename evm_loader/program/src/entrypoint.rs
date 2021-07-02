@@ -456,7 +456,7 @@ fn do_call<'a>(
             account_storage.contract(),
             instruction_data,
             gas_limit,
-        ).map_err(|_| ProgramError::InvalidInstructionData)?;
+        )?;
 
         let (result, exit_reason) = executor.execute();
 
@@ -512,7 +512,7 @@ fn do_partial_call<'a>(
         account_storage.contract(),
         instruction_data,
         gas_limit,
-    ).map_err(|_| ProgramError::InvalidInstructionData)?;
+    )?;
 
     executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;
 
