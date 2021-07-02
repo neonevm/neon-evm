@@ -74,6 +74,14 @@ use solana_transaction_status::{
     UiInstruction,
     EncodedConfirmedTransaction
 };
+use std::borrow::Borrow;
+
+use evm_loader::{
+    instruction::EvmInstruction,
+    solana_backend::SolanaBackend,
+    account_data::{AccountData, Account, Contract},
+};
+use evm::{H160, H256, U256};
 
 
 #[derive(Serialize, Deserialize)]
@@ -129,5 +137,23 @@ fn main() -> std::io::Result<()>{
         _ => {panic!("get_recent_blockhash() error")}
     }
     println!("recent_block_hash {}", blockhash.to_string());
+
+    let keccakprog = "KeccakSecp256k11111111111111111111111111111";
+    let prog_id = bs58::decode(keccakprog).into_vec().unwrap();
+    let lamports :u64 = 1;
+    let space : u64 = 1;
+    let v = vec![0; 20];
+    let ether : H160 = H160::from_slice(&v) ;
+    let nonce : u8 =0;
+
+    let instruction = Instruction::new_with_bincode(
+        Pubkey::new(prog_id.as_ref()) ,
+        &EvmInstruction::CreateAccount {lamports, space, ether, nonce},
+        vec![
+            // AccountMeta::new(config.signer.pubkey(), true),
+            // AccountMeta::new(solana_address, false),
+            AccountMeta::new_readonly(system_program::id(), false)
+        ]);
+
     Ok(())
 }
