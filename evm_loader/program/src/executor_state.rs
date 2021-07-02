@@ -5,15 +5,19 @@ use std::{
 };
 use core::mem;
 use evm::backend::{Apply, Backend, Basic, Log};
-use evm::{ExitError, Transfer, H160, H256, U256};
+use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
+
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub basic: Basic,
     #[serde(with = "serde_bytes")]
     pub code: Option<Vec<u8>>,
+    #[serde(with = "serde_bytes")]
+    pub valids: Option<Vec<u8>>,
     pub reset: bool,
 }
 
@@ -153,12 +157,19 @@ impl ExecutorSubstate {
             }
 
             let apply = {
-                let account = self.account_mut(address, backend);
+                let account = self.accounts.remove(&address).unwrap_or_else(
+                    || ExecutorAccount {
+                        basic: backend.basic(address),
+                        code: None,
+                        valids: None,
+                        reset: false,
+                    }
+                );
 
                 Apply::Modify {
                     address,
-                    basic: account.basic.clone(),
-                    code: account.code.clone(),
+                    basic: account.basic,
+                    code_and_valids: account.code.zip(account.valids),
                     storage,
                     reset_storage: account.reset,
                 }
@@ -263,6 +274,10 @@ impl ExecutorSubstate {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
+        self.known_account(address).and_then(|acc| acc.valids.clone())
+    }
+
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(account) = self.known_account(address) {
             if account.basic.balance != U256::zero() {
@@ -336,6 +351,7 @@ impl ExecutorSubstate {
                 || ExecutorAccount {
                     basic: backend.basic(address),
                     code: None,
+                    valids: None,
                     reset: false,
                 },
                 |mut v| {
@@ -388,6 +404,7 @@ impl ExecutorSubstate {
     }
 
     pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
+        self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
     }
 
@@ -503,6 +520,12 @@ impl<B: Backend> Backend for ExecutorState<B> {
     fn code_size(&self, address: H160) -> usize {
          self.substate.known_code(address)
             .map_or_else(|| self.backend.code_size(address), |code| code.len())
+    }
+
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.substate
+            .known_valids(address)
+            .unwrap_or_else(|| self.backend.valids(address))
     }
 
     fn storage(&self, address: H160, key: U256) -> U256 {

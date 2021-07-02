@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use evm_runtime::{save_return_value, save_created_address, Control};
 use evm::{
     Capture, ExitError, ExitReason, ExitFatal, Handler, 
-    backend::Backend, Resolve, H160, H256, U256
+    backend::Backend, Resolve, Valids, H160, H256, U256
 };
 use crate::executor_state::{ StackState, ExecutorState };
 use crate::storage_account::StorageAccount;
@@ -76,6 +76,10 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
     fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
+    }
+
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.state.valids(address)
     }
 
     fn storage(&self, address: H160, index: U256) -> U256 {
@@ -335,9 +339,10 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
+        let valids = self.executor.valids(code_address);
         let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
 
-        let runtime = evm::Runtime::new(code, input, context, self.executor.config);
+        let runtime = evm::Runtime::new(code, valids, input, context, self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
     }
@@ -359,8 +364,10 @@ impl<'config, B: Backend> Machine<'config, B> {
                     self.executor.state.inc_nonce(info.address);
                 }
 
+                let valids = Valids::compute(&info.init_code);
                 let instance = evm::Runtime::new(
                     info.init_code,
+                    valids,
                     Vec::new(),
                     info.context,
                     self.executor.config
@@ -399,11 +406,14 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     fn apply_call(&mut self, interrupt: CallInterrupt) {
         let code = self.executor.code(interrupt.code_address);
+        let valids = self.executor.valids(interrupt.code_address);
+
         self.executor.state.enter(u64::max_value(), false);
         self.executor.state.touch(interrupt.code_address);
 
         let instance = evm::Runtime::new(
             code,
+            valids,
             interrupt.input,
             interrupt.context,
             self.executor.config
@@ -419,8 +429,10 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.state.inc_nonce(interrupt.address);
         }
 
+        let valids = Valids::compute(&interrupt.init_code);
         let instance = evm::Runtime::new(
             interrupt.init_code,
+            valids,
             Vec::new(),
             interrupt.context,
             self.executor.config

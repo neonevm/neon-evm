@@ -224,14 +224,14 @@ impl<'a> ProgramAccountStorage<'a> {
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
                     if (address == system_account) || (address == system_account_ecrecover) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let account_info = &self.account_metas[pos];
-                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code_and_valids, storage, reset_storage)?;
                     }
                     else {
                         if let Sender::Solana(addr) = self.sender {
