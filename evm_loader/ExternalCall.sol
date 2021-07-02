@@ -12,7 +12,7 @@ contract ExternalCall {
         bytes memory instruction_data = abi.encodePacked(
             uint8(0),    // external call
             token_id,    // token contract
-            uint16(4),   // accountMeta count
+            uint16(5),   // accountMeta count
             packMeta(false, true,  from),
             packMeta(false, false, token),
             packMeta(false, true,  to),

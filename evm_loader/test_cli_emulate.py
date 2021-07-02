@@ -66,7 +66,7 @@ class ExternalCall:
             ])
         if owner_token_acc1 is not None:
             ether_trx.trx_account_metas \
-                .append(AccountMeta(pubkey=owner_token_acc1, is_signer=False, is_writable=False))
+                .append(AccountMeta(pubkey=PublicKey(owner_token_acc1), is_signer=False, is_writable=False))
 
         result = None
         try:
