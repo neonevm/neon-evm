@@ -13,7 +13,7 @@ use solana_program::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -191,7 +191,8 @@ impl<'a> SolidityAccount<'a> {
             AccountData::Foreign => 0,
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
-        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce.as_u64();
+        let nonce = u64::try_from(nonce).map_err(|_| ProgramError::InvalidArgument)?;
+        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
         if let Some(code) = code {
             debug_print!("Write contract");

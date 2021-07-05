@@ -19,6 +19,7 @@ use solana_program::{
 use std::{
     cell::RefCell,
 };
+use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -231,7 +232,8 @@ impl<'a> ProgramAccountStorage<'a> {
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let (account_info, _) = &self.account_metas[pos];
-                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
+                        let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
+                        account.update(account_info, address, basic.nonce, basic_balance, &code, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {
