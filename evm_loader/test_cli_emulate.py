@@ -15,15 +15,14 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
-def create_ether_trx_data(token, acc_from, acc_to, amount, owner):
+def create_ether_trx_data(token, acc_from, acc_to, amount, signer):
     trx_data = abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint256,uint256)') \
                + bytes.fromhex(base58.b58decode(token).hex()
                                + base58.b58decode(acc_from).hex()
                                + base58.b58decode(acc_to).hex()
                                + "%064x" % amount
-                               + owner.hex()
+                               + signer.hex()
                                )
-
     return trx_data
 
 
@@ -43,17 +42,16 @@ class ExternalCall:
     def set_neon_evm_client(self, neon_evm_client):
         self.neon_evm_client = neon_evm_client
 
-    def transfer_ext(self, ether_caller, token, acc_from, acc_to, amount, owner):
+    def transfer_ext(self, ether_caller, token, acc_from, acc_to, amount, signer):
         ether_trx = EthereumTransaction(
             ether_caller, self.contract_account, self.contract_code_account,
-            create_ether_trx_data(token, acc_from, acc_to, amount, owner),
+            create_ether_trx_data(token, acc_from, acc_to, amount, signer),
             [
                 AccountMeta(pubkey=acc_from, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc_to, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=token, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
             ])
-
         result = None
         try:
             result = self.neon_evm_client.send_ethereum_trx_single(ether_trx)
@@ -147,12 +145,10 @@ class EmulateTest(unittest.TestCase):
         cls.token = cls.spl_token.create_token()
         print("token:", cls.token)
 
-        cls.wallet1 = RandomAccount()
-        cls.token_acc1 = cls.spl_token.create_token_account(cls.token, cls.wallet1.get_path())
+        cls.token_acc1 = cls.spl_token.create_token_account(cls.token)
         print("token_acc1:", cls.token_acc1)
 
-        cls.wallet2 = RandomAccount()
-        cls.token_acc2 = cls.spl_token.create_token_account(cls.token, cls.wallet2.get_path())
+        cls.token_acc2 = cls.spl_token.create_token_account(cls.token, RandomAccount().get_path())
         print("token_acc2:", cls.token_acc2)
 
     def compare_accounts(self, left_json, right_json):
@@ -191,23 +187,11 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
-        owner_token_acc1 = self.wallet1.get_acc().public_key()
-
-        ether_trx_data = create_ether_trx_data(self.token, self.token_acc1, self.token_acc2,
-                                               11 * (10 ** 9), bytes(self.acc.public_key()))
-
-        emulate_result = emulate_external_call(self.ethereum_caller.hex(),
-                                               self.contract.ethereum_id.hex(),
-                                               ether_trx_data.hex())
-        print('\n::::::::::::::::::::::::::::::')
-        print('emulate_result:', json.dumps(emulate_result, sort_keys=True, indent=2, separators=(',', ': ')))
-
         transfer_amount = 17
         (trx_data, result) \
             = self.contract.transfer_ext(self.ethereum_caller,
                                          self.token, self.token_acc1, self.token_acc2, transfer_amount * (10 ** 9),
-                                         bytes(self.acc.public_key()),
-                                         bytes(owner_token_acc1))
+                                         bytes(self.acc.public_key()))
         src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
         self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
         self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
@@ -326,8 +310,7 @@ class EmulateTest(unittest.TestCase):
         }
 
         ether_trx_data = create_ether_trx_data(self.token, self.token_acc1, self.token_acc2,
-                                               transfer_amount * (10 ** 9),
-                                               bytes(owner_token_acc1))
+                                               transfer_amount * (10 ** 9), bytes(self.acc.public_key()))
 
         emulate_result = emulate_external_call(self.ethereum_caller.hex(),
                                                self.contract.ethereum_id.hex(),
@@ -354,7 +337,7 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - 2 * transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + 2 * transfer_amount)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_unsuccessful_cli_emulate(self):
         print('\n-----------------------------')
         print('test_unsuccessful_cli_emulate')
