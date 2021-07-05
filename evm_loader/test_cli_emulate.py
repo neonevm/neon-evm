@@ -15,25 +15,14 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
-def create_ether_trx_data(token, acc_from, acc_to, amount, signer, owner=None):
-    if owner is None:
-        trx_data = abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint256,uint256)') \
-                   + bytes.fromhex(base58.b58decode(token).hex()
-                                   + base58.b58decode(acc_from).hex()
-                                   + base58.b58decode(acc_to).hex()
-                                   + "%064x" % amount
-                                   + signer.hex()
-                                   )
-    else:
-        trx_data = abi.function_signature_to_4byte_selector(
-            'transferExt(uint256,uint256,uint256,uint256,uint256,uint256)') \
-                   + bytes.fromhex(base58.b58decode(token).hex()
-                                   + base58.b58decode(acc_from).hex()
-                                   + base58.b58decode(acc_to).hex()
-                                   + "%064x" % amount
-                                   + signer.hex()
-                                   + owner.hex()
-                                   )
+def create_ether_trx_data(token, acc_from, acc_to, amount, owner):
+    trx_data = abi.function_signature_to_4byte_selector('transferExt(uint256,uint256,uint256,uint256,uint256)') \
+               + bytes.fromhex(base58.b58decode(token).hex()
+                               + base58.b58decode(acc_from).hex()
+                               + base58.b58decode(acc_to).hex()
+                               + "%064x" % amount
+                               + owner.hex()
+                               )
 
     return trx_data
 
@@ -54,19 +43,16 @@ class ExternalCall:
     def set_neon_evm_client(self, neon_evm_client):
         self.neon_evm_client = neon_evm_client
 
-    def transfer_ext(self, ether_caller, token, acc_from, acc_to, amount, signer, owner_token_acc1=None):
+    def transfer_ext(self, ether_caller, token, acc_from, acc_to, amount, owner):
         ether_trx = EthereumTransaction(
             ether_caller, self.contract_account, self.contract_code_account,
-            create_ether_trx_data(token, acc_from, acc_to, amount, signer, owner_token_acc1),
+            create_ether_trx_data(token, acc_from, acc_to, amount, owner),
             [
                 AccountMeta(pubkey=acc_from, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc_to, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=token, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
             ])
-        if owner_token_acc1 is not None:
-            ether_trx.trx_account_metas \
-                .append(AccountMeta(pubkey=PublicKey(owner_token_acc1), is_signer=False, is_writable=False))
 
         result = None
         try:
@@ -340,7 +326,8 @@ class EmulateTest(unittest.TestCase):
         }
 
         ether_trx_data = create_ether_trx_data(self.token, self.token_acc1, self.token_acc2,
-                                               transfer_amount * (10 ** 9), bytes(self.acc.public_key()))
+                                               transfer_amount * (10 ** 9),
+                                               bytes(owner_token_acc1))
 
         emulate_result = emulate_external_call(self.ethereum_caller.hex(),
                                                self.contract.ethereum_id.hex(),
