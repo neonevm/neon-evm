@@ -12,7 +12,6 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
-
 class ExternalCall:
     """Encapsulate the all data of the ExternalCall ethereum contract."""
 
@@ -161,6 +160,7 @@ class EmulateTest(unittest.TestCase):
         src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
         self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
         self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(int().from_bytes(base58.b58decode(src_data)[2:10], 'little'), 9844306) # used_gas
 
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
@@ -277,6 +277,7 @@ class EmulateTest(unittest.TestCase):
         src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
         self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
         self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(int().from_bytes(base58.b58decode(src_data)[2:10], 'little'), 9844306) # used_gas
 
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - 2 * transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + 2 * transfer_amount)

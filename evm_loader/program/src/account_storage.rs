@@ -19,6 +19,7 @@ use solana_program::{
 use std::{
     cell::RefCell,
 };
+use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -33,7 +34,7 @@ pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     clock_account: &'a AccountInfo<'a>,
-    account_metas: Vec<&'a AccountInfo<'a>>,
+    account_metas: Vec<(&'a AccountInfo<'a>, Option<&'a AccountInfo<'a>>)>,
     contract_id: H160,
     sender: Sender,
 }
@@ -65,10 +66,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let mut clock_account = None;
 
-        let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>| {
+        let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>, code_info: Option<&'a AccountInfo<'a>>| {
             aliases.push((sol_account.get_ether(), accounts.len()));
             accounts.push(sol_account);
-            account_metas.push(account_info);
+            account_metas.push((account_info, code_info));
         };
 
         let construct_contract_account = |account_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
@@ -100,7 +101,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
             let contract_acc = construct_contract_account(program_info, program_code)?;
             let contract_id = contract_acc.get_ether();
-            push_account(contract_acc, program_info);
+            push_account(contract_acc, program_info, Some(program_code));
 
             contract_id
         };
@@ -114,7 +115,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
                 let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
                 let caller_address = caller_acc.get_ether();
-                push_account(caller_acc, caller_info);
+                push_account(caller_acc, caller_info, None);
                 Sender::Ethereum(caller_address)
             } else {
                 if !caller_info.is_signer {
@@ -136,17 +137,17 @@ impl<'a> ProgramAccountStorage<'a> {
                     _ => { continue; },
                 };
 
-                let sol_account = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                let (sol_account, code_info) = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
                     debug_print!("User account");
-                    SolidityAccount::new(account_info.key, account_info.lamports(), account_data, None)
+                    (SolidityAccount::new(account_info.key, account_info.lamports(), account_data, None) , None)
                 } else {
                     debug_print!("Contract account");
                     let code_info = next_account_info(account_info_iter)?;
 
-                    construct_contract_account(account_info, code_info)?
+                    (construct_contract_account(account_info, code_info)?, Some(code_info))
                 };
 
-                push_account(sol_account, account_info);
+                push_account(sol_account, account_info, code_info);
             } else if clock::check_id(account_info.key) {
                 debug_print!("Clock account {}", account_info.key);
                 clock_account = Some(account_info);
@@ -169,7 +170,7 @@ impl<'a> ProgramAccountStorage<'a> {
             clock_account,
             account_metas,
             contract_id,
-            sender,
+            sender
         })
     }
 
@@ -230,10 +231,10 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
-                        let account_info = &self.account_metas[pos];
-                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code_and_valids, storage, reset_storage)?;
-                    }
-                    else {
+                        let (account_info, _) = &self.account_metas[pos];
+                        let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
+                        account.update(account_info, address, basic.nonce, basic_balance, &code_and_valids, storage, reset_storage)?;
+                    } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {
                                 debug_print!("This is solana user, because {:?} == {:?}.", address, addr);
@@ -243,8 +244,38 @@ impl<'a> ProgramAccountStorage<'a> {
                         debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
                     }
+                },
+                Apply::Delete { address } => {
+                    debug_print!("Going to delete address = {:?}.", address);
+
+                    if let Some(pos) = self.find_account(&address) {
+                        let (account_info, code_info) = &self.account_metas[pos];
+                        let code_info = if let Some(code_info) = code_info {
+                            code_info
+                        } else {
+                            debug_print!("Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
+                            return Err(ProgramError::InvalidAccountData);
+                        };
+                        let (caller_info, _) = &self.account_metas[self.find_account(&self.origin()).ok_or(ProgramError::NotEnoughAccountKeys)?];
+
+                        debug_print!("Move funds from account");
+                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + account_info.lamports();
+                        **account_info.lamports.borrow_mut() = 0;
+
+                        debug_print!("Move funds from code");
+                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + code_info.lamports();
+                        **code_info.lamports.borrow_mut() = 0;
+
+                        debug_print!("Mark accounts empty");
+                        let mut account_data = account_info.try_borrow_mut_data()?;
+                        AccountData::pack(&AccountData::Empty, &mut account_data)?;
+                        let mut code_data = code_info.try_borrow_mut_data()?;
+                        AccountData::pack(&AccountData::Empty, &mut code_data)?;
+                    } else {
+                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
+                        return Err(ProgramError::NotEnoughAccountKeys);
+                    }
                 }
-                Apply::Delete { address: _ } => {}
             }
         }
 

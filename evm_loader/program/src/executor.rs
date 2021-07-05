@@ -1,39 +1,36 @@
 use std::convert::Infallible;
-use evm_runtime::{save_return_value, save_created_address, Control};
+use std::mem;
+
 use evm::{
-    Capture, ExitError, ExitReason, ExitFatal, Handler, 
-    backend::Backend, Resolve, Valids, H160, H256, U256
+    backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
+    gasometer, H160, H256, Handler, Resolve, Valids, U256,
 };
-use crate::executor_state::{ StackState, ExecutorState };
+use evm_runtime::{Control, save_created_address, save_return_value};
+use solana_program::entrypoint::ProgramResult;
+use solana_program::program_error::ProgramError;
+
+use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
-use std::mem;
-use solana_program::program_error::ProgramError;
-use solana_program::entrypoint::ProgramResult;
 
-// macro_rules! try_or_fail {
-//     ( $e:expr ) => {
-//         match $e {
-//             Ok(v) => v,
-//             Err(e) => return e.into(),
-//         }
-//     }
-// }
-
-// fn l64(gas: u64) -> u64 {
-//     gas - gas / 64
-// }
+/// "All but one 64th" operation.
+/// See also EIP-150.
+const fn l64(gas: u64) -> u64 {
+    gas - gas / 64
+}
 
 struct CallInterrupt {
+    context: evm::Context,
     code_address : H160,
     input : Vec<u8>,
-    context: evm::Context,
+    gas_limit: u64,
 }
 
 struct CreateInterrupt {
-    init_code: Vec<u8>,
     context: evm::Context,
-    address: H160
+    address: H160,
+    init_code: Vec<u8>,
+    gas_limit: u64,
 }
 
 enum RuntimeApply{
@@ -44,7 +41,7 @@ enum RuntimeApply{
 }
 
 struct Executor<'config, B: Backend> {
-    state: ExecutorState<B>,
+    state: ExecutorState<'config, B>,
     config: &'config evm::Config,
 }
 
@@ -67,11 +64,11 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 
     fn code_hash(&self, address: H160) -> H256 {
-        if !self.exists(address) {
-            return H256::default()
+        if self.exists(address) {
+            self.state.code_hash(address)
+        } else {
+            H256::default()
         }
-
-        self.state.code_hash(address)
     }
 
     fn code(&self, address: H160) -> Vec<u8> {
@@ -91,7 +88,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::one() // U256::from(self.state.metadata().gasometer.gas())
+        U256::from(self.state.metadata().gasometer().gas()) // U256::one()
     }
 
     fn gas_price(&self) -> U256 {
@@ -173,18 +170,41 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<usize>,
+        target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-
+        debug_print!("create target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
             }
         }
+
         // TODO: check
         // if self.balance(caller) < value {
         //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         // }
+
+        let after_gas = if self.config.call_l64_after_gas {
+            if self.config.estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), None, Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+
+        let gas_limit = core::cmp::min(target_gas, after_gas);
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), None, Vec::new()));
+        }
 
         // Get the create address from given scheme.
         let address =
@@ -224,7 +244,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             apparent_value: value,
         };
 
-        Capture::Trap(CreateInterrupt{init_code, context, address})
+        Capture::Trap(CreateInterrupt{context, address, init_code, gas_limit})
     }
 
     fn call(
@@ -232,17 +252,50 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        target_gas: Option<usize>,
+        target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
+        debug_print!("call target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > self.config.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
             }
         }
 
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), target_gas, is_static, true, true);
+        // These parameters should be true for call from another contract
+        let take_l64 = true;
+        let take_stipend = true;
+
+        let after_gas = if take_l64 && self.config.call_l64_after_gas {
+            if self.config.estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+        let mut gas_limit = core::cmp::min(target_gas, after_gas);
+
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), Vec::new()));
+        }
+
+        if let Some(transfer) = transfer.as_ref() {
+            if take_stipend && transfer.value != U256::zero() {
+                gas_limit = gas_limit.saturating_add(self.config.call_stipend);
+            }
+        }
+
+        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
@@ -254,27 +307,34 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{code_address, input, context})
+        Capture::Trap(CallInterrupt{context, code_address, input, gas_limit})
     }
 
     fn pre_validate(
         &mut self,
-        _context: &evm::Context,
-        _opcode: evm::Opcode,
-        _stack: &evm::Stack,
+        context: &evm::Context,
+        opcode: evm::Opcode,
+        stack: &evm::Stack,
     ) -> Result<(), ExitError> {
-        // if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-        //     self.state.metadata_mut().gasometer.record_cost(cost)?;
-        // } else {
-        //     let is_static = self.state.metadata().is_static;
-        //     let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
-        //         context.address, opcode, stack, is_static, &self.config, self
-        //     )?;
+        if let Some(cost) = gasometer::static_opcode_cost(opcode) {
+            self.state
+                .metadata_mut()
+                .gasometer_mut()
+                .record_cost(cost)?;
+        } else {
+            let is_static = self.state.metadata().is_static();
+            let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
+                context.address,
+                opcode,
+                stack,
+                is_static,
+                self.config,
+                self,
+            )?;
 
-        //     let gasometer = &mut self.state.metadata_mut().gasometer;
+            self.state.metadata_mut().gasometer_mut().record_dynamic_cost(gas_cost, memory_cost)?;
+        }
 
-        //     gasometer.record_dynamic_cost(gas_cost, memory_cost)?;
-        // }
         Ok(())
     }
 }
@@ -294,7 +354,7 @@ pub struct Machine<'config, B: Backend> {
 
 impl<'config, B: Backend> Machine<'config, B> {
 
-    pub fn new(state: ExecutorState<B>) -> Self {
+    pub fn new(state: ExecutorState<'config, B>) -> Self {
         let executor = Executor { state, config: evm::Config::default() };
         Self{ executor, runtime: Vec::new() }
     }
@@ -312,28 +372,25 @@ impl<'config, B: Backend> Machine<'config, B> {
         Self{ executor, runtime }
     }
 
-    pub fn call_begin(&mut self, caller: H160, code_address: H160, input: Vec<u8>, gas_limit: u64) {
+    pub fn call_begin(&mut self,
+        caller: H160,
+        code_address: H160,
+        input: Vec<u8>,
+        gas_limit: u64,
+    ) -> ProgramResult {
+        debug_print!("call_begin gas_limit={}", gas_limit);
+
+        let transaction_cost = gasometer::call_transaction_cost(&input);
+        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+        let after_gas = self.executor.state.metadata().gasometer().gas();
+        let gas_limit = core::cmp::min(gas_limit, after_gas);
+
+        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
         self.executor.state.inc_nonce(caller);
-
-
-        // let after_gas = if take_l64 && self.config.call_l64_after_gas {
-        //     if self.config.estimate {
-        //         let initial_after_gas = self.state.metadata().gasometer.gas();
-        //         let diff = initial_after_gas - l64(initial_after_gas);
-        //         try_or_fail!(self.state.metadata_mut().gasometer.record_cost(diff));
-        //         self.state.metadata().gasometer.gas()
-        //     } else {
-        //         l64(self.state.metadata().gasometer.gas())
-        //     }
-        // } else {
-        //     self.state.metadata().gasometer.gas()
-        // };
-
-        // let mut gas_limit = min(gas_limit, after_gas);
-
-        // try_or_fail!(
-        //     self.state.metadata_mut().gasometer.record_cost(gas_limit)
-        // );
 
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
@@ -345,9 +402,26 @@ impl<'config, B: Backend> Machine<'config, B> {
         let runtime = evm::Runtime::new(code, valids, input, context, self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
+
+        Ok(())
     }
 
-    pub fn create_begin(&mut self, caller: H160, code: Vec<u8>, gas_limit: u64) -> ProgramResult {
+    pub fn create_begin(&mut self,
+                        caller: H160,
+                        code: Vec<u8>,
+                        gas_limit: u64,
+    ) -> ProgramResult {
+        debug_print!("create_begin gas_limit={}", gas_limit);
+        let transaction_cost = gasometer::create_transaction_cost(&code);
+        self.executor.state.metadata_mut().gasometer_mut()
+            .record_transaction(transaction_cost)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+        let after_gas = self.executor.state.metadata().gasometer().gas();
+        let gas_limit = core::cmp::min(gas_limit, after_gas);
+
+        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(gas_limit, false);
@@ -375,9 +449,9 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
         }
+
         Ok(())
     }
-
 
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
@@ -408,7 +482,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
-        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.code_address);
 
         let instance = evm::Runtime::new(
@@ -422,7 +496,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     }
 
     fn apply_create(&mut self, interrupt: CreateInterrupt) {
-        self.executor.state.enter(u64::max_value(), false);
+        self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
         if self.executor.config.create_increase_nonce {
@@ -524,17 +598,14 @@ impl<'config, B: Backend> Machine<'config, B> {
                 RuntimeApply::Continue => {},
                 RuntimeApply::Call(info) => self.apply_call(info),
                 RuntimeApply::Create(info) => self.apply_create(info),
-                RuntimeApply::Exit(reason) => match self.apply_exit(reason) {
-                    Ok(()) => {},
-                    Err((return_value, reason)) => return Err((return_value, reason))
-                }
+                RuntimeApply::Exit(reason) => self.apply_exit(reason)?,
             }
         }
 
         Ok(())
     }
 
-    pub fn into_state(self) -> ExecutorState<B> {
+    pub fn into_state(self) -> ExecutorState<'config, B> {
         self.executor.state
     }
 }

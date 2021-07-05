@@ -13,7 +13,7 @@ use solana_program::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -148,10 +148,9 @@ impl<'a> SolidityAccount<'a> {
     /// Will panic `account_data` doesn't contain `Account` struct
     #[must_use]
     pub fn basic(&self) -> Basic {
-        Basic { 
+        Basic {
             balance: self.lamports.into(), 
             nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), }
-        
     }
 
     /// Get code hash
@@ -203,6 +202,7 @@ impl<'a> SolidityAccount<'a> {
         #[allow(unused_variables)]
         solidity_address: H160,
         nonce: U256,
+        #[allow(unused_variables)]
         lamports: u64,
         code_and_valids: &Option<(Vec<u8>, Vec<u8>)>,
         storage_items: I,
@@ -212,14 +212,15 @@ impl<'a> SolidityAccount<'a> {
     {
         debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code_and_valids.is_some() {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
-        **(*account_info.lamports).borrow_mut() = lamports;
+        // **account_info.lamports.borrow_mut() = lamports;
 
         /*let mut current_code_size = match self.account_data {
             AccountData::Empty => 0,
             AccountData::Foreign => 0,
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
-        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce.as_u64();
+        let nonce = u64::try_from(nonce).map_err(|_| ProgramError::InvalidArgument)?;
+        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
         if let Some((code, valids)) = code_and_valids {
             debug_print!("Write contract");
