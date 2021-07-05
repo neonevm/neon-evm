@@ -122,7 +122,7 @@ class DeployTest(unittest.TestCase):
         tx = {
             'to': None,
             'value': 0,
-            'gas': 1,
+            'gas': 9999999,
             'gasPrice': 1,
             'nonce': trx_count,
             'data': content,
