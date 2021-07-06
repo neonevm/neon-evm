@@ -23,6 +23,7 @@ use std::{
 //     time::{Duration},
     i64,
     str::FromStr,
+    process::exit,
 };
 
 use std::io::{self, prelude::*, BufReader};
@@ -159,7 +160,23 @@ fn main() -> CommandResult{
                 .default_value("http://localhost:8899")
                 .help("URL for Solana node"),
         )
+        .arg(
+            Arg::with_name("evm_loader")
+                .long("evm_loader")
+                .value_name("EVM_LOADER")
+                .takes_value(true)
+                .global(true)
+                .validator(is_valid_pubkey)
+                .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
+                .help("Pubkey for evm_loader contract")
+        )
         .get_matches();
+
+    let evm_loader = pubkey_of(&app_matches, "evm_loader")
+        .unwrap_or_else(|| {
+            println!("Need specify evm_loader");
+            exit(1);
+        });
 
     let json_rpc_url = normalize_to_url_if_moniker(
         app_matches
@@ -174,18 +191,9 @@ fn main() -> CommandResult{
         _ => {panic!("get_recent_blockhash() error")}
     }
     println!("recent_block_hash {}", blockhash.to_string());
-
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
-    let keccak_str = "KeccakSecp256k11111111111111111111111111111";
-    let prog_id = bs58::decode(keccak_str).into_vec().unwrap();
-    let lamports :u64 = 1;
-    let space : u64 = 1;
-    let v = vec![0; 20];
-    let ether : H160 = H160::from_slice(&v) ;
-    let nonce : u8 =0;
-
-    // let sender_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1";
     let trx_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1";
+    // let sender_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1";
 
     // let mut file = File::open(sender_file_name)?;
     // let reader= BufReader::new(file);
@@ -236,13 +244,38 @@ fn main() -> CommandResult{
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         println!("{}",trx.erc20_code);
         println!("{}",trx.msg);
-        let msg = hex::decode(trx.msg).unwrap();
-        let keccak_instr = make_keccak_instruction_data(1, msg.len() as u16, 1);
-        let instruction = Instruction::new_with_bincode(
+        let msg = hex::decode(&trx.msg).unwrap();
+        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
+        let instruction_keccak = Instruction::new_with_bincode(
             keccakprog,
-            &keccak_instr,
+            &data_keccak,
             vec![AccountMeta::new_readonly(keccakprog, false)]);
-        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
+
+        let mut data_05_hex = String::from("05");
+        data_05_hex.push_str(trx.from_addr.as_str());
+        data_05_hex.push_str(trx.sign.as_str());
+        data_05_hex.push_str(trx.msg.as_str());
+        let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
+
+        let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
+        let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
+        let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
+        let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
+        let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
+
+        let instruction_05 = Instruction::new_with_bincode(
+            evm_loader,
+            &data_05,
+            vec![
+                AccountMeta::new_readonly(contract, false),
+                AccountMeta::new_readonly(contract_code, false),
+                AccountMeta::new_readonly(caller, false),
+                AccountMeta::new_readonly(sysinstruct, false),
+                AccountMeta::new_readonly(evm_loader, false),
+                AccountMeta::new_readonly(sysvarclock, false),
+            ]);
+
+        let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
         let mut tx = Transaction::new_unsigned(message);
         let signer: Box<dyn Signer> = Box::from(keypair);
 
