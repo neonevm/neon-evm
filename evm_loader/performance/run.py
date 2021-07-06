@@ -13,7 +13,8 @@ import statistics
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
 CONTRACTS_DIR = "contracts/"
 # evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "CcUVX7PAGmftm3pAE2po5idVsnAyYh953gM8DETSZ68R"
+evm_loader_id = "Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x"
+# evm_loader_id = "jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A"
 chain_id = 111
 transfer_sum = 1
 
@@ -29,13 +30,13 @@ verify_file = "verify.json"
 class init_senders():
     @classmethod
     def init(cls):
-        print("init_senders init")
-        with open(senders_file+args.postfix, mode='r') as f:
-            senders = json.loads(f.read())
-
         cls.accounts = []
-        for (pub_key, pr_key) in senders:
-            cls.accounts.append(Account(bytes().fromhex(pr_key)))
+        file = open(senders_file + args.postfix, mode='r')
+        for line in file:
+            rec = json.loads(line)
+            print (rec)
+            cls.accounts.append(Account(bytes().fromhex(rec["pr_key"])))
+        print("init_senders init")
 
         if len(cls.accounts) == 0:
             raise RuntimeError("solana senders is absent")
@@ -484,7 +485,7 @@ def send_transactions(args):
         sign = bytes.fromhex(rec['sign'])
         msg = bytes.fromhex(rec['msg'])
         trx = Transaction()
-        trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
+        # trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
         trx.add(sol_instr_05((from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']))
         trx.recent_blockhash = recent_blockhash
         trx.sign(senders.next_acc())
@@ -530,6 +531,7 @@ def verify_trx(args):
             try:
                 success = check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
             except AssertionError:
+                print(res['result'])
                 event_error = event_error + 1
         print(success, res['result']['slot'])
 
@@ -571,8 +573,8 @@ def create_senders(args):
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
-parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_acc, create_trx, send_trx, '
-                                                                          'create_sender')
+parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_senders, create_acc, create_trx, send_trx, '
+                                                                           'veryfy_trx')
 parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..')
 

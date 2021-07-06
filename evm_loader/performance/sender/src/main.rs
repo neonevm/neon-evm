@@ -107,6 +107,45 @@ struct sender_t{
     pr_key: String,
 }
 
+#[derive(Default, Serialize, Deserialize, Debug)]
+struct SecpSignatureOffsets {
+    signature_offset: u16, // offset to [signature,recovery_id] of 64+1 bytes
+    signature_instruction_index: u8,
+    eth_address_offset: u16, // offset to eth_address of 20 bytes
+    eth_address_instruction_index: u8,
+    message_data_offset: u16, // offset to start of message data
+    message_data_size: u16,   // size of message data
+    message_instruction_index: u8,
+}
+
+pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
+    const NUMBER_OF_SIGNATURES: u8 = 1;
+    const ETH_SIZE: u16 = 20;
+    const SIGN_SIZE: u16 = 65;
+    let eth_offset: u16 = data_start;
+    let sign_offset: u16 = eth_offset + ETH_SIZE;
+    let msg_offset: u16 = sign_offset + SIGN_SIZE;
+
+    let offsets = SecpSignatureOffsets {
+        signature_offset: sign_offset,
+        signature_instruction_index: instruction_index,
+        eth_address_offset: eth_offset,
+        eth_address_instruction_index: instruction_index,
+        message_data_offset: msg_offset,
+        message_data_size: message_len,
+        message_instruction_index: instruction_index,
+    };
+
+    let bin_offsets = bincode::serialize(&offsets).unwrap();
+
+    let mut instruction_data = Vec::with_capacity(1 + bin_offsets.len());
+    instruction_data.push(NUMBER_OF_SIGNATURES);
+    instruction_data.extend(&bin_offsets);
+
+    instruction_data
+}
+
+
 fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
     let mut data = Vec::new();
 
@@ -167,7 +206,8 @@ fn main() -> CommandResult{
                 .takes_value(true)
                 .global(true)
                 .validator(is_valid_pubkey)
-                .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
+                // .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
+                .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
                 .help("Pubkey for evm_loader contract")
         )
         .get_matches();
@@ -193,68 +233,38 @@ fn main() -> CommandResult{
     println!("recent_block_hash {}", blockhash.to_string());
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
     let trx_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1";
-    // let sender_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1";
-
-    // let mut file = File::open(sender_file_name)?;
-    // let reader= BufReader::new(file);
-    // let mut senders = Vec::new();
-    // for line in reader.lines(){
-    //     let sender : sender_t = serde_json::from_str(line?.as_str())?;
-    //     println!("{}", sender.pr_key);
-    //     let prkey : Vec<u8> = hex::decode(sender.pr_key).unwrap();
-    //     let pubkey : Pubkey = Pubkey::from_str(sender.pub_key.as_str()).unwrap();
-    //     senders.push((prkey,  pubkey));
-    // }
     let mut file = File::open(trx_file_name)?;
     let reader= BufReader::new(file);
-    // let mut count: usize = 0;
-    // let mut iter = senders.iter();
-    // let signer : Box<dyn Signer>;
 
     for line in reader.lines(){
-
-        // let mut pub_key : Pubkey;
-        // let mut pr_key = Vec::new() ;
-        // let mut pr_key1 = Vec::new() ;
-        // pr_key1.resize(32, 0 as u8);
-
-        // match (iter.next()){
-        //     None => {iter = senders.iter(); continue;},
-        //     Some((pr_bin, pb)) => {
-        //         for &i in pr_bin{
-        //             pr_key.push(i);
-        //         }
-        //         pub_key = pb.clone();
-        //     }
-        // }
-        // for &i in pr_key.iter().rev(){
-        //     pr_key1.push(i);
-        // }
-        // println!("{}", &hex::encode(&pr_key1));
-        // println!("{}", &hex::encode(&pr_key));
-        // let keypair = Keypair::from_bytes(&pr_key1).unwrap();
         let keypair = Keypair::new();
         println!("wallet {}", keypair.pubkey());
-
-        match (rpc_client.request_airdrop(&keypair.pubkey(), 1000)){
-            Ok((signature)) => println! ("airdrop sig {}", &signature.to_string()),
+        match (rpc_client.request_airdrop(&keypair.pubkey(), 100000000000)){
+            Ok((signature)) => {
+                rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
+                let sum = rpc_client.poll_get_balance_with_commitment(&keypair.pubkey(), CommitmentConfig::confirmed()).unwrap();
+                println!("SUM ========== {}", &sum.to_string());
+            },
             _ => {panic!("request_airdrop() error")}
         }
 
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
-        println!("{}",trx.erc20_code);
-        println!("{}",trx.msg);
         let msg = hex::decode(&trx.msg).unwrap();
-        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
-        let instruction_keccak = Instruction::new_with_bincode(
-            keccakprog,
-            &data_keccak,
-            vec![AccountMeta::new_readonly(keccakprog, false)]);
+        // let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
+        // let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
+        // let instruction_keccak = Instruction::new_with_bincode(
+        //     keccakprog,
+        //     &data_keccak,
+        //     vec![
+        //         AccountMeta::new_readonly(keccakprog, false),
+        //     ]
+        // );
 
         let mut data_05_hex = String::from("05");
         data_05_hex.push_str(trx.from_addr.as_str());
         data_05_hex.push_str(trx.sign.as_str());
         data_05_hex.push_str(trx.msg.as_str());
+        println!("{}", data_05_hex.as_str());
         let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
 
         let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
@@ -267,37 +277,41 @@ fn main() -> CommandResult{
             evm_loader,
             &data_05,
             vec![
-                AccountMeta::new_readonly(contract, false),
-                AccountMeta::new_readonly(contract_code, false),
-                AccountMeta::new_readonly(caller, false),
+                AccountMeta::new(contract, false),
+                AccountMeta::new(contract_code, false),
+                AccountMeta::new(caller, false),
                 AccountMeta::new_readonly(sysinstruct, false),
                 AccountMeta::new_readonly(evm_loader, false),
                 AccountMeta::new_readonly(sysvarclock, false),
             ]);
 
-        let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
+        // let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
+        let message = Message::new(&[instruction_05], Some(&keypair.pubkey()));
+
         let mut tx = Transaction::new_unsigned(message);
+
         let signer: Box<dyn Signer> = Box::from(keypair);
-
         tx.try_sign(&[&*signer] , blockhash)?;
-        println!("signed: {:x?}", tx);
-        let sig = rpc_client.send_transaction(&tx)?;
-        println!("sended: {:x?}", sig);
 
-        // count = count + 1;
-        // if count == senders.len(){
-        //     count = 0;
-        // }
+        let sig = rpc_client.send_transaction(&tx)?;
+
+
+        // let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, CommitmentConfig::confirmed())?;
+        // let c = RpcSendTransactionConfig {/
+        //     skip_preflight :true,
+        //     preflight_commitment: Some(CommitmentLevel::Confirmed),
+        //     ..RpcSendTransactionConfig::default()
+        // };
+        //
+        //let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        //     &tx,
+        //     CommitmentConfig::confirmed(),
+        //     c
+        // );
+
+        println!("!!!  {:x?}", sig);
 
     }
     Ok(())
 }
 
-// fn new_throwaway_signer() -> (Option<Box<dyn Signer>>, Option<Pubkey>) {
-//     let keypair = Keypair::new();
-//     let pubkey = keypair.pubkey();
-//     (Some(Box::new(keypair) as Box<dyn Signer>), Some(pubkey))
-// }
-
-// let msg = i64::/from_str_radix(trx.msg.len(), 16).unwrap();
-// let msg = i64::from//_str_radix(trx.msg.len(), 16).unwrap();
