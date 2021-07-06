@@ -12,6 +12,8 @@ use solana_sdk::{
     signer::keypair::Keypair,
     signature::Signature,
     signer::Signer,
+    program_error::ProgramError,
+    transaction::TransactionError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
@@ -29,6 +31,7 @@ use std::{
     error,
     time::Duration,
     thread::sleep,
+    convert::TryFrom,
 };
 use crate::Config;
 #[allow(unused)]
@@ -113,6 +116,7 @@ pub struct EmulatorAccountStorage<'a> {
     caller_id: H160,
     block_number: u64,
     block_timestamp: i64,
+    // pub external_call_fail: bool,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
@@ -323,11 +327,17 @@ pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Res
 fn simulate_transaction(
     rpc_client: &RpcClient,
     transaction: Transaction,
-) -> client_error::Result<Transaction> {
+) -> ProgramResult {
     eprintln!("Simulating transaction {:?}", transaction,);
     let mut t = transaction;
-    t.message.recent_blockhash =
-            retry_rpc_operation(10, || rpc_client.get_recent_blockhash())?.0;
+
+    let response = retry_rpc_operation(10, || rpc_client.get_recent_blockhash());
+    let blockhash = match response {
+        Ok(res) => res,
+        Err(err) => return Err(ProgramError::BorshIoError(format!("rpc_client.get_recent_blockhash failed {:?}", err.kind))),
+    };
+
+    t.message.recent_blockhash = blockhash.0;
 
     eprintln!("t= {:?}", t,);
     eprintln!("message_data {}", base64::encode(t.message_data()));
@@ -338,11 +348,26 @@ fn simulate_transaction(
             commitment: Option::from(CommitmentConfig::confirmed()),
             ..RpcSimulateTransactionConfig::default()
         },
-    )?;
+    );
 
     eprintln!("sim_result: {:?}", sim_result);
 
-    Ok(t)
+    match sim_result {
+        Ok(success) => {
+            if success.value.err.is_some() {
+                #[allow(unused_variables)]
+                if let TransactionError::InstructionError(n, instruction_error) = success.value.err.unwrap() {
+                    eprintln!("InstructionError: {:?}", instruction_error);
+                    return Err(ProgramError::try_from(instruction_error).unwrap());
+                }
+            }
+            else {
+                return Ok(());
+            }
+        }
+        Err(fail) => return Err(ProgramError::BorshIoError(format!("rpc_client.simulate_transaction_with_config failed {:?}", fail.kind))),
+    }
+    Ok(())
 }
 
 impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
@@ -420,7 +445,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         let result =
             simulate_transaction(&*self.config.rpc_client, transaction);
         eprintln!("result of simulate_transaction: {:?}", result);
-        Ok(())
+        return result;
 
         // match self.seeds(&self.origin()) {
         //     Some((sender_eth, sender_nonce)) => {
