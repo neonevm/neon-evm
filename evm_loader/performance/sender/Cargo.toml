@@ -18,5 +18,6 @@ solana-cli-output = "=1.6.9"
 solana-transaction-status = "=1.6.9"
 solana-program = { version = "1.6.9", default_features = false }
 bs58 = "0.4.0"
+hex = ""
 evm-loader = { path = "../../program", version = "2.0.8", default_features = false }
 evm = { path = "../../rust-evm", version = "0.18.0", default_features = false }

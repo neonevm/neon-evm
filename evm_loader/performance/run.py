@@ -540,24 +540,32 @@ def verify_trx(args):
 
 def create_senders(args):
     total = 0
-    acc_list = []
+    # acc_list = []
     receipt_list = []
+
+    senders = open(senders_file+args.postfix, mode='w')
+    senders = open(senders_file+args.postfix, mode='a')
+
 
     while total < args.count:
         total = total + 1
-        acc = Account(random.randbytes(32))
+        acc = Account()
         tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
         receipt_list.append((tx['result'], acc.secret_key().hex(), str(acc.public_key())))
 
+    acc = {}
     for (receipt, pr_key, pub_key ) in receipt_list:
         confirm_transaction(client, receipt, sleep_time=0.1)
         if getBalance(pub_key) == 0:
             print("request_airdrop error", acc.public_key())
             exit(0)
-        acc_list.append((pub_key, pr_key))
+        acc["pub_key"] = pub_key
+        acc["pr_key"] = pr_key
+        senders.write(json.dumps(acc)+"\n")
+        # acc_list.append((pub_key, pr_key))
 
-    with open(senders_file+args.postfix, mode="w") as f:
-        f.write(json.dumps(acc_list))
+    # with open(senders_file+args.postfix, mode="w") as f:
+    #     f.write(json.dumps(acc_list))
 
 
 
