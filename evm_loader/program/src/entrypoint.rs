@@ -433,7 +433,8 @@ fn do_call<'a>(
     instruction_data: Vec<u8>,
 ) -> ProgramResult
 {
-    debug_print!("do_call");
+    // TODO: Delete before merge to develop
+    debug_print!("do_call: {}", hex::encode(&instruction_data));
 
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());

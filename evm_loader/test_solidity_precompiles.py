@@ -106,41 +106,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%064x" % len(data))\
                 + str.encode(data)
 
-    # def test_fail_on_tx_after_delete1(self):
-    #     trx = self.make_transactions(self.make_addmod(1, 2, 3))
-    #     result = send_transaction(client, trx, self.acc)["result"]
-    #     print("Result:")
-    #     print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data']).hex())
-
-    # def test_fail_on_tx_after_delete2(self):
-    #     trx = self.make_transactions(self.make_addmod(4, 5, 0))
-    #     result = send_transaction(client, trx, self.acc)["result"]
-    #     print("Result:")
-    #     print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data']).hex())
-
-    # def test_fail_on_tx_after_delete3(self):
-    #     trx = self.make_transactions(self.make_mulmod(4, 5, 0))
-    #     result = send_transaction(client, trx, self.acc)["result"]
-    #     print("Result:")
-    #     print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data']).hex())
-
-    # def test_fail_on_tx_after_delete4(self):
-    #     trx = self.make_transactions(self.make_mulmod(7, 9, 3))
-    #     result = send_transaction(client, trx, self.acc)["result"]
-    #     print("Result:")
-    #     print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data']).hex())
-
-    def test_fail_on_tx_after_delete6(self):
-        import hashlib
-        print("ripemd160() - ", self.make_ripemd160("").hex())
-        trx = self.make_transactions(self.make_ripemd160(""))
-        result = send_transaction(client, trx, self.acc)["result"]
-        print("Result:")
-        print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex())
-        print("Expect:")
-        print(hashlib.new('ripemd160', str.encode("")).hexdigest())
-
-    def test_fail_on_tx_after_delete7(self):
+    def test_02_sha256_contract(self):
         from hashlib import sha256
         print("sha256() - ", self.make_sha256("").hex())
         trx = self.make_transactions(self.make_sha256(""))
@@ -149,6 +115,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex())
         print("Expect:")
         print(sha256(str.encode("")).hexdigest())
+
+    def test_03_ripemd160_contract(self):
+        import hashlib
+        print("ripemd160() - ", self.make_ripemd160("").hex())
+        trx = self.make_transactions(self.make_ripemd160(""))
+        result = send_transaction(client, trx, self.acc)["result"]
+        print("Result:")
+        print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex())
+        print("Expect:")
+        print(hashlib.new('ripemd160', str.encode("")).hexdigest())
 
 if __name__ == '__main__':
     unittest.main()
