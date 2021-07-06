@@ -86,33 +86,6 @@ def emulate_external_call(sender, contract, trx_data):
     print('emulate_result:', emulate_result)
     return emulate_result
 
-
-def emulate_external_call_by_rpc(contract, trx_data, signer, pubkey):
-    print('\nEmulate external call by rpc:')
-    print('contract:', contract)
-    print('trx_data:', trx_data)
-    print('signer:', signer)
-    blockhash = Blockhash(client.get_recent_blockhash(Confirmed)["result"]["value"]["blockhash"])
-    print('blockhash:', blockhash)
-    trx = Transaction(recent_blockhash=blockhash)
-    trx.add(TransactionInstruction(program_id=PublicKey(contract),
-                                   data=trx_data,
-                                   keys=[AccountMeta(pubkey=PublicKey(contract), is_signer=False, is_writable=False)]))
-    trx.sign(signer)
-
-    try:
-        trx.serialize()
-    except Exception as err:
-        print("trx.serialize() exception")
-        if str(err).startswith("transaction too large:"):
-            raise Exception("transaction too large")
-        raise
-
-    response = client.simulate_transaction(trx, commitment=Confirmed)
-    print('response:', response)
-    return response
-
-
 class EmulateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -234,66 +207,6 @@ class EmulateTest(unittest.TestCase):
                     "code_size": None,
                     "contract": str(self.contract.contract_code_account),
                     "new": False,
-                    "writable": True
-                },
-                {
-                    "account": str(self.caller),
-                    "address": '0x' + self.ethereum_caller.hex(),
-                    "code_size": None,
-                    "contract": None,
-                    "new": False,
-                    "writable": True
-                }
-            ],
-            "exit_status": "succeed",
-            "result": ""
-        }
-
-        emulate_result = emulate_external_call(self.ethereum_caller.hex(),
-                                               self.contract.ethereum_id.hex(),
-                                               trx_data.hex())
-
-        self.compare_tmpl_and_emulate_result(tmpl_json, emulate_result)
-
-        # no changes after the emulation
-        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
-        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
-
-        tmpl_json = {
-            "solana_accounts": [
-                {
-                    "pubkey": str(tokenkeg),
-                    "is_signer": False,
-                    "is_writable": False,
-                },
-                {
-                    "pubkey": str(self.token),
-                    "is_signer": False,
-                    "is_writable": False,
-                },
-                {
-                    "pubkey": str(self.token_acc1),
-                    "is_signer": False,
-                    "is_writable": True,
-                },
-                {
-                    "pubkey": str(self.token_acc2),
-                    "is_signer": False,
-                    "is_writable": True,
-                },
-                {
-                    "pubkey": str(self.acc.public_key()),
-                    "is_signer": True,
-                    "is_writable": False,
-                },
-            ],
-            "accounts": [
-                {
-                    "account": str(self.contract.contract_account),
-                    "address": '0x' + self.contract.ethereum_id.hex(),
-                    "code_size": None,
-                    "contract": str(self.contract.contract_code_account),
-                    "new": False,
                     "writable": True,
                 },
                 {
@@ -354,65 +267,6 @@ class EmulateTest(unittest.TestCase):
                                          self.token, self.token_acc1, self.token_acc2, transfer_amount * (10 ** 9),
                                          bytes(self.acc.public_key()))
         self.assertEqual(result, None)
-
-        emulate_result = emulate_external_call(self.ethereum_caller.hex(),
-                                               self.contract.ethereum_id.hex(),
-                                               trx_data.hex())
-        tmpl_json = {
-            "solana_accounts": [
-                {
-                    "pubkey": str(tokenkeg),
-                    "is_signer": False,
-                    "is_writable": False,
-                },
-                {
-                    "pubkey": str(self.token),
-                    "is_signer": False,
-                    "is_writable": False,
-                },
-                {
-                    "pubkey": str(self.token_acc1),
-                    "is_signer": False,
-                    "is_writable": True,
-                },
-                {
-                    "pubkey": str(self.token_acc2),
-                    "is_signer": False,
-                    "is_writable": True,
-                },
-                {
-                    "pubkey": str(self.acc.public_key()),
-                    "is_signer": True,
-                    "is_writable": False,
-                },
-            ],
-            "accounts": [
-                {
-                    "account": str(self.contract.contract_account),
-                    "address": '0x' + self.contract.ethereum_id.hex(),
-                    "code_size": None,
-                    "contract": str(self.contract.contract_code_account),
-                    "new": False,
-                    "writable": True
-                },
-                {
-                    "account": str(self.caller),
-                    "address": '0x' + self.ethereum_caller.hex(),
-                    "code_size": None,
-                    "contract": None,
-                    "new": False,
-                    "writable": True
-                }
-            ],
-            "exit_status": "succeed",
-            "result": ""
-        }
-
-        self.compare_tmpl_and_emulate_result(tmpl_json, emulate_result)
-
-        # no changes after the emulation
-        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
-        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
 
         tmpl_json = {
             "solana_accounts": [
@@ -511,7 +365,7 @@ class EmulateTest(unittest.TestCase):
         print('blockhash:', blockhash)
         trx = Transaction(recent_blockhash=blockhash)
         trx.add(TransactionInstruction(program_id=PublicKey(tokenkeg),
-                                       data=ether_trx_data.hex(),
+                                       data=ether_trx_data,
                                        keys=[
                                            AccountMeta(pubkey=self.token, is_signer=False, is_writable=False),
                                            AccountMeta(pubkey=self.token_acc1, is_signer=False, is_writable=False),
