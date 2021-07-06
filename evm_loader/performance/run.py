@@ -13,8 +13,8 @@ import statistics
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
 CONTRACTS_DIR = "contracts/"
 # evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x"
-# evm_loader_id = "jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A"
+# evm_loader_id = "Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x"
+evm_loader_id = "jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A"
 chain_id = 111
 transfer_sum = 1
 

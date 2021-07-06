@@ -206,8 +206,8 @@ fn main() -> CommandResult{
                 .takes_value(true)
                 .global(true)
                 .validator(is_valid_pubkey)
-                // .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
-                .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
+                .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
+                // .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
                 .help("Pubkey for evm_loader contract")
         )
         .get_matches();
@@ -238,33 +238,33 @@ fn main() -> CommandResult{
 
     for line in reader.lines(){
         let keypair = Keypair::new();
-        println!("wallet {}", keypair.pubkey());
+        // println!("wallet {}", keypair.pubkey());
         match (rpc_client.request_airdrop(&keypair.pubkey(), 100000000000)){
             Ok((signature)) => {
                 rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
-                let sum = rpc_client.poll_get_balance_with_commitment(&keypair.pubkey(), CommitmentConfig::confirmed()).unwrap();
-                println!("SUM ========== {}", &sum.to_string());
+                // let sum = rpc_client.poll_get_balance_with_commitment(&keypair.pubkey(), CommitmentConfig::confirmed()).unwrap();
+                // println!("SUM ========== {}", &sum.to_string());
             },
             _ => {panic!("request_airdrop() error")}
         }
 
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
-        // let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
-        // let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
-        // let instruction_keccak = Instruction::new_with_bincode(
-        //     keccakprog,
-        //     &data_keccak,
-        //     vec![
-        //         AccountMeta::new_readonly(keccakprog, false),
-        //     ]
-        // );
+
+        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
+        let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
+        let instruction_keccak = Instruction::new_with_bytes(
+            keccakprog,
+            &data_keccak,
+            vec![
+                AccountMeta::new_readonly(keccakprog, false),
+            ]
+        );
 
         let mut data_05_hex = String::from("05");
         data_05_hex.push_str(trx.from_addr.as_str());
         data_05_hex.push_str(trx.sign.as_str());
         data_05_hex.push_str(trx.msg.as_str());
-        println!("{}", data_05_hex.as_str());
         let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
 
         let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
@@ -273,7 +273,8 @@ fn main() -> CommandResult{
         let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
         let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
 
-        let instruction_05 = Instruction::new_with_bincode(
+        // let instruction_05 = Instruction::new_with_bincode(
+        let instruction_05 = Instruction::new_with_bytes(
             evm_loader,
             &data_05,
             vec![
@@ -285,8 +286,8 @@ fn main() -> CommandResult{
                 AccountMeta::new_readonly(sysvarclock, false),
             ]);
 
-        // let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
-        let message = Message::new(&[instruction_05], Some(&keypair.pubkey()));
+        let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
+        // let message = Message::new(&[instruction_05], Some(&keypair.pubkey()));
 
         let mut tx = Transaction::new_unsigned(message);
 
@@ -297,19 +298,19 @@ fn main() -> CommandResult{
 
 
         // let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, CommitmentConfig::confirmed())?;
-        // let c = RpcSendTransactionConfig {/
+        // let c = RpcSendTransactionConfig {
         //     skip_preflight :true,
         //     preflight_commitment: Some(CommitmentLevel::Confirmed),
         //     ..RpcSendTransactionConfig::default()
         // };
         //
-        //let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        // let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         //     &tx,
         //     CommitmentConfig::confirmed(),
         //     c
         // );
 
-        println!("!!!  {:x?}", sig);
+        println!("trx signature  {:x?}", sig);
 
     }
     Ok(())

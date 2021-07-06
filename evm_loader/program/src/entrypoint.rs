@@ -227,12 +227,12 @@ fn process_instruction<'a>(
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
-            // let sysvar_info = next_account_info(account_info_iter)?;
+            let sysvar_info = next_account_info(account_info_iter)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            // check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
