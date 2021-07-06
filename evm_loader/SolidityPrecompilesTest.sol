@@ -17,7 +17,7 @@ contract SolidityPrecompilesTest {
         bytes memory ret = new bytes(data.length);
         assembly {
             let len := mload(data)
-            if iszero(call(gas, 0x04, 0, add(data, 0x20), len, add(ret,0x20), len)) {
+            if iszero(call(gas(), 0x04, 0, add(data, 0x20), len, add(ret,0x20), len)) {
                 invalid()
             }
         }
@@ -41,7 +41,7 @@ contract SolidityPrecompilesTest {
             mstore(add(memPtr, 0xa0), modulus)
 
             // call the precompiled contract BigModExp (0x05)
-            if iszero(call(gas, 0x05, 0x0, memPtr, 0xc0, memPtr, 0x20)) {
+            if iszero(call(gas(), 0x05, 0x0, memPtr, 0xc0, memPtr, 0x20)) {
                 revert(0x0, 0x0)
             }
             result := mload(memPtr)
@@ -55,7 +55,7 @@ contract SolidityPrecompilesTest {
         input[2] = bx;
         input[3] = by;
         assembly {
-            if iszero(call(gas, 0x06, 0, input, 0x80, result, 0x40)) {
+            if iszero(call(gas(), 0x06, 0, input, 0x80, result, 0x40)) {
                 revert(0,0)
             }
         }
@@ -67,7 +67,7 @@ contract SolidityPrecompilesTest {
         input[1] = y;
         input[2] = scalar;
         assembly {
-            if iszero(call(gas, 0x07, 0, input, 0x60, result, 0x40)) {
+            if iszero(call(gas(), 0x07, 0, input, 0x60, result, 0x40)) {
                 revert(0,0)
             }
         }
@@ -79,20 +79,20 @@ contract SolidityPrecompilesTest {
         require(len % 192 == 0);
         assembly {
             let memPtr := mload(0x40)
-            if iszero(call(gas, 0x08, 0, add(input, 0x20), len, memPtr, 0x20)) {
+            if iszero(call(gas(), 0x08, 0, add(input, 0x20), len, memPtr, 0x20)) {
                 revert(0,0)
             }
             result := mload(memPtr)
         }
     }
 
-    function test_09_blake2F(uint32 rounds, bytes32[2] memory h, bytes32[4] memory m, bytes8[2] memory t, bool f) public view returns (bytes32[2] memory) {
+    function test_09_blake2F(uint32 rounds, bytes32[2] memory h, bytes32[4] memory m, bytes8[2] memory t, bool f) public returns (bytes32[2] memory) {
         bytes32[2] memory output;
 
         bytes memory args = abi.encodePacked(rounds, h[0], h[1], m[0], m[1], m[2], m[3], t[0], t[1], f);
 
         assembly {
-            if iszero(call(gas, 0x09, add(args, 32), 0xd5, output, 0x40)) {
+            if iszero(call(gas(), 0x09, 0, add(args, 32), 0xd5, output, 0x40)) {
                 revert(0, 0)
             }
         }
