@@ -27,7 +27,17 @@ contract ExternalCall {
         bool status;
         bytes memory result;
         (status, result) = solana.call(instruction_data);
-        if (!status) {revert();}
+//        if (!status) {revert("transferChecked failed");}
+        return status;
+    }
+
+    function transferFirstOrSecond(uint256 token, uint256 from, uint256 to_first, uint256 to_second, uint amount,
+        uint256 signer) public {
+        bool status = transferExt(token,from,to_first,amount,signer);
+        if (!status) {
+            status = transferExt(token,from,to_second,amount/2,signer);
+            if (!status) {revert("transferExt failed to_second");}
+        }
     }
 
     function packMeta(bool is_signer, bool is_writable, uint256 account) pure private returns(bytes memory) {
