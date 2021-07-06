@@ -10,6 +10,7 @@
 
 use std::fs::File;
 use std::vec::Vec;
+use std::time::{Duration, SystemTime};
 
 use std::{
 //     collections::HashMap,
@@ -225,29 +226,39 @@ fn main() -> CommandResult{
     let rpc_client = Rc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
 
-    let blockhash : solana_program::hash::Hash;
-    match (rpc_client.get_recent_blockhash()){
-        Ok((hash,_)) => blockhash = hash,
-        _ => {panic!("get_recent_blockhash() error")}
-    }
-    println!("recent_block_hash {}", blockhash.to_string());
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
     let trx_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1";
     let mut file = File::open(trx_file_name)?;
     let reader= BufReader::new(file);
 
-    for line in reader.lines(){
+    let mut keypairs = Vec::new();
+    let mut count = 0;
+
+    println!("sending requests airdrop ..");
+    while count < 1000{
         let keypair = Keypair::new();
-        // println!("wallet {}", keypair.pubkey());
-        match (rpc_client.request_airdrop(&keypair.pubkey(), 100000000000)){
+        match (rpc_client.request_airdrop(&keypair.pubkey(), 10000000000)){
             Ok((signature)) => {
                 rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
-                // let sum = rpc_client.poll_get_balance_with_commitment(&keypair.pubkey(), CommitmentConfig::confirmed()).unwrap();
-                // println!("SUM ========== {}", &sum.to_string());
+                keypairs.push(keypair);
             },
             _ => {panic!("request_airdrop() error")}
         }
+        count = count + 1;
+    }
 
+
+    println!("creating transactions  ..");
+    let mut transaction = Vec::new();
+    for line in reader.lines(){
+        // let keypair = Keypair::new();
+        // match (rpc_client.request_airdrop(&keypair.pubkey(), 100000000000)){
+        //     Ok((signature)) => {
+        //         rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
+        //     },
+        //     _ => {panic!("request_airdrop() error")}
+        // }
+        let keypair = keypairs.pop().unwrap();
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
 
@@ -273,7 +284,6 @@ fn main() -> CommandResult{
         let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
         let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
 
-        // let instruction_05 = Instruction::new_with_bincode(
         let instruction_05 = Instruction::new_with_bytes(
             evm_loader,
             &data_05,
@@ -287,32 +297,35 @@ fn main() -> CommandResult{
             ]);
 
         let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
-        // let message = Message::new(&[instruction_05], Some(&keypair.pubkey()));
-
         let mut tx = Transaction::new_unsigned(message);
+
+        let blockhash : solana_program::hash::Hash;
+        match (rpc_client.get_recent_blockhash()){
+            Ok((hash,_)) => blockhash = hash,
+            _ => {panic!("get_recent_blockhash() error")}
+        }
+        // println!("recent_block_hash {}", blockhash.to_string());
 
         let signer: Box<dyn Signer> = Box::from(keypair);
         tx.try_sign(&[&*signer] , blockhash)?;
-
-        let sig = rpc_client.send_transaction(&tx)?;
-
-
-        // let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, CommitmentConfig::confirmed())?;
-        // let c = RpcSendTransactionConfig {
-        //     skip_preflight :true,
-        //     preflight_commitment: Some(CommitmentLevel::Confirmed),
-        //     ..RpcSendTransactionConfig::default()
-        // };
-        //
-        // let sig = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        //     &tx,
-        //     CommitmentConfig::confirmed(),
-        //     c
-        // );
-
-        println!("trx signature  {:x?}", sig);
-
+        transaction.push(tx);
     }
+
+    let start = SystemTime::now();
+    println!("sending transactions ..");
+    for tx in transaction{
+        let sig = rpc_client.send_transaction_with_config(
+            &tx,
+            RpcSendTransactionConfig {
+                skip_preflight : true,
+                preflight_commitment: Some(CommitmentLevel::Confirmed),
+                ..RpcSendTransactionConfig::default()
+            }
+        )?;
+    }
+    let end = SystemTime::now();
+    let time = end.duration_since(start).expect("Clock may have gone backwards");;
+    println!("time  {:?}", time);
     Ok(())
 }
 
