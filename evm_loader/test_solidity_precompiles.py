@@ -111,10 +111,11 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("sha256() - ", self.make_sha256("").hex())
         trx = self.make_transactions(self.make_sha256(""))
         result = send_transaction(client, trx, self.acc)["result"]
-        print("Result:")
-        print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex())
-        print("Expect:")
-        print(sha256(str.encode("")).hexdigest())
+        result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+        expect_hash = sha256(str.encode("")).hexdigest()
+        print("Result: ", result_hash)
+        print("Expect: ", expect_hash)
+        self.assertEqual(result_hash, expect_hash)
 
     # def test_03_ripemd160_contract(self):
     #     import hashlib
