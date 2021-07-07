@@ -66,6 +66,7 @@ pub struct SolanaBackend<'a, 's, S> {
 
 static SYSTEM_ACCOUNT: H160 = H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 static SYSTEM_ACCOUNT_ECRECOVER: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+static SYSTEM_ACCOUNT_RIPEMD160: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -84,6 +85,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn is_system_address(address: &H160) -> bool {
         *address == SYSTEM_ACCOUNT
         || *address == SYSTEM_ACCOUNT_ECRECOVER
+        || *address == SYSTEM_ACCOUNT_RIPEMD160
     }
 
     /// Call inner ecrecover
@@ -123,6 +125,34 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("{}", &hex::encode(&address));
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
+    }
+
+    /// Call inner ripemd160
+    #[must_use]
+    pub fn call_inner_ripemd160(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        use ripemd160::{Ripemd160, Digest};
+        debug_print!("ripemd160");
+        debug_print!("input: {}", &hex::encode(&input));
+        
+        let mut hasher = Ripemd160::new();
+
+        // process input message
+        hasher.update(input);
+
+        // acquire hash digest in the form of GenericArray,
+        // which in this case is equivalent to [u8; 20]
+        let hash_val = hasher.finalize();
+        debug_print!("{}", &hex::encode(&hash_val[..]));
+
+        // transform to [u8; 32]
+        let mut result = vec![0_u8; 12];
+        result.extend(&hash_val[..]);
+
+        debug_print!("{}", &hex::encode(&result));
+
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result)))
     }
 
     /// Get chain id
@@ -187,6 +217,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_RIPEMD160 {
+            return Self::call_inner_ripemd160(&input);
         }
 
         if !self.is_solana_address(&code_address) {

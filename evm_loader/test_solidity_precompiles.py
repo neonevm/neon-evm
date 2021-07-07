@@ -105,7 +105,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%062x" % 0x0 + "20") \
                 + bytes.fromhex("%064x" % len(data))\
                 + str.encode(data)
-    
+
+    def test_03_ripemd160_contract(self):
+        import hashlib
+        print("ripemd160() - ", self.make_ripemd160("").hex())
+        trx = self.make_transactions(self.make_ripemd160(""))
+        result = send_transaction(client, trx, self.acc)["result"]
+        result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+        expect_hash = hashlib.new('ripemd160', str.encode("")).hexdigest()
+        print("Result: ", result_hash)
+        print("Expect: ", expect_hash)
+        self.assertEqual(result_hash[:40], expect_hash)
 
 if __name__ == '__main__':
     unittest.main()
