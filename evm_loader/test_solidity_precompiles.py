@@ -105,7 +105,38 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%062x" % 0x0 + "20") \
                 + bytes.fromhex("%064x" % len(data))\
                 + str.encode(data)
-    
+
+    def make_bigModExp(self, base, exponent, modulus):
+        return abi.function_signature_to_4byte_selector('test_05_bigModExp(bytes32, bytes32, bytes32)')\
+                + bytes.fromhex("%064x" % base) \
+                + bytes.fromhex("%064x" % exponent) \
+                + bytes.fromhex("%064x" % modulus)
+
+    def test_05_bigModExp_contract(self):
+        def get_pow_ints():
+            from random import randint
+            base = ''
+            exponent = ''
+            modulus = ''
+            for _ in range(50):
+                base += str(randint(0,9))
+                exponent += str(randint(0,9))
+                modulus += str(randint(0,9))
+            base = int(base)
+            exponent = int(exponent)
+            modulus = int(modulus)
+            return (pow(base,exponent,modulus), base, exponent, modulus)
+
+        (expected_result, base, exponent, modulus) = get_pow_ints()
+
+        print("bigModExp() - ", self.make_bigModExp(base, exponent, modulus).hex())
+        trx = self.make_transactions(self.make_bigModExp(base, exponent, modulus))
+        result = send_transaction(client, trx, self.acc)["result"]
+        result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+        print("Result: ", result_data)
+        print("Expect: ", "%064x" % expected_result)
+        self.assertEqual(result_data, "%064x" % expected_result)
+
 
 if __name__ == '__main__':
     unittest.main()

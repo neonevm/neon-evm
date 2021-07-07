@@ -66,6 +66,7 @@ pub struct SolanaBackend<'a, 's, S> {
 
 static SYSTEM_ACCOUNT: H160 = H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 static SYSTEM_ACCOUNT_ECRECOVER: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+static SYSTEM_ACCOUNT_BIGMODEXP: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -84,6 +85,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn is_system_address(address: &H160) -> bool {
         *address == SYSTEM_ACCOUNT
         || *address == SYSTEM_ACCOUNT_ECRECOVER
+        || *address == SYSTEM_ACCOUNT_BIGMODEXP
     }
 
     /// Call inner ecrecover
@@ -123,6 +125,73 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("{}", &hex::encode(&address));
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
+    }
+
+    /// Call inner big_mod_exp
+    #[must_use]
+    pub fn call_inner_big_mod_exp(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        use num_bigint::BigInt;
+        use num_traits::{Zero, One};
+        let mod_exp =|base: &BigInt, exponent: &BigInt, modulus: &BigInt| -> BigInt {
+            let one: BigInt = One::one();
+            let two = &one + &one;
+            let mut result: BigInt = One::one();
+            let mut base_acc = base.clone();
+            let mut exp_acc = exponent.clone();
+            while exp_acc > Zero::zero() {
+                if (&exp_acc % &two) == One::one() {
+                    result = (result * &base_acc) % modulus;
+                }
+                exp_acc >>= 1;
+                base_acc = (&base_acc * &base_acc) % modulus;
+            }
+            result
+        };
+
+        debug_print!("big_mod_exp");
+        debug_print!("input: {}", &hex::encode(&input));
+
+        let (base_len, rest) = input.split_at(32);
+        let (exp_len, rest) = rest.split_at(32);
+        let (mod_len, rest) = rest.split_at(32);
+
+        let base_len: usize = match U256::from_big_endian(base_len).try_into() {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])))
+        };
+        let exp_len: usize = match U256::from_big_endian(exp_len).try_into() {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])))
+        };
+        let mod_len: usize = match U256::from_big_endian(mod_len).try_into() {
+            Ok(value) => value,
+            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])))
+        };
+
+        if base_len == 0 && mod_len == 0 {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])));
+        }
+
+        let (base_val, rest) = rest.split_at(base_len);
+        let (exp_val, rest) = rest.split_at(exp_len);
+        let (mod_val, _rest) = rest.split_at(mod_len);
+
+        let base_val = BigInt::from_signed_bytes_be(base_val);
+        let exp_val  = BigInt::from_signed_bytes_be(exp_val);
+        let mod_val  = BigInt::from_signed_bytes_be(mod_val);
+
+        if mod_val.bits() == 0 {
+            let return_value = vec![0_u8; mod_len];
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), return_value)));
+        }
+
+        let ret_int = mod_exp(&base_val, &exp_val, &mod_val).to_bytes_be().1;
+        let mut return_value = vec![0_u8; mod_len - ret_int.len()];
+        return_value.extend(ret_int);
+
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), return_value)))
     }
 
     /// Get chain id
@@ -187,6 +256,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_BIGMODEXP {
+            return Self::call_inner_big_mod_exp(&input);
         }
 
         if !self.is_solana_address(&code_address) {
