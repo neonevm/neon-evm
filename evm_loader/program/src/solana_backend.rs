@@ -64,8 +64,8 @@ pub struct SolanaBackend<'a, 's, S> {
     account_infos: Option<&'a [AccountInfo<'a>]>,
 }
 
-static SYSTEM_ACCOUNT: [u8; 20] = [0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-static SYSTEM_ACCOUNT_ECRECOVER: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
+static SYSTEM_ACCOUNT: H160 = H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+static SYSTEM_ACCOUNT_ECRECOVER: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -79,29 +79,23 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         *code_address == Self::system_account()
     }
 
-    #[allow(clippy::unused_self)]
-    fn is_ecrecover_address(&self, code_address: &H160) -> bool {
-        *code_address == Self::system_account_ecrecover()
-    }
-
     /// Is system address
     #[must_use]
     pub fn is_system_address(address: &H160) -> bool {
-        *address == H160::from_slice(&SYSTEM_ACCOUNT)
-            ||
-            *address == H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
+        *address == SYSTEM_ACCOUNT
+        || *address == SYSTEM_ACCOUNT_ECRECOVER
     }
 
     /// Get system account
     #[must_use]
     pub fn system_account() -> H160 {
-        H160::from_slice(&SYSTEM_ACCOUNT)
+        SYSTEM_ACCOUNT
     }
 
     /// Get ecrecover system account
     #[must_use]
     pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
+        SYSTEM_ACCOUNT_ECRECOVER
     }
 
     /// Call inner ecrecover
@@ -203,7 +197,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        if self.is_ecrecover_address(&code_address) {
+        if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
         }
 
