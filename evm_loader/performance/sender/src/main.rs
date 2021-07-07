@@ -163,7 +163,7 @@ fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-fn parse_program_args() -> (Pubkey, String, String, String){
+fn parse_program_args() -> (Pubkey, String, String, String, String){
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -186,7 +186,7 @@ fn parse_program_args() -> (Pubkey, String, String, String){
                 .takes_value(true)
                 .global(true)
                 .validator(is_valid_pubkey)
-                .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
+                .default_value("AeTXaphqg264q2Bf1iqnLMWNiyykrfK13cKDR6WBHLGY")
                 // .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
                 .help("Pubkey for evm_loader contract")
         ).arg(
@@ -204,7 +204,14 @@ fn parse_program_args() -> (Pubkey, String, String, String){
             .help("/path/to/senders.json")
             .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1"),
     )
-        .get_matches();
+        .arg(
+            Arg::with_name("verify_file")
+                .value_name("VERIFY_FILEPATH")
+                .takes_value(true)
+                .required(true)
+                .help("/path/to/verify.json")
+                .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/verify.json1"),
+        )        .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
         .unwrap_or_else(|| {
@@ -220,8 +227,9 @@ fn parse_program_args() -> (Pubkey, String, String, String){
 
     let trx_filename = app_matches.value_of("transactions_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("senders_file").unwrap().to_string();
+    let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename);
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename);
 }
 
 fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
@@ -240,7 +248,7 @@ fn create_trx(
     evm_loader: &Pubkey,
     trx_filename: &String,
     senders_filename :&String,
-    rpc_client: &Rc<RpcClient> )-> Result<Vec<Transaction>, Error>{
+    rpc_client: &Rc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
 
@@ -312,7 +320,7 @@ fn create_trx(
 
         let signer: Box<dyn Signer> = Box::from(keypair);
         tx.try_sign(&[&*signer] , blockhash)?;
-        transaction.push(tx);
+        transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
     }
 
     return Ok(transaction);
@@ -320,7 +328,7 @@ fn create_trx(
 
 fn main() -> CommandResult{
 
-    let (evm_loader, json_rpc_url,trx_filename, senders_filename )
+    let (evm_loader, json_rpc_url,trx_filename, senders_filename, verify_filename )
         = parse_program_args();
 
     let rpc_client = Rc::new(RpcClient::new_with_commitment(json_rpc_url,
@@ -331,7 +339,8 @@ fn main() -> CommandResult{
     println!("sending transactions ..");
     let start = SystemTime::now();
     let mut count = 0;
-    for tx in transaction{
+    let mut signatures = Vec::new();
+    for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
         let sig = rpc_client.send_transaction_with_config(
             &tx,
             RpcSendTransactionConfig {
@@ -340,12 +349,27 @@ fn main() -> CommandResult{
                 ..RpcSendTransactionConfig::default()
             }
         )?;
+        signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
         count = count  + 1;
     }
     let end = SystemTime::now();
     let time = end.duration_since(start).expect("Clock may have gone backwards");;
     println!("time  {:?}", time);
     println!("count {}", &count.to_string());
+
+    let mut verify = File::create(verify_filename).unwrap();
+
+    // Write a &str in the file (ignoring the result).
+    for (erc20_eth, payer_eth, receiver_eth, sig) in signatures{
+        writeln!(&mut verify, "[\"{}\", \"{}\", \"{}\", \"{}\"]",
+                 &erc20_eth.to_string(),
+                 &payer_eth.to_string(),
+                 &receiver_eth.to_string(),
+                 &sig.to_string()
+        ).unwrap();
+
+    }
+
     Ok(())
 }
 

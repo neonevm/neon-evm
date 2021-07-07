@@ -33,9 +33,10 @@ class init_senders():
         cls.accounts = []
         file = open(senders_file + args.postfix, mode='r')
         for line in file:
-            rec = json.loads(line)
-            print (rec)
-            cls.accounts.append(Account(bytes().fromhex(rec["pr_key"])))
+            # pair = bytes.fromhex(line)
+            # rec = json.loads(line)
+            # print (rec)
+            cls.accounts.append(Account(bytes().fromhex(line[:64])))
         print("init_senders init")
 
         if len(cls.accounts) == 0:
@@ -527,13 +528,14 @@ def verify_trx(args):
         res = client.get_confirmed_transaction(receipt)
         if res['result'] == None:
             receipt_error = receipt_error + 1
+            print(success)
         else:
             try:
                 success = check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
             except AssertionError:
                 print(res['result'])
                 event_error = event_error + 1
-        print(success, res['result']['slot'])
+            print(success, res['result']['slot'])
 
 
     print("\ntotal:", total)
