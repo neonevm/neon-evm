@@ -117,15 +117,5 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Expect: ", expect_hash)
         self.assertEqual(result_hash, expect_hash)
 
-    # def test_03_ripemd160_contract(self):
-    #     import hashlib
-    #     print("ripemd160() - ", self.make_ripemd160("").hex())
-    #     trx = self.make_transactions(self.make_ripemd160(""))
-    #     result = send_transaction(client, trx, self.acc)["result"]
-    #     print("Result:")
-    #     print(b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex())
-    #     print("Expect:")
-    #     print(hashlib.new('ripemd160', str.encode("")).hexdigest())
-
 if __name__ == '__main__':
     unittest.main()
