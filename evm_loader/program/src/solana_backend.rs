@@ -81,11 +81,6 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         *code_address == Self::system_account()
     }
 
-    // #[allow(clippy::unused_self)]
-    // fn is_ecrecover_address(&self, code_address: &H160) -> bool {
-    //     *code_address == Self::system_account_ecrecover()
-    // }
-
     /// Is system address
     #[must_use]
     pub fn is_system_address(address: &H160) -> bool {
