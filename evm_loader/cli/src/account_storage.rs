@@ -1,6 +1,7 @@
 use evm::backend::Apply;
 use evm::{H160, U256};
 #[allow(unused)]
+#[allow(clippy::upper_case_acronyms)]
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
