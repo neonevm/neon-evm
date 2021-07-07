@@ -4,6 +4,7 @@ use std::time::{Duration, SystemTime};
 
 use std::{
     rc::Rc,
+    sync::Arc,
     i64,
     str::FromStr,
     process::exit,
@@ -248,7 +249,7 @@ fn create_trx(
     evm_loader: &Pubkey,
     trx_filename: &String,
     senders_filename :&String,
-    rpc_client: &Rc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
+    rpc_client: &Arc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
 
@@ -326,37 +327,8 @@ fn create_trx(
     return Ok(transaction);
 }
 
-fn main() -> CommandResult{
-
-    let (evm_loader, json_rpc_url,trx_filename, senders_filename, verify_filename )
-        = parse_program_args();
-
-    let rpc_client = Rc::new(RpcClient::new_with_commitment(json_rpc_url,
-                                                            CommitmentConfig::confirmed()));
-
-    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &rpc_client).unwrap();
-
-    println!("sending transactions ..");
-    let start = SystemTime::now();
-    let mut count = 0;
-    let mut signatures = Vec::new();
-    for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
-        let sig = rpc_client.send_transaction_with_config(
-            &tx,
-            RpcSendTransactionConfig {
-                skip_preflight : true,
-                preflight_commitment: Some(CommitmentLevel::Confirmed),
-                ..RpcSendTransactionConfig::default()
-            }
-        )?;
-        signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
-        count = count  + 1;
-    }
-    let end = SystemTime::now();
-    let time = end.duration_since(start).expect("Clock may have gone backwards");;
-    println!("time  {:?}", time);
-    println!("count {}", &count.to_string());
-
+fn write_for_verify(verify_filename : &String, signatures: &Vec<(String, String, String, Signature)>)
+    -> Result<(), Error>{
     let mut verify = File::create(verify_filename).unwrap();
 
     // Write a &str in the file (ignoring the result).
@@ -369,6 +341,44 @@ fn main() -> CommandResult{
         ).unwrap();
 
     }
+    return Ok(());
+}
+
+fn main() -> CommandResult{
+
+    let (evm_loader, json_rpc_url,trx_filename, senders_filename, verify_filename )
+        = parse_program_args();
+
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
+                                                            CommitmentConfig::confirmed()));
+
+    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &rpc_client).unwrap();
+
+    println!("sending transactions ..");
+    let start = SystemTime::now();
+    let mut count = 0;
+    let mut signatures = Vec::new();
+    let tpu_config : TpuClientConfig = TpuClientConfig::default();
+    let tpu_client = TpuClient::new(rpc_client, "", tpu_config).unwrap();
+    for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
+        // let sig = rpc_client.send_transaction_with_config(
+        //     &tx,
+        //     RpcSendTransactionConfig {
+        //         skip_preflight : true,
+        //         preflight_commitment: Some(CommitmentLevel::Confirmed),
+        //         ..RpcSendTransactionConfig::default()
+        //     }
+        // )?;
+        let res = tpu_client.send_transaction(&tx);
+        signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
+        count = count  + 1;
+    }
+    let end = SystemTime::now();
+    let time = end.duration_since(start).expect("Clock may have gone backwards");
+    println!("time  {:?}", time);
+    println!("count {}", &count.to_string());
+
+    write_for_verify(&verify_filename, &signatures);
 
     Ok(())
 }
