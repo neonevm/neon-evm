@@ -15,7 +15,7 @@ contract ExternalCall {
             packMeta(false, true,  from),
             packMeta(false, false, token),
             packMeta(false, true,  to),
-            packMeta(true, false, owner),
+            packMeta(true, false, signer),
             abi.encodePacked(
                 uint8(12),        // transferChecked
                 uint64(val),      // amount
