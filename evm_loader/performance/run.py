@@ -14,7 +14,7 @@ import statistics
 CONTRACTS_DIR = "contracts/"
 # evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x"
-evm_loader_id = "jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A"
+evm_loader_id = "AeTXaphqg264q2Bf1iqnLMWNiyykrfK13cKDR6WBHLGY"
 chain_id = 111
 transfer_sum = 1
 
@@ -542,33 +542,24 @@ def verify_trx(args):
 
 def create_senders(args):
     total = 0
-    # acc_list = []
     receipt_list = []
 
     senders = open(senders_file+args.postfix, mode='w')
     senders = open(senders_file+args.postfix, mode='a')
 
-
     while total < args.count:
         total = total + 1
         acc = Account()
         tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-        receipt_list.append((tx['result'], acc.secret_key().hex(), str(acc.public_key())))
+        receipt_list.append((tx['result'], acc.secret_key(), acc.public_key()) )
 
-    acc = {}
     for (receipt, pr_key, pub_key ) in receipt_list:
         confirm_transaction(client, receipt, sleep_time=0.1)
         if getBalance(pub_key) == 0:
-            print("request_airdrop error", acc.public_key())
+            print("request_airdrop error", str(pub_key))
             exit(0)
-        acc["pub_key"] = pub_key
-        acc["pr_key"] = pr_key
-        senders.write(json.dumps(acc)+"\n")
-        # acc_list.append((pub_key, pr_key))
-
-    # with open(senders_file+args.postfix, mode="w") as f:
-    #     f.write(json.dumps(acc_list))
-
+        line = pr_key.hex() + bytes(pub_key).hex()
+        senders.write(line+"\n")
 
 
 parser = argparse.ArgumentParser(description='Process some integers.')

@@ -1,36 +1,18 @@
-// #![deny(warnings)]
-// #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-// #![allow(
-// clippy::redundant_field_names,
-// clippy::must_use_candidate,
-// clippy::missing_errors_doc,
-// clippy::missing_panics_doc,
-// clippy::missing_const_for_fn
-// )]
-
 use std::fs::File;
 use std::vec::Vec;
 use std::time::{Duration, SystemTime};
 
 use std::{
-//     collections::HashMap,
-//     io::{Read},
-//     fs::File,
-//     env, str::FromStr,
-//     process::exit,
     rc::Rc,
-    // sync::Arc,
-//     thread::sleep,
-//     time::{Duration},
     i64,
     str::FromStr,
     process::exit,
+    fmt::Display,
 };
 
 use std::io::{self, prelude::*, BufReader};
 
 use serde::{Deserialize, Serialize};
-// use serde_json::Result;
 
 use solana_sdk::{
     clock::Slot,
@@ -78,7 +60,7 @@ use solana_transaction_status::{
     UiInstruction,
     EncodedConfirmedTransaction
 };
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 
 use evm_loader::{
     instruction::EvmInstruction,
@@ -87,7 +69,6 @@ use evm_loader::{
 };
 use evm::{H160, H256, U256};
 use solana_sdk::recent_blockhashes_account::update_account;
-// use
 
 #[derive(Serialize, Deserialize)]
 struct trx_t {
@@ -182,9 +163,7 @@ fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-
-// fn main() -> std::io::Result<()>{
-fn main() -> CommandResult{
+fn parse_program_args() -> (Pubkey, String, String, String){
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -210,7 +189,21 @@ fn main() -> CommandResult{
                 .default_value("jmHKzUejhejY2b212jTfy7fFbVfGbKchd3uHv9khT1A")
                 // .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
                 .help("Pubkey for evm_loader contract")
-        )
+        ).arg(
+        Arg::with_name("transactions_file")
+            .value_name("TRANSACTIONS_FILEPATH")
+            .takes_value(true)
+            .required(true)
+            .help("/path/to/transactions.json")
+            .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1"),
+    ).arg(
+        Arg::with_name("senders_file")
+            .value_name("SENDERS_FILEPATH")
+            .takes_value(true)
+            .required(true)
+            .help("/path/to/senders.json")
+            .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1"),
+    )
         .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
@@ -219,51 +212,63 @@ fn main() -> CommandResult{
             exit(1);
         });
 
+
     let json_rpc_url = normalize_to_url_if_moniker(
         app_matches
             .value_of("json_rpc_url").unwrap()
     );
-    let rpc_client = Rc::new(RpcClient::new_with_commitment(json_rpc_url,
-                                                            CommitmentConfig::confirmed()));
+
+    let trx_filename = app_matches.value_of("transactions_file").unwrap().to_string();
+    let senders_filename = app_matches.value_of("senders_file").unwrap().to_string();
+
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename);
+}
+
+fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
+    let mut file = File::open(filename)?;
+    let reader= BufReader::new(file);
+    let mut keys = Vec::new();
+
+    for line in reader.lines(){
+        let bin = hex::decode(line?.as_str()).unwrap();
+        keys.push(bin);
+    }
+    return Ok(keys);
+}
+
+fn create_trx(
+    evm_loader: &Pubkey,
+    trx_filename: &String,
+    senders_filename :&String,
+    rpc_client: &Rc<RpcClient> )-> Result<Vec<Transaction>, Error>{
 
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
-    let trx_file_name : &str = "/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1";
-    let mut file = File::open(trx_file_name)?;
-    let reader= BufReader::new(file);
 
-    let mut keypairs = Vec::new();
-    let mut count = 0;
-
-    println!("sending requests airdrop ..");
-    while count < 1000{
-        let keypair = Keypair::new();
-        match (rpc_client.request_airdrop(&keypair.pubkey(), 10000000000)){
-            Ok((signature)) => {
-                rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
-                keypairs.push(keypair);
-            },
-            _ => {panic!("request_airdrop() error")}
-        }
-        count = count + 1;
-    }
-
+    let mut keys = read_senders(&senders_filename).unwrap();
 
     println!("creating transactions  ..");
     let mut transaction = Vec::new();
+    let mut it = keys.iter();
+
+    let mut file = File::open(trx_filename)?;
+    let reader= BufReader::new(file);
+
     for line in reader.lines(){
-        // let keypair = Keypair::new();
-        // match (rpc_client.request_airdrop(&keypair.pubkey(), 100000000000)){
-        //     Ok((signature)) => {
-        //         rpc_client.poll_for_signature_with_commitment(&signature, CommitmentConfig::confirmed());
-        //     },
-        //     _ => {panic!("request_airdrop() error")}
-        // }
-        let keypair = keypairs.pop().unwrap();
+
+        let mut keypair_bin : &Vec<u8>;
+        match (it.next()){
+            Some(val) => keypair_bin = val,
+            None => {
+                it = keys.iter();
+                keypair_bin = it.next().unwrap()
+            }
+        }
+        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
 
         let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
-        let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
+        // let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
         let instruction_keccak = Instruction::new_with_bytes(
             keccakprog,
             &data_keccak,
@@ -285,14 +290,14 @@ fn main() -> CommandResult{
         let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
 
         let instruction_05 = Instruction::new_with_bytes(
-            evm_loader,
+            *evm_loader,
             &data_05,
             vec![
                 AccountMeta::new(contract, false),
                 AccountMeta::new(contract_code, false),
                 AccountMeta::new(caller, false),
                 AccountMeta::new_readonly(sysinstruct, false),
-                AccountMeta::new_readonly(evm_loader, false),
+                AccountMeta::new_readonly(*evm_loader, false),
                 AccountMeta::new_readonly(sysvarclock, false),
             ]);
 
@@ -302,17 +307,30 @@ fn main() -> CommandResult{
         let blockhash : solana_program::hash::Hash;
         match (rpc_client.get_recent_blockhash()){
             Ok((hash,_)) => blockhash = hash,
-            _ => {panic!("get_recent_blockhash() error")}
+            _ => panic!("get_recent_blockhash() error")
         }
-        // println!("recent_block_hash {}", blockhash.to_string());
 
         let signer: Box<dyn Signer> = Box::from(keypair);
         tx.try_sign(&[&*signer] , blockhash)?;
         transaction.push(tx);
     }
 
-    let start = SystemTime::now();
+    return Ok(transaction);
+}
+
+fn main() -> CommandResult{
+
+    let (evm_loader, json_rpc_url,trx_filename, senders_filename )
+        = parse_program_args();
+
+    let rpc_client = Rc::new(RpcClient::new_with_commitment(json_rpc_url,
+                                                            CommitmentConfig::confirmed()));
+
+    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &rpc_client).unwrap();
+
     println!("sending transactions ..");
+    let start = SystemTime::now();
+    let mut count = 0;
     for tx in transaction{
         let sig = rpc_client.send_transaction_with_config(
             &tx,
@@ -322,10 +340,12 @@ fn main() -> CommandResult{
                 ..RpcSendTransactionConfig::default()
             }
         )?;
+        count = count  + 1;
     }
     let end = SystemTime::now();
     let time = end.duration_since(start).expect("Clock may have gone backwards");;
     println!("time  {:?}", time);
+    println!("count {}", &count.to_string());
     Ok(())
 }
 
