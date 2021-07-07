@@ -1,7 +1,6 @@
 use evm::backend::Apply;
 use evm::{H160, U256};
 #[allow(unused)]
-#[allow(clippy::upper_case_acronyms)]
 use solana_sdk::{
     pubkey::Pubkey,
     account::Account,
@@ -428,71 +427,21 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
             external_account_metas.insert(0,contract_meta);
         }
-        eprintln!("external_call: solana_accounts: {:?}", self.solana_accounts);
-
-        // let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-        // let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
-
-        // TODO: config.rpc_client.simulate_transaction(&solana_address, CommitmentConfig::processed()).unwrap().value {
-        eprintln!("external_call: account_infos: {:?}", account_infos);
         let instructions = [instruction.clone()];
-        eprintln!("external_call: instructions: {:?}", instructions);
         let msg = Message::new(
             &instructions,
             Some(&self.config.signer.pubkey()));
-        eprintln!("external_call: msg: {:?}", msg);
         let transaction = Transaction::new_unsigned(msg,);
-        eprintln!("external_call: transaction: {:?}", transaction);
-        let result =
-            simulate_transaction(&*self.config.rpc_client, transaction);
-        eprintln!("result of simulate_transaction: {:?}", result);
-        return result;
 
-        // match self.seeds(&self.origin()) {
-        //     Some((sender_eth, sender_nonce)) => {
-        //         // let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-        //         // // TODO: config.rpc_client.simulate_transaction(&solana_address, CommitmentConfig::processed()).unwrap().value {
-        //         // let mut transactions = vec![];
-        //         // let mut instructions = [instruction.clone()];
-        //         // transactions.push((
-        //         //     Transaction::new_unsigned(
-        //         //         Message::new(
-        //         //             &instructions,
-        //         //             None),
-        //         //     ),
-        //         //     format!("Simulate external call with instruction: {:?}",
-        //         //             instruction)
-        //         // ));
-        //         // let create_transactions =
-        //         //     simulate_transactions(&*self.config.rpc_client, transactions);
-        //         // eprintln!("result of simulate_transactions: {:?}", create_transactions);
-        //         // let confirmations = transact(
-        //         //     &self.config.rpc_client,
-        //         //     false,
-        //         //     create_transactions,
-        //         //     &self.config.authorized_staker,
-        //         // )?;
-        //         // eprintln!("confirmations length of transact: {:?}", confirmations.len());
-        //
-        //         // if !process_confirmations(confirmations, None) {
-        //         //     eprintln!("external_call: Simulate transactions were failed.");
-        //         // }
-        //
-        //         Ok(())
-        //
-        //         // invoke_signed(
-        //         //     instruction,
-        //         //     account_infos,
-        //         //     &[&sender_seeds[..], &contract_seeds[..]]
-        //         // )
-        //     }
-        //     None => {
+        // simulate transaction instead of a call
         //         invoke_signed(
         //             instruction,
         //             account_infos,
         //             &[&contract_seeds[..]]
-        //         )
-        //     }
-        // }
+        let result =
+            simulate_transaction(&*self.config.rpc_client, transaction);
+        eprintln!("result of simulate_transaction: {:?}", result);
+
+        result
     }
 }
