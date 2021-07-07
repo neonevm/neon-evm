@@ -127,7 +127,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
     }
 
-    /// Call inner big_mod_exp
+    /// Call inner `big_mod_exp`
     #[must_use]
     pub fn call_inner_big_mod_exp(
         input: &[u8],
