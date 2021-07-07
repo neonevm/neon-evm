@@ -66,6 +66,7 @@ pub struct SolanaBackend<'a, 's, S> {
 
 static SYSTEM_ACCOUNT: H160 = H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 static SYSTEM_ACCOUNT_ECRECOVER: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+static SYSTEM_ACCOUNT_DATACOPY: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -84,6 +85,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn is_system_address(address: &H160) -> bool {
         *address == SYSTEM_ACCOUNT
         || *address == SYSTEM_ACCOUNT_ECRECOVER
+        || *address == SYSTEM_ACCOUNT_DATACOPY
     }
 
     /// Call inner ecrecover
@@ -123,6 +125,17 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("{}", &hex::encode(&address));
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
+    }
+
+    /// Call inner datacopy
+    #[must_use]
+    pub fn call_inner_datacopy(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        debug_print!("datacopy");
+        debug_print!("input: {}", &hex::encode(&input));
+
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
     }
 
     /// Get chain id
@@ -187,6 +200,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_DATACOPY {
+            return Self::call_inner_datacopy(&input);
         }
 
         if !self.is_solana_address(&code_address) {
