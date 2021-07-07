@@ -485,7 +485,7 @@ def send_transactions(args):
         sign = bytes.fromhex(rec['sign'])
         msg = bytes.fromhex(rec['msg'])
         trx = Transaction()
-        # trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
+        trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
         trx.add(sol_instr_05((from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']))
         trx.recent_blockhash = recent_blockhash
         trx.sign(senders.next_acc())
