@@ -508,6 +508,26 @@ class EmulateTest(unittest.TestCase):
                     "is_writable": True,
                 },
                 {
+                    "pubkey": str(self.acc.public_key()),
+                    "is_signer": True,
+                    "is_writable": False,
+                },
+                {
+                    "pubkey": str(tokenkeg),
+                    "is_signer": False,
+                    "is_writable": False,
+                },
+                {
+                    "pubkey": str(self.token),
+                    "is_signer": False,
+                    "is_writable": False,
+                },
+                {
+                    "pubkey": str(self.token_acc1),
+                    "is_signer": False,
+                    "is_writable": True,
+                },
+                {
                     "pubkey": str(self.token_acc3),
                     "is_signer": False,
                     "is_writable": True,
