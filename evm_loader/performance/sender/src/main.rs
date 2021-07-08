@@ -137,7 +137,7 @@ fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-fn parse_program_args() -> (Pubkey, String, String, String, String){
+fn parse_program_args() -> (Pubkey, String, String, String, String, String){
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -184,6 +184,16 @@ fn parse_program_args() -> (Pubkey, String, String, String, String){
                 .help("/path/to/verify.json")
                 .default_value("verify.json"),
         )
+        .arg(
+            Arg::with_name("client")
+                .long("client")
+                .value_name("CLIENT")
+                .takes_value(true)
+                .global(true)
+                .help("tcp, udp")
+                .possible_values(&["tcp", "udp"])
+                .default_value("udp"),
+        )
         .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
@@ -198,11 +208,13 @@ fn parse_program_args() -> (Pubkey, String, String, String, String){
             .value_of("json_rpc_url").unwrap()
     );
 
+    let client = app_matches.value_of("client").unwrap().to_string();
+
     let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename);
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, client);
 }
 
 fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
@@ -317,7 +329,13 @@ fn write_for_verify(verify_filename : &String, signatures: &Vec<(String, String,
 
 fn main() -> CommandResult{
 
-    let (evm_loader, json_rpc_url,trx_filename, senders_filename, verify_filename )
+    let (evm_loader,
+        json_rpc_url,
+        trx_filename,
+        senders_filename,
+        verify_filename,
+        client
+    )
         = parse_program_args();
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
@@ -326,22 +344,28 @@ fn main() -> CommandResult{
     let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &rpc_client).unwrap();
 
     println!("sending transactions ..");
-    let start = SystemTime::now();
     let mut count = 0;
     let mut signatures = Vec::new();
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
-    let tpu_client = TpuClient::new(rpc_client, "", tpu_config).unwrap();
+    let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
+
+    let start = SystemTime::now();
     for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
-        // let sig = rpc_client.send_transaction_with_config(
-        //     &tx,
-        //     RpcSendTransactionConfig {
-        //         skip_preflight : true,
-        //         preflight_commitment: Some(CommitmentLevel::Confirmed),
-        //         ..RpcSendTransactionConfig::default()
-        //     }
-        // )?;
-        let res = tpu_client.send_transaction(&tx);
-        signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
+        if (client == "tcp"){
+            let sig = rpc_client.send_transaction_with_config(
+                &tx,
+                RpcSendTransactionConfig {
+                    skip_preflight : true,
+                    preflight_commitment: Some(CommitmentLevel::Confirmed),
+                    ..RpcSendTransactionConfig::default()
+                }
+            )?;
+            signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
+        }
+        else if (client == "udp") {
+            let res = tpu_client.send_transaction(&tx);
+            signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
+        }
         count = count  + 1;
     }
     let end = SystemTime::now();

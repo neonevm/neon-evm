@@ -372,6 +372,7 @@ def mint_confirm(receipt_list, sum):
     event_error = 0
     receipt_error = 0
     nonce_error = 0
+    too_small_error = 0
     unknown_error = 0
     total = 0
     account_minted =[]
@@ -387,21 +388,30 @@ def mint_confirm(receipt_list, sum):
             if res['result']['meta']['err'] == None:
                 if check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11'):
                     account_minted.append(acc_eth_hex)
+                    print("ok")
                 else:
                     event_error = event_error + 1
             else:
-                found = False
+                print(res['result'])
+                found_nonce = False
+                found_too_small = False
                 for err in res['result']['meta']['err']['InstructionError']:
                     if err == "InvalidArgument":
-                        found = True
+                        found_nonce = True
                         break
-                if found:
+                    if err == "AccountDataTooSmall":
+                        found_too_small = True
+                        break
+
+                if found_nonce:
                     nonce_error = nonce_error + 1
+                elif found_too_small:
+                    too_small_error = too_small_error + 1
                 else:
-                    unknown_error = unknown_error +  1
+                    unknown_error = unknown_error + 1
 
 
-    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error)
+    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
 def mint(accounts, acc):
     sum = 1000 * 10 ** 18
@@ -435,7 +445,7 @@ def create_accounts(args):
             ether_accounts.append((acc_eth_hex, acc_sol))
 
     # erc20.mint()
-    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error) = mint(ether_accounts, instance.acc)
+    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint(ether_accounts, instance.acc)
 
     to_file = []
     for acc_eth_hex in account_minted:
@@ -447,6 +457,7 @@ def create_accounts(args):
     print("mint receipt_error:", receipt_error)
     print("mint nonce_error:", nonce_error)
     print("mint unknown_error:", unknown_error)
+    print("mint AccountDataTooSmall:", too_small_error)
     print("total accounts:", len(to_file))
 
     with open(accounts_file+args.postfix, mode='w') as f:
@@ -468,6 +479,14 @@ def create_transactions(args):
 
     func_name = abi.function_signature_to_4byte_selector('transfer(address,uint256)')
     total = 0
+    if len(accounts) == 0:
+        print ("accounts not found" )
+        exit(1)
+
+    if len(contracts) == 0:
+        print ("contracts not found")
+        exit(1)
+
     ia = iter(accounts)
     ic = iter(contracts)
 
@@ -579,6 +598,15 @@ def send_transactions(args):
     print("avg send_raw_transaction time:  ", statistics.mean(trx_times), "sec")
     print("avg cycle time:                 ", statistics.mean(cycle_times), "sec")
 
+def found_revert(res):
+    if len(res['meta']['innerInstructions']) == 1:
+        if len(res['meta']['innerInstructions'][0]['instructions']) == 1:
+            ret_val = b58decode(res['meta']['innerInstructions'][0]['instructions'][0]['data'])
+            if ret_val[:2].hex() == "06d0":
+                return True
+    return False
+
+
 def verify_trx(args):
     verify = open(verify_file+args.postfix, 'r')
     total = 0
@@ -586,6 +614,7 @@ def verify_trx(args):
     receipt_error = 0
     nonce_error = 0
     unknown_error = 0
+    revert_error = 0
 
     for line in verify:
         total = total + 1
@@ -601,11 +630,17 @@ def verify_trx(args):
             print(success)
         else:
             if res['result']['meta']['err'] == None:
-                if check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12'):
+                if found_revert(res['result']):
+                    revert_error = revert_error + 1
                     success = True
                 else:
-                    event_error = event_error + 1
+                    if check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12'):
+                        success = True
+                    else:
+                        # print(res['result'])
+                        event_error = event_error + 1
             else:
+                print(res["result"])
                 found = False
                 for err in res['result']['meta']['err']['InstructionError']:
                     if err == "InvalidArgument":
@@ -623,6 +658,7 @@ def verify_trx(args):
     print("nonce_error:", nonce_error)
     print("unknown_error:", unknown_error)
     print("receipt_error:", receipt_error)
+    print("revert_error:", revert_error)
 
 def create_senders(args):
     total = 0
