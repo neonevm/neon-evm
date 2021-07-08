@@ -471,9 +471,23 @@ class EmulateTest(unittest.TestCase):
         print('solana_accounts:', solana_accounts)
 
         result = self.contract.call(self.ethereum_caller, ether_trx_data, solana_accounts)
-        src_data = result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data']
-        self.assertEqual(base58.b58decode(src_data)[0], 6)  # 6 means OnReturn
-        self.assertLess(base58.b58decode(src_data)[1], 0xd0)  # less 0xd0 - success
+
+        data = base58.b58decode(result['result']['meta']['innerInstructions'][0]['instructions'][-3]['data'])
+        self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
+        self.assertEqual(data[1:21], self.contract.ethereum_id)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('transferFirstOrSecond_called()'))  #topics
+
+        data = base58.b58decode(result['result']['meta']['innerInstructions'][0]['instructions'][-2]['data'])
+        self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
+        self.assertEqual(data[1:21], self.contract.ethereum_id)
+        self.assertEqual(data[21:29], bytes().fromhex('%016x' % 1)[::-1])  # topics len
+        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('transferExt_called(uint256)'))  #topics
+        self.assertEqual(data[61:93], bytes().fromhex("%064x" % (transfer_amount * (10 ** 9))))  # sum
+
+        data = base58.b58decode(result['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
+        self.assertEqual(data[:1], b'\x06')  # 6 means OnReturn
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
 
         self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount - transfer_amount)
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + transfer_amount)
