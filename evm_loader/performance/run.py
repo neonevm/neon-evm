@@ -10,22 +10,23 @@ import random
 from solana.blockhash import *
 import statistics
 
-# CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
-CONTRACTS_DIR = "contracts/"
-# evm_loader_id = os.environ.get("EVM_LOADER")
-# evm_loader_id = "Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x"
-evm_loader_id = "AeTXaphqg264q2Bf1iqnLMWNiyykrfK13cKDR6WBHLGY"
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
+evm_loader_id = os.environ.get("EVM_LOADER")
 chain_id = 111
 transfer_sum = 1
 
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-contracts_file = "contracts.json"
-accounts_file = "accounts.json"
-transactions_file = "transactions.json"
-senders_file = "senders.json"
+contracts_file = "contract.json"
+accounts_file = "account.json"
+transactions_file = "transaction.json"
+senders_file = "sender.json"
 verify_file = "verify.json"
+
+# map caller->trx_count
+trx_count = {}
+
 
 class init_senders():
     @classmethod
@@ -96,21 +97,65 @@ def check_address_event(result, factory_eth, erc20_eth):
     assert(data[61:93] == bytes().fromhex("%024x" % 0)+erc20_eth)  # sum
 
 def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
-    assert(result['meta']['err'] == None)
-    assert(len(result['meta']['innerInstructions']) == 1)
-    assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)
+    # assert(result['meta']['err'] == None)
+
+    if (len(result['meta']['innerInstructions']) != 1):
+        print("len(result['meta']['innerInstructions']) != 1", len(result['meta']['innerInstructions']))
+        return False
+
+    if (len(result['meta']['innerInstructions'][0]['instructions']) != 2):
+        print("len(result['meta']['innerInstructions'][0]['instructions']) != 2",
+              len(result['meta']['innerInstructions'][0]['instructions']))
+        return False
+
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
-    assert(data[:1] == b'\x06')  #  OnReturn
-    assert(data[1:2] == return_code)    # 11 - Machine encountered an explict stop,
-                                        # 12 - Machine encountered an explict return
+    if (data[:1] != b'\x06'):  #  OnReturn
+        print("data[:1] != x06", data[:1].hex())
+        return False
+
+    if(data[1:2] != return_code):    # 11 - Machine encountered an explict stop,  # 12 - Machine encountered an explict return
+        print("data[1:2] != return_code", data[1:2].hex(), return_code.hex())
+        return False
+
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-    assert(data[:1] == b'\x07')  # 7 means OnEvent
-    assert(data[1:21] == bytes.fromhex(erc20_eth))
-    assert(data[21:29] == bytes().fromhex('%016x' % 3)[::-1])  # topics len
-    assert(data[29:61] == abi.event_signature_to_log_topic('Transfer(address,address,uint256)'))  # topics
-    assert(data[61:93] == bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_from))  # from
-    assert(data[93:125] == bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_to))  # to
-    assert(data[125:157] == bytes().fromhex("%064x" % sum))  # value
+    if(data[:1] != b'\x07'):  # 7 means OnEvent
+        print("data[:1] != x07", data[:1].hex())
+        return  False
+
+
+    if (data[1:21] != bytes.fromhex(erc20_eth)):
+        print("data[1:21] != bytes.fromhex(erc20_eth)", data[1:21].hex(), erc20_eth)
+        return False
+
+    if(data[21:29] != bytes().fromhex('%016x' % 3)[::-1]):  # topics len
+        print("data[21:29] != bytes().fromhex('%016x' % 3)[::-1]", data[21:29].hex())
+        return False
+
+    if(data[29:61] != abi.event_signature_to_log_topic('Transfer(address,address,uint256)')):  # topics
+        print("data[29:61] != abi.event_signature_to_log_topic('Transfer(address,address,uint256)')",
+              data[29:61].hex(),
+              abi.event_signature_to_log_topic('Transfer(address,address,uint256)').hex())
+        return False
+
+    if (data[61:93] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_from)):
+        print("data[61:93] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)",
+              data[61:93].hex(),
+              (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)).hex())
+        return False
+
+    if(data[93:125] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_to)):  # from
+        print("data[93:125] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)",
+              data[93:125].hex(),
+              (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)).hex()
+              )
+        return False
+
+    if (data[125:157] != bytes().fromhex("%064x" % sum)):  # value
+        print("data[125:157] != bytes().fromhex('%064x' % sum)",
+              data[125:157].hex(),
+              '%064x' % sum)
+        return False
+
     return True
 
 def get_filehash(factory, factory_code, factory_eth, acc):
@@ -142,11 +187,16 @@ def get_filehash(factory, factory_code, factory_eth, acc):
     hash = data[61:93]
     return hash
 
-
 def get_trx(contract_eth, caller, caller_eth, input, pr_key):
+    if trx_count.get(caller) != None:
+        trx_count[caller] = trx_count[caller] + 1
+    else:
+        trx_count[caller] = getTransactionCount(client, caller)
+
     tx = {'to': contract_eth, 'value': 1, 'gas': 1, 'gasPrice': 1,
-        'nonce': getTransactionCount(client, caller), 'data': input, 'chainId': chain_id}
+        'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
+
     assert (from_addr == caller_eth)
     return (from_addr, sign, msg)
 
@@ -321,6 +371,8 @@ def mint_create(accounts, acc, sum):
 def mint_confirm(receipt_list, sum):
     event_error = 0
     receipt_error = 0
+    nonce_error = 0
+    unknown_error = 0
     total = 0
     account_minted =[]
 
@@ -332,13 +384,24 @@ def mint_confirm(receipt_list, sum):
         if res['result'] == None:
             receipt_error = receipt_error + 1
         else:
-            try:
-                check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11')
-                account_minted.append(acc_eth_hex)
-            except AssertionError:
-                event_error = event_error + 1
+            if res['result']['meta']['err'] == None:
+                if check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11'):
+                    account_minted.append(acc_eth_hex)
+                else:
+                    event_error = event_error + 1
+            else:
+                found = False
+                for err in res['result']['meta']['err']['InstructionError']:
+                    if err == "InvalidArgument":
+                        found = True
+                        break
+                if found:
+                    nonce_error = nonce_error + 1
+                else:
+                    unknown_error = unknown_error +  1
 
-    return (account_minted, total, event_error, receipt_error)
+
+    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error)
 
 def mint(accounts, acc):
     sum = 1000 * 10 ** 18
@@ -352,7 +415,7 @@ def create_accounts(args):
 
     receipt_list = {}
     for i in range(args.count):
-        pr_key = w3.eth.account.from_key(random.randbytes(32))
+        pr_key = w3.eth.account.from_key(os.urandom(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
         trx = Transaction()
         (transaction, acc_sol) = instance.loader.createEtherAccountTrx(acc_eth)
@@ -372,7 +435,7 @@ def create_accounts(args):
             ether_accounts.append((acc_eth_hex, acc_sol))
 
     # erc20.mint()
-    (account_minted, total, event_error, receipt_error) = mint(ether_accounts, instance.acc)
+    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error) = mint(ether_accounts, instance.acc)
 
     to_file = []
     for acc_eth_hex in account_minted:
@@ -382,6 +445,8 @@ def create_accounts(args):
     print("\nmint total:", total)
     print("mint event_error:", event_error)
     print("mint receipt_error:", receipt_error)
+    print("mint nonce_error:", nonce_error)
+    print("mint unknown_error:", unknown_error)
     print("total accounts:", len(to_file))
 
     with open(accounts_file+args.postfix, mode='w') as f:
@@ -477,8 +542,9 @@ def send_transactions(args):
 
         cycle_start = time.time()
         total = total + 1
-        if total > args.count:
-            break
+        if args.count != None:
+            if total > args.count:
+                break
         if time.time() - blockhash_time > 5:
             (recent_blockhash, blockhash_time) = get_block_hash()
 
@@ -518,10 +584,14 @@ def verify_trx(args):
     total = 0
     event_error = 0
     receipt_error = 0
+    nonce_error = 0
+    unknown_error = 0
+
     for line in verify:
         total = total + 1
-        if total > args.count:
-            break
+        if args.count != None:
+            if total > args.count:
+                break
         success = False
         (erc20_eth, payer_eth, receiver_eth, receipt) = json.loads(line)
         # confirm_transaction(client, receipt, sleep_time=0.1)
@@ -530,16 +600,28 @@ def verify_trx(args):
             receipt_error = receipt_error + 1
             print(success)
         else:
-            try:
-                success = check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12')
-            except AssertionError:
-                print(res['result'])
-                event_error = event_error + 1
+            if res['result']['meta']['err'] == None:
+                if check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12'):
+                    success = True
+                else:
+                    event_error = event_error + 1
+            else:
+                found = False
+                for err in res['result']['meta']['err']['InstructionError']:
+                    if err == "InvalidArgument":
+                        found = True
+                        break
+                if found:
+                    nonce_error = nonce_error + 1
+                else:
+                    unknown_error = unknown_error + 1
             print(success, res['result']['slot'])
 
 
     print("\ntotal:", total)
     print("event_error:", event_error)
+    print("nonce_error:", nonce_error)
+    print("unknown_error:", unknown_error)
     print("receipt_error:", receipt_error)
 
 def create_senders(args):

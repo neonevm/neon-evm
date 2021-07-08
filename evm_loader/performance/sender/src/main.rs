@@ -101,33 +101,6 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
-    const NUMBER_OF_SIGNATURES: u8 = 1;
-    const ETH_SIZE: u16 = 20;
-    const SIGN_SIZE: u16 = 65;
-    let eth_offset: u16 = data_start;
-    let sign_offset: u16 = eth_offset + ETH_SIZE;
-    let msg_offset: u16 = sign_offset + SIGN_SIZE;
-
-    let offsets = SecpSignatureOffsets {
-        signature_offset: sign_offset,
-        signature_instruction_index: instruction_index,
-        eth_address_offset: eth_offset,
-        eth_address_instruction_index: instruction_index,
-        message_data_offset: msg_offset,
-        message_data_size: message_len,
-        message_instruction_index: instruction_index,
-    };
-
-    let bin_offsets = bincode::serialize(&offsets).unwrap();
-
-    let mut instruction_data = Vec::with_capacity(1 + bin_offsets.len());
-    instruction_data.push(NUMBER_OF_SIGNATURES);
-    instruction_data.extend(&bin_offsets);
-
-    instruction_data
-}
-
 
 fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
     let mut data = Vec::new();
@@ -187,23 +160,21 @@ fn parse_program_args() -> (Pubkey, String, String, String, String){
                 .takes_value(true)
                 .global(true)
                 .validator(is_valid_pubkey)
-                .default_value("AeTXaphqg264q2Bf1iqnLMWNiyykrfK13cKDR6WBHLGY")
-                // .default_value("Bn5MgusJdV4dhZYrTMXCDUNUfD69SyJLSXWwRk8sdp3x")
                 .help("Pubkey for evm_loader contract")
         ).arg(
-        Arg::with_name("transactions_file")
-            .value_name("TRANSACTIONS_FILEPATH")
+        Arg::with_name("transaction_file")
+            .value_name("TRANSACTION_FILEPATH")
             .takes_value(true)
             .required(true)
-            .help("/path/to/transactions.json")
-            .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/transactions.json1"),
+            .help("/path/to/transaction.json")
+            .default_value("transaction.json"),
     ).arg(
-        Arg::with_name("senders_file")
-            .value_name("SENDERS_FILEPATH")
+        Arg::with_name("sender_file")
+            .value_name("SENDER_FILEPATH")
             .takes_value(true)
             .required(true)
-            .help("/path/to/senders.json")
-            .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/senders.json1"),
+            .help("/path/to/sender.json")
+            .default_value("sender.json"),
     )
         .arg(
             Arg::with_name("verify_file")
@@ -211,8 +182,9 @@ fn parse_program_args() -> (Pubkey, String, String, String, String){
                 .takes_value(true)
                 .required(true)
                 .help("/path/to/verify.json")
-                .default_value("/home/user/CLionProjects/cyber-core/neon-evm/evm_loader/performance/verify.json1"),
-        )        .get_matches();
+                .default_value("verify.json"),
+        )
+        .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
         .unwrap_or_else(|| {
@@ -226,8 +198,8 @@ fn parse_program_args() -> (Pubkey, String, String, String, String){
             .value_of("json_rpc_url").unwrap()
     );
 
-    let trx_filename = app_matches.value_of("transactions_file").unwrap().to_string();
-    let senders_filename = app_matches.value_of("senders_file").unwrap().to_string();
+    let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
+    let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
 
     return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename);
@@ -277,7 +249,6 @@ fn create_trx(
         let msg = hex::decode(&trx.msg).unwrap();
 
         let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
-        // let data_keccak = make_secp256k1_instruction(1, msg.len() as u16, 1);
         let instruction_keccak = Instruction::new_with_bytes(
             keccakprog,
             &data_keccak,
