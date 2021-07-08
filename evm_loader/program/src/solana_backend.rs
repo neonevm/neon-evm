@@ -259,9 +259,11 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     self.account_infos.unwrap(),
                 );
 
+                debug_print!("result: {:?}", result);
+
                 #[allow(unused_variables)]
                 if let Err(err) = result {
-                    debug_print!("result: {}", err);
+                    debug_print!("result/err: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())))

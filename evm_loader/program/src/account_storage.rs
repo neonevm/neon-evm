@@ -321,11 +321,14 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         match self.seeds(&self.origin()) {
             Some((sender_eth, sender_nonce)) => {
                 let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-                invoke_signed(
+                debug_print!("call invoke_signed for instruction: {:?}", instruction);
+                let program_result = invoke_signed(
                     instruction,
                     account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
-                )
+                );
+                debug_print!("invoke_signed returned: {:?}", program_result);
+                program_result
             }
             None => {
                 invoke_signed(

@@ -586,10 +586,15 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc3), balance3)
         self.compare_tmpl_and_emulate_result(tmpl_json, emulate_result)
 
+        emulate_result_uniq = []
+        for item in emulate_result['solana_accounts']:
+            if item not in emulate_result_uniq:
+                emulate_result_uniq.append(item)
+
         solana_accounts = [AccountMeta(pubkey=item['pubkey'],
                                        is_signer=item['is_signer'],
                                        is_writable=item['is_writable'])
-                           for item in emulate_result['solana_accounts']]
+                           for item in emulate_result_uniq]
 
         print('solana_accounts:', solana_accounts)
 
