@@ -195,15 +195,16 @@ class NeonEvmClient:
         ]))
         trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
         [
-            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),

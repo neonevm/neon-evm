@@ -2,34 +2,36 @@
 
 #![cfg(not(feature = "no-entrypoint"))]
 
+use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use std::convert::{TryInto, TryFrom};
-use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
-    program_error::{ProgramError}, pubkey::Pubkey,
-    system_instruction::{create_account, create_account_with_seed},
-    program::{invoke_signed, invoke},
-};
-use crate::{
-//    bump_allocator::BumpAllocator,
-    instruction::{EvmInstruction, on_return, on_event},
-    account_data::{AccountData, Account, Contract},
-    account_storage::{ProgramAccountStorage, Sender},
-    solana_backend::{SolanaBackend, AccountStorage},
-    solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
-    executor::{ Machine },
-    executor_state::{ ExecutorState, ExecutorSubstate },
-    storage_account::{ StorageAccount },
-    error::EvmLoaderError,
-};
+use std::convert::{TryFrom, TryInto};
+
 use evm::{
-    ExitReason, ExitFatal, ExitError, ExitSucceed,
+    ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
-use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
+use solana_program::{
+    account_info::{AccountInfo, next_account_info},
+    entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
+    program::{invoke, invoke_signed}, program_error::ProgramError,
+    pubkey::Pubkey,
+    system_instruction::{create_account, create_account_with_seed},
+};
+
+use crate::{
+//    bump_allocator::BumpAllocator,
+account_data::{Account, AccountData, Contract},
+account_storage::{ProgramAccountStorage, Sender},
+error::EvmLoaderError,
+executor::Machine,
+executor_state::{ExecutorState, ExecutorSubstate},
+instruction::{EvmInstruction, on_event, on_return},
+solana_backend::{AccountStorage, SolanaBackend},
+solidity_account::SolidityAccount,
+storage_account::StorageAccount,
+transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
+};
 
 const HEAP_LENGTH: usize = 1024*1024;
 
@@ -198,7 +200,7 @@ fn process_instruction<'a>(
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
 
-            let  accounts = &accounts[1..];
+            let accounts = &accounts[1..];
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
@@ -223,33 +225,30 @@ fn process_instruction<'a>(
 
             storage.block_accounts(program_id, accounts)
         },
-
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
-            debug_print!("EvmInstruction::CallFromRawEthereumTX: [05]");
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let collat_pool_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
-            debug_print!("operator_sol_info {:?}", operator_sol_info);
-            debug_print!("collat_pool_sol_info {:?}", collat_pool_sol_info);
-            debug_print!("user_eth_info {:?}", user_eth_info);
-            debug_print!("operator_eth_info {:?}", operator_eth_info);
+
+            let _program_info = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
+            let _caller_info = next_account_info(account_info_iter)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[5..])?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
+            perform_payments(operator_sol_info, collateral_pool_sol_info, user_eth_info, operator_eth_info)?;
+
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
+            do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -701,14 +700,29 @@ fn check_ethereum_authority<'a>(
     Ok(())
 }
 
+/// Checks accounts and makes payments for the Ethereum transaction execution.
+#[allow(clippy::unnecessary_wraps)]
+fn perform_payments(operator_sol_info: &AccountInfo,
+                    collateral_pool_sol_info: &AccountInfo,
+                    user_eth_info: &AccountInfo,
+                    operator_eth_info: &AccountInfo) -> ProgramResult {
+    debug_print!("operator_sol_info {:?}", operator_sol_info);
+    debug_print!("collat_pool_sol_info {:?}", collateral_pool_sol_info);
+    debug_print!("user_eth_info {:?}", user_eth_info);
+    debug_print!("operator_eth_info {:?}", operator_eth_info);
+
+    Ok(())
+}
+
 // Pull in syscall stubs when building for non-BPF targets
 //#[cfg(not(target_arch = "bpf"))]
 //solana_sdk::program_stubs!();
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use solana_sdk::{program_error::ProgramError, pubkey::Pubkey};
+
+    use super::*;
 
     #[test]
     fn test_write() {
