@@ -26,7 +26,8 @@ fi
 
 sleep 25   # Wait while evm_loader deploy finalized
 
-python3 -m unittest discover -v -p 'test*.py'
+#python3 -m unittest discover -v -p 'test*.py' run only the test
+python3 -m unittest discover -v -p 'test_cli_emulate.py'
 
 echo "Deploy test success"
 exit 0
