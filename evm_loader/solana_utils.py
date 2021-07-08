@@ -1,26 +1,28 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.api import Client
-from solana.rpc.types import TxOpts
-from solana.rpc import types
-from solana.account import Account
-from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed
-import time
+import base64
+import json
 import os
 import subprocess
-from typing import NamedTuple
-import json
-from eth_keys import keys as eth_keys
-import base64
-from base58 import b58encode
-from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
-from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
-from hashlib import sha256
-from sha3 import keccak_256
-import rlp
+import time
 from enum import Enum
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from hashlib import sha256
+from typing import NamedTuple
+
 import base58
+import rlp
+from base58 import b58encode
+from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from eth_keys import keys as eth_keys
+from sha3 import keccak_256
+from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
+from solana.account import Account
+from solana.publickey import PublicKey
+from solana.rpc import types
+from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed
+from solana.rpc.types import TxOpts
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -184,6 +186,30 @@ class NeonEvmClient:
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
+    def __create_trx_single(self, ethereum_transaction, keccak_data, data):
+        print('create_trx_single with keccak:', keccak_data.hex(), 'and data:', data.hex())
+        trx = Transaction()
+        trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
+        [
+            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+        ]))
+        trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
+        [
+            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+        ]))
+        return trx
+
     def __create_trx(self, ethereum_transaction, keccak_data, data):
         print('create_trx with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
@@ -206,7 +232,10 @@ class NeonEvmClient:
         (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
         keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 1)
         data = evm_trx_data + from_address + sign + msg
-        trx = self.__create_trx(ethereum_transaction, keccak_data, data)
+
+        instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
+        trx = self.__create_trx_single(ethereum_transaction, keccak_data, data) if instruction_code == 5 else self.__create_trx(ethereum_transaction, keccak_data, data)
+
         if need_storage:
             if ethereum_transaction._storage is None:
                 ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())

@@ -225,10 +225,20 @@ fn process_instruction<'a>(
         },
 
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
+            debug_print!("EvmInstruction::CallFromRawEthereumTX: [05]");
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
+
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collat_pool_sol_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            debug_print!("operator_sol_info {:?}", operator_sol_info);
+            debug_print!("collat_pool_sol_info {:?}", collat_pool_sol_info);
+            debug_print!("user_eth_info {:?}", user_eth_info);
+            debug_print!("operator_eth_info {:?}", operator_eth_info);
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;

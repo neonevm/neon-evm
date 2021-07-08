@@ -50,6 +50,12 @@ class EventTest(unittest.TestCase):
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
