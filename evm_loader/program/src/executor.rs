@@ -3,7 +3,7 @@ use std::mem;
 
 use evm::{
     backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
-    gasometer, H160, H256, Handler, Resolve, U256,
+    gasometer, H160, H256, Handler, Resolve, Valids, U256,
 };
 use evm_runtime::{Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
@@ -73,6 +73,10 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
     fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
+    }
+
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.state.valids(address)
     }
 
     fn storage(&self, address: H160, index: U256) -> U256 {
@@ -392,9 +396,10 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.touch(code_address);
 
         let code = self.executor.code(code_address);
+        let valids = self.executor.valids(code_address);
         let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
 
-        let runtime = evm::Runtime::new(code, input, context, self.executor.config);
+        let runtime = evm::Runtime::new(code, valids, input, context, self.executor.config);
 
         self.runtime.push((runtime, CreateReason::Call));
 
@@ -433,8 +438,10 @@ impl<'config, B: Backend> Machine<'config, B> {
                     self.executor.state.inc_nonce(info.address);
                 }
 
+                let valids = Valids::compute(&info.init_code);
                 let instance = evm::Runtime::new(
                     info.init_code,
+                    valids,
                     Vec::new(),
                     info.context,
                     self.executor.config
@@ -473,11 +480,14 @@ impl<'config, B: Backend> Machine<'config, B> {
 
     fn apply_call(&mut self, interrupt: CallInterrupt) {
         let code = self.executor.code(interrupt.code_address);
+        let valids = self.executor.valids(interrupt.code_address);
+
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.code_address);
 
         let instance = evm::Runtime::new(
             code,
+            valids,
             interrupt.input,
             interrupt.context,
             self.executor.config
@@ -493,8 +503,10 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.state.inc_nonce(interrupt.address);
         }
 
+        let valids = Valids::compute(&interrupt.init_code);
         let instance = evm::Runtime::new(
             interrupt.init_code,
+            valids,
             Vec::new(),
             interrupt.context,
             self.executor.config
@@ -586,10 +598,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 RuntimeApply::Continue => {},
                 RuntimeApply::Call(info) => self.apply_call(info),
                 RuntimeApply::Create(info) => self.apply_create(info),
-                RuntimeApply::Exit(reason) => match self.apply_exit(reason) {
-                    Ok(()) => {},
-                    Err((return_value, reason)) => return Err((return_value, reason))
-                }
+                RuntimeApply::Exit(reason) => self.apply_exit(reason)?,
             }
         }
 

@@ -436,7 +436,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(())
 }
 
@@ -492,7 +492,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(())
 }
 
@@ -610,7 +610,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(Some(exit_reason))
 }
 
