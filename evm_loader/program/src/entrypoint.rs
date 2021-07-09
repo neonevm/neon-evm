@@ -6,6 +6,7 @@ use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
 use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
 
 use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
@@ -31,6 +32,7 @@ solana_backend::{AccountStorage, SolanaBackend},
 solidity_account::SolidityAccount,
 storage_account::StorageAccount,
 transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
+constant,
 };
 
 const HEAP_LENGTH: usize = 1024*1024;
@@ -244,7 +246,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            check_collateral_account(collateral_pool_sol_info, collateral_pool_seed_index[0])?;
+            check_collateral_account(program_id, collateral_pool_sol_info, collateral_pool_seed_index[0] as usize)?;
             perform_payments(operator_sol_info, collateral_pool_sol_info, user_eth_info, operator_eth_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -702,10 +704,32 @@ fn check_ethereum_authority<'a>(
 
 /// Checks accounts for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
-fn check_collateral_account(collateral_pool_sol_info: &AccountInfo,
-                            collateral_pool_seed_index: u8) -> ProgramResult {
+fn check_collateral_account(program_id: &Pubkey,
+                            collateral_pool_sol_info: &AccountInfo,
+                            collateral_pool_seed_index: usize) -> ProgramResult {
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("collateral_pool_seed_index {}", collateral_pool_seed_index);
+
+    let collateral_pool = Pubkey::from_str(constant::COLLATERAL_POOL)
+        .map_err(|e| {
+            debug_print!("Error key string '{}', {:?}", constant::COLLATERAL_POOL, e);
+            ProgramError::InvalidArgument
+        })?;
+
+    if collateral_pool_seed_index >= constant::COLLATERAL_SEEDS.len() {
+        debug_print!("Error: seed index {} out of range [0..{}]",
+            collateral_pool_seed_index,
+            constant::COLLATERAL_SEEDS.len() - 1);
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let seed = constant::COLLATERAL_SEEDS[collateral_pool_seed_index];
+    let pool_key = Pubkey::create_with_seed(&collateral_pool, seed, program_id)?;
+    if *collateral_pool_sol_info.key != pool_key {
+        debug_print!("Collateral pool key {}", *collateral_pool_sol_info.key);
+        debug_print!("Wrong seed pool key {}", pool_key);
+        return Err(ProgramError::InvalidArgument);
+    }
 
     Ok(())
 }
