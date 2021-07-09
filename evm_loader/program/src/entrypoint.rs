@@ -81,7 +81,6 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
     }
 }
 
-
 #[cfg(target_arch = "bpf")]
 #[global_allocator]
 static mut A: BumpAllocator = BumpAllocator;
@@ -225,7 +224,7 @@ fn process_instruction<'a>(
 
             storage.block_accounts(program_id, accounts)
         },
-        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg, collateral_pool_seed_index} => {
             let sysvar_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -245,6 +244,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
+            check_collateral_account(collateral_pool_sol_info, collateral_pool_seed_index[0])?;
             perform_payments(operator_sol_info, collateral_pool_sol_info, user_eth_info, operator_eth_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -700,14 +700,24 @@ fn check_ethereum_authority<'a>(
     Ok(())
 }
 
-/// Checks accounts and makes payments for the Ethereum transaction execution.
+/// Checks accounts for the Ethereum transaction execution.
+#[allow(clippy::unnecessary_wraps)]
+fn check_collateral_account(collateral_pool_sol_info: &AccountInfo,
+                            collateral_pool_seed_index: u8) -> ProgramResult {
+    debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
+    debug_print!("collateral_pool_seed_index {}", collateral_pool_seed_index);
+
+    Ok(())
+}
+
+/// Makes payments for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
 fn perform_payments(operator_sol_info: &AccountInfo,
                     collateral_pool_sol_info: &AccountInfo,
                     user_eth_info: &AccountInfo,
                     operator_eth_info: &AccountInfo) -> ProgramResult {
     debug_print!("operator_sol_info {:?}", operator_sol_info);
-    debug_print!("collat_pool_sol_info {:?}", collateral_pool_sol_info);
+    debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("user_eth_info {:?}", user_eth_info);
     debug_print!("operator_eth_info {:?}", operator_eth_info);
 

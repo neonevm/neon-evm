@@ -106,6 +106,8 @@ pub enum EvmInstruction<'a> {
         sign: &'a [u8],
         /// Unsigned ethereum transaction
         unsigned_msg: &'a [u8],
+        /// Seed index for a collateral pool account
+        collateral_pool_seed_index: &'a [u8],
     },
 
     /// Called action return
@@ -227,8 +229,9 @@ impl<'a> EvmInstruction<'a> {
             },
             5 => {
                 let (from_addr, rest) = rest.split_at(20);
-                let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg}
+                let (sign, rest) = rest.split_at(65);
+                let (unsigned_msg, collateral_pool_seed_index) = rest.split_at(rest.len() - 1);
+                EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg, collateral_pool_seed_index}
             },
             6 => {
                 let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;
