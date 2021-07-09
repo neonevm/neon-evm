@@ -334,13 +334,12 @@ fn simulate_transaction(
     let response = retry_rpc_operation(10, || rpc_client.get_recent_blockhash());
     let blockhash = match response {
         Ok(res) => res,
+        // Todo: neon-cli shouldn't return accounts on an rpc error
         Err(err) => return Err(ProgramError::BorshIoError(format!("rpc_client.get_recent_blockhash failed {:?}", err.kind))),
     };
 
     t.message.recent_blockhash = blockhash.0;
 
-    eprintln!("t= {:?}", t,);
-    eprintln!("message_data {}", base64::encode(t.message_data()));
     let sim_result = rpc_client.simulate_transaction_with_config(
         &t,
         RpcSimulateTransactionConfig {
@@ -420,7 +419,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         instruction: &Instruction,
         account_infos: &[AccountInfo]
     ) -> ProgramResult {
-        eprintln!("emulate external_call {:?} {:?}", instruction, account_infos);
         {
             let mut external_account_metas = self.solana_accounts.borrow_mut();
             external_account_metas.extend(instruction.accounts.iter().cloned());
@@ -438,10 +436,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         //             instruction,
         //             account_infos,
         //             &[&contract_seeds[..]]
-        let result =
-            simulate_transaction(&*self.config.rpc_client, transaction);
-        eprintln!("result of simulate_transaction: {:?}", result);
-
-        result
+        simulate_transaction(&*self.config.rpc_client, transaction)
     }
 }
