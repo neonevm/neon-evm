@@ -219,12 +219,12 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage: _, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage: _, reset_storage} => {
                     if let Some(acc) = accounts.get_mut(&address) {
                         *acc.writable.borrow_mut() = true;
-                        *acc.code_size.borrow_mut() = code.map(|v| v.len());
+                        *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
                     } else if let Some(acc) = new_accounts.get_mut(&address) {
-                        *acc.code_size.borrow_mut() = code.map(|v| v.len());
+                        *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
                         *acc.writable.borrow_mut() = true;
                     } else {
                         eprintln!("Account not found {}", &address.to_string());
