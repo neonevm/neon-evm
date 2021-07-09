@@ -334,10 +334,8 @@ fn simulate_transaction(
     let response = retry_rpc_operation(10, || rpc_client.get_recent_blockhash());
     let blockhash = match response {
         Ok(res) => res,
-        // Todo: neon-cli shouldn't return accounts on an rpc error
-        Err(err) => return Err(ProgramError::BorshIoError(format!("rpc_client.get_recent_blockhash failed {:?}", err.kind))),
+        Err(fail)  => panic!("rpc_client.get_recent_blockhash failed {:?}", fail),
     };
-
     t.message.recent_blockhash = blockhash.0;
 
     let sim_result = rpc_client.simulate_transaction_with_config(
@@ -364,7 +362,7 @@ fn simulate_transaction(
                 return Ok(());
             }
         }
-        Err(fail) => return Err(ProgramError::BorshIoError(format!("rpc_client.simulate_transaction_with_config failed {:?}", fail.kind))),
+        Err(fail) => panic!("rpc_client.simulate_transaction_with_config failed {:?}", fail),
     }
     Ok(())
 }
