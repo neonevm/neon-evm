@@ -417,7 +417,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn external_call(
         &self,
         instruction: &Instruction,
-        account_infos: &[AccountInfo]
+        _: &[AccountInfo]
     ) -> ProgramResult {
         {
             let mut external_account_metas = self.solana_accounts.borrow_mut();
