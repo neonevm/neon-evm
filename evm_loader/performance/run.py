@@ -623,7 +623,7 @@ def verify_trx(args):
                 break
         success = False
         (erc20_eth, payer_eth, receiver_eth, receipt) = json.loads(line)
-        # confirm_transaction(client, receipt, sleep_time=0.1)
+        # confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
         if res['result'] == None:
             receipt_error = receipt_error + 1
@@ -674,7 +674,7 @@ def create_senders(args):
         receipt_list.append((tx['result'], acc.secret_key(), acc.public_key()) )
 
     for (receipt, pr_key, pub_key ) in receipt_list:
-        confirm_transaction(client, receipt, sleep_time=0.1)
+        confirm_transaction(client, receipt)
         if getBalance(pub_key) == 0:
             print("request_airdrop error", str(pub_key))
             exit(0)
