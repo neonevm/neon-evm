@@ -12,8 +12,8 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo clippy
-#RUN cargo build-bpf --features no-logs a.i. debug logs turn on
-RUN cargo build-bpf
+#RUN cargo build-bpf
+RUN cargo build-bpf --features no-logs
 WORKDIR /opt/evm_loader/cli
 RUN cargo clippy
 RUN cargo build --release
