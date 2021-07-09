@@ -225,7 +225,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
                     if (address == system_account) || (address == system_account_ecrecover) {
                         continue;
                     }
@@ -233,7 +233,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let account = &mut self.accounts[pos];
                         let (account_info, _) = &self.account_metas[pos];
                         let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
-                        account.update(account_info, address, basic.nonce, basic_balance, &code, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, basic_balance, &code_and_valids, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {

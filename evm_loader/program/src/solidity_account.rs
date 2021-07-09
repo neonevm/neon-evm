@@ -77,6 +77,27 @@ impl<'a> SolidityAccount<'a> {
         }
     }
 
+    fn valids<U, F>(&self, f: F) -> U
+    where F: FnOnce(&[u8]) -> U {
+        if self.code_data.is_none() {
+            return f(&[])
+        }
+
+        let contract_data = &self.code_data.as_ref().unwrap().0;
+        let contract = AccountData::get_contract(contract_data).unwrap();
+        let code_size = contract.code_size as usize;
+        let valids_size = (code_size / 8) + 1;
+
+        if code_size > 0 {
+            let data = self.code_data.as_ref().unwrap().1.borrow();
+            let begin = contract_data.size() + code_size;
+            let end = contract_data.size() + code_size + valids_size; 
+            f(&data[begin..end])
+        } else {
+            f(&[])
+        }
+    }
+
     fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
     where F: FnOnce(&mut Hamt) -> U {
         /*if let AccountData::Account{code_size,..} = self.account_data {
@@ -96,11 +117,12 @@ impl<'a> SolidityAccount<'a> {
         let contract_data = &self.code_data.as_ref().unwrap().0;
         let contract = AccountData::get_contract(contract_data)?;
         let code_size = contract.code_size as usize;
+        let valids_size = (code_size / 8) + 1;
 
         if code_size > 0 {
             let mut data = self.code_data.as_ref().unwrap().1.borrow_mut();
             debug_print!("Storage data borrowed");
-            let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size..], false)?;
+            let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size+valids_size..], false)?;
             Ok(f(&mut hamt))
         } else {
             Err(ProgramError::UninitializedAccount)
@@ -152,6 +174,12 @@ impl<'a> SolidityAccount<'a> {
         self.code(|d| d.into())
     }
 
+    /// Get code data
+    #[must_use]
+    pub fn get_valids(&self) -> Vec<u8> {
+        self.valids(|d| d.into())
+    }
+
     /// Get storage record data
     pub fn get_storage(&self, index: &U256) -> U256 {
         self.storage(|storage| storage.find(*index))
@@ -176,13 +204,13 @@ impl<'a> SolidityAccount<'a> {
         nonce: U256,
         #[allow(unused_variables)]
         lamports: u64,
-        code: &Option<Vec<u8>>,
+        code_and_valids: &Option<(Vec<u8>, Vec<u8>)>,
         storage_items: I,
         reset_storage: bool,
     ) -> Result<(), ProgramError>
     where I: IntoIterator<Item = (U256, U256)> 
     {
-        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code.is_some() {"Exist"} else {"Empty"}, reset_storage);
+        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code_and_valids.is_some() {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
         // **account_info.lamports.borrow_mut() = lamports;
 
@@ -194,7 +222,7 @@ impl<'a> SolidityAccount<'a> {
         let nonce = u64::try_from(nonce).map_err(|_| ProgramError::InvalidArgument)?;
         AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
-        if let Some(code) = code {
+        if let Some((code, valids)) = code_and_valids {
             debug_print!("Write contract");
             if let Some((ref mut contract_data, ref mut code_data)) = self.code_data {
                 let mut code_data = code_data.borrow_mut();
@@ -207,9 +235,17 @@ impl<'a> SolidityAccount<'a> {
     
                 debug_print!("Write contract header");
                 contract_data.pack(&mut code_data)?;
+
                 debug_print!("Write code");
-                code_data[contract_data.size()..contract_data.size()+code.len()].copy_from_slice(code);
+                let code_begin = contract_data.size();
+                let code_end = code_begin + code.len();
+                code_data[code_begin..code_end].copy_from_slice(code);
                 debug_print!("Code written");
+
+                let valids_begin = code_end;
+                let valids_end = valids_begin + valids.len();
+                code_data[valids_begin..valids_end].copy_from_slice(valids);
+                debug_print!("Valids written");
             }
             else {
                 debug_print!("Expected code account");
@@ -229,8 +265,10 @@ impl<'a> SolidityAccount<'a> {
     
                 let contract = AccountData::get_contract(contract_data)?;
                 if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+                let code_size = contract.code_size as usize;
+                let valids_size = (code_size / 8) + 1;
     
-                let mut storage = Hamt::new(&mut code_data[contract_data.size()+(contract.code_size as usize)..], reset_storage)?;
+                let mut storage = Hamt::new(&mut code_data[contract_data.size()+code_size+valids_size..], reset_storage)?;
                 debug_print!("Storage initialized");
                 for (key, value) in storage_iter {
                     debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());

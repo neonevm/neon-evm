@@ -48,6 +48,8 @@ pub trait AccountStorage {
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
     /// Get code data
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
+    /// Get valids data
+    fn valids(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_valids()) }
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
     /// Get account seeds
@@ -177,6 +179,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     }
     fn code(&self, address: H160) -> Vec<u8> {
         self.account_storage.code(&address)
+    }
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.account_storage.valids(&address)
     }
     fn storage(&self, address: H160, index: U256) -> U256 {
         self.account_storage.storage(&address, &index)
