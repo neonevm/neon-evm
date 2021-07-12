@@ -607,40 +607,6 @@ class EmulateTest(unittest.TestCase):
         self.assertEqual(self.spl_token.balance(self.token_acc2), balance2 + 2*transfer_amount/2)
         self.assertEqual(self.spl_token.balance(self.token_acc3), balance3 + 1*transfer_amount/2)
 
-    @unittest.skip("a.i.")
-    def test_emulate_external_call_by_rpc(self):
-        print('\n---------------------------------')
-        print('test_emulate_external_call_by_rpc')
-        balance1 = self.spl_token.balance(self.token_acc1)
-        balance2 = self.spl_token.balance(self.token_acc2)
-        mint_amount = 100
-        self.spl_token.mint(self.token, self.token_acc1, mint_amount)
-        self.assertEqual(self.spl_token.balance(self.token_acc1), balance1 + mint_amount)
-        self.assertEqual(self.spl_token.balance(self.token_acc2), balance2)
-
-        transfer_amount = 31
-        ether_trx_data = create_ether_trx_data(self.token, self.token_acc1, self.token_acc2,
-                                               transfer_amount * (10 ** 9), bytes(self.acc.public_key()))
-
-        print('ether_trx_data:', ether_trx_data.hex())
-
-        blockhash = Blockhash(client.get_recent_blockhash(Confirmed)["result"]["value"]["blockhash"])
-        print('blockhash:', blockhash)
-        trx = Transaction(recent_blockhash=blockhash)
-        trx.add(TransactionInstruction(program_id=PublicKey(tokenkeg),
-                                       data=ether_trx_data,
-                                       keys=[
-                                           AccountMeta(pubkey=self.token, is_signer=False, is_writable=False),
-                                           AccountMeta(pubkey=self.token_acc1, is_signer=False, is_writable=False),
-                                           AccountMeta(pubkey=self.token_acc2, is_signer=False, is_writable=False),
-                                           AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=False),
-                                       ]))
-        # trx.sign(self.acc)
-        trx.serialize()
-        response = client.simulate_transaction(trx, commitment=Confirmed)
-        print('response:', response)
-        self.assertGreater(len(response), 0)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -116,7 +116,6 @@ pub struct EmulatorAccountStorage<'a> {
     caller_id: H160,
     block_number: u64,
     block_timestamp: i64,
-    // pub external_call_fail: bool,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
