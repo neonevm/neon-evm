@@ -48,26 +48,19 @@ contract SolidityPrecompilesTest {
         }
     }
 
-    function test_06_bn256Add(bytes32 ax, bytes32 ay, bytes32 bx, bytes32 by) public returns (bytes32[2] memory result) {
-        bytes32[4] memory input;
-        input[0] = ax;
-        input[1] = ay;
-        input[2] = bx;
-        input[3] = by;
+    function test_06_bn256Add(bytes memory input) public returns (bytes32[2] memory result) {
         assembly {
-            if iszero(call(gas(), 0x06, 0, input, 0x80, result, 0x40)) {
+            let len := mload(input)
+            if iszero(call(gas(), 0x06, 0, add(input, 0x20), len, result, 0x40)) {
                 revert(0,0)
             }
         }
     }
 
-    function test_07_bn256ScalarMul(bytes32 x, bytes32 y, bytes32 scalar) public returns (bytes32[2] memory result) {
-        bytes32[3] memory input;
-        input[0] = x;
-        input[1] = y;
-        input[2] = scalar;
+    function test_07_bn256ScalarMul(bytes memory input) public returns (bytes32[2] memory result) {
         assembly {
-            if iszero(call(gas(), 0x07, 0, input, 0x60, result, 0x40)) {
+            let len := mload(input)
+            if iszero(call(gas(), 0x07, 0, add(input, 0x20), len, result, 0x40)) {
                 revert(0,0)
             }
         }
@@ -76,7 +69,6 @@ contract SolidityPrecompilesTest {
     function test_08_bn256Pairing(bytes memory input) public returns (bytes32 result) {
         // input is a serialized bytes stream of (a1, b1, a2, b2, ..., ak, bk) from (G_1 x G_2)^k
         uint256 len = input.length;
-        require(len % 192 == 0);
         assembly {
             let memPtr := mload(0x40)
             if iszero(call(gas(), 0x08, 0, add(input, 0x20), len, memPtr, 0x20)) {
