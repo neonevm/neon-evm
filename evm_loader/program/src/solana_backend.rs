@@ -388,7 +388,6 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
             };
 
             vals.push((a, b));
-            sol_log_compute_units();
         }
 
         if pairing_batch(&vals) == Gt::one() {
