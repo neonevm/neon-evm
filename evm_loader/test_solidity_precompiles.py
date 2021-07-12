@@ -3,6 +3,7 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 from eth_utils import abi
 from base58 import b58decode
+import re
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
@@ -42,6 +43,66 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.contract_code = program_and_code[2]
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
+
+        with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
+            cls.test_data = json.load(json_data)
+            json_data.close()
+
+    def extract_measurements_from_receipt(self, receipt):
+        log_messages = receipt['result']['meta']['logMessages']
+        transaction = receipt['result']['transaction']
+        accounts = transaction['message']['accountKeys']
+        instructions = []
+        for instr in transaction['message']['instructions']:
+            program = accounts[instr['programIdIndex']]
+            instructions.append({
+                'accs': [accounts[acc] for acc in instr['accounts']],
+                'program': accounts[instr['programIdIndex']],
+                'data': b58decode(instr['data']).hex()
+            })
+
+        pattern = re.compile('Program ([0-9A-Za-z]+) (.*)')
+        messages = []
+        for log in log_messages:
+            res = pattern.match(log)
+            if res:
+                (program, reason) = res.groups()
+                if reason == 'invoke [1]': messages.append({'program':program,'logs':[]})
+            messages[-1]['logs'].append(log)
+
+        for instr in instructions:
+            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+            if messages[0]['program'] != instr['program']:
+                raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
+            instr['logs'] = messages.pop(0)['logs']
+            exit_result = re.match(r'Program %s (success)'%instr['program'], instr['logs'][-1])
+            if not exit_result: raise Exception("Can't get exit result")
+            instr['result'] = exit_result.group(1)
+
+            if instr['program'] == evm_loader_id:
+                memory_result = re.match(r'Program log: Total memory occupied: ([0-9]+)', instr['logs'][-3])
+                instruction_result = re.match(r'Program %s consumed ([0-9]+) of ([0-9]+) compute units'%instr['program'], instr['logs'][-2])
+                if not (memory_result and instruction_result):
+                    raise Exception("Can't parse measurements for evm_loader")
+                instr['measurements'] = {
+                        'instructions': instruction_result.group(1),
+                        'memory': memory_result.group(1)
+                    }
+
+        result = []
+        for instr in instructions:
+            if instr['program'] == evm_loader_id:
+                result.append({
+                        'program':instr['program'],
+                        'measurements':instr['measurements'],
+                        'result':instr['result'],
+                        'data':instr['data']
+                    })
+        return result
+
+    def get_measurements(self, result):
+        measurements = self.extract_measurements_from_receipt(result)
+        for m in measurements: print(json.dumps(m))
 
 
     def make_transactions(self, call_data):
@@ -85,27 +146,83 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     def make_ecrecover(self, data):
         return abi.function_signature_to_4byte_selector('test_01_ecrecover(bytes32, uint8, bytes32, bytes32)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + data.to_bytes()
 
     def make_sha256(self, data):
         return abi.function_signature_to_4byte_selector('test_02_sha256(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + str.encode(data)
 
     def make_ripemd160(self, data):
         return abi.function_signature_to_4byte_selector('test_03_ripemd160(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + str.encode(data)
 
     def make_callData(self, data):
         return abi.function_signature_to_4byte_selector('test_04_dataCopy(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + str.encode(data)
-    
+
+    def make_bn256Add(self, data):
+        # return abi.function_signature_to_4byte_selector('test_06_bn256Add(bytes32, bytes32, bytes32, bytes32)')\
+        #         + data
+        return abi.function_signature_to_4byte_selector('test_06_bn256Add(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def make_bn256ScalarMul(self, data):
+        return abi.function_signature_to_4byte_selector('test_07_bn256ScalarMul(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def make_bn256Pairing(self, data):
+        return abi.function_signature_to_4byte_selector('test_08_bn256Pairing(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def test_06_bn256Add_contract(self):
+            for test_case in self.test_data["bn256Add"]:
+                print("make_bn256Add() - test case ", test_case["Name"])
+                bin_input = bytes.fromhex(test_case["Input"])
+                trx = self.make_transactions(self.make_bn256Add(bin_input))
+                result = send_transaction(client, trx, self.acc)
+                self.get_measurements(result)
+                result = result["result"]
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+                self.assertEqual(result_data, test_case["Expected"])
+
+    def test_07_bn256ScalarMul_contract(self):
+            for test_case in self.test_data["bn256ScalarMul"]:
+                print("make_bn256ScalarMul() - test case ", test_case["Name"])
+                bin_input = bytes.fromhex(test_case["Input"])
+                trx = self.make_transactions(self.make_bn256ScalarMul(bin_input))
+                result = send_transaction(client, trx, self.acc)
+                self.get_measurements(result)
+                result = result["result"]
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+                self.assertEqual(result_data, test_case["Expected"])
+
+    # def test_08_bn256Pairing_contract(self):
+    #         for test_case in self.test_data["bn256Pairing"]:
+    #             print("make_bn256Pairing() - test case ", test_case["Name"])
+    #             bin_input = bytes.fromhex(test_case["Input"])
+    #             trx = self.make_transactions(self.make_bn256Pairing(bin_input))
+    #             result = send_transaction(client, trx, self.acc)
+    #             self.get_measurements(result)
+    #             result = result["result"]
+    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+    #             print("Result:   ", result_data)
+    #             print("Expected: ", test_case["Expected"])
+    #             self.assertEqual(result_data, test_case["Expected"])
+
+
 
 if __name__ == '__main__':
     unittest.main()
