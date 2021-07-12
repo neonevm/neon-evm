@@ -12,7 +12,7 @@ import statistics
 
 factory_path = "contracts/Factory.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
-evm_loader_id = "wkiSZ5TANo7e4MjaJhCYND9A7FQXHkoZNRcUjeuK5Yp"
+# evm_loader_id = "wkiSZ5TANo7e4MjaJhCYND9A7FQXHkoZNRcUjeuK5Yp"
 chain_id = 111
 transfer_sum = 1
 
@@ -199,7 +199,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key):
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': 1, 'gas': 1, 'gasPrice': 1,
+    tx = {'to': contract_eth, 'value': 1, 'gas': 99999999, 'gasPrice': 1,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 

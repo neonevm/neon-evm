@@ -737,7 +737,7 @@ fn command_deploy(
     let (trx_count, caller_ether) = get_ether_account_nonce(config, &caller_arg)?;
 
     let (program_id, program_ether, program_nonce, program_code, program_seed) = 
-        get_ethereum_contract_account_credentials(config, &caller_ether, trx_count.clone());
+        get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
     create_ethereum_contract_accounts_in_solana(
