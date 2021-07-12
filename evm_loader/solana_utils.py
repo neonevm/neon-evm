@@ -327,11 +327,7 @@ class RandomAccount:
         print('Private:', self.acc.secret_key())
 
     def make_random_path(self):
-        import calendar;
-        import time;
-        ts = calendar.timegm(time.gmtime())
-        self.path = str(ts) + '.json'
-        time.sleep(1)
+        self.path  = os.urandom(5).hex()+ ".json"
 
     def generate_key(self):
         cmd_generate = 'solana-keygen new --no-passphrase --outfile {}'.format(self.path)
