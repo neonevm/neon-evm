@@ -58,9 +58,6 @@ class init_wallet():
         print("\ntest_performance.py init")
 
         wallet = RandomAccount()
-        # wallet_path()
-        res = solana_cli().call("config set --keypair " + wallet.get_path())
-
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 100000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
@@ -69,6 +66,7 @@ class init_wallet():
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
+        cls.keypath = wallet.get_path()
 
         # Create ethereum account for user account
         # cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
@@ -79,6 +77,7 @@ class init_wallet():
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -231,7 +230,9 @@ def deploy_contracts(args):
     instance = init_wallet()
     instance.init()
 
-    res = instance.loader.deploy(factory_path, instance.caller)
+    res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
+
+    res = instance.loader.deploy(factory_path, caller=instance.caller, config="config.yml"+args.postfix)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
     print("factory", factory)

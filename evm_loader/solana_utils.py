@@ -374,9 +374,13 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def deploy(self, contract_path, caller=None):
+    def deploy(self, contract_path, caller=None, config=None):
         print('deploy caller:', caller)
-        output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        if config == None:
+            output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        else:
+            output = neon_cli().call("deploy --evm_loader {} --config {} {} {}".format(self.loader_id, config,
+                                                                                       contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
