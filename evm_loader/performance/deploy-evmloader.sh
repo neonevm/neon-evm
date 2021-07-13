@@ -27,7 +27,8 @@ sleep 25   # Wait while evm_loader deploy finalized
 
 echo -e /nEVM_LOADER $EVM_LOADER
 echo -e "run script run.sh to start performance test"
-echo "./run.sh <count of processes> <count of itmes> tcp|udp"
-echo -e "/nexample:   run.sh 10 10 tcp"
+echo "before starting, set EVM_LOADER environment variable"
+echo "args desc:  ./run.sh <count of processes> <count of itmes> tcp|udp"
+echo -e "/nexample: export EVM_LOADER=9tPwQFA392rAYYqoy4wkX847PopT73J2Fyppoxe7Rmg2 &   run.sh 10 10 tcp"
 
 exit 0
