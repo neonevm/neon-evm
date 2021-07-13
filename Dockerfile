@@ -32,6 +32,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/*.sol /opt/
+COPY evm_loader/precompiles_testdata.json /opt/
 COPY evm_loader/ERC20/src/*.sol /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
