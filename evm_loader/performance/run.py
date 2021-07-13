@@ -10,7 +10,7 @@ import random
 from solana.blockhash import *
 import statistics
 
-factory_path = "contracts/Factory.binary"
+factory_path = "Factory.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "wkiSZ5TANo7e4MjaJhCYND9A7FQXHkoZNRcUjeuK5Yp"
 chain_id = 111
