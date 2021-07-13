@@ -58,6 +58,7 @@ COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
+COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
 

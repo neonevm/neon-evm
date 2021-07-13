@@ -326,6 +326,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
                 )
+                // Todo: neon-evm does not return an external call error.
+                // https://github.com/neonlabsorg/neon-evm/issues/120
+                // debug_print!("invoke_signed done.");
+                // debug_print!("invoke_signed returned: {:?}", program_result);
             }
             None => {
                 invoke_signed(
