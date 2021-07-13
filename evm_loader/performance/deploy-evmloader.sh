@@ -25,10 +25,9 @@ fi
 sleep 25   # Wait while evm_loader deploy finalized
 
 
-for i in $(seq $1)
-do
-    echo $i
-    python3 run.py --step deploy --count $2 --postfix $i &
-done
+echo -e /nEVM_LOADER $EVM_EVM_LOADER
+echo -e "run script run.sh to start performance test"
+echo "./run.sh <count of processes> <count of itmes> tcp|udp"
+echo -e "/nexample:   run.sh 10 10 tcp"
 
 exit 0
