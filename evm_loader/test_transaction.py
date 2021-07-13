@@ -49,7 +49,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         tx_1 = {
             'to': solana2ether(self.owner_contract),
             'value': 1,
-            'gas': 1,
+            'gas': 9999999,
             'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller),
             'data': '3917b3df',

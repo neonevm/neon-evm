@@ -31,8 +31,6 @@ use evm::{
 };
 use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 
-
-
 const HEAP_LENGTH: usize = 256*1024;
 
 /// Developers can implement their own heap by defining their own
@@ -43,6 +41,8 @@ pub struct BumpAllocator;
 impl BumpAllocator {
     /// Get occupied memory
     #[inline]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn occupied() -> usize {
         const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
         const TOP_ADDRESS: usize = HEAP_START_ADDRESS + HEAP_LENGTH;
@@ -93,7 +93,7 @@ static mut A: BumpAllocator = BumpAllocator;
 
 entrypoint!(process_instruction);
 
-#[warn(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 fn process_instruction<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
@@ -124,7 +124,7 @@ fn process_instruction<'a>(
                 if program_code.owner == program_id {
                     let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
                     contract_data.pack(&mut program_code.data.borrow_mut())?;
-    
+
                     *program_code.key
                 } else {
                     Pubkey::new_from_array([0_u8; 32])
@@ -156,7 +156,7 @@ fn process_instruction<'a>(
                 AccountData::Account(_) => (),
                 _ => return Err(ProgramError::InvalidAccountData),
             };
-            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None)?;
+            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
@@ -191,7 +191,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec())
+            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), u64::MAX)
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
@@ -213,11 +213,12 @@ fn process_instruction<'a>(
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
-            else{
-                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data)?;
+            else {
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
 
             storage.block_accounts(program_id, accounts)
@@ -237,7 +238,8 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            do_call(program_id, &mut account_storage, accounts, trx.call_data)
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -263,7 +265,8 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data)?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx_gas_limit)?;
 
             storage.block_accounts(program_id, accounts)
         },
@@ -375,7 +378,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -395,22 +398,22 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code.to_vec()
         };
 
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        executor.create_begin(account_storage.origin(), code_data, u64::max_value())?;
-        let exit_reason = executor.execute();
-        let result = executor.return_value();
+        executor.create_begin(account_storage.origin(), code_data, u64::MAX)?;
+        let (result, exit_reason) = executor.execute();
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
@@ -421,7 +424,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(program_id, accounts, exit_reason, &result)?;
+
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(())
 }
 
@@ -430,6 +434,7 @@ fn do_call<'a>(
     account_storage: &mut ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    gas_limit: u64,
 ) -> ProgramResult
 {
     debug_print!("do_call");
@@ -437,32 +442,34 @@ fn do_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
 
-        executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+	    executor.call_begin(
+            account_storage.origin(),
+            account_storage.contract(),
+            instruction_data,
+            gas_limit,
+        )?;
 
-        let exit_reason = match executor.execute_n_steps(u64::MAX) {
-            Ok(()) => return Err(ProgramError::InvalidInstructionData),
-            Err(reason) => reason
-        };
-        let result = executor.return_value();
+        let (result, exit_reason) = executor.execute();
 
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
@@ -474,7 +481,7 @@ fn do_call<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(())
 }
 
@@ -484,6 +491,7 @@ fn do_partial_call<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    gas_limit: u64,
 ) -> ProgramResult
 {
     debug_print!("do_partial_call");
@@ -491,7 +499,7 @@ fn do_partial_call<'a>(
     let backend = SolanaBackend::new(account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -499,14 +507,19 @@ fn do_partial_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    executor.call_begin(account_storage.origin(), account_storage.contract(), instruction_data, u64::max_value());
+    executor.call_begin(
+        account_storage.origin(),
+        account_storage.contract(),
+        instruction_data,
+        gas_limit,
+    )?;
+
     executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     debug_print!("save");
     executor.save_into(storage);
 
     debug_print!("partial call complete");
-
     Ok(())
 }
 
@@ -516,26 +529,26 @@ fn do_partial_create<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    gas_limit: u64,
 ) -> ProgramResult
 {
-    debug_print!("do_partial_create");
+    debug_print!("do_partial_create gas_limit={}", gas_limit);
 
     let backend = SolanaBackend::new(account_storage, Some(accounts));
     debug_print!("  backend initialized");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
 
-    executor.create_begin(account_storage.origin(), instruction_data, u64::max_value())?;
+    executor.create_begin(account_storage.origin(), instruction_data, gas_limit)?;
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
     executor.save_into(storage);
 
     debug_print!("partial create complete");
-
     Ok(())
 }
 
@@ -549,32 +562,32 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
         let mut executor = Machine::restore(storage, backend);
         debug_print!("Executor restored");
 
-        let exit_reason = match executor.execute_n_steps(step_count) {
+        let (result, exit_reason) = match executor.execute_n_steps(step_count) {
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 return Ok(None);
             }
-            Err(reason) => reason
+            Err((result, reason)) => (result, reason)
         };
-        let result = executor.return_value();
 
         debug_print!("Call done");
 
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let executor_state = executor.into_state();
             let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, used_gas, result, Some((applies, logs)))
         } else {
-            (exit_reason, result, None)
+            (exit_reason, used_gas, result, None)
         }
     };
 
@@ -586,8 +599,7 @@ fn do_continue<'a>(
         }
     }
 
-    invoke_on_return(program_id, accounts, exit_reason.clone(), &result)?;
-
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(Some(exit_reason))
 }
 
@@ -595,11 +607,12 @@ fn invoke_on_return<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
     exit_reason: ExitReason,
+    used_gas: u64,
     result: &[u8],
 ) -> ProgramResult
-{    
+{
     let exit_status = match exit_reason {
-        ExitReason::Succeed(success_code) => { 
+        ExitReason::Succeed(success_code) => {
             debug_print!("Succeed");
             match success_code {
                 ExitSucceed::Stopped => { debug_print!("Machine encountered an explict stop."); 0x11},
@@ -607,7 +620,7 @@ fn invoke_on_return<'a>(
                 ExitSucceed::Suicided => { debug_print!("Machine encountered an explict suicide."); 0x13},
             }
         },
-        ExitReason::Error(error_code) => { 
+        ExitReason::Error(error_code) => {
             debug_print!("Error");
             match error_code {
                 ExitError::StackUnderflow => { debug_print!("Trying to pop from an empty stack."); 0xe1},
@@ -623,24 +636,25 @@ fn invoke_on_return<'a>(
                 ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
                 ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
                 ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
-                ExitError::Other(_) => { debug_print!("Other normal errors."); 0xee},
             }
         },
         ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
-        ExitReason::Fatal(fatal_code) => {             
+        ExitReason::Fatal(fatal_code) => {
             debug_print!("Fatal");
             match fatal_code {
                 ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
                 ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
                 ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
-                ExitFatal::Other(_) => { debug_print!("Other fatal errors."); 0xf4},
             }
         },
+        ExitReason::StepLimitReached => unreachable!(),
     };
 
-    debug_print!("{}", &hex::encode(&result));
+    debug_print!("exit status {}", exit_status);
+    debug_print!("used gas {}", used_gas);
+    debug_print!("result {}", &hex::encode(&result));
 
-    let ix = on_return(program_id, exit_status, result);
+    let ix = on_return(program_id, exit_status, used_gas, result);
     invoke(
         &ix,
         accounts

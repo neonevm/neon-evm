@@ -1,3 +1,4 @@
+//! Solana Backend for rust evm
 use evm::{
     backend::{Basic, Backend},
     CreateScheme, Capture, Transfer, ExitReason,
@@ -8,7 +9,7 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
-    program::invoke_signed,
+    entrypoint::ProgramResult,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -17,55 +18,97 @@ use crate::{
     utils::{keccak256_h256, keccak256_h256_v, keccak256_digest, ecrecover},
 };
 
+/// Account storage
+/// Trait to access account info
 #[allow(clippy::redundant_closure_for_method_calls)]
 pub trait AccountStorage {
+    /// Apply function to given account
     fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U;
 
+    /// Get contract address
     fn contract(&self) -> H160;
+    /// Get caller address
     fn origin(&self) -> H160;
+    /// Get block number
     fn block_number(&self) -> U256;
+    /// Get block timestamp
     fn block_timestamp(&self) -> U256;
 
+    /// Get solana address for given ethereum account
     fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> { self.apply_to_account(address, || None, |account| Some(account.get_solana_address())) }
+    /// Check if ethereum account exists
     fn exists(&self, address: &H160) -> bool { self.apply_to_account(address, || false, |_| true) }
+    /// Get account basic info (balance and nonce)
     fn basic(&self, address: &H160) -> Basic { self.apply_to_account(address, || Basic{balance: U256::zero(), nonce: U256::zero()}, |account| account.basic()) }
+    /// Get code hash
     fn code_hash(&self, address: &H160) -> H256 { self.apply_to_account(address, || keccak256_h256(&[]) , |account| account.code_hash()) }
+    /// Get code size
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
+    /// Get code data
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
+    /// Get valids data
+    fn valids(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_valids()) }
+    /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
+    /// Get account seeds
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {self.apply_to_account(address, || None, |account| Some(account.get_seeds())) }
+    /// External call
+    /// # Errors
+    /// Will return `Err` if the external call returns err
+    fn external_call(&self, _: &Instruction, _: &[AccountInfo]) -> ProgramResult { Ok(()) }
 }
 
+/// Solana Backend for rust evm
 pub struct SolanaBackend<'a, 's, S> {
     account_storage: &'s S,
     account_infos: Option<&'a [AccountInfo<'a>]>,
 }
 
+static SYSTEM_ACCOUNT: [u8; 20] = [0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+static SYSTEM_ACCOUNT_ECRECOVER: [u8; 20] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
+
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
+    /// Create `SolanaBackend`
     pub fn new(account_storage: &'s S, account_infos: Option<&'a [AccountInfo<'a>]>) -> Self {
         debug_print!("backend::new"); 
         Self { account_storage, account_infos }
     }
 
+    #[allow(clippy::unused_self)]
     fn is_solana_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account()
     }
 
+    #[allow(clippy::unused_self)]
     fn is_ecrecover_address(&self, code_address: &H160) -> bool {
         *code_address == Self::system_account_ecrecover()
     }
 
+    /// Is system address
+    #[must_use]
+    pub fn is_system_address(address: &H160) -> bool {
+        *address == H160::from_slice(&SYSTEM_ACCOUNT)
+            ||
+            *address == H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
+    }
+
+    /// Get system account
+    #[must_use]
     pub fn system_account() -> H160 {
-        H160::from_slice(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        H160::from_slice(&SYSTEM_ACCOUNT)
     }
 
+    /// Get ecrecover system account
+    #[must_use]
     pub fn system_account_ecrecover() -> H160 {
-        H160::from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01])
+        H160::from_slice(&SYSTEM_ACCOUNT_ECRECOVER)
     }
 
-    pub fn call_inner_ecrecover(&self,
+    /// Call inner ecrecover
+    #[must_use]
+    pub fn call_inner_ecrecover(
         input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         debug_print!("ecrecover");
@@ -92,6 +135,8 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
     }
 
+    /// Get chain id
+    #[must_use]
     pub fn chain_id() -> U256 { U256::from(111) }
 }
 
@@ -107,7 +152,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         self.account_storage.block_timestamp()
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
-    fn block_gas_limit(&self) -> U256 { U256::zero() }
+    fn block_gas_limit(&self) -> U256 { U256::from(u64::MAX) }
     fn chain_id(&self) -> U256 { Self::chain_id() }
 
     fn exists(&self, address: H160) -> bool {
@@ -125,17 +170,21 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     fn code(&self, address: H160) -> Vec<u8> {
         self.account_storage.code(&address)
     }
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.account_storage.valids(&address)
+    }
     fn storage(&self, address: H160, index: U256) -> U256 {
         self.account_storage.storage(&address, &index)
     }
 
+    #[allow(unused_variables)]
     fn create(&self, scheme: &CreateScheme, address: &H160) {
         if let CreateScheme::Create2 {caller, code_hash, salt} = scheme {
             debug_print!("CreateScheme2 {} from {} {} {} {}", &hex::encode(address), &hex::encode(caller), &hex::encode(code_hash), &hex::encode(salt), "" /*dummy arg for use correct message function*/);
         } else {
             debug_print!("Call create");
         }
-    /*    let account = if let CreateScheme::Create2{salt,..} = scheme
+        /* let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         self.add_alias(address, &account);*/
     }
@@ -144,13 +193,13 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         code_address: H160,
         _transfer: Option<Transfer>,
         input: Vec<u8>,
-        _target_gas: Option<usize>,
+        _target_gas: Option<u64>,
         _is_static: bool,
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         if self.is_ecrecover_address(&code_address) {
-            return self.call_inner_ecrecover(&input);
+            return Self::call_inner_ecrecover(&input);
         }
 
         if !self.is_solana_address(&code_address) {
@@ -185,7 +234,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     accounts.push(AccountMeta {
                         is_signer: signer[0] != 0,
                         is_writable: writable[0] != 0,
-                        pubkey: pubkey,
+                        pubkey,
                     });
                     debug_print!("Acc: {}", pubkey);
                 };
@@ -193,32 +242,23 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                 let (_, input) = input.split_at(35 * acc_length as usize);
                 debug_print!("{}", &hex::encode(&input));
 
-                let (contract_eth, contract_nonce) = self.account_storage.seeds(&self.account_storage.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-                let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
-
-                debug_print!("account_infos");
+                debug_print!("account_infos[");
+                #[allow(unused_variables)]
                 for info in self.account_infos.unwrap() {
                     debug_print!("  {}", info.key);
                 };
-                let result : solana_program::entrypoint::ProgramResult;
-                match self.account_storage.seeds(&self.account_storage.origin()) {
-                    Some((sender_eth, sender_nonce)) => {
-                        let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&sender_seeds[..], &contract_seeds[..]]
-                        );
+                debug_print!("]");
 
-                    }
-                    None => {
-                        result = invoke_signed(
-                            &Instruction{program_id, accounts: accounts, data: input.to_vec()},
-                            self.account_infos.unwrap(), &[&contract_seeds[..]]
-                        );
-                    }
-                }
+                let result = self.account_storage.external_call(
+                    &Instruction { program_id, accounts, data: input.to_vec() },
+                    self.account_infos.unwrap(),
+                );
+
+                debug_print!("result: {:?}", result);
+
+                #[allow(unused_variables)]
                 if let Err(err) = result {
-                    debug_print!("result: {}", err);
+                    debug_print!("result/err: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())))
@@ -274,12 +314,15 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::*;
     use solana_sdk::{
         account::Account,
         account_info::{AccountInfo},
         pubkey::Pubkey,
+        program_error::ProgramError,
     };
     use evm::executor::StackExecutor;
+    use std::str::FromStr;
 
     pub struct TestContract;
     impl TestContract {
@@ -296,14 +339,14 @@ mod test {
     
         fn get_owner() -> Vec<u8> {
             let mut v = Vec::new();
-            v.extend_from_slice(&0x893d20e8u32.to_be_bytes());
+            v.extend_from_slice(&0x893d_20e8_u32.to_be_bytes());
             v
         }
     
         fn change_owner(address: H160) -> Vec<u8> {
             let mut v = Vec::new();
-            v.extend_from_slice(&0xa6f9dae1u32.to_be_bytes());
-            v.extend_from_slice(&[0u8;12]);
+            v.extend_from_slice(&0xa6f9_dae1_u32.to_be_bytes());
+            v.extend_from_slice(&[0_u8;12]);
             v.extend_from_slice(&<[u8;20]>::from(address));
             v
         }
@@ -330,6 +373,7 @@ mod test {
 
     #[test]
     fn test_solidity_address() -> Result<(), ProgramError> {
+        use std::str::FromStr;
 //        let account = Pubkey::from_str("Bfj8CF5ywavXyqkkuKSXt5AVhMgxUJgHfQsQjPc1JKzj").unwrap();
         let account = Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap();
         let account = Pubkey::from_str("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r").unwrap();
@@ -341,18 +385,18 @@ mod test {
 
     #[test]
     fn test_solana_backend() -> Result<(), ProgramError> {
-        let owner = Pubkey::new_rand();
+        let owner = Pubkey::new_unique();
         let mut accounts = Vec::new();
 
         for i in 0..4 {
             accounts.push( (
-                    Pubkey::new_rand(), i == 0,
+                    Pubkey::new_unique(), i == 0,
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &owner)));
-        accounts.push((Pubkey::new_rand(), false, Account::new(5423u64, 1024, &Pubkey::new_rand())));
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &owner)));
+        accounts.push((Pubkey::new_unique(), false, Account::new(5423u64, 1024, &Pubkey::new_unique())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &Pubkey::new_unique())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 
@@ -361,10 +405,10 @@ mod test {
             infos.push(AccountInfo::from((&acc.0, acc.1, &mut acc.2)));
         }
 
-        let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
+        let mut backend = SolanaBackend::new(&owner, Some(&infos[..]));
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let config = evm::Config::default();
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
         assert_eq!(backend.exists(solidity_address(infos[1].key)), true);
@@ -374,7 +418,7 @@ mod test {
         executor.deposit(creator, U256::exp10(18));
 
         let contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&TestContract::code()), salt: infos[0].key.to_bytes().into()});
-        let exit_reason = executor.transact_create2(creator, U256::zero(), TestContract::code(), infos[0].key.to_bytes().into(), usize::max_value());
+        let exit_reason = executor.transact_create2(creator, U256::zero(), TestContract::code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         let (applies, logs) = executor.deconstruct();
@@ -385,7 +429,7 @@ mod test {
 
         println!();
 //        let mut backend = SolanaBackend::new(&infos).unwrap();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
         println!("======================================");
         println!("Contract: {:x}", contract);
         println!("{:x?}", backend.exists(contract));
@@ -405,7 +449,7 @@ mod test {
         println!("storage value: {:x}", backend.storage(H160::zero(), H256::default()));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), TestContract::get_owner(), usize::max_value());
+                creator, contract, U256::zero(), TestContract::get_owner(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (applies, logs) = executor.deconstruct();
@@ -421,18 +465,18 @@ mod test {
 
     #[test]
     fn test_erc20_wrapper() -> Result<(), ProgramError> {
-        let owner = Pubkey::new_rand();
+        let owner = Pubkey::new_unique();
         let mut accounts = Vec::new();
 
         for i in 0..4 {
             accounts.push( (
-                    Pubkey::new_rand(), i == 0,
+                    Pubkey::new_unique(), i == 0,
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &owner)));
-        accounts.push((Pubkey::new_rand(), false, Account::new(5423u64, 1024, &Pubkey::new_rand())));
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &owner)));
+        accounts.push((Pubkey::new_unique(), false, Account::new(5423u64, 1024, &Pubkey::new_unique())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &Pubkey::new_unique())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 
@@ -443,8 +487,8 @@ mod test {
 
         let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let config = evm::Config::default();
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
         assert_eq!(backend.exists(solidity_address(infos[1].key)), true);
@@ -454,11 +498,11 @@ mod test {
         executor.deposit(creator, U256::exp10(18));
 
         let contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&ERC20Contract::wrapper_code()), salt: infos[0].key.to_bytes().into()});
-        let exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::wrapper_code(), infos[0].key.to_bytes().into(), usize::max_value());
+        let exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::wrapper_code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&ERC20Contract::code()), salt: infos[0].key.to_bytes().into()});
-        exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::code(), infos[0].key.to_bytes().into(), usize::max_value());
+        exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         let (applies, logs) = executor.deconstruct();
@@ -469,7 +513,7 @@ mod test {
 
         println!();
 //        let mut backend = SolanaBackend::new(&infos).unwrap();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
         println!("======================================");
         println!("Contract: {:x}", contract);
         println!("{:x?}", backend.exists(contract));
@@ -489,11 +533,11 @@ mod test {
         println!("storage value: {:x}", backend.storage(H160::zero(), H256::default()));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), ERC20Contract::donate(), usize::max_value());
+                creator, contract, U256::zero(), ERC20Contract::donate(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), ERC20Contract::donateFrom(), usize::max_value());
+                creator, contract, U256::zero(), ERC20Contract::donateFrom(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (applies, logs) = executor.deconstruct();
