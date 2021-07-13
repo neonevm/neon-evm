@@ -177,7 +177,11 @@ def get_filehash(factory, factory_code, factory_eth, acc):
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
     result = send_transaction(client, trx, acc)['result']
-
+    print(result)
+    if result['meta']['err'] != None:
+        print(result)
+        print("Error: result['meta']['err'] != None")
+        exit(1)
     assert(result['meta']['err'] == None)
     assert(len(result['meta']['innerInstructions']) == 1)
     assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)

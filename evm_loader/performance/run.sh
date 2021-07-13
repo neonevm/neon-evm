@@ -1,5 +1,6 @@
 #! /bin/bash -p
-
+# before start set EVM_LOADER environment variable
+#
 # args:
 #   $1 - count of processes
 #   $2 - count of items (accounts, contracts, transactions, ...)
@@ -8,45 +9,19 @@
 # example:
 #   run.sh 10 10 tcp  
 
+if [ ${#EVM_LOADER} -eq 0 ]; then
+  echo  "EVM_LOADER is not deployed"
+  exit 1
+fi
+
+echo EVM_LOADER $EVM_LOADER
+
 echo -e '\nCOUNT OF PROCESSES' $1
 echo COUNT OF ITEMS $2
 
-echo -e '\nDEPLOY'
-for i in $(seq $1); do python3 run.py --step deploy --count $2 --postfix $i & done    
-P=$!
-wait $P 
-
-echo -e '\nCREATE SENDERS'
-for i in $(seq $1); do python3 run.py --step create_senders --count $2 --postfix $i & done    
-P=$!
-wait $P 
-
-echo -e '\nCREATE ACCOUNTS'
-for i in $(seq $1); do python3 run.py --step create_acc --count $2 --scheme one-to-one --postfix $i & done    
-P=$!
-wait $P 
-
-echo -e '\nCREATE TRANSACTIONS'
-for i in $(seq $1)
-do 
-    python3 run.py --step create_trx --count $2 --scheme one-to-one --postfix $i 
-done
-P=$!
-wait $P 
-
-echo -e 'SEND TRANSACTIONS'
-for i in $(seq $1); 
-do 
-    ./sender --url $SOLANA_URL --evm_loader $EVM_LOADER transaction.json$i sender.json$i verify.json$i --client $3 & 
-done    
-P=$!
-wait $P
-
-echo -e '\nVERIFY TRANSACTIONS'
-for i in $(seq $1)
-do 
-    python3 run.py --step verify_trx --count $2  --postfix $i 
-done
-P=$!
-wait $P 
-
+parallel --jobs 0 --keep-order --results log.deploy python3 run.py --step deploy --count $2  --postfix {}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.create_senders python3 run.py --step create_senders --count $2  --postfix {}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.create_acc  python3 run.py --step create_acc --count $2 --scheme one-to-one --postfix {}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.create_trx  python3 run.py --step create_trx --count $2 --postfix {}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.send_trx ./sender --url $SOLANA_URL --evm_loader $EVM_LOADER transaction.json{} sender.json{} verify.json{} --client $3 ::: $(seq $1)
+parallel --jobs 0 --keep-order --results log.verify_trx  python3 run.py --step verify_trx  --postfix {}  :::  $(seq $1)
