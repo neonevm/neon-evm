@@ -61,6 +61,7 @@ COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
+COPY evm_loader/evm_loader-keypair.json /opt/
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
