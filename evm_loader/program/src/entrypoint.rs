@@ -17,13 +17,14 @@ use solana_program::{
     entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
     program::{invoke, invoke_signed}, program_error::ProgramError,
     pubkey::Pubkey,
-    system_instruction::{create_account, create_account_with_seed},
+    system_instruction,
 };
 
 use crate::{
 //    bump_allocator::BumpAllocator,
 account_data::{Account, AccountData, Contract},
 account_storage::{ProgramAccountStorage, Sender},
+constant,
 error::EvmLoaderError,
 executor::Machine,
 executor_state::{ExecutorState, ExecutorSubstate},
@@ -32,7 +33,6 @@ solana_backend::{AccountStorage, SolanaBackend},
 solidity_account::SolidityAccount,
 storage_account::StorageAccount,
 transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
-constant,
 };
 
 const HEAP_LENGTH: usize = 1024*1024;
@@ -138,7 +138,7 @@ fn process_instruction<'a>(
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
+                &system_instruction::create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
@@ -167,7 +167,7 @@ fn process_instruction<'a>(
             debug_print!("{}", lamports);
             debug_print!("{}", space);
             invoke_signed(
-                &create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
+                &system_instruction::create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account_with_seed done");
@@ -246,8 +246,12 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            check_collateral_account(program_id, collateral_pool_sol_info, collateral_pool_seed_index[0] as usize)?;
-            perform_payments(operator_sol_info, collateral_pool_sol_info, user_eth_info, operator_eth_info)?;
+            check_collateral_account(program_id,
+                                     collateral_pool_sol_info,
+                                     collateral_pool_seed_index[0] as usize)?;
+            perform_payments(operator_sol_info,
+                             collateral_pool_sol_info,
+                             user_eth_info, operator_eth_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)
@@ -702,11 +706,12 @@ fn check_ethereum_authority<'a>(
     Ok(())
 }
 
-/// Checks accounts for the Ethereum transaction execution.
+/// Checks collateral accounts for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
 fn check_collateral_account(program_id: &Pubkey,
                             collateral_pool_sol_info: &AccountInfo,
                             collateral_pool_seed_index: usize) -> ProgramResult {
+    debug_print!("program_id {:?}", program_id);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("collateral_pool_seed_index {}", collateral_pool_seed_index);
 
@@ -744,6 +749,10 @@ fn perform_payments(operator_sol_info: &AccountInfo,
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("user_eth_info {:?}", user_eth_info);
     debug_print!("operator_eth_info {:?}", operator_eth_info);
+
+    debug_print!("PAYMENT_TO_COLLATERAL_POOL {}", constant::PAYMENT_TO_COLLATERAL_POOL);
+    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() - constant::PAYMENT_TO_COLLATERAL_POOL;
+    **collateral_pool_sol_info.lamports.borrow_mut() = collateral_pool_sol_info.lamports() + constant::PAYMENT_TO_COLLATERAL_POOL;
 
     Ok(())
 }

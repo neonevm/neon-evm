@@ -6,3 +6,5 @@ pub const COLLATERAL_SEEDS: &[&str] = &[
     "collateral_seed_3",
     "collateral_seed_4",
 ];
+
+pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
