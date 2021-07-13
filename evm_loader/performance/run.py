@@ -182,6 +182,11 @@ def get_filehash(factory, factory_code, factory_eth, acc):
         print(result)
         print("Error: result['meta']['err'] != None")
         exit(1)
+
+    if result == None:
+        print("Error: result == None")
+        exit(1)
+        
     assert(result['meta']['err'] == None)
     assert(len(result['meta']['innerInstructions']) == 1)
     assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)
