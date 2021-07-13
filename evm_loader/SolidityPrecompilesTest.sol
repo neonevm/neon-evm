@@ -25,27 +25,19 @@ contract SolidityPrecompilesTest {
         return ret;
     }
 
-    function test_05_bigModExp(bytes32 base, bytes32 exponent, bytes32 modulus) public returns (bytes32 result) {
+    function test_05_bigModExp(bytes memory input) public returns (bytes memory) {
+        uint256 out_len;
         assembly {
-            // free memory pointer
-            let memPtr := mload(0x40)
-
-            // length of base, exponent, modulus
-            mstore(memPtr, 0x20)
-            mstore(add(memPtr, 0x20), 0x20)
-            mstore(add(memPtr, 0x40), 0x20)
-
-            // assign base, exponent, modulus
-            mstore(add(memPtr, 0x60), base)
-            mstore(add(memPtr, 0x80), exponent)
-            mstore(add(memPtr, 0xa0), modulus)
-
-            // call the precompiled contract BigModExp (0x05)
-            if iszero(call(gas(), 0x05, 0x0, memPtr, 0xc0, memPtr, 0x20)) {
-                revert(0x0, 0x0)
-            }
-            result := mload(memPtr)
+            out_len := mload(add(input, 0x60))
         }
+        bytes memory ret = new bytes(out_len);
+        uint256 len = input.length;
+        assembly {
+            if iszero(call(gas(), 0x05, 0, add(input, 0x20), len, add(ret,0x20), out_len)) {
+                revert(0,0)
+            }
+        }
+        return ret;
     }
 
     function test_06_bn256Add(bytes32 ax, bytes32 ay, bytes32 bx, bytes32 by) public returns (bytes32[2] memory result) {

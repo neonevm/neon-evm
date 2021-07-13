@@ -132,26 +132,14 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn call_inner_big_mod_exp(
         input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        use num_bigint::BigInt;
-        use num_traits::{Zero, One};
-        let mod_exp =|base: &BigInt, exponent: &BigInt, modulus: &BigInt| -> BigInt {
-            let one: BigInt = One::one();
-            let two = &one + &one;
-            let mut result: BigInt = One::one();
-            let mut base_acc = base.clone();
-            let mut exp_acc = exponent.clone();
-            while exp_acc > Zero::zero() {
-                if (&exp_acc % &two) == One::one() {
-                    result = (result * &base_acc) % modulus;
-                }
-                exp_acc >>= 1;
-                base_acc = (&base_acc * &base_acc) % modulus;
-            }
-            result
-        };
-
+        use num_bigint::BigUint;
+        use num_traits::{One, Zero};
         debug_print!("big_mod_exp");
         debug_print!("input: {}", &hex::encode(&input));
+
+        if input.len() < 96 {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])))
+        };
 
         let (base_len, rest) = input.split_at(32);
         let (exp_len, rest) = rest.split_at(32);
@@ -171,23 +159,24 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         };
 
         if base_len == 0 && mod_len == 0 {
-            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 0])));
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0_u8; 32])));
         }
 
         let (base_val, rest) = rest.split_at(base_len);
         let (exp_val, rest) = rest.split_at(exp_len);
         let (mod_val, _rest) = rest.split_at(mod_len);
 
-        let base_val = BigInt::from_signed_bytes_be(base_val);
-        let exp_val  = BigInt::from_signed_bytes_be(exp_val);
-        let mod_val  = BigInt::from_signed_bytes_be(mod_val);
+        let base_val = BigUint::from_bytes_be(base_val);
+        let exp_val  = BigUint::from_bytes_be(exp_val);
+        let mod_val  = BigUint::from_bytes_be(mod_val);
 
-        if mod_val.bits() == 0 {
+        if mod_val.is_zero() || mod_val.is_one() {
             let return_value = vec![0_u8; mod_len];
             return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), return_value)));
         }
 
-        let ret_int = mod_exp(&base_val, &exp_val, &mod_val).to_bytes_be().1;
+        let ret_int = base_val.modpow(&exp_val, &mod_val);
+        let ret_int = ret_int.to_bytes_be();
         let mut return_value = vec![0_u8; mod_len - ret_int.len()];
         return_value.extend(ret_int);
 
