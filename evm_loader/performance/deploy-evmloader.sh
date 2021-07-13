@@ -25,7 +25,7 @@ fi
 sleep 25   # Wait while evm_loader deploy finalized
 
 
-echo -e /nEVM_LOADER $EVM_EVM_LOADER
+echo -e /nEVM_LOADER $EVM_LOADER
 echo -e "run script run.sh to start performance test"
 echo "./run.sh <count of processes> <count of itmes> tcp|udp"
 echo -e "/nexample:   run.sh 10 10 tcp"
