@@ -11,10 +11,10 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
-RUN cargo clippy
+#RUN cargo clippy
 RUN cargo build-bpf --features no-logs
 WORKDIR /opt/evm_loader/cli
-RUN cargo clippy
+#RUN cargo clippy
 RUN cargo build --release
 
 # Download and build spl-token
