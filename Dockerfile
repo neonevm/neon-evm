@@ -64,7 +64,7 @@ COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
-COPY evm_loader/performance/run.py evm_loader/performance/deploy-performance.sh  /opt/
+COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
 
 ENV CONTRACTS_DIR=/opt/solidity/
