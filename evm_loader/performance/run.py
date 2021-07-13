@@ -480,7 +480,6 @@ def create_transactions(args):
         contracts = json.loads(f.read())
     with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
-
     transactions = open(transactions_file+args.postfix, mode='w')
     transactions = open(transactions_file+args.postfix, mode='a')
 
@@ -488,6 +487,10 @@ def create_transactions(args):
     total = 0
     if len(accounts) == 0:
         print ("accounts not found" )
+        exit(1)
+
+    if len(accounts) == 1:
+        print ("accounts count too small" )
         exit(1)
 
     if len(contracts) == 0:
