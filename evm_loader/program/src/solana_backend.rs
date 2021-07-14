@@ -10,7 +10,6 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     entrypoint::ProgramResult,
-    hash::hash as sha256_digest,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -90,8 +89,8 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn is_system_address(address: &H160) -> bool {
         *address == SYSTEM_ACCOUNT
         || *address == SYSTEM_ACCOUNT_ECRECOVER
-        || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_SHA_256
+        || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_BLAKE2F
     }
 
@@ -134,6 +133,21 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), address)))
     }
 
+    /// Call inner `sha256`
+    #[must_use]
+    pub fn call_inner_sha256(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {        
+        use solana_program::hash::hash as sha256_digest;
+        debug_print!("sha256");
+
+        let hash = sha256_digest(input);
+
+        debug_print!("{}", &hex::encode(hash.to_bytes()));
+
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), hash.to_bytes().to_vec())))
+    }
+
     /// Call inner `ripemd160`
     #[must_use]
     pub fn call_inner_ripemd160(
@@ -141,17 +155,13 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         use ripemd160::{Ripemd160, Digest};
         debug_print!("ripemd160");
-        debug_print!("input: {}", &hex::encode(&input));
-        
-        let mut hasher = Ripemd160::new();
 
+        let mut hasher = Ripemd160::new();
         // process input message
         hasher.update(input);
-
         // acquire hash digest in the form of GenericArray,
         // which in this case is equivalent to [u8; 20]
         let hash_val = hasher.finalize();
-        debug_print!("{}", &hex::encode(&hash_val[..]));
 
         // transform to [u8; 32]
         let mut result = vec![0_u8; 12];
@@ -160,19 +170,6 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("{}", &hex::encode(&result));
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result)))
-    }
-
-    /// Call inner `sha256`
-    #[must_use]
-    pub fn call_inner_sha256(
-        input: &[u8],
-    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        debug_print!("sha256");
-        debug_print!("input: {}", &hex::encode(&input));
-
-        let hash = sha256_digest(input);
-
-        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), hash.to_bytes().to_vec())))
     }
 
     /// Call inner `blake2F`
@@ -301,6 +298,8 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
             output_buf[i * 8..(i + 1) * 8].copy_from_slice(&state_word.to_le_bytes());
         }
 
+        debug_print!("{}", &hex::encode(&output_buf));
+
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output_buf.to_vec())))
     }
 
@@ -372,8 +371,10 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
         if code_address == SYSTEM_ACCOUNT_RIPEMD160 {
             return Self::call_inner_ripemd160(&input);
+        }
         if code_address == SYSTEM_ACCOUNT_SHA_256 {
             return Self::call_inner_sha256(&input);
+        }
         if code_address == SYSTEM_ACCOUNT_BLAKE2F {
             return Self::call_inner_blake2_f(&input);
         }
