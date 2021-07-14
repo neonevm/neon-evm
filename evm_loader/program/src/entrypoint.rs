@@ -227,19 +227,20 @@ fn process_instruction<'a>(
             storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg, collateral_pool_seed_index} => {
+            // Get six accounts needed for payments (note slice accounts[6..] later)
             let sysvar_info = next_account_info(account_info_iter)?;
-
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[5..])?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[6..])?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
             check_ethereum_authority(
@@ -252,7 +253,8 @@ fn process_instruction<'a>(
             perform_payments(operator_sol_info,
                              collateral_pool_sol_info,
                              user_eth_info,
-                             operator_eth_info)?;
+                             operator_eth_info,
+                             system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)
@@ -745,23 +747,16 @@ fn check_collateral_account(program_id: &Pubkey,
 fn perform_payments<'a>(operator_sol_info: &'a AccountInfo<'a>,
                         collateral_pool_sol_info: &'a AccountInfo<'a>,
                         user_eth_info: &'a AccountInfo<'a>,
-                        operator_eth_info: &'a AccountInfo<'a>) -> ProgramResult {
-    debug_print!("operator_sol_info {:?}", operator_sol_info);
-    debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
-    debug_print!("user_eth_info {:?}", user_eth_info);
-    debug_print!("operator_eth_info {:?}", operator_eth_info);
-    debug_print!("PAYMENT_TO_COLLATERAL_POOL {}", constant::PAYMENT_TO_COLLATERAL_POOL);
-
-//    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() - constant::PAYMENT_TO_COLLATERAL_POOL;
-//    **collateral_pool_sol_info.lamports.borrow_mut() = collateral_pool_sol_info.lamports() + constant::PAYMENT_TO_COLLATERAL_POOL;
-
+                        operator_eth_info: &'a AccountInfo<'a>,
+                        system_info: &'a AccountInfo<'a>) -> ProgramResult {
     let transfer = system_instruction::transfer(operator_sol_info.key,
                                                 collateral_pool_sol_info.key,
                                                 constant::PAYMENT_TO_COLLATERAL_POOL);
     let accounts = [(*operator_sol_info).clone(),
                     (*collateral_pool_sol_info).clone(),
                     (*user_eth_info).clone(),
-                    (*operator_eth_info).clone()];
+                    (*operator_eth_info).clone(),
+                    (*system_info).clone()];
     invoke(&transfer, &accounts)?;
 
     Ok(())
