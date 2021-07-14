@@ -195,11 +195,11 @@ impl<'a> ProgramAccountStorage<'a> {
     fn find_account(&self, address: &H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
         if let Ok(pos) = aliases.binary_search_by_key(&address, |v| &v.0) {
-            debug_print!("Found account for {} on position {}", &address.to_string(), &pos.to_string());
+            debug_print!("Found account for {:?} on position {}", &address, &pos.to_string());
             Some(aliases[pos].1)
         }
         else {
-            debug_print!("Not found account for {}", &address.to_string());
+            debug_print!("Not found account for {:?}", &address);
             None
         }
     }
@@ -220,13 +220,10 @@ impl<'a> ProgramAccountStorage<'a> {
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
     {
-        let system_account = SolanaBackend::<ProgramAccountStorage>::system_account();
-        let system_account_ecrecover = SolanaBackend::<ProgramAccountStorage>::system_account_ecrecover();
-
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
-                    if (address == system_account) || (address == system_account_ecrecover) {
+                    if SolanaBackend::<ProgramAccountStorage>::is_system_address(&address) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
