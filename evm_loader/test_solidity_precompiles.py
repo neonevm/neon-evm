@@ -234,7 +234,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
             self.assertEqual(result_data[128:], test_case["Expected"])
 
 
