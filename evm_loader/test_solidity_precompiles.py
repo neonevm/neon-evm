@@ -104,7 +104,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         measurements = self.extract_measurements_from_receipt(result)
         for m in measurements: print(json.dumps(m))
 
-
     def make_transactions(self, call_data):
         eth_tx = {
             'to': solana2ether(self.owner_contract),
@@ -167,9 +166,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%064x" % len(data)) \
                 + str.encode(data)
 
+    def make_bigModExp(self, data):
+        return abi.function_signature_to_4byte_selector('test_05_bigModExp(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
     def make_bn256Add(self, data):
-        # return abi.function_signature_to_4byte_selector('test_06_bn256Add(bytes32, bytes32, bytes32, bytes32)')\
-        #         + data
         return abi.function_signature_to_4byte_selector('test_06_bn256Add(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
                 + bytes.fromhex("%064x" % len(data)) \
@@ -223,6 +226,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             print("Expected: ", test_case["Expected"])
     #             self.assertEqual(result_data, test_case["Expected"])
 
+    def test_05_bigModExp_contract(self):
+        for test_case in self.test_data["bigModExp"]:
+            print("make_bigModExp() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_bigModExp(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+            self.assertEqual(result_data[128:], test_case["Expected"])
 
 
 if __name__ == '__main__':
