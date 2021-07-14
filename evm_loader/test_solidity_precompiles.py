@@ -209,6 +209,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
+    ### Couldn't be run run because of heavy instruction consuption
     # def test_08_bn256Pairing_contract(self):
     #         for test_case in self.test_data["bn256Pairing"]:
     #             print("make_bn256Pairing() - test case ", test_case["Name"])
