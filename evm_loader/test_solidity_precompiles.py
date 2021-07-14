@@ -195,7 +195,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 result = send_transaction(client, trx, self.acc)
                 self.get_measurements(result)
                 result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
     def test_07_bn256ScalarMul_contract(self):
@@ -206,7 +206,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 result = send_transaction(client, trx, self.acc)
                 self.get_measurements(result)
                 result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
     ### Couldn't be run run because of heavy instruction consuption
@@ -218,7 +218,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             result = send_transaction(client, trx, self.acc)
     #             self.get_measurements(result)
     #             result = result["result"]
-    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
     #             print("Result:   ", result_data)
     #             print("Expected: ", test_case["Expected"])
     #             self.assertEqual(result_data, test_case["Expected"])
