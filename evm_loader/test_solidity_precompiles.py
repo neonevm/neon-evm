@@ -11,10 +11,10 @@ from solana_utils import *
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 
-class EvmLoaderTestsNewAccount(unittest.TestCase):
+class PrecompilesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_delete_account.py setUpClass")
+        print("\ntest_solidity_precompiles.py setUpClass")
 
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -46,7 +46,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
             cls.test_data = json.load(json_data)
-            json_data.close()
 
     def extract_measurements_from_receipt(self, receipt):
         log_messages = receipt['result']['meta']['logMessages']
@@ -173,7 +172,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + data
 
     def test_02_sha256_contract(self):
-        from hashlib import sha256
         for test_case in self.test_data["sha256"]:
             print("make_sha256() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
@@ -182,11 +180,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.get_measurements(result)
             result = result["result"]
             result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            expect_hash = sha256(bin_input).hexdigest()
-            self.assertEqual(result_hash, expect_hash)
+            self.assertEqual(result_hash, test_case["Expected"])
 
     def test_03_ripemd160_contract(self):
-        import hashlib
         for test_case in self.test_data["ripemd160"]:
             print("make_ripemd160() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
@@ -195,8 +191,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.get_measurements(result)
             result = result["result"]
             result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            expect_hash = hashlib.new('ripemd160', bin_input).hexdigest()
-            self.assertEqual(result_hash[:40], expect_hash)
+            self.assertEqual(result_hash[:40], test_case["Expected"])
 
     def test_09_blake2F_contract(self):
         for test_case in self.test_data["blake2F"]:
