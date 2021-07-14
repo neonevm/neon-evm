@@ -100,25 +100,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%064x" % len(data))\
                 + str.encode(data)
 
-    def make_dataCopy(self, data):
-        return abi.function_signature_to_4byte_selector('test_04_dataCopy(bytes)')\
-                + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
-                + str.encode(data)
-
-    def test_04_dataCopy_contract(self):
-        input_data = "Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam eaque ipsa, quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt, explicabo. Nemo enim ipsam voluptatem, quia voluptas sit, aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos, qui ratione voluptatem sequi nesciunt, neque porro quisquam est, qui dolorem ipsum, quia dolor sit, amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt, ut labore et dolore magnam aliquam quaerat voluptatem."
-        print("dataCopy() - ", self.make_dataCopy(input_data).hex())
-        trx = self.make_transactions(self.make_dataCopy(input_data))
-        result = send_transaction(client, trx, self.acc)["result"]
-        bin_result = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
-        str_len = int.from_bytes(bin_result[2+32:32+32+2], "big")
-        result_data = bin_result[2+32+32:][:str_len].hex()
-        print("Result length: ", str_len)
-        print("Result: ", result_data)
-        print("Expect: ", input_data.encode("utf-8").hex())
-        self.assertEqual(result_data, input_data.encode("utf-8").hex())
-
 
 if __name__ == '__main__':
     unittest.main()
