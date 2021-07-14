@@ -687,6 +687,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         self.add_alias(address, &account);*/
     }
 
+    #[allow(clippy::too_many_lines)]
     fn call_inner(&self,
         code_address: H160,
         _transfer: Option<Transfer>,
