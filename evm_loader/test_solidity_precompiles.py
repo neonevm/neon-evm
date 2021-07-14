@@ -150,14 +150,14 @@ class PrecompilesTests(unittest.TestCase):
     def make_sha256(self, data):
         return abi.function_signature_to_4byte_selector('test_02_sha256(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data)) \
-                + str.encode(data)
+                + bytes.fromhex("%064x" % len(data))\
+                + data
 
     def make_ripemd160(self, data):
         return abi.function_signature_to_4byte_selector('test_03_ripemd160(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data)) \
-                + str.encode(data)
+                + bytes.fromhex("%064x" % len(data))\
+                + data
 
     def make_callData(self, data):
         return abi.function_signature_to_4byte_selector('test_04_dataCopy(bytes)')\
@@ -188,6 +188,45 @@ class PrecompilesTests(unittest.TestCase):
                 + bytes.fromhex("%062x" % 0x0 + "20") \
                 + bytes.fromhex("%064x" % len(data)) \
                 + data
+
+    def make_blake2F(self, data):
+        return abi.function_signature_to_4byte_selector('test_09_blake2F(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def test_02_sha256_contract(self):
+        for test_case in self.test_data["sha256"]:
+            print("make_sha256() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_sha256(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            self.assertEqual(result_hash, test_case["Expected"])
+
+    def test_03_ripemd160_contract(self):
+        for test_case in self.test_data["ripemd160"]:
+            print("make_ripemd160() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_ripemd160(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            self.assertEqual(result_hash[:40], test_case["Expected"])
+
+    def test_05_bigModExp_contract(self):
+        for test_case in self.test_data["bigModExp"]:
+            print("make_bigModExp() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_bigModExp(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            self.assertEqual(result_data[128:], test_case["Expected"])
 
     def test_06_bn256Add_contract(self):
             for test_case in self.test_data["bn256Add"]:
@@ -225,17 +264,16 @@ class PrecompilesTests(unittest.TestCase):
     #             print("Expected: ", test_case["Expected"])
     #             self.assertEqual(result_data, test_case["Expected"])
 
-    def test_05_bigModExp_contract(self):
-        for test_case in self.test_data["bigModExp"]:
-            print("make_bigModExp() - test case ", test_case["Name"])
+    def test_09_blake2F_contract(self):
+        for test_case in self.test_data["blake2F"]:
+            print("make_blake2F() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
-            trx = self.make_transactions(self.make_bigModExp(bin_input))
+            trx = self.make_transactions(self.make_blake2F(bin_input))
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            self.assertEqual(result_data[128:], test_case["Expected"])
-
+            self.assertEqual(result_data, test_case["Expected"])
 
 if __name__ == '__main__':
     unittest.main()
