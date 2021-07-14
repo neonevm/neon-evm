@@ -38,6 +38,8 @@ pub fn solidity_address(key: &Pubkey) -> H160 {
     H256::from_slice(key.as_ref()).into()
 }
 
+/// Errors that may be returned by `secp256k1_recover`.
+#[allow(clippy::pub_enum_variant_names)]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Secp256k1RecoverError {
     #[error("The hash provided to a secp256k1_recover is invalid")]
@@ -48,8 +50,10 @@ pub enum Secp256k1RecoverError {
     InvalidSignature,
 }
 
+#[allow(clippy::use_self)]
+#[allow(clippy::fallible_impl_from)]
 impl From<u64> for Secp256k1RecoverError {
-    fn from(v: u64) -> Secp256k1RecoverError {
+    fn from(v: u64) -> Self {
         match v {
             1 => Secp256k1RecoverError::InvalidHash,
             2 => Secp256k1RecoverError::InvalidRecoveryId,
@@ -59,6 +63,7 @@ impl From<u64> for Secp256k1RecoverError {
     }
 }
 
+#[allow(clippy::use_self)]
 impl From<Secp256k1RecoverError> for u64 {
     fn from(v: Secp256k1RecoverError) -> u64 {
         match v {
@@ -85,6 +90,7 @@ pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
 pub struct Secp256k1Pubkey(pub [u8; SECP256K1_PUBLIC_KEY_LENGTH]);
 
 impl Secp256k1Pubkey {
+    #[must_use]
     pub fn new(pubkey_vec: &[u8]) -> Self {
         Self(
             <[u8; SECP256K1_PUBLIC_KEY_LENGTH]>::try_from(<&[u8]>::clone(&pubkey_vec))
@@ -92,11 +98,20 @@ impl Secp256k1Pubkey {
         )
     }
 
-    pub fn to_bytes(self) -> [u8; 64] {
+    #[must_use]
+    pub const fn to_bytes(self) -> [u8; 64] {
         self.0
     }
 }
 
+/// Recover Public key from  message hash and signature
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `Secp256k1RecoverError::InvalidHash` if failed parsing `hash`
+/// `Secp256k1RecoverError::InvalidRecoveryId` if failed parsing `recovery_id`
+/// `Secp256k1RecoverError::InvalidSignature` if failed parsing `signature` or failed recover public key
 pub fn secp256k1_recover(
     hash: &[u8],
     recovery_id: u8,
@@ -131,14 +146,14 @@ pub fn secp256k1_recover(
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        let message = libsecp256k1::Message::parse_slice(hash)
+        let message = secp256k1::Message::parse_slice(hash)
             .map_err(|_| Secp256k1RecoverError::InvalidHash)?;
-        let recovery_id = libsecp256k1::RecoveryId::parse(recovery_id)
+        let recovery_id = secp256k1::RecoveryId::parse(recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
-        let signature = libsecp256k1::Signature::parse_standard_slice(signature)
+        let signature = secp256k1::Signature::parse_slice(signature)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
 
-        let secp256k1_key = libsecp256k1::recover(&message, &signature, &recovery_id)
+        let secp256k1_key = secp256k1::recover(&message, &signature, &recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
         Ok(Secp256k1Pubkey::new(&secp256k1_key.serialize()[1..65]))
     }
