@@ -15,7 +15,7 @@ use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
     solidity_account::SolidityAccount,
-    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest, ecrecover},
+    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest, secp256k1_recover},
 };
 
 /// Account storage
@@ -123,7 +123,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
         let v: u8 = U256::from(v).as_u32().try_into().unwrap();
         let recovery_id = v - 27;
-        let public_key = match ecrecover(&msg[..], recovery_id, &sig[..]) {
+        let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
             Ok(key) => key,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };

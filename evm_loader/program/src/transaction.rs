@@ -8,7 +8,7 @@ use solana_program::{
     secp256k1_program,
 };
 use std::convert::{Into, TryFrom};
-use crate::utils::{keccak256_digest, ecrecover, EcrecoverError};
+use crate::utils::{keccak256_digest, secp256k1_recover, Secp256k1RecoverError};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -120,10 +120,10 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, EcrecoverError> {
+pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, Secp256k1RecoverError> {
     let digest = keccak256_digest(unsigned_trx);
 
-    let public_key = ecrecover(&digest, signature[64], &signature[0..64])?;
+    let public_key = secp256k1_recover(&digest, signature[64], &signature[0..64])?;
 
     let address = keccak256_digest(&public_key.to_bytes());
     let address = H160::from_slice(&address[12..32]);
