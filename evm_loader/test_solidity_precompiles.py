@@ -11,10 +11,10 @@ from solana_utils import *
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 
-class EvmLoaderTestsNewAccount(unittest.TestCase):
+class PrecompilesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_delete_account.py setUpClass")
+        print("\ntest_solidity_precompiles.py setUpClass")
 
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -46,7 +46,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
             cls.test_data = json.load(json_data)
-            json_data.close()
 
     def extract_measurements_from_receipt(self, receipt):
         log_messages = receipt['result']['meta']['logMessages']
