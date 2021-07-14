@@ -146,15 +146,11 @@ pub fn secp256k1_recover(
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        let message = secp256k1::Message::parse_slice(hash)
-            .map_err(|_| Secp256k1RecoverError::InvalidHash)?;
-        let recovery_id = secp256k1::RecoveryId::parse(recovery_id)
-            .map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
-        let signature = secp256k1::Signature::parse_slice(signature)
-            .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
-
-        let secp256k1_key = secp256k1::recover(&message, &signature, &recovery_id)
-            .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
-        Ok(Secp256k1Pubkey::new(&secp256k1_key.serialize()[1..65]))
+       let message = secp256k1::Message::parse_slice(hash).map_err(|_| Secp256k1RecoverError::InvalidHash)?;
+       let recovery_id = secp256k1::RecoveryId::parse(recovery_id).map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
+       let signature = secp256k1::Signature::parse_slice(signature).map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
+   
+       let secp256k1_key = secp256k1::recover(&message, &signature, &recovery_id).map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
+       Ok(Secp256k1Pubkey::new(&secp256k1_key.serialize()[1..65]))
     }
 }
