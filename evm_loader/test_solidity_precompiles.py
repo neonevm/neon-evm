@@ -166,6 +166,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 + bytes.fromhex("%064x" % len(data))\
                 + str.encode(data)
 
+    def make_blake2F(self, data):
+        return abi.function_signature_to_4byte_selector('test_09_blake2F(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
     def test_02_sha256_contract(self):
         from hashlib import sha256
         for test_case in self.test_data["sha256"]:
@@ -191,6 +197,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
             expect_hash = hashlib.new('ripemd160', bin_input).hexdigest()
             self.assertEqual(result_hash[:40], expect_hash)
+
+    def test_09_blake2F_contract(self):
+        for test_case in self.test_data["blake2F"]:
+            print("make_blake2F() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_blake2F(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[2:].hex()
+            self.assertEqual(result_data, test_case["Expected"])
 
 if __name__ == '__main__':
     unittest.main()
