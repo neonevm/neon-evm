@@ -251,7 +251,8 @@ fn process_instruction<'a>(
                                      collateral_pool_seed_index[0] as usize)?;
             perform_payments(operator_sol_info,
                              collateral_pool_sol_info,
-                             user_eth_info, operator_eth_info)?;
+                             user_eth_info,
+                             operator_eth_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)
@@ -741,18 +742,27 @@ fn check_collateral_account(program_id: &Pubkey,
 
 /// Makes payments for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
-fn perform_payments(operator_sol_info: &AccountInfo,
-                    collateral_pool_sol_info: &AccountInfo,
-                    user_eth_info: &AccountInfo,
-                    operator_eth_info: &AccountInfo) -> ProgramResult {
+fn perform_payments<'a>(operator_sol_info: &'a AccountInfo<'a>,
+                        collateral_pool_sol_info: &'a AccountInfo<'a>,
+                        user_eth_info: &'a AccountInfo<'a>,
+                        operator_eth_info: &'a AccountInfo<'a>) -> ProgramResult {
     debug_print!("operator_sol_info {:?}", operator_sol_info);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("user_eth_info {:?}", user_eth_info);
     debug_print!("operator_eth_info {:?}", operator_eth_info);
-
     debug_print!("PAYMENT_TO_COLLATERAL_POOL {}", constant::PAYMENT_TO_COLLATERAL_POOL);
-    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() - constant::PAYMENT_TO_COLLATERAL_POOL;
-    **collateral_pool_sol_info.lamports.borrow_mut() = collateral_pool_sol_info.lamports() + constant::PAYMENT_TO_COLLATERAL_POOL;
+
+//    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() - constant::PAYMENT_TO_COLLATERAL_POOL;
+//    **collateral_pool_sol_info.lamports.borrow_mut() = collateral_pool_sol_info.lamports() + constant::PAYMENT_TO_COLLATERAL_POOL;
+
+    let transfer = system_instruction::transfer(operator_sol_info.key,
+                                                collateral_pool_sol_info.key,
+                                                constant::PAYMENT_TO_COLLATERAL_POOL);
+    let accounts = [(*operator_sol_info).clone(),
+                    (*collateral_pool_sol_info).clone(),
+                    (*user_eth_info).clone(),
+                    (*operator_eth_info).clone()];
+    invoke(&transfer, &accounts)?;
 
     Ok(())
 }
