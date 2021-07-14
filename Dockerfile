@@ -47,7 +47,7 @@ FROM cybercoredev/solana:v1.6.9-resources AS solana
 FROM ubuntu:20.04 AS base
 WORKDIR /opt
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install openssl ca-certificates curl python3 python3-pip && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
@@ -59,6 +59,7 @@ COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
+COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
 

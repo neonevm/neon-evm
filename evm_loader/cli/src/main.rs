@@ -108,9 +108,9 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         let accounts : Vec<AccountInfo> = Vec::new();
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::MAX, &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
     
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, usize::MAX);
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
     
         debug!("Call done");
         
@@ -284,7 +284,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         // Collect statuses for all the transactions, drop those that are confirmed
         loop {
             let mut slot = 0;
-            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
+            let pending_signatures = pending_transactions.keys().copied().collect::<Vec<_>>();
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
             {
@@ -416,7 +416,7 @@ fn make_deploy_ethereum_transaction(
         let tx = UnsignedTransaction {
             to: None,
             nonce: trx_count,
-            gas_limit: 1.into(),
+            gas_limit: 9_999_999.into(),
             gas_price: 1.into(),
             value: 0.into(),
             data: program_data.to_owned(),

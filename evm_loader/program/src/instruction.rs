@@ -1,4 +1,5 @@
-//! `EvmInstruction` serrialization/deserrialization
+//! `EvmInstruction` serialization/deserialization
+
 use serde::{Serialize, Serializer};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey, instruction::Instruction};
 use std::convert::{TryInto, TryFrom};
@@ -278,11 +279,16 @@ impl<'a> EvmInstruction<'a> {
 pub fn on_return(
     myself_program_id: &Pubkey,
     status: u8,
+    used_gas: u64,
     result: &[u8]
 ) -> Instruction {
-    let mut data = Vec::with_capacity(2 + result.len());
+    use core::mem;
+
+    let cap = 2 * mem::size_of::<u8>() + mem::size_of::<u64>() + result.len();
+    let mut data = Vec::with_capacity(cap);
     data.push(6_u8);
     data.push(status);
+    data.extend(&used_gas.to_le_bytes());
     data.extend(result);
 
     Instruction {

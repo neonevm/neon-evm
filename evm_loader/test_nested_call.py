@@ -135,7 +135,7 @@ class EventTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, input, contract, code):
-        tx = {'to': solana2ether(contract), 'value': 1, 'gas': 1, 'gasPrice': 1,
+        tx = {'to': solana2ether(contract), 'value': 1, 'gas': 9999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -198,7 +198,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
     def test_ecrecover(self):
-        tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 1, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 9999999, 'gasPrice': 1,
               'nonce': getTransactionCount(client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())

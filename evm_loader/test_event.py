@@ -14,7 +14,6 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 
-
 class EventTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -115,7 +114,7 @@ class EventTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input):
-        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -176,6 +175,7 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21657) # used_gas
 
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
@@ -191,7 +191,8 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(data[2:], bytes().fromhex("%064x" % 0x3))
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
+                self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
 
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
@@ -213,7 +214,8 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(data[2:34], bytes().fromhex('%064x' % 3)) #sum
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 22743) # used_gas
+                self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
 
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
@@ -241,15 +243,16 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(data[2:34], bytes().fromhex('%064x' % 5)) #sum
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+                self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
 
     def test_events_of_different_instructions(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
-        tx1 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
+        tx1 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 111}
-        tx2 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 1, 'gasPrice': 1,
+        tx2 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 111}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())
@@ -287,7 +290,8 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0x5)) #sum
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+        self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
         self.assertEqual(len(result['meta']['innerInstructions'][1]['instructions']), 3)
@@ -306,8 +310,8 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][2]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(data[2:34], bytes().fromhex('%064x' % 0xb)) #sum
-
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+        self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
     def test_caseFailAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
