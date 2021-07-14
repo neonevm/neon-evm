@@ -48,6 +48,8 @@ pub trait AccountStorage {
     fn code_size(&self, address: &H160) -> usize { self.apply_to_account(address, || 0, |account| account.code_size()) }
     /// Get code data
     fn code(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_code()) }
+    /// Get valids data
+    fn valids(&self, address: &H160) -> Vec<u8> { self.apply_to_account(address, Vec::new, |account| account.get_valids()) }
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256 { self.apply_to_account(address, U256::zero, |account| account.get_storage(index)) }
     /// Get account seeds
@@ -155,7 +157,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         self.account_storage.block_timestamp()
     }
     fn block_difficulty(&self) -> U256 { U256::zero() }
-    fn block_gas_limit(&self) -> U256 { U256::zero() }
+    fn block_gas_limit(&self) -> U256 { U256::from(u64::MAX) }
     fn chain_id(&self) -> U256 { Self::chain_id() }
 
     fn exists(&self, address: H160) -> bool {
@@ -173,6 +175,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
     fn code(&self, address: H160) -> Vec<u8> {
         self.account_storage.code(&address)
     }
+    fn valids(&self, address: H160) -> Vec<u8> {
+        self.account_storage.valids(&address)
+    }
     fn storage(&self, address: H160, index: U256) -> U256 {
         self.account_storage.storage(&address, &index)
     }
@@ -184,7 +189,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         } else {
             debug_print!("Call create");
         }
-    /*    let account = if let CreateScheme::Create2{salt,..} = scheme
+        /* let account = if let CreateScheme::Create2{salt,..} = scheme
                 {Pubkey::new(&salt.to_fixed_bytes())} else {Pubkey::default()};
         self.add_alias(address, &account);*/
     }
@@ -193,7 +198,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         code_address: H160,
         _transfer: Option<Transfer>,
         input: Vec<u8>,
-        _target_gas: Option<usize>,
+        _target_gas: Option<u64>,
         _is_static: bool,
         _take_l64: bool,
         _take_stipend: bool,
@@ -257,9 +262,11 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
                     self.account_infos.unwrap(),
                 );
 
+                debug_print!("result: {:?}", result);
+
                 #[allow(unused_variables)]
                 if let Err(err) = result {
-                    debug_print!("result: {}", err);
+                    debug_print!("result/err: {}", err);
                     return Some(Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())));
                 };
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new())))
@@ -315,12 +322,15 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::*;
     use solana_sdk::{
         account::Account,
         account_info::{AccountInfo},
         pubkey::Pubkey,
+        program_error::ProgramError,
     };
     use evm::executor::StackExecutor;
+    use std::str::FromStr;
 
     pub struct TestContract;
     impl TestContract {
@@ -383,18 +393,18 @@ mod test {
 
     #[test]
     fn test_solana_backend() -> Result<(), ProgramError> {
-        let owner = Pubkey::new_rand();
+        let owner = Pubkey::new_unique();
         let mut accounts = Vec::new();
 
         for i in 0..4 {
             accounts.push( (
-                    Pubkey::new_rand(), i == 0,
+                    Pubkey::new_unique(), i == 0,
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &owner)));
-        accounts.push((Pubkey::new_rand(), false, Account::new(5423u64, 1024, &Pubkey::new_rand())));
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234u64, 0, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &owner)));
+        accounts.push((Pubkey::new_unique(), false, Account::new(5423u64, 1024, &Pubkey::new_unique())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &Pubkey::new_unique())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 
@@ -403,10 +413,10 @@ mod test {
             infos.push(AccountInfo::from((&acc.0, acc.1, &mut acc.2)));
         }
 
-        let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
+        let mut backend = SolanaBackend::new(&owner, Some(&infos[..]));
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let config = evm::Config::default();
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
         assert_eq!(backend.exists(solidity_address(infos[1].key)), true);
@@ -416,7 +426,7 @@ mod test {
         executor.deposit(creator, U256::exp10(18));
 
         let contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&TestContract::code()), salt: infos[0].key.to_bytes().into()});
-        let exit_reason = executor.transact_create2(creator, U256::zero(), TestContract::code(), infos[0].key.to_bytes().into(), usize::max_value());
+        let exit_reason = executor.transact_create2(creator, U256::zero(), TestContract::code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         let (applies, logs) = executor.deconstruct();
@@ -427,7 +437,7 @@ mod test {
 
         println!();
 //        let mut backend = SolanaBackend::new(&infos).unwrap();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
         println!("======================================");
         println!("Contract: {:x}", contract);
         println!("{:x?}", backend.exists(contract));
@@ -447,7 +457,7 @@ mod test {
         println!("storage value: {:x}", backend.storage(H160::zero(), H256::default()));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), TestContract::get_owner(), usize::max_value());
+                creator, contract, U256::zero(), TestContract::get_owner(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (applies, logs) = executor.deconstruct();
@@ -463,18 +473,18 @@ mod test {
 
     #[test]
     fn test_erc20_wrapper() -> Result<(), ProgramError> {
-        let owner = Pubkey::new_rand();
+        let owner = Pubkey::new_unique();
         let mut accounts = Vec::new();
 
         for i in 0..4 {
             accounts.push( (
-                    Pubkey::new_rand(), i == 0,
+                    Pubkey::new_unique(), i == 0,
                     Account::new(((i+2)*1000) as u64, 10*1024, &owner)
                 ) );
         }
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234_u64, 0, &owner)));
-        accounts.push((Pubkey::new_rand(), false, Account::new(5423_u64, 1024, &Pubkey::new_rand())));
-        accounts.push((Pubkey::new_rand(), false, Account::new(1234_u64, 0, &Pubkey::new_rand())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &owner)));
+        accounts.push((Pubkey::new_unique(), false, Account::new(5423u64, 1024, &Pubkey::new_unique())));
+        accounts.push((Pubkey::new_unique(), false, Account::new(1234u64, 0, &Pubkey::new_unique())));
 
         for acc in &accounts {println!("{:x?}", acc);};
 
@@ -485,8 +495,8 @@ mod test {
 
         let mut backend = SolanaBackend::new(&owner, &infos[..]).unwrap();
 
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let config = evm::Config::default();
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
 
         assert_eq!(backend.exists(solidity_address(&owner)), false);
         assert_eq!(backend.exists(solidity_address(infos[1].key)), true);
@@ -496,11 +506,11 @@ mod test {
         executor.deposit(creator, U256::exp10(18));
 
         let contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&ERC20Contract::wrapper_code()), salt: infos[0].key.to_bytes().into()});
-        let exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::wrapper_code(), infos[0].key.to_bytes().into(), usize::max_value());
+        let exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::wrapper_code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         contract = executor.create_address(CreateScheme::Create2{caller: creator, code_hash: keccak256_digest(&ERC20Contract::code()), salt: infos[0].key.to_bytes().into()});
-        exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::code(), infos[0].key.to_bytes().into(), usize::max_value());
+        exit_reason = executor.transact_create2(creator, U256::zero(), ERC20Contract::code(), infos[0].key.to_bytes().into(), u64::MAX);
         println!("Create contract {:?}: {:?}", contract, exit_reason);
 
         let (applies, logs) = executor.deconstruct();
@@ -511,7 +521,7 @@ mod test {
 
         println!();
 //        let mut backend = SolanaBackend::new(&infos).unwrap();
-        let mut executor = StackExecutor::new(&backend, usize::max_value(), &config);
+        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
         println!("======================================");
         println!("Contract: {:x}", contract);
         println!("{:x?}", backend.exists(contract));
@@ -531,11 +541,11 @@ mod test {
         println!("storage value: {:x}", backend.storage(H160::zero(), H256::default()));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), ERC20Contract::donate(), usize::max_value());
+                creator, contract, U256::zero(), ERC20Contract::donate(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (exit_reason, result) = executor.transact_call(
-                creator, contract, U256::zero(), ERC20Contract::donateFrom(), usize::max_value());
+                creator, contract, U256::zero(), ERC20Contract::donateFrom(), u64::MAX);
         println!("Call: {:?}, {}", exit_reason, hex::encode(&result));
 
         let (applies, logs) = executor.deconstruct();

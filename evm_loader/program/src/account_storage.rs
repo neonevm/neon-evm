@@ -19,6 +19,7 @@ use solana_program::{
 use std::{
     cell::RefCell,
 };
+use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -221,14 +222,15 @@ impl<'a> ProgramAccountStorage<'a> {
     {
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
                     if SolanaBackend::<ProgramAccountStorage>::is_system_address(&address) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let (account_info, _) = &self.account_metas[pos];
-                        account.update(account_info, address, basic.nonce, basic.balance.as_u64(), &code, storage, reset_storage)?;
+                        let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
+                        account.update(account_info, address, basic.nonce, basic_balance, &code_and_valids, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {
@@ -321,6 +323,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
                 )
+                // Todo: neon-evm does not return an external call error.
+                // https://github.com/neonlabsorg/neon-evm/issues/120
+                // debug_print!("invoke_signed done.");
+                // debug_print!("invoke_signed returned: {:?}", program_result);
             }
             None => {
                 invoke_signed(
