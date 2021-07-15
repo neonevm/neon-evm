@@ -21,7 +21,7 @@ pub struct SolidityAccount<'a> {
     account_data: AccountData,
     solana_address: &'a Pubkey,
     code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>,
-    lamports: u64,
+    balance: u64,
 }
 
 impl<'a> SolidityAccount<'a> {
@@ -33,9 +33,9 @@ impl<'a> SolidityAccount<'a> {
     /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
     /// ```
     #[must_use]
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
-        debug_print!("  SolidityAccount::new");
-        Self{account_data, solana_address, code_data, lamports}
+    pub fn new(solana_address: &'a Pubkey, balance: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
+        debug_print!("  SolidityAccount::new solana_adress={} balance={}", solana_address, balance);
+        Self{account_data, solana_address, code_data, balance}
     }
 
     /// Get ethereum account address
@@ -149,8 +149,9 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn basic(&self) -> Basic {
         Basic {
-            balance: self.lamports.into(), 
-            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), }
+            balance: self.balance.into(), 
+            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), 
+        }
     }
 
     /// Get code hash

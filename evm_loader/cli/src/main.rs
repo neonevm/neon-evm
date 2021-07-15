@@ -28,6 +28,7 @@ use solana_sdk::{
     signers::Signers,
     transaction::Transaction,
     system_program,
+    sysvar,
     system_instruction,
     sysvar::{clock},
 };
@@ -187,6 +188,7 @@ fn command_create_ether_account (
     space: u64
 ) -> CommandResult {
     let (solana_address, nonce) = Pubkey::find_program_address(&[ether_address.as_bytes()], &config.evm_loader);
+    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::token::token_mint::id());
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let instruction = Instruction::new_with_bincode(
@@ -195,7 +197,12 @@ fn command_create_ether_account (
             vec![
                 AccountMeta::new(config.signer.pubkey(), true),
                 AccountMeta::new(solana_address, false),
-                AccountMeta::new_readonly(system_program::id(), false)
+                AccountMeta::new(token_address, false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_associated_token_account::id(), false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
             ]);
 
     let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
@@ -216,6 +223,7 @@ fn command_create_ether_account (
 
     println!("{}", json!({
         "solana": solana_address.to_string(),
+        "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
         "nonce": nonce,
     }).to_string());
@@ -495,7 +503,7 @@ fn fill_holder_account(
 
 fn get_ethereum_caller_credentials(
     config: &Config,
-) -> (SecretKey, H160, Pubkey, u8) {
+) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
     use secp256k1::PublicKey;
     let caller_private = {
         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
@@ -506,10 +514,12 @@ fn get_ethereum_caller_credentials(
     let caller_public = PublicKey::from_secret_key(&caller_private);
     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
+    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
     debug!("caller_sol = {}", caller_sol);
     debug!("caller_ether = {}", caller_ether);
+    debug!("caller_token = {}", caller_token);
 
-    (caller_private, caller_ether, caller_sol, caller_nonce)
+    (caller_private, caller_ether, caller_sol, caller_nonce, caller_token)
 }
 
 fn get_ether_account_nonce(
@@ -541,7 +551,7 @@ fn get_ethereum_contract_account_credentials(
     config: &Config, 
     caller_ether: &H160,
     trx_count: u64,
-) -> (Pubkey, H160, u8, Pubkey, String) {
+) -> (Pubkey, H160, u8, Pubkey, Pubkey, String) {
     let creator = &config.signer;
 
     let (program_id, program_ether, program_nonce) = {
@@ -558,6 +568,8 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
 
+    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::token::token_mint::id());
+
     let (program_code, program_seed) = {
         let seed = bs58::encode(&program_ether.to_fixed_bytes()).into_string();
         debug!("Code account seed {} and len {}", &seed, &seed.len());
@@ -566,14 +578,16 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create code account: {}", &program_code.to_string());
 
-    (program_id, program_ether, program_nonce, program_code, program_seed)
+    (program_id, program_ether, program_nonce, program_token, program_code, program_seed)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_ethereum_contract_accounts_in_solana(
     config: &Config,
     program_id: &Pubkey,
     program_ether: &H160,
     program_nonce: u8,
+    program_token: &Pubkey,
     program_code: &Pubkey,
     program_seed: &str,
     program_code_len: usize,
@@ -606,10 +620,17 @@ fn create_ethereum_contract_accounts_in_solana(
         Instruction::new_with_bincode(
             config.evm_loader,
             &(2_u32, minimum_balance_for_account, 0_u64, program_ether.as_fixed_bytes(), program_nonce),
-            vec![AccountMeta::new(creator.pubkey(), true),
-                    AccountMeta::new(*program_id, false),
-                    AccountMeta::new(*program_code, false),
-                    AccountMeta::new_readonly(system_program::id(), false),]
+            vec![
+                AccountMeta::new(creator.pubkey(), true),
+                AccountMeta::new(*program_id, false),
+                AccountMeta::new(*program_token, false),
+                AccountMeta::new(*program_code, false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_associated_token_account::id(), false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
+            ]
         )
     ];
 
@@ -717,7 +738,7 @@ fn command_deploy(
     let program_data = read_program_data(program_location)?;
 
     // Create ethereum caller private key from sign of array by signer
-    let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
+    let (caller_private, caller_ether, caller_sol, _caller_nonce, caller_token) = get_ethereum_caller_credentials(config);
 
     if caller_sol != caller {
         return Err("Could not acquire caller account private key".to_string().into());
@@ -726,7 +747,7 @@ fn command_deploy(
     // Get caller nonce
     let trx_count = get_ether_account_nonce(config, &caller_sol)?;
 
-    let (program_id, program_ether, program_nonce, program_code, program_seed) = 
+    let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) = 
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
@@ -735,6 +756,7 @@ fn command_deploy(
         &program_id,
         &program_ether,
         program_nonce,
+        &program_token,
         &program_code,
         &program_seed,
         program_data.len()
@@ -754,8 +776,10 @@ fn command_deploy(
     let accounts = vec![AccountMeta::new(holder, false),
                         AccountMeta::new(storage, false),
                         AccountMeta::new(program_id, false),
+                        AccountMeta::new(program_token, false),
                         AccountMeta::new(program_code, false),
                         AccountMeta::new(caller_sol, false),
+                        AccountMeta::new(caller_token, false),
                         AccountMeta::new_readonly(config.evm_loader, false),
                         AccountMeta::new(clock::id(), false),
                         ];
@@ -795,6 +819,7 @@ fn command_deploy(
 
     println!("{}", json!({
         "programId": format!("{}", program_id),
+        "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
     }).to_string());

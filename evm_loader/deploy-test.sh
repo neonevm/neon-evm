@@ -15,6 +15,18 @@ solana airdrop 1000
 solana account $ACCOUNT
 
 echo "Run tests for EVM Loader"
+
+# Create a token
+export ETH_TOKEN_MINT=$(spl-token create-token -- test_token_keypair | grep -Po 'Creating token \K[^\n]*')
+if [ ${#ETH_TOKEN_MINT} -eq 0 ]; then
+  echo "ETH token mint is not created"
+  exit 1
+fi
+
+spl-token create-account $ETH_TOKEN_MINT
+spl-token mint $ETH_TOKEN_MINT 1000
+spl-token balance $ETH_TOKEN_MINT
+
 # Parse deployed contract address from output of solana-cli:
 # Example output: `Program Id: 853qJy1Z8hfgHe194fVrYUbVDfx88ny7phSCHc481Fc6`
 # EVM_LOADER will be empty if the match fails.
