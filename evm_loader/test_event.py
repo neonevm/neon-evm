@@ -44,14 +44,21 @@ class EventTest(unittest.TestCase):
 
     def sol_instr_05(self, evm_instruction):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
+                                   data=bytearray.fromhex("05") + evm_instruction + bytearray([2]),
                                    keys=[
+                                       # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                                       # System instructions account:
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                                       # Operator address:
+                                       AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
+                                       # Collateral pool address:
+                                       AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
+                                       # Operator ETH address (stub for now):
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                                       # User ETH address (stub for now):
+                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                                       # System program account:
+                                       AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),

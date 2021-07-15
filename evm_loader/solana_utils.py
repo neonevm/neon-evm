@@ -44,7 +44,6 @@ EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/re
 client = Client(solana_url)
 path_to_solana = 'solana'
 
-
 class SplToken:
     def __init__(self, url):
         self.url = url
@@ -187,6 +186,7 @@ class NeonEvmClient:
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
     def __create_trx_single(self, ethereum_transaction, keccak_data, data):
+        data = data + bytearray([2])
         print('create_trx_single with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
@@ -195,12 +195,19 @@ class NeonEvmClient:
         ]))
         trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
         [
+            # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+            # System instructions account:
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            # Operator address:
+            AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
+            # Operator ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # User ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
