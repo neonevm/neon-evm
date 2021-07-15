@@ -33,3 +33,4 @@ rlp = "0.5"
 solana-program = { version = "1.6.9", default_features = false }
 rand = "0.8"
 ethereum-types = "0.11.0"
+base64 = { version = "0.13.0" }
