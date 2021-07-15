@@ -188,6 +188,7 @@ class EmulateTest(unittest.TestCase):
         self.compare_solana_accounts(tmpl_json, emulate_result)
 
     # @unittest.skip("a.i.")
+    @unittest.skip("Too many instructions for testnet")
     def test_successful_cli_emulate(self):
         print('\n---------------------------')
         print('test_successful_cli_emulate')
