@@ -113,7 +113,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
         debug_print!("ecrecover");
         debug_print!("input: {}", &hex::encode(&input));
-    
+
         if input.len() != 128 {
             return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
         }
@@ -121,13 +121,17 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
 
-        let v: u8 = U256::from(v).as_u32().try_into().unwrap();
+        let v: u8 = if let Ok(v) = U256::from(v).as_u32().try_into() {
+            v
+        } else {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
+        };
         let recovery_id = v - 27;
         let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
             Ok(key) => key,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
-    
+
         let mut address = keccak256_digest(&public_key.to_bytes());
         address[0..12].fill(0);
         debug_print!("{}", &hex::encode(&address));
