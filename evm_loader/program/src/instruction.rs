@@ -100,14 +100,14 @@ pub enum EvmInstruction<'a> {
     /// Call Ethereum-contract action from raw transaction data
     /// #### Account references same as in Call
     CallFromRawEthereumTX {
+        /// Seed index for a collateral pool account
+        collateral_pool_seed_index: u32,
         /// Ethereum transaction sender address
         from_addr: &'a [u8],
         /// Ethereum transaction sign
         sign: &'a [u8],
         /// Unsigned ethereum transaction
         unsigned_msg: &'a [u8],
-        /// Seed index for a collateral pool account
-        collateral_pool_seed_index: &'a [u8],
     },
 
     /// Called action return
@@ -228,10 +228,13 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner}
             },
             5 => {
-                let (from_addr, rest) = rest.split_at(20);
-                let (sign, rest) = rest.split_at(65);
-                let (unsigned_msg, collateral_pool_seed_index) = rest.split_at(rest.len() - 1);
-                EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg, collateral_pool_seed_index}
+                let (collateral_pool_seed_index, rest) = rest.split_at(4);
+                let (from_addr, rest) = rest.split_at(24);
+                let (sign, unsigned_msg) = rest.split_at(69);
+                let collateral_pool_seed_index =
+                    u32::from_le_bytes(
+                        collateral_pool_seed_index.try_into().map_err(|_| InvalidInstructionData)?);
+                EvmInstruction::CallFromRawEthereumTX {collateral_pool_seed_index, from_addr, sign, unsigned_msg}
             },
             6 => {
                 let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;

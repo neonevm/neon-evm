@@ -186,7 +186,6 @@ class NeonEvmClient:
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
     def __create_trx_single(self, ethereum_transaction, keccak_data, data):
-        data = data + bytearray([2])
         print('create_trx_single with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=

@@ -44,7 +44,7 @@ class EventTest(unittest.TestCase):
 
     def sol_instr_05(self, evm_instruction):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction + bytearray([2]),
+                                   data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
                                        # System instructions account:
@@ -132,9 +132,7 @@ class EventTest(unittest.TestCase):
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
-
         return (from_addr, sign, msg)
-
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -143,9 +141,11 @@ class EventTest(unittest.TestCase):
     def call_signed(self, input):
         (from_addr, sign,  msg) = self.get_call_parameters(input)
 
+        collateral_pool_seed_index = 0x2.to_bytes(4, 'little')
+
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(self.sol_instr_05(from_addr + sign + msg))
+        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
     def create_storage_account(self, seed):
@@ -275,10 +275,11 @@ class EventTest(unittest.TestCase):
         assert (from_addr2 == self.caller_ether)
 
         trx = Transaction()
+        collateral_pool_seed_index = 0x2.to_bytes(4, 'little')
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1))))
-        trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
+        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr1 + sign1 + msg1))
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2))))
-        trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
+        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
         self.assertEqual(result['meta']['err'], None)
