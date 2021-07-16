@@ -57,15 +57,30 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         }
         
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
-        keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
+        collateral_pool_index = 0x2.to_bytes(4, 'little')
 
-        trx_data = self.caller_ether + sign + msg
+        trx_data = collateral_pool_index + self.caller_ether + sign + msg
         
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
             ])).add(
             TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
