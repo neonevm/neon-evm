@@ -229,8 +229,8 @@ impl<'a> EvmInstruction<'a> {
             },
             5 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
-                let (from_addr, rest) = rest.split_at(24);
-                let (sign, unsigned_msg) = rest.split_at(69);
+                let (from_addr, rest) = rest.split_at(20);
+                let (sign, unsigned_msg) = rest.split_at(65);
                 let collateral_pool_index =
                     u32::from_le_bytes(
                         collateral_pool_index.try_into().map_err(|_| InvalidInstructionData)?);

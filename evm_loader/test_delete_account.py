@@ -59,7 +59,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         }
         (_from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(position, len(msg))
+        keccak_instruction = make_keccak_instruction_data(position, len(msg), 1)
         
         keccak_tx = self.sol_instr_keccak(keccak_instruction)
         call_tx = self.sol_instr_call(trx_data, owner_contract, contract_code)

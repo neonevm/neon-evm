@@ -57,7 +57,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         }
         
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
         trx_data = self.caller_ether + sign + msg
         
@@ -87,7 +87,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #     }
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
         
     #     (caller, caller_nonce) = self.loader.ether2programAddress(from_addr)
     #     print(" ether: " + from_addr.hex())
@@ -123,7 +123,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
 
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
     #     trx = Transaction().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -142,7 +142,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
 
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
     #     trx = Transaction().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[

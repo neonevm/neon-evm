@@ -116,7 +116,7 @@ class PrecompilesTests(unittest.TestCase):
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
         
         solana_trx = Transaction().add(
                 self.sol_instr_keccak(keccak_instruction) 

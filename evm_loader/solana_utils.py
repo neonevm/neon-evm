@@ -237,10 +237,13 @@ class NeonEvmClient:
 
     def __send_neon_transaction(self, evm_trx_data, ethereum_transaction, need_storage=False) -> types.RPCResponse:
         (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
-        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 1)
         data = evm_trx_data + from_address + sign + msg
 
         instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
+        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 5)
+        if instruction_code == 5:
+            collateral_pool_index = 0x2.to_bytes(4, 'little')
+            data = evm_trx_data + collateral_pool_index + from_address + sign + msg
         trx = self.__create_trx_single(ethereum_transaction, keccak_data, data) if instruction_code == 5 else self.__create_trx(ethereum_transaction, keccak_data, data)
 
         if need_storage:

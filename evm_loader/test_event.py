@@ -276,9 +276,9 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         collateral_pool_index = 0x2.to_bytes(4, 'little')
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1))))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1), 5)))
         trx.add(self.sol_instr_05(collateral_pool_index + from_addr1 + sign1 + msg1))
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2))))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2), 5)))
         trx.add(self.sol_instr_05(collateral_pool_index + from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
