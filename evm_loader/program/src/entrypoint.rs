@@ -452,8 +452,7 @@ fn do_call<'a>(
     gas_limit: u64,
 ) -> ProgramResult
 {
-    // TODO: Delete before merge to develop
-    debug_print!("do_call: {}", hex::encode(&instruction_data));
+    debug_print!("do_call");
 
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
