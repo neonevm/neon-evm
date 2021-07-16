@@ -250,8 +250,7 @@ class EventTest(unittest.TestCase):
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
-            print(result)
-
+            
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
