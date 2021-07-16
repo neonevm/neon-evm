@@ -144,7 +144,7 @@ class PrecompilesTests(unittest.TestCase):
     def make_ecrecover(self, data):
         return abi.function_signature_to_4byte_selector('test_01_ecrecover(bytes32, uint8, bytes32, bytes32)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + data.to_bytes()
 
     def make_sha256(self, data):
@@ -162,8 +162,32 @@ class PrecompilesTests(unittest.TestCase):
     def make_callData(self, data):
         return abi.function_signature_to_4byte_selector('test_04_dataCopy(bytes)')\
                 + bytes.fromhex("%062x" % 0x0 + "20") \
-                + bytes.fromhex("%064x" % len(data))\
+                + bytes.fromhex("%064x" % len(data)) \
                 + str.encode(data)
+
+    def make_bigModExp(self, data):
+        return abi.function_signature_to_4byte_selector('test_05_bigModExp(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def make_bn256Add(self, data):
+        return abi.function_signature_to_4byte_selector('test_06_bn256Add(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def make_bn256ScalarMul(self, data):
+        return abi.function_signature_to_4byte_selector('test_07_bn256ScalarMul(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
+
+    def make_bn256Pairing(self, data):
+        return abi.function_signature_to_4byte_selector('test_08_bn256Pairing(bytes)')\
+                + bytes.fromhex("%062x" % 0x0 + "20") \
+                + bytes.fromhex("%064x" % len(data)) \
+                + data
 
     def make_blake2F(self, data):
         return abi.function_signature_to_4byte_selector('test_09_blake2F(bytes)')\
@@ -192,6 +216,53 @@ class PrecompilesTests(unittest.TestCase):
             result = result["result"]
             result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
             self.assertEqual(result_hash[:40], test_case["Expected"])
+
+    def test_05_bigModExp_contract(self):
+        for test_case in self.test_data["bigModExp"]:
+            print("make_bigModExp() - test case ", test_case["Name"])
+            bin_input = bytes.fromhex(test_case["Input"])
+            trx = self.make_transactions(self.make_bigModExp(bin_input))
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            self.assertEqual(result_data[128:], test_case["Expected"])
+
+    def test_06_bn256Add_contract(self):
+            for test_case in self.test_data["bn256Add"]:
+                print("make_bn256Add() - test case ", test_case["Name"])
+                bin_input = bytes.fromhex(test_case["Input"])
+                trx = self.make_transactions(self.make_bn256Add(bin_input))
+                result = send_transaction(client, trx, self.acc)
+                self.get_measurements(result)
+                result = result["result"]
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+                self.assertEqual(result_data, test_case["Expected"])
+
+    def test_07_bn256ScalarMul_contract(self):
+            for test_case in self.test_data["bn256ScalarMul"]:
+                print("make_bn256ScalarMul() - test case ", test_case["Name"])
+                bin_input = bytes.fromhex(test_case["Input"])
+                trx = self.make_transactions(self.make_bn256ScalarMul(bin_input))
+                result = send_transaction(client, trx, self.acc)
+                self.get_measurements(result)
+                result = result["result"]
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+                self.assertEqual(result_data, test_case["Expected"])
+
+    ### Couldn't be run run because of heavy instruction consuption
+    # def test_08_bn256Pairing_contract(self):
+    #         for test_case in self.test_data["bn256Pairing"]:
+    #             print("make_bn256Pairing() - test case ", test_case["Name"])
+    #             bin_input = bytes.fromhex(test_case["Input"])
+    #             trx = self.make_transactions(self.make_bn256Pairing(bin_input))
+    #             result = send_transaction(client, trx, self.acc)
+    #             self.get_measurements(result)
+    #             result = result["result"]
+    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+    #             print("Result:   ", result_data)
+    #             print("Expected: ", test_case["Expected"])
+    #             self.assertEqual(result_data, test_case["Expected"])
 
     def test_09_blake2F_contract(self):
         for test_case in self.test_data["blake2F"]:
