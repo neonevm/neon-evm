@@ -141,11 +141,11 @@ class EventTest(unittest.TestCase):
     def call_signed(self, input):
         (from_addr, sign,  msg) = self.get_call_parameters(input)
 
-        collateral_pool_seed_index = 0x2.to_bytes(4, 'little')
+        collateral_pool_index = 0x2.to_bytes(4, 'little')
 
         trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg))))
-        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr + sign + msg))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
+        trx.add(self.sol_instr_05(collateral_pool_index + from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
     def create_storage_account(self, seed):
@@ -275,11 +275,11 @@ class EventTest(unittest.TestCase):
         assert (from_addr2 == self.caller_ether)
 
         trx = Transaction()
-        collateral_pool_seed_index = 0x2.to_bytes(4, 'little')
+        collateral_pool_index = 0x2.to_bytes(4, 'little')
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1))))
-        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr1 + sign1 + msg1))
+        trx.add(self.sol_instr_05(collateral_pool_index + from_addr1 + sign1 + msg1))
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2))))
-        trx.add(self.sol_instr_05(collateral_pool_seed_index + from_addr2 + sign2 + msg2))
+        trx.add(self.sol_instr_05(collateral_pool_index + from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
         self.assertEqual(result['meta']['err'], None)
@@ -288,7 +288,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
         self.assertEqual(result['meta']['innerInstructions'][1]['index'], 3)  # second instruction
 
-        # log sol_instr_05(from_addr1 + sign1 + msg1)
+        # log sol_instr_05(collateral_pool_index + from_addr1 + sign1 + msg1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
@@ -308,7 +308,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
-        # log sol_instr_05(from_addr2 + sign2 + msg2)
+        # log sol_instr_05(collateral_pool_index + from_addr2 + sign2 + msg2)
         self.assertEqual(len(result['meta']['innerInstructions'][1]['instructions']), 3)
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent

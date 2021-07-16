@@ -225,7 +225,7 @@ fn process_instruction<'a>(
 
             storage.block_accounts(program_id, accounts)
         },
-        EvmInstruction::CallFromRawEthereumTX {collateral_pool_seed_index, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
             // Get six accounts needed for payments (note slice accounts[6..] later)
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -248,7 +248,7 @@ fn process_instruction<'a>(
 
             payment::check_collateral_account(program_id,
                                               collateral_pool_sol_info,
-                                              collateral_pool_seed_index as usize)?;
+                                              collateral_pool_index as usize)?;
             payment::operator(operator_sol_info,
                               collateral_pool_sol_info,
                               system_info)?;

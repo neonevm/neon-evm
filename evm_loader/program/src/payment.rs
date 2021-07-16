@@ -19,10 +19,10 @@ const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 #[allow(clippy::unnecessary_wraps)]
 pub fn check_collateral_account(program_id: &Pubkey,
                                 collateral_pool_sol_info: &AccountInfo,
-                                collateral_pool_seed_index: usize) -> ProgramResult {
+                                collateral_pool_index: usize) -> ProgramResult {
     debug_print!("program_id {}", program_id);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
-    debug_print!("collateral_pool_seed_index {}", collateral_pool_seed_index);
+    debug_print!("collateral_pool_index {}", collateral_pool_index);
 
     // Owner of collateral_pool_sol_info is system: 11111111111111111111111111111111
     /*if collateral_pool_sol_info.owner != program_id {
@@ -37,7 +37,7 @@ pub fn check_collateral_account(program_id: &Pubkey,
             ProgramError::InvalidArgument
         })?;
 
-    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_seed_index);
+    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
     let pool_key = Pubkey::create_with_seed(&collateral_pool_key, &seed, program_id)?;
     if *collateral_pool_sol_info.key != pool_key {
         debug_print!("Wrong seed pool key {}", pool_key);
