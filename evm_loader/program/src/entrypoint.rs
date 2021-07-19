@@ -249,7 +249,7 @@ fn process_instruction<'a>(
             payment::check_collateral_account(program_id,
                                               collateral_pool_sol_info,
                                               collateral_pool_index as usize)?;
-            payment::operator(operator_sol_info,
+            payment::from_operator_to_collateral_pool(operator_sol_info,
                               collateral_pool_sol_info,
                               system_info)?;
 

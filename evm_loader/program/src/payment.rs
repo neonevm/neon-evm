@@ -17,6 +17,7 @@ const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 
 /// Checks collateral accounts for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
+#[allow(unused_variables)]
 pub fn check_collateral_account(program_id: &Pubkey,
                                 collateral_pool_sol_info: &AccountInfo,
                                 collateral_pool_index: usize) -> ProgramResult {
@@ -50,7 +51,7 @@ pub fn check_collateral_account(program_id: &Pubkey,
 
 /// Makes payments for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
-pub fn operator<'a>(operator_sol_info: &'a AccountInfo<'a>,
+pub fn from_operator_to_collateral_pool<'a>(operator_sol_info: &'a AccountInfo<'a>,
                     collateral_pool_sol_info: &'a AccountInfo<'a>,
                     system_info: &'a AccountInfo<'a>) -> ProgramResult {
     debug_print!("operator_sol_info {:?}", operator_sol_info);
