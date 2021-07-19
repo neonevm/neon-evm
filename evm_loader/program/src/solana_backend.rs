@@ -10,12 +10,13 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     entrypoint::ProgramResult,
+    secp256k1_recover::secp256k1_recover,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
 use crate::{
     solidity_account::SolidityAccount,
-    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest, secp256k1_recover},
+    utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
 use tbn::G1;
 

@@ -763,7 +763,6 @@ dependencies = [
  "getrandom 0.1.16",
  "hex",
  "impl-serde",
- "libsecp256k1 0.3.5",
  "num-bigint",
  "num-derive",
  "num-traits",
@@ -1375,19 +1374,6 @@ checksum = "351a32417a12d5f7e82c368a66781e307834dae04c6ce0cd4456d52989229883"
 dependencies = [
  "cfg-if 1.0.0",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "libsecp256k1"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc1e2c808481a63dc6da2074752fdd4336a3c8fcc68b83db6f1fd5224ae7962"
-dependencies = [
- "arrayref",
- "crunchy",
- "digest 0.8.1",
- "rand 0.7.3",
- "subtle",
 ]
 
 [[package]]
@@ -2504,7 +2490,7 @@ checksum = "00bce44af56179ac1afea505509820b821663b32113ce806d7b2cbc67d1976fd"
 dependencies = [
  "bincode",
  "byteorder",
- "libsecp256k1 0.5.0",
+ "libsecp256k1",
  "log",
  "num-derive",
  "num-traits",
@@ -2641,7 +2627,7 @@ dependencies = [
  "hex",
  "itertools",
  "lazy_static",
- "libsecp256k1 0.5.0",
+ "libsecp256k1",
  "log",
  "num-derive",
  "num-traits",
@@ -2768,7 +2754,7 @@ dependencies = [
  "hmac 0.10.1",
  "itertools",
  "lazy_static",
- "libsecp256k1 0.5.0",
+ "libsecp256k1",
  "log",
  "memmap2",
  "num-derive",
