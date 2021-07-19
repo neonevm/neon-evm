@@ -59,7 +59,7 @@ class init_wallet():
 
         wallet = RandomAccount()
         if getBalance(wallet.get_acc().public_key()) == 0:
-            tx = client.request_airdrop(wallet.get_acc().public_key(), 100000 * 10 ** 9, commitment=Confirmed)
+            tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
 
         assert (getBalance(wallet.get_acc().public_key()) > 0)
@@ -207,7 +207,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key):
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': 1, 'gas': 99999999, 'gasPrice': 1,
+    tx = {'to': contract_eth, 'value': 1, 'gas': 9999999999, 'gasPrice': 1,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 
