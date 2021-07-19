@@ -1,5 +1,5 @@
 # Install BPF SDK
-FROM solanalabs/rust:1.52.0 AS builder
+FROM solanalabs/rust:1.53.0 AS builder
 RUN rustup component add clippy
 WORKDIR /opt
 RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.6/install)" && \
