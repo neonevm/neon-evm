@@ -10,6 +10,7 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     entrypoint::ProgramResult,
+    secp256k1_recover::secp256k1_recover,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};

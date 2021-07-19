@@ -6,9 +6,10 @@ use solana_program::{
     entrypoint::{ ProgramResult },
     program_error::{ProgramError},
     secp256k1_program,
+    secp256k1_recover::{Secp256k1RecoverError, secp256k1_recover},
 };
 use std::convert::{Into, TryFrom};
-use crate::utils::{keccak256_digest, keccak256_h256};
+use crate::utils::{keccak256_digest};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
