@@ -62,7 +62,7 @@ use solana_clap_utils::{
 
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcConfirmedTransactionConfig},
+    rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     tpu_client::{TpuClient, TpuClientConfig},
 };
@@ -79,7 +79,7 @@ use solana_transaction_status::{
     EncodedConfirmedTransaction
 };
 
-use secp256k1::SecretKey;
+use libsecp256k1::SecretKey;
 
 use rlp::RlpStream;
 
@@ -104,22 +104,24 @@ pub struct Config {
 fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) {
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
     
         let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
-    
+
         debug!("Call done");
-        
+
+        let used_gas = executor.used_gas();
+
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let (applies, logs) = executor.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
-            (exit_reason, result, None)
+            (exit_reason, result, None, used_gas)
         }
     };
 
@@ -159,7 +161,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "result": &hex::encode(&result),
-        "exit_status": status
+        "exit_status": status,
+        "used_gas": used_gas,
     }).to_string();
 
     println!("{}", js);
@@ -427,7 +430,7 @@ fn make_deploy_ethereum_transaction(
     };
 
     let (sig, rec) = {
-        use secp256k1::{Message, sign};
+        use libsecp256k1::{Message, sign};
         let msg = Message::parse(&keccak256(rlp_data.as_slice()));
         sign(&msg, caller_private)
     };
@@ -496,7 +499,7 @@ fn fill_holder_account(
 fn get_ethereum_caller_credentials(
     config: &Config,
 ) -> (SecretKey, H160, Pubkey, u8) {
-    use secp256k1::PublicKey;
+    use libsecp256k1::PublicKey;
     let caller_private = {
         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
         let mut sign_arr: [u8;32] = Default::default();
@@ -775,9 +778,9 @@ fn command_deploy(
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 
-        let result = config.rpc_client.get_confirmed_transaction_with_config(
+        let result = config.rpc_client.get_transaction_with_config(
             &signature, 
-            RpcConfirmedTransactionConfig {
+            RpcTransactionConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
                 encoding: Some(UiTransactionEncoding::Json),
             },
