@@ -19,7 +19,7 @@ custom-heap = []
 default = ["custom-heap"]
 
 [dependencies]
-solana-program = { version = "1.6.9", default_features = false }
+solana-program = { version = "1.7.6", default_features = false }
 num-bigint = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
@@ -45,8 +45,8 @@ evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
-solana-program-test = "1.6.9"
-solana-sdk = "1.6.9"
+solana-program-test = "1.7.6"
+solana-sdk = "1.7.6"
 
 [lib]
 crate-type = ["cdylib", "lib"]

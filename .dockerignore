@@ -9,3 +9,6 @@ Dockerfile.*
 .dockerfile
 bin
 target
+evm_loader/program/target
+evm_loader/cli/target
+evm_loader/performance/sender/target
