@@ -349,7 +349,7 @@ fn main() -> CommandResult{
     let mut signatures = Vec::new();
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
     let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
-    let ten = time::Duration::from_micros(500);
+    let ten = time::Duration::from_micros(1000);
     let start = SystemTime::now();
     for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
         if (client == "tcp"){
