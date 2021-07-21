@@ -245,8 +245,10 @@ class NeonEvmClient:
 
         # instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
         keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 5)
-        collateral_pool_address = None
-        if not need_storage:
+
+        if need_storage:
+            trx = self.__create_trx(ethereum_transaction, keccak_data, data)
+        else:
             collateral_pool_index = 2
             collateral_pool_index_buf = 0x2.to_bytes(4, 'little')
             collateral_pool_address = create_collateral_pool_address(client,
@@ -254,14 +256,14 @@ class NeonEvmClient:
                                                                      collateral_pool_index,
                                                                      self.evm_loader.loader_id)
             data = evm_trx_data + collateral_pool_index_buf + from_address + sign + msg
-
-        trx = self.__create_trx_single(ethereum_transaction, keccak_data, data, collateral_pool_address)
+            trx = self.__create_trx_single(ethereum_transaction, keccak_data, data, collateral_pool_address)
 
         if need_storage:
             if ethereum_transaction._storage is None:
                 ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
             trx.instructions[-1].keys \
                 .insert(0, AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True))
+
         if ethereum_transaction.trx_account_metas is not None:
             trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
         trx.instructions[-1].keys \
