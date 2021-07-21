@@ -1,2 +1,2 @@
 #!/bin/bash
-rm -rf *.json
+rm -rf *.json* *.yml* 
