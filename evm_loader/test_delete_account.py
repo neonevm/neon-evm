@@ -30,7 +30,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
-    
+
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+
+
     def deploy_contract(self):
         print("deploy contract: ")
         program_and_code = self.loader.deployChecked(
@@ -59,7 +64,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         }
         (_from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(position, len(msg), 1)
+        keccak_instruction = make_keccak_instruction_data(position, len(msg), 5)
         
         keccak_tx = self.sol_instr_keccak(keccak_instruction)
         call_tx = self.sol_instr_call(trx_data, owner_contract, contract_code)
@@ -71,14 +76,31 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 ])
     
     def sol_instr_call(self, trx_data, owner_contract, contract_code):
-        return TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
-                    AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data, 
+            keys=[
+            # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+            # System instructions account:
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            # Operator address:
+            AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+            # Operator ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # User ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+        ])
 
 
     def test_fail_on_tx_after_delete(self):
