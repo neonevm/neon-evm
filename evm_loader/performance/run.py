@@ -208,31 +208,32 @@ def sol_instr_keccak(keccak_instruction):
         keys=[AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False)]
     )
 
-def sol_instr_05(evm_instruction, contract, contract_code, caller):
-    return TransactionInstruction(program_id=evm_loader_id,
-                               data=bytearray.fromhex("05") + evm_instruction,
-                               keys=[
-                                   # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
-                                   # System instructions account:
-                                   AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                   # Operator address:
-                                   AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
-                                   # Collateral pool address:
-                                   AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
-                                   # Operator ETH address (stub for now):
-                                   AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
-                                   # User ETH address (stub for now):
-                                   AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
-                                   # System program account:
-                                   AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+def sol_instr_05(evm_instruction, contract, contract_code, caller, signer, collateral_pool_address):
+    return TransactionInstruction(
+        program_id=evm_loader_id,
+        data=bytearray.fromhex("05") + evm_instruction,
+        keys=[
+            # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+            # System instructions account:
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            # Operator address:
+            AccountMeta(pubkey=signer, is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
+            # Operator ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # User ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
-                                   AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
-                                   AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
-                                   AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-                                   AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                   AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-                                   AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                               ])
+            AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+        ])
 
 def deploy_contracts(args):
     instance = init_wallet()
@@ -583,12 +584,20 @@ def send_transactions(args):
         from_addr = bytes.fromhex(rec['from_addr'])
         sign = bytes.fromhex(rec['sign'])
         msg = bytes.fromhex(rec['msg'])
+
+        sender_signer = senders.next_acc()
+
+
+
+        collateral_pool_index = 2
+        collateral_pool_address = create_collateral_pool_address(client, sender_signer, collateral_pool_index, evm_loader_id)
+        collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+
         trx = Transaction()
         trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
-        collateral_pool_index = 0x2.to_bytes(4, 'little')
-        trx.add(sol_instr_05((collateral_pool_index + from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']))
+        trx.add(sol_instr_05((collateral_pool_index_buf + from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']), sender_signer.public_key(), collateral_pool_address)
         trx.recent_blockhash = recent_blockhash
-        trx.sign(senders.next_acc())
+        trx.sign(sender_signer)
 
         try:
             print("send trx", total)
