@@ -185,7 +185,7 @@ class NeonEvmClient:
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
-    def __create_trx_single(self, ethereum_transaction, keccak_data, data):
+    def __create_trx_single(self, ethereum_transaction, keccak_data, data, collateral_pool_address=None):
         print('create_trx_single with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
@@ -198,13 +198,13 @@ class NeonEvmClient:
             # System instructions account:
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             # Operator address:
-            AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
             # Collateral pool address:
-            AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
             # Operator ETH address (stub for now):
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=True),
             # User ETH address (stub for now):
-            AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -212,8 +212,9 @@ class NeonEvmClient:
             AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
         ]))
         return trx
 
@@ -239,12 +240,17 @@ class NeonEvmClient:
         (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
         data = evm_trx_data + from_address + sign + msg
 
-        instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
+        # instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
         keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 5)
-        if instruction_code == 5:
+        collateral_pool_address = None
+        if need_storage is False:
             collateral_pool_index = 0x2.to_bytes(4, 'little')
+            collateral_pool_address = create_collateral_pool_address(client,
+                                                                     self.solana_wallet,
+                                                                     collateral_pool_index,
+                                                                     self.evm_loader.loader_id)
             data = evm_trx_data + collateral_pool_index + from_address + sign + msg
-        trx = self.__create_trx_single(ethereum_transaction, keccak_data, data) if instruction_code == 5 else self.__create_trx(ethereum_transaction, keccak_data, data)
+        trx = self.__create_trx_single(ethereum_transaction, keccak_data, data, collateral_pool_address)
 
         if need_storage:
             if ethereum_transaction._storage is None:
