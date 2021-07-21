@@ -44,6 +44,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
 
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+
 
     def test_success_tx_send(self):  
         tx_1 = {
@@ -55,27 +59,23 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'data': '3917b3df',
             'chainId': 111
         }
-        
+
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
         keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
-        collateral_pool_index = 2
-        collateral_pool_address = create_collateral_pool_address(client, self.acc, collateral_pool_index, self.loader.loader_id)
+        trx_data = self.caller_ether + sign + msg
 
-        collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
-        trx_data = collateral_pool_index_buf + self.caller_ether + sign + msg
-        
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
+            TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data, keys=[
                 # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
                 # System instructions account:
                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
-                AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
