@@ -258,6 +258,19 @@ class NeonEvmClient:
         return send_transaction(client, trx, self.solana_wallet)
 
 
+def create_collateral_pool_address(http_client, operator_acc, collateral_pool_index, program_id):
+    COLLATERAL_SEED_PREFIX = "collateral_seed_"
+    seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
+    collateral_pool_address = accountWithSeed(operator_acc.public_key(), seed, program_id)
+    print("Collateral pool address: ", collateral_pool_address)
+    if getBalance(collateral_pool_address) == 0:
+        trx = Transaction()
+        trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, 10**9, 0, PublicKey(program_id)))
+        result = send_transaction(http_client, trx, operator_acc)
+        print(result)
+    return collateral_pool_address
+
+
 def confirm_transaction(http_client, tx_sig, confirmations=1):
     """Confirm a transaction."""
     TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name

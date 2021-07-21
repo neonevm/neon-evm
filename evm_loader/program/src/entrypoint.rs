@@ -246,12 +246,16 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            payment::check_collateral_account(program_id,
-                                              collateral_pool_sol_info,
-                                              collateral_pool_index as usize)?;
-            payment::from_operator_to_collateral_pool(operator_sol_info,
-                              collateral_pool_sol_info,
-                              system_info)?;
+            payment::check_collateral_account(
+                program_id,
+                // WARNING Only for tests when base is random
+                operator_sol_info,
+                collateral_pool_sol_info,
+                collateral_pool_index as usize)?;
+            payment::from_operator_to_collateral_pool(
+                operator_sol_info,
+                collateral_pool_sol_info,
+                system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)

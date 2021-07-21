@@ -11,6 +11,7 @@ use solana_program::{
 
 use std::str::FromStr;
 
+// TODO set collateral pool base address
 const COLLATERAL_POOL_BASE: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
 const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
@@ -18,9 +19,13 @@ const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 /// Checks collateral accounts for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
 #[allow(unused_variables)]
-pub fn check_collateral_account(program_id: &Pubkey,
-                                collateral_pool_sol_info: &AccountInfo,
-                                collateral_pool_index: usize) -> ProgramResult {
+pub fn check_collateral_account(
+    program_id: &Pubkey,
+    // WARNING Only for tests when base is random
+    collateral_pool_base: &AccountInfo,
+    collateral_pool_sol_info: &AccountInfo,
+    collateral_pool_index: usize
+) -> ProgramResult {
     debug_print!("program_id {}", program_id);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("collateral_pool_index {}", collateral_pool_index);
@@ -32,11 +37,7 @@ pub fn check_collateral_account(program_id: &Pubkey,
         return Err(ProgramError::InvalidArgument);
     }*/
 
-    let collateral_pool_key = Pubkey::from_str(COLLATERAL_POOL_BASE)
-        .map_err(|e| {
-            debug_print!("Error key string '{}', {:?}", COLLATERAL_POOL_BASE, e);
-            ProgramError::InvalidArgument
-        })?;
+    let collateral_pool_key = collateral_pool_base.key;
 
     let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
     let pool_key = Pubkey::create_with_seed(&collateral_pool_key, &seed, program_id)?;
@@ -51,9 +52,11 @@ pub fn check_collateral_account(program_id: &Pubkey,
 
 /// Makes payments for the Ethereum transaction execution.
 #[allow(clippy::unnecessary_wraps)]
-pub fn from_operator_to_collateral_pool<'a>(operator_sol_info: &'a AccountInfo<'a>,
-                    collateral_pool_sol_info: &'a AccountInfo<'a>,
-                    system_info: &'a AccountInfo<'a>) -> ProgramResult {
+pub fn from_operator_to_collateral_pool<'a>(
+    operator_sol_info: &'a AccountInfo<'a>,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>
+) -> ProgramResult {
     debug_print!("operator_sol_info {:?}", operator_sol_info);
     let transfer = system_instruction::transfer(operator_sol_info.key,
                                                 collateral_pool_sol_info.key,
