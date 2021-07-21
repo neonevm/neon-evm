@@ -186,7 +186,9 @@ class NeonEvmClient:
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
     def __create_trx_single(self, ethereum_transaction, keccak_data, data, collateral_pool_address=None):
-        print('create_trx_single with keccak:', keccak_data.hex(), 'and data:', data.hex())
+        print('create_trx_single with keccak:', keccak_data.hex(),
+              'and data:', data.hex(),
+              'and collateral_pool_address:', collateral_pool_address)
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
         [
@@ -243,13 +245,15 @@ class NeonEvmClient:
         # instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
         keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 5)
         collateral_pool_address = None
-        if need_storage is False:
-            collateral_pool_index = 0x2.to_bytes(4, 'little')
+        if not need_storage:
+            collateral_pool_index = 2
+            collateral_pool_index_buf = 0x2.to_bytes(4, 'little')
             collateral_pool_address = create_collateral_pool_address(client,
                                                                      self.solana_wallet,
                                                                      collateral_pool_index,
                                                                      self.evm_loader.loader_id)
-            data = evm_trx_data + collateral_pool_index + from_address + sign + msg
+            data = evm_trx_data + collateral_pool_index_buf + from_address + sign + msg
+
         trx = self.__create_trx_single(ethereum_transaction, keccak_data, data, collateral_pool_address)
 
         if need_storage:
