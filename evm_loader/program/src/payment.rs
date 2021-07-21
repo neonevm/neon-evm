@@ -9,10 +9,10 @@ use solana_program::{
     system_instruction,
 };
 
-use std::str::FromStr;
+// use std::str::FromStr;
 
 // TODO set collateral pool base address
-const COLLATERAL_POOL_BASE: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
+// const COLLATERAL_POOL_BASE: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
 const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 
@@ -40,7 +40,7 @@ pub fn check_collateral_account(
     let collateral_pool_key = collateral_pool_base.key;
 
     let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
-    let pool_key = Pubkey::create_with_seed(&collateral_pool_key, &seed, program_id)?;
+    let pool_key = Pubkey::create_with_seed(collateral_pool_key, &seed, program_id)?;
     if *collateral_pool_sol_info.key != pool_key {
         debug_print!("Wrong seed pool key {}", pool_key);
         debug_print!("Must be collateral pool key {}", *collateral_pool_sol_info.key);

@@ -261,7 +261,7 @@ class NeonEvmClient:
 def create_collateral_pool_address(http_client, operator_acc, collateral_pool_index, program_id):
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-    collateral_pool_address = accountWithSeed(operator_acc.public_key(), seed, program_id)
+    collateral_pool_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(program_id))
     print("Collateral pool address: ", collateral_pool_address)
     if getBalance(collateral_pool_address) == 0:
         trx = Transaction()
@@ -297,7 +297,7 @@ def accountWithSeed(base, seed, program):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type=SystemInstructionType.CreateAccountWithSeed,
+            instruction_type=SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),

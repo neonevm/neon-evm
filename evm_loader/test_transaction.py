@@ -40,7 +40,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             )
         cls.owner_contract = program_and_code[0]
         cls.contract_code = program_and_code[2]
-        
+
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
 
@@ -58,9 +58,11 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
         keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
-        collateral_pool_index = 0x2.to_bytes(4, 'little')
+        collateral_pool_index = 2
+        collateral_pool_address = create_collateral_pool_address(client, self.acc, collateral_pool_index, self.loader.loader_id)
 
-        trx_data = collateral_pool_index + self.caller_ether + sign + msg
+        collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        trx_data = collateral_pool_index_buf + self.caller_ether + sign + msg
         
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -71,9 +73,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 # System instructions account:
                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 # Operator address:
-                AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
-                AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
