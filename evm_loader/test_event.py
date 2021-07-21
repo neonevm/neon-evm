@@ -42,31 +42,36 @@ class EventTest(unittest.TestCase):
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
 
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+
     def sol_instr_05(self, evm_instruction):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("05") + evm_instruction,
-                                   keys=[
-                                       # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
-                                       # System instructions account:
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       # Operator address:
-                                       AccountMeta(pubkey=PublicKey("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"), is_signer=True, is_writable=True),
-                                       # Collateral pool address:
-                                       AccountMeta(pubkey=PublicKey("BmweRNmqMUVBQE8onugArJNmHwcBzSeL8h4vwGjrce77"), is_signer=False, is_writable=True),
-                                       # Operator ETH address (stub for now):
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
-                                       # User ETH address (stub for now):
-                                       AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
-                                       # System program account:
-                                       AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("05") + self.collateral_pool_index_buf + evm_instruction, 
+            keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
 
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(program_id=self.loader.loader_id,
@@ -141,11 +146,9 @@ class EventTest(unittest.TestCase):
     def call_signed(self, input):
         (from_addr, sign,  msg) = self.get_call_parameters(input)
 
-        collateral_pool_index = 0x2.to_bytes(4, 'little')
-
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
-        trx.add(self.sol_instr_05(collateral_pool_index + from_addr + sign + msg))
+        trx.add(self.sol_instr_05(from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
     def create_storage_account(self, seed):
@@ -275,11 +278,10 @@ class EventTest(unittest.TestCase):
         assert (from_addr2 == self.caller_ether)
 
         trx = Transaction()
-        collateral_pool_index = 0x2.to_bytes(4, 'little')
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1), 5)))
-        trx.add(self.sol_instr_05(collateral_pool_index + from_addr1 + sign1 + msg1))
+        trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2), 5)))
-        trx.add(self.sol_instr_05(collateral_pool_index + from_addr2 + sign2 + msg2))
+        trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
         self.assertEqual(result['meta']['err'], None)
@@ -289,7 +291,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][1]['index'], 3)  # second instruction
 
         return # temporarily switch off tests
-        # log sol_instr_05(collateral_pool_index + from_addr1 + sign1 + msg1)
+        # log sol_instr_05(from_addr1 + sign1 + msg1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
@@ -309,7 +311,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
-        # log sol_instr_05(collateral_pool_index + from_addr2 + sign2 + msg2)
+        # log sol_instr_05(from_addr2 + sign2 + msg2)
         self.assertEqual(len(result['meta']['innerInstructions'][1]['instructions']), 3)
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][0]['data'])
         self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
