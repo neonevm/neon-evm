@@ -5,7 +5,7 @@ from eth_utils import abi
 from base58 import b58decode
 import re
 
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, JsonEncoder
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -43,6 +43,10 @@ class PrecompilesTests(unittest.TestCase):
         cls.contract_code = program_and_code[2]
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
+
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
 
         with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
             cls.test_data = json.load(json_data)
@@ -116,7 +120,7 @@ class PrecompilesTests(unittest.TestCase):
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
         
         solana_trx = Transaction().add(
                 self.sol_instr_keccak(keccak_instruction) 
@@ -132,14 +136,31 @@ class PrecompilesTests(unittest.TestCase):
                 ])
 
     def sol_instr_call(self, trx_data):
-        return TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
-                    AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id, 
+            data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data, 
+            keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])
 
     def make_ecrecover(self, data):
         return abi.function_signature_to_4byte_selector('test_01_ecrecover(bytes32, uint8, bytes32, bytes32)')\
@@ -202,8 +223,10 @@ class PrecompilesTests(unittest.TestCase):
             trx = self.make_transactions(self.make_sha256(bin_input))
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
+            # print(json.dumps(result, cls=JsonEncoder, indent=4))
             result = result["result"]
-            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            # print("Result: ", b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data']).hex())
+            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
             self.assertEqual(result_hash, test_case["Expected"])
 
     def test_03_ripemd160_contract(self):
@@ -214,7 +237,7 @@ class PrecompilesTests(unittest.TestCase):
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
             self.assertEqual(result_hash[:40], test_case["Expected"])
 
     def test_05_bigModExp_contract(self):
@@ -225,7 +248,7 @@ class PrecompilesTests(unittest.TestCase):
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
             self.assertEqual(result_data[128:], test_case["Expected"])
 
     def test_06_bn256Add_contract(self):
@@ -236,7 +259,7 @@ class PrecompilesTests(unittest.TestCase):
                 result = send_transaction(client, trx, self.acc)
                 self.get_measurements(result)
                 result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
     def test_07_bn256ScalarMul_contract(self):
@@ -247,7 +270,7 @@ class PrecompilesTests(unittest.TestCase):
                 result = send_transaction(client, trx, self.acc)
                 self.get_measurements(result)
                 result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
     ### Couldn't be run run because of heavy instruction consuption
@@ -259,7 +282,7 @@ class PrecompilesTests(unittest.TestCase):
     #             result = send_transaction(client, trx, self.acc)
     #             self.get_measurements(result)
     #             result = result["result"]
-    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
     #             print("Result:   ", result_data)
     #             print("Expected: ", test_case["Expected"])
     #             self.assertEqual(result_data, test_case["Expected"])
@@ -272,7 +295,7 @@ class PrecompilesTests(unittest.TestCase):
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
             self.assertEqual(result_data, test_case["Expected"])
 
 if __name__ == '__main__':
