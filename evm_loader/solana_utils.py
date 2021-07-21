@@ -216,6 +216,7 @@ class NeonEvmClient:
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
         ]))
         return trx
