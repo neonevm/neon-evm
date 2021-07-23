@@ -19,12 +19,12 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_sysvar_info},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
-    token::{ create_associated_token_account, token_mint },
+    token::{token_mint, create_associated_token_account},
 };
 use evm::{
     ExitReason, ExitFatal, ExitError, ExitSucceed,
@@ -240,12 +240,7 @@ fn process_instruction<'a>(
         },
 
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let sysvar_info = find_sysvar_info(accounts)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
@@ -266,12 +261,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign: _, unsigned_msg} => {
             let storage_info = next_account_info(account_info_iter)?;
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let sysvar_info = find_sysvar_info(accounts)?;
 
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -439,7 +429,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     };
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(program_id, accounts, transfers)?;
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -498,7 +488,7 @@ fn do_call<'a>(
     };
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(program_id, accounts, transfers)?;
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -620,7 +610,7 @@ fn do_continue<'a>(
     };
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(program_id, accounts, transfers)?;
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {

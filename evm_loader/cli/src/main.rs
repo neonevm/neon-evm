@@ -102,7 +102,7 @@ pub struct Config {
     keypair: Option<Keypair>,
 }
 
-fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) {
+fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Option<Vec<u8>>) {
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
     let (exit_reason, result, applies_logs, used_gas) = {
@@ -111,7 +111,7 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
     
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
+        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data.unwrap_or_default(), u64::MAX);
 
         debug!("Call done");
 
@@ -906,8 +906,11 @@ fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 
 // Return hexdata for an argument
 fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
-    matches.value_of(name).map(|value| {
-        hex::decode(&make_clean_hex(value)).unwrap()
+    matches.value_of(name).and_then(|value| {
+        match value {
+            "None" => None,
+            _ => hex::decode(&make_clean_hex(value)).ok()
+        }
     })
 }
 
@@ -1015,7 +1018,7 @@ fn main() {
                         .value_name("DATA")
                         .takes_value(true)
                         .index(3)
-                        .required(true)
+                        .required(false)
                         .validator(is_valid_hexdata)
                         .help("Transaction data")
                 )
@@ -1170,7 +1173,7 @@ fn main() {
             ("emulate", Some(arg_matches)) => {
                 let contract = h160_of(arg_matches, "contract").unwrap();
                 let sender = h160_of(arg_matches, "sender").unwrap();
-                let data = hexdata_of(arg_matches, "data").unwrap();
+                let data = hexdata_of(arg_matches, "data");
 
                 command_emulate(&config, contract, sender, data);
 

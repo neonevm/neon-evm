@@ -1,4 +1,5 @@
 //! `EVMLoader` token functions
+use crate::account_data::{AccountData};
 
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -18,6 +19,10 @@ pub mod token_mint {
     #[must_use]
     pub const fn decimals() -> u8 { 9 }
 }
+
+#[must_use]
+/// Number of base 10 digits to the right of the decimal place of ETH value
+pub const fn eth_decimals() -> u8 { 18 }
 
 /// Create an associated token account for the given wallet address and token mint
 #[must_use]
@@ -55,4 +60,31 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
 
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
     Ok(data.amount)
+}
+
+
+/// Validate Token Account
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result<(), ProgramError> {
+    debug_print!("check_token_account");
+    if *token.owner != spl_token::id() {
+        debug_print!("token.owner != spl_token::id() {}", token.owner);
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    let data = account.try_borrow_data()?;
+    let data = AccountData::unpack(&data)?;
+    let data = data.get_account()?;
+    if data.eth_token_account != *token.key {
+        debug_print!("data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    debug_print!("check_token_account success");
+
+    Ok(())
 }

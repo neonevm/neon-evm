@@ -4,7 +4,7 @@ use crate::{
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
     utils::keccak256_h256,
-    token::{get_token_account_balance, token_mint},
+    token::{get_token_account_balance, token_mint, check_token_account, eth_decimals},
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -47,25 +47,6 @@ pub struct ProgramAccountStorage<'a> {
     sender: Sender,
 }
 
-fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result<(), ProgramError> {
-    debug_print!("check_token_account");
-    if *token.owner != spl_token::id() {
-        debug_print!("token.owner != spl_token::id() {}", token.owner);
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    let data = account.try_borrow_data()?;
-    let data = AccountData::unpack(&data)?;
-    let data = data.get_account()?;
-    if data.eth_token_account != *token.key {
-        debug_print!("data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
-        return Err(ProgramError::IncorrectProgramId);
-    }
-
-    debug_print!("check_token_account success");
-
-    Ok(())
-}
 
 impl<'a> ProgramAccountStorage<'a> {
     /// `ProgramAccountStorage` constructor
@@ -83,6 +64,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// `ProgramError::InvalidArgument` if account in `account_infos` is wrong or in wrong place
     /// `ProgramError::InvalidAccountData` if account's data doesn't meet requirements
     /// `ProgramError::NotEnoughAccountKeys` if `account_infos` doesn't meet expectations
+    #[allow(clippy::too_many_lines)]
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -126,13 +108,21 @@ impl<'a> ProgramAccountStorage<'a> {
         let contract_id = {
             let program_info = next_account_info(account_info_iter)?;
             let program_token = next_account_info(account_info_iter)?;
-            let program_code = next_account_info(account_info_iter)?;
-
+            
             check_token_account(program_token, program_info)?;
 
-            let contract_acc = construct_contract_account(program_info, program_token, program_code)?;
+            let account_data = AccountData::unpack(&program_info.data.borrow())?;
+            let account = account_data.get_account()?;
+
+            let (contract_acc, program_code) = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                (SolidityAccount::new(program_info.key, get_token_account_balance(program_token)?, account_data, None) , None)
+            } else {
+                let program_code = next_account_info(account_info_iter)?;
+                (construct_contract_account(program_info, program_token, program_code)?, Some(program_code))
+            };
+            
             let contract_id = contract_acc.get_ether();
-            push_account(contract_acc, program_info, program_token, Some(program_code));
+            push_account(contract_acc, program_info, program_token, program_code);
 
             contract_id
         };
@@ -266,8 +256,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let AccountMeta{ account: account_info, token: _, code: _ } = &self.account_metas[pos];
-                        let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
-                        account.update(account_info, address, basic.nonce, basic_balance, &code_and_valids, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, basic.balance, &code_and_valids, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {
@@ -327,7 +316,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply_transfers(&mut self, _authority: &Pubkey, accounts: &[AccountInfo], transfers: Vec<evm::Transfer>) -> Result<(), ProgramError> {
+    pub fn apply_transfers(&mut self, accounts: &[AccountInfo], transfers: Vec<evm::Transfer>) -> Result<(), ProgramError> {
         debug_print!("apply_transfers {:?}", transfers);
 
         for transfer in transfers {
@@ -338,9 +327,12 @@ impl<'a> ProgramAccountStorage<'a> {
             let target_account_index = self.find_account(&transfer.target).ok_or(ProgramError::NotEnoughAccountKeys)?;
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
             
-            let amount = u64::try_from(transfer.value).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
+            let min_value = U256::from(10_u64.pow(min_decimals));
+            let value = transfer.value / min_value;
+            let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            debug_print!("Transfer ETH tokens from {} to {} amount {}", source_token_account.key, target_token_account.key, amount);
+            debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
             let instruction = spl_token::instruction::transfer_checked(
                 &spl_token::id(),
@@ -349,7 +341,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 target_token_account.key,
                 source_account.key,
                 &[],
-                amount,
+                value,
                 token_mint::decimals(),
             )?;
 
