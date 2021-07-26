@@ -86,9 +86,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
 
@@ -121,7 +120,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())
@@ -149,7 +148,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())
@@ -168,7 +167,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())

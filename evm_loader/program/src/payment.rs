@@ -17,8 +17,6 @@ const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 
 /// Checks collateral accounts for the Ethereum transaction execution.
-#[allow(clippy::unnecessary_wraps)]
-#[allow(unused_variables)]
 pub fn check_collateral_account(
     program_id: &Pubkey,
     // WARNING Only for tests when base is random
@@ -51,8 +49,7 @@ pub fn check_collateral_account(
 }
 
 /// Makes payments for the Ethereum transaction execution.
-#[allow(clippy::unnecessary_wraps)]
-pub fn from_operator_to_collateral_pool<'a>(
+pub fn transfer_from_operator_to_collateral_pool<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>
@@ -61,9 +58,9 @@ pub fn from_operator_to_collateral_pool<'a>(
     let transfer = system_instruction::transfer(operator_sol_info.key,
                                                 collateral_pool_sol_info.key,
                                                 PAYMENT_TO_COLLATERAL_POOL);
-    let accounts = [(*operator_sol_info).clone(),
-        (*collateral_pool_sol_info).clone(),
-        (*system_info).clone()];
+    let accounts = [operator_sol_info.clone(),
+        collateral_pool_sol_info.clone(),
+        system_info.clone()];
     invoke(&transfer, &accounts)?;
 
     Ok(())

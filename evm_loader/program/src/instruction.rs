@@ -231,9 +231,7 @@ impl<'a> EvmInstruction<'a> {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                let collateral_pool_index =
-                    u32::from_le_bytes(
-                        collateral_pool_index.try_into().map_err(|_| InvalidInstructionData)?);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign, unsigned_msg}
             },
             6 => {
