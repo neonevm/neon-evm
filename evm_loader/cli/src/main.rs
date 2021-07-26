@@ -894,8 +894,8 @@ fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
 // Return an error if string cannot be parsed as a H160 address
 fn is_valid_h160_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    if string.as_ref() == "deploy".to_string() {
-        ()
+    if string.as_ref() == "deploy" {
+        return Ok(());
     }
     H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
