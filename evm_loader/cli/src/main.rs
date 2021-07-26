@@ -101,16 +101,32 @@ pub struct Config {
     keypair: Option<Keypair>,
 }
 
-fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) {
-    let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
+fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Vec<u8>) {
+    let account_storage = match &contract_id {
+        Some(contract_h160) =>  {
+            EmulatorAccountStorage::new(config, *contract_h160, caller_id)
+        },
+        None => {
+            EmulatorAccountStorage::new(config,
+                                        H160::from_str(make_clean_hex("0000000000000000000000000000000000000000")).unwrap(),
+                                        caller_id)
+        }
+    };
 
     let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
-    
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
+
+        let (exit_reason, result) = match &contract_id {
+            Some(contract_h160) =>  {
+                executor.transact_call(caller_id, *contract_h160, U256::zero(), data, u64::MAX)
+            },
+            None => {
+                (executor.transact_create(caller_id, U256::zero(), data, u64::MAX), Vec::new())
+            }
+        };
 
         debug!("Call done");
 
@@ -866,6 +882,26 @@ fn make_clean_hex(in_str: &str) -> &str {
 }
 
 // Return H160 for an argument
+fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
+    if matches.value_of(name) == Some("deploy") {
+        return None;
+    }
+    matches.value_of(name).map(|value| {
+        H160::from_str(make_clean_hex(value)).unwrap()
+    })
+}
+
+// Return an error if string cannot be parsed as a H160 address
+fn is_valid_h160_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+{
+    if string.as_ref() == "deploy".to_string() {
+        ()
+    }
+    H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+// Return H160 for an argument
 fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     matches.value_of(name).map(|value| {
         H160::from_str(make_clean_hex(value)).unwrap()
@@ -982,8 +1018,8 @@ fn main() {
                         .takes_value(true)
                         .index(2)
                         .required(true)
-                        .validator(is_valid_h160)
-                        .help("The contract that executes the transaction")
+                        .validator(is_valid_h160_or_deploy)
+                        .help("The contract that executes the transaction or 'deploy'")
                 )
                 .arg(
                     Arg::with_name("data")
@@ -1143,7 +1179,7 @@ fn main() {
         let (sub_command, sub_matches) = app_matches.subcommand();
         let result = match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
-                let contract = h160_of(arg_matches, "contract").unwrap();
+                let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data").unwrap();
 
