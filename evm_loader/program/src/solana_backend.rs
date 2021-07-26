@@ -71,6 +71,7 @@ static SYSTEM_ACCOUNT: H160 =                   H160([0xff, 0, 0, 0, 0, 0, 0, 0,
 static SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =            H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 static SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
+static SYSTEM_ACCOUNT_DATACOPY: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
 static SYSTEM_ACCOUNT_BIGMODEXP: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
 static SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
 static SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
@@ -94,12 +95,13 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn is_system_address(address: &H160) -> bool {
         *address == SYSTEM_ACCOUNT
         || *address == SYSTEM_ACCOUNT_ECRECOVER
+        || *address == SYSTEM_ACCOUNT_SHA_256
+        || *address == SYSTEM_ACCOUNT_RIPEMD160
+        || *address == SYSTEM_ACCOUNT_DATACOPY
+        || *address == SYSTEM_ACCOUNT_BIGMODEXP
         || *address == SYSTEM_ACCOUNT_BN256_ADD
         || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
         || *address == SYSTEM_ACCOUNT_BN256_PAIRING
-        || *address == SYSTEM_ACCOUNT_BIGMODEXP
-        || *address == SYSTEM_ACCOUNT_SHA_256
-        || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_BLAKE2F
     }
 
@@ -179,6 +181,17 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("{}", &hex::encode(&result));
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result)))
+    }
+
+    /// Call inner datacopy
+    #[must_use]
+    pub fn call_inner_datacopy(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        debug_print!("datacopy");
+        debug_print!("input: {}", &hex::encode(&input));
+
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
     }
 
     /// Call inner `big_mod_exp`
@@ -700,6 +713,15 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
         }
+        if code_address == SYSTEM_ACCOUNT_SHA_256 {
+            return Self::call_inner_sha256(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_RIPEMD160 {
+            return Self::call_inner_ripemd160(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_DATACOPY {
+            return Self::call_inner_datacopy(&input);
+        }
         if code_address == SYSTEM_ACCOUNT_BIGMODEXP {
             return Self::call_inner_big_mod_exp(&input);
         }
@@ -711,12 +733,6 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
         if code_address == SYSTEM_ACCOUNT_BN256_PAIRING {
             return self.call_inner_bn256_pairing(&input);
-        }
-        if code_address == SYSTEM_ACCOUNT_RIPEMD160 {
-            return Self::call_inner_ripemd160(&input);
-        }
-        if code_address == SYSTEM_ACCOUNT_SHA_256 {
-            return Self::call_inner_sha256(&input);
         }
         if code_address == SYSTEM_ACCOUNT_BLAKE2F {
             return Self::call_inner_blake2_f(&input);
