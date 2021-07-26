@@ -234,9 +234,9 @@ impl<'a> EvmInstruction<'a> {
             },
             5 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign, unsigned_msg}
             },
             6 => {
@@ -260,11 +260,11 @@ impl<'a> EvmInstruction<'a> {
             },
             9 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
             },
             10 => {
@@ -274,9 +274,9 @@ impl<'a> EvmInstruction<'a> {
             },
             11 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterative {collateral_pool_index, step_count}
             },
             12 => {

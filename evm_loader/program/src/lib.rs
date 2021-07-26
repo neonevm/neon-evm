@@ -20,7 +20,7 @@ mod transaction;
 mod executor;
 mod executor_state;
 pub mod utils;
-mod payment;
+pub mod payment;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
