@@ -7,6 +7,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
+    sysvar::{rent::Rent, Sysvar},
 };
 
 // use std::str::FromStr;
@@ -15,10 +16,9 @@ use solana_program::{
 // const COLLATERAL_POOL_BASE: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
 const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
+const PAYMENT_TO_DEPOSIT: u64 = 1000;
 
 /// Checks collateral accounts for the Ethereum transaction execution.
-#[allow(clippy::unnecessary_wraps)]
-#[allow(unused_variables)]
 pub fn check_collateral_account(
     program_id: &Pubkey,
     // WARNING Only for tests when base is random
@@ -51,18 +51,66 @@ pub fn check_collateral_account(
 }
 
 /// Makes payments for the Ethereum transaction execution.
-#[allow(clippy::unnecessary_wraps)]
-pub fn from_operator_to_collateral_pool<'a>(
+pub fn operator_to_collateral_pool<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult {
+    debug_print!("operator_to_collateral_pool");
     debug_print!("operator_sol_info {:?}", operator_sol_info);
-    let transfer = system_instruction::transfer(operator_sol_info.key,
-                                                collateral_pool_sol_info.key,
-                                                PAYMENT_TO_COLLATERAL_POOL);
-    let accounts = [(*operator_sol_info).clone(),
-        (*collateral_pool_sol_info).clone(),
+    debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
+
+    transfer(operator_sol_info, collateral_pool_sol_info, system_info, PAYMENT_TO_COLLATERAL_POOL)?;
+
+    Ok(())
+}
+
+/// Makes payments for the Ethereum transaction execution.
+pub fn operator_to_deposit<'a>(
+    operator_sol_info: &'a AccountInfo<'a>,
+    deposit_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>
+) -> ProgramResult {
+    debug_print!("operator_to_deposit");
+    debug_print!("operator_sol_info {:?}", operator_sol_info);
+    debug_print!("deposit_sol_info {:?}", deposit_sol_info);
+
+    let rent_via_sysvar = Rent::get()?;
+    if rent_via_sysvar.lamports_per_byte_year * deposit_sol_info.data.borrow().len() as u64 > deposit_sol_info.lamports() {
+        return Err(ProgramError::InsufficientFunds)
+    }
+
+    transfer(operator_sol_info, deposit_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
+
+    Ok(())
+}
+
+/// Makes payments for the Ethereum transaction execution.
+pub fn deposit_to_operator<'a>(
+    deposit_sol_info: &'a AccountInfo<'a>,
+    operator_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>
+) -> ProgramResult {
+    debug_print!("deposit_to_operator");
+    debug_print!("deposit_sol_info {:?}", deposit_sol_info);
+    debug_print!("operator_sol_info {:?}", operator_sol_info);
+
+    transfer(deposit_sol_info, operator_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
+
+    Ok(())
+}
+
+fn transfer<'a>(
+    from_account_info: &'a AccountInfo<'a>,
+    to_account_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
+    amount: u64
+) -> ProgramResult {
+    let transfer = system_instruction::transfer(from_account_info.key,
+                                                to_account_info.key,
+                                                amount);
+    let accounts = [(*from_account_info).clone(),
+        (*to_account_info).clone(),
         (*system_info).clone()];
     invoke(&transfer, &accounts)?;
 
