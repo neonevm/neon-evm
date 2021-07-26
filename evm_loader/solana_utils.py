@@ -214,7 +214,6 @@ class NeonEvmClient:
             AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),

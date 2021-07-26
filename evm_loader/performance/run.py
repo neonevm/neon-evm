@@ -15,9 +15,6 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 chain_id = 111
 transfer_sum = 1
 
-sysinstruct = "Sysvar1nstructions1111111111111111111111111"
-keccakprog = "KeccakSecp256k11111111111111111111111111111"
-sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 contracts_file = "contract.json"
 accounts_file = "account.json"
 transactions_file = "transaction.json"
@@ -230,7 +227,6 @@ def sol_instr_05(evm_instruction, contract, contract_code, caller, signer, colla
             AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
             AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
         ])

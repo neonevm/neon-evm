@@ -51,7 +51,7 @@ pub fn check_collateral_account(
 }
 
 /// Makes payments for the Ethereum transaction execution.
-pub fn operator_to_collateral_pool<'a>(
+pub fn transfer_from_operator_to_collateral_pool<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>

@@ -271,7 +271,7 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 collateral_pool_sol_info,
                 collateral_pool_index as usize)?;
-            payment::operator_to_collateral_pool(
+            payment::transfer_from_operator_to_collateral_pool(
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
