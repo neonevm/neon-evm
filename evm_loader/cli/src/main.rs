@@ -125,14 +125,14 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
             },
             None => {
                 let value = U256::zero();
-                println!("transact_create(caller_id={:?}, value={:?}, data={:?})",
+                debug!("transact_create(caller_id={:?}, value={:?}, data={:?})",
                     caller_id, value, &hex::encode(&data));
                 (executor.transact_create(caller_id, value, data, u64::MAX), Vec::new())
 
             }
         };
 
-        println!("Call done, exit_reason={:?}, result={:?}", exit_reason, result);
+        debug!("Call done, exit_reason={:?}, result={:?}", exit_reason, result);
 
         let used_gas = executor.used_gas();
 
