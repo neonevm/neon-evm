@@ -593,9 +593,9 @@ fn create_ethereum_contract_accounts_in_solana(
 
     if let Some(_account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
-        // return Err("Account already exist".to_string().into());
-        debug!("Account already exist");
-    } else {
+        return Err("Account already exist".to_string().into());
+        // debug!("Account already exist");
+    }
 
     let instructions = vec![
         system_instruction::create_account_with_seed(
@@ -618,7 +618,6 @@ fn create_ethereum_contract_accounts_in_solana(
     ];
 
     send_transaction(config, &instructions)?;
-    }
 
     Ok(())
 }
@@ -775,14 +774,14 @@ fn command_deploy(
                         AccountMeta::new(collateral_pool_acc, false),
                         AccountMeta::new(clock::id(), false),
                         AccountMeta::new(clock::id(), false),
-                        AccountMeta::new_readonly(system_program::id(), false),
+                        AccountMeta::new(system_program::id(), false),
 
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_code, false),
                         AccountMeta::new(caller_sol, false),
                         AccountMeta::new_readonly(config.evm_loader, false),
-                        AccountMeta::new_readonly(rent::id(), false),
-                        AccountMeta::new_readonly(clock::id(), false),
+                        AccountMeta::new(rent::id(), false),
+                        AccountMeta::new(clock::id(), false),
                         ];
 
     // Send trx_from_account_data_instruction
@@ -801,14 +800,14 @@ fn command_deploy(
                             AccountMeta::new(creator.pubkey(), true),
                             AccountMeta::new(clock::id(), false),
                             AccountMeta::new(clock::id(), false),
-                            AccountMeta::new_readonly(system_program::id(), false),
+                            AccountMeta::new(system_program::id(), false),
     
                             AccountMeta::new(program_id, false),
                             AccountMeta::new(program_code, false),
                             AccountMeta::new(caller_sol, false),
                             AccountMeta::new_readonly(config.evm_loader, false),
-                            AccountMeta::new_readonly(rent::id(), false),
-                            AccountMeta::new_readonly(clock::id(), false),
+                            AccountMeta::new(rent::id(), false),
+                            AccountMeta::new(clock::id(), false),
                             ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
