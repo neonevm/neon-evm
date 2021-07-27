@@ -239,7 +239,7 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21725) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
                 self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
 
     def test_addReturnEvent(self):
@@ -262,7 +262,7 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 22755) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 22743) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
 
     def test_addReturnEventTwice(self):
@@ -291,7 +291,7 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 23876) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
 
     def test_events_of_different_instructions(self):
@@ -339,7 +339,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23876) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
@@ -359,7 +359,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23876) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
     def test_caseFailAfterCancel(self):
