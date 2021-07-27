@@ -174,18 +174,30 @@ class PrecompilesTests(unittest.TestCase):
 
     def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count):
         return TransactionInstruction(
-                program_id=self.loader.loader_id, 
-                data=bytearray.fromhex("0B") + step_count.to_bytes(8, byteorder='little'),
-                keys=[
-                    AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                ])
+            program_id=self.loader.loader_id, 
+            data=bytearray.fromhex("0B") + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_10_continue(self, storage_account, step_count):
         return TransactionInstruction(
@@ -193,6 +205,16 @@ class PrecompilesTests(unittest.TestCase):
             data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),

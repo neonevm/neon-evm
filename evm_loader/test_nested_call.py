@@ -75,50 +75,75 @@ class EventTest(unittest.TestCase):
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            keys=[
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_10_continue(self, storage_account, step_count, evm_instruction, contract, code):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            keys=[
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
     def create_storage_account(self, seed):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
         print("Storage", storage)
