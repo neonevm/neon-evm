@@ -113,13 +113,18 @@ pub fn transfer_from_operator_to_deposit<'a>(
 pub fn transfer_from_deposit_to_operator<'a>(
     deposit_sol_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+    _system_info: &'a AccountInfo<'a>
 ) -> ProgramResult {
     debug_print!("deposit_to_operator");
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
     debug_print!("operator_sol_info {:?}", operator_sol_info);
 
-    transfer(deposit_sol_info, operator_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
+    if deposit_sol_info.lamports() < PAYMENT_TO_DEPOSIT {
+        return Err(ProgramError::InsufficientFunds)
+    }
+
+    **deposit_sol_info.lamports.borrow_mut() = deposit_sol_info.lamports() - PAYMENT_TO_DEPOSIT;
+    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() + PAYMENT_TO_DEPOSIT;
 
     Ok(())
 }
