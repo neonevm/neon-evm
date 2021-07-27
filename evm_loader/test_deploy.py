@@ -2,6 +2,8 @@ import unittest
 from base58 import b58decode
 from solana_utils import *
 from eth_tx_utils import  make_instruction_data_from_tx, pack
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
 from sha3 import keccak_256
 from hashlib import sha256
 
@@ -9,6 +11,7 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
@@ -47,7 +50,7 @@ def write_layout(offset, data):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type = SystemInstructionType.CreateAccountWithSeed,
+            instruction_type = SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),
@@ -170,8 +173,13 @@ class DeployTest(unittest.TestCase):
             keys=[
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
             ]))
 
         result = send_transaction(client, trx, self.acc)["result"]
@@ -188,8 +196,10 @@ class DeployTest(unittest.TestCase):
                                        AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
@@ -200,8 +210,10 @@ class DeployTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])

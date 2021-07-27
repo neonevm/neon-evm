@@ -130,3 +130,14 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160
     let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
     Ok(keccak256_h256(&public_key.serialize()[1..]).into())
 }
+
+pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
+    for account in accounts {
+        if solana_program::sysvar::instructions::check_id(account.key) {
+            return Ok(account);
+        }
+    }
+
+    debug_print!("sysvar account not found");
+    Err(ProgramError::InvalidInstructionData)
+}
