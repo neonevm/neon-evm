@@ -242,7 +242,7 @@ fn process_instruction<'a>(
                 do_partial_create(&mut storage, step_count, &account_storage, &accounts[6..], trx.call_data, trx_gas_limit)?;
             }
 
-            storage.block_accounts(program_id, accounts)
+            storage.block_accounts(program_id, &accounts[7..])
         },
         EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction");
@@ -288,7 +288,6 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
-            // Get six accounts needed for payments (note slice accounts[6..] later)
             let storage_info = next_account_info(account_info_iter)?;
 
             let sysvar_info = next_account_info(account_info_iter)?;
@@ -304,7 +303,7 @@ fn process_instruction<'a>(
             let mut storage = StorageAccount::new(storage_info, &accounts[7..], caller, trx.nonce)?;
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[7..])?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
@@ -327,7 +326,7 @@ fn process_instruction<'a>(
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_partial_call(&mut storage, step_count, &account_storage, &accounts[6..], trx.call_data, trx_gas_limit)?;
 
-            storage.block_accounts(program_id, accounts)
+            storage.block_accounts(program_id, &accounts[7..])
         },
         EvmInstruction::Continue {step_count} => {
             let storage_info = next_account_info(account_info_iter)?;
