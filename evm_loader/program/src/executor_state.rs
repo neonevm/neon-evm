@@ -12,25 +12,36 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 
 
 
+/// Todo: document
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
+    /// Todo: document
     pub basic: Basic,
+    /// Todo: document
     #[serde(with = "serde_bytes")]
     pub code: Option<Vec<u8>>,
+    /// Todo: document
     #[serde(with = "serde_bytes")]
     pub valids: Option<Vec<u8>>,
+    /// Todo: document
     pub reset: bool,
 }
 
+/// Todo: document
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorMetadata<'config> {
+    /// Todo: document
     gasometer: Gasometer<'config>,
+    /// Todo: document
     is_static: bool,
+    /// Todo: document
     depth: Option<usize>
 }
 
 impl<'config> ExecutorMetadata<'config> {
+    /// Todo: document
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
@@ -39,6 +50,9 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
 	    self.gasometer.record_stipend(other.gasometer.gas())?;
@@ -54,6 +68,9 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
         self.gasometer.record_stipend(other.gasometer.gas())?;
@@ -61,12 +78,17 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
+    /// Todo: document
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
@@ -78,24 +100,32 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    /// Todo: document
+    #[must_use]
     pub const fn gasometer(&self) -> &Gasometer {
         &self.gasometer
     }
 
+    /// Todo: document
     pub fn gasometer_mut(&mut self) -> &'config mut Gasometer {
         &mut self.gasometer
     }
 
+    /// Todo: document
     #[allow(dead_code)]
+    #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
+    /// Todo: document
+    #[must_use]
     pub const fn depth(&self) -> Option<usize> {
         self.depth
     }
 }
 
+/// Todo: document
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate<'config> {
     metadata: ExecutorMetadata<'config>,
@@ -107,7 +137,9 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
+    /// Todo: document
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn new(gas_limit: u64) -> Self {
         Self {
             metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
@@ -119,16 +151,21 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    /// Todo: document
+    #[must_use]
     pub const fn metadata(&self) -> &'config ExecutorMetadata {
         &self.metadata
     }
 
+    /// Todo: document
     pub fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
         &mut self.metadata
     }
 
     /// Deconstruct the executor, return state to be applied. Panic if the
     /// executor is not in the top-level substate.
+    /// # Panics
+    /// Todo: document Panics
     #[must_use]
     pub fn deconstruct<B: Backend>(
         mut self,
@@ -189,6 +226,7 @@ impl<'config> ExecutorSubstate<'config> {
         (applies, self.logs)
     }
 
+    /// Todo: document
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         let mut entering = Self {
             metadata: self.metadata.spit_child(gas_limit, is_static),
@@ -203,6 +241,11 @@ impl<'config> ExecutorSubstate<'config> {
         self.parent = Some(Box::new(entering));
     }
 
+    /// Todo: document
+    /// # Panics
+    /// Todo: document Panics
+    /// # Errors
+    /// Todo: document Errors
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot commit on root substate");
         mem::swap(&mut exited, self);
@@ -245,6 +288,9 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn exit_revert(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -254,6 +300,9 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn exit_discard(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -263,6 +312,7 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Todo: document
     fn known_account(&self, address: H160) -> Option<&ExecutorAccount> {
         match self.accounts.get(&address) {
             Some(account) => Some(account),
@@ -270,18 +320,26 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_basic(&self, address: H160) -> Option<Basic> {
         self.known_account(address).map(|acc| acc.basic.clone())
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.valids.clone())
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(account) = self.known_account(address) {
             if account.basic.balance != U256::zero() {
@@ -304,6 +362,8 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
             return Some(*value);
@@ -322,6 +382,8 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
             if account.reset {
@@ -336,6 +398,8 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Todo: document
+    #[must_use]
     pub fn deleted(&self, address: H160) -> bool {
         if self.deletes.contains(&address) {
             return true;
@@ -348,6 +412,7 @@ impl<'config> ExecutorSubstate<'config> {
         false
     }
 
+    /// Todo: document
     fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut ExecutorAccount {
         #[allow(clippy::map_entry)]
         if !self.accounts.contains_key(&address) {
@@ -371,14 +436,17 @@ impl<'config> ExecutorSubstate<'config> {
             .expect("New account was just inserted")
     }
 
+    /// Todo: document
     pub fn inc_nonce<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.nonce += U256::one();
     }
 
+    /// Todo: document
     pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.storages.insert((address, key), value);
     }
 
+    /// Todo: document
     pub fn reset_storage<B: Backend>(&mut self, address: H160, backend: &B) {
         let mut removing = Vec::new();
 
@@ -395,6 +463,7 @@ impl<'config> ExecutorSubstate<'config> {
         self.account_mut(address, backend).reset = true;
     }
 
+    /// Todo: document
     pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
         self.logs.push(Log {
             address,
@@ -403,15 +472,20 @@ impl<'config> ExecutorSubstate<'config> {
         });
     }
 
+    /// Todo: document
     pub fn set_deleted(&mut self, address: H160) {
         self.deletes.insert(address);
     }
 
+    /// Todo: document
     pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn transfer<B: Backend>(
         &mut self,
         transfer: &Transfer,
@@ -433,41 +507,73 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Todo: document
     pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.balance = U256::zero();
     }
 
+    /// Todo: document
     pub fn touch<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend);
     }
 }
 
+/// Todo: document
 pub trait StackState : Backend {
+    /// Todo: document
     fn metadata(&self) -> &ExecutorMetadata;
+    /// Todo: document
     fn metadata_mut(&mut self) -> &mut ExecutorMetadata;
 
+    /// Todo: document
     fn enter(&mut self, gas_limit: u64, is_static: bool);
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     fn exit_commit(&mut self) -> Result<(), ExitError>;
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     fn exit_revert(&mut self) -> Result<(), ExitError>;
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     fn exit_discard(&mut self) -> Result<(), ExitError>;
 
+    /// Todo: document
     fn is_empty(&self, address: H160) -> bool;
+    /// Todo: document
     fn deleted(&self, address: H160) -> bool;
 
+    /// Todo: document
     fn inc_nonce(&mut self, address: H160);
+    /// Todo: document
     fn set_storage(&mut self, address: H160, key: U256, value: U256);
+    /// Todo: document
     fn reset_storage(&mut self, address: H160);
+    /// Todo: document
     fn original_storage(&self, address: H160, key: U256) -> Option<U256>;
+    /// Todo: document
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
+    /// Todo: document
     fn set_deleted(&mut self, address: H160);
+    /// Todo: document
     fn set_code(&mut self, address: H160, code: Vec<u8>);
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError>;
+    /// Todo: document
     fn reset_balance(&mut self, address: H160);
+    /// Todo: document
     fn touch(&mut self, address: H160);
 }
 
+/// Todo: document
 pub struct ExecutorState<'config, B: Backend> {
+    /// Todo: document
     backend: B,
+    /// Todo: document
     substate: ExecutorSubstate<'config>,
 }
 
@@ -648,6 +754,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
 }
 
 impl<'config, B: Backend> ExecutorState<'config, B> {
+    /// Todo: document
     pub fn new(substate: ExecutorSubstate<'config>, backend: B) -> Self {
         Self {
             backend,
@@ -655,10 +762,12 @@ impl<'config, B: Backend> ExecutorState<'config, B> {
         }
     }
 
+    /// Todo: document
     pub fn substate(&self) -> &ExecutorSubstate {
         &self.substate
     }
 
+    /// Todo: document
     #[must_use]
     #[allow(clippy::type_complexity)]
     pub fn deconstruct(

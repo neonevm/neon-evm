@@ -19,29 +19,47 @@ const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
+/// Todo: document
 struct CallInterrupt {
+    /// Todo: document
     context: evm::Context,
+    /// Todo: document
     code_address : H160,
+    /// Todo: document
     input : Vec<u8>,
+    /// Todo: document
     gas_limit: u64,
 }
 
+/// Todo: document
 struct CreateInterrupt {
+    /// Todo: document
     context: evm::Context,
+    /// Todo: document
     address: H160,
+    /// Todo: document
     init_code: Vec<u8>,
+    /// Todo: document
     gas_limit: u64,
 }
 
+/// Todo: document
 enum RuntimeApply{
+    /// Todo: document
     Continue,
+    /// Todo: document
     Call(CallInterrupt),
+    /// Todo: document
     Create(CreateInterrupt),
+    /// Todo: document
     Exit(ExitReason),
 }
 
+/// Todo: document
 struct Executor<'config, B: Backend> {
+    /// Todo: document
     state: ExecutorState<'config, B>,
+    /// Todo: document
     config: &'config evm::Config,
 }
 
@@ -51,18 +69,22 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     type CallInterrupt = crate::executor::CallInterrupt;
     type CallFeedback = Infallible;
 
+    /// Todo: document
     fn keccak256_h256(&self, data: &[u8]) -> H256 {
         keccak256_h256(data)
     }
 
+    /// Todo: document
     fn balance(&self, address: H160) -> U256 {
         self.state.basic(address).balance
     }
 
+    /// Todo: document
     fn code_size(&self, address: H160) -> U256 {
         U256::from(self.state.code_size(address))
     }
 
+    /// Todo: document
     fn code_hash(&self, address: H160) -> H256 {
         if self.exists(address) {
             self.state.code_hash(address)
@@ -71,62 +93,77 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         }
     }
 
+    /// Todo: document
     fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
     }
 
+    /// Todo: document
     fn valids(&self, address: H160) -> Vec<u8> {
         self.state.valids(address)
     }
 
+    /// Todo: document
     fn storage(&self, address: H160, index: U256) -> U256 {
         self.state.storage(address, index)
     }
 
+    /// Todo: document
     fn original_storage(&self, address: H160, index: U256) -> U256 {
         self.state.original_storage(address, index).unwrap_or_default()
     }
 
+    /// Todo: document
     fn gas_left(&self) -> U256 {
         U256::from(self.state.metadata().gasometer().gas()) // U256::one()
     }
 
+    /// Todo: document
     fn gas_price(&self) -> U256 {
         self.state.gas_price()
     }
 
+    /// Todo: document
     fn origin(&self) -> H160 {
         self.state.origin()
     }
 
+    /// Todo: document
     fn block_hash(&self, number: U256) -> H256 {
         self.state.block_hash(number)
     }
 
+    /// Todo: document
     fn block_number(&self) -> U256 {
         self.state.block_number()
     }
 
+    /// Todo: document
     fn block_coinbase(&self) -> H160 {
         self.state.block_coinbase()
     }
 
+    /// Todo: document
     fn block_timestamp(&self) -> U256 {
         self.state.block_timestamp()
     }
 
+    /// Todo: document
     fn block_difficulty(&self) -> U256 {
         self.state.block_difficulty()
     }
 
+    /// Todo: document
     fn block_gas_limit(&self) -> U256 {
         self.state.block_gas_limit()
     }
 
+    /// Todo: document
     fn chain_id(&self) -> U256 {
         self.state.chain_id()
     }
 
+    /// Todo: document
     fn exists(&self, address: H160) -> bool {
         if self.config.empty_considered_exists {
             self.state.exists(address)
@@ -135,20 +172,24 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         }
     }
 
+    /// Todo: document
     fn deleted(&self, address: H160) -> bool {
         self.state.deleted(address)
     }
 
+    /// Todo: document
     fn set_storage(&mut self, address: H160, index: U256, value: U256) -> Result<(), ExitError> {
         self.state.set_storage(address, index, value);
         Ok(())
     }
 
+    /// Todo: document
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError> {
         self.state.log(address, topics, data);
         Ok(())
     }
 
+    /// Todo: document
     fn mark_delete(&mut self, address: H160, target: H160) -> Result<(), ExitError> {
         let balance = self.balance(address);
         let transfer = evm::Transfer {
@@ -164,6 +205,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         Ok(())
     }
 
+    /// Todo: document
     fn create(
         &mut self,
         caller: H160,
@@ -247,6 +289,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         Capture::Trap(CreateInterrupt{context, address, init_code, gas_limit})
     }
 
+    /// Todo: document
     fn call(
         &mut self,
         code_address: H160,
@@ -310,6 +353,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         Capture::Trap(CallInterrupt{context, code_address, input, gas_limit})
     }
 
+    /// Todo: document
     fn pre_validate(
         &mut self,
         context: &evm::Context,
@@ -340,29 +384,42 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+/// Todo: document
 pub enum CreateReason {
+    /// Todo: document
     Call,
+    /// Todo: document
     Create(H160),
 }
 
 type RuntimeInfo<'config> = (evm::Runtime<'config>, CreateReason);
 
+/// Todo: document
 pub struct Machine<'config, B: Backend> {
+    /// Todo: document
     executor: Executor<'config, B>,
+    /// Todo: document
     runtime: Vec<RuntimeInfo<'config>>
 }
 
 impl<'config, B: Backend> Machine<'config, B> {
 
+    /// Todo: document
     pub fn new(state: ExecutorState<'config, B>) -> Self {
         let executor = Executor { state, config: evm::Config::default() };
         Self{ executor, runtime: Vec::new() }
     }
 
+    /// Todo: document
+    /// # Panics
+    /// Todo: document Panics
     pub fn save_into(&self, storage: &mut StorageAccount) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
+    /// Todo: document
+    /// # Panics
+    /// Todo: document Panics
     pub fn restore(storage: &StorageAccount, backend: B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
 
@@ -372,6 +429,9 @@ impl<'config, B: Backend> Machine<'config, B> {
         Self{ executor, runtime }
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn call_begin(&mut self,
         caller: H160,
         code_address: H160,
@@ -406,6 +466,9 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
@@ -453,6 +516,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
+    /// Todo: document
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
@@ -478,6 +542,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
+    /// Todo: document
     fn apply_call(&mut self, interrupt: CallInterrupt) {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
@@ -495,6 +560,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((instance, CreateReason::Call));
     }
 
+    /// Todo: document
     fn apply_create(&mut self, interrupt: CreateInterrupt) {
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.address);
@@ -514,6 +580,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.runtime.push((instance, CreateReason::Create(interrupt.address)));
     }
 
+    /// Todo: document
     fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
         if reason.is_succeed() {
             self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
@@ -533,6 +600,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
+    /// Todo: document
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
         let return_value = exited_runtime.machine().return_value();
 
@@ -560,6 +628,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
+    /// Todo: document
     fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
         match reason {
             ExitReason::Succeed(_) => Ok(()),
@@ -579,6 +648,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
+    /// Todo: document
     pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
         loop {
             if let Err(result) = self.execute_n_steps(u64::max_value()) {
@@ -587,6 +657,9 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
+    /// Todo: document
+    /// # Errors
+    /// Todo: document Errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
         let mut steps = 0_u64;
 
@@ -605,6 +678,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
+    /// Todo: document
     pub fn into_state(self) -> ExecutorState<'config, B> {
         self.executor.state
     }
