@@ -17,8 +17,8 @@ pub mod solidity_account;
 mod storage_account;
 pub mod instruction;
 mod transaction;
-mod executor;
-mod executor_state;
+pub mod executor;
+pub mod executor_state;
 pub mod utils;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
