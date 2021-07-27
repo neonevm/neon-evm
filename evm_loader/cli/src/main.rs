@@ -15,8 +15,7 @@ use evm_loader::{
     account_data::{AccountData, Account, Contract},
 };
 
-use evm::{executor::StackExecutor, ExitReason};
-use evm::{H160, H256, U256};
+use evm::{H160, H256, U256, ExitReason,};
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -36,12 +35,15 @@ use std::{
     collections::HashMap,
     io::{Read},
     fs::File,
-    env, str::FromStr,
+    env,
+    str::FromStr,
     process::exit,
     sync::Arc,
     thread::sleep,
     time::{Duration},
-    convert::{TryFrom}
+    convert::{TryFrom},
+    fmt,
+    fmt::{Debug},
 };
 
 use clap::{
@@ -85,6 +87,14 @@ use rlp::RlpStream;
 
 use log::{debug, error, info};
 use crate::account_storage::SolanaAccountJSON;
+use evm_loader::{
+    executor_state::{
+        ExecutorState,
+        ExecutorSubstate,
+    },
+    executor::Machine,
+    solana_backend::AccountStorage,
+};
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -101,58 +111,86 @@ pub struct Config {
     keypair: Option<Keypair>,
 }
 
+impl Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "evm_loader={:?}, signer={:?}", self.evm_loader, self.signer)
+    }
+}
+
 fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Vec<u8>) {
+    eprintln!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(&data));
+
     let account_storage = match &contract_id {
         Some(contract_h160) =>  {
             EmulatorAccountStorage::new(config, *contract_h160, caller_id)
         },
         None => {
-            EmulatorAccountStorage::new(config,
-                                        H160::from_str(make_clean_hex("0000000000000000000000000000000000000000")).unwrap(),
-                                        caller_id)
+            let nonce = if let Some((acc, _)) = EmulatorAccountStorage::get_account_from_solana(config, &caller_id) {
+                let solana_address =  Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
+                let account_data = AccountData::unpack(&acc.data).unwrap();
+                let account_data = AccountData::get_account(&account_data).unwrap();
+
+                eprintln!("Ethereum address: 0x{}", &hex::encode(&caller_id.as_fixed_bytes()));
+                eprintln!("Solana address: {}", solana_address);
+
+                eprintln!("Account fields");
+                eprintln!("    ether: {}", &account_data.ether);
+                eprintln!("    nonce: {}", &account_data.nonce);
+                eprintln!("    trx_count: {}", &account_data.trx_count);
+                eprintln!("    code_account: {}", &account_data.code_account);
+                eprintln!("    blocked: {}", &account_data.blocked.is_some());
+
+                account_data.nonce
+            } else {
+                eprintln!("Account not found {}", &caller_id.to_string());
+                u8::default()
+            };
+            let program_id = {
+                let mut stream = rlp::RlpStream::new_list(2);
+                stream.append(&caller_id);
+                stream.append(&nonce);
+                keccak256_h256(&stream.out()).into()
+            };
+            eprintln!("program_id={:?}", program_id);
+            EmulatorAccountStorage::new(config, program_id, caller_id)
         }
     };
 
     let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
+        let mut executor = Machine::new(executor_state);
+        eprintln!("Executor initialized");
 
-        let (exit_reason, result) = match &contract_id {
-            Some(contract_h160) =>  {
-                executor.transact_call(caller_id, *contract_h160, U256::zero(), data, u64::MAX)
-            },
-            None => {
-                let value = U256::zero();
-                debug!("transact_create(caller_id={:?}, value={:?}, data={:?})",
-                    caller_id, value, &hex::encode(&data));
-                (executor.transact_create(caller_id, value, data, u64::MAX), Vec::new())
-
-            }
+        let (result, exit_reason) = {
+            eprintln!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(&data));
+            let _result = executor.create_begin(account_storage.origin(), data, 9_999_996);
+            executor.execute()
         };
+        eprintln!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
-        debug!("Call done, exit_reason={:?}, result={:?}", exit_reason, result);
-
-        let used_gas = executor.used_gas();
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+        eprintln!("used_gas={:?}", used_gas);
 
         if exit_reason.is_succeed() {
-            debug!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
+            eprintln!("Succeed execution");
+            let (_, (applies, logs)) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
             (exit_reason, result, None, used_gas)
         }
     };
 
-    debug!("Call done");
+    eprintln!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
             account_storage.apply(applies);
 
-            debug!("Applies done");
+            eprintln!("Applies done");
             "succeed".to_string()
         }
         ExitReason::Error(_) => "error".to_string(),
@@ -165,7 +203,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     info!("{}", &hex::encode(&result));
 
     if !exit_reason.is_succeed() {
-        debug!("Not succeed execution");
+        eprintln!("Not succeed execution");
     }
 
     let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
