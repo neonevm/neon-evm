@@ -2,34 +2,37 @@
 
 #![cfg(not(feature = "no-entrypoint"))]
 
+use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
 //use crate::{error::TokenError, processor::Processor};
 //use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use std::convert::{TryInto, TryFrom};
-use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
-    program_error::{ProgramError}, pubkey::Pubkey,
-    system_instruction::{create_account, create_account_with_seed},
-    program::{invoke_signed, invoke},
-};
-use crate::{
-//    bump_allocator::BumpAllocator,
-    instruction::{EvmInstruction, on_return, on_event},
-    account_data::{AccountData, Account, Contract},
-    account_storage::{ProgramAccountStorage, Sender},
-    solana_backend::{SolanaBackend, AccountStorage},
-    solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
-    executor::{ Machine },
-    executor_state::{ ExecutorState, ExecutorSubstate },
-    storage_account::{ StorageAccount },
-    error::EvmLoaderError,
-};
+use std::convert::{TryFrom, TryInto};
+
 use evm::{
-    ExitReason, ExitFatal, ExitError, ExitSucceed,
+    ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
-use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
+use solana_program::{
+    account_info::{AccountInfo, next_account_info},
+    entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
+    program::{invoke, invoke_signed}, program_error::ProgramError,
+    pubkey::Pubkey,
+    system_instruction,
+};
+
+use crate::{
+//    bump_allocator::BumpAllocator,
+account_data::{Account, AccountData, Contract},
+account_storage::{ProgramAccountStorage, Sender},
+error::EvmLoaderError,
+executor::Machine,
+executor_state::{ExecutorState, ExecutorSubstate},
+instruction::{EvmInstruction, on_event, on_return},
+payment,
+solana_backend::{AccountStorage, SolanaBackend},
+solidity_account::SolidityAccount,
+storage_account::StorageAccount,
+transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
+};
 
 const HEAP_LENGTH: usize = 1024*1024;
 
@@ -78,7 +81,6 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         // I'm a bump allocator, I don't free
     }
 }
-
 
 #[cfg(target_arch = "bpf")]
 #[global_allocator]
@@ -135,7 +137,7 @@ fn process_instruction<'a>(
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
+                &system_instruction::create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
@@ -164,7 +166,7 @@ fn process_instruction<'a>(
             debug_print!("{}", lamports);
             debug_print!("{}", space);
             invoke_signed(
-                &create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
+                &system_instruction::create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account_with_seed done");
@@ -198,7 +200,7 @@ fn process_instruction<'a>(
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
 
-            let  accounts = &accounts[1..];
+            let accounts = &accounts[1..];
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
@@ -223,20 +225,39 @@ fn process_instruction<'a>(
 
             storage.block_accounts(program_id, accounts)
         },
+        EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
+            // Get six accounts needed for payments (note slice accounts[6..] later)
+            let sysvar_info = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
-        EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+
+            let accounts = &accounts[6..];
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
+
+            payment::check_collateral_account(
+                program_id,
+                // WARNING Only for tests when base is random
+                operator_sol_info,
+                collateral_pool_sol_info,
+                collateral_pool_index as usize)?;
+            payment::transfer_from_operator_to_collateral_pool(
+                operator_sol_info,
+                collateral_pool_sol_info,
+                system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
@@ -697,8 +718,9 @@ fn check_ethereum_authority<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use solana_sdk::{program_error::ProgramError, pubkey::Pubkey};
+
+    use super::*;
 
     #[test]
     fn test_write() {

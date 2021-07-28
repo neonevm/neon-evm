@@ -1,26 +1,28 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.api import Client
-from solana.rpc.types import TxOpts
-from solana.rpc import types
-from solana.account import Account
-from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed
-import time
+import base64
+import json
 import os
 import subprocess
-from typing import NamedTuple
-import json
-from eth_keys import keys as eth_keys
-import base64
-from base58 import b58encode
-from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
-from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
-from hashlib import sha256
-from sha3 import keccak_256
-import rlp
+import time
 from enum import Enum
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from hashlib import sha256
+from typing import NamedTuple
+
 import base58
+import rlp
+from base58 import b58encode
+from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from eth_keys import keys as eth_keys
+from sha3 import keccak_256
+from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
+from solana.account import Account
+from solana.publickey import PublicKey
+from solana.rpc import types
+from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed
+from solana.rpc.types import TxOpts
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -41,7 +43,6 @@ EVM_LOADER = os.environ.get("EVM_LOADER")
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
-
 
 class SplToken:
     def __init__(self, url):
@@ -184,6 +185,41 @@ class NeonEvmClient:
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
+    def __create_trx_single(self, ethereum_transaction, keccak_data, data, collateral_pool_address=None):
+        print('create_trx_single with keccak:', keccak_data.hex(),
+              'and data:', data.hex(),
+              'and collateral_pool_address:', collateral_pool_address)
+        trx = Transaction()
+        trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
+        [
+            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+        ]))
+        trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
+        [
+            # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+            # System instructions account:
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            # Operator address:
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
+            # Operator ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=True),
+            # User ETH address (stub for now):
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+        ]))
+        return trx
+
     def __create_trx(self, ethereum_transaction, keccak_data, data):
         print('create_trx with keccak:', keccak_data.hex(), 'and data:', data.hex())
         trx = Transaction()
@@ -204,14 +240,29 @@ class NeonEvmClient:
 
     def __send_neon_transaction(self, evm_trx_data, ethereum_transaction, need_storage=False) -> types.RPCResponse:
         (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
-        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 1)
         data = evm_trx_data + from_address + sign + msg
-        trx = self.__create_trx(ethereum_transaction, keccak_data, data)
+
+        # instruction_code = int.from_bytes(evm_trx_data[0:1], 'little')
+        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 5)
+
+        if need_storage:
+            trx = self.__create_trx(ethereum_transaction, keccak_data, data)
+        else:
+            collateral_pool_index = 2
+            collateral_pool_index_buf = 0x2.to_bytes(4, 'little')
+            collateral_pool_address = create_collateral_pool_address(client,
+                                                                     self.solana_wallet,
+                                                                     collateral_pool_index,
+                                                                     self.evm_loader.loader_id)
+            data = evm_trx_data + collateral_pool_index_buf + from_address + sign + msg
+            trx = self.__create_trx_single(ethereum_transaction, keccak_data, data, collateral_pool_address)
+
         if need_storage:
             if ethereum_transaction._storage is None:
                 ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
             trx.instructions[-1].keys \
                 .insert(0, AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True))
+
         if ethereum_transaction.trx_account_metas is not None:
             trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
         trx.instructions[-1].keys \
@@ -219,7 +270,20 @@ class NeonEvmClient:
         return send_transaction(client, trx, self.solana_wallet)
 
 
-def confirm_transaction(http_client, tx_sig, confirmations=1):
+def create_collateral_pool_address(http_client, operator_acc, collateral_pool_index, program_id):
+    COLLATERAL_SEED_PREFIX = "collateral_seed_"
+    seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
+    collateral_pool_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(program_id))
+    print("Collateral pool address: ", collateral_pool_address)
+    if getBalance(collateral_pool_address) == 0:
+        trx = Transaction()
+        trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, 10**9, 0, PublicKey(program_id)))
+        result = send_transaction(http_client, trx, operator_acc)
+        print(result)
+    return collateral_pool_address
+
+
+def confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
     TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
     elapsed_time = 0
@@ -232,7 +296,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=1):
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
                            and status['confirmations'] >= confirmations):
                 return
-        sleep_time = 1
+        sleep_time = 0.1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
@@ -245,7 +309,7 @@ def accountWithSeed(base, seed, program):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type=SystemInstructionType.CreateAccountWithSeed,
+            instruction_type=SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),

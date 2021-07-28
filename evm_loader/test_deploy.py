@@ -10,11 +10,6 @@ client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 
-sysinstruct = "Sysvar1nstructions1111111111111111111111111"
-keccakprog = "KeccakSecp256k11111111111111111111111111111"
-sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-system = "11111111111111111111111111111111"
-
 
 contract_name = "helloWorld.binary"
 # "ERC20Wrapper.binary"
@@ -47,7 +42,7 @@ def write_layout(offset, data):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type = SystemInstructionType.CreateAccountWithSeed,
+            instruction_type = SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),
