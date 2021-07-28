@@ -2,11 +2,13 @@ from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 from eth_utils import abi
+from spl.token.instructions import get_associated_token_address
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 
 class EvmLoaderTestsNewAccount(unittest.TestCase):
@@ -55,7 +57,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         tx = {
             'to': solana2ether(owner_contract),
-            'value': 1,
+            'value': 0,
             'gas': 9999999,
             'gasPrice': 1,
             'nonce': nonce,
@@ -95,8 +97,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
         ])
