@@ -26,16 +26,13 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_sysvar_info},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
     token::{token_mint, create_associated_token_account},
-};
-use evm::{
-    ExitReason, ExitFatal, ExitError, ExitSucceed,
-    H160, U256,
+    payment,
 };
 
 const HEAP_LENGTH: usize = 1024*1024;
@@ -348,7 +345,7 @@ fn process_instruction<'a>(
                 system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
+            do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
             storage.block_accounts(program_id, accounts)
         },
