@@ -1,11 +1,9 @@
 import unittest
 import solana
 from eth_utils import abi
-from solana.blockhash import Blockhash
 from web3.auto import w3
 from solana_utils import *
-from solana.rpc.commitment import Commitment, Confirmed
-
+from solana.transaction import AccountMeta
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")

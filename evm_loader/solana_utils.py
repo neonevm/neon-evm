@@ -123,9 +123,9 @@ class NeonEvmClient:
         self.collateral_pool_index = 2
         self.collateral_pool_index_buf = self.collateral_pool_index.to_bytes(4, 'little')
         self.collateral_pool_address = create_collateral_pool_address(client,
-                                                                    self.solana_wallet,
-                                                                    self.collateral_pool_index,
-                                                                    self.evm_loader.loader_id)
+                                                                      self.solana_wallet,
+                                                                      self.collateral_pool_index,
+                                                                      self.evm_loader.loader_id)
 
     def set_execute_mode(self, new_mode):
         self.mode = ExecuteMode(new_mode)
@@ -176,7 +176,7 @@ class NeonEvmClient:
         solana_trx = Transaction().add(
                 self.__sol_instr_keccak(keccak_data) 
             ).add( 
-                self.__sol_instr_09_partial_call(ethereum_transaction, ethereum_transaction.iterative_steps, data) 
+                self.__sol_instr_05(ethereum_transaction, data)
             )
         return self.__send_neon_transaction(ethereum_transaction, solana_trx)
 
@@ -247,8 +247,9 @@ class NeonEvmClient:
                 AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             ])
 
     def __sol_instr_09_partial_call(self, ethereum_transaction, step_count, data):
@@ -275,8 +276,9 @@ class NeonEvmClient:
                 AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             ])
 
     def __sol_instr_10_continue(self, ethereum_transaction, step_count):
@@ -300,8 +302,8 @@ class NeonEvmClient:
                 AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-
                 AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             ])
 
     def __send_neon_transaction(self, ethereum_transaction, trx) -> types.RPCResponse:
