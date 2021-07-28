@@ -119,7 +119,7 @@ impl Debug for Config {
 }
 
 fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>) {
-    eprintln!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(&data));
+    eprintln!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
 
     let account_storage = match &contract_id {
         Some(contract_h160) =>  {
@@ -152,7 +152,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                 stream.append(&nonce);
                 keccak256_h256(&stream.out()).into()
             };
-            eprintln!("program_id={:?}", program_id);
+            debug!("program_id={:?}", program_id);
             EmulatorAccountStorage::new(config, program_id, caller_id)
         }
     };
@@ -162,11 +162,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
         let mut executor = Machine::new(executor_state);
-        eprintln!("Executor initialized");
+        debug!("Executor initialized");
 
         let (result, exit_reason) = {
-            eprintln!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(&data));
-            let _result = executor.create_begin(account_storage.origin(), data.unwrap_or_default(), 99_999_996);
+            eprintln!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(data.clone().unwrap_or_default()));
+            let _result = executor.create_begin(account_storage.origin(), data.unwrap_or_default(), U256::zero(),99_999_996);
             executor.execute()
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
@@ -177,7 +177,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let (_, (applies, logs)) = executor_state.deconstruct();
+            let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
             (exit_reason, result, None, used_gas)
