@@ -20,21 +20,27 @@ const fn l64(gas: u64) -> u64 {
 }
 
 /// Todo: document
+#[derive(Debug)]
 struct CallInterrupt {
     /// Todo: document
     context: evm::Context,
     /// Todo: document
-    code_address : H160,
+    transfer: Option<evm::Transfer>,
     /// Todo: document
-    input : Vec<u8>,
+    code_address: H160,
+    /// Todo: document
+    input: Vec<u8>,
     /// Todo: document
     gas_limit: u64,
 }
 
 /// Todo: document
+#[derive(Debug)]
 struct CreateInterrupt {
     /// Todo: document
     context: evm::Context,
+    /// Todo: document
+    transfer: Option<evm::Transfer>,
     /// Todo: document
     address: H160,
     /// Todo: document
@@ -221,10 +227,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        // TODO: check
-        // if self.balance(caller) < value {
-        //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
-        // }
+        if self.balance(caller) < value {
+            return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
+        }
 
         let after_gas = if self.config.call_l64_after_gas {
             if self.config.estimate {
@@ -286,7 +291,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             apparent_value: value,
         };
 
-        Capture::Trap(CreateInterrupt{context, address, init_code, gas_limit})
+        let transfer = Some(evm::Transfer { source: caller, target: address, value });
+
+        Capture::Trap(CreateInterrupt{context, transfer, address, init_code, gas_limit})
     }
 
     /// Todo: document
@@ -350,7 +357,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{context, code_address, input, gas_limit})
+        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit})
     }
 
     /// Todo: document
@@ -436,6 +443,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
+        transfer_value: U256,
         gas_limit: u64,
     ) -> ProgramResult {
         debug_print!("call_begin gas_limit={}", gas_limit);
@@ -450,10 +458,14 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
+
         self.executor.state.inc_nonce(caller);
 
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
+
+        let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
+        self.executor.state.transfer(&transfer).map_err(|_| ProgramError::InsufficientFunds)?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
@@ -472,6 +484,7 @@ impl<'config, B: Backend> Machine<'config, B> {
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
+                        transfer_value: U256,
                         gas_limit: u64,
     ) -> ProgramResult {
         debug_print!("create_begin gas_limit={}", gas_limit);
@@ -489,7 +502,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let scheme = evm::CreateScheme::Legacy { caller };
         self.executor.state.enter(gas_limit, false);
 
-        match self.executor.create(caller, scheme, U256::zero(), code, None) {
+        match self.executor.create(caller, scheme, transfer_value, code, None) {
             Capture::Exit(_) => {
                 debug_print!("create_begin() error ");
                 return Err(ProgramError::InvalidInstructionData);
@@ -499,6 +512,10 @@ impl<'config, B: Backend> Machine<'config, B> {
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
+                }
+
+                if let Some(transfer) = info.transfer {
+                    self.executor.state.transfer(&transfer).map_err(|_| ProgramError::InsufficientFunds)?;
                 }
 
                 let valids = Valids::compute(&info.init_code);
@@ -543,12 +560,17 @@ impl<'config, B: Backend> Machine<'config, B> {
     }
 
     /// Todo: document
-    fn apply_call(&mut self, interrupt: CallInterrupt) {
+    fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+        debug_print!("apply_call {:?}", interrupt);
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.code_address);
+
+        if let Some(transfer) = interrupt.transfer {
+            self.executor.state.transfer(&transfer).map_err(|_| (Vec::new(), ExitError::OutOfFund.into()))?;
+        }
 
         let instance = evm::Runtime::new(
             code,
@@ -558,15 +580,22 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.config
         );
         self.runtime.push((instance, CreateReason::Call));
+
+        Ok(())
     }
 
     /// Todo: document
-    fn apply_create(&mut self, interrupt: CreateInterrupt) {
+    fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+        debug_print!("apply_create {:?}", interrupt);
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
         if self.executor.config.create_increase_nonce {
             self.executor.state.inc_nonce(interrupt.address);
+        }
+
+        if let Some(transfer) = interrupt.transfer {
+            self.executor.state.transfer(&transfer).map_err(|_| (Vec::new(), ExitError::OutOfFund.into()))?;
         }
 
         let valids = Valids::compute(&interrupt.init_code);
@@ -578,6 +607,8 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.config
         );
         self.runtime.push((instance, CreateReason::Create(interrupt.address)));
+
+        Ok(())
     }
 
     /// Todo: document
@@ -669,8 +700,8 @@ impl<'config, B: Backend> Machine<'config, B> {
 
             match apply {
                 RuntimeApply::Continue => {},
-                RuntimeApply::Call(info) => self.apply_call(info),
-                RuntimeApply::Create(info) => self.apply_create(info),
+                RuntimeApply::Call(info) => self.apply_call(info)?,
+                RuntimeApply::Create(info) => self.apply_create(info)?,
                 RuntimeApply::Exit(reason) => self.apply_exit(reason)?,
             }
         }

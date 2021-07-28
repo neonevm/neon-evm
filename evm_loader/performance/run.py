@@ -193,7 +193,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key):
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': 1, 'gas': 1, 'gasPrice': 1,
+    tx = {'to': contract_eth, 'value': 0, 'gas': 1, 'gasPrice': 1,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 

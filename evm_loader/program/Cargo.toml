@@ -20,6 +20,8 @@ default = ["custom-heap"]
 
 [dependencies]
 solana-program = { version = "1.6.9", default_features = false }
+spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
 num-bigint = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"

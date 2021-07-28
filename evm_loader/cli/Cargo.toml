@@ -17,6 +17,8 @@ solana-cli-config = "=1.6.9"
 solana-cli = "=1.6.9"
 solana-cli-output = "=1.6.9"
 solana-transaction-status = "=1.6.9"
+spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
 bs58 = "0.4.0"
 hex = ""
 sha3 = "0.8"
