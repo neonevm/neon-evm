@@ -260,8 +260,10 @@ fn process_instruction<'a>(
             let _program_code = next_account_info(account_info_iter)?;
             let _caller_info = next_account_info(account_info_iter)?;
 
+            let accounts = &accounts[6..];
+
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[6..])?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
             check_ethereum_authority(
@@ -280,7 +282,7 @@ fn process_instruction<'a>(
                 system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_call(program_id, &mut account_storage, &accounts[5..], trx.call_data, trx_gas_limit)
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
