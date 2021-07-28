@@ -333,6 +333,7 @@ fn process_instruction<'a>(
             storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::Continue {step_count} => {
+            debug_print!("Continue");
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;

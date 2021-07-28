@@ -115,10 +115,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction, contract, code):
+    def sol_instr_10_continue(self, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
@@ -134,7 +134,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
@@ -148,6 +147,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
+
     def create_storage_account(self, seed):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
         print("Storage", storage)
@@ -169,16 +169,16 @@ class EventTest(unittest.TestCase):
 
         storage = self.create_storage_account(sign[:8].hex())
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 400, instruction, contract, code))
+        trx = Transaction().add(
+                self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13))
+            ).add(
+                self.sol_instr_09_partial_call(storage, 400, instruction, contract, code)
+            )
         send_transaction(client, trx, self.acc)
 
         while (True):
             print("Continue")
-            trx = Transaction()
-            trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-            trx.add(self.sol_instr_10_continue(storage, 400, instruction, contract, code))
+            trx = Transaction().add(self.sol_instr_10_continue(storage, 400, contract, code))
             result = send_transaction(client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
@@ -194,7 +194,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # first instruction
 
         #  emit Foo(msg.sender, msg.value, _message);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -244,7 +244,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
 
         #  emit Recovered(address);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -305,7 +305,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -338,7 +338,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)  # TODO: why not 1?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
 
         #  emit Result(success, data);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
