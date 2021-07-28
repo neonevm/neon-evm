@@ -261,7 +261,7 @@ class NeonEvmClient:
                 # System instructions account:
                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
@@ -287,7 +287,7 @@ class NeonEvmClient:
                 AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True),
 
                 # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
