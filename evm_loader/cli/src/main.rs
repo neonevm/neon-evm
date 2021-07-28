@@ -165,7 +165,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         let (result, exit_reason) = {
             eprintln!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(&data));
-            let _result = executor.create_begin(account_storage.origin(), data, 9_999_996);
+            let _result = executor.create_begin(account_storage.origin(), data, 99_999_996);
             executor.execute()
         };
         eprintln!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
