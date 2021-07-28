@@ -104,22 +104,24 @@ pub struct Config {
 fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Vec<u8>) {
     let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
 
-    let (exit_reason, result, applies_logs) = {
+    let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
         let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
         let config = evm::Config::istanbul();
         let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
     
         let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data, u64::MAX);
-    
+
         debug!("Call done");
-        
+
+        let used_gas = executor.used_gas();
+
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let (applies, logs) = executor.deconstruct();
-            (exit_reason, result, Some((applies, logs)))
+            (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
-            (exit_reason, result, None)
+            (exit_reason, result, None, used_gas)
         }
     };
 
@@ -159,7 +161,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Ve
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "result": &hex::encode(&result),
-        "exit_status": status
+        "exit_status": status,
+        "used_gas": used_gas,
     }).to_string();
 
     println!("{}", js);

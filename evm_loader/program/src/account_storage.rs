@@ -195,11 +195,11 @@ impl<'a> ProgramAccountStorage<'a> {
     fn find_account(&self, address: &H160) -> Option<usize> {
         let aliases = self.aliases.borrow();
         if let Ok(pos) = aliases.binary_search_by_key(&address, |v| &v.0) {
-            debug_print!("Found account for {} on position {}", &address.to_string(), &pos.to_string());
+            debug_print!("Found account for {:?} on position {}", &address, &pos.to_string());
             Some(aliases[pos].1)
         }
         else {
-            debug_print!("Not found account for {}", &address.to_string());
+            debug_print!("Not found account for {:?}", &address);
             None
         }
     }
@@ -220,20 +220,17 @@ impl<'a> ProgramAccountStorage<'a> {
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
     {
-        let system_account = SolanaBackend::<ProgramAccountStorage>::system_account();
-        let system_account_ecrecover = SolanaBackend::<ProgramAccountStorage>::system_account_ecrecover();
-
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code, storage, reset_storage} => {
-                    if (address == system_account) || (address == system_account_ecrecover) {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
+                    if SolanaBackend::<ProgramAccountStorage>::is_system_address(&address) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let (account_info, _) = &self.account_metas[pos];
                         let basic_balance = u64::try_from(basic.balance).map_err(|_| ProgramError::InvalidAccountData)?;
-                        account.update(account_info, address, basic.nonce, basic_balance, &code, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, basic_balance, &code_and_valids, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {
@@ -326,6 +323,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
                 )
+                // Todo: neon-evm does not return an external call error.
+                // https://github.com/neonlabsorg/neon-evm/issues/120
+                // debug_print!("invoke_signed done.");
+                // debug_print!("invoke_signed returned: {:?}", program_result);
             }
             None => {
                 invoke_signed(
