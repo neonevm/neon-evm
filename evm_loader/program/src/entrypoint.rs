@@ -209,15 +209,17 @@ fn process_instruction<'a>(
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
+            let accounts = &accounts[7..];
+
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let account_storage = ProgramAccountStorage::new(program_id, &accounts[7..])?;
+            let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
-            let mut storage = StorageAccount::new(storage_info, &accounts[7..], from_addr, trx.nonce)?;
+            let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
             payment::check_collateral_account(
                 program_id,
@@ -236,13 +238,13 @@ fn process_instruction<'a>(
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, &accounts[6..], trx.call_data, trx_gas_limit)?;
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
             else {
-                do_partial_create(&mut storage, step_count, &account_storage, &accounts[6..], trx.call_data, trx_gas_limit)?;
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
             }
 
-            storage.block_accounts(program_id, &accounts[7..])
+            storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction");
@@ -297,11 +299,13 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            let accounts = &accounts[7..];
+
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut storage = StorageAccount::new(storage_info, &accounts[7..], caller, trx.nonce)?;
-            let account_storage = ProgramAccountStorage::new(program_id, &accounts[7..])?;
+            let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
+            let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
             check_ethereum_authority(
@@ -324,9 +328,9 @@ fn process_instruction<'a>(
                 system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[6..], trx.call_data, trx_gas_limit)?;
+            do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
 
-            storage.block_accounts(program_id, &accounts[7..])
+            storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::Continue {step_count} => {
             let storage_info = next_account_info(account_info_iter)?;
@@ -336,21 +340,23 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            let accounts = &accounts[5..];
+
             let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
-            storage.check_accounts(program_id, &accounts[5..])?;
+            storage.check_accounts(program_id, accounts)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[5..])?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, &accounts[4..])?;
+            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts)?;
             if exit_reason != None {
                 payment::transfer_from_deposit_to_operator(
                     storage_info,
                     operator_sol_info,
                     system_info)?;
-                storage.unblock_accounts_and_destroy(program_id, &accounts[5..])?;
+                storage.unblock_accounts_and_destroy(program_id, accounts)?;
             }
 
             Ok(())
@@ -368,8 +374,10 @@ fn process_instruction<'a>(
             let caller_info = next_account_info(account_info_iter)?;
             let _sysvar_info = next_account_info(account_info_iter)?;
 
+            let accounts = &accounts[5..];
+
             let storage = StorageAccount::restore(storage_info)?;
-            storage.check_accounts(program_id,  &accounts[5..])?;
+            storage.check_accounts(program_id,  accounts)?;
 
             { // Increment nonce for caller on cancel
                 let mut caller_info_data = AccountData::unpack(&caller_info.data.borrow())?;
@@ -394,7 +402,7 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 system_info)?;
 
-            storage.unblock_accounts_and_destroy(program_id, &accounts[5..])?;
+            storage.unblock_accounts_and_destroy(program_id, accounts)?;
 
             Ok(())
         },
