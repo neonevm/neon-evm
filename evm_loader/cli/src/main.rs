@@ -13,6 +13,7 @@ use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
+    payment::COLLATERAL_SEED_PREFIX
 };
 
 use evm::{executor::StackExecutor, ExitReason};
@@ -29,7 +30,7 @@ use solana_sdk::{
     transaction::Transaction,
     system_program,
     system_instruction,
-    sysvar::{clock},
+    sysvar::{clock, rent},
 };
 use serde_json::json;
 use std::{
@@ -41,7 +42,7 @@ use std::{
     sync::Arc,
     thread::sleep,
     time::{Duration},
-    convert::{TryFrom}
+    convert::{TryFrom, TryInto}
 };
 
 use clap::{
@@ -621,7 +622,7 @@ fn create_ethereum_contract_accounts_in_solana(
     Ok(())
 }
 
-fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
+fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let creator = &config.signer;
@@ -629,6 +630,15 @@ fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
     let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024_u64)?;
     debug!("storage = {}", storage);
     Ok(storage)
+}
+
+fn get_collateral_pool_account_and_index(config: &Config) -> Result<(Pubkey, u32), Error> {
+    let creator = &config.signer;
+    let collateral_pool_index = 2;
+    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);    
+    let collateral_pool_account = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &seed, 0)?;
+
+    Ok((collateral_pool_account, collateral_pool_index))
 }
 
 fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
@@ -670,12 +680,13 @@ fn create_account_with_seed(
 
     if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Account not found");
+        let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(len.try_into().unwrap())?;
         let create_acc_instruction = system_instruction::create_account_with_seed(
             funding,
             &created_account,
             base,
             seed,
-            10_u64.pow(9),
+            minimum_balance_for_account,
             len,
             &config.evm_loader
         );
@@ -752,28 +763,52 @@ fn command_deploy(
     fill_holder_account(config, &holder, &msg)?;
 
     // Create storage account if not exists
-    let storage = create_ctorage_accoiunt(config)?;
+    let storage = create_storage_account(config)?;
+
+    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config)?;
 
     let accounts = vec![AccountMeta::new(holder, false),
                         AccountMeta::new(storage, false),
+
+                        AccountMeta::new(creator.pubkey(), true),
+                        AccountMeta::new(collateral_pool_acc, false),
+                        AccountMeta::new(clock::id(), false),
+                        AccountMeta::new(clock::id(), false),
+                        AccountMeta::new(system_program::id(), false),
+
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_code, false),
                         AccountMeta::new(caller_sol, false),
                         AccountMeta::new_readonly(config.evm_loader, false),
+                        AccountMeta::new(rent::id(), false),
                         AccountMeta::new(clock::id(), false),
                         ];
 
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, 0_u64), accounts.clone());
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
         send_transaction(config, &[trx_from_account_data_instruction])?;
     }
 
     // Continue while no result
     loop {
         debug!("continue");
-        let continue_accounts = accounts[1..].to_vec();
+        let continue_accounts = vec![
+                            AccountMeta::new(storage, false),
+    
+                            AccountMeta::new(creator.pubkey(), true),
+                            AccountMeta::new(clock::id(), false),
+                            AccountMeta::new(clock::id(), false),
+                            AccountMeta::new(system_program::id(), false),
+    
+                            AccountMeta::new(program_id, false),
+                            AccountMeta::new(program_code, false),
+                            AccountMeta::new(caller_sol, false),
+                            AccountMeta::new_readonly(config.evm_loader, false),
+                            AccountMeta::new(rent::id(), false),
+                            AccountMeta::new(clock::id(), false),
+                            ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
