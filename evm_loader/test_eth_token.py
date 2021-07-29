@@ -49,40 +49,71 @@ class EthTokenTest(unittest.TestCase):
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
 
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            keys=[
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_10_continue(self, storage_account, step_count):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -91,7 +122,7 @@ class EthTokenTest(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
         trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 

@@ -83,13 +83,11 @@ class EventTest(unittest.TestCase):
     def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0B") + step_count.to_bytes(8, byteorder='little'),
+            data=bytearray.fromhex("0B") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
-                # System instructions account:
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
@@ -208,12 +206,11 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
 
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
-    def create_storage_account(self, seed):
+    def create_account_with_seed(self, seed):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
 
         if getBalance(storage) == 0:
@@ -270,7 +267,6 @@ class EventTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
-
     def call_with_holder_account(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
             'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
@@ -297,7 +293,6 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     return result
-
 
     def test_callFoo(self):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
@@ -390,7 +385,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
-
 
     def test_create2_opcode(self):
         if http_client.get_balance(self.reId_create_receiver_code_account, commitment='recent')['result']['value'] == 0:
