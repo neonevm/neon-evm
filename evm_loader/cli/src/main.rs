@@ -589,7 +589,7 @@ fn get_ether_account_nonce(
     let data : Vec<u8>;
     match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) =>   data = acc.data,
-        None => panic!("AccountNotFound: pubkey={}", caller_sol)
+        None => return Ok(u64::default())
     }
 
     let trx_count : u64;
