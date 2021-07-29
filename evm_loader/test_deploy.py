@@ -87,6 +87,10 @@ class DeployTest(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
+        cls.collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+
     def executeTrxFromAccountData(self):
         # Create transaction holder account (if not exists)
         seed = "1236"
@@ -176,30 +180,53 @@ class DeployTest(unittest.TestCase):
 
 
     def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0b") + step_count.to_bytes(8, byteorder='little'),
-                                   # data=bytearray.fromhex("0b"),
-                                   keys=[
-                                       AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0b") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_10_continue(self, storage_account, step_count, contract_sol, code_sol):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+            ])
 
 
     def create_storage_account(self, seed):

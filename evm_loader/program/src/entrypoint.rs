@@ -195,25 +195,46 @@ fn process_instruction<'a>(
 
             do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), u64::MAX)
         },
-        EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
+        EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
 
-            let accounts = &accounts[1..];
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
+            let accounts = &accounts[7..];
+
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
+            let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
+
+            payment::check_collateral_account(
+                program_id,
+                // WARNING Only for tests when base is random
+                operator_sol_info,
+                collateral_pool_sol_info,
+                collateral_pool_index as usize)?;
+            payment::transfer_from_operator_to_collateral_pool(
+                operator_sol_info,
+                collateral_pool_sol_info,
+                system_info)?;
+            payment::transfer_from_operator_to_deposit(
+                operator_sol_info,
+                storage_info,
+                system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
@@ -226,6 +247,7 @@ fn process_instruction<'a>(
             storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
+            debug_print!("Execute from raw ethereum transaction");
             // Get six accounts needed for payments (note slice accounts[6..] later)
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -268,31 +290,60 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+            debug_print!("Execute from raw ethereum transaction iterative");
             let storage_info = next_account_info(account_info_iter)?;
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
+
             let sysvar_info = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
+
+            let accounts = &accounts[7..];
 
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
-            let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
+            let account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
             check_ethereum_authority(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
+            payment::check_collateral_account(
+                program_id,
+                // WARNING Only for tests when base is random
+                operator_sol_info,
+                collateral_pool_sol_info,
+                collateral_pool_index as usize)?;
+            payment::transfer_from_operator_to_collateral_pool(
+                operator_sol_info,
+                collateral_pool_sol_info,
+                system_info)?;
+            payment::transfer_from_operator_to_deposit(
+                operator_sol_info,
+                storage_info,
+                system_info)?;
+
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx_gas_limit)?;
+            do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
 
             storage.block_accounts(program_id, accounts)
         },
         EvmInstruction::Continue {step_count} => {
+            debug_print!("Continue");
             let storage_info = next_account_info(account_info_iter)?;
+
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
+
+            let accounts = &accounts[5..];
 
             let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
@@ -300,10 +351,14 @@ fn process_instruction<'a>(
             })?;
             storage.check_accounts(program_id, accounts)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, &accounts[1..])?;
+            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts)?;
             if exit_reason != None {
+                payment::transfer_from_deposit_to_operator(
+                    storage_info,
+                    operator_sol_info,
+                    system_info)?;
                 storage.unblock_accounts_and_destroy(program_id, accounts)?;
             }
 
@@ -311,13 +366,21 @@ fn process_instruction<'a>(
         },
         EvmInstruction::Cancel => {
             let storage_info = next_account_info(account_info_iter)?;
+
+            let incinerator_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
+
             let _program_info = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let caller_info = next_account_info(account_info_iter)?;
             let _sysvar_info = next_account_info(account_info_iter)?;
 
+            let accounts = &accounts[5..];
+
             let storage = StorageAccount::restore(storage_info)?;
-            storage.check_accounts(program_id, accounts)?;
+            storage.check_accounts(program_id,  accounts)?;
 
             { // Increment nonce for caller on cancel
                 let mut caller_info_data = AccountData::unpack(&caller_info.data.borrow())?;
@@ -336,6 +399,11 @@ fn process_instruction<'a>(
                 };
                 caller_info_data.pack(&mut caller_info.data.borrow_mut())?;
             }
+
+            payment::burn_operators_deposit(
+                storage_info,
+                incinerator_info,
+                system_info)?;
 
             storage.unblock_accounts_and_destroy(program_id, accounts)?;
 
