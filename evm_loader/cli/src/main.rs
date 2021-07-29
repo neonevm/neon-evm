@@ -164,10 +164,29 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
 
-        let (result, exit_reason) = {
-            debug!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(data.clone().unwrap_or_default()));
-            executor.create_begin(account_storage.origin(), data.unwrap_or_default(), U256::zero(),u64::MAX)?;
-            executor.execute()
+        let (result, exit_reason) = match &contract_id {
+            Some(_) =>  {
+                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?})",
+                    account_storage.origin(),
+                    account_storage.contract(),
+                    &hex::encode(data.clone().unwrap_or_default()));
+                executor.call_begin(account_storage.origin(),
+                                    account_storage.contract(),
+                                    data.unwrap_or_default(),
+                                    U256::zero(),
+                                    u64::MAX)?;
+                executor.execute()
+            },
+            None => {
+                debug!("create_begin(storage.origin()={:?}, data={:?})",
+                    account_storage.origin(),
+                    &hex::encode(data.clone().unwrap_or_default()));
+                executor.create_begin(account_storage.origin(),
+                                      data.unwrap_or_default(),
+                                      U256::zero(),
+                                      u64::MAX)?;
+                executor.execute()
+            }
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
