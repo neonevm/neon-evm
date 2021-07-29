@@ -127,7 +127,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
             EmulatorAccountStorage::new(config, *program_id, caller_id)
         },
         None => {
-            let trx_count = get_ether_account_nonce(config, &Pubkey::from_str(&caller_id.to_string()).unwrap_or_default())?;
+            let solana_address = Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
+            let trx_count = get_ether_account_nonce(config, &solana_address)?;
             let program_id = get_program_ether(&caller_id, trx_count);
             debug!("program_id to deploy: {:?}", program_id);
             EmulatorAccountStorage::new(config, program_id, caller_id)
