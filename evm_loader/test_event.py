@@ -128,7 +128,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
                 # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
