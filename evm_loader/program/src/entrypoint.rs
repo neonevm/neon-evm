@@ -236,13 +236,9 @@ fn process_instruction<'a>(
 
             let mut storage = StorageAccount::new(storage_info, accounts, from_addr, trx.nonce)?;
 
-            payment::check_collateral_account(
-                program_id,
-                // WARNING Only for tests when base is random
-                operator_sol_info,
-                collateral_pool_sol_info,
-                collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(
+                program_id,
+                collateral_pool_index,
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
@@ -271,10 +267,6 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-
             let accounts = &accounts[6..];
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -285,13 +277,9 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
-            payment::check_collateral_account(
-                program_id,
-                // WARNING Only for tests when base is random
-                operator_sol_info,
-                collateral_pool_sol_info,
-                collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(
+                program_id,
+                collateral_pool_index,
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
@@ -329,13 +317,9 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
-            payment::check_collateral_account(
-                program_id,
-                // WARNING Only for tests when base is random
-                operator_sol_info,
-                collateral_pool_sol_info,
-                collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(
+                program_id,
+                collateral_pool_index,
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
