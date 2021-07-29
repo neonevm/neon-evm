@@ -121,45 +121,22 @@ impl Debug for Config {
 fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>) -> CommandResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
 
-    let account_storage = match &contract_id {
-        Some(contract_h160) =>  {
-            EmulatorAccountStorage::new(config, *contract_h160, caller_id)
+    let storage = match &contract_id {
+        Some(program_id) =>  {
+            debug!("program_id to call: {:?}", *program_id);
+            EmulatorAccountStorage::new(config, *program_id, caller_id)
         },
         None => {
-            let nonce = if let Some((acc, _)) = EmulatorAccountStorage::get_account_from_solana(config, &caller_id) {
-                let solana_address =  Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
-                let account_data = AccountData::unpack(&acc.data).unwrap();
-                let account_data = AccountData::get_account(&account_data).unwrap();
-
-                debug!("Ethereum address: 0x{}", &hex::encode(&caller_id.as_fixed_bytes()));
-                debug!("Solana address: {}", solana_address);
-
-                debug!("Account fields");
-                debug!("    ether: {}", &account_data.ether);
-                debug!("    nonce: {}", &account_data.nonce);
-                debug!("    trx_count: {}", &account_data.trx_count);
-                debug!("    code_account: {}", &account_data.code_account);
-                debug!("    blocked: {}", &account_data.blocked.is_some());
-
-                account_data.nonce
-            } else {
-                debug!("Account not found {}", &caller_id.to_string());
-                u8::default()
-            };
-            let program_id = {
-                let mut stream = rlp::RlpStream::new_list(2);
-                stream.append(&caller_id);
-                stream.append(&nonce);
-                keccak256_h256(&stream.out()).into()
-            };
-            debug!("program_id={:?}", program_id);
+            let trx_count = get_ether_account_nonce(config, &Pubkey::from_str(&caller_id.to_string()).unwrap_or_default())?;
+            let program_id = get_program_ether(&caller_id, trx_count);
+            debug!("program_id to deploy: {:?}", program_id);
             EmulatorAccountStorage::new(config, program_id, caller_id)
         }
     };
 
     let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
-        let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
+        let backend = SolanaBackend::new(&storage, Some(&accounts[..]));
         let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
@@ -167,11 +144,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let (result, exit_reason) = match &contract_id {
             Some(_) =>  {
                 debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?})",
-                    account_storage.origin(),
-                    account_storage.contract(),
+                    storage.origin(),
+                    storage.contract(),
                     &hex::encode(data.clone().unwrap_or_default()));
-                executor.call_begin(account_storage.origin(),
-                                    account_storage.contract(),
+                executor.call_begin(storage.origin(),
+                                    storage.contract(),
                                     data.unwrap_or_default(),
                                     U256::zero(),
                                     u64::MAX)?;
@@ -179,9 +156,9 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
             },
             None => {
                 debug!("create_begin(storage.origin()={:?}, data={:?})",
-                    account_storage.origin(),
+                    storage.origin(),
                     &hex::encode(data.clone().unwrap_or_default()));
-                executor.create_begin(account_storage.origin(),
+                executor.create_begin(storage.origin(),
                                       data.unwrap_or_default(),
                                       U256::zero(),
                                       u64::MAX)?;
@@ -208,7 +185,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
-            account_storage.apply(applies);
+            storage.apply(applies);
 
             debug!("Applies done");
             "succeed".to_string()
@@ -226,9 +203,9 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         debug!("Not succeed execution");
     }
 
-    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
+    let accounts: Vec<AccountJSON> = storage.get_used_accounts();
 
-    let solana_accounts: Vec<SolanaAccountJSON> = account_storage.solana_accounts
+    let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
         .borrow()
         .iter()
         .cloned()
@@ -629,6 +606,17 @@ fn get_ether_account_nonce(
     Ok(trx_count)
 }
 
+fn get_program_ether(
+    caller_ether: &H160,
+    trx_count: u64
+) -> H160 {
+    let trx_count_256 : U256 = U256::from(trx_count);
+    let mut stream = rlp::RlpStream::new_list(2);
+    stream.append(caller_ether);
+    stream.append(&trx_count_256);
+    keccak256_h256(&stream.out()).into()
+}
+
 fn get_ethereum_contract_account_credentials(
     config: &Config, 
     caller_ether: &H160,
@@ -637,13 +625,7 @@ fn get_ethereum_contract_account_credentials(
     let creator = &config.signer;
 
     let (program_id, program_ether, program_nonce) = {
-        let ether : H160 = {
-            let trx_count_256 : U256 = U256::from(trx_count);
-            let mut stream = rlp::RlpStream::new_list(2);
-            stream.append(caller_ether);
-            stream.append(&trx_count_256);
-            keccak256_h256(&stream.out()).into()
-        };
+        let ether = get_program_ether(caller_ether, trx_count);
         let seeds = [ether.as_bytes()];
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
         (address, ether, nonce)
