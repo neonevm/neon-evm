@@ -118,8 +118,8 @@ impl Debug for Config {
     }
 }
 
-fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>) {
-    eprintln!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
+fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>) -> CommandResult {
+    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
 
     let account_storage = match &contract_id {
         Some(contract_h160) =>  {
@@ -165,8 +165,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         debug!("Executor initialized");
 
         let (result, exit_reason) = {
-            eprintln!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(data.clone().unwrap_or_default()));
-            let _result = executor.create_begin(account_storage.origin(), data.unwrap_or_default(), U256::zero(),99_999_996);
+            debug!("create_begin(account_storage.origin()={:?}, data={:?})", account_storage.origin(), &hex::encode(data.clone().unwrap_or_default()));
+            executor.create_begin(account_storage.origin(), data.unwrap_or_default(), U256::zero(),u64::MAX)?;
             executor.execute()
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
@@ -225,6 +225,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     }).to_string();
 
     println!("{}", js);
+
+    Ok(())
 }
 
 fn command_create_program_address (
@@ -1253,9 +1255,7 @@ fn main() {
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
 
-                command_emulate(&config, contract, sender, data);
-
-                Ok(())
+                command_emulate(&config, contract, sender, data)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let seed = arg_matches.value_of("seed").unwrap().to_string();
