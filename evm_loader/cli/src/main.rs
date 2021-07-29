@@ -592,6 +592,7 @@ fn get_ether_account_nonce(
     }
 
     let trx_count : u64;
+    debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
