@@ -382,7 +382,7 @@ fn process_instruction<'a>(
         EvmInstruction::Cancel => {
             let storage_info = next_account_info(account_info_iter)?;
 
-            let operator_sol_info = next_account_info(account_info_iter)?;
+            let incinerator_info = next_account_info(account_info_iter)?;
             let _user_eth_info = next_account_info(account_info_iter)?;
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
@@ -417,9 +417,9 @@ fn process_instruction<'a>(
                 caller_info_data.pack(&mut caller_info.data.borrow_mut())?;
             }
 
-            payment::transfer_from_deposit_to_operator(
+            payment::burn_operators_deposit(
                 storage_info,
-                operator_sol_info,
+                incinerator_info,
                 system_info)?;
 
             storage.unblock_accounts_and_destroy(program_id, accounts)?;

@@ -2,10 +2,11 @@
 
 use solana_program::{
     account_info::AccountInfo,
+    pubkey::Pubkey,
     entrypoint::ProgramResult,
+    incinerator,
     program::invoke,
     program_error::ProgramError,
-    pubkey::Pubkey,
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
@@ -93,12 +94,12 @@ pub fn transfer_from_operator_to_deposit<'a>(
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
 
     let rent_via_sysvar = Rent::get()?;
-    if rent_via_sysvar.lamports_per_byte_year * deposit_sol_info.data.borrow().len() as u64 > deposit_sol_info.lamports() {
+    if rent_via_sysvar.lamports_per_byte_year * deposit_sol_info.data.borrow().len() as u64 * 2_u64 > deposit_sol_info.lamports() {
         debug_print!("deposit account insufficient funds");
         debug_print!("lamports_per_byte_year {}", rent_via_sysvar.lamports_per_byte_year);
-        debug_print!("deposit_sol_info.data.len() {}",  deposit_sol_info.data.borrow().len());
+        debug_print!("deposit_sol_info.data.len() {}", deposit_sol_info.data.borrow().len());
         debug_print!("deposit_sol_info.lamports() {}", deposit_sol_info.lamports());
-        return Err(ProgramError::InsufficientFunds)
+        return Err(ProgramError::AccountNotRentExempt)
     }
 
     transfer(operator_sol_info, deposit_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
@@ -113,21 +114,40 @@ pub fn transfer_from_operator_to_deposit<'a>(
 pub fn transfer_from_deposit_to_operator<'a>(
     deposit_sol_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
-    _system_info: &'a AccountInfo<'a>
+    system_info: &'a AccountInfo<'a>
 ) -> ProgramResult {
     debug_print!("deposit_to_operator");
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
     debug_print!("operator_sol_info {:?}", operator_sol_info);
 
-    if deposit_sol_info.lamports() < PAYMENT_TO_DEPOSIT {
-        return Err(ProgramError::InsufficientFunds)
-    }
-
-    **deposit_sol_info.lamports.borrow_mut() = deposit_sol_info.lamports() - PAYMENT_TO_DEPOSIT;
-    **operator_sol_info.lamports.borrow_mut() = operator_sol_info.lamports() + PAYMENT_TO_DEPOSIT;
+    transfer(deposit_sol_info, operator_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
 
     Ok(())
 }
+
+
+/// Burns deposit
+/// # Errors
+///
+/// Will return error only if `transfer` fail
+pub fn burn_operators_deposit<'a>(
+    deposit_sol_info: &'a AccountInfo<'a>,
+    incinerator_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>
+) -> ProgramResult {
+    if !incinerator::check_id(incinerator_info.key) {
+        return Err(ProgramError::InvalidAccountData)
+    }
+
+    debug_print!("deposit_to_operator");
+    debug_print!("deposit_sol_info {:?}", deposit_sol_info);
+    debug_print!("incinerator {:?}", incinerator_info);
+
+    transfer(deposit_sol_info, incinerator_info, system_info, PAYMENT_TO_DEPOSIT)?;
+
+    Ok(())
+}
+
 
 fn transfer<'a>(
     from_account_info: &'a AccountInfo<'a>,
@@ -135,13 +155,22 @@ fn transfer<'a>(
     system_info: &'a AccountInfo<'a>,
     amount: u64
 ) -> ProgramResult {
-    let transfer = system_instruction::transfer(from_account_info.key,
-                                                to_account_info.key,
-                                                amount);
-    let accounts = [(*from_account_info).clone(),
-        (*to_account_info).clone(),
-        (*system_info).clone()];
-    invoke(&transfer, &accounts)?;
+    if from_account_info.owner == system_info.key {
+        let transfer = system_instruction::transfer(from_account_info.key,
+                                                    to_account_info.key,
+                                                    amount);
+        let accounts = [from_account_info.clone(),
+            to_account_info.clone(),
+            system_info.clone()];
+        invoke(&transfer, &accounts)?;
+    } else {
+        if from_account_info.lamports() < PAYMENT_TO_DEPOSIT {
+            return Err(ProgramError::InsufficientFunds)
+        }
+
+        **from_account_info.lamports.borrow_mut() = from_account_info.lamports() - PAYMENT_TO_DEPOSIT;
+        **to_account_info.lamports.borrow_mut() = to_account_info.lamports() + PAYMENT_TO_DEPOSIT;
+    }
 
     Ok(())
 }
