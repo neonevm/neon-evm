@@ -96,6 +96,7 @@ use evm_loader::{
     executor::Machine,
     solana_backend::AccountStorage,
 };
+use spl_token::instruction::is_valid_signer_index;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -173,8 +174,9 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
-        debug!("used_gas={:?}", used_gas);
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
+        let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
@@ -1108,6 +1110,15 @@ fn main() {
                         .required(false)
                         .validator(is_valid_hexdata)
                         .help("Transaction data")
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .value_name("VALUE")
+                        .takes_value(true)
+                        .index(4)
+                        .required(false)
+                        .validator(is_valid_signer_index)
+                        .help("Transaction value")
                 )
         )
         .subcommand(
