@@ -44,7 +44,7 @@ use std::{
     time::{Duration},
     convert::{TryFrom},
     fmt,
-    fmt::{Debug},
+    fmt::{Debug, Display,},
 };
 
 use clap::{
@@ -59,7 +59,7 @@ use solana_program::{
 
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of,},
-    input_validators::{is_amount, is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
+    input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
     keypair::{signer_from_path, keypair_from_path},
 };
 
@@ -118,8 +118,13 @@ impl Debug for Config {
     }
 }
 
-fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, transfer_value: U256) -> CommandResult {
-    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
+fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, value: Option<U256>) -> CommandResult {
+    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
+        config,
+        contract_id,
+        caller_id,
+        &hex::encode(data.clone().unwrap_or_default()),
+        value);
 
     let storage = match &contract_id {
         Some(program_id) =>  {
@@ -155,7 +160,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                 executor.call_begin(storage.origin(),
                                     storage.contract(),
                                     data.unwrap_or_default(),
-                                    transfer_value,
+                                    value.unwrap_or_default(),
                                     gas_limit)?;
                 executor.execute()
             },
@@ -165,7 +170,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                     &hex::encode(data.clone().unwrap_or_default()));
                 executor.create_begin(storage.origin(),
                                       data.unwrap_or_default(),
-                                      transfer_value,
+                                      value.unwrap_or_default(),
                                       gas_limit)?;
                 executor.execute()
             }
@@ -1009,6 +1014,20 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
+fn is_amount_u256<T>(amount: T) -> Result<(), String>
+    where
+        T: AsRef<str> + Display,
+{
+    if amount.as_ref().parse::<U256>().is_ok() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unable to parse input amount as integer U256, provided: {}",
+            amount
+        ))
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let app_matches = App::new(crate_name!())
@@ -1116,7 +1135,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_amount)
+                        .validator(is_amount_u256)
                         .help("Transaction value")
                 )
         )
@@ -1271,7 +1290,7 @@ fn main() {
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
-                let value = value_of(arg_matches, "value").unwrap();
+                let value = value_of(arg_matches, "value");
 
                 command_emulate(&config, contract, sender, data, value)
             }
