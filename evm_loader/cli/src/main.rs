@@ -58,8 +58,8 @@ use solana_program::{
 };
 
 use solana_clap_utils::{
-    input_parsers::pubkey_of,
-    input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
+    input_parsers::{pubkey_of, value_of,},
+    input_validators::{is_amount, is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
     keypair::{signer_from_path, keypair_from_path},
 };
 
@@ -96,7 +96,6 @@ use evm_loader::{
     executor::Machine,
     solana_backend::AccountStorage,
 };
-use solana_clap_utils::input_validators::is_amount;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -119,7 +118,7 @@ impl Debug for Config {
     }
 }
 
-fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>) -> CommandResult {
+fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, transfer_value: U256) -> CommandResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?})", config, contract_id, caller_id, &hex::encode(data.clone().unwrap_or_default()));
 
     let storage = match &contract_id {
@@ -156,7 +155,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                 executor.call_begin(storage.origin(),
                                     storage.contract(),
                                     data.unwrap_or_default(),
-                                    U256::zero(),
+                                    transfer_value,
                                     gas_limit)?;
                 executor.execute()
             },
@@ -166,7 +165,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                     &hex::encode(data.clone().unwrap_or_default()));
                 executor.create_begin(storage.origin(),
                                       data.unwrap_or_default(),
-                                      U256::zero(),
+                                      transfer_value,
                                       gas_limit)?;
                 executor.execute()
             }
@@ -1272,8 +1271,9 @@ fn main() {
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
+                let value = value_of(arg_matches, "value").unwrap();
 
-                command_emulate(&config, contract, sender, data)
+                command_emulate(&config, contract, sender, data, value)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let seed = arg_matches.value_of("seed").unwrap().to_string();
