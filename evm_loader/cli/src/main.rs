@@ -96,7 +96,7 @@ use evm_loader::{
     executor::Machine,
     solana_backend::AccountStorage,
 };
-use spl_token::instruction::is_valid_signer_index;
+use solana_clap_utils::input_validators::is_amount;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -1117,7 +1117,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_valid_signer_index)
+                        .validator(is_amount)
                         .help("Transaction value")
                 )
         )
