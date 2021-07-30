@@ -153,10 +153,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         let (result, exit_reason) = match &contract_id {
             Some(_) =>  {
-                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?})",
+                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?}, value={:?})",
                     storage.origin(),
                     storage.contract(),
-                    &hex::encode(data.clone().unwrap_or_default()));
+                    &hex::encode(data.clone().unwrap_or_default()),
+                    value);
                 executor.call_begin(storage.origin(),
                                     storage.contract(),
                                     data.unwrap_or_default(),
@@ -165,9 +166,10 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                 executor.execute()
             },
             None => {
-                debug!("create_begin(storage.origin()={:?}, data={:?})",
+                debug!("create_begin(storage.origin()={:?}, data={:?}, value={:?})",
                     storage.origin(),
-                    &hex::encode(data.clone().unwrap_or_default()));
+                    &hex::encode(data.clone().unwrap_or_default()),
+                    value);
                 executor.create_begin(storage.origin(),
                                       data.unwrap_or_default(),
                                       value.unwrap_or_default(),
