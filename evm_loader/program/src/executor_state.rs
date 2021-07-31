@@ -62,7 +62,7 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
@@ -547,7 +547,7 @@ impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
     }
 
     fn create(&self, scheme: &evm::CreateScheme, address: &H160) {
-        self.backend.create(scheme, address)
+        self.backend.create(scheme, address);
     }
 
     fn call_inner(&self, // todo remove
@@ -581,7 +581,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 
     fn enter(&mut self, gas_limit: u64, is_static: bool) {
-        self.substate.enter(gas_limit, is_static)
+        self.substate.enter(gas_limit, is_static);
     }
 
     fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -615,7 +615,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 
     fn set_storage(&mut self, address: H160, key: U256, value: U256) {
-        self.substate.set_storage(address, key, value)
+        self.substate.set_storage(address, key, value);
     }
 
     fn reset_storage(&mut self, address: H160) {
@@ -635,11 +635,11 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 
     fn set_deleted(&mut self, address: H160) {
-        self.substate.set_deleted(address)
+        self.substate.set_deleted(address);
     }
 
     fn set_code(&mut self, address: H160, code: Vec<u8>) {
-        self.substate.set_code(address, code, &self.backend)
+        self.substate.set_code(address, code, &self.backend);
     }
 
     fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
@@ -658,11 +658,11 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 
     fn reset_balance(&mut self, address: H160) {
-        self.substate.reset_balance(address, &self.backend)
+        self.substate.reset_balance(address, &self.backend);
     }
 
     fn touch(&mut self, address: H160) {
-        self.substate.touch(address, &self.backend)
+        self.substate.touch(address, &self.backend);
     }
 }
 
