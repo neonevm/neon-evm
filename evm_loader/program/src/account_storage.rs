@@ -4,7 +4,7 @@ use crate::{
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
     utils::keccak256_h256,
-    token::{get_token_account_balance, token_mint, check_token_account, eth_decimals},
+    token::{get_token_account_balance, check_token_account, transfer_token},
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -20,7 +20,6 @@ use solana_program::{
 use std::{
     cell::RefCell,
 };
-use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -323,30 +322,18 @@ impl<'a> ProgramAccountStorage<'a> {
             let source_account_index = self.find_account(&transfer.source).ok_or(ProgramError::NotEnoughAccountKeys)?;
             let AccountMeta{ account: source_account, token: source_token_account, code: _ } = &self.account_metas[source_account_index];
             let source_solidity_account = &self.accounts[source_account_index];
-            
+
             let target_account_index = self.find_account(&transfer.target).ok_or(ProgramError::NotEnoughAccountKeys)?;
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
-            
-            let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-            let min_value = U256::from(10_u64.pow(min_decimals));
-            let value = transfer.value / min_value;
-            let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-            let instruction = spl_token::instruction::transfer_checked(
-                &spl_token::id(),
-                source_token_account.key,
-                &token_mint::id(),
-                target_token_account.key,
-                source_account.key,
-                &[],
-                value,
-                token_mint::decimals(),
+            transfer_token(
+                accounts,
+                source_token_account,
+                target_token_account,
+                source_account,
+                source_solidity_account,
+                &transfer.value,
             )?;
-
-            let (ether, nonce) = source_solidity_account.get_seeds();
-            invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
         }
 
         debug_print!("apply_transfers done");
