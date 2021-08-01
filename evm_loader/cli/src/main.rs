@@ -803,6 +803,7 @@ fn command_deploy(
                         AccountMeta::new(program_code, false),
                         AccountMeta::new(caller_sol, false),
                         AccountMeta::new(caller_token, false),
+
                         AccountMeta::new_readonly(config.evm_loader, false),
                         AccountMeta::new(rent::id(), false),
                         AccountMeta::new(clock::id(), false),
@@ -827,8 +828,11 @@ fn command_deploy(
                             AccountMeta::new(system_program::id(), false),
     
                             AccountMeta::new(program_id, false),
+                            AccountMeta::new(program_token, false),
                             AccountMeta::new(program_code, false),
                             AccountMeta::new(caller_sol, false),
+                            AccountMeta::new(caller_token, false),
+
                             AccountMeta::new_readonly(config.evm_loader, false),
                             AccountMeta::new(rent::id(), false),
                             AccountMeta::new(clock::id(), false),

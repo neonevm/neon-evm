@@ -564,9 +564,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
             v[12] ^= t[0];
             v[13] ^= t[1];
-        
+
             if f {
-                v[14] = !v[14] // Invert all bits if the last-block-flag is set.
+                v[14] = !v[14]; // Invert all bits if the last-block-flag is set.
             }
             for i in 0..rounds {
                 // Message word selection permutation for this round.
