@@ -116,6 +116,8 @@ pub fn transfer_token(
     let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    debug_print!("Token {} balance {}", source_token_account.key, get_token_account_balance(source_token_account)?);
+    debug_print!("Token {} balance {}", target_token_account.key, get_token_account_balance(target_token_account)?);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),

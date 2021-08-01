@@ -31,7 +31,7 @@ use crate::{
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
-    token::{token_mint, create_associated_token_account},
+    token::{token_mint, create_associated_token_account, transfer_token},
     payment,
 };
 
@@ -208,7 +208,9 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)
+            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+
+            Ok(())
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
@@ -263,10 +265,17 @@ fn process_instruction<'a>(
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            let _program_info = next_account_info(account_info_iter)?;
+            let _program_token = next_account_info(account_info_iter)?;
+            let _program_code = next_account_info(account_info_iter)?;
+            let caller_info = next_account_info(account_info_iter)?;
+            let _caller_token = next_account_info(account_info_iter)?;
+
+            let token_transfer_accounts = accounts;
             let accounts = &accounts[6..];
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -283,9 +292,24 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
+            // payment::pay_to_operator(
+            //     user_eth_info,
+            //     operator_eth_info,
+            // );
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)
+            let used_gas = do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
+
+            let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
+            transfer_token(
+                token_transfer_accounts,
+                user_eth_info,
+                operator_eth_info,
+                caller_info,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                &fee)?;
+
+            Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -527,7 +551,7 @@ fn do_call<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> ProgramResult
+) -> Result<u64, ProgramError>
 {
     debug_print!("do_call");
 
@@ -576,7 +600,8 @@ fn do_call<'a>(
     }
 
     invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
-    Ok(())
+
+    Ok(used_gas)
 }
 
 fn do_partial_call<'a>(
