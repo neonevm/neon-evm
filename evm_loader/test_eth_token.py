@@ -22,6 +22,7 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_event.py setUpClass")
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -57,7 +58,7 @@ class EthTokenTest(unittest.TestCase):
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
