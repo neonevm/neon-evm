@@ -258,8 +258,7 @@ class EventTest(unittest.TestCase):
 
         while (True):
             print("Continue")
-            trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 400, contract, code))
+            trx = Transaction().add(self.sol_instr_10_continue(storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):

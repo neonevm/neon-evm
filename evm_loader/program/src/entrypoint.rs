@@ -20,19 +20,19 @@ use solana_program::{
 };
 
 use crate::{
-//    bump_allocator::BumpAllocator,
-    instruction::{EvmInstruction, on_return, on_event},
-    account_data::{AccountData, Account, Contract},
+    //    bump_allocator::BumpAllocator,
+    account_data::{Account, AccountData, Contract},
     account_storage::{ProgramAccountStorage, Sender},
-    solana_backend::{SolanaBackend, AccountStorage},
-    solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
-    executor::{ Machine },
-    executor_state::{ ExecutorState, ExecutorSubstate },
-    storage_account::{ StorageAccount },
     error::EvmLoaderError,
-    token::{token_mint, create_associated_token_account, transfer_token},
+    executor::Machine,
+    executor_state::{ExecutorState, ExecutorSubstate},
+    instruction::{EvmInstruction, on_event, on_return},
     payment,
+    solana_backend::{AccountStorage, SolanaBackend},
+    solidity_account::SolidityAccount,
+    storage_account::StorageAccount,
+    transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
+    token::{token_mint, create_associated_token_account},
 };
 
 const HEAP_LENGTH: usize = 1024*1024;
