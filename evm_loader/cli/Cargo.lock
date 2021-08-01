@@ -964,6 +964,8 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "solana-program",
+ "spl-associated-token-account",
+ "spl-token",
  "tbn",
  "thiserror",
 ]
@@ -1935,6 +1937,8 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
+ "spl-associated-token-account",
+ "spl-token",
  "stderrlog",
 ]
 
