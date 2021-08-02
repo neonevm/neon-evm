@@ -38,7 +38,7 @@ class EthTokenTest(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
 
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 500, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -224,7 +224,7 @@ class EthTokenTest(unittest.TestCase):
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        self.token.transfer(ETH_TOKEN_MINT_ID, 100, contract_token)
+        self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)

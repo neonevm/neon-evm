@@ -11,7 +11,7 @@ for i in {1..10}; do
     sleep 2
 done
 
-solana airdrop 1000
+solana airdrop 2000
 solana account $ACCOUNT
 
 echo "Run tests for EVM Loader"
@@ -27,7 +27,7 @@ if [ ${#ETH_TOKEN_MINT} -eq 0 ]; then
 fi
 
 TOKEN_ACCOUNT=$(spl-token --config test_token_config.yml create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
-spl-token --config test_token_config.yml mint $ETH_TOKEN_MINT 1000 -- $TOKEN_ACCOUNT
+spl-token --config test_token_config.yml mint $ETH_TOKEN_MINT 2000 -- $TOKEN_ACCOUNT
 spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT
 
 # Parse deployed contract address from output of solana-cli:
