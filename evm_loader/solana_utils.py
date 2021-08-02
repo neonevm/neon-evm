@@ -201,7 +201,7 @@ class NeonEvmClient:
                 self.evm_loader.createEtherAccount(ethereum_transaction.ether_caller)
             self.token.transfer(
                 ETH_TOKEN_MINT_ID, 
-                500, 
+                2000, 
                 get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
                 )
         print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
