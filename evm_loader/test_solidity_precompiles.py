@@ -57,7 +57,7 @@ class PrecompilesTests(unittest.TestCase):
             cls.test_data = json.load(json_data)
 
     def send_transaction(self, data):
-        if len(data) > 600:
+        if len(data) > 512:
             result = self.call_with_holder_account(data)
             return b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
         else:

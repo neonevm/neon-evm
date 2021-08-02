@@ -32,7 +32,7 @@ use crate::{
     solidity_account::SolidityAccount,
     storage_account::StorageAccount,
     transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
-    token::{token_mint, create_associated_token_account},
+    token::{token_mint, create_associated_token_account, transfer_token},
 };
 
 const HEAP_LENGTH: usize = 1024*1024;
