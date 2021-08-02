@@ -283,11 +283,11 @@ impl<'a> ProgramAccountStorage<'a> {
                         let AccountMeta{ account: caller_info, token: _, code: _ } = &self.account_metas[caller_account_index];
 
                         debug_print!("Move funds from account");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + account_info.lamports();
+                        **caller_info.lamports.borrow_mut() += account_info.lamports();
                         **account_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Move funds from code");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + code_info.lamports();
+                        **caller_info.lamports.borrow_mut() += code_info.lamports();
                         **code_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Mark accounts empty");

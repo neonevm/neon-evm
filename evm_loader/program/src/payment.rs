@@ -176,8 +176,8 @@ fn transfer<'a>(
             return Err(ProgramError::InsufficientFunds)
         }
 
-        **from_account_info.lamports.borrow_mut() = from_account_info.lamports() - PAYMENT_TO_DEPOSIT;
-        **to_account_info.lamports.borrow_mut() = to_account_info.lamports() + PAYMENT_TO_DEPOSIT;
+        **from_account_info.lamports.borrow_mut() -= PAYMENT_TO_DEPOSIT;
+        **to_account_info.lamports.borrow_mut() += PAYMENT_TO_DEPOSIT;
     }
 
     Ok(())

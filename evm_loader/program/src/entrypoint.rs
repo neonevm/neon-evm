@@ -292,15 +292,8 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 collateral_pool_sol_info,
                 system_info)?;
-            // payment::pay_to_operator(
-            //     user_eth_info,
-            //     operator_eth_info,
-            // );
 
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let used_gas = do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
-
-            let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
+            let fee = U256::from(1000_u64) * trx.gas_price * U256::from(1_000_000_000_u64);
             transfer_token(
                 token_transfer_accounts,
                 user_eth_info,
@@ -308,6 +301,9 @@ fn process_instruction<'a>(
                 caller_info,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &fee)?;
+
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let _used_gas = do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
             Ok(())
         },
