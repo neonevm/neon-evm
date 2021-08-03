@@ -1,3 +1,4 @@
+from  time import sleep
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
@@ -323,6 +324,7 @@ def deploy_contracts(args):
 
 def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
 
+    sleep(0.01)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + payer_eth) + \
@@ -656,7 +658,7 @@ def verify_trx(args):
                     if check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12'):
                         success = True
                     else:
-                        # print(res['result'])
+                        print(res['result'])
                         event_error = event_error + 1
             else:
                 print(res["result"])
