@@ -135,6 +135,7 @@ class EmulateTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             cls.loader.createEtherAccount(cls.ethereum_caller)
+            cls.spl_token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))

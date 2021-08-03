@@ -23,6 +23,7 @@ class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_event.py setUpClass")
+
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -36,7 +37,7 @@ class EthTokenTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
 
