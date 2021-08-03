@@ -18,7 +18,7 @@ docker-compose -f evm_loader/docker-compose-test.yml up -d
 function cleanup_docker {
     docker logs solana >solana.log 2>&1
     echo "Cleanup docker-compose..."
-    docker-compose -f evm_loader/docker-compose-test.yml down
+    docker-compose -f evm_loader/docker-compose-test.yml down --rmi 'all'
     echo "Cleanup docker-compose done."
 }
 trap cleanup_docker EXIT
