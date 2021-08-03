@@ -65,7 +65,7 @@ class PrecompilesTests(unittest.TestCase):
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            return b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])[8+2:].hex()
+            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
     def extract_measurements_from_receipt(self, receipt):
         log_messages = receipt['result']['meta']['logMessages']

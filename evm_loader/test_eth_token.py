@@ -173,7 +173,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(self.caller_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**9))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -189,7 +189,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(contract_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**9)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -205,10 +205,10 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
-        value = 10
-        
+        value = 10 * (10**9)
+
         func_name = abi.function_signature_to_4byte_selector('nop()')
-        result = self.call_partial_signed(func_name, value * (10**18))
+        result = self.call_partial_signed(func_name, value * (10**9))
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -229,10 +229,10 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
-        value = 5
-        
+        value = 5 * (10**9)
+
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % (value * (10**9)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
