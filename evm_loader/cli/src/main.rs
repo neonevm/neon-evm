@@ -146,7 +146,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         // u64::MAX is too large, remix gives this error:
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
-        let gas_limit = u64::MAX>>11;
+        let gas_limit = 50_000_000;
         let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
