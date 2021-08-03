@@ -70,7 +70,7 @@ class SplToken:
     def balance(self, acc):
         from decimal import Decimal
         res = self.call("balance --address {}".format(acc))
-        return int(Decimal(res.rstrip()) * 10**9)
+        return Decimal(res.rstrip())
 
     def mint(self, mint_id, recipient, amount, owner=None):
         if owner is None:
