@@ -68,8 +68,9 @@ class SplToken:
         self.call("transfer {} {} {}".format(mint, amount, recipient))
 
     def balance(self, acc):
+        from decimal import Decimal
         res = self.call("balance --address {}".format(acc))
-        return int(res.rstrip())
+        return int(Decimal(res.rstrip()) * 10**9)
 
     def mint(self, mint_id, recipient, amount, owner=None):
         if owner is None:
