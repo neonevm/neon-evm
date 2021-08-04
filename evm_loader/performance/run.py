@@ -1,4 +1,4 @@
-from  time import sleep
+from time import sleep
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
@@ -253,6 +253,7 @@ def deploy_contracts(args):
     receipt_list = []
 
     for i in range(args.count):
+        sleep(0.01)
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
