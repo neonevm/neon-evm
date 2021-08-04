@@ -253,7 +253,8 @@ def deploy_contracts(args):
     receipt_list = []
 
     for i in range(args.count):
-        sleep(0.01)
+
+        sleep(args.delay/1000)
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
@@ -325,7 +326,7 @@ def deploy_contracts(args):
 
 def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
 
-    sleep(0.01)
+    sleep(args.delay/1000)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + payer_eth) + \
@@ -710,6 +711,7 @@ parser.add_argument('--step', metavar="step of the test", type=str,  help='deplo
                                                                            'veryfy_trx')
 parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..')
+parser.add_argument('--delay', metavar="delay between transactions in milliseconds (only for deploy, create_acc steps)", type=int,  help='10, 20, ..', default=0)
 
 args = parser.parse_args()
 
