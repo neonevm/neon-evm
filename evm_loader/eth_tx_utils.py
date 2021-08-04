@@ -226,7 +226,7 @@ def make_keccak_instruction_data(check_instruction_index, msg_len, data_start=1)
 
 # tx_1 = {
 #     'to': '0x2ccb0f131443b797b46dd9690a7dec9e6eeee309',
-#     'value': 1,
+#     'value': 0,
 #     'gas': 1,
 #     'gasPrice': 1,
 #     'nonce': 0,

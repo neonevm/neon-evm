@@ -64,7 +64,7 @@ COPY --from=evm-loader-builder /opt/evm_loader/performance/sender/target/release
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
-COPY evm_loader/*.py evm_loader/deploy-test.sh /opt/
+COPY evm_loader/*.py evm_loader/deploy-test.sh evm_loader/test_token_keypair evm_loader/test_token_owner evm_loader/test_token_config.yml /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/

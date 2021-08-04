@@ -3,6 +3,8 @@ import base58
 import unittest
 from solana.rpc import types
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
 from eth_utils import abi
 from web3.auto import w3
 from solana_utils import *
@@ -13,6 +15,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
 
 
