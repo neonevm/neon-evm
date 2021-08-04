@@ -9,6 +9,7 @@ use evm::backend::{Apply, Backend, Basic, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
+use crate::token;
 
 
 
@@ -101,6 +102,7 @@ pub struct ExecutorSubstate<'config> {
     metadata: ExecutorMetadata<'config>,
     parent: Option<Box<ExecutorSubstate<'config>>>,
     logs: Vec<Log>,
+    transfers: Vec<Transfer>,
     accounts: BTreeMap<H160, ExecutorAccount>,
     storages: BTreeMap<(H160, U256), U256>,
     deletes: BTreeSet<H160>,
@@ -113,6 +115,7 @@ impl<'config> ExecutorSubstate<'config> {
             metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
             parent: None,
             logs: Vec::new(),
+            transfers: Vec::new(),
             accounts: BTreeMap::new(),
             storages: BTreeMap::new(),
             deletes: BTreeSet::new(),
@@ -130,10 +133,11 @@ impl<'config> ExecutorSubstate<'config> {
     /// Deconstruct the executor, return state to be applied. Panic if the
     /// executor is not in the top-level substate.
     #[must_use]
+    #[allow(clippy::type_complexity)]
     pub fn deconstruct<B: Backend>(
         mut self,
         backend: &B,
-    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>) {
+    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>) {
         assert!(self.parent.is_none());
 
         let mut applies = Vec::<Apply<BTreeMap<U256, U256>>>::new();
@@ -186,7 +190,7 @@ impl<'config> ExecutorSubstate<'config> {
             applies.push(Apply::Delete { address });
         }
 
-        (applies, self.logs)
+        (applies, self.logs, self.transfers)
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
@@ -194,6 +198,7 @@ impl<'config> ExecutorSubstate<'config> {
             metadata: self.metadata.spit_child(gas_limit, is_static),
             parent: None,
             logs: Vec::new(),
+            transfers: Vec::new(),
             accounts: BTreeMap::new(),
             storages: BTreeMap::new(),
             deletes: BTreeSet::new(),
@@ -209,6 +214,7 @@ impl<'config> ExecutorSubstate<'config> {
 
         self.metadata.swallow_commit(exited.metadata)?;
         self.logs.append(&mut exited.logs);
+        self.transfers.append(&mut exited.transfers);
 
         let mut resets = BTreeSet::new();
         for (address, account) in &exited.accounts {
@@ -430,6 +436,8 @@ impl<'config> ExecutorSubstate<'config> {
             target.basic.balance = target.basic.balance.saturating_add(transfer.value);
         }
 
+        self.transfers.push(*transfer);
+
         Ok(())
     }
 
@@ -635,6 +643,17 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 
     fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
+        debug_print!("executor transfer from={} to={} value={}", transfer.source, transfer.target, transfer.value);
+        if transfer.value.is_zero() {
+            return Ok(())
+        }
+
+        let min_decimals = u32::from(token::eth_decimals() - token::token_mint::decimals());
+        let min_value = U256::from(10_u64.pow(min_decimals));
+        if !(transfer.value % min_value).is_zero() {
+            return Err(ExitError::OutOfFund);
+        }
+
         self.substate.transfer(transfer, &self.backend)
     }
 
@@ -663,8 +682,8 @@ impl<'config, B: Backend> ExecutorState<'config, B> {
     #[allow(clippy::type_complexity)]
     pub fn deconstruct(
         self,
-    ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>)) {
-        let (applies, logs) = self.substate.deconstruct(&self.backend);
-        (self.backend, (applies, logs))
+    ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)) {
+        let (applies, logs, transfer) = self.substate.deconstruct(&self.backend);
+        (self.backend, (applies, logs, transfer))
     }
 }

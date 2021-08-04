@@ -19,11 +19,12 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_sysvar_info},
     executor::{ Machine },
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
+    token::{token_mint, create_associated_token_account},
 };
 use evm::{
     ExitReason, ExitFatal, ExitError, ExitSucceed,
@@ -110,6 +111,7 @@ fn process_instruction<'a>(
         EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
+            let token_account_info = next_account_info(account_info_iter)?;
 
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
@@ -131,7 +133,14 @@ fn process_instruction<'a>(
                 }
             };
 
-            let account_data = AccountData::Account( Account {ether, nonce, trx_count: 0_u64, code_account: code_account_key, blocked: None} );
+            let account_data = AccountData::Account(Account {
+                ether,
+                nonce,
+                trx_count: 0_u64,
+                code_account: code_account_key,
+                blocked: None,
+                eth_token_account: *token_account_info.key,
+            });
 
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
@@ -139,6 +148,12 @@ fn process_instruction<'a>(
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
+
+            invoke_signed(
+                &create_associated_token_account(funding_info.key, account_info.key, token_account_info.key, &token_mint::id()),
+                accounts, &[&program_seeds[..]]
+            )?;
+            debug_print!("create_associated_token_account done");
 
             account_data.pack(&mut account_info.data.borrow_mut())?;
 
@@ -191,7 +206,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), u64::MAX)
+            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{step_count} =>{
             debug_print!("Execute iterative transaction from account data");
@@ -215,20 +230,17 @@ fn process_instruction<'a>(
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
+                do_partial_call(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
             }
             else {
-                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx_gas_limit)?;
+                do_partial_create(&mut storage, step_count, &account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
             }
 
             storage.block_accounts(program_id, accounts)
         },
 
         EvmInstruction::CallFromRawEthereumTX  {from_addr, sign: _, unsigned_msg} => {
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let sysvar_info = find_sysvar_info(accounts)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
@@ -239,7 +251,7 @@ fn process_instruction<'a>(
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx_gas_limit)
+            do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
             Ok(())
@@ -249,10 +261,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign: _, unsigned_msg} => {
             let storage_info = next_account_info(account_info_iter)?;
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let _caller_info = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let sysvar_info = find_sysvar_info(accounts)?;
 
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -266,7 +275,7 @@ fn process_instruction<'a>(
                 &caller, trx.nonce, &trx.chain_id)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx_gas_limit)?;
+            do_partial_call(&mut storage, step_count, &account_storage, &accounts[1..], trx.call_data, trx.value, trx_gas_limit)?;
 
             storage.block_accounts(program_id, accounts)
         },
@@ -291,8 +300,10 @@ fn process_instruction<'a>(
         EvmInstruction::Cancel => {
             let storage_info = next_account_info(account_info_iter)?;
             let _program_info = next_account_info(account_info_iter)?;
+            let _program_token = next_account_info(account_info_iter)?;
             let _program_code = next_account_info(account_info_iter)?;
             let caller_info = next_account_info(account_info_iter)?;
+            let _caller_token = next_account_info(account_info_iter)?;
             let _sysvar_info = next_account_info(account_info_iter)?;
 
             let storage = StorageAccount::restore(storage_info)?;
@@ -378,7 +389,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-    let (exit_reason, used_gas, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs_transfers) = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -402,7 +413,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
-        executor.create_begin(account_storage.origin(), code_data, u64::MAX)?;
+        executor.create_begin(account_storage.origin(), code_data, U256::zero(), u64::MAX)?;
         let (result, exit_reason) = executor.execute();
         debug_print!("Call done");
 
@@ -410,14 +421,15 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs)))
+            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
         }
     };
 
-    if let Some((applies, logs)) = applies_logs {
+    if let Some((applies, logs, transfers)) = applies_logs_transfers {
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -434,6 +446,7 @@ fn do_call<'a>(
     account_storage: &mut ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    transfer_value: U256,
     gas_limit: u64,
 ) -> ProgramResult
 {
@@ -442,7 +455,7 @@ fn do_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let (exit_reason, used_gas, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs_transfers) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -455,6 +468,7 @@ fn do_call<'a>(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
+            transfer_value,
             gas_limit,
         )?;
 
@@ -466,14 +480,15 @@ fn do_call<'a>(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs)))
+            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
         }
     };
 
-    if let Some((applies, logs)) = applies_logs {
+    if let Some((applies, logs, transfers)) = applies_logs_transfers {
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {
@@ -491,6 +506,7 @@ fn do_partial_call<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    transfer_value: U256,
     gas_limit: u64,
 ) -> ProgramResult
 {
@@ -511,6 +527,7 @@ fn do_partial_call<'a>(
         account_storage.origin(),
         account_storage.contract(),
         instruction_data,
+        transfer_value,
         gas_limit,
     )?;
 
@@ -529,6 +546,7 @@ fn do_partial_create<'a>(
     account_storage: &ProgramAccountStorage,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
+    transfer_value: U256,
     gas_limit: u64,
 ) -> ProgramResult
 {
@@ -542,7 +560,7 @@ fn do_partial_create<'a>(
 
     debug_print!("Executor initialized");
 
-    executor.create_begin(account_storage.origin(), instruction_data, gas_limit)?;
+    executor.create_begin(account_storage.origin(), instruction_data, transfer_value, gas_limit)?;
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
@@ -562,7 +580,7 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let (exit_reason, used_gas, result, applies_logs) = {
+    let (exit_reason, used_gas, result, applies_logs_transfers) = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -584,14 +602,15 @@ fn do_continue<'a>(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs)) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs)))
+            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
         }
     };
 
-    if let Some((applies, logs)) = applies_logs {
+    if let Some((applies, logs, transfers)) = applies_logs_transfers {
+        account_storage.apply_transfers(accounts, transfers)?;
         account_storage.apply(applies, false)?;
         debug_print!("Applies done");
         for log in logs {

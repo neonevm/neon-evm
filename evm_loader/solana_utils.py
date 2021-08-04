@@ -20,6 +20,8 @@ from sha3 import keccak_256
 import rlp
 from enum import Enum
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
 import base58
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
@@ -34,9 +36,11 @@ tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
+rentid = "SysvarRent111111111111111111111111111111111"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
@@ -56,6 +60,9 @@ class SplToken:
             import sys
             print("ERR: spl-token error {}".format(err))
             raise
+
+    def transfer(self, mint, amount, recipient):
+        self.call("transfer {} {} {}".format(mint, amount, recipient))
 
     def balance(self, acc):
         res = self.call("balance --address {}".format(acc))
@@ -180,7 +187,7 @@ class NeonEvmClient:
         self.__create_solana_ether_caller(ethereum_transaction)
         caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
         trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
-                   'value': 1, 'gas': 9999999, 'gasPrice': 1, 'nonce': caller_trx_cnt,
+                   'value': 0, 'gas': 9999999, 'gasPrice': 1, 'nonce': caller_trx_cnt,
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
@@ -194,8 +201,10 @@ class NeonEvmClient:
         trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
         [
             AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction.contract_account), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
@@ -245,7 +254,7 @@ def accountWithSeed(base, seed, program):
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
-            instruction_type=SystemInstructionType.CreateAccountWithSeed,
+            instruction_type=SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
             args=dict(
                 base=bytes(base),
                 seed=dict(length=len(seed), chars=seed),
@@ -388,6 +397,7 @@ class EvmLoader:
             ether = ether.hex()
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+        associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
         trx = Transaction()
         base = self.acc.get_acc().public_key()
         trx.add(TransactionInstruction(
@@ -400,7 +410,12 @@ class EvmLoader:
             keys=[
                 AccountMeta(pubkey=base, is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc.get_acc())
         print('result:', result)
@@ -450,6 +465,7 @@ class EvmLoader:
         else:
             ether = ether.hex()
         (sol, nonce) = self.ether2program(ether)
+        token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         seed = b58encode(bytes.fromhex(ether))
         base = self.acc.get_acc().public_key()
@@ -466,7 +482,12 @@ class EvmLoader:
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
                     AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
                 ]))
         else:
             trx.add(TransactionInstruction(
@@ -475,8 +496,13 @@ class EvmLoader:
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
                     AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
                 ]))
         return (trx, sol)
 
@@ -498,6 +524,7 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "code_acc" / Bytes(32),
     "is_blocked" / Int8ul,
     "blocked_by" / Bytes(32),
+    "eth_token" / Bytes(32),
 )
 
 

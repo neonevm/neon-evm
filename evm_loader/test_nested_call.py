@@ -2,6 +2,7 @@ import unittest
 from base58 import b58decode
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, Trx
+from spl.token.instructions import get_associated_token_address
 from eth_utils import abi
 from web3.auto import w3
 from eth_keys import keys
@@ -12,6 +13,7 @@ solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
 
@@ -78,54 +80,99 @@ class EventTest(unittest.TestCase):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
+    def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count, contract, code):
+        return TransactionInstruction(program_id=self.loader.loader_id,
+                                   data=bytearray.fromhex("0B") + step_count.to_bytes(8, byteorder='little'),
+                                   keys=[
+                                       AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_recover), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_create_receiver), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                                   ])
+
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
         return TransactionInstruction(program_id=self.loader.loader_id,
                                    data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_recover), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_create_receiver), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, evm_instruction, contract, code):
+    def sol_instr_10_continue(self, storage_account, step_count, contract, code):
         return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_recover), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_create_receiver), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                    ])
-    def create_storage_account(self, seed):
+
+    def create_account_with_seed(self, seed):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
-        print("Storage", storage)
 
         if getBalance(storage) == 0:
             trx = Transaction()
@@ -134,28 +181,76 @@ class EventTest(unittest.TestCase):
 
         return storage
 
+    def write_transaction_to_holder_account(self, holder, signature, message):
+        message = signature + len(message).to_bytes(8, byteorder="little") + message
+
+        offset = 0
+        receipts = []
+        rest = message
+        while len(rest):
+            (part, rest) = (rest[:1000], rest[1000:])
+            trx = Transaction()
+            trx.add(TransactionInstruction(program_id=evm_loader_id,
+                data=(bytes.fromhex("00000000") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
+                keys=[
+                    AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
+                ]))
+            receipts.append(http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))["result"])
+            offset += len(part)
+
+        for rcpt in receipts:
+            confirm_transaction(http_client, rcpt)
+
     def call_partial_signed(self, input, contract, code):
-        tx = {'to': solana2ether(contract), 'value': 1, 'gas': 9999999, 'gasPrice': 1,
-            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
+        tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
+            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
         instruction = from_addr + sign + msg
 
-        storage = self.create_storage_account(sign[:8].hex())
+        storage = self.create_account_with_seed(sign[:8].hex())
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, 400, instruction, contract, code))
-        send_transaction(client, trx, self.acc)
+        trx.add(self.sol_instr_09_partial_call(storage, 0, instruction, contract, code))
+        send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-            trx.add(self.sol_instr_10_continue(storage, 400, instruction, contract, code))
-            result = send_transaction(client, trx, self.acc)["result"]
+            trx.add(self.sol_instr_10_continue(storage, 400, contract, code))
+            result = send_transaction(http_client, trx, self.acc)["result"]
 
+            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if (data[0] == 6):
+                    return result
+
+
+    def call_with_holder_account(self, input, contract, code):
+        tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
+            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+        assert (from_addr == self.caller_ether)
+
+        holder = self.create_account_with_seed("1236")
+        storage = self.create_account_with_seed(sign[:8].hex())
+
+        self.write_transaction_to_holder_account(holder, sign, msg)
+
+        trx = Transaction()
+        trx.add(self.sol_instr_11_partial_call_from_account(holder, storage, 0, contract, code))
+        send_transaction(http_client, trx, self.acc)
+
+        while (True):
+            print("Continue")
+            trx = Transaction()
+            trx.add(self.sol_instr_10_continue(storage, 400, contract, code))
+            result = send_transaction(http_client, trx, self.acc)["result"]
+            
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
@@ -169,7 +264,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Foo(msg.sender, msg.value, _message);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -198,7 +293,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
     def test_ecrecover(self):
-        tx = {'to': solana2ether(self.reId_caller), 'value': 1, 'gas': 9999999, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.reId_caller), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
               'nonce': getTransactionCount(client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())
@@ -215,11 +310,11 @@ class EventTest(unittest.TestCase):
                 sig.to_bytes()
                 )
         # result = self.call_signed(input=data, contract=self.reId_caller)
-        result = self.call_partial_signed(input=data, contract=self.reId_caller, code=self.reId_caller_code)
+        result = self.call_with_holder_account(input=data, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Recovered(address);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -280,7 +375,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
@@ -313,7 +408,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)  # TODO: why not 1?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Result(success, data);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
