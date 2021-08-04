@@ -1012,6 +1012,10 @@ fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
 // Return an error if string cannot be parsed as a hexdata
 fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
+    if string.as_ref() == "None" {
+        return Ok(());
+    }
+
     hex::decode(&make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
