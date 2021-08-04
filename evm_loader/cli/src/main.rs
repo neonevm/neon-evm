@@ -546,7 +546,7 @@ fn get_ether_account_nonce(
     };
     trx_count = account.trx_count;
     let caller_ether = account.ether;
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::token::token_mint::id());
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
     debug!("Caller trx_count: {} ", trx_count);
