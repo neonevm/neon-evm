@@ -1133,7 +1133,7 @@ fn main() {
                         .index(3)
                         .required(false)
                         .validator(is_valid_hexdata)
-                        .help("Transaction data")
+                        .help("Transaction data or 'None'")
                 )
                 .arg(
                     Arg::with_name("value")
