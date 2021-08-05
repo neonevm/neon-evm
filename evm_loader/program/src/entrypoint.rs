@@ -2,12 +2,18 @@
 
 #![cfg(not(feature = "no-entrypoint"))]
 
-use std::{alloc::Layout, mem::size_of, ptr::null_mut, usize};
-//use crate::{error::TokenError, processor::Processor};
-//use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use std::convert::{TryFrom, TryInto};
+use std::{
+    alloc::Layout,
+    convert::{TryFrom, TryInto},
+    collections::BTreeMap,
+    mem::size_of, 
+    ptr::null_mut, 
+    usize
+};
 
 use evm::{
+    backend::{Log, Apply},
+    Transfer,
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
@@ -35,11 +41,9 @@ use crate::{
     token::{token_mint, create_associated_token_account, transfer_token, get_token_account_owner},
 };
 
-use std::collections::BTreeMap;
-use evm::backend::Apply;
-use evm::backend::Log;
-use evm::Transfer;
-type CallResult = Result<Option<(ExitReason, u64, Vec<u8>, Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)>)>, ProgramError>;
+type LogApplies = Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)>;
+type SuccessExitResults = (ExitReason, u64, Vec<u8>, LogApplies);
+type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
 
 const HEAP_LENGTH: usize = 1024*1024;
 
@@ -216,17 +220,13 @@ fn process_instruction<'a>(
 
             let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
 
-            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
-                if let Some((applies, logs, transfers)) = applies_logs_transfers {
-                    account_storage.apply_transfers(accounts, transfers)?;
-                    account_storage.apply(applies, None, false)?;
-                    debug_print!("Applies done");
-                    for log in logs {
-                        invoke(&on_event(program_id, log), accounts)?;
-                    }
-                }
-
-                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
+            if let Some(call_results) = call_return {
+                applies_and_invokes(
+                    program_id,
+                    &mut account_storage,
+                    accounts,
+                    None,
+                    call_results)?;
             }
 
             Ok(())
@@ -309,7 +309,8 @@ fn process_instruction<'a>(
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let call_return = do_call(&mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
-            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
+            if let Some(call_results) = call_return {
+                let used_gas = call_results.1;
                 if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
                     debug_print!("operator ownership");
                     debug_print!("operator token owner {}", operator_eth_info.owner);
@@ -325,16 +326,12 @@ fn process_instruction<'a>(
                     account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                     &fee)?;
 
-                if let Some((applies, logs, transfers)) = applies_logs_transfers {
-                    account_storage.apply_transfers(accounts, transfers)?;
-                    account_storage.apply(applies, Some(operator_eth_info), false)?;
-                    debug_print!("Applies done");
-                    for log in logs {
-                        invoke(&on_event(program_id, log), accounts)?;
-                    }
-                }
-
-                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
+                applies_and_invokes(
+                    program_id,
+                    &mut account_storage,
+                    accounts,
+                    Some(operator_sol_info),
+                    call_results)?;
             }
             Ok(())
         },
@@ -405,22 +402,18 @@ fn process_instruction<'a>(
 
             let call_return = do_continue(&mut storage, step_count, &mut account_storage, accounts)?;
 
-            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
+            if let Some(call_results) = call_return {
                 payment::transfer_from_deposit_to_operator(
                     storage_info,
                     operator_sol_info,
                     system_info)?;
 
-                if let Some((applies, logs, transfers)) = applies_logs_transfers {
-                    account_storage.apply_transfers(accounts, transfers)?;
-                    account_storage.apply(applies, Some(operator_sol_info), false)?;
-                    debug_print!("Applies done");
-                    for log in logs {
-                        invoke(&on_event(program_id, log), accounts)?;
-                    }
-                }
-
-                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
+                applies_and_invokes(
+                    program_id,
+                    &mut account_storage,
+                    accounts,
+                    Some(operator_sol_info),
+                    call_results)?;
 
                 storage.unblock_accounts_and_destroy(program_id, accounts)?;
             }
@@ -532,7 +525,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-    let (exit_reason, used_gas, result, applies_logs_transfers) = {
+    let call_results = {
         let backend = SolanaBackend::new(&account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -571,16 +564,13 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         }
     };
 
-    if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, None, false)?;
-        debug_print!("Applies done");
-        for log in logs {
-            invoke(&on_event(program_id, log), accounts)?;
-        }
-    }
+    applies_and_invokes(
+        program_id,
+        &mut account_storage,
+        accounts,
+        None,
+        call_results)?;
 
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
     Ok(())
 }
 
@@ -597,7 +587,7 @@ fn do_call<'a>(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let (exit_reason, used_gas, result, applies_logs_transfers) = {
+    let call_results = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -629,7 +619,7 @@ fn do_call<'a>(
         }
     };
 
-    Ok(Some((exit_reason, used_gas, result, applies_logs_transfers)))
+    Ok(Some(call_results))
 }
 
 fn do_partial_call<'a>(
@@ -712,7 +702,7 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let (exit_reason, used_gas, result, applies_logs_transfers) = {
+    let call_results = {
         let backend = SolanaBackend::new(account_storage, Some(accounts));
         debug_print!("  backend initialized");
 
@@ -741,7 +731,29 @@ fn do_continue<'a>(
         }
     };
 
-    Ok(Some((exit_reason, used_gas, result, applies_logs_transfers)))
+    Ok(Some(call_results))
+}
+
+fn applies_and_invokes<'a>(
+    program_id: &Pubkey,
+    account_storage: &mut ProgramAccountStorage<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    operator: Option<&AccountInfo<'a>>,
+    call_results: SuccessExitResults
+) -> ProgramResult {
+    let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
+    if let Some((applies, logs, transfers)) = applies_logs_transfers {
+        account_storage.apply_transfers(accounts, transfers)?;
+        account_storage.apply(applies, operator, false)?;
+        debug_print!("Applies done");
+        for log in logs {
+            invoke(&on_event(program_id, log), accounts)?;
+        }
+    }
+
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+
+    Ok(())
 }
 
 fn invoke_on_return<'a>(
