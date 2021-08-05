@@ -110,7 +110,7 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    if source_token_account.owner != source_account {
+    if source_token_account.owner != source_account.key {
         return Err(ProgramError::InvalidInstructionData)
     }
 
