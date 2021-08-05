@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::vec::Vec;
 use std::time::{Duration, SystemTime};
+use std::{thread, time};
 
 use std::{
     rc::Rc,
@@ -348,7 +349,7 @@ fn main() -> CommandResult{
     let mut signatures = Vec::new();
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
     let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
-
+    let ten = time::Duration::from_micros(1000);
     let start = SystemTime::now();
     for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
         if (client == "tcp"){
@@ -367,6 +368,7 @@ fn main() -> CommandResult{
             signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
         }
         count = count  + 1;
+        thread::sleep(ten);
     }
     let end = SystemTime::now();
     let time = end.duration_since(start).expect("Clock may have gone backwards");
