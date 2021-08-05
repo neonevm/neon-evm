@@ -290,6 +290,9 @@ fn process_instruction<'a>(
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let used_gas = do_call(program_id, &mut account_storage, accounts, Some(operator_sol_info), trx.call_data, trx.value, trx_gas_limit)?;
 
+            if operator_eth_info.owner != operator_sol_info {
+                return Err(ProgramError::InvalidInstructionData)
+            }
             let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
             transfer_token(
                 token_transfer_accounts,

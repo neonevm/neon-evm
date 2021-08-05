@@ -110,6 +110,10 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    if source_token_account.owner != source_account {
+        return Err(ProgramError::InvalidInstructionData)
+    }
+
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
     let value = value / min_value;
