@@ -96,12 +96,12 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 }
 
 
-/// Validate Token Account
+/// Transfer Tokens
 /// 
 /// # Errors
 ///
-/// Will return: 
-/// `ProgramError::IncorrectProgramId` if account is not token account
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
 pub fn transfer_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
