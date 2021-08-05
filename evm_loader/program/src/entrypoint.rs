@@ -208,7 +208,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, &accounts[3], bytes.to_vec(), U256::zero(), u64::MAX)?;
+            do_call(program_id, &mut account_storage, accounts, None, bytes.to_vec(), U256::zero(), u64::MAX)?;
 
             Ok(())
         },
@@ -269,12 +269,6 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-
             let token_transfer_accounts = accounts;
             let accounts = &accounts[6..];
 
@@ -293,18 +287,17 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let fee = U256::from(1000_u64) * trx.gas_price * U256::from(1_000_000_000_u64);
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let used_gas = do_call(program_id, &mut account_storage, accounts, Some(operator_sol_info), trx.call_data, trx.value, trx_gas_limit)?;
+
+            let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
             transfer_token(
                 token_transfer_accounts,
                 user_eth_info,
                 operator_eth_info,
-                caller_info,
+                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &fee)?;
-
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let _used_gas = do_call(program_id, &mut account_storage, accounts, operator_sol_info, trx.call_data, trx.value, trx_gas_limit)?;
-
             Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
@@ -372,7 +365,7 @@ fn process_instruction<'a>(
 
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts, operator_sol_info)?;
+            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts, Some(operator_sol_info))?;
             if exit_reason != None {
                 payment::transfer_from_deposit_to_operator(
                     storage_info,
@@ -529,7 +522,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
         account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, &accounts[0], false)?;
+        account_storage.apply(applies, None, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
@@ -544,7 +537,7 @@ fn do_call<'a>(
     program_id: &Pubkey,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: &'a AccountInfo<'a>,
+    operator: Option<&AccountInfo<'a>>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
@@ -677,7 +670,7 @@ fn do_continue<'a>(
     step_count: u64,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: &'a AccountInfo<'a>,
+    operator: Option<&AccountInfo<'a>>,
 ) -> Result<Option<ExitReason>, ProgramError>
 {
     debug_print!("do_continue");

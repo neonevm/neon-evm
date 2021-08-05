@@ -234,6 +234,15 @@ impl<'a> ProgramAccountStorage<'a> {
         self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
+    /// Get caller account info
+    pub fn get_caller_account_info(&self) -> Option<&AccountInfo<'a>> {
+        if let Some(account_index) = self.find_account(&self.origin()) {
+            let AccountMeta{ account, token: _, code: _ } = &self.account_metas[account_index];
+            return Some(account);
+        }
+        None
+    }
+
     /// Apply contact execution results
     /// 
     /// # Errors
@@ -243,7 +252,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// or `account.update` errors
     pub fn apply<A, I>(
         &mut self, values: A,
-        operator: &'a AccountInfo<'a>,
+        operator: Option<&AccountInfo<'a>>,
         _delete_empty: bool
     ) -> Result<(), ProgramError>
     where
@@ -283,12 +292,18 @@ impl<'a> ProgramAccountStorage<'a> {
                             return Err(ProgramError::InvalidAccountData);
                         };
 
+                        let recipient = if let Some(some_operator) = operator {
+                            some_operator
+                        } else {
+                            self.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?
+                        };
+
                         debug_print!("Move funds from account");
-                        **operator.lamports.borrow_mut() += account_info.lamports();
+                        **recipient.lamports.borrow_mut() += account_info.lamports();
                         **account_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Move funds from code");
-                        **operator.lamports.borrow_mut() += code_info.lamports();
+                        **recipient.lamports.borrow_mut() += code_info.lamports();
                         **code_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Mark accounts empty");
