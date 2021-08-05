@@ -95,6 +95,9 @@ pub enum EvmInstruction<'a> {
 
         /// Owner program account address
         owner: Pubkey,
+
+        /// Associated token address to create
+        token: Option<Pubkey>,
     },
 
     /// Call Ethereum-contract action from raw transaction data
@@ -175,7 +178,7 @@ impl<'a> EvmInstruction<'a> {
     /// # Errors
     ///
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `input`
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
     pub fn unpack(input: &'a[u8]) -> Result<Self, ProgramError> {
         use ProgramError::InvalidInstructionData;
 
@@ -214,23 +217,30 @@ impl<'a> EvmInstruction<'a> {
             4 => {
                 let (_, rest) = rest.split_at(3);
                 let (base, rest) = rest.split_at(32);
-                let (seed_len, rest) = rest.split_at(4);
-                let (_, rest) = rest.split_at(4);  // padding
-                let seed_len = seed_len.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (seed_len, rest) = rest.split_at(8);
+                let seed_len = seed_len.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (seed, rest) = rest.split_at(seed_len as usize);
 
                 let base = Pubkey::new(base);
                 let (lamports, rest) = rest.split_at(8);
                 let (space, rest) = rest.split_at(8);
 
-                let (owner, _rest) = rest.split_at(32);
+                let (owner, rest) = rest.split_at(32);
                 let owner = Pubkey::new(owner);
+
+                let token = if rest.len() >= 32 {
+                    let (token, _rest) = rest.split_at(32);
+                    let token = Pubkey::new(token);
+                    Some(token)
+                } else {
+                    None
+                };
 
                 let seed = seed.into();
                 let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
 
-                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner}
+                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner, token}
             },
             5 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);

@@ -53,6 +53,7 @@ pub fn create_associated_token_account(
     }
 }
 
+
 /// Extract a token amount from the `AccountInfo`
 /// 
 /// # Errors
@@ -110,14 +111,137 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    debug_print!("transfer_token");
+
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
     let value = value / min_value;
     let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-    debug_print!("Token {} balance {}", source_token_account.key, get_token_account_balance(source_token_account)?);
-    debug_print!("Token {} balance {}", target_token_account.key, get_token_account_balance(target_token_account)?);
+
+    let instruction = spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        source_token_account.key,
+        &token_mint::id(),
+        target_token_account.key,
+        source_account.key,
+        &[],
+        value,
+        token_mint::decimals(),
+    )?;
+
+    let (ether, nonce) = source_solidity_account.get_seeds();
+    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+
+    Ok(())
+}
+
+
+/// Validate Token Account
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn block_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    debug_print!("block_token");
+
+    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
+    let min_value = U256::from(10_u64.pow(min_decimals));
+    let value = value / min_value;
+    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+
+    let instruction = spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        source_token_account.key,
+        &token_mint::id(),
+        target_token_account.key,
+        source_account.key,
+        &[],
+        value,
+        token_mint::decimals(),
+    )?;
+
+    let (ether, nonce) = source_solidity_account.get_seeds();
+    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+
+    Ok(())
+}
+
+
+/// Validate Token Account
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn pay_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    debug_print!("pay_token");
+
+    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
+    let min_value = U256::from(10_u64.pow(min_decimals));
+    let value = value / min_value;
+    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+
+    let instruction = spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        source_token_account.key,
+        &token_mint::id(),
+        target_token_account.key,
+        source_account.key,
+        &[],
+        value,
+        token_mint::decimals(),
+    )?;
+
+    let (ether, nonce) = source_solidity_account.get_seeds();
+    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+
+    Ok(())
+}
+
+
+/// Validate Token Account
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn return_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    debug_print!("return_token");
+
+    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
+    let min_value = U256::from(10_u64.pow(min_decimals));
+    let value = value / min_value;
+    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),

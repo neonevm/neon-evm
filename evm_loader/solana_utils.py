@@ -387,8 +387,7 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
         )
     )
     print("createAccountWithSeed", data.hex())
-    created = accountWithSeed(base, seed,
-                              program)  # PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    created = accountWithSeed(base, seed, program)
     print("created", created)
     return TransactionInstruction(
         keys=[
