@@ -66,7 +66,24 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
     }
 
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
     Ok(data.amount)
+}
+
+/// Extract a token owner from `AccountInfo`
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramError> {
+    if *account.owner != spl_token::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
+    Ok(data.owner)
 }
 
 
@@ -97,12 +114,12 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 }
 
 
-/// Validate Token Account
+/// Transfer Tokens
 /// 
 /// # Errors
 ///
-/// Will return: 
-/// `ProgramError::IncorrectProgramId` if account is not token account
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
 pub fn transfer_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
@@ -112,6 +129,10 @@ pub fn transfer_token(
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
@@ -138,12 +159,12 @@ pub fn transfer_token(
 }
 
 
-/// Validate Token Account
+/// Transfer Tokens to block account
 /// 
 /// # Errors
 ///
-/// Will return: 
-/// `ProgramError::IncorrectProgramId` if account is not token account
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
 pub fn block_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
@@ -153,6 +174,14 @@ pub fn block_token(
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("block_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
+    if get_token_account_owner(target_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
@@ -179,12 +208,12 @@ pub fn block_token(
 }
 
 
-/// Validate Token Account
+/// Transfer Tokens from block account to operator
 /// 
 /// # Errors
 ///
-/// Will return: 
-/// `ProgramError::IncorrectProgramId` if account is not token account
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
 pub fn pay_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
@@ -194,6 +223,10 @@ pub fn pay_token(
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("pay_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
@@ -220,12 +253,12 @@ pub fn pay_token(
 }
 
 
-/// Validate Token Account
+/// Return Tokens from block account to user
 /// 
 /// # Errors
 ///
-/// Will return: 
-/// `ProgramError::IncorrectProgramId` if account is not token account
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
 pub fn return_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
@@ -235,6 +268,14 @@ pub fn return_token(
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("return_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
+    if get_token_account_owner(target_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        return Err(ProgramError::InvalidInstructionData)
+    }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));

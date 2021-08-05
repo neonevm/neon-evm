@@ -40,7 +40,6 @@ class EthTokenTest(unittest.TestCase):
             cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
-
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
@@ -173,7 +172,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(self.caller_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**9))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -189,7 +188,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(contract_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**9)))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -205,10 +204,10 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
-        value = 10 * (10**9)
+        value = 10
 
         func_name = abi.function_signature_to_4byte_selector('nop()')
-        result = self.call_partial_signed(func_name, value * (10**9))
+        result = self.call_partial_signed(func_name, value * (10**18))
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -229,10 +228,9 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
-        value = 5 * (10**9)
-
+        value = 5
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (value * (10**9)))
+        input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
