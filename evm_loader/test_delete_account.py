@@ -131,8 +131,14 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     def test_success_deletion(self):
         (owner_contract, contract_code) = self.deploy_contract()
+        self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
-        caller_balance_pre = getBalance(self.caller)
+        payments = 11000
+
+        operator_token_balance = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
+        contract_token_balance = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+
+        caller_balance_pre = getBalance(self.acc.public_key())
         contract_balance_pre = getBalance(owner_contract)
         code_balance_pre = getBalance(contract_code)
 
@@ -141,14 +147,20 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         send_transaction(client, trx, self.acc)
 
-        caller_balance_post = getBalance(self.caller)
+        caller_balance_post = getBalance(self.acc.public_key())
         contract_balance_post = getBalance(owner_contract)
         code_balance_post = getBalance(contract_code)
 
+        operator_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
+        contract_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+
         # Check that lamports moved from code accounts to caller
-        self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre + code_balance_pre)
+        self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre + code_balance_pre - payments)
         self.assertEqual(contract_balance_post, 0)
         self.assertEqual(code_balance_post, 0)
+        self.assertEqual(code_balance_post, 0)
+        self.assertEqual(contract_token_balance_post, 0)
+        self.assertAlmostEqual(operator_token_balance_post, contract_token_balance + operator_token_balance, 3)
 
         err = "Can't get information about"
         with self.assertRaisesRegex(Exception,err):
