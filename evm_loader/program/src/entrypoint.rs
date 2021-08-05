@@ -32,8 +32,14 @@ use crate::{
     solidity_account::SolidityAccount,
     storage_account::StorageAccount,
     transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
-    token::{token_mint, create_associated_token_account, transfer_token},
+    token::{token_mint, create_associated_token_account, transfer_token, get_token_account_owner},
 };
+
+use std::collections::BTreeMap;
+use evm::backend::Apply;
+use evm::backend::Log;
+use evm::Transfer;
+type CallResult = Result<Option<(ExitReason, u64, Vec<u8>, Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)>)>, ProgramError>;
 
 const HEAP_LENGTH: usize = 1024*1024;
 
@@ -208,7 +214,20 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, None, bytes.to_vec(), U256::zero(), u64::MAX)?;
+            let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+
+            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
+                if let Some((applies, logs, transfers)) = applies_logs_transfers {
+                    account_storage.apply_transfers(accounts, transfers)?;
+                    account_storage.apply(applies, None, false)?;
+                    debug_print!("Applies done");
+                    for log in logs {
+                        invoke(&on_event(program_id, log), accounts)?;
+                    }
+                }
+
+                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
+            }
 
             Ok(())
         },
@@ -288,19 +307,35 @@ fn process_instruction<'a>(
                 system_info)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let used_gas = do_call(program_id, &mut account_storage, accounts, Some(operator_sol_info), trx.call_data, trx.value, trx_gas_limit)?;
+            let call_return = do_call(&mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
-            if operator_eth_info.owner != operator_sol_info {
-                return Err(ProgramError::InvalidInstructionData)
+            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
+                if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
+                    debug_print!("operator ownership");
+                    debug_print!("operator token owner {}", operator_eth_info.owner);
+                    debug_print!("operator key {}", operator_sol_info.key);
+                    return Err(ProgramError::InvalidInstructionData)
+                }
+                let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
+                transfer_token(
+                    token_transfer_accounts,
+                    user_eth_info,
+                    operator_eth_info,
+                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
+                    account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                    &fee)?;
+
+                if let Some((applies, logs, transfers)) = applies_logs_transfers {
+                    account_storage.apply_transfers(accounts, transfers)?;
+                    account_storage.apply(applies, Some(operator_eth_info), false)?;
+                    debug_print!("Applies done");
+                    for log in logs {
+                        invoke(&on_event(program_id, log), accounts)?;
+                    }
+                }
+
+                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
             }
-            let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
-            transfer_token(
-                token_transfer_accounts,
-                user_eth_info,
-                operator_eth_info,
-                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
-                &fee)?;
             Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
@@ -368,12 +403,25 @@ fn process_instruction<'a>(
 
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts, Some(operator_sol_info))?;
-            if exit_reason != None {
+            let call_return = do_continue(&mut storage, step_count, &mut account_storage, accounts)?;
+
+            if let Some((exit_reason, used_gas, result, applies_logs_transfers)) = call_return {
                 payment::transfer_from_deposit_to_operator(
                     storage_info,
                     operator_sol_info,
                     system_info)?;
+
+                if let Some((applies, logs, transfers)) = applies_logs_transfers {
+                    account_storage.apply_transfers(accounts, transfers)?;
+                    account_storage.apply(applies, Some(operator_sol_info), false)?;
+                    debug_print!("Applies done");
+                    for log in logs {
+                        invoke(&on_event(program_id, log), accounts)?;
+                    }
+                }
+
+                invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
+
                 storage.unblock_accounts_and_destroy(program_id, accounts)?;
             }
 
@@ -537,14 +585,12 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 }
 
 fn do_call<'a>(
-    program_id: &Pubkey,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: Option<&AccountInfo<'a>>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> Result<u64, ProgramError>
+) -> CallResult
 {
     debug_print!("do_call");
 
@@ -583,18 +629,7 @@ fn do_call<'a>(
         }
     };
 
-    if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, operator, false)?;
-        debug_print!("Applies done");
-        for log in logs {
-            invoke(&on_event(program_id, log), accounts)?;
-        }
-    }
-
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
-
-    Ok(used_gas)
+    Ok(Some((exit_reason, used_gas, result, applies_logs_transfers)))
 }
 
 fn do_partial_call<'a>(
@@ -667,14 +702,13 @@ fn do_partial_create<'a>(
     Ok(())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn do_continue<'a>(
     storage: &mut StorageAccount,
-    program_id: &Pubkey,
     step_count: u64,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: Option<&AccountInfo<'a>>,
-) -> Result<Option<ExitReason>, ProgramError>
+) -> CallResult
 {
     debug_print!("do_continue");
 
@@ -707,17 +741,7 @@ fn do_continue<'a>(
         }
     };
 
-    if let Some((applies, logs, transfers)) = applies_logs_transfers {
-        account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, operator, false)?;
-        debug_print!("Applies done");
-        for log in logs {
-            invoke(&on_event(program_id, log), accounts)?;
-        }
-    }
-
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result[..])?;
-    Ok(Some(exit_reason))
+    Ok(Some((exit_reason, used_gas, result, applies_logs_transfers)))
 }
 
 fn invoke_on_return<'a>(

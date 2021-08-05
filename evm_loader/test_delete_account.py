@@ -133,8 +133,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         (owner_contract, contract_code) = self.deploy_contract()
         self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
-        payments = 11000
-
         operator_token_balance = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
         contract_token_balance = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
@@ -155,7 +153,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         contract_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
         # Check that lamports moved from code accounts to caller
-        self.assertEqual(caller_balance_post, contract_balance_pre + caller_balance_pre + code_balance_pre - payments)
+        self.assertGreater(caller_balance_post, contract_balance_pre)
+        self.assertLess(caller_balance_post, contract_balance_pre + caller_balance_pre + code_balance_pre)
         self.assertEqual(contract_balance_post, 0)
         self.assertEqual(code_balance_post, 0)
         self.assertEqual(code_balance_post, 0)

@@ -65,7 +65,24 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
     }
 
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
     Ok(data.amount)
+}
+
+/// Extract a token owner from `AccountInfo`
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramError> {
+    if *account.owner != spl_token::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
+    Ok(data.owner)
 }
 
 
@@ -110,7 +127,10 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    if source_token_account.owner != source_account.key {
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        debug_print!("source token owner {}", source_token_account.owner);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
     }
 
