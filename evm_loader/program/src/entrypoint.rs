@@ -208,7 +208,7 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidArgument);
             }
 
-            do_call(program_id, &mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+            do_call(program_id, &mut account_storage, accounts, &accounts[3], bytes.to_vec(), U256::zero(), u64::MAX)?;
 
             Ok(())
         },
@@ -303,7 +303,7 @@ fn process_instruction<'a>(
                 &fee)?;
 
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let _used_gas = do_call(program_id, &mut account_storage, accounts, trx.call_data, trx.value, trx_gas_limit)?;
+            let _used_gas = do_call(program_id, &mut account_storage, accounts, operator_sol_info, trx.call_data, trx.value, trx_gas_limit)?;
 
             Ok(())
         },
@@ -372,7 +372,7 @@ fn process_instruction<'a>(
 
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
-            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts)?;
+            let exit_reason = do_continue(&mut storage, program_id, step_count, &mut account_storage, accounts, operator_sol_info)?;
             if exit_reason != None {
                 payment::transfer_from_deposit_to_operator(
                     storage_info,
@@ -529,7 +529,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
         account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, false)?;
+        account_storage.apply(applies, &accounts[0], false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
@@ -542,8 +542,9 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
 fn do_call<'a>(
     program_id: &Pubkey,
-    account_storage: &mut ProgramAccountStorage,
+    account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
+    operator: &'a AccountInfo<'a>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
@@ -588,7 +589,7 @@ fn do_call<'a>(
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
         account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, false)?;
+        account_storage.apply(applies, operator, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
@@ -603,7 +604,7 @@ fn do_call<'a>(
 fn do_partial_call<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
-    account_storage: &ProgramAccountStorage,
+    account_storage: &ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
     transfer_value: U256,
@@ -643,7 +644,7 @@ fn do_partial_call<'a>(
 fn do_partial_create<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
-    account_storage: &ProgramAccountStorage,
+    account_storage: &ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
     transfer_value: U256,
@@ -674,8 +675,9 @@ fn do_continue<'a>(
     storage: &mut StorageAccount,
     program_id: &Pubkey,
     step_count: u64,
-    account_storage: &mut ProgramAccountStorage,
+    account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
+    operator: &'a AccountInfo<'a>,
 ) -> Result<Option<ExitReason>, ProgramError>
 {
     debug_print!("do_continue");
@@ -711,7 +713,7 @@ fn do_continue<'a>(
 
     if let Some((applies, logs, transfers)) = applies_logs_transfers {
         account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply(applies, false)?;
+        account_storage.apply(applies, operator, false)?;
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;

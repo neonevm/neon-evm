@@ -241,7 +241,11 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I>(
+        &mut self, values: A,
+        operator: &'a AccountInfo<'a>,
+        _delete_empty: bool
+    ) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
@@ -279,15 +283,12 @@ impl<'a> ProgramAccountStorage<'a> {
                             return Err(ProgramError::InvalidAccountData);
                         };
 
-                        let caller_account_index = self.find_account(&self.origin()).ok_or(ProgramError::NotEnoughAccountKeys)?;
-                        let AccountMeta{ account: caller_info, token: _, code: _ } = &self.account_metas[caller_account_index];
-
                         debug_print!("Move funds from account");
-                        **caller_info.lamports.borrow_mut() += account_info.lamports();
+                        **operator.lamports.borrow_mut() += account_info.lamports();
                         **account_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Move funds from code");
-                        **caller_info.lamports.borrow_mut() += code_info.lamports();
+                        **operator.lamports.borrow_mut() += code_info.lamports();
                         **code_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Mark accounts empty");
