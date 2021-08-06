@@ -423,7 +423,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        _gas_limit: u64,
+                        gas_limit: u64,
     ) -> ProgramResult {
         debug_print!("create_begin gas_limit={}", _gas_limit);
         let transaction_cost = gasometer::create_transaction_cost(&code);
@@ -433,7 +433,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         let scheme = evm::CreateScheme::Legacy { caller };
 
-        match self.executor.create(caller, scheme, transfer_value, code, None) {
+        match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
             Capture::Exit(_) => {
                 debug_print!("create_begin() error ");
                 return Err(ProgramError::InvalidInstructionData);
