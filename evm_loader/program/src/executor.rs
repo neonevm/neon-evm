@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::pedantic)] /// Todo: document
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
 
 use std::convert::Infallible;
 use std::mem;
