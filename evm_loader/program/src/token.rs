@@ -135,11 +135,6 @@ pub fn transfer_token(
         debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
     }
-    if *source_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
-        debug_print!("invalid user token account");
-        debug_print!("target: {}", source_token_account.key);
-        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
-    }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
     let min_value = U256::from(10_u64.pow(min_decimals));
@@ -180,14 +175,8 @@ pub fn block_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    let (ether, nonce) = source_solidity_account.get_seeds();
+    let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("block_token");
-    if get_token_account_owner(source_token_account)? != *source_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
-        return Err(ProgramError::InvalidInstructionData)
-    }
     if *source_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
         debug_print!("invalid user token account");
         debug_print!("target: {}", source_token_account.key);
@@ -206,25 +195,14 @@ pub fn block_token(
         debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
-    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
-
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-    let instruction = spl_token::instruction::transfer_checked(
-        &spl_token::id(),
-        source_token_account.key,
-        &token_mint::id(),
-        target_token_account.key,
-        source_account.key,
-        &[],
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
         value,
-        token_mint::decimals(),
     )?;
-
-    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())
 }
@@ -244,14 +222,8 @@ pub fn pay_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    let (ether, nonce) = source_solidity_account.get_seeds();
+    let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("pay_token");
-    if get_token_account_owner(source_token_account)? != *source_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
-        return Err(ProgramError::InvalidInstructionData)
-    }
     let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
     if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
         debug_print!("invalid hold token account");
@@ -259,25 +231,14 @@ pub fn pay_token(
         debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
-    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
-
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-    let instruction = spl_token::instruction::transfer_checked(
-        &spl_token::id(),
-        source_token_account.key,
-        &token_mint::id(),
-        target_token_account.key,
-        source_account.key,
-        &[],
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
         value,
-        token_mint::decimals(),
     )?;
-
-    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())
 }
@@ -297,14 +258,8 @@ pub fn return_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    let (ether, nonce) = source_solidity_account.get_seeds();
+    let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("return_token");
-    if get_token_account_owner(source_token_account)? != *source_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
-        return Err(ProgramError::InvalidInstructionData)
-    }
     let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
     if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
         debug_print!("invalid hold token account");
@@ -323,25 +278,14 @@ pub fn return_token(
         debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
-    let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
-
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-    let instruction = spl_token::instruction::transfer_checked(
-        &spl_token::id(),
-        source_token_account.key,
-        &token_mint::id(),
-        target_token_account.key,
-        source_account.key,
-        &[],
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
         value,
-        token_mint::decimals(),
     )?;
-
-    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())
 }
