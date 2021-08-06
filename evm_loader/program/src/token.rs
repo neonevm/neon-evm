@@ -131,7 +131,14 @@ pub fn transfer_token(
     debug_print!("transfer_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
+    }
+    if *source_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
+        debug_print!("invalid user token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
@@ -173,14 +180,30 @@ pub fn block_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    let (ether, nonce) = source_solidity_account.get_seeds();
     debug_print!("block_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
     }
+    if *source_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
+        debug_print!("invalid user token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
+    }
     if get_token_account_owner(target_token_account)? != *source_account.key {
-        debug_print!("source ownership");
+        debug_print!("target ownership");
+        debug_print!("target owner {}", get_token_account_owner(target_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
+    }
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *target_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", target_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
@@ -201,7 +224,6 @@ pub fn block_token(
         token_mint::decimals(),
     )?;
 
-    let (ether, nonce) = source_solidity_account.get_seeds();
     invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())
@@ -222,10 +244,19 @@ pub fn pay_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    let (ether, nonce) = source_solidity_account.get_seeds();
     debug_print!("pay_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
+    }
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
@@ -246,7 +277,6 @@ pub fn pay_token(
         token_mint::decimals(),
     )?;
 
-    let (ether, nonce) = source_solidity_account.get_seeds();
     invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())
@@ -267,14 +297,30 @@ pub fn return_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    let (ether, nonce) = source_solidity_account.get_seeds();
     debug_print!("return_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
     }
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+    }
     if get_token_account_owner(target_token_account)? != *source_account.key {
-        debug_print!("source ownership");
+        debug_print!("target ownership");
+        debug_print!("target owner {}", get_token_account_owner(target_token_account)?);
+        debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
+    }
+    if *target_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
+        debug_print!("invalid user token account");
+        debug_print!("target: {}", target_token_account.key);
+        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
@@ -295,7 +341,6 @@ pub fn return_token(
         token_mint::decimals(),
     )?;
 
-    let (ether, nonce) = source_solidity_account.get_seeds();
     invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
 
     Ok(())

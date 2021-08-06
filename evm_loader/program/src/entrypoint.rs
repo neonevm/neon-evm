@@ -211,7 +211,7 @@ fn process_instruction<'a>(
                         &spl_token::id(),
                         token_account_info.key,
                         &token_mint::id(),
-                        &owner,
+                        base_info.key,
                     )?,
                     accounts, &[&program_seeds[..]]
                 )?;
@@ -265,12 +265,6 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
@@ -300,7 +294,7 @@ fn process_instruction<'a>(
                 accounts,
                 user_eth_info,
                 block_acc,
-                caller_info,
+                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &U256::from(1_000_000_000_000_u64))?;
 
@@ -353,7 +347,7 @@ fn process_instruction<'a>(
                     return Err(ProgramError::InvalidInstructionData)
                 }
                 let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
-                transfer_token(
+                token::transfer_token(
                     accounts,
                     user_eth_info,
                     operator_eth_info,
@@ -387,12 +381,6 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-
             let trx_accounts = &accounts[7..];
 
             let caller = H160::from_slice(from_addr);
@@ -420,7 +408,7 @@ fn process_instruction<'a>(
                 accounts,
                 user_eth_info,
                 block_acc,
-                caller_info,
+                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &U256::from(1_000_000_000_000_u64))?;
 
@@ -437,12 +425,6 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let block_acc = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[5..];
 
@@ -466,7 +448,7 @@ fn process_instruction<'a>(
                     accounts,
                     block_acc,
                     operator_eth_info,
-                    caller_info,
+                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                     account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                     &U256::from(1_000_000_000_000_u64))?;
 
@@ -483,6 +465,7 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Cancel => {
+            debug_print!("Cancel");
             let storage_info = next_account_info(account_info_iter)?;
 
             let incinerator_info = next_account_info(account_info_iter)?;
@@ -490,31 +473,35 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let _program_info = next_account_info(account_info_iter)?;
-            let _program_token = next_account_info(account_info_iter)?;
-            let _program_code = next_account_info(account_info_iter)?;
-            let caller_info = next_account_info(account_info_iter)?;
-            let _caller_token = next_account_info(account_info_iter)?;
-            let _sysvar_info = next_account_info(account_info_iter)?;
-
             let trx_accounts = &accounts[5..];
 
             let storage = StorageAccount::restore(storage_info)?;
-            storage.check_accounts(program_id,  trx_accounts)?;
+            storage.check_accounts(program_id, trx_accounts)?;
 
-            let mut caller_info_data = AccountData::unpack(&caller_info.data.borrow())?;
+            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+
+            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?.data.borrow())?;
             match caller_info_data {
                 AccountData::Account(ref mut acc) => {
                     let (caller, nonce) = storage.caller_and_nonce()?;
                     if acc.ether != caller {
+                        debug_print!("acc.ether != caller");
+                        debug_print!("acc.ether {:}", acc.ether);
+                        debug_print!("caller {:}", caller);
                         return Err(ProgramError::InvalidAccountData);
                     }
                     if acc.trx_count != nonce {
+                        debug_print!("acc.trx_count != nonce");
+                        debug_print!("acc.trx_count {}", acc.trx_count);
+                        debug_print!("nonce {}", nonce);
                         return Err(ProgramError::InvalidAccountData);
                     }
                     acc.trx_count += 1;
                 },
-                _ => return Err(ProgramError::InvalidAccountData),
+                _ => {
+                    debug_print!("Unknown account");
+                    return Err(ProgramError::InvalidAccountData)
+                },
             };
 
             payment::burn_operators_deposit(
@@ -525,8 +512,8 @@ fn process_instruction<'a>(
                 accounts,
                 block_acc,
                 user_eth_info,
-                storage_info,
-                &SolidityAccount::new(caller_info.key, caller_info.lamports(), caller_info_data, None),
+                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &U256::from(1_000_000_000_000_u64))?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
