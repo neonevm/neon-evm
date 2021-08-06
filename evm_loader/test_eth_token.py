@@ -101,6 +101,8 @@ class EthTokenTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # User ETH address (stub for now):
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
@@ -180,7 +182,7 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
@@ -196,7 +198,7 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
@@ -214,13 +216,13 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal('0.000001000')
+        gas_used = Decimal(int().from_bytes(data[2:10])/1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
@@ -240,13 +242,13 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal('0.000001000')
+        gas_used = Decimal(int().from_bytes(data[2:10])/1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)

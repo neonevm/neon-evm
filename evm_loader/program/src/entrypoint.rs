@@ -271,6 +271,8 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
@@ -278,7 +280,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
-            let mut storage = StorageAccount::new(storage_info, trx_accounts, from_addr, trx.nonce)?;
+            let mut storage = StorageAccount::new(storage_info, trx_accounts, from_addr, trx.nonce, trx_gas_limit, trx_gas_price)?;
 
             payment::transfer_from_operator_to_collateral_pool(
                 program_id,
@@ -290,15 +292,15 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 storage_info,
                 system_info)?;
+            let fee = trx.gas_limit * trx.gas_price * U256::from(1_000_000_000_u64);
             token::block_token(
                 accounts,
                 user_eth_info,
                 block_acc,
                 account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
-                &U256::from(1_000_000_000_000_u64))?;
+                &fee)?;
 
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             if trx.to.is_some() {
                 do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
             }
@@ -321,6 +323,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[6..];
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
@@ -335,17 +338,16 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let call_return = do_call(&mut account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
             if let Some(call_results) = call_return {
-                let used_gas = call_results.1;
                 if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
                     debug_print!("operator ownership");
                     debug_print!("operator token owner {}", operator_eth_info.owner);
                     debug_print!("operator key {}", operator_sol_info.key);
                     return Err(ProgramError::InvalidInstructionData)
                 }
+                let used_gas = call_results.1;
                 let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
                 token::transfer_token(
                     accounts,
@@ -385,8 +387,10 @@ fn process_instruction<'a>(
 
             let caller = H160::from_slice(from_addr);
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut storage = StorageAccount::new(storage_info, trx_accounts, caller, trx.nonce)?;
+            let mut storage = StorageAccount::new(storage_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -404,15 +408,15 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 storage_info,
                 system_info)?;
+            let fee = trx.gas_limit * trx.gas_price * U256::from(1_000_000_000_u64);
             token::block_token(
                 accounts,
                 user_eth_info,
                 block_acc,
                 account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
-                &U256::from(1_000_000_000_000_u64))?;
+                &fee)?;
 
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
 
             storage.block_accounts(program_id, trx_accounts)
@@ -423,10 +427,11 @@ fn process_instruction<'a>(
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let block_acc = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[6..];
 
             let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
@@ -443,14 +448,30 @@ fn process_instruction<'a>(
                     storage_info,
                     operator_sol_info,
                     system_info)?;
-
+                if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
+                    debug_print!("operator token ownership");
+                    debug_print!("operator token owner {}", operator_eth_info.owner);
+                    debug_print!("operator key {}", operator_sol_info.key);
+                    return Err(ProgramError::InvalidInstructionData)
+                }
+                let (gas_limit, gas_price) = storage.get_gas_params()?;
+                let used_gas = call_results.1;
+                let fee = U256::from(used_gas * gas_price) * U256::from(1_000_000_000_u64);
+                let return_fee = U256::from((gas_limit - used_gas) * gas_price) * U256::from(1_000_000_000_u64);
                 token::pay_token(
                     accounts,
                     block_acc,
                     operator_eth_info,
                     account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
                     account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
-                    &U256::from(1_000_000_000_000_u64))?;
+                    &fee)?;
+                token::return_token(
+                    accounts,
+                    block_acc,
+                    user_eth_info,
+                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
+                    account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                    &return_fee)?;
 
                 applies_and_invokes(
                     program_id,
