@@ -425,7 +425,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                         transfer_value: U256,
                         gas_limit: u64,
     ) -> ProgramResult {
-        debug_print!("create_begin gas_limit={}", _gas_limit);
+        debug_print!("create_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
