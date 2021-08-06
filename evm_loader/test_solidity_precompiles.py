@@ -62,7 +62,7 @@ class PrecompilesTests(unittest.TestCase):
     def send_transaction(self, data):
         if len(data) > 512:
             result = self.call_with_holder_account(data)
-            return b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
+            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
         else:
             trx = self.make_transactions(data)
             result = send_transaction(client, trx, self.acc)

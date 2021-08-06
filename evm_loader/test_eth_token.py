@@ -7,6 +7,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
+from decimal import Decimal
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -179,9 +180,9 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -195,9 +196,9 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -213,16 +214,18 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal('0.000001000')
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before + value)
-        self.assertEqual(caller_balance_after, caller_balance_before - value)
+        self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
@@ -237,16 +240,18 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal('0.000001000')
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
-        self.assertEqual(caller_balance_after, caller_balance_before + value)
+        self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
 
 if __name__ == '__main__':
     unittest.main()

@@ -309,11 +309,11 @@ class EventTest(unittest.TestCase):
         result = self.call_partial_signed(input=data, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 2?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Foo(msg.sender, msg.value, _message);
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_reciever_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -327,7 +327,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[189:221], bytes.fromhex('{:0<64}'.format(s.hex())))
 
         # emit Result(success, data);
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_caller_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -359,11 +359,11 @@ class EventTest(unittest.TestCase):
         result = self.call_with_holder_account(input=data, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 3?
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 3?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Recovered(address);
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-4]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_recover_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -372,7 +372,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[61:93], bytes.fromhex("%024x" %0x0 + self.caller_ether.hex()))
 
         # emit Response_recovery_signer(success, data));
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_reciever_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -384,7 +384,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[157:189], bytes.fromhex("%024x" %0x0 + self.caller_ether.hex()))
 
         #  emit Result(success, data);
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][2]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_caller_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -415,15 +415,15 @@ class EventTest(unittest.TestCase):
             res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
         func_name = abi.function_signature_to_4byte_selector('creator()')
-        result = self.call_partial_signed(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+        result = self.call_with_holder_account(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3) # TODO: why not 2?
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4) # TODO: why not 2?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         # emit Foo(caller, amount, message)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_create_receiver_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -437,7 +437,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[189:221], bytes.fromhex('{:0<64}'.format(s.hex())))
 
         # emit Result_foo(result)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_create_caller_eth)
         count_topics = int().from_bytes(data[21:29], 'little')
@@ -452,11 +452,11 @@ class EventTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)  # TODO: why not 1?
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)  # TODO: why not 1?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         #  emit Result(success, data);
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
         self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
         self.assertEqual(data[1:21], self.reId_caller_eth)
         count_topics = int().from_bytes(data[21:29], 'little')

@@ -138,7 +138,7 @@ class EmulateTest(unittest.TestCase):
             cls.spl_token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
             
-        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.ethereum_caller)
 
         print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))
         print('Ethereum Caller: {}-{}'.format(cls.ethereum_caller.hex(), cls.caller_nonce))
