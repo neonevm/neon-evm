@@ -1015,17 +1015,17 @@ fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 // Return hexdata for an argument
 fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
     matches.value_of(name).and_then(|value| {
-        match value {
-            "None" => None,
-            _ => hex::decode(&make_clean_hex(value)).ok()
+        if value.to_lowercase() == "none" {
+            return None;
         }
+        hex::decode(&make_clean_hex(value)).ok()
     })
 }
 
 // Return an error if string cannot be parsed as a hexdata
 fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    if string.as_ref() == "None" {
+    if string.as_ref().to_lowercase() == "none" {
         return Ok(());
     }
 
