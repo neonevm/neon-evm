@@ -2,7 +2,6 @@ from time import sleep
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
-from eth_keys import keys as eth_keys
 from web3 import Web3
 import argparse
 from eth_utils import abi
@@ -30,7 +29,6 @@ senders_file = "sender.json"
 verify_file = "verify.json"
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
-# map caller->trx_count
 trx_count = {}
 
 
@@ -40,9 +38,6 @@ class init_senders():
         cls.accounts = []
         file = open(senders_file + args.postfix, mode='r')
         for line in file:
-            # pair = bytes.fromhex(line)
-            # rec = json.loads(line)
-            # print (rec)
             cls.accounts.append(Account(bytes().fromhex(line[:64])))
         print("init_senders init")
 
@@ -64,7 +59,6 @@ class init_wallet():
         cls.token = SplToken(solana_url)
 
         wallet = RandomAccount()
-        spl_wallet = WalletAccount(wallet_path())
 
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
@@ -74,24 +68,16 @@ class init_wallet():
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
-        # cls.token_owner_keypath = spl_wallet.get_path()
         cls.keypath = wallet.get_path()
 
         # Create ethereum account for user account
-        # cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
-        cls.caller_token = get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
-
-        cls.caller_token_acc = cls.token.call("create-account {} --owner  {} | grep -Po \"Creating account \K[^\\n]*\"".format(str(ETH_TOKEN_MINT_ID), cls.keypath))
-        cls.token.call("mint {} 1000 {}   ".format(str(ETH_TOKEN_MINT_ID), cls.caller_token_acc))
-        # cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
