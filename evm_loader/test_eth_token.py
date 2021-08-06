@@ -222,7 +222,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10])/1_000_000_000)
+        gas_used = Decimal(int().from_bytes(data[2:10], 'little')/1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
@@ -248,7 +248,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10])/1_000_000_000)
+        gas_used = Decimal(int().from_bytes(data[2:10],'little')/1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
