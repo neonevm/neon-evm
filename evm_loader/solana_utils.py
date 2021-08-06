@@ -390,33 +390,8 @@ class EvmLoader:
         result = json.loads(output.splitlines()[-1])
         return result
 
-    def createEtherAccount(self, ether):
-        if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
-        else:
-            ether = ether.hex()
-        (sol, nonce) = self.ether2program(ether)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-        associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
-        trx = Transaction()
-        base = self.acc.get_acc().public_key()
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10 ** 9,
-                space=0,
-                ether=bytes.fromhex(ether),
-                nonce=nonce)),
-            keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
-            ]))
+    def createEtherAccount(self, ether, code_acc=None):
+        (trx, sol) = self.createEtherAccountTrx(ether=ether, code_acc=code_acc)
         result = send_transaction(client, trx, self.acc.get_acc())
         print('result:', result)
         return sol
@@ -464,46 +439,35 @@ class EvmLoader:
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
+
         (sol, nonce) = self.ether2program(ether)
         token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-        seed = b58encode(bytes.fromhex(ether))
         base = self.acc.get_acc().public_key()
         data = bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
             lamports=10 ** 9,
             space=0,
             ether=bytes.fromhex(ether),
             nonce=nonce))
+
+        account_meta = [
+                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
+                ]
+        if code_acc is not None:
+            account_meta.insert(3, AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True))
+
         trx = Transaction()
-        if code_acc is None:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
-                ]))
-        else:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
-                ]))
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=data,
+            keys=account_meta))
+
         return (trx, sol)
 
 

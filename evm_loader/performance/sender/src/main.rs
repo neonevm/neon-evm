@@ -10,6 +10,7 @@ use std::{
     str::FromStr,
     process::exit,
     fmt::Display,
+    env
 };
 
 use std::io::{self, prelude::*, BufReader};
@@ -91,17 +92,6 @@ struct sender_t{
     pr_key: String,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug)]
-struct SecpSignatureOffsets {
-    signature_offset: u16, // offset to [signature,recovery_id] of 64+1 bytes
-    signature_instruction_index: u8,
-    eth_address_offset: u16, // offset to eth_address of 20 bytes
-    eth_address_instruction_index: u8,
-    message_data_offset: u16, // offset to start of message data
-    message_data_size: u16,   // size of message data
-    message_instruction_index: u8,
-}
-
 
 fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
     let mut data = Vec::new();
@@ -139,6 +129,18 @@ type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
 fn parse_program_args() -> (Pubkey, String, String, String, String, String){
+    let key = "EVM_LOADER";
+    let env_evm_loader  = match env::var_os(key) {
+        Some(val) => val.into_string().unwrap(),
+        None => "".to_string()
+    };
+
+    let key = "SOLANA_URL";
+    let env_solana_url  = match env::var_os(key) {
+        Some(val) => val.into_string().unwrap(),
+        None => "http://localhost:8899".to_string()
+    };
+
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -151,7 +153,7 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String){
                 .takes_value(true)
                 .global(true)
                 .validator(is_url_or_moniker)
-                .default_value("http://localhost:8899")
+                .default_value(&*env_solana_url)
                 .help("URL for Solana node"),
         )
         .arg(
@@ -161,6 +163,7 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String){
                 .takes_value(true)
                 .global(true)
                 .validator(is_valid_pubkey)
+                .default_value(&*env_evm_loader)
                 .help("Pubkey for evm_loader contract")
         ).arg(
         Arg::with_name("transaction_file")
@@ -230,6 +233,34 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
+fn make_instruction_05(trx : &trx_t ) -> solana_program::Instruction {
+    let mut data_05_hex = String::from("05");
+    data_05_hex.push_str(trx.from_addr.as_str());
+    data_05_hex.push_str(trx.sign.as_str());
+    data_05_hex.push_str(trx.msg.as_str());
+    let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
+
+    let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
+    let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
+    let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
+    let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
+    let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
+
+    let instruction_05 = Instruction::new_with_bytes(
+        *evm_loader,
+        &data_05,
+        vec![
+            AccountMeta::new(contract, false),
+            AccountMeta::new(contract_code, false),
+            AccountMeta::new(caller, false),
+            AccountMeta::new_readonly(sysinstruct, false),
+            AccountMeta::new_readonly(*evm_loader, false),
+            AccountMeta::new_readonly(sysvarclock, false),
+        ]);
+
+    instruction_05
+}
+
 fn create_trx(
     evm_loader: &Pubkey,
     trx_filename: &String,
@@ -270,29 +301,7 @@ fn create_trx(
             ]
         );
 
-        let mut data_05_hex = String::from("05");
-        data_05_hex.push_str(trx.from_addr.as_str());
-        data_05_hex.push_str(trx.sign.as_str());
-        data_05_hex.push_str(trx.msg.as_str());
-        let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
-
-        let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
-        let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
-        let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
-        let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
-        let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
-
-        let instruction_05 = Instruction::new_with_bytes(
-            *evm_loader,
-            &data_05,
-            vec![
-                AccountMeta::new(contract, false),
-                AccountMeta::new(contract_code, false),
-                AccountMeta::new(caller, false),
-                AccountMeta::new_readonly(sysinstruct, false),
-                AccountMeta::new_readonly(*evm_loader, false),
-                AccountMeta::new_readonly(sysvarclock, false),
-            ]);
+        let instruction_05 = make_instruction_05(&trx);
 
         let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
         let mut tx = Transaction::new_unsigned(message);

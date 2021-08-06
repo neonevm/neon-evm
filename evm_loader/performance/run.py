@@ -10,10 +10,13 @@ from base58 import b58decode
 import random
 from solana.blockhash import *
 import statistics
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
 
 factory_path = "Factory.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
-# evm_loader_id = "wkiSZ5TANo7e4MjaJhCYND9A7FQXHkoZNRcUjeuK5Yp"
+trx_cnt = os.environ.get("CNT", 10)
+
 chain_id = 111
 transfer_sum = 1
 
@@ -25,6 +28,7 @@ accounts_file = "account.json"
 transactions_file = "transaction.json"
 senders_file = "sender.json"
 verify_file = "verify.json"
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 # map caller->trx_count
 trx_count = {}
@@ -57,8 +61,11 @@ class init_wallet():
     @classmethod
     def init(cls):
         print("\ntest_performance.py init")
+        cls.token = SplToken(solana_url)
 
         wallet = RandomAccount()
+        spl_wallet = WalletAccount(wallet_path())
+
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
@@ -67,6 +74,7 @@ class init_wallet():
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
+        # cls.token_owner_keypath = spl_wallet.get_path()
         cls.keypath = wallet.get_path()
 
         # Create ethereum account for user account
@@ -74,6 +82,11 @@ class init_wallet():
         cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
         cls.caller_ether = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_token = get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
+
+        cls.caller_token_acc = cls.token.call("create-account {} --owner  {} | grep -Po \"Creating account \K[^\\n]*\"".format(str(ETH_TOKEN_MINT_ID), cls.keypath))
+        cls.token.call("mint {} 1000 {}   ".format(str(ETH_TOKEN_MINT_ID), cls.caller_token_acc))
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -172,9 +185,12 @@ def get_filehash(factory, factory_code, factory_eth, acc):
             data=bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('get_hash()'),
             keys=[
                 AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(factory), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
     result = send_transaction(client, trx, acc)['result']
@@ -229,10 +245,16 @@ def sol_instr_05(evm_instruction, contract, contract_code, caller):
                                data=bytearray.fromhex("05") + evm_instruction,
                                keys=[
                                    AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+                                   AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+                                   AccountMeta(
+                                       pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
+                                       is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                    AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                                   AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                                    AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
                                ])
 
@@ -287,11 +309,17 @@ def deploy_contracts(args):
                 data=trx_data,
                 keys=[
                     AccountMeta(pubkey=factory, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=get_associated_token_address(PublicKey(factory), ETH_TOKEN_MINT_ID),
+                                is_signer=False, is_writable=True),
                     AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
                     AccountMeta(pubkey=erc20_id, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=get_associated_token_address(PublicKey(erc20_id), ETH_TOKEN_MINT_ID),
+                                is_signer=False, is_writable=True),
                     AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
         res = client.send_transaction(trx, instance.acc,
@@ -338,11 +366,17 @@ def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, s
             data=trx_data,
             keys=[
                 AccountMeta(pubkey=erc20_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(erc20_sol), ETH_TOKEN_MINT_ID),
+                            is_signer=False, is_writable=True),
                 AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=payer_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(payer_sol), ETH_TOKEN_MINT_ID),
+                            is_signer=False, is_writable=True),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False)
             ]))
     res = client.send_transaction(trx, acc,
                                   opts=TxOpts(skip_confirmation=True, skip_preflight=True,
@@ -360,31 +394,22 @@ def mint_create(accounts, acc, sum):
     ic = iter(contracts)
 
     total = 0
-    if args.scheme == "one-to-one":
-        while total < args.count:
-            print("mint ", total)
-            try:
-                (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
-            except StopIteration as err:
-                ic = iter(contracts)
-                continue
+    while total < args.count:
+        print("mint ", total)
+        try:
+            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
+        except StopIteration as err:
+            ic = iter(contracts)
+            continue
 
-            try:
-                (payer_eth, payer_sol) = next(ia)
-            except StopIteration as err:
-                ia = iter(accounts)
-                (payer_eth, payer_sol) = next(ia)
+        try:
+            (payer_eth, payer_sol) = next(ia)
+        except StopIteration as err:
+            ia = iter(accounts)
+            (payer_eth, payer_sol) = next(ia)
 
-            receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
-            total = total + 1
-    else:
-        for (erc20_sol, erc20_eth_hex, erc20_code) in contracts:
-            for (payer_eth, payer_sol) in accounts:
-                print("mint ", total)
-                receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
-                total = total + 1
-                if total >= args.count:
-                    return receipt_list
+        receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
+        total = total + 1
     return receipt_list
 
 
@@ -706,11 +731,10 @@ def create_senders(args):
 
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)')
-parser.add_argument('--step', metavar="step of the test", type=str,  help='deploy, create_senders, create_acc, create_trx, send_trx, '
-                                                                           'veryfy_trx')
-parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
-parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..')
+parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)', default=trx_cnt)
+parser.add_argument('--step', metavar="step of the test", type=str,  help='for ERC20.transfer: deploy, create_senders, create_acc, create_trx, send_trx, '
+                                                                           'veryfy_trx\n for spl-token transfer: create_senders,  ')
+parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
 parser.add_argument('--delay', metavar="delay between transactions in milliseconds (only for deploy, create_acc steps)", type=int,  help='10, 20, ..', default=0)
 
 args = parser.parse_args()
