@@ -3,7 +3,7 @@ from solana.rpc.types import TxOpts
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
@@ -35,6 +35,8 @@ class EventTest(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -95,9 +97,9 @@ class EventTest(unittest.TestCase):
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -108,6 +110,8 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
@@ -120,10 +124,10 @@ class EventTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -134,6 +138,8 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
@@ -147,9 +153,9 @@ class EventTest(unittest.TestCase):
                 # Operator address:
                 AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -160,6 +166,8 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
@@ -236,7 +244,6 @@ class EventTest(unittest.TestCase):
         for (call, index) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
-                ''' TODO fix with iterative payments
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
@@ -245,7 +252,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), 21657) # used_gas
-                '''
 
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
@@ -254,7 +260,6 @@ class EventTest(unittest.TestCase):
         for (call, index) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
-                ''' TODO fix with iterative payments
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
@@ -264,7 +269,6 @@ class EventTest(unittest.TestCase):
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
                 self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
-                '''
 
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
@@ -273,7 +277,6 @@ class EventTest(unittest.TestCase):
         for (call, index) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
-                ''' TODO fix with iterative payments
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
@@ -289,7 +292,6 @@ class EventTest(unittest.TestCase):
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), 22743) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
-                '''
 
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
@@ -298,7 +300,6 @@ class EventTest(unittest.TestCase):
         for (call, index) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
-                ''' TODO fix with iterative payments
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
@@ -320,7 +321,6 @@ class EventTest(unittest.TestCase):
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
-                '''
 
     def test_events_of_different_instructions(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
@@ -343,7 +343,6 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
-        ''' TODO fix with iterative payments
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
@@ -390,7 +389,6 @@ class EventTest(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
-        '''
 
     def test_caseFailAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')

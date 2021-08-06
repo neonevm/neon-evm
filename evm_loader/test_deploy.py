@@ -36,28 +36,6 @@ def create_account_layout(lamports, space, ether, nonce):
         nonce=nonce
     ))
 
-def create_with_seed_loader_instruction(funding, created, base, seed, lamports, space, owner):
-    return TransactionInstruction(program_id=evm_loader_id,
-                data=bytes.fromhex("04000000") + \
-                    bytes(base) + \
-                    len(seed).to_bytes(8, byteorder='little') + \
-                    bytes(seed, 'utf8') + \
-                    lamports.to_bytes(8, byteorder='little') + \
-                    space.to_bytes(8, byteorder='little') + \
-                    bytes(owner) + \
-                    bytes(created),
-                keys=[
-                    AccountMeta(pubkey=funding, is_signer=True, is_writable=False),
-                    AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=base, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(rentid), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=True),
-                ])
-
-
 def write_layout(offset, data):
     return (bytes.fromhex("00000000")+
             offset.to_bytes(4, byteorder="little")+
@@ -78,8 +56,6 @@ class DeployTest(unittest.TestCase):
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
-        holder_seed = b58encode(cls.caller_ether).decode('utf8') + "hold"
-        cls.caller_holder = accountWithSeed(PublicKey(cls.caller), holder_seed, PublicKey(tokenkeg))
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -87,10 +63,7 @@ class DeployTest(unittest.TestCase):
             cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
-        if getBalance(cls.caller_holder) == 0:
-            trx = Transaction()
-            trx.add(create_with_seed_loader_instruction(cls.acc.public_key(), cls.caller_holder, PublicKey(cls.caller), holder_seed, 10**9, ACCOUNT_LEN, PublicKey(tokenkeg)))
-            send_transaction(client, trx, cls.acc)
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -163,11 +136,10 @@ class DeployTest(unittest.TestCase):
 
         base = self.acc.public_key()
         seed = b58encode(contract_eth).decode('utf8')
+
         # Create contract accounts
         trx = Transaction()
-
         trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))
-
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
             data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
@@ -189,6 +161,7 @@ class DeployTest(unittest.TestCase):
 
         result = send_transaction(client, trx, self.acc)["result"]
         print("result :", result)
+
         return (holder, contract_sol, code_sol)
 
     def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
@@ -265,7 +238,7 @@ class DeployTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, holder, contract_sol, code_sol):
-        storage = self.create_storage_account("0123456789")
+        storage = self.create_storage_account("01234567890")
 
         print("Begin")
         trx = Transaction()
