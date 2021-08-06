@@ -2764,6 +2764,8 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
+ "spl-associated-token-account",
+ "spl-token",
 ]
 
 [[package]]

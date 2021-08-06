@@ -202,15 +202,18 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String){
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
         .unwrap_or_else(|| {
-            println!("Need specify evm_loader");
+            println!("Need to specify evm_loader");
             exit(1);
         });
+    println!("evm_loader:   {:?}", evm_loader);
 
 
     let json_rpc_url = normalize_to_url_if_moniker(
         app_matches
             .value_of("json_rpc_url").unwrap()
     );
+    println!("url:   {:?}", json_rpc_url);
+
 
     let client = app_matches.value_of("client").unwrap().to_string();
 
@@ -233,7 +236,7 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
-fn make_instruction_05(trx : &trx_t ) -> solana_program::Instruction {
+fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey) -> Instruction {
     let mut data_05_hex = String::from("05");
     data_05_hex.push_str(trx.from_addr.as_str());
     data_05_hex.push_str(trx.sign.as_str());
@@ -245,16 +248,22 @@ fn make_instruction_05(trx : &trx_t ) -> solana_program::Instruction {
     let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
     let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
     let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
+    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::token::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::token::token_mint::id());
 
     let instruction_05 = Instruction::new_with_bytes(
         *evm_loader,
         &data_05,
         vec![
             AccountMeta::new(contract, false),
+            AccountMeta::new(contract_token, false),
             AccountMeta::new(contract_code, false),
             AccountMeta::new(caller, false),
+            AccountMeta::new(caller_token, false),
             AccountMeta::new_readonly(sysinstruct, false),
             AccountMeta::new_readonly(*evm_loader, false),
+            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(sysvarclock, false),
         ]);
 
@@ -301,7 +310,7 @@ fn create_trx(
             ]
         );
 
-        let instruction_05 = make_instruction_05(&trx);
+        let instruction_05 = make_instruction_05(&trx, evm_loader);
 
         let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
         let mut tx = Transaction::new_unsigned(message);
