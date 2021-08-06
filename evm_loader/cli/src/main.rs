@@ -134,6 +134,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         None => {
             let solana_address = Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
             let trx_count = get_ether_account_nonce(config, &solana_address)?;
+            let trx_count= trx_count.0;
             let program_id = get_program_ether(&caller_id, trx_count);
             debug!("program_id to deploy: {:?}", program_id);
             EmulatorAccountStorage::new(config, program_id, caller_id)
@@ -601,7 +602,7 @@ fn get_ether_account_nonce(
     let data : Vec<u8>;
     match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) =>   data = acc.data,
-        None => return Ok(u64::default())
+        None => return Ok((u64::default(), H160::default(), Pubkey::default()))
     }
 
     let trx_count : u64;
