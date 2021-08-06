@@ -507,7 +507,7 @@ fn fill_holder_account(
 
 fn get_ethereum_caller_credentials(
     config: &Config,
-) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
+) -> (SecretKey, H160, Pubkey, u8, Pubkey, Pubkey) {
     use secp256k1::PublicKey;
     let caller_private = {
         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
@@ -519,11 +519,43 @@ fn get_ethereum_caller_credentials(
     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+    let caller_holder = create_block_token_account(config, &caller_ether, &caller_sol).unwrap();
     debug!("caller_sol = {}", caller_sol);
     debug!("caller_ether = {}", caller_ether);
     debug!("caller_token = {}", caller_token);
 
-    (caller_private, caller_ether, caller_sol, caller_nonce, caller_token)
+    (caller_private, caller_ether, caller_sol, caller_nonce, caller_token, caller_holder)
+}
+
+fn create_block_token_account(
+    config: &Config,
+    caller_ether: &H160,
+    caller_sol: &Pubkey,
+) -> Result<Pubkey, Error> {
+    use solana_sdk::program_pack::Pack;
+    let creator = &config.signer;
+    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN)?;
+    let holder_seed = bs58::encode(&caller_ether.to_fixed_bytes()).into_string() + "hold";
+    let caller_holder = Pubkey::create_with_seed(caller_sol, &holder_seed, &spl_token::id())?;
+    if config.rpc_client.get_account_with_commitment(&caller_holder, CommitmentConfig::confirmed())?.value.is_none() {
+        let instruction = Instruction::new_with_bincode(
+            config.evm_loader,
+            &(4_u32, caller_sol, holder_seed, minimum_balance_for_account, spl_token::state::Account::LEN, spl_token::id(), caller_holder),
+            vec![
+                AccountMeta::new(creator.pubkey(), true),
+                AccountMeta::new(caller_holder, false),
+                AccountMeta::new(*caller_sol, false),
+                AccountMeta::new(caller_holder, false),
+                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
+            ]
+        );
+
+        send_transaction(config, &[instruction])?;
+    }
+    Ok(caller_holder)
 }
 
 fn get_ether_account_nonce(
@@ -607,8 +639,9 @@ fn create_ethereum_contract_accounts_in_solana(
 
     if let Some(_account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
-        return Err("Account already exist".to_string().into());
-        // debug!("Account already exist");
+        // return Err("Account already exist".to_string().into());
+        debug!("Account already exist");
+        return Ok(());
     }
 
     let instructions = vec![
@@ -750,9 +783,10 @@ fn command_deploy(
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
+    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &evm_loader::token::token_mint::id());
 
     // Create ethereum caller private key from sign of array by signer
-    let (caller_private, caller_ether, caller_sol, _caller_nonce, caller_token) = get_ethereum_caller_credentials(config);
+    let (caller_private, caller_ether, caller_sol, _caller_nonce, caller_token, block_token) = get_ethereum_caller_credentials(config);
 
     if caller_sol != caller {
         return Err("Could not acquire caller account private key".to_string().into());
@@ -794,8 +828,8 @@ fn command_deploy(
 
                         AccountMeta::new(creator.pubkey(), true),
                         AccountMeta::new(collateral_pool_acc, false),
-                        AccountMeta::new(clock::id(), false),
-                        AccountMeta::new(clock::id(), false),
+                        AccountMeta::new(block_token, false),
+                        AccountMeta::new(caller_token, false),
                         AccountMeta::new(system_program::id(), false),
 
                         AccountMeta::new(program_id, false),
@@ -805,6 +839,8 @@ fn command_deploy(
                         AccountMeta::new(caller_token, false),
 
                         AccountMeta::new_readonly(config.evm_loader, false),
+                        AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                        AccountMeta::new_readonly(spl_token::id(), false),
                         AccountMeta::new(rent::id(), false),
                         AccountMeta::new(clock::id(), false),
                         ];
@@ -823,8 +859,8 @@ fn command_deploy(
                             AccountMeta::new(storage, false),
     
                             AccountMeta::new(creator.pubkey(), true),
-                            AccountMeta::new(clock::id(), false),
-                            AccountMeta::new(clock::id(), false),
+                            AccountMeta::new(operator_token, false),
+                            AccountMeta::new(block_token, false),
                             AccountMeta::new(system_program::id(), false),
 
                             AccountMeta::new(program_id, false),
@@ -834,6 +870,8 @@ fn command_deploy(
                             AccountMeta::new(caller_token, false),
 
                             AccountMeta::new_readonly(config.evm_loader, false),
+                            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                            AccountMeta::new_readonly(spl_token::id(), false),
                             AccountMeta::new(rent::id(), false),
                             AccountMeta::new(clock::id(), false),
                             ];
