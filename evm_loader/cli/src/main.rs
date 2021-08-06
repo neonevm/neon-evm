@@ -573,31 +573,31 @@ fn fill_holder_account(
     Ok(())
 }
 
-fn get_ethereum_caller_credentials(
-    config: &Config,
-) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
-    use secp256k1::PublicKey;
-    let caller_private = {
-        let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
-        let mut sign_arr: [u8;32] = Default::default();
-        sign_arr.clone_from_slice(&private_bytes[..32]);
-        SecretKey::parse(&sign_arr).unwrap()
-    };
-    let caller_public = PublicKey::from_secret_key(&caller_private);
-    let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
-    let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
-    debug!("caller_sol = {}", caller_sol);
-    debug!("caller_ether = {}", caller_ether);
-    debug!("caller_token = {}", caller_token);
-
-    (caller_private, caller_ether, caller_sol, caller_nonce, caller_token)
-}
+//fn get_ethereum_caller_credentials(
+//    config: &Config,
+//) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
+//     use secp256k1::PublicKey;
+//     let caller_private = {
+//         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
+//         let mut sign_arr: [u8;32] = Default::default();
+//         sign_arr.clone_from_slice(&private_bytes[..32]);
+//         SecretKey::parse(&sign_arr).unwrap()
+//     };
+//     let caller_public = PublicKey::from_secret_key(&caller_private);
+//     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
+//     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
+//    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     debug!("caller_sol = {}", caller_sol);
+//     debug!("caller_ether = {}", caller_ether);
+//    debug!("caller_token = {}", caller_token);
+//
+//    (caller_private, caller_ether, caller_sol, caller_nonce)
+// }
 
 fn get_ether_account_nonce(
     config: &Config, 
     caller_sol: &Pubkey
-) -> Result<u64, Error> {
+) -> Result<(u64, H160, Pubkey), Error> {
     let data : Vec<u8>;
     match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) =>   data = acc.data,
@@ -615,9 +615,14 @@ fn get_ether_account_nonce(
         Err(_) => return Err("Caller unpack error".into())
     };
     trx_count = account.trx_count;
-    debug!("trx_count = {}", trx_count);
+    let caller_ether = account.ether;
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::token::token_mint::id());
 
-    Ok(trx_count)
+    debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
+    debug!("Caller trx_count: {} ", trx_count);
+    debug!("caller_token = {}", caller_token);
+
+    Ok((trx_count, caller_ether, caller_token))
 }
 
 fn get_program_ether(
@@ -810,20 +815,27 @@ fn send_transaction(
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    caller: Pubkey
+    caller_arg: Pubkey
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
 
     // Create ethereum caller private key from sign of array by signer
-    let (caller_private, caller_ether, caller_sol, _caller_nonce, caller_token) = get_ethereum_caller_credentials(config);
+    // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
 
-    if caller_sol != caller {
-        return Err("Could not acquire caller account private key".to_string().into());
-    }
+    let caller_private_eth = {
+        let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
+        let mut sign_arr: [u8;32] = Default::default();
+        sign_arr.clone_from_slice(&private_bytes[..32]);
+        SecretKey::parse(&sign_arr).unwrap()
+    };
+
+    // if caller_sol != caller_arg {
+    //     return Err("Could not acquire caller account private key".to_string().into());
+    // }
 
     // Get caller nonce
-    let trx_count = get_ether_account_nonce(config, &caller_sol)?;
+    let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
 
     let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
@@ -841,7 +853,7 @@ fn command_deploy(
     )?;
 
     // Create transaction prepared for execution from account
-    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private);
+    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
     let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), "1236", 128*1024_u64)?;
@@ -856,8 +868,8 @@ fn command_deploy(
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_token, false),
                         AccountMeta::new(program_code, false),
-                        AccountMeta::new(caller_sol, false),
-                        AccountMeta::new(caller_token, false),
+                        AccountMeta::new(caller_arg, false),
+			AccountMeta::new(caller_token, false),
                         AccountMeta::new_readonly(config.evm_loader, false),
                         AccountMeta::new(clock::id(), false),
                         ];

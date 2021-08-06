@@ -1,3 +1,4 @@
+from time import sleep
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
@@ -10,8 +11,9 @@ import random
 from solana.blockhash import *
 import statistics
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "contracts/")
+factory_path = "Factory.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
+# evm_loader_id = "wkiSZ5TANo7e4MjaJhCYND9A7FQXHkoZNRcUjeuK5Yp"
 chain_id = 111
 transfer_sum = 1
 
@@ -57,28 +59,32 @@ class init_wallet():
         print("\ntest_performance.py init")
 
         wallet = RandomAccount()
-        tx = client.request_airdrop(wallet.get_acc().public_key(), 100000 * 10 ** 9, commitment=Confirmed)
-        confirm_transaction(client, tx["result"])
-
         if getBalance(wallet.get_acc().public_key()) == 0:
-            print("request_airdrop error")
-            exit(0)
+            tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
+            confirm_transaction(client, tx["result"])
+
+        assert (getBalance(wallet.get_acc().public_key()) > 0)
 
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
+        cls.keypath = wallet.get_path()
 
         # Create ethereum account for user account
-        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        # cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        cls.caller_eth_pr_key = w3.eth.account.from_key(cls.acc.secret_key())
+        cls.caller_ether = bytes.fromhex(cls.caller_eth_pr_key.address[2:])
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
 
 
 def check_address_event(result, factory_eth, erc20_eth):
@@ -172,7 +178,16 @@ def get_filehash(factory, factory_code, factory_eth, acc):
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ]))
     result = send_transaction(client, trx, acc)['result']
+    print(result)
+    if result['meta']['err'] != None:
+        print(result)
+        print("Error: result['meta']['err'] != None")
+        exit(1)
 
+    if result == None:
+        print("Error: result == None")
+        exit(1)
+        
     assert(result['meta']['err'] == None)
     assert(len(result['meta']['innerInstructions']) == 1)
     assert(len(result['meta']['innerInstructions'][0]['instructions']) == 2)
@@ -193,7 +208,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key):
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': 0, 'gas': 1, 'gasPrice': 1,
+    tx = {'to': contract_eth, 'value': 0, 'gas': 9999999999, 'gasPrice': 1,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 
@@ -225,17 +240,21 @@ def deploy_contracts(args):
     instance = init_wallet()
     instance.init()
 
-    res = instance.loader.deploy(CONTRACTS_DIR + "Factory.binary", instance.caller)
+    res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
+
+    res = instance.loader.deploy(factory_path, caller=instance.caller, config="config.yml"+args.postfix)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
-    erc20_filehash = get_filehash(factory, factory_code, factory_eth, instance.acc)
     print("factory", factory)
     print ("factory_eth", factory_eth.hex())
     print("factory_code", factory_code)
+    erc20_filehash = get_filehash(factory, factory_code, factory_eth, instance.acc)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20(bytes32)')
     receipt_list = []
 
     for i in range(args.count):
+
+        sleep(args.delay/1000)
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
@@ -307,6 +326,7 @@ def deploy_contracts(args):
 
 def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
 
+    sleep(args.delay/1000)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + payer_eth) + \
@@ -473,7 +493,6 @@ def create_transactions(args):
         contracts = json.loads(f.read())
     with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
-
     transactions = open(transactions_file+args.postfix, mode='w')
     transactions = open(transactions_file+args.postfix, mode='a')
 
@@ -481,6 +500,10 @@ def create_transactions(args):
     total = 0
     if len(accounts) == 0:
         print ("accounts not found" )
+        exit(1)
+
+    if len(accounts) == 1:
+        print ("accounts count too small" )
         exit(1)
 
     if len(contracts) == 0:
@@ -637,7 +660,7 @@ def verify_trx(args):
                     if check_transfer_event(res['result'], erc20_eth, payer_eth, receiver_eth, transfer_sum, b'\x12'):
                         success = True
                     else:
-                        # print(res['result'])
+                        print(res['result'])
                         event_error = event_error + 1
             else:
                 print(res["result"])
@@ -688,6 +711,7 @@ parser.add_argument('--step', metavar="step of the test", type=str,  help='deplo
                                                                            'veryfy_trx')
 parser.add_argument('--scheme', metavar="(optional for stage=create_acc) scheme of the transactions", type=str,  help='one-to-one')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..')
+parser.add_argument('--delay', metavar="delay between transactions in milliseconds (only for deploy, create_acc steps)", type=int,  help='10, 20, ..', default=0)
 
 args = parser.parse_args()
 

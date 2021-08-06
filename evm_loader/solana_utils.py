@@ -340,11 +340,7 @@ class RandomAccount:
         print('Private:', self.acc.secret_key())
 
     def make_random_path(self):
-        import calendar;
-        import time;
-        ts = calendar.timegm(time.gmtime())
-        self.path = str(ts) + '.json'
-        time.sleep(1)
+        self.path  = os.urandom(5).hex()+ ".json"
 
     def generate_key(self):
         cmd_generate = 'solana-keygen new --no-passphrase --outfile {}'.format(self.path)
@@ -387,9 +383,13 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def deploy(self, contract_path, caller=None):
+    def deploy(self, contract_path, caller=None, config=None):
         print('deploy caller:', caller)
-        output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        if config == None:
+            output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        else:
+            output = neon_cli().call("deploy --evm_loader {} --config {} {} {}".format(self.loader_id, config,
+                                                                                       contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
