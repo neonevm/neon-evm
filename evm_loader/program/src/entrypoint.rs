@@ -498,10 +498,7 @@ fn process_instruction<'a>(
                     }
                     acc.trx_count += 1;
                 },
-                _ => {
-                    debug_print!("Unknown account");
-                    return Err(ProgramError::InvalidAccountData)
-                },
+                _ => return Err(ProgramError::InvalidAccountData),
             };
 
             payment::burn_operators_deposit(
