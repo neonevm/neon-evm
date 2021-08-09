@@ -1,3 +1,5 @@
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+
 use std::convert::Infallible;
 use std::mem;
 
@@ -37,6 +39,7 @@ struct CreateInterrupt {
     gas_limit: u64,
 }
 
+#[derive(Debug)]
 enum RuntimeApply{
     Continue,
     Call(CallInterrupt),
@@ -428,21 +431,16 @@ impl<'config, B: Backend> Machine<'config, B> {
             .record_transaction(transaction_cost)
             .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-        let after_gas = self.executor.state.metadata().gasometer().gas();
-        let gas_limit = core::cmp::min(gas_limit, after_gas);
-
-        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-
         let scheme = evm::CreateScheme::Legacy { caller };
-        self.executor.state.enter(gas_limit, false);
 
-        match self.executor.create(caller, scheme, transfer_value, code, None) {
+        match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
             Capture::Exit(_) => {
                 debug_print!("create_begin() error ");
                 return Err(ProgramError::InvalidInstructionData);
             },
             Capture::Trap(info) => {
+                self.executor.state.enter(info.gas_limit, false);
+
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {

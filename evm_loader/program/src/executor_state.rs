@@ -1,3 +1,6 @@
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+
+
 use std::{
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
@@ -32,6 +35,7 @@ pub struct ExecutorMetadata<'config> {
 
 impl<'config> ExecutorMetadata<'config> {
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, config),
@@ -68,6 +72,7 @@ impl<'config> ExecutorMetadata<'config> {
     }
 
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
             gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
@@ -79,6 +84,7 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    #[must_use]
     pub const fn gasometer(&self) -> &Gasometer {
         &self.gasometer
     }
@@ -88,10 +94,12 @@ impl<'config> ExecutorMetadata<'config> {
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
+    #[must_use]
     pub const fn depth(&self) -> Option<usize> {
         self.depth
     }
@@ -110,6 +118,7 @@ pub struct ExecutorSubstate<'config> {
 
 impl<'config> ExecutorSubstate<'config> {
     #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
     pub fn new(gas_limit: u64) -> Self {
         Self {
             metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
@@ -122,6 +131,7 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    #[must_use]
     pub const fn metadata(&self) -> &'config ExecutorMetadata {
         &self.metadata
     }
@@ -276,18 +286,22 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    #[must_use]
     pub fn known_basic(&self, address: H160) -> Option<Basic> {
         self.known_account(address).map(|acc| acc.basic.clone())
     }
 
+    #[must_use]
     pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    #[must_use]
     pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.valids.clone())
     }
 
+    #[must_use]
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(account) = self.known_account(address) {
             if account.basic.balance != U256::zero() {
@@ -310,6 +324,7 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    #[must_use]
     pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
             return Some(*value);
@@ -328,6 +343,7 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    #[must_use]
     pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
             if account.reset {
@@ -342,6 +358,7 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    #[must_use]
     pub fn deleted(&self, address: H160) -> bool {
         if self.deletes.contains(&address) {
             return true;
