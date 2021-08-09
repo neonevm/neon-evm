@@ -188,7 +188,8 @@ fn process_instruction<'a>(
             };
             let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
-            let account_lamports = rent.minimum_balance(space as usize) + lamports;
+            let space_as_usize = usize::try_from(space).map_err(|_| ProgramError::InvalidArgument)?;
+            let account_lamports = rent.minimum_balance(space_as_usize) + lamports;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
