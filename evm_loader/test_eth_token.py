@@ -222,12 +222,12 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10], 'little')/1_000_000_000)
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before + value)
-        self.assertAlmostEqual(caller_balance_after, caller_balance_before - value - gas_used)
+        self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
@@ -248,12 +248,12 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10],'little')/1_000_000_000)
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
-        self.assertAlmostEqual(caller_balance_after, caller_balance_before + value - gas_used)
+        self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
 
 if __name__ == '__main__':
     unittest.main()

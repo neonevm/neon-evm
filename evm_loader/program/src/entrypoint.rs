@@ -532,7 +532,8 @@ fn process_instruction<'a>(
                 accounts,
                 block_acc,
                 user_eth_info,
-                program_id,
+                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &return_fee)?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;

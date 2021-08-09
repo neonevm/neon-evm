@@ -420,9 +420,14 @@ class EventTest(unittest.TestCase):
 
         storage = self.create_storage_account(sign[:8].hex())
 
+        caller_balance_before_cancel = self.token.balance(self.caller_token)
+
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
+
+        caller_balance_after_cancel = self.token.balance(self.caller_token)
+        self.assertEqual(caller_balance_after_cancel, caller_balance_before_cancel)
 
         self.call_partial_signed(input)
 
