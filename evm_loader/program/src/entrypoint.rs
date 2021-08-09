@@ -522,6 +522,8 @@ fn process_instruction<'a>(
                 _ => return Err(ProgramError::InvalidAccountData),
             };
 
+            let (gas_limit, gas_price) = storage.get_gas_params()?;
+            let return_fee = U256::from(gas_limit * gas_price) * U256::from(1_000_000_000_u64);
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
@@ -530,9 +532,8 @@ fn process_instruction<'a>(
                 accounts,
                 block_acc,
                 user_eth_info,
-                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
-                &U256::from(1_000_000_000_000_u64))?;
+                program_id,
+                &return_fee)?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
 
