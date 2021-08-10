@@ -131,10 +131,7 @@ class NeonEvmClient:
 
         self.collateral_pool_index = 2
         self.collateral_pool_index_buf = self.collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = create_collateral_pool_address(client,
-                                                                      self.solana_wallet,
-                                                                      self.collateral_pool_index,
-                                                                      self.evm_loader.loader_id)
+        self.collateral_pool_address = create_collateral_pool_address(self.collateral_pool_index)
 
     def set_execute_mode(self, new_mode):
         self.mode = ExecuteMode(new_mode)
@@ -329,17 +326,11 @@ class NeonEvmClient:
         return send_transaction(client, trx, self.solana_wallet)
 
 
-def create_collateral_pool_address(http_client, operator_acc, collateral_pool_index, program_id):
+def create_collateral_pool_address(collateral_pool_index):
+    creator_acc = client.get_account_info(PublicKey(EVM_LOADER))['value']['owner']
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-    collateral_pool_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(program_id))
-    print("Collateral pool address: ", collateral_pool_address)
-    if getBalance(collateral_pool_address) == 0:
-        trx = Transaction()
-        trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, 10**9, 0, PublicKey(program_id)))
-        result = send_transaction(http_client, trx, operator_acc)
-        print(result)
-    return collateral_pool_address
+    return accountWithSeed(PublicKey(creator_acc), seed, PublicKey(EVM_LOADER))
 
 
 def confirm_transaction(http_client, tx_sig, confirmations=0):

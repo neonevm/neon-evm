@@ -41,6 +41,9 @@ fi
 
 sleep 25   # Wait while evm_loader deploy finalized
 
+#generate collateral pool accounts
+python3 collateral_pool_generator.py evm_loader-keypair.json
+
 python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"

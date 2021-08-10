@@ -47,7 +47,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("code id: ", cls.contract_code)
 
         cls.collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
+        cls.collateral_pool_address = create_collateral_pool_address(cls.collateral_pool_index)
         cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
 
 
