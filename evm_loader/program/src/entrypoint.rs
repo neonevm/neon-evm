@@ -130,7 +130,7 @@ fn process_instruction<'a>(
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
                     if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
-                        debug_print!("Code account is not rent exempt");
+                        error_print!("Code account is not rent exempt");
                         return Err(ProgramError::InvalidArgument); 
                     }
 

@@ -149,6 +149,6 @@ pub fn find_rent_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a Account
         }
     }
 
-    debug_print!("rent account not found");
+    error_print!("rent account not found");
     Err(ProgramError::InvalidInstructionData)
 }
