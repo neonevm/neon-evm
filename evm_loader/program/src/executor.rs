@@ -435,7 +435,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
             Capture::Exit(_) => {
-                debug_print!("create_begin() error ");
+                error_print!("create_begin() error ");
                 return Err(ProgramError::InvalidInstructionData);
             },
             Capture::Trap(info) => {

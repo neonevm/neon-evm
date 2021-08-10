@@ -85,7 +85,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let construct_contract_account = |account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
         {
             if account_info.owner != program_id || code_info.owner != program_id {
-                debug_print!("Invalid owner for program info/code");
+                error_print!("Invalid owner for program info/code");
                 return Err(ProgramError::InvalidArgument);
             }
 
@@ -93,8 +93,8 @@ impl<'a> ProgramAccountStorage<'a> {
             let account = account_data.get_account()?;
     
             if *code_info.key != account.code_account {
-                debug_print!("code_info.key: {:?}", *code_info.key);
-                debug_print!("account.code_account: {:?}", account.code_account);
+                error_print!("code_info.key: {:?}", *code_info.key);
+                error_print!("account.code_account: {:?}", account.code_account);
                 return Err(ProgramError::InvalidAccountData)
             }
     
@@ -143,8 +143,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 Sender::Ethereum(caller_address)
             } else {
                 if !caller_info.is_signer {
-                    debug_print!("Caller must be signer");
-                    debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
+                    error_print!("Caller must be signer");
+                    error_print!("Caller pubkey: {}", &caller_info.key.to_string());
 
                     return Err(ProgramError::InvalidArgument);
                 }
@@ -264,7 +264,7 @@ impl<'a> ProgramAccountStorage<'a> {
                                 continue;
                             }
                         }
-                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
+                        error_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
                     }
                 },
@@ -276,7 +276,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let code_info = if let Some(code_info) = code_info {
                             code_info
                         } else {
-                            debug_print!("Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
+                            error_print!("Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
                             return Err(ProgramError::InvalidAccountData);
                         };
 
@@ -297,7 +297,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let mut code_data = code_info.try_borrow_mut_data()?;
                         AccountData::pack(&AccountData::Empty, &mut code_data)?;
                     } else {
-                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
+                        error_print!("Apply can't be done. Not found account for address = {:?}.", address);
                         return Err(ProgramError::NotEnoughAccountKeys);
                     }
                 }

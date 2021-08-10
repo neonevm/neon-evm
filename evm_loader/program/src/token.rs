@@ -72,7 +72,7 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
 pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result<(), ProgramError> {
     debug_print!("check_token_account");
     if *token.owner != spl_token::id() {
-        debug_print!("token.owner != spl_token::id() {}", token.owner);
+        error_print!("token.owner != spl_token::id() {}", token.owner);
         return Err(ProgramError::IncorrectProgramId);
     }
 
@@ -80,7 +80,7 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
     let data = AccountData::unpack(&data)?;
     let data = data.get_account()?;
     if data.eth_token_account != *token.key {
-        debug_print!("data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
+        error_print!("data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
         return Err(ProgramError::IncorrectProgramId);
     }
 

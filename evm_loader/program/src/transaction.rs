@@ -60,9 +60,9 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
         if secp256k1_program::check_id(&instr.program_id) {
             let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
             if reference_instruction != instr.data {
-                debug_print!("wrong keccak instruction data");
-                debug_print!("instruction: {}", &hex::encode(&instr.data));
-                debug_print!("reference: {}", &hex::encode(&reference_instruction));
+                error_print!("wrong keccak instruction data");
+                error_print!("instruction: {}", &hex::encode(&instr.data));
+                error_print!("reference: {}", &hex::encode(&reference_instruction));
                 return Err(ProgramError::InvalidInstructionData);
             }
         } else {
@@ -70,7 +70,7 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
         }
     }
     else {
-        debug_print!("ERR");
+        error_print!("ERR");
         return Err(ProgramError::MissingRequiredSignature);
     }
 
@@ -138,6 +138,6 @@ pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a Accou
         }
     }
 
-    debug_print!("sysvar account not found");
+    error_print!("sysvar account not found");
     Err(ProgramError::InvalidInstructionData)
 }

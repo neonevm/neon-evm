@@ -13,3 +13,10 @@ macro_rules! debug_print {
 macro_rules! debug_print {
     ($( $args:expr ),*) => {}
 }
+
+macro_rules! error_print {
+    ($( $args:expr ),*) =>  {
+        solana_program::msg!("{}:{}", file!(), line!());
+        solana_program::msg!( $( $args ),* )
+    }
+}
