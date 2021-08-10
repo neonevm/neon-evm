@@ -1,5 +1,6 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
-
+//! # Neon EVM Executor State
+//!
+//! Executor State is a struct that stores the state during execution.
 
 use std::{
     boxed::Box,
@@ -14,8 +15,6 @@ use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::token;
 
-
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub basic: Basic,
@@ -26,6 +25,7 @@ struct ExecutorAccount {
     pub reset: bool,
 }
 
+/// Represents additional data attached to an executor.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorMetadata<'config> {
     gasometer: Gasometer<'config>,
@@ -34,6 +34,7 @@ pub struct ExecutorMetadata<'config> {
 }
 
 impl<'config> ExecutorMetadata<'config> {
+    /// Creates new empty metadata with specified gas limit.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
@@ -44,21 +45,21 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    /// Records gas usage on commit.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
 	    self.gasometer.record_stipend(other.gasometer.gas())?;
         self.gasometer
             .record_refund(other.gasometer.refunded_gas())?;
 
-    	// The following fragment deleted in the mainstream code:
-        // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
-        //     let return_value = other.borrow().runtime().unwrap().machine().return_value();
-        //     runtime.set_return_data(return_value);
-        // }
-
         Ok(())
     }
 
+    /// Records gas usage on revert.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     #[allow(clippy::needless_pass_by_value)]
     pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
         self.gasometer.record_stipend(other.gasometer.gas())?;
@@ -66,11 +67,15 @@ impl<'config> ExecutorMetadata<'config> {
         Ok(())
     }
 
+    /// Records gas usage on discard (actually does nothing).
+    /// # Errors
+    /// Cannot return an error.
     #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
+    /// Creates new instance of metadata when entering next frame of execution.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
@@ -84,27 +89,32 @@ impl<'config> ExecutorMetadata<'config> {
         }
     }
 
+    /// Returns an immutable reference on gasometer.
     #[must_use]
     pub const fn gasometer(&self) -> &Gasometer {
         &self.gasometer
     }
 
+    /// Returns the mutable reference on gasometer.
     pub fn gasometer_mut(&mut self) -> &'config mut Gasometer {
         &mut self.gasometer
     }
 
+    /// Returns property `is_static`.
     #[allow(dead_code)]
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
+    /// Returns current depth of frame of execution.
     #[must_use]
     pub const fn depth(&self) -> Option<usize> {
         self.depth
     }
 }
 
+/// Represents the state of executor abstracted away from a backend.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate<'config> {
     metadata: ExecutorMetadata<'config>,
@@ -117,6 +127,7 @@ pub struct ExecutorSubstate<'config> {
 }
 
 impl<'config> ExecutorSubstate<'config> {
+    /// Creates new empty instance of `ExecutorSubstate`.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn new(gas_limit: u64) -> Self {
@@ -131,17 +142,20 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    /// Returns an immutable reference on executor metadata.
     #[must_use]
     pub const fn metadata(&self) -> &'config ExecutorMetadata {
         &self.metadata
     }
 
+    /// Returns the mutable reference on executor metadata.
     pub fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
         &mut self.metadata
     }
 
-    /// Deconstruct the executor, return state to be applied. Panic if the
-    /// executor is not in the top-level substate.
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     #[allow(clippy::type_complexity)]
     pub fn deconstruct<B: Backend>(
@@ -203,6 +217,7 @@ impl<'config> ExecutorSubstate<'config> {
         (applies, self.logs, self.transfers)
     }
 
+    /// Creates new instance of `ExecutorSubstate` when entering next execution of a call or create.
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         let mut entering = Self {
             metadata: self.metadata.spit_child(gas_limit, is_static),
@@ -218,6 +233,11 @@ impl<'config> ExecutorSubstate<'config> {
         self.parent = Some(Box::new(entering));
     }
 
+    /// Commits the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence or if an address not found in known accounts.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot commit on root substate");
         mem::swap(&mut exited, self);
@@ -261,6 +281,11 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Reverts the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_revert(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -270,6 +295,11 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Discards the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_discard(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -286,21 +316,29 @@ impl<'config> ExecutorSubstate<'config> {
         }
     }
 
+    /// Returns copy of basic account information if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_basic(&self, address: H160) -> Option<Basic> {
         self.known_account(address).map(|acc| acc.basic.clone())
     }
 
+    /// Returns copy of code stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    /// Returns copy of `valids` bit array stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.valids.clone())
     }
 
+    /// Checks if an account is empty: does not contain balance, nonce and code.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(account) = self.known_account(address) {
@@ -324,6 +362,9 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Returns value of record stored in a account if the `address` represents a known account.
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if a record with the key does not exist or the account is not known.
     #[must_use]
     pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
@@ -343,6 +384,8 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if the account is not in reset state or is not known.
     #[must_use]
     pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
@@ -358,6 +401,7 @@ impl<'config> ExecutorSubstate<'config> {
         None
     }
 
+    /// Checks if an account has been deleted.
     #[must_use]
     pub fn deleted(&self, address: H160) -> bool {
         if self.deletes.contains(&address) {
@@ -394,14 +438,17 @@ impl<'config> ExecutorSubstate<'config> {
             .expect("New account was just inserted")
     }
 
+    /// Increments nonce of an account: increases it by 1.
     pub fn inc_nonce<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.nonce += U256::one();
     }
 
+    /// Adds or changes a record in the storage of given account.
     pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.storages.insert((address, key), value);
     }
 
+    /// Clears the storage of an account and marks the account as reset.
     pub fn reset_storage<B: Backend>(&mut self, address: H160, backend: &B) {
         let mut removing = Vec::new();
 
@@ -418,6 +465,7 @@ impl<'config> ExecutorSubstate<'config> {
         self.account_mut(address, backend).reset = true;
     }
 
+    /// Adds an Ethereum event log record.
     pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
         self.logs.push(Log {
             address,
@@ -426,15 +474,20 @@ impl<'config> ExecutorSubstate<'config> {
         });
     }
 
+    /// Marks an account as deleted.
     pub fn set_deleted(&mut self, address: H160) {
         self.deletes.insert(address);
     }
 
+    /// Initializes a contract account with it's code and corresponding bit array of valid jumps.
     pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
     }
 
+    /// Adds a transfer to execute.
+    /// # Errors
+    /// May return `OutOfFund` if the source has no funds.
     pub fn transfer<B: Backend>(
         &mut self,
         transfer: &Transfer,
@@ -458,39 +511,75 @@ impl<'config> ExecutorSubstate<'config> {
         Ok(())
     }
 
+    /// Resets the balance of an account: sets it to 0.
     pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.balance = U256::zero();
     }
 
+    /// Adds an account to list of known accounts if not yet added.
     pub fn touch<B: Backend>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend);
     }
 }
 
+/// Represents internal state of stack of an execution.
 pub trait StackState : Backend {
+    /// Returns an immutable reference on metadata.
     fn metadata(&self) -> &ExecutorMetadata;
+    /// Returns the mutable reference on metadata.
     fn metadata_mut(&mut self) -> &mut ExecutorMetadata;
 
+    /// Enters next frame of execution.
     fn enter(&mut self, gas_limit: u64, is_static: bool);
+
+    /// Commits the state on exit of call or creation.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     fn exit_commit(&mut self) -> Result<(), ExitError>;
+
+    /// Reverts the state on exit of call or creation.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     fn exit_revert(&mut self) -> Result<(), ExitError>;
+
+    /// Discards the state on exit of call or creation.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     fn exit_discard(&mut self) -> Result<(), ExitError>;
 
+    /// Checks if an account is empty: does not contain balance, nonce and code.
     fn is_empty(&self, address: H160) -> bool;
+    /// Checks if an account has been marked as deleted.
     fn deleted(&self, address: H160) -> bool;
 
+    /// Increments nonce of an account: increases it by 1.
     fn inc_nonce(&mut self, address: H160);
+    /// Adds or changes a record in the storage of given account.
     fn set_storage(&mut self, address: H160, key: U256, value: U256);
+    /// Clears the storage of an account and marks the account as reset.
     fn reset_storage(&mut self, address: H160);
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if the account is not in reset state or is not known.
     fn original_storage(&self, address: H160, key: U256) -> Option<U256>;
+    /// Adds an Ethereum event log record.
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
+    /// Marks an account as deleted.
     fn set_deleted(&mut self, address: H160);
+    /// Initializes a contract account with it's code.
     fn set_code(&mut self, address: H160, code: Vec<u8>);
+
+    /// Adds a transfer to execute.
+    /// # Errors
+    /// May return `OutOfFund` if the source has no funds.
     fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError>;
+
+    /// Resets the balance of an account: sets it to 0.
     fn reset_balance(&mut self, address: H160);
+    /// Adds an account to list of known accounts if not yet added.
     fn touch(&mut self, address: H160);
 }
 
+/// Represents internal state of executor.
 pub struct ExecutorState<'config, B: Backend> {
     backend: B,
     substate: ExecutorSubstate<'config>,
@@ -684,6 +773,7 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
 }
 
 impl<'config, B: Backend> ExecutorState<'config, B> {
+    /// Creates new initialized instance of the executor state.
     pub fn new(substate: ExecutorSubstate<'config>, backend: B) -> Self {
         Self {
             backend,
@@ -691,10 +781,14 @@ impl<'config, B: Backend> ExecutorState<'config, B> {
         }
     }
 
+    /// Returns an immutable reference on the executor substate.
     pub fn substate(&self) -> &ExecutorSubstate {
         &self.substate
     }
 
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     #[allow(clippy::type_complexity)]
     pub fn deconstruct(
