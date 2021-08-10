@@ -141,3 +141,14 @@ pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a Accou
     error_print!("sysvar account not found");
     Err(ProgramError::InvalidInstructionData)
 }
+
+pub fn find_rent_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
+    for account in accounts {
+        if solana_program::sysvar::rent::check_id(account.key) {
+            return Ok(account);
+        }
+    }
+
+    debug_print!("rent account not found");
+    Err(ProgramError::InvalidInstructionData)
+}
