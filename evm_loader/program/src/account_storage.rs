@@ -75,17 +75,14 @@ impl<'a> ProgramAccountStorage<'a> {
         let construct_contract_account = |account_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
         {
             if account_info.owner != program_id || code_info.owner != program_id {
-                error_print!("Invalid owner for program info/code");
-                return Err(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument; "Invalid owner! account_info.owner={:?}, code_info.owner={:?}, program_id={:?}", account_info.owner, code_info.owner, program_id);
             }
 
             let account_data = AccountData::unpack(&account_info.data.borrow())?;
             let account = account_data.get_account()?;
     
             if *code_info.key != account.code_account {
-                error_print!("code_info.key: {:?}", *code_info.key);
-                error_print!("account.code_account: {:?}", account.code_account);
-                return Err(ProgramError::InvalidAccountData)
+                return Err!(ProgramError::InvalidAccountData; "code_info.key={:?}, account.code_account={:?}", *code_info.key, account.code_account)
             }
     
             let code_data = code_info.data.clone();
@@ -119,10 +116,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 Sender::Ethereum(caller_address)
             } else {
                 if !caller_info.is_signer {
-                    error_print!("Caller must be signer");
-                    error_print!("Caller pubkey: {}", &caller_info.key.to_string());
-
-                    return Err(ProgramError::InvalidArgument);
+                    return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
                 }
 
                 Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
@@ -157,7 +151,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let clock_account = if let Some(clock_acc) = clock_account {
             clock_acc
         } else {
-            return Err(ProgramError::NotEnoughAccountKeys);
+            return Err!(ProgramError::NotEnoughAccountKeys);
         };
 
 
@@ -238,8 +232,7 @@ impl<'a> ProgramAccountStorage<'a> {
                                 continue;
                             }
                         }
-                        error_print!("Apply can't be done. Not found account for address = {:?}.", address);
-                        return Err(ProgramError::NotEnoughAccountKeys);
+                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
                     }
                 },
                 Apply::Delete { address } => {
@@ -250,8 +243,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let code_info = if let Some(code_info) = code_info {
                             code_info
                         } else {
-                            error_print!("Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
-                            return Err(ProgramError::InvalidAccountData);
+                            return Err!(ProgramError::InvalidAccountData; "Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
                         };
                         let (caller_info, _) = &self.account_metas[self.find_account(&self.origin()).ok_or(ProgramError::NotEnoughAccountKeys)?];
 
@@ -269,8 +261,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let mut code_data = code_info.try_borrow_mut_data()?;
                         AccountData::pack(&AccountData::Empty, &mut code_data)?;
                     } else {
-                        error_print!("Apply can't be done. Not found account for address = {:?}.", address);
-                        return Err(ProgramError::NotEnoughAccountKeys);
+                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
                     }
                 }
             }
