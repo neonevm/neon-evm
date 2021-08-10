@@ -115,7 +115,7 @@ fn process_instruction<'a>(
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             if expected_address != *account_info.key {
-                debug_print!("expected_address != *program_info.key");
+                error_print!("expected_address != *program_info.key");
                 return Err(ProgramError::InvalidArgument);
             };
 
@@ -187,7 +187,7 @@ fn process_instruction<'a>(
             if let Sender::Solana(_addr) = account_storage.get_sender() {
                 // Success execution
             } else {
-                debug_print!("This method should used with Solana sender");
+                error_print!("This method should used with Solana sender");
                 return Err(ProgramError::InvalidArgument);
             }
 
@@ -362,7 +362,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
     let offset = account_data.size() + offset as usize;
     if data.len() < offset + bytes.len() {
-        debug_print!("Account data too small");
+        error_print!("Account data too small");
         return Err(ProgramError::AccountDataTooSmall);
     }
     data[offset .. offset+bytes.len()].copy_from_slice(bytes);
@@ -671,19 +671,19 @@ fn check_ethereum_authority<'a>(
 ) -> ProgramResult
 {
     if sender.get_ether() != *recovered_address {
-        debug_print!("Invalid sender: actual {}, recovered {}",
+        error_print!("Invalid sender: actual {}, recovered {}",
                 sender.get_ether(), recovered_address);
         return Err(ProgramError::InvalidArgument);
     }
 
     if sender.get_nonce() != trx_nonce {
-        debug_print!("Invalid Ethereum transaction nonce: acc {}, trx {}",
+        error_print!("Invalid Ethereum transaction nonce: acc {}, trx {}",
                 sender.get_nonce(), trx_nonce);
         return Err(ProgramError::InvalidArgument);
     }
 
     if SolanaBackend::<ProgramAccountStorage>::chain_id() != *chain_id {
-        debug_print!("Invalid chain_id: actual {}, expected {}",
+        error_print!("Invalid chain_id: actual {}, expected {}",
                 chain_id, SolanaBackend::<ProgramAccountStorage>::chain_id());
         return Err(ProgramError::InvalidArgument);
     }

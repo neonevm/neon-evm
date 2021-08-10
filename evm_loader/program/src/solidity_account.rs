@@ -248,7 +248,7 @@ impl<'a> SolidityAccount<'a> {
                 debug_print!("Valids written");
             }
             else {
-                debug_print!("Expected code account");
+                error_print!("Expected code account");
                 return Err(ProgramError::NotEnoughAccountKeys);
             }
         }
@@ -276,7 +276,7 @@ impl<'a> SolidityAccount<'a> {
                 }
             }
             else {
-                debug_print!("Expected code account");
+                error_print!("Expected code account");
                 return Err(ProgramError::NotEnoughAccountKeys);
             }
         }
