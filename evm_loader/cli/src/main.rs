@@ -43,7 +43,7 @@ use std::{
     sync::Arc,
     thread::sleep,
     time::{Duration},
-    convert::{TryFrom},
+    convert::{TryFrom, TryInto},
     fmt,
     fmt::{Debug, Display,},
 };
