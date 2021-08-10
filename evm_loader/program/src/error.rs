@@ -27,3 +27,33 @@ impl<T> DecodeError<T> for EvmLoaderError {
         "EVMLoaderError"
     }
 }
+
+pub fn err_fn_without_info<T:>(err: ProgramError, fl: &str, ln: u32) -> Result<T, ProgramError> {
+    solana_program::msg!("{:?}:{:?}", fl, ln);
+    Err(err)
+}
+
+pub fn err_fn<T:>(err: ProgramError, fl: &str, ln: u32, info: &str) -> Result<T, ProgramError> {
+    solana_program::msg!("{:?}:{:?} : {}", fl, ln, info);
+    Err(err)
+}
+
+macro_rules! Err {
+    ( $n:expr; $($args:expr),* ) => ( crate::error::err_fn($n, file!(), line!(), &format!($($args),*)) );
+    ( $n:expr ) => ( crate::error::err_fn_without_info($n, file!(), line!()) )
+}
+
+pub fn e_fn_without_info(e: ProgramError, fl: &str, ln: u32) -> ProgramError {
+    solana_program::msg!("{:?}:{:?}", fl, ln);
+    e
+}
+
+pub fn e_fn(e: ProgramError, fl: &str, ln: u32, info: &str) -> ProgramError {
+    solana_program::msg!("{:?}:{:?} : {}", fl, ln, info);
+    e
+}
+
+macro_rules! E {
+    ( $n:expr; $($args:expr),* ) => ( crate::error::e_fn($n, file!(), line!(), &format!($($args),*)) );
+    ( $n:expr ) => ( crate::error::e_fn_without_info($n, file!(), line!()) )
+}

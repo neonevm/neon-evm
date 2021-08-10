@@ -391,13 +391,13 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
 
         let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
 
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
 
 
         self.executor.state.inc_nonce(caller);
@@ -406,7 +406,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.touch(code_address);
 
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
-        self.executor.state.transfer(&transfer).map_err(|_| ProgramError::InsufficientFunds)?;
+        self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
@@ -429,14 +429,13 @@ impl<'config, B: Backend> Machine<'config, B> {
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "ExitError={:?}", e))?;
 
         let scheme = evm::CreateScheme::Legacy { caller };
 
         match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
-            Capture::Exit(_) => {
-                error_print!("create_begin() error ");
-                return Err(ProgramError::InvalidInstructionData);
+            Capture::Exit(e) => {
+                return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", e);
             },
             Capture::Trap(info) => {
                 self.executor.state.enter(info.gas_limit, false);
@@ -448,7 +447,7 @@ impl<'config, B: Backend> Machine<'config, B> {
                 }
 
                 if let Some(transfer) = info.transfer {
-                    self.executor.state.transfer(&transfer).map_err(|_| ProgramError::InsufficientFunds)?;
+                    self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
                 }
 
                 let valids = Valids::compute(&info.init_code);
