@@ -412,8 +412,11 @@ class solana_cli:
 
 
 class neon_cli:
+    def __init__(self, verbose_flags=''):
+        self.verbose_flags = verbose_flags
+
     def call(self, arguments):
-        cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
+        cmd = 'neon-cli {} --url {} {}'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -422,9 +425,10 @@ class neon_cli:
             raise
 
     def emulate(self, loader_id, arguments):
-        cmd = 'neon-cli  --commitment=recent --evm_loader {} --url {} emulate {}'.format(loader_id,
-                                                                                         solana_url,
-                                                                                         arguments)
+        cmd = 'neon-cli {} --commitment=recent --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
+                                                                                           loader_id,
+                                                                                           solana_url,
+                                                                                           arguments)
         print('cmd:', cmd)
         try:
             output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
@@ -450,11 +454,7 @@ class RandomAccount:
         print('Private:', self.acc.secret_key())
 
     def make_random_path(self):
-        import calendar;
-        import time;
-        ts = calendar.timegm(time.gmtime())
-        self.path = str(ts) + '.json'
-        time.sleep(1)
+        self.path  = os.urandom(5).hex()+ ".json"
 
     def generate_key(self):
         cmd_generate = 'solana-keygen new --no-passphrase --outfile {}'.format(self.path)
@@ -497,9 +497,13 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def deploy(self, contract_path, caller=None):
+    def deploy(self, contract_path, caller=None, config=None):
         print('deploy caller:', caller)
-        output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        if config == None:
+            output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+        else:
+            output = neon_cli().call("deploy --evm_loader {} --config {} {} {}".format(self.loader_id, config,
+                                                                                       contract_path, caller))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result

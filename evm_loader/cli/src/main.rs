@@ -16,8 +16,7 @@ use evm_loader::{
     payment::COLLATERAL_SEED_PREFIX
 };
 
-use evm::{executor::StackExecutor, ExitReason};
-use evm::{H160, H256, U256};
+use evm::{H160, H256, U256, ExitReason,};
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -38,12 +37,15 @@ use std::{
     collections::HashMap,
     io::{Read},
     fs::File,
-    env, str::FromStr,
+    env,
+    str::FromStr,
     process::exit,
     sync::Arc,
     thread::sleep,
     time::{Duration},
-    convert::{TryFrom, TryInto}
+    convert::{TryFrom},
+    fmt,
+    fmt::{Debug, Display,},
 };
 
 use clap::{
@@ -57,7 +59,7 @@ use solana_program::{
 };
 
 use solana_clap_utils::{
-    input_parsers::pubkey_of,
+    input_parsers::{pubkey_of, value_of,},
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
     keypair::{signer_from_path, keypair_from_path},
 };
@@ -87,6 +89,14 @@ use rlp::RlpStream;
 
 use log::{debug, error, info};
 use crate::account_storage::SolanaAccountJSON;
+use evm_loader::{
+    executor_state::{
+        ExecutorState,
+        ExecutorSubstate,
+    },
+    executor::Machine,
+    solana_backend::AccountStorage,
+};
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -103,24 +113,82 @@ pub struct Config {
     keypair: Option<Keypair>,
 }
 
-fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Option<Vec<u8>>) {
-    let account_storage = EmulatorAccountStorage::new(config, contract_id, caller_id);
+impl Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "evm_loader={:?}, signer={:?}", self.evm_loader, self.signer)
+    }
+}
+
+fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, value: Option<U256>) -> CommandResult {
+    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
+        config,
+        contract_id,
+        caller_id,
+        &hex::encode(data.clone().unwrap_or_default()),
+        value);
+
+    let storage = match &contract_id {
+        Some(program_id) =>  {
+            debug!("program_id to call: {:?}", *program_id);
+            EmulatorAccountStorage::new(config, *program_id, caller_id)
+        },
+        None => {
+            let solana_address = Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
+            let trx_count = get_ether_account_nonce(config, &solana_address)?;
+            let trx_count= trx_count.0;
+            let program_id = get_program_ether(&caller_id, trx_count);
+            debug!("program_id to deploy: {:?}", program_id);
+            EmulatorAccountStorage::new(config, program_id, caller_id)
+        }
+    };
 
     let (exit_reason, result, applies_logs, used_gas) = {
         let accounts : Vec<AccountInfo> = Vec::new();
-        let backend = SolanaBackend::new(&account_storage, Some(&accounts[..]));
-        let config = evm::Config::istanbul();
-        let mut executor = StackExecutor::new(&backend, u64::MAX, &config);
-    
-        let (exit_reason, result) = executor.transact_call(caller_id, contract_id, U256::zero(), data.unwrap_or_default(), u64::MAX);
+        let backend = SolanaBackend::new(&storage, Some(&accounts[..]));
+        // u64::MAX is too large, remix gives this error:
+        // Gas estimation errored with the following message (see below).
+        // Number can only safely store up to 53 bits
+        let gas_limit = 50_000_000;
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+        let mut executor = Machine::new(executor_state);
+        debug!("Executor initialized");
 
-        debug!("Call done");
+        let (result, exit_reason) = match &contract_id {
+            Some(_) =>  {
+                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?}, value={:?})",
+                    storage.origin(),
+                    storage.contract(),
+                    &hex::encode(data.clone().unwrap_or_default()),
+                    value);
+                executor.call_begin(storage.origin(),
+                                    storage.contract(),
+                                    data.unwrap_or_default(),
+                                    value.unwrap_or_default(),
+                                    gas_limit)?;
+                executor.execute()
+            },
+            None => {
+                debug!("create_begin(storage.origin()={:?}, data={:?}, value={:?})",
+                    storage.origin(),
+                    &hex::encode(data.clone().unwrap_or_default()),
+                    value);
+                executor.create_begin(storage.origin(),
+                                      data.unwrap_or_default(),
+                                      value.unwrap_or_default(),
+                                      gas_limit)?;
+                executor.execute()
+            }
+        };
+        debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
-        let used_gas = executor.used_gas();
+        let executor_state = executor.into_state();
+        let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
+        let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let (applies, logs) = executor.deconstruct();
+            let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
             (exit_reason, result, None, used_gas)
@@ -132,7 +200,7 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Op
         ExitReason::Succeed(_) => {
             let (applies, _logs) = applies_logs.unwrap();
     
-            account_storage.apply(applies);
+            storage.apply(applies);
 
             debug!("Applies done");
             "succeed".to_string()
@@ -150,9 +218,9 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Op
         debug!("Not succeed execution");
     }
 
-    let accounts: Vec<AccountJSON> = account_storage.get_used_accounts();
+    let accounts: Vec<AccountJSON> = storage.get_used_accounts();
 
-    let solana_accounts: Vec<SolanaAccountJSON> = account_storage.solana_accounts
+    let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
         .borrow()
         .iter()
         .cloned()
@@ -168,6 +236,8 @@ fn command_emulate(config: &Config, contract_id: H160, caller_id: H160, data: Op
     }).to_string();
 
     println!("{}", js);
+
+    Ok(())
 }
 
 fn command_create_program_address (
@@ -505,38 +575,39 @@ fn fill_holder_account(
     Ok(())
 }
 
-fn get_ethereum_caller_credentials(
-    config: &Config,
-) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
-    use secp256k1::PublicKey;
-    let caller_private = {
-        let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
-        let mut sign_arr: [u8;32] = Default::default();
-        sign_arr.clone_from_slice(&private_bytes[..32]);
-        SecretKey::parse(&sign_arr).unwrap()
-    };
-    let caller_public = PublicKey::from_secret_key(&caller_private);
-    let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
-    let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
-    debug!("caller_sol = {}", caller_sol);
-    debug!("caller_ether = {}", caller_ether);
-    debug!("caller_token = {}", caller_token);
-
-    (caller_private, caller_ether, caller_sol, caller_nonce, caller_token)
-}
+//fn get_ethereum_caller_credentials(
+//    config: &Config,
+//) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
+//     use secp256k1::PublicKey;
+//     let caller_private = {
+//         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
+//         let mut sign_arr: [u8;32] = Default::default();
+//         sign_arr.clone_from_slice(&private_bytes[..32]);
+//         SecretKey::parse(&sign_arr).unwrap()
+//     };
+//     let caller_public = PublicKey::from_secret_key(&caller_private);
+//     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
+//     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
+//    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     debug!("caller_sol = {}", caller_sol);
+//     debug!("caller_ether = {}", caller_ether);
+//    debug!("caller_token = {}", caller_token);
+//
+//    (caller_private, caller_ether, caller_sol, caller_nonce)
+// }
 
 fn get_ether_account_nonce(
     config: &Config, 
     caller_sol: &Pubkey
-) -> Result<u64, Error> {
+) -> Result<(u64, H160, Pubkey), Error> {
     let data : Vec<u8>;
     match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) =>   data = acc.data,
-        None => panic!("AccountNotFound: pubkey={}", caller_sol)
+        None => return Ok((u64::default(), H160::default(), Pubkey::default()))
     }
 
     let trx_count : u64;
+    debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
@@ -546,9 +617,25 @@ fn get_ether_account_nonce(
         Err(_) => return Err("Caller unpack error".into())
     };
     trx_count = account.trx_count;
-    debug!("trx_count = {}", trx_count);
+    let caller_ether = account.ether;
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::token::token_mint::id());
 
-    Ok(trx_count)
+    debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
+    debug!("Caller trx_count: {} ", trx_count);
+    debug!("caller_token = {}", caller_token);
+
+    Ok((trx_count, caller_ether, caller_token))
+}
+
+fn get_program_ether(
+    caller_ether: &H160,
+    trx_count: u64
+) -> H160 {
+    let trx_count_256 : U256 = U256::from(trx_count);
+    let mut stream = rlp::RlpStream::new_list(2);
+    stream.append(caller_ether);
+    stream.append(&trx_count_256);
+    keccak256_h256(&stream.out()).into()
 }
 
 fn get_ethereum_contract_account_credentials(
@@ -559,13 +646,7 @@ fn get_ethereum_contract_account_credentials(
     let creator = &config.signer;
 
     let (program_id, program_ether, program_nonce) = {
-        let ether : H160 = {
-            let trx_count_256 : U256 = U256::from(trx_count);
-            let mut stream = rlp::RlpStream::new_list(2);
-            stream.append(caller_ether);
-            stream.append(&trx_count_256);
-            keccak256_h256(&stream.out()).into()
-        };
+        let ether = get_program_ether(caller_ether, trx_count);
         let seeds = [ether.as_bytes()];
         let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
         (address, ether, nonce)
@@ -746,22 +827,29 @@ fn send_transaction(
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    caller: Pubkey
+    caller_arg: Pubkey
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
 
     // Create ethereum caller private key from sign of array by signer
-    let (caller_private, caller_ether, caller_sol, _caller_nonce, caller_token) = get_ethereum_caller_credentials(config);
+    // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
 
-    if caller_sol != caller {
-        return Err("Could not acquire caller account private key".to_string().into());
-    }
+    let caller_private_eth = {
+        let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
+        let mut sign_arr: [u8;32] = Default::default();
+        sign_arr.clone_from_slice(&private_bytes[..32]);
+        SecretKey::parse(&sign_arr).unwrap()
+    };
+
+    // if caller_sol != caller_arg {
+    //     return Err("Could not acquire caller account private key".to_string().into());
+    // }
 
     // Get caller nonce
-    let trx_count = get_ether_account_nonce(config, &caller_sol)?;
+    let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
 
-    let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) = 
+    let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
@@ -777,7 +865,7 @@ fn command_deploy(
     )?;
 
     // Create transaction prepared for execution from account
-    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private);
+    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
     let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), "1236", 128*1024_u64)?;
@@ -801,7 +889,7 @@ fn command_deploy(
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_token, false),
                         AccountMeta::new(program_code, false),
-                        AccountMeta::new(caller_sol, false),
+                        AccountMeta::new(caller_arg, false),
                         AccountMeta::new(caller_token, false),
 
                         AccountMeta::new_readonly(config.evm_loader, false),
@@ -830,7 +918,7 @@ fn command_deploy(
                             AccountMeta::new(program_id, false),
                             AccountMeta::new(program_token, false),
                             AccountMeta::new(program_code, false),
-                            AccountMeta::new(caller_sol, false),
+                            AccountMeta::new(caller_arg, false),
                             AccountMeta::new(caller_token, false),
 
                             AccountMeta::new_readonly(config.evm_loader, false),
@@ -930,6 +1018,26 @@ fn make_clean_hex(in_str: &str) -> &str {
 }
 
 // Return H160 for an argument
+fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
+    if matches.value_of(name) == Some("deploy") {
+        return None;
+    }
+    matches.value_of(name).map(|value| {
+        H160::from_str(make_clean_hex(value)).unwrap()
+    })
+}
+
+// Return an error if string cannot be parsed as a H160 address
+fn is_valid_h160_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+{
+    if string.as_ref() == "deploy" {
+        return Ok(());
+    }
+    H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+// Return H160 for an argument
 fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     matches.value_of(name).map(|value| {
         H160::from_str(make_clean_hex(value)).unwrap()
@@ -946,18 +1054,36 @@ fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 // Return hexdata for an argument
 fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
     matches.value_of(name).and_then(|value| {
-        match value {
-            "None" => None,
-            _ => hex::decode(&make_clean_hex(value)).ok()
+        if value.to_lowercase() == "none" {
+            return None;
         }
+        hex::decode(&make_clean_hex(value)).ok()
     })
 }
 
 // Return an error if string cannot be parsed as a hexdata
 fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
+    if string.as_ref().to_lowercase() == "none" {
+        return Ok(());
+    }
+
     hex::decode(&make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+fn is_amount_u256<T>(amount: T) -> Result<(), String>
+    where
+        T: AsRef<str> + Display,
+{
+    if amount.as_ref().parse::<U256>().is_ok() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unable to parse input amount as integer U256, provided: {}",
+            amount
+        ))
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1049,8 +1175,8 @@ fn main() {
                         .takes_value(true)
                         .index(2)
                         .required(true)
-                        .validator(is_valid_h160)
-                        .help("The contract that executes the transaction")
+                        .validator(is_valid_h160_or_deploy)
+                        .help("The contract that executes the transaction or 'deploy'")
                 )
                 .arg(
                     Arg::with_name("data")
@@ -1059,7 +1185,16 @@ fn main() {
                         .index(3)
                         .required(false)
                         .validator(is_valid_hexdata)
-                        .help("Transaction data")
+                        .help("Transaction data or 'None'")
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .value_name("VALUE")
+                        .takes_value(true)
+                        .index(4)
+                        .required(false)
+                        .validator(is_amount_u256)
+                        .help("Transaction value")
                 )
         )
         .subcommand(
@@ -1210,13 +1345,12 @@ fn main() {
         let (sub_command, sub_matches) = app_matches.subcommand();
         let result = match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
-                let contract = h160_of(arg_matches, "contract").unwrap();
+                let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
+                let value = value_of(arg_matches, "value");
 
-                command_emulate(&config, contract, sender, data);
-
-                Ok(())
+                command_emulate(&config, contract, sender, data, value)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let seed = arg_matches.value_of("seed").unwrap().to_string();

@@ -12,17 +12,25 @@ use evm::{
     H160, U256,
 };
 use solana_program::{
-    account_info::{AccountInfo, next_account_info},
-    entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
-    program::{invoke, invoke_signed}, program_error::ProgramError,
-    pubkey::Pubkey,
-    system_instruction,
+    account_info::{next_account_info, AccountInfo},
+    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
+    program_error::{ProgramError}, pubkey::Pubkey,
+    system_instruction::{create_account, create_account_with_seed},
+    program::{invoke_signed, invoke},
+    rent::Rent,
+    sysvar::Sysvar
 };
 
 use crate::{
     //    bump_allocator::BumpAllocator,
     account_data::{Account, AccountData, Contract},
     account_storage::{ProgramAccountStorage, Sender},
+    solana_backend::{SolanaBackend, AccountStorage},
+    solidity_account::SolidityAccount,
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_sysvar_info, find_rent_info},
+    executor::{ Machine },
+    executor_state::{ ExecutorState, ExecutorSubstate },
+    storage_account::{ StorageAccount },
     error::EvmLoaderError,
     executor::Machine,
     executor_state::{ExecutorState, ExecutorSubstate},
@@ -111,6 +119,9 @@ fn process_instruction<'a>(
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
         EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
+            let rent_info = find_rent_info(accounts)?;
+            let rent = Rent::from_account_info(rent_info)?;
+
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
@@ -126,6 +137,11 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
+                    if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
+                        debug_print!("Code account is not rent exempt");
+                        return Err(ProgramError::InvalidArgument); 
+                    }
+
                     let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
                     contract_data.pack(&mut program_code.data.borrow_mut())?;
 
@@ -144,9 +160,11 @@ fn process_instruction<'a>(
                 eth_token_account: *token_account_info.key,
             });
 
+            let account_lamports = rent.minimum_balance(account_data.size()) + lamports;
+
             let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &system_instruction::create_account(funding_info.key, account_info.key, lamports, account_data.size() as u64, program_id),
+                &create_account(funding_info.key, account_info.key, account_lamports, account_data.size() as u64, program_id),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");
@@ -162,6 +180,9 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner} => {
+            let rent_info = find_rent_info(accounts)?;
+            let rent = Rent::from_account_info(rent_info)?;
+
             let funding_info = next_account_info(account_info_iter)?;
             let created_info = next_account_info(account_info_iter)?;
             let base_info = next_account_info(account_info_iter)?;
@@ -175,13 +196,16 @@ fn process_instruction<'a>(
             };
             let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
+            let space_as_usize = usize::try_from(space).map_err(|_| ProgramError::InvalidArgument)?;
+            let account_lamports = rent.minimum_balance(space_as_usize) + lamports;
+
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
-            debug_print!("{}", lamports);
+            debug_print!("{}", account_lamports);
             debug_print!("{}", space);
             invoke_signed(
-                &system_instruction::create_account_with_seed(funding_info.key, created_info.key, &base, seed, lamports, space, &owner),
+                &create_account_with_seed(funding_info.key, created_info.key, &base, seed, account_lamports, space, &owner),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account_with_seed done");
