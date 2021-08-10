@@ -29,12 +29,12 @@ impl<T> DecodeError<T> for EvmLoaderError {
 }
 
 pub fn err_fn_without_info<T:>(err: ProgramError, fl: &str, ln: u32) -> Result<T, ProgramError> {
-    solana_program::msg!("{:?}:{:?}", fl, ln);
+    solana_program::msg!("{}:{:?}", fl, ln);
     Err(err)
 }
 
 pub fn err_fn<T:>(err: ProgramError, fl: &str, ln: u32, info: &str) -> Result<T, ProgramError> {
-    solana_program::msg!("{:?}:{:?} : {}", fl, ln, info);
+    solana_program::msg!("{}:{:?} : {}", fl, ln, info);
     Err(err)
 }
 
@@ -44,12 +44,12 @@ macro_rules! Err {
 }
 
 pub fn e_fn_without_info(e: ProgramError, fl: &str, ln: u32) -> ProgramError {
-    solana_program::msg!("{:?}:{:?}", fl, ln);
+    solana_program::msg!("{}:{:?}", fl, ln);
     e
 }
 
 pub fn e_fn(e: ProgramError, fl: &str, ln: u32, info: &str) -> ProgramError {
-    solana_program::msg!("{:?}:{:?} : {}", fl, ln, info);
+    solana_program::msg!("{}:{:?} : {}", fl, ln, info);
     e
 }
 
