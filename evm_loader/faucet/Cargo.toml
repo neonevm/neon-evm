@@ -1,0 +1,15 @@
+[package]
+name = "faucet"
+description = "Ethereum ERC20 Token Faucet Service"
+authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
+repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+color-eyre = "0.5"
+ethers = { git = "https://github.com/gakonst/ethers-rs" }
+structopt = "0.3"
+tokio = { version = "1.9", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = "0.2"
