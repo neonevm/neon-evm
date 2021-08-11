@@ -267,7 +267,6 @@ def deploy_contracts(args):
 
     for i in range(args.count):
 
-        sleep(args.delay/1000)
         print (" -- count", i)
         trx_count = getTransactionCount(client, factory)
 
@@ -344,7 +343,6 @@ def deploy_contracts(args):
 
 def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
 
-    sleep(args.delay/1000)
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + payer_eth) + \
@@ -375,6 +373,13 @@ def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, s
 
 
 def mint_create(accounts, acc, sum):
+    event_error = 0
+    receipt_error = 0
+    nonce_error = 0
+    too_small_error = 0
+    unknown_error = 0
+    account_minted =[]
+
 
     with open(contracts_file+args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
@@ -399,8 +404,19 @@ def mint_create(accounts, acc, sum):
             (payer_eth, payer_sol) = next(ia)
 
         receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
+
+        if total % 1000 == 0 or total == args.count - 1:
+            (account_minted_, event_error_, receipt_error_, nonce_error_, unknown_error_, too_small_error_)  = mint_confirm(receipt_list, sum)
+            account_minted = account_minted + account_minted_
+            event_error = event_error + event_error_
+            receipt_error = receipt_error + receipt_error_
+            nonce_error = nonce_error + nonce_error_
+            unknown_error = unknown_error + unknown_error_
+            too_small_error = too_small_error + too_small_error_
+            receipt_list = []
         total = total + 1
-    return receipt_list
+
+    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
 
 def mint_confirm(receipt_list, sum):
@@ -409,11 +425,9 @@ def mint_confirm(receipt_list, sum):
     nonce_error = 0
     too_small_error = 0
     unknown_error = 0
-    total = 0
     account_minted =[]
 
     for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
-        total = total + 1
         confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
 
@@ -446,12 +460,7 @@ def mint_confirm(receipt_list, sum):
                     unknown_error = unknown_error + 1
 
 
-    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
-
-def mint(accounts, acc):
-    sum = 1000 * 10 ** 18
-    receipt_list = mint_create(accounts, acc, sum)
-    return mint_confirm(receipt_list, sum)
+    return (account_minted, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
 
 def create_accounts(args):
@@ -480,7 +489,7 @@ def create_accounts(args):
             ether_accounts.append((acc_eth_hex, acc_sol))
 
     # erc20.mint()
-    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint(ether_accounts, instance.acc)
+    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_create(ether_accounts, instance.acc, 1000 * 10 ** 18)
 
     to_file = []
     for acc_eth_hex in account_minted:
