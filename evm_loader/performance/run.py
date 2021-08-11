@@ -260,6 +260,11 @@ def deploy_contracts(args):
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('create_erc20(bytes32)')
     receipt_list = []
 
+    contracts = []
+    event_error = 0
+    receipt_error = 0
+    total = 0
+
     for i in range(args.count):
 
         sleep(args.delay/1000)
@@ -313,22 +318,21 @@ def deploy_contracts(args):
 
         receipt_list.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
 
-    contracts = []
-    event_error = 0
-    receipt_error = 0
-    total = 0
-    for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
-        total = total + 1
-        confirm_transaction(client, receipt)
-        res = client.get_confirmed_transaction(receipt)
-        if res['result'] == None:
-            receipt_error = receipt_error + 1
-        else:
-            try:
-                check_address_event(res['result'], factory_eth, erc20_ether)
-                contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
-            except AssertionError:
-                event_error = event_error + 1
+        if i % 1000 == 0:
+            for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
+                total = total + 1
+                confirm_transaction(client, receipt)
+                res = client.get_confirmed_transaction(receipt)
+                if res['result'] == None:
+                    receipt_error = receipt_error + 1
+                else:
+                    try:
+                        check_address_event(res['result'], factory_eth, erc20_ether)
+                        contracts.append((erc20_id, erc20_ether.hex(), erc20_code))
+                    except AssertionError:
+                        event_error = event_error + 1
+
+            receipt_list = []
 
     with open(contracts_file+args.postfix, mode='w') as f:
         f.write(json.dumps(contracts))
