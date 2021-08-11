@@ -55,7 +55,7 @@ pub fn create_associated_token_account(
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
     if *account.owner != spl_token::id() {
-        return Err(ProgramError::IncorrectProgramId);
+        return Err!(ProgramError::IncorrectProgramId; "*account.owner<{:?}> != spl_token::id()<{:?}>", *account.owner,  spl_token::id());
     }
 
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
@@ -72,16 +72,14 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
 pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result<(), ProgramError> {
     debug_print!("check_token_account");
     if *token.owner != spl_token::id() {
-        debug_print!("token.owner != spl_token::id() {}", token.owner);
-        return Err(ProgramError::IncorrectProgramId);
+        return Err!(ProgramError::IncorrectProgramId; "token.owner != spl_token::id() {}", token.owner);
     }
 
     let data = account.try_borrow_data()?;
     let data = AccountData::unpack(&data)?;
     let data = data.get_account()?;
     if data.eth_token_account != *token.key {
-        debug_print!("data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
-        return Err(ProgramError::IncorrectProgramId);
+        return Err!(ProgramError::IncorrectProgramId; "data.eth_token_account != *token.key data.eth = {} token.key = {}", data.eth_token_account, *token.key);
     }
 
     debug_print!("check_token_account success");
