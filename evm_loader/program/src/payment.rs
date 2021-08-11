@@ -10,6 +10,7 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
+use std::str::FromStr;
 
 /// `COLLATERAL_BASE_ADDRESS`
 pub const COLLATERAL_BASE_ADDRESS: &str = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io";
@@ -26,6 +27,9 @@ pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 /// Will return: 
 /// `ProgramError::InvalidArgument` if `collateral_pool_sol_info` owner not `program_id` 
 /// or its key is not equal to generated
+/// # Panics
+/// 
+/// if `COLLATERAL_BASE_ADDRESS` is invalid
 pub fn check_collateral_account(
     program_id: &Pubkey,
     collateral_pool_sol_info: &AccountInfo,
@@ -42,7 +46,7 @@ pub fn check_collateral_account(
     }
 
     let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
-    let pool_key = Pubkey::create_with_seed(COLLATERAL_BASE_ADDRESS, &seed, program_id)?;
+    let pool_key = Pubkey::create_with_seed(&Pubkey::from_str(COLLATERAL_BASE_ADDRESS).unwrap(), &seed, program_id)?;
     if *collateral_pool_sol_info.key != pool_key {
         debug_print!("Wrong seed pool key {}", pool_key);
         debug_print!("Must be collateral pool key {}", *collateral_pool_sol_info.key);

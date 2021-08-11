@@ -5,7 +5,6 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::{ ProgramResult },
     program_error::{ProgramError},
-    pubkey::Pubkey,
     secp256k1_program,
 };
 use std::convert::{Into, TryFrom};
