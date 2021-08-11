@@ -6,6 +6,7 @@
 
 mod cli;
 mod config;
+mod contract;
 mod server;
 
 use color_eyre::Report;
@@ -21,7 +22,7 @@ fn main() -> Result<(), Report> {
 /// Initializes the logger and error handler.
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "1")
+        std::env::set_var("RUST_LIB_BACKTRACE", "0") // set "1" to enable backtrace
     }
     color_eyre::install()?;
 
@@ -49,6 +50,8 @@ fn execute(app: cli::Application) -> Result<(), Report> {
 }
 
 /// Runs the server.
-async fn run(_config_file: &std::path::Path) -> Result<(), Report> {
-    server::run(()).await
+async fn run(config_file: &std::path::Path) -> Result<(), Report> {
+    let cfg = config::Faucet::load(config_file)?;
+    server::run(&cfg).await?;
+    Ok(())
 }

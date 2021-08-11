@@ -9,3 +9,4 @@ node_modules
 hfuzz_target
 hfuzz_workspace
 **/*.so
+**/*.lock
