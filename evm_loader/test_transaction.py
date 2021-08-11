@@ -46,9 +46,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
 
-        cls.collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(cls.collateral_pool_index)
-        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
 
     def test_success_tx_send(self):  

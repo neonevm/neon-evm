@@ -50,9 +50,9 @@ class EthTokenTest(unittest.TestCase):
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
 
-        cls.collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(cls.collateral_pool_index)
-        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):

@@ -13,7 +13,7 @@ use solana_program::{
 use std::str::FromStr;
 
 /// `COLLATERAL_BASE_ADDRESS`
-pub const COLLATERAL_BASE_ADDRESS: &str = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io";
+pub const COLLATERAL_BASE_ADDRESS: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
 /// `COLLATERAL_SEED_PREFIX`
 pub const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 /// `PAYMENT_TO_COLLATERAL_POOL`

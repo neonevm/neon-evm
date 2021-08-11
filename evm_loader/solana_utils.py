@@ -41,7 +41,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
-evm_loader_creator = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
+collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -130,9 +130,9 @@ class NeonEvmClient:
         self.solana_wallet = solana_wallet
         self.evm_loader = evm_loader
 
-        self.collateral_pool_index = 2
-        self.collateral_pool_index_buf = self.collateral_pool_index.to_bytes(4, 'little')
-        self.collateral_pool_address = create_collateral_pool_address(self.collateral_pool_index)
+        collateral_pool_index = 2
+        self.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def set_execute_mode(self, new_mode):
         self.mode = ExecuteMode(new_mode)
@@ -330,7 +330,7 @@ class NeonEvmClient:
 def create_collateral_pool_address(collateral_pool_index):
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-    return accountWithSeed(PublicKey(evm_loader_creator), seed, PublicKey(EVM_LOADER))
+    return accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
 
 
 def confirm_transaction(http_client, tx_sig, confirmations=0):
