@@ -42,8 +42,8 @@ fi
 sleep 25   # Wait while evm_loader deploy finalized
 
 #generate collateral pool accounts
-solana -k evm_loader-keypair.json airdrop 1000
-python3 collateral_pool_generator.py evm_loader-keypair.json
+solana -k collateral-pool-keypair.json airdrop 1000
+python3 collateral_pool_generator.py collateral-pool-keypair.json
 
 python3 -m unittest discover -v -p 'test*.py'
 
