@@ -40,8 +40,7 @@ fn setup() -> Result<(), Report> {
 fn execute(app: cli::Application) -> Result<(), Report> {
     match app.cmd {
         cli::Command::Run => {
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(run(&app.config))?;
+            run(&app.config)?;
         }
     }
 
@@ -50,8 +49,8 @@ fn execute(app: cli::Application) -> Result<(), Report> {
 }
 
 /// Runs the server.
-async fn run(config_file: &std::path::Path) -> Result<(), Report> {
+fn run(config_file: &std::path::Path) -> Result<(), Report> {
     let cfg = config::Faucet::load(config_file)?;
-    server::run(cfg).await;
+    server::start(cfg);
     Ok(())
 }
