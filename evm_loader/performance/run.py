@@ -318,7 +318,7 @@ def deploy_contracts(args):
 
         receipt_list.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
 
-        if i % 1000 == 0:
+        if i % 1000 == 0 or i == args.count-1:
             for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
                 total = total + 1
                 confirm_transaction(client, receipt)
