@@ -1,4 +1,8 @@
 //! `EVMLoader` helper functions
+use evm::{H160, H256, U256};
+use solana_program::pubkey::Pubkey;
+use solana_program::keccak::{hash, hashv};
+
 /// Get Keccak256 hash as `H256`
 #[must_use]
 pub fn keccak256_h256(data: &[u8]) -> H256 {
