@@ -480,7 +480,7 @@ def create_accounts(args):
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
                                       opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-        receipt_list.append(acc_eth.hex(), acc_sol, res['result'])
+        receipt_list.append((acc_eth.hex(), acc_sol, res['result']))
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
         if i % 1000 == 0 or i == args.count-1:
@@ -494,7 +494,7 @@ def create_accounts(args):
                     ether_accounts.append((acc_eth_hex, acc_sol))
             receipt_list = []
 
-    # erc20.mint()  
+    # erc20.mint()
     (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_create(ether_accounts, instance.acc, 1000 * 10 ** 18)
 
     to_file = []
