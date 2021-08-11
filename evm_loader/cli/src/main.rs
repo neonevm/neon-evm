@@ -13,7 +13,7 @@ use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
-    payment::COLLATERAL_SEED_PREFIX
+    payment::{COLLATERAL_SEED_PREFIX, COLLATERAL_BASE_ADDRESS},
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -734,13 +734,15 @@ fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
     Ok(storage)
 }
 
-fn get_collateral_pool_account_and_index(config: &Config) -> Result<(Pubkey, u32), Error> {
-    let creator = &config.signer;
+fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let collateral_pool_index = 2;
-    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);    
-    let collateral_pool_account = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &seed, 0)?;
+    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
+    let collateral_pool_account = Pubkey::create_with_seed(
+        &Pubkey::from_str(COLLATERAL_BASE_ADDRESS).unwrap(), 
+        &seed, 
+        &config.evm_loader).unwrap();
 
-    Ok((collateral_pool_account, collateral_pool_index))
+    (collateral_pool_account, collateral_pool_index)
 }
 
 fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
@@ -875,7 +877,7 @@ fn command_deploy(
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
 
-    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config)?;
+    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config);
 
     let accounts = vec![AccountMeta::new(holder, false),
                         AccountMeta::new(storage, false),
