@@ -467,8 +467,12 @@ def create_accounts(args):
     instance = init_wallet()
     instance.init()
 
-    receipt_list = {}
+    ether_accounts = []
+    receipt_list = []
+    pr_key_list = {}
     for i in range(args.count):
+        print("create ethereum acc ", i)
+
         pr_key = w3.eth.account.from_key(os.urandom(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
         trx = Transaction()
@@ -476,24 +480,26 @@ def create_accounts(args):
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
                                       opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-        receipt_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:], res['result'])
+        receipt_list.append(acc_eth.hex(), acc_sol, res['result'])
+        pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
-    ether_accounts = []
-    for (acc_eth_hex,  (acc_sol, pr_key_hex, receipt)) in receipt_list.items():
-        confirm_transaction(client, receipt)
-        res = client.get_confirmed_transaction(receipt)
-        if res['result'] == None:
-            print("createEtherAccount, get_confirmed_transaction() error")
-        else:
-            print(acc_eth_hex, acc_sol)
-            ether_accounts.append((acc_eth_hex, acc_sol))
+        if i % 1000 == 0 or i == args.count-1:
+            for (acc_eth_hex, acc_sol,  receipt) in receipt_list:
+                confirm_transaction(client, receipt)
+                res = client.get_confirmed_transaction(receipt)
+                if res['result'] == None:
+                    print("createEtherAccount, get_confirmed_transaction() error")
+                else:
+                    print(acc_eth_hex, acc_sol)
+                    ether_accounts.append((acc_eth_hex, acc_sol))
+            receipt_list = []
 
-    # erc20.mint()
+    # erc20.mint()  
     (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_create(ether_accounts, instance.acc, 1000 * 10 ** 18)
 
     to_file = []
     for acc_eth_hex in account_minted:
-        (acc_sol, pr_key_hex, _) = receipt_list.get(acc_eth_hex)
+        (acc_sol, pr_key_hex) = pr_key_list.get(acc_eth_hex)
         to_file.append((acc_eth_hex, pr_key_hex, acc_sol))
 
     print("\nmint total:", total)
