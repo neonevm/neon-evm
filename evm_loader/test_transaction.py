@@ -4,11 +4,13 @@ from solana.rpc.types import TxOpts
 import unittest
 import base58
 from eth_account import Account as EthAccount
+from spl.token.instructions import get_associated_token_address
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 
 class EvmLoaderTestsNewAccount(unittest.TestCase):
@@ -48,7 +50,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     def test_success_tx_send(self):  
         tx_1 = {
             'to': solana2ether(self.owner_contract),
-            'value': 1,
+            'value': 0,
             'gas': 9999999,
             'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller),
@@ -67,8 +69,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             ])).add(
             TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
@@ -78,7 +82,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # def test_fail_on_no_signature(self):  
     #     tx_1 = {
     #         'to': solana2ether(self.owner_contract),
-    #         'value': 1,
+    #         'value': 0,
     #         'gas': 1,
     #         'gasPrice': 1,
     #         'nonce': 0,

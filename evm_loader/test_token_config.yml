@@ -1,0 +1,7 @@
+---
+json_rpc_url: "SOLANA_URL"
+websocket_url: ""
+keypair_path: /opt/test_token_owner
+address_labels:
+  "11111111111111111111111111111111": System Program
+commitment: confirmed

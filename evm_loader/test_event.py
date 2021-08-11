@@ -3,6 +3,8 @@ from solana.rpc.types import TxOpts
 import unittest
 from base58 import b58decode
 from solana_utils import *
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
 
@@ -13,6 +15,8 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
+
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 class EventTest(unittest.TestCase):
     @classmethod
@@ -47,8 +51,10 @@ class EventTest(unittest.TestCase):
                                    data=bytearray.fromhex("05") + evm_instruction,
                                    keys=[
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -60,8 +66,10 @@ class EventTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -73,8 +81,10 @@ class EventTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -86,8 +96,10 @@ class EventTest(unittest.TestCase):
                                    keys=[
                                        AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                                        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                                        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
@@ -114,7 +126,7 @@ class EventTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input):
-        tx = {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -250,9 +262,9 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
-        tx1 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
+        tx1 =  {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 111}
-        tx2 =  {'to': solana2ether(self.reId), 'value': 1, 'gas': 99999999, 'gasPrice': 1,
+        tx2 =  {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1,
             'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 111}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())

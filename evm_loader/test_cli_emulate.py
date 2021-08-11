@@ -113,7 +113,7 @@ def emulate_external_call(sender, contract, trx_data):
     print('sender:', sender)
     print('contract:', contract)
     print('trx_data:', trx_data)
-    cli = neon_cli()
+    cli = neon_cli('-v -v -v -v')
     cli_result = cli.emulate(evm_loader_id, sender + ' ' + contract + ' ' + trx_data)
     print('cli_result:', cli_result)
     emulate_result = json.loads(cli_result)

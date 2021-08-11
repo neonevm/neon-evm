@@ -1,3 +1,5 @@
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+
 use std::convert::Infallible;
 use std::mem;
 
@@ -19,20 +21,25 @@ const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
 
+#[derive(Debug)]
 struct CallInterrupt {
     context: evm::Context,
-    code_address : H160,
-    input : Vec<u8>,
+    transfer: Option<evm::Transfer>,
+    code_address: H160,
+    input: Vec<u8>,
     gas_limit: u64,
 }
 
+#[derive(Debug)]
 struct CreateInterrupt {
     context: evm::Context,
+    transfer: Option<evm::Transfer>,
     address: H160,
     init_code: Vec<u8>,
     gas_limit: u64,
 }
 
+#[derive(Debug)]
 enum RuntimeApply{
     Continue,
     Call(CallInterrupt),
@@ -179,10 +186,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        // TODO: check
-        // if self.balance(caller) < value {
-        //     return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
-        // }
+        if self.balance(caller) < value {
+            return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
+        }
 
         let after_gas = if self.config.call_l64_after_gas {
             if self.config.estimate {
@@ -244,7 +250,9 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             apparent_value: value,
         };
 
-        Capture::Trap(CreateInterrupt{context, address, init_code, gas_limit})
+        let transfer = Some(evm::Transfer { source: caller, target: address, value });
+
+        Capture::Trap(CreateInterrupt{context, transfer, address, init_code, gas_limit})
     }
 
     fn call(
@@ -307,7 +315,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{context, code_address, input, gas_limit})
+        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit})
     }
 
     fn pre_validate(
@@ -376,24 +384,29 @@ impl<'config, B: Backend> Machine<'config, B> {
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
+        transfer_value: U256,
         gas_limit: u64,
     ) -> ProgramResult {
         debug_print!("call_begin gas_limit={}", gas_limit);
 
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
 
         let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
 
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
+
 
         self.executor.state.inc_nonce(caller);
 
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
+
+        let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
+        self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
@@ -409,33 +422,32 @@ impl<'config, B: Backend> Machine<'config, B> {
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
+                        transfer_value: U256,
                         gas_limit: u64,
     ) -> ProgramResult {
         debug_print!("create_begin gas_limit={}", gas_limit);
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
-
-        let after_gas = self.executor.state.metadata().gasometer().gas();
-        let gas_limit = core::cmp::min(gas_limit, after_gas);
-
-        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|_| ProgramError::InvalidInstructionData)?;
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "ExitError={:?}", e))?;
 
         let scheme = evm::CreateScheme::Legacy { caller };
-        self.executor.state.enter(gas_limit, false);
 
-        match self.executor.create(caller, scheme, U256::zero(), code, None) {
-            Capture::Exit(_) => {
-                debug_print!("create_begin() error ");
-                return Err(ProgramError::InvalidInstructionData);
+        match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
+            Capture::Exit(e) => {
+                return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", e);
             },
             Capture::Trap(info) => {
+                self.executor.state.enter(info.gas_limit, false);
+
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
                 if self.executor.config.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
+                }
+
+                if let Some(transfer) = info.transfer {
+                    self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
                 }
 
                 let valids = Valids::compute(&info.init_code);
@@ -478,12 +490,17 @@ impl<'config, B: Backend> Machine<'config, B> {
         }
     }
 
-    fn apply_call(&mut self, interrupt: CallInterrupt) {
+    fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+        debug_print!("apply_call {:?}", interrupt);
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.code_address);
+
+        if let Some(transfer) = interrupt.transfer {
+            self.executor.state.transfer(&transfer).map_err(|_| (Vec::new(), ExitError::OutOfFund.into()))?;
+        }
 
         let instance = evm::Runtime::new(
             code,
@@ -493,14 +510,21 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.config
         );
         self.runtime.push((instance, CreateReason::Call));
+
+        Ok(())
     }
 
-    fn apply_create(&mut self, interrupt: CreateInterrupt) {
+    fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+        debug_print!("apply_create {:?}", interrupt);
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
         if self.executor.config.create_increase_nonce {
             self.executor.state.inc_nonce(interrupt.address);
+        }
+
+        if let Some(transfer) = interrupt.transfer {
+            self.executor.state.transfer(&transfer).map_err(|_| (Vec::new(), ExitError::OutOfFund.into()))?;
         }
 
         let valids = Valids::compute(&interrupt.init_code);
@@ -512,6 +536,8 @@ impl<'config, B: Backend> Machine<'config, B> {
             self.executor.config
         );
         self.runtime.push((instance, CreateReason::Create(interrupt.address)));
+
+        Ok(())
     }
 
     fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
@@ -596,8 +622,8 @@ impl<'config, B: Backend> Machine<'config, B> {
 
             match apply {
                 RuntimeApply::Continue => {},
-                RuntimeApply::Call(info) => self.apply_call(info),
-                RuntimeApply::Create(info) => self.apply_create(info),
+                RuntimeApply::Call(info) => self.apply_call(info)?,
+                RuntimeApply::Create(info) => self.apply_create(info)?,
                 RuntimeApply::Exit(reason) => self.apply_exit(reason)?,
             }
         }

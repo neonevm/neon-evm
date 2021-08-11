@@ -12,3 +12,8 @@ target
 evm_loader/program/target
 evm_loader/cli/target
 evm_loader/performance/sender/target
+evm_loader/rust-evm/target
+evm_loader/rust-evm/core/target
+evm_loader/rust-evm/gasometer/target
+evm_loader/rust-evm/runtime/target
+evm_loader/rust-evm/src/target

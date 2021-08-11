@@ -40,7 +40,7 @@ impl<'a> Hamt<'a> {
         let header_len = size_of::<u32>() * 32 * 2;
 
         if data.len() < header_len {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err!(ProgramError::AccountDataTooSmall; "data.len()={:?} < header_len={:?}", data.len(), header_len);
         }
 
         if reset {
@@ -52,7 +52,7 @@ impl<'a> Hamt<'a> {
             let last_used_ptr = array_mut_ref![data, 0, 4];
             let last_used = u32::from_le_bytes(*last_used_ptr);
             if last_used < header_len as u32 {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData; "last_used={:?} < header_len={:?}", last_used, header_len);
             }
             Ok(Hamt {data, last_used, used: 0, item_count: 0})
         }
@@ -74,7 +74,7 @@ impl<'a> Hamt<'a> {
             }
         }
         if (self.last_used + size) as usize > self.data.len() {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err!(ProgramError::AccountDataTooSmall; "(self.last_used + size)={:?} > self.data.len()={:?}; size={:?}", (self.last_used + size), self.data.len(), size);
         }
         let item_pos = self.last_used;
         self.last_used += size;

@@ -3,6 +3,7 @@ use crate::{
     account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
+    token, token::token_mint
 };
 use evm::backend::Basic;
 use evm::{H160, H256, U256};
@@ -21,7 +22,7 @@ pub struct SolidityAccount<'a> {
     account_data: AccountData,
     solana_address: &'a Pubkey,
     code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>,
-    lamports: u64,
+    balance: U256,
 }
 
 impl<'a> SolidityAccount<'a> {
@@ -33,9 +34,15 @@ impl<'a> SolidityAccount<'a> {
     /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
     /// ```
     #[must_use]
-    pub fn new(solana_address: &'a Pubkey, lamports: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
-        debug_print!("  SolidityAccount::new");
-        Self{account_data, solana_address, code_data, lamports}
+    pub fn new(solana_address: &'a Pubkey, balance: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
+        let min_decimals = u32::from(token::eth_decimals() - token_mint::decimals());
+        let min_value = U256::from(10_u64.pow(min_decimals));
+
+        let balance = U256::from(balance);
+        let balance = balance * min_value;
+
+        debug_print!("  SolidityAccount::new solana_adress={} balance={}", solana_address, balance);
+        Self{account_data, solana_address, code_data, balance}
     }
 
     /// Get ethereum account address
@@ -109,9 +116,9 @@ impl<'a> SolidityAccount<'a> {
                 return Ok(f(&mut hamt));
             }
         }
-        Err(ProgramError::UninitializedAccount)*/
+        Err!(ProgramError::UninitializedAccount)*/
         if self.code_data.is_none() {
-            return Err(ProgramError::UninitializedAccount)
+            return Err!(ProgramError::UninitializedAccount)
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
@@ -125,7 +132,7 @@ impl<'a> SolidityAccount<'a> {
             let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size+valids_size..], false)?;
             Ok(f(&mut hamt))
         } else {
-            Err(ProgramError::UninitializedAccount)
+            Err!(ProgramError::UninitializedAccount)
         }
     }
 
@@ -149,8 +156,9 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn basic(&self) -> Basic {
         Basic {
-            balance: self.lamports.into(), 
-            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), }
+            balance: self.balance, 
+            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), 
+        }
     }
 
     /// Get code hash
@@ -203,14 +211,14 @@ impl<'a> SolidityAccount<'a> {
         solidity_address: H160,
         nonce: U256,
         #[allow(unused_variables)]
-        lamports: u64,
+        balance: U256,
         code_and_valids: &Option<(Vec<u8>, Vec<u8>)>,
         storage_items: I,
         reset_storage: bool,
     ) -> Result<(), ProgramError>
     where I: IntoIterator<Item = (U256, U256)> 
     {
-        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, lamports, if code_and_valids.is_some() {"Exist"} else {"Empty"}, reset_storage);
+        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, balance, if code_and_valids.is_some() {"Exist"} else {"Empty"}, reset_storage);
         let mut data = (*account_info.data).borrow_mut();
         // **account_info.lamports.borrow_mut() = lamports;
 
@@ -219,7 +227,7 @@ impl<'a> SolidityAccount<'a> {
             AccountData::Foreign => 0,
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
-        let nonce = u64::try_from(nonce).map_err(|_| ProgramError::InvalidArgument)?;
+        let nonce = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;
         AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
         if let Some((code, valids)) = code_and_valids {
@@ -229,9 +237,9 @@ impl<'a> SolidityAccount<'a> {
                 let contract = AccountData::get_mut_contract(contract_data)?;
     
                 if contract.code_size != 0 {
-                    return Err(ProgramError::AccountAlreadyInitialized);
+                    return Err!(ProgramError::AccountAlreadyInitialized; "contract.code_size={:?}", contract.code_size);
                 };
-                contract.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
+                contract.code_size = code.len().try_into().map_err(|e| E!(ProgramError::AccountDataTooSmall; "TryFromIntError={:?}", e))?;
     
                 debug_print!("Write contract header");
                 contract_data.pack(&mut code_data)?;
@@ -248,8 +256,7 @@ impl<'a> SolidityAccount<'a> {
                 debug_print!("Valids written");
             }
             else {
-                debug_print!("Expected code account");
-                return Err(ProgramError::NotEnoughAccountKeys);
+                return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
             }
         }
 
@@ -264,7 +271,7 @@ impl<'a> SolidityAccount<'a> {
                 let mut code_data = code_data.borrow_mut();
     
                 let contract = AccountData::get_contract(contract_data)?;
-                if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+                if contract.code_size == 0 {return Err!(ProgramError::UninitializedAccount; "contract.code_size={:?}", contract.code_size);};
                 let code_size = contract.code_size as usize;
                 let valids_size = (code_size / 8) + 1;
     
@@ -276,8 +283,7 @@ impl<'a> SolidityAccount<'a> {
                 }
             }
             else {
-                debug_print!("Expected code account");
-                return Err(ProgramError::NotEnoughAccountKeys);
+                return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
             }
         }
 
