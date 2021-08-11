@@ -51,8 +51,13 @@ fn handle(request: &Request, cfg: config::Faucet) -> Response {
     let input: Airdrop = try_or_400!(input::json_input(request));
     info!("Requesting {:?}...", &input);
 
-    let rt = tokio::runtime::Runtime::new().expect("tokio runtime failed");
-    if let Err(err) = rt.block_on(process_airdrop(input, cfg)) {
+    let rt = tokio::runtime::Runtime::new();
+    if let Err(err) = rt {
+        error!("{}", err);
+        return Response::text(format!("Error: {}", err));
+    }
+
+    if let Err(err) = rt.unwrap().block_on(process_airdrop(input, cfg)) {
         error!("{}", err);
         return Response::text(format!("Error: {}", err));
     }
