@@ -27,7 +27,7 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_rent_info, find_account_info},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_rent_info},
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
@@ -256,7 +256,6 @@ fn process_instruction<'a>(
 
             payment::check_collateral_account(
                 program_id,
-                find_account_info(accounts, program_id)?,
                 collateral_pool_sol_info,
                 collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(
@@ -304,7 +303,6 @@ fn process_instruction<'a>(
 
             payment::check_collateral_account(
                 program_id,
-                find_account_info(accounts, program_id)?,
                 collateral_pool_sol_info,
                 collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(
@@ -347,7 +345,6 @@ fn process_instruction<'a>(
 
             payment::check_collateral_account(
                 program_id,
-                find_account_info(accounts, program_id)?,
                 collateral_pool_sol_info,
                 collateral_pool_index as usize)?;
             payment::transfer_from_operator_to_collateral_pool(

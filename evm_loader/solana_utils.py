@@ -41,6 +41,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
+evm_loader_creator = "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -327,10 +328,9 @@ class NeonEvmClient:
 
 
 def create_collateral_pool_address(collateral_pool_index):
-    creator_acc = client.get_account_info(PublicKey(EVM_LOADER))['value']['owner']
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
-    return accountWithSeed(PublicKey(creator_acc), seed, PublicKey(EVM_LOADER))
+    return accountWithSeed(PublicKey(evm_loader_creator), seed, PublicKey(EVM_LOADER))
 
 
 def confirm_transaction(http_client, tx_sig, confirmations=0):
