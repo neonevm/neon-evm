@@ -740,7 +740,6 @@ parser.add_argument('--count', metavar="count of the transaction",  type=int,  h
 parser.add_argument('--step', metavar="step of the test", type=str,  help='for ERC20.transfer: deploy, create_senders, create_acc, create_trx, send_trx, '
                                                                            'veryfy_trx\n for spl-token transfer: create_senders,  ')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
-parser.add_argument('--delay', metavar="delay between transactions in milliseconds (only for deploy, create_acc steps)", type=int,  help='10, 20, ..', default=0)
 
 args = parser.parse_args()
 
