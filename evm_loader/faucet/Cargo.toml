@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 color-eyre = "0.5"
 ethers = { git = "https://github.com/gakonst/ethers-rs" }
+rouille = "3.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"

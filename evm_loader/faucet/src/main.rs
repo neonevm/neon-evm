@@ -52,6 +52,6 @@ fn execute(app: cli::Application) -> Result<(), Report> {
 /// Runs the server.
 async fn run(config_file: &std::path::Path) -> Result<(), Report> {
     let cfg = config::Faucet::load(config_file)?;
-    server::run(&cfg).await?;
+    server::run(cfg).await;
     Ok(())
 }
