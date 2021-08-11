@@ -48,7 +48,7 @@ pub fn err_fn<T:>(err: ProgramError, fl: &str, ln: u32, info: &str) -> Result<T,
 /// # Examples
 ///
 /// ```
-/// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
+/// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
 /// ```
 ///
 macro_rules! Err {
@@ -76,7 +76,7 @@ pub fn e_fn(e: ProgramError, fl: &str, ln: u32, info: &str) -> ProgramError {
 /// # Examples
 ///
 /// ```
-/// #    return Err!(ProgramError::InvalidArgument; "Caller pubkey: {} ", &caller_info.key.to_string());
+/// #    map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))
 /// ```
 ///
 macro_rules! E {
