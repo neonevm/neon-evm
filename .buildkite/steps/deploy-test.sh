@@ -13,6 +13,9 @@ done
 REVISION=$(git rev-parse HEAD)
 EVM_LOADER_IMAGE=cybercoredev/evm_loader:${IMAGETAG:-$REVISION}
 
+echo "Currently runned Docker-containers"
+docker ps -a
+
 docker-compose -f evm_loader/docker-compose-test.yml up -d
 
 function cleanup_docker {
