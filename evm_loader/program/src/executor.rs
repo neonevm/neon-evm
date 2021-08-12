@@ -7,7 +7,7 @@ use evm::{
     backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
     gasometer, H160, H256, Handler, Resolve, Valids, U256,
 };
-use evm_runtime::{Control, save_created_address, save_return_value};
+use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
@@ -47,12 +47,11 @@ enum RuntimeApply{
     Exit(ExitReason),
 }
 
-struct Executor<'config, B: Backend> {
-    state: ExecutorState<'config, B>,
-    config: &'config evm::Config,
+struct Executor<B: Backend> {
+    state: ExecutorState<B>,
 }
 
-impl<'config, B: Backend> Handler for Executor<'config, B> {
+impl<B: Backend> Handler for Executor<B> {
     type CreateInterrupt = crate::executor::CreateInterrupt;
     type CreateFeedback = Infallible;
     type CallInterrupt = crate::executor::CallInterrupt;
@@ -135,7 +134,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     }
 
     fn exists(&self, address: H160) -> bool {
-        if self.config.empty_considered_exists {
+        if CONFIG.empty_considered_exists {
             self.state.exists(address)
         } else {
             self.state.exists(address) && !self.state.is_empty(address)
@@ -181,7 +180,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         debug_print!("create target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
-            if depth + 1 > self.config.call_stack_limit {
+            if depth + 1 > CONFIG.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
             }
         }
@@ -190,8 +189,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
 
-        let after_gas = if self.config.call_l64_after_gas {
-            if self.config.estimate {
+        let after_gas = if CONFIG.call_l64_after_gas {
+            if CONFIG.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
@@ -266,7 +265,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
         if let Some(depth) = self.state.metadata().depth() {
-            if depth + 1 > self.config.call_stack_limit {
+            if depth + 1 > CONFIG.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
             }
         }
@@ -275,8 +274,8 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
         let take_l64 = true;
         let take_stipend = true;
 
-        let after_gas = if take_l64 && self.config.call_l64_after_gas {
-            if self.config.estimate {
+        let after_gas = if take_l64 && CONFIG.call_l64_after_gas {
+            if CONFIG.estimate {
                 let initial_after_gas = self.state.metadata().gasometer().gas();
                 let diff = initial_after_gas - l64(initial_after_gas);
                 if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
@@ -299,7 +298,7 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
 
         if let Some(transfer) = transfer.as_ref() {
             if take_stipend && transfer.value != U256::zero() {
-                gas_limit = gas_limit.saturating_add(self.config.call_stipend);
+                gas_limit = gas_limit.saturating_add(CONFIG.call_stipend);
             }
         }
 
@@ -336,7 +335,6 @@ impl<'config, B: Backend> Handler for Executor<'config, B> {
                 opcode,
                 stack,
                 is_static,
-                self.config,
                 self,
             )?;
 
@@ -353,17 +351,17 @@ pub enum CreateReason {
     Create(H160),
 }
 
-type RuntimeInfo<'config> = (evm::Runtime<'config>, CreateReason);
+type RuntimeInfo = (evm::Runtime, CreateReason);
 
-pub struct Machine<'config, B: Backend> {
-    executor: Executor<'config, B>,
-    runtime: Vec<RuntimeInfo<'config>>
+pub struct Machine<B: Backend> {
+    executor: Executor<B>,
+    runtime: Vec<RuntimeInfo>
 }
 
-impl<'config, B: Backend> Machine<'config, B> {
+impl<B: Backend> Machine<B> {
 
-    pub fn new(state: ExecutorState<'config, B>) -> Self {
-        let executor = Executor { state, config: evm::Config::default() };
+    pub fn new(state: ExecutorState<B>) -> Self {
+        let executor = Executor { state };
         Self{ executor, runtime: Vec::new() }
     }
 
@@ -376,7 +374,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         let state = ExecutorState::new(substate, backend);
 
-        let executor = Executor { state, config: evm::Config::default() };
+        let executor = Executor { state };
         Self{ executor, runtime }
     }
 
@@ -412,7 +410,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let valids = self.executor.valids(code_address);
         let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
 
-        let runtime = evm::Runtime::new(code, valids, input, context, self.executor.config);
+        let runtime = evm::Runtime::new(code, valids, input, context);
 
         self.runtime.push((runtime, CreateReason::Call));
 
@@ -442,7 +440,7 @@ impl<'config, B: Backend> Machine<'config, B> {
 
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
-                if self.executor.config.create_increase_nonce {
+                if CONFIG.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
                 }
 
@@ -456,7 +454,6 @@ impl<'config, B: Backend> Machine<'config, B> {
                     valids,
                     Vec::new(),
                     info.context,
-                    self.executor.config
                 );
                 self.runtime.push((instance, CreateReason::Create(info.address)));
             },
@@ -507,7 +504,6 @@ impl<'config, B: Backend> Machine<'config, B> {
             valids,
             interrupt.input,
             interrupt.context,
-            self.executor.config
         );
         self.runtime.push((instance, CreateReason::Call));
 
@@ -519,7 +515,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.enter(interrupt.gas_limit, false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
-        if self.executor.config.create_increase_nonce {
+        if CONFIG.create_increase_nonce {
             self.executor.state.inc_nonce(interrupt.address);
         }
 
@@ -533,7 +529,6 @@ impl<'config, B: Backend> Machine<'config, B> {
             valids,
             Vec::new(),
             interrupt.context,
-            self.executor.config
         );
         self.runtime.push((instance, CreateReason::Create(interrupt.address)));
 
@@ -563,7 +558,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let return_value = exited_runtime.machine().return_value();
 
         if reason.is_succeed() {
-            match self.executor.config.create_contract_limit {
+            match CONFIG.create_contract_limit {
                 Some(limit) if return_value.len() > limit => {
                     self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     reason = ExitError::CreateContractLimit.into();
@@ -631,7 +626,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         Ok(())
     }
 
-    pub fn into_state(self) -> ExecutorState<'config, B> {
+    pub fn into_state(self) -> ExecutorState<B> {
         self.executor.state
     }
 }
