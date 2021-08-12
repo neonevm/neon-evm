@@ -18,7 +18,7 @@ use crate::{
     solidity_account::SolidityAccount,
     utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
-use tbn::G1;
+//use tbn::G1;
 
 /// Account storage
 /// Trait to access account info
@@ -189,6 +189,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
     }
 
+    /* Should be implemented via Solana syscall
     /// Call inner `big_mod_exp`
     #[must_use]
     pub fn call_inner_big_mod_exp(
@@ -243,8 +244,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         return_value.extend(ret_int);
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), return_value)))
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     #[must_use]
     #[allow(clippy::similar_names)]
     #[allow(clippy::unused_self)]
@@ -290,8 +292,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         };
 
         Some(a)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256Add`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -349,8 +352,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_buf(buf)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256ScalarMul`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -409,8 +413,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_buf(buf)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256Pairing`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -508,7 +513,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_val(false)
-    }
+    }*/
 
     /// Call inner `blake2F`
     #[must_use]
@@ -718,16 +723,20 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
             return Self::call_inner_datacopy(&input);
         }
         if code_address == SYSTEM_ACCOUNT_BIGMODEXP {
-            return Self::call_inner_big_mod_exp(&input);
+            //return Self::call_inner_big_mod_exp(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_ADD {
-            return self.call_inner_bn256_add(&input);
+            //return self.call_inner_bn256_add(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL {
-            return self.call_inner_bn256_scalar_mul(&input);
+            //return self.call_inner_bn256_scalar_mul(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_PAIRING {
-            return self.call_inner_bn256_pairing(&input);
+            //return self.call_inner_bn256_pairing(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BLAKE2F {
             return Self::call_inner_blake2_f(&input);
