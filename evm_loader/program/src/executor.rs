@@ -382,13 +382,13 @@ impl<'config, B: Backend> Machine<'config, B> {
 
         let transaction_cost = gasometer::call_transaction_cost(&input);
         self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
 
         self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         self.executor.state.inc_nonce(caller);
 
@@ -415,7 +415,7 @@ impl<'config, B: Backend> Machine<'config, B> {
         let transaction_cost = gasometer::create_transaction_cost(&code);
         self.executor.state.metadata_mut().gasometer_mut()
             .record_transaction(transaction_cost)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "ExitError={:?}", e))?;
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
 
         let after_gas = self.executor.state.metadata().gasometer().gas();
         let gas_limit = core::cmp::min(gas_limit, after_gas);
@@ -427,8 +427,9 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.enter(gas_limit, false);
 
         match self.executor.create(caller, scheme, U256::zero(), code, None) {
-            Capture::Exit(e) => {
-                return Err!(ProgramError::InvalidInstructionData; "executor.create() error={:?} ", e);
+            Capture::Exit(_) => {
+                error_print!("create_begin() error ");
+                return Err(ProgramError::InvalidInstructionData);
             },
             Capture::Trap(info) => {
                 self.executor.state.touch(info.address);
@@ -595,8 +596,8 @@ impl<'config, B: Backend> Machine<'config, B> {
 
             match apply {
                 RuntimeApply::Continue => {},
-                RuntimeApply::Call(info) => self.apply_call(info)?,
-                RuntimeApply::Create(info) => self.apply_create(info)?,
+                RuntimeApply::Call(info) => self.apply_call(info),
+                RuntimeApply::Create(info) => self.apply_create(info),
                 RuntimeApply::Exit(reason) => self.apply_exit(reason)?,
             }
         }
