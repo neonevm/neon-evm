@@ -35,11 +35,14 @@ pub fn start(cfg: config::Faucet) {
     });
 }
 
+/// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, Deserialize)]
 struct Airdrop {
     wallet: String,
     amount: u64,
 }
+
+const ALLOW_ORIGIN: &str = "localhost, neonlabs.org";
 
 /// Handles a request for airdrop.
 fn handle(request: &Request, cfg: config::Faucet) -> Response {
@@ -52,16 +55,18 @@ fn handle(request: &Request, cfg: config::Faucet) -> Response {
     let rt = tokio::runtime::Runtime::new();
     if let Err(err) = rt {
         error!("{}", err);
-        return Response::text(format!("Error: {}", err));
+        return Response::text(format!("Error: {}", err))
+            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN);
     }
 
     if let Err(err) = rt.unwrap().block_on(process_airdrop(input, cfg)) {
         error!("{}", err);
-        return Response::text(format!("Error: {}", err));
+        return Response::text(format!("Error: {}", err))
+            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN);
     }
 
     info!("OK");
-    Response::text("OK")
+    Response::text("OK").with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
 }
 
 type Amount = ethers::types::U256;
