@@ -42,8 +42,9 @@ struct Airdrop {
     amount: u64,
 }
 
-const ALLOW_ORIGIN: &str = "localhost, neonlabs.org";
-const ALLOW_METHODS: &str = "POST, OPTIONS";
+const ALLOW_ORIGIN: &str = "*";
+const ALLOW_METHODS: &str = "*";
+const ALLOW_HEADERS: &str = "*";
 
 /// Handles a request for airdrop.
 fn handle(request: &Request, cfg: config::Faucet) -> Response {
@@ -58,20 +59,23 @@ fn handle(request: &Request, cfg: config::Faucet) -> Response {
         error!("{}", err);
         return Response::text(format!("Error: {}", err))
             .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS);
+            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
+            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
     }
 
     if let Err(err) = rt.unwrap().block_on(process_airdrop(input, cfg)) {
         error!("{}", err);
         return Response::text(format!("Error: {}", err))
             .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS);
+            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
+            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
     }
 
     info!("OK");
     Response::text("OK")
         .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
         .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
+        .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS)
 }
 
 type Amount = ethers::types::U256;
