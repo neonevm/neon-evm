@@ -9,7 +9,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Faucet {
     pub environment: String,
-    pub rpc_port: String,
+    pub rpc_port: u16,
     pub ethereum_endpoint: String,
     pub token_a: String,
     pub token_b: String,

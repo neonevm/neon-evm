@@ -15,16 +15,14 @@ use transaction::eip2718::TypedTransaction;
 
 use crate::{config, contract};
 
-type Amount = ethers::types::U256;
-type Address = ethers::types::Address;
 pub type Account = SignerMiddleware<Provider<Http>, LocalWallet>;
 pub type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
 
 /// Starts the server in listening mode.
 #[allow(clippy::manual_strip)]
 pub fn start(cfg: config::Faucet) {
-    let url = format!("localhost:{}", cfg.rpc_port);
     info!("Listening port {}...", cfg.rpc_port);
+    let url = format!("localhost:{}", cfg.rpc_port);
 
     rouille::start_server(url, move |request| {
         router!(request,
@@ -66,6 +64,9 @@ fn handle(request: &Request, cfg: config::Faucet) -> Response {
     Response::text("OK")
 }
 
+type Amount = ethers::types::U256;
+type Address = ethers::types::Address;
+
 /// Processes the aridrop: sends needed transactions into Ethereum.
 async fn process_airdrop(input: Airdrop, cfg: config::Faucet) -> Result<(), Report> {
     info!("Processing Airdrop...");
@@ -92,7 +93,7 @@ async fn process_airdrop(input: Airdrop, cfg: config::Faucet) -> Result<(), Repo
     Ok(())
 }
 
-/// Sends transaction to perform one airdrop operation.
+/// Creates transaction to perform one airdrop operation.
 async fn airdrop(
     token: &UniswapV2ERC20,
     recipient: &str,
@@ -103,7 +104,7 @@ async fn airdrop(
     Ok(call.tx)
 }
 
-/// Imports account by it's private key.
+/// Imports account from it's private key.
 fn import_account(provider: Provider<Http>, priv_key: &str) -> Result<Account, Report> {
     let wallet = priv_key.parse::<LocalWallet>()?;
     let account = SignerMiddleware::new(provider, wallet);

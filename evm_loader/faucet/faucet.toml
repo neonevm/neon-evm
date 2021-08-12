@@ -1,7 +1,7 @@
 # ERC20 Token Faucet config
 
 environment = "testing"
-rpc_port = "3333"
+rpc_port = 3333
 ethereum_endpoint = "http://localhost:8545"
 token_a = "0x54dbb737eac5007103e729e9ab7ce64a6850a310"
 token_b = "0x62877dDCd49aD22f5eDfc6ac108e9a4b5D2bD88B"
