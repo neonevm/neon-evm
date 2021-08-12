@@ -22,7 +22,7 @@ default = ["custom-heap"]
 solana-program = { version = "1.7.9", default_features = false }
 spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
-num-bigint = "0.4"
+#num-bigint = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
 remove_dir_all = "=0.5.0"
@@ -33,7 +33,7 @@ hex = "0.4.2"
 bs58 = "0.3.1"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 #k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
-tbn = { version = "0.4.4", default-features = false }
+#tbn = { version = "0.4.4", default-features = false }
 ripemd160 = "0.9.1"
 serde = "1.0.112"
 serde_bytes = "0.11"
