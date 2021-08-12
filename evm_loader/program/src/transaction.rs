@@ -127,6 +127,3 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160
 
     Ok(address)
 }
-
-    Err!(ProgramError::InvalidInstructionData; "sysvar account not found in {:?}", accounts)
-}
