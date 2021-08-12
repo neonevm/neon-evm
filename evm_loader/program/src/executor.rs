@@ -427,9 +427,8 @@ impl<'config, B: Backend> Machine<'config, B> {
         self.executor.state.enter(gas_limit, false);
 
         match self.executor.create(caller, scheme, U256::zero(), code, None) {
-            Capture::Exit(_) => {
-                error_print!("create_begin() error ");
-                return Err(ProgramError::InvalidInstructionData);
+            Capture::Exit(e) => {
+                return Err!(ProgramError::InvalidInstructionData; "create() error:{:?}", e);
             },
             Capture::Trap(info) => {
                 self.executor.state.touch(info.address);
