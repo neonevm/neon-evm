@@ -15,7 +15,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "testnet" # TODO: if it is merge change to  "${PROXY_BRANCH:-develop}"
+       branch: "v0.1.x" # TODO: if it is merge change to  "${PROXY_BRANCH:-develop}"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
