@@ -128,7 +128,7 @@ fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-fn parse_program_args() -> (Pubkey, String, String, String, String, String){
+fn parse_program_args() -> (Pubkey, String, String, String, String, String, u64) {
     let key = "EVM_LOADER";
     let env_evm_loader  = match env::var_os(key) {
         Some(val) => val.into_string().unwrap(),
@@ -198,6 +198,15 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String){
                 .possible_values(&["tcp", "udp"])
                 .default_value("udp"),
         )
+        .arg(
+            Arg::with_name("delay")
+                .long("delay")
+                .value_name("DELAY")
+                .takes_value(true)
+                .global(true)
+                .help("delay in microseconds between sending trx")
+                .default_value("1000"),
+        )
         .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
@@ -220,8 +229,9 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String){
     let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
+    let delay :u64 = app_matches.value_of("verify_file").unwrap().to_string().parse().unwrap();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, client);
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, client, delay);
 }
 
 fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
@@ -353,7 +363,8 @@ fn main() -> CommandResult{
         trx_filename,
         senders_filename,
         verify_filename,
-        client
+        client,
+        delay
     )
         = parse_program_args();
 
@@ -367,7 +378,7 @@ fn main() -> CommandResult{
     let mut signatures = Vec::new();
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
     let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
-    let ten = time::Duration::from_micros(1000);
+    let ten = time::Duration::from_micros(delay);
     let start = SystemTime::now();
     for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
         if (client == "tcp"){
