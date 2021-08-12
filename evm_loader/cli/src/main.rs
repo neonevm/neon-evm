@@ -882,7 +882,7 @@ fn command_deploy(
 
     // Get caller nonce
     let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
-    let block_token = create_block_token_account(config, caller_ether, caller_arg)?
+    let block_token = create_block_token_account(config, &caller_ether, &caller_arg)?;
 
     let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);

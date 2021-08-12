@@ -40,7 +40,8 @@ use crate::{
     executor::Machine,
     instruction::{EvmInstruction, on_event, on_return},
     payment,
-    token::{token_mint, create_associated_token_account},
+    token,
+    token::{token_mint, create_associated_token_account, get_token_account_owner},
 };
 
 type LogApplies = Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)>;
