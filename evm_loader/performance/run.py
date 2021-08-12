@@ -721,19 +721,23 @@ def create_senders(args):
     senders = open(senders_file+args.postfix, mode='a')
 
     while total < args.count:
+        print("create sender", total)
         total = total + 1
         acc = Account()
         tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
         receipt_list.append((tx['result'], acc.secret_key(), acc.public_key()) )
 
-    for (receipt, pr_key, pub_key ) in receipt_list:
-        confirm_transaction(client, receipt)
-        if getBalance(pub_key) == 0:
-            print("request_airdrop error", str(pub_key))
-            exit(0)
-        line = pr_key.hex() + bytes(pub_key).hex()
-        senders.write(line+"\n")
+        if total % 1000 == 0 or total == args.count-1:
+            for (receipt, pr_key, pub_key ) in receipt_list:
+                confirm_transaction(client, receipt)
+                if getBalance(pub_key) == 0:
+                    print("request_airdrop error", str(pub_key))
+                    exit(0)
+                line = pr_key.hex() + bytes(pub_key).hex()
+                senders.write(line+"\n")
+            receipt_list = []
 
+    print ("\ntotal: ", total)
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)', default=trx_cnt)
