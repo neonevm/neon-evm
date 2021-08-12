@@ -7,6 +7,7 @@
 //! An ERC20-like Token program for the Solana blockchain
 #[macro_use]
 mod debug;
+#[macro_use]
 mod error;
 pub mod entrypoint;
 mod hamt;
@@ -17,8 +18,10 @@ pub mod solidity_account;
 mod storage_account;
 pub mod instruction;
 mod transaction;
-mod executor;
-mod executor_state;
+/// Todo: document
+pub mod executor;
+/// Todo: document
+pub mod executor_state;
 pub mod utils;
 pub mod token;
 

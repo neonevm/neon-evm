@@ -6,9 +6,10 @@ use solana_program::{
     entrypoint::{ ProgramResult },
     program_error::{ProgramError},
     secp256k1_program,
+    secp256k1_recover::{Secp256k1RecoverError, secp256k1_recover},
 };
 use std::convert::{Into, TryFrom};
-use crate::utils::{keccak256_digest, keccak256_h256};
+use crate::utils::{keccak256_digest};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 struct SecpSignatureOffsets {
@@ -50,28 +51,24 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
 
 pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
 {
-    let message_len = u16::try_from(message_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+    let message_len = u16::try_from(message_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
 
     let current_instruction = load_current_index(&sysvar_info.try_borrow_data()?);
-    let current_instruction = u8::try_from(current_instruction).map_err(|_| ProgramError::InvalidInstructionData)?;
+    let current_instruction = u8::try_from(current_instruction).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
     let index = current_instruction - 1;
 
     if let Ok(instr) = load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
         if secp256k1_program::check_id(&instr.program_id) {
             let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
             if reference_instruction != instr.data {
-                debug_print!("wrong keccak instruction data");
-                debug_print!("instruction: {}", &hex::encode(&instr.data));
-                debug_print!("reference: {}", &hex::encode(&reference_instruction));
-                return Err(ProgramError::InvalidInstructionData);
+                return Err!(ProgramError::InvalidInstructionData; "wrong keccak instruction data, instruction={}, reference={}", &hex::encode(&instr.data), &hex::encode(&reference_instruction));
             }
         } else {
-            return Err(ProgramError::IncorrectProgramId);
+            return Err!(ProgramError::IncorrectProgramId; "index={:?}, sysvar_info={:?}, instr.program_id={:?}", index, sysvar_info, instr.program_id);
         }
     }
     else {
-        debug_print!("ERR");
-        return Err(ProgramError::MissingRequiredSignature);
+        return Err!(ProgramError::MissingRequiredSignature; "index={:?}, sysvar_info={:?}", index, sysvar_info);
     }
 
     Ok(())
@@ -120,15 +117,15 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, secp256k1::Error> {
+pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, Secp256k1RecoverError> {
     let digest = keccak256_digest(unsigned_trx);
-    let message = secp256k1::Message::parse_slice(&digest)?;
 
-    let recovery_id = secp256k1::RecoveryId::parse(signature[64])?;
-    let signature = secp256k1::Signature::parse_slice(&signature[0..64])?;
+    let public_key = secp256k1_recover(&digest, signature[64], &signature[0..64])?;
 
-    let public_key = secp256k1::recover(&message, &signature, &recovery_id)?;
-    Ok(keccak256_h256(&public_key.serialize()[1..]).into())
+    let address = keccak256_digest(&public_key.to_bytes());
+    let address = H160::from_slice(&address[12..32]);
+
+    Ok(address)
 }
 
 pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
@@ -138,6 +135,15 @@ pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a Accou
         }
     }
 
-    debug_print!("sysvar account not found");
-    Err(ProgramError::InvalidInstructionData)
+    Err!(ProgramError::InvalidInstructionData; "sysvar account not found in {:?}", accounts)
+}
+
+pub fn find_rent_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
+    for account in accounts {
+        if solana_program::sysvar::rent::check_id(account.key) {
+            return Ok(account);
+        }
+    }
+
+    Err!(ProgramError::InvalidInstructionData; "rent account not found in {:?}",  accounts)
 }

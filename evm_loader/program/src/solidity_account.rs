@@ -116,9 +116,9 @@ impl<'a> SolidityAccount<'a> {
                 return Ok(f(&mut hamt));
             }
         }
-        Err(ProgramError::UninitializedAccount)*/
+        Err!(ProgramError::UninitializedAccount)*/
         if self.code_data.is_none() {
-            return Err(ProgramError::UninitializedAccount)
+            return Err!(ProgramError::UninitializedAccount)
         }
 
         let contract_data = &self.code_data.as_ref().unwrap().0;
@@ -132,7 +132,7 @@ impl<'a> SolidityAccount<'a> {
             let mut hamt = Hamt::new(&mut data[contract_data.size()+code_size+valids_size..], false)?;
             Ok(f(&mut hamt))
         } else {
-            Err(ProgramError::UninitializedAccount)
+            Err!(ProgramError::UninitializedAccount)
         }
     }
 
@@ -227,7 +227,7 @@ impl<'a> SolidityAccount<'a> {
             AccountData::Foreign => 0,
             AccountData::Account{code_size, ..} => code_size as usize,
         };*/
-        let nonce = u64::try_from(nonce).map_err(|_| ProgramError::InvalidArgument)?;
+        let nonce = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;
         AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
         if let Some((code, valids)) = code_and_valids {
@@ -237,9 +237,9 @@ impl<'a> SolidityAccount<'a> {
                 let contract = AccountData::get_mut_contract(contract_data)?;
     
                 if contract.code_size != 0 {
-                    return Err(ProgramError::AccountAlreadyInitialized);
+                    return Err!(ProgramError::AccountAlreadyInitialized; "contract.code_size={:?}", contract.code_size);
                 };
-                contract.code_size = code.len().try_into().map_err(|_| ProgramError::AccountDataTooSmall)?;
+                contract.code_size = code.len().try_into().map_err(|e| E!(ProgramError::AccountDataTooSmall; "TryFromIntError={:?}", e))?;
     
                 debug_print!("Write contract header");
                 contract_data.pack(&mut code_data)?;
@@ -256,8 +256,7 @@ impl<'a> SolidityAccount<'a> {
                 debug_print!("Valids written");
             }
             else {
-                debug_print!("Expected code account");
-                return Err(ProgramError::NotEnoughAccountKeys);
+                return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
             }
         }
 
@@ -272,7 +271,7 @@ impl<'a> SolidityAccount<'a> {
                 let mut code_data = code_data.borrow_mut();
     
                 let contract = AccountData::get_contract(contract_data)?;
-                if contract.code_size == 0 {return Err(ProgramError::UninitializedAccount);};
+                if contract.code_size == 0 {return Err!(ProgramError::UninitializedAccount; "contract.code_size={:?}", contract.code_size);};
                 let code_size = contract.code_size as usize;
                 let valids_size = (code_size / 8) + 1;
     
@@ -284,8 +283,7 @@ impl<'a> SolidityAccount<'a> {
                 }
             }
             else {
-                debug_print!("Expected code account");
-                return Err(ProgramError::NotEnoughAccountKeys);
+                return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
             }
         }
 

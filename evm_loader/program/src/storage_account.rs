@@ -25,8 +25,7 @@ impl<'a> StorageAccount<'a> {
             );
             Ok(Self { info, data })
         } else {
-            debug_print!("storage account is not empty");
-            Err(ProgramError::InvalidAccountData)
+            Err!(ProgramError::InvalidAccountData; "storage account is not empty. account_data.len()={:?}", &account_data.len())
         }
     }
 
@@ -37,7 +36,7 @@ impl<'a> StorageAccount<'a> {
             let data = AccountData::Storage(data);
             Ok(Self { info, data })
         } else {
-            Err(ProgramError::InvalidAccountData)
+            Err!(ProgramError::InvalidAccountData)
         }
     }
 
@@ -66,7 +65,7 @@ impl<'a> StorageAccount<'a> {
 
         let account_data = self.info.try_borrow_data()?;
         if account_data.len() < end {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?} < end={:?}", account_data.len(), end);
         }
 
         let keys_storage = &account_data[begin..end];
@@ -80,19 +79,19 @@ impl<'a> StorageAccount<'a> {
         let storage = AccountData::get_storage(&self.data)?;
         
         if storage.accounts_len != accounts.len() {
-            return Err(ProgramError::NotEnoughAccountKeys);
+            return Err!(ProgramError::NotEnoughAccountKeys; "storage.accounts_len={:?} != accounts.len()={:?}", storage.accounts_len, accounts.len());
         }
 
         let keys = accounts.iter().map(|a| *a.unsigned_key());
         if !self.accounts()?.into_iter().eq(keys) {
-            return Err(ProgramError::NotEnoughAccountKeys);
+            return Err!(ProgramError::NotEnoughAccountKeys);
         }
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
                 if Some(self.info.unsigned_key()) != account.blocked.as_ref() {
-                    return Err(ProgramError::NotEnoughAccountKeys);
+                    return Err!(ProgramError::NotEnoughAccountKeys);
                 }
             }
         }
@@ -104,14 +103,14 @@ impl<'a> StorageAccount<'a> {
         {
             let storage = AccountData::get_storage(&self.data)?;
             if storage.accounts_len != accounts.len() {
-                return Err(ProgramError::InvalidInstructionData);
+                return Err!(ProgramError::InvalidInstructionData; "storage.accounts_len={:?} != accounts.len()={:?}", storage.accounts_len, accounts.len());
             }
 
             let (begin, end) = self.accounts_region()?;
 
             let mut account_data = self.info.try_borrow_mut_data()?;
             if account_data.len() < end {
-                return Err(ProgramError::AccountDataTooSmall);
+                return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?} < end={:?}", account_data.len(), end);
             }
 
             let keys_storage = &mut account_data[begin..end];
@@ -139,29 +138,29 @@ impl<'a> StorageAccount<'a> {
         {
             let storage = AccountData::get_mut_storage(&mut self.data)?;
             storage.evm_data_size = bincode::serialized_size(&evm_data)
-                .map_err(|_| ProgramError::InvalidInstructionData)?
+                .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
                 .try_into()
-                .map_err(|_| ProgramError::InvalidInstructionData)?;
+                .map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
             storage.executor_data_size = bincode::serialized_size(&executor_data)
-                .map_err(|_| ProgramError::InvalidInstructionData)?
+                .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
                 .try_into()
-                .map_err(|_| ProgramError::InvalidInstructionData)?;
+                .map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
         }
         
         let mut account_data = self.info.try_borrow_mut_data()?;
         {
             let (start, mid, end) = self.storage_region()?;
             if account_data.len() < end {
-                return Err(ProgramError::AccountDataTooSmall);
+                return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?} < end={:?}", account_data.len(), end);
             }
 
             {
                 let buffer = &mut account_data[start..mid];
-                bincode::serialize_into(buffer, &evm_data).map_err(|_| ProgramError::InvalidInstructionData)?;
+                bincode::serialize_into(buffer, &evm_data).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
             }
             {
                 let buffer = &mut account_data[mid..end];
-                bincode::serialize_into(buffer, &executor_data).map_err(|_| ProgramError::InvalidInstructionData)?;
+                bincode::serialize_into(buffer, &executor_data).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
             }
         }
 
@@ -175,16 +174,16 @@ impl<'a> StorageAccount<'a> {
 
         let (start, mid, end) = self.storage_region()?;
         if account_data.len() < end {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?}", account_data.len());
         }
 
         let evm_data: T = {
             let buffer = &account_data[start..mid];
-            bincode::deserialize_from(buffer).map_err(|_| ProgramError::InvalidInstructionData)?
+            bincode::deserialize_from(buffer).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
         };
         let executor_data: E = {
             let buffer = &account_data[mid..end];
-            bincode::deserialize_from(buffer).map_err(|_| ProgramError::InvalidInstructionData)?
+            bincode::deserialize_from(buffer).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
         };
 
         Ok((evm_data, executor_data))

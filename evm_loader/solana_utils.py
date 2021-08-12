@@ -298,8 +298,11 @@ class solana_cli:
 
 
 class neon_cli:
+    def __init__(self, verbose_flags=''):
+        self.verbose_flags = verbose_flags
+
     def call(self, arguments):
-        cmd = 'neon-cli --url {} {}'.format(solana_url, arguments)
+        cmd = 'neon-cli {} --url {} {}'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -308,9 +311,10 @@ class neon_cli:
             raise
 
     def emulate(self, loader_id, arguments):
-        cmd = 'neon-cli  --commitment=recent --evm_loader {} --url {} emulate {}'.format(loader_id,
-                                                                                         solana_url,
-                                                                                         arguments)
+        cmd = 'neon-cli {} --commitment=recent --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
+                                                                                           loader_id,
+                                                                                           solana_url,
+                                                                                           arguments)
         print('cmd:', cmd)
         try:
             output = subprocess.check_output(cmd, shell=True, universal_newlines=True)

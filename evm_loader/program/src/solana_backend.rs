@@ -10,6 +10,7 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     entrypoint::ProgramResult,
+    secp256k1_recover::secp256k1_recover,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -17,7 +18,7 @@ use crate::{
     solidity_account::SolidityAccount,
     utils::{keccak256_h256, keccak256_h256_v, keccak256_digest},
 };
-use tbn::G1;
+//use tbn::G1;
 
 /// Account storage
 /// Trait to access account info
@@ -119,25 +120,19 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
-        let message = secp256k1::Message::parse(msg);
 
-        let signature = secp256k1::Signature::parse(sig);
-
-        let v: u8 = match U256::from_big_endian(v).try_into() {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
+        let v: u8 = if let Ok(v) = U256::from(v).as_u32().try_into() {
+            v
+        } else {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
         };
-        let recovery_id = match secp256k1::RecoveryId::parse_rpc(v) {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
-        };
-
-        let public_key = match secp256k1::recover(&message, &signature, &recovery_id) {
-            Ok(value) => value,
+        let recovery_id = v - 27;
+        let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
+            Ok(key) => key,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
 
-        let mut address = keccak256_digest(&public_key.serialize()[1..]);
+        let mut address = keccak256_digest(&public_key.to_bytes());
         address[0..12].fill(0);
         debug_print!("{}", &hex::encode(&address));
 
@@ -194,6 +189,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
     }
 
+    /* Should be implemented via Solana syscall
     /// Call inner `big_mod_exp`
     #[must_use]
     pub fn call_inner_big_mod_exp(
@@ -248,8 +244,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         return_value.extend(ret_int);
 
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), return_value)))
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     #[must_use]
     #[allow(clippy::similar_names)]
     #[allow(clippy::unused_self)]
@@ -295,8 +292,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         };
 
         Some(a)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256Add`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -354,8 +352,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_buf(buf)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256ScalarMul`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -414,8 +413,9 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_buf(buf)
-    }
+    }*/
 
+    /* Should be implemented via Solana syscall
     /// Call inner `bn256Pairing`
     #[must_use]
     #[allow(clippy::similar_names)]
@@ -513,7 +513,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
 
         return_val(false)
-    }
+    }*/
 
     /// Call inner `blake2F`
     #[must_use]
@@ -723,16 +723,20 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
             return Self::call_inner_datacopy(&input);
         }
         if code_address == SYSTEM_ACCOUNT_BIGMODEXP {
-            return Self::call_inner_big_mod_exp(&input);
+            //return Self::call_inner_big_mod_exp(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_ADD {
-            return self.call_inner_bn256_add(&input);
+            //return self.call_inner_bn256_add(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL {
-            return self.call_inner_bn256_scalar_mul(&input);
+            //return self.call_inner_bn256_scalar_mul(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BN256_PAIRING {
-            return self.call_inner_bn256_pairing(&input);
+            //return self.call_inner_bn256_pairing(&input);
+            return Some(Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0])));
         }
         if code_address == SYSTEM_ACCOUNT_BLAKE2F {
             return Self::call_inner_blake2_f(&input);
