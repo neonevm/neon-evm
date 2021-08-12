@@ -46,8 +46,8 @@ evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
-solana-program-test = "1.7.6"
-solana-sdk = "1.7.6"
+solana-program-test = "1.7.9"
+solana-sdk = "1.7.9"
 
 [lib]
 crate-type = ["cdylib", "lib"]
