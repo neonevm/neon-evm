@@ -13,7 +13,7 @@ use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
-    payment::{COLLATERAL_SEED_PREFIX, COLLATERAL_BASE_ADDRESS},
+    payment::collateral_pool_base,
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -736,9 +736,9 @@ fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
 
 fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let collateral_pool_index = 2;
-    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
+    let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
-        &Pubkey::from_str(COLLATERAL_BASE_ADDRESS).unwrap(), 
+        &collateral_pool_base::id(), 
         &seed, 
         &config.evm_loader).unwrap();
 
