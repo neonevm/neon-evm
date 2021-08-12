@@ -292,7 +292,9 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 storage_info,
                 system_info)?;
-            let fee = trx.gas_limit * trx.gas_price * U256::from(1_000_000_000_u64);
+            let fee = trx.gas_limit
+                .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?
+                .checked_mul(U256::from(1_000_000_000_u64)).ok_or(ProgramError::InvalidArgument)?;
             token::block_token(
                 accounts,
                 user_eth_info,
@@ -348,7 +350,9 @@ fn process_instruction<'a>(
                     return Err(ProgramError::InvalidInstructionData)
                 }
                 let used_gas = call_results.1;
-                let fee = U256::from(used_gas) * trx.gas_price * U256::from(1_000_000_000_u64);
+                let fee = U256::from(used_gas)
+                    .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?
+                    .checked_mul(U256::from(1_000_000_000_u64)).ok_or(ProgramError::InvalidArgument)?;
                 token::transfer_token(
                     accounts,
                     user_eth_info,
@@ -408,7 +412,9 @@ fn process_instruction<'a>(
                 operator_sol_info,
                 storage_info,
                 system_info)?;
-            let fee = trx.gas_limit * trx.gas_price * U256::from(1_000_000_000_u64);
+            let fee = trx.gas_limit
+                .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?
+                .checked_mul(U256::from(1_000_000_000_u64)).ok_or(ProgramError::InvalidArgument)?;
             token::block_token(
                 accounts,
                 user_eth_info,
@@ -456,8 +462,15 @@ fn process_instruction<'a>(
                 }
                 let (gas_limit, gas_price) = storage.get_gas_params()?;
                 let used_gas = call_results.1;
-                let fee = U256::from(used_gas * gas_price) * U256::from(1_000_000_000_u64);
-                let return_fee = U256::from((gas_limit - used_gas) * gas_price) * U256::from(1_000_000_000_u64);
+                if used_gas > gas_limit {
+                    return Err(ProgramError::InvalidArgument);
+                }
+                let gas_price_wei = U256::from(gas_price)
+                    .checked_mul(U256::from(1_000_000_000_u64)).ok_or(ProgramError::InvalidArgument)?;
+                let fee = U256::from(used_gas)
+                    .checked_mul(gas_price_wei).ok_or(ProgramError::InvalidArgument)?;
+                let return_fee =  U256::from(gas_limit - used_gas)
+                    .checked_mul(gas_price_wei).ok_or(ProgramError::InvalidArgument)?;
                 token::pay_token(
                     accounts,
                     block_acc,
@@ -523,7 +536,9 @@ fn process_instruction<'a>(
             };
 
             let (gas_limit, gas_price) = storage.get_gas_params()?;
-            let return_fee = U256::from(gas_limit * gas_price) * U256::from(1_000_000_000_u64);
+            let return_fee = U256::from(gas_limit)
+                .checked_mul(U256::from(gas_price)).ok_or(ProgramError::InvalidArgument)?
+                .checked_mul(U256::from(1_000_000_000_u64)).ok_or(ProgramError::InvalidArgument)?;
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
