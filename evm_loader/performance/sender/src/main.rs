@@ -229,7 +229,7 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String, u64)
     let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
-    let delay :u64 = app_matches.value_of("verify_file").unwrap().to_string().parse().unwrap();
+    let delay :u64 = app_matches.value_of("delay").unwrap().to_string().parse().unwrap();
 
     return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, client, delay);
 }
