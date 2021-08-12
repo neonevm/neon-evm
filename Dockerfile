@@ -16,6 +16,9 @@ RUN cargo build-bpf --features no-logs
 WORKDIR /opt/evm_loader/cli
 RUN cargo clippy
 RUN cargo build --release
+WORKDIR /opt/evm_loader/performance/sender
+RUN cargo clippy
+RUN cargo build --release
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
@@ -47,7 +50,7 @@ FROM cybercoredev/solana:v1.6.9-resources AS solana
 FROM ubuntu:20.04 AS base
 WORKDIR /opt
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
 COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
@@ -57,12 +60,16 @@ RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patc
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/performance/sender/target/release/sender /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh evm_loader/test_token_keypair evm_loader/test_token_owner evm_loader/test_token_config.yml /opt/
 COPY evm_loader/ERC20/test/test_*.py /opt/
+COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
+COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
+
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
