@@ -94,11 +94,11 @@ pub fn transfer_from_operator_to_deposit<'a>(
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
 
     let rent_via_sysvar = Rent::get()?;
-    let rent_exempt_balance = rent_via_sysvar.minimum_balance(deposit_sol_info.data.borrow().len());
+    let rent_exempt_balance = rent_via_sysvar.minimum_balance(deposit_sol_info.data_len());
     if rent_exempt_balance > deposit_sol_info.lamports() {
         debug_print!("deposit account insufficient funds");
         debug_print!("rent_exempt_balance {}", rent_exempt_balance);
-        debug_print!("deposit_sol_info.data.len() {}", deposit_sol_info.data.borrow().len());
+        debug_print!("deposit_sol_info.data.len() {}", deposit_sol_info.data_len());
         debug_print!("deposit_sol_info.lamports() {}", deposit_sol_info.lamports());
 
         let funds_to_rent_exempt = rent_exempt_balance - deposit_sol_info.lamports();
