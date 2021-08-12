@@ -65,7 +65,7 @@ use solana_clap_utils::{
 
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcConfirmedTransactionConfig},
+    rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     tpu_client::{TpuClient, TpuClientConfig},
 };
@@ -82,7 +82,7 @@ use solana_transaction_status::{
     EncodedConfirmedTransaction
 };
 
-use secp256k1::SecretKey;
+use libsecp256k1::SecretKey;
 
 use rlp::RlpStream;
 
@@ -508,7 +508,7 @@ fn make_deploy_ethereum_transaction(
     };
 
     let (sig, rec) = {
-        use secp256k1::{Message, sign};
+        use libsecp256k1::{Message, sign};
         let msg = Message::parse(&keccak256(rlp_data.as_slice()));
         sign(&msg, caller_private)
     };
@@ -890,9 +890,9 @@ fn command_deploy(
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 
-        let result = config.rpc_client.get_confirmed_transaction_with_config(
+        let result = config.rpc_client.get_transaction_with_config(
             &signature, 
-            RpcConfirmedTransactionConfig {
+            RpcTransactionConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
                 encoding: Some(UiTransactionEncoding::Json),
             },

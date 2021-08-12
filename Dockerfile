@@ -1,9 +1,9 @@
 # Install BPF SDK
-FROM solanalabs/rust:1.52.0 AS builder
+FROM solanalabs/rust:1.53.0 AS builder
 RUN rustup component add clippy
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.6.9/install)" && \
-    /root/.local/share/solana/install/releases/1.6.9/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.9/install)" && \
+    /root/.local/share/solana/install/releases/1.7.9/solana-release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Build evm_loader
@@ -22,11 +22,11 @@ RUN cargo build --release
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
-ADD http://github.com/solana-labs/solana-program-library/archive/refs/tags/token-cli-v2.0.11.tar.gz /opt/
-RUN tar -xvf /opt/token-cli-v2.0.11.tar.gz && \
-    cd /opt/solana-program-library-token-cli-v2.0.11/token/cli && \
+ADD http://github.com/solana-labs/solana-program-library/archive/refs/tags/token-cli-v2.0.14.tar.gz /opt/
+RUN tar -xvf /opt/token-cli-v2.0.14.tar.gz && \
+    cd /opt/solana-program-library-token-cli-v2.0.14/token/cli && \
     cargo build --release && \
-    cp /opt/solana-program-library-token-cli-v2.0.11/target/release/spl-token /opt/
+    cp /opt/solana-program-library-token-cli-v2.0.14/target/release/spl-token /opt/
 
 # Build Solidity contracts
 FROM ethereum/solc:0.7.0 AS solc
@@ -44,7 +44,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM cybercoredev/solana:v1.6.9-resources AS solana
+FROM cybercoredev/solana:v1.7.9-resources AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base

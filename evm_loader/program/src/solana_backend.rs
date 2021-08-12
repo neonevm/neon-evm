@@ -10,6 +10,7 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::{Instruction, AccountMeta},
     entrypoint::ProgramResult,
+    secp256k1_recover::secp256k1_recover,
 };
 use std::convert::TryInto;
 use arrayref::{array_ref, array_refs};
@@ -119,25 +120,19 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
         let data = array_ref![input, 0, 128];
         let (msg, v, sig) = array_refs![data, 32, 32, 64];
-        let message = secp256k1::Message::parse(msg);
 
-        let signature = secp256k1::Signature::parse(sig);
-
-        let v: u8 = match U256::from_big_endian(v).try_into() {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
+        let v: u8 = if let Ok(v) = U256::from(v).as_u32().try_into() {
+            v
+        } else {
+            return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])));
         };
-        let recovery_id = match secp256k1::RecoveryId::parse_rpc(v) {
-            Ok(value) => value,
-            Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
-        };
-
-        let public_key = match secp256k1::recover(&message, &signature, &recovery_id) {
-            Ok(value) => value,
+        let recovery_id = v - 27;
+        let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
+            Ok(key) => key,
             Err(_) => return Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32])))
         };
 
-        let mut address = keccak256_digest(&public_key.serialize()[1..]);
+        let mut address = keccak256_digest(&public_key.to_bytes());
         address[0..12].fill(0);
         debug_print!("{}", &hex::encode(&address));
 
