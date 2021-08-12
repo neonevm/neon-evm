@@ -583,6 +583,8 @@ def create_transactions(args):
 
         transactions.write(json.dumps(trx)+"\n")
 
+    print("\ntotal:", total)
+
 def get_block_hash():
     try:
         blockhash_resp = client.get_recent_blockhash()
