@@ -153,6 +153,8 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
                 # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Incenirator
                 AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
