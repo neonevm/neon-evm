@@ -14,6 +14,7 @@ pub struct Faucet {
     pub token_a: String,
     pub token_b: String,
     pub admin: String,
+    pub admin_key: String,
 }
 
 /// Implements construction of the config.

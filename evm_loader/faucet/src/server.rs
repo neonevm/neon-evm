@@ -103,24 +103,28 @@ type Address = ethers::types::Address;
 async fn process_airdrop(input: Airdrop, cfg: config::Faucet) -> Result<(), Report> {
     info!("Processing Airdrop...");
 
-    let provider = Provider::<Http>::try_from(cfg.ethereum_endpoint.clone())?;
-    let admin = Arc::new(import_account(provider.clone(), &cfg.admin)?);
+    let admin = address_from_str(&cfg.admin)?;
+    let provider = Provider::<Http>::try_from(cfg.ethereum_endpoint.clone())?.with_sender(admin);
+    let admin = Arc::new(import_account(provider.clone(), &cfg.admin_key)?);
 
-    info!("Depositing token A...");
     let token_a = address_from_str(&cfg.token_a)?;
     let token_a = UniswapV2ERC20::new(token_a, admin.clone());
-    let tx = airdrop(&token_a, &input.wallet, Amount::from(input.amount)).await?;
-    let tx = provider.send_transaction(tx, None).await?;
-    let receipt = tx.await?;
-    info!("{:?}", receipt);
-
-    info!("Depositing token B...");
     let token_b = address_from_str(&cfg.token_b)?;
-    let token_b = UniswapV2ERC20::new(token_b, admin);
-    let tx = airdrop(&token_b, &input.wallet, Amount::from(input.amount)).await?;
+    let token_b = UniswapV2ERC20::new(token_b, admin.clone());
+
+    let amount = Amount::from(input.amount);
+
+    info!("Depositing token A {}...", input.amount);
+    let tx = airdrop(&token_a, &input.wallet, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
-    let receipt = tx.await?;
-    info!("{:?}", receipt);
+    let _receipt = tx.await?;
+    //info!("{:?}", receipt);
+
+    info!("Depositing token B {}...", input.amount);
+    let tx = airdrop(&token_b, &input.wallet, amount).await?;
+    let tx = provider.send_transaction(tx, None).await?;
+    let _receipt = tx.await?;
+    //info!("{:?}", receipt);
 
     Ok(())
 }
