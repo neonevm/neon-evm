@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use color_eyre::Report;
 use ethers::prelude::*;
-use rouille::{input, router, try_or_400, Request, Response};
+use rouille::{input, router, Request, Response};
 use serde::Deserialize;
 use tracing::{error, info};
 use transaction::eip2718::TypedTransaction;
@@ -51,7 +51,25 @@ fn handle(request: &Request, cfg: config::Faucet) -> Response {
     println!();
     info!("Handling {:?}...", request);
 
-    let input: Airdrop = try_or_400!(input::json_input(request));
+    let body = input::plain_text_body(request);
+    if let Err(err) = body {
+        error!("{}", err);
+        return Response::text(format!("Error: {}", err))
+            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
+            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
+            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
+    }
+
+    let input = serde_json::from_str(&body.unwrap());
+    if let Err(err) = input {
+        error!("{}", err);
+        return Response::text(format!("Error: {}", err))
+            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
+            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
+            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
+    }
+
+    let input: Airdrop = input.unwrap();
     info!("Requesting {:?}...", &input);
 
     let rt = tokio::runtime::Runtime::new();
