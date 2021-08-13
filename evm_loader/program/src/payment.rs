@@ -69,8 +69,6 @@ pub fn transfer_from_operator_to_collateral_pool<'a>(
 ) -> ProgramResult {
     check_collateral_account(
         program_id,
-        // WARNING Only for tests when base is random
-        operator_sol_info,
         collateral_pool_sol_info,
         collateral_pool_index)?;
     debug_print!("operator_to_collateral_pool");
