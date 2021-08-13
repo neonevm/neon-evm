@@ -55,6 +55,7 @@ class init_wallet():
     def init(cls):
         print("\ntest_performance.py init")
 
+        cls.token = SplToken(solana_url)
         wallet = RandomAccount()
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
@@ -75,7 +76,7 @@ class init_wallet():
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller_ether), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())

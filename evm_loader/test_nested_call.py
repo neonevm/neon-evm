@@ -23,6 +23,7 @@ class EventTest(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_nested_call.py setUpClass")
 
+        cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -34,6 +35,7 @@ class EventTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -104,7 +106,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
@@ -150,7 +151,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
@@ -192,7 +192,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
@@ -257,18 +256,17 @@ class EventTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_09_partial_call(storage, 0, instruction, contract, code))
-        send_transaction(client, trx, self.acc)
+        send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Continue")
             trx = Transaction().add(self.sol_instr_10_continue(storage, 400, contract, code))
-            result = send_transaction(client, trx, self.acc)["result"]
+            result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     return result
-
 
     def call_with_holder_account(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
@@ -296,7 +294,6 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     return result
-
 
     def test_callFoo(self):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
@@ -389,7 +386,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[93:125], bytes.fromhex("%062x" %0x0 + "40"))
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
-
 
     def test_create2_opcode(self):
         if http_client.get_balance(self.reId_create_receiver_code_account, commitment='recent')['result']['value'] == 0:

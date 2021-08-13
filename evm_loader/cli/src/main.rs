@@ -914,7 +914,7 @@ fn command_deploy(
                             AccountMeta::new(clock::id(), false),
                             AccountMeta::new(clock::id(), false),
                             AccountMeta::new(system_program::id(), false),
-    
+
                             AccountMeta::new(program_id, false),
                             AccountMeta::new(program_token, false),
                             AccountMeta::new(program_code, false),

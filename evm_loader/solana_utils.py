@@ -39,8 +39,8 @@ tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
-incinerator = "1nc1nerator11111111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
+incinerator = "1nc1nerator11111111111111111111111111111111"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -68,8 +68,9 @@ class SplToken:
         self.call("transfer {} {} {}".format(mint, amount, recipient))
 
     def balance(self, acc):
+        from decimal import Decimal
         res = self.call("balance --address {}".format(acc))
-        return int(res.rstrip())
+        return Decimal(res.rstrip())
 
     def mint(self, mint_id, recipient, amount, owner=None):
         if owner is None:
@@ -128,6 +129,7 @@ class NeonEvmClient:
         self.mode = ExecuteMode.SINGLE
         self.solana_wallet = solana_wallet
         self.evm_loader = evm_loader
+        self.token = SplToken(solana_url)
 
         self.collateral_pool_index = 2
         self.collateral_pool_index_buf = self.collateral_pool_index.to_bytes(4, 'little')
@@ -198,6 +200,11 @@ class NeonEvmClient:
             print("Create solana ether caller account...")
             ethereum_transaction._solana_ether_caller = \
                 self.evm_loader.createEtherAccount(ethereum_transaction.ether_caller)
+            self.token.transfer(
+                ETH_TOKEN_MINT_ID, 
+                2000, 
+                get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
+                )
         print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
 
     def __create_storage_account(self, seed):
@@ -246,9 +253,9 @@ class NeonEvmClient:
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(self.solana_wallet.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -258,8 +265,9 @@ class NeonEvmClient:
                 AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
             ])
 

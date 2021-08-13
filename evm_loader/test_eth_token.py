@@ -23,6 +23,7 @@ class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_event.py setUpClass")
+
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -36,9 +37,8 @@ class EthTokenTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
-
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -53,7 +53,6 @@ class EthTokenTest(unittest.TestCase):
         cls.collateral_pool_index = 2
         cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
         cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
-
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
@@ -173,7 +172,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(self.caller_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -189,7 +188,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(contract_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -206,7 +205,7 @@ class EthTokenTest(unittest.TestCase):
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 10
-        
+
         func_name = abi.function_signature_to_4byte_selector('nop()')
         result = self.call_partial_signed(func_name, value * (10**18))
 
@@ -225,12 +224,11 @@ class EthTokenTest(unittest.TestCase):
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        self.token.transfer(ETH_TOKEN_MINT_ID, 100, contract_token)
+        self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 5
-        
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
         input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
         result = self.call_partial_signed(input, 0)
