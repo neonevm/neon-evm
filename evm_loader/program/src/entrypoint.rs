@@ -288,6 +288,10 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[7..];
 
+            if !operator_sol_info.is_signer {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -298,7 +302,7 @@ fn process_instruction<'a>(
                 account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
-            let mut storage = StorageAccount::new(storage_info, trx_accounts, from_addr, trx.nonce, trx_gas_limit, trx_gas_price)?;
+            let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, from_addr, trx.nonce, trx_gas_limit, trx_gas_price)?;
 
             payment::transfer_from_operator_to_collateral_pool(
                 program_id,
@@ -341,6 +345,10 @@ fn process_instruction<'a>(
             let system_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[6..];
+
+            if !operator_sol_info.is_signer {
+                return Err(ProgramError::InvalidAccountData);
+            }
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
@@ -412,7 +420,11 @@ fn process_instruction<'a>(
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
             let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
 
-            let mut storage = StorageAccount::new(storage_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+            if !operator_sol_info.is_signer {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -457,7 +469,11 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[6..];
 
-            let mut storage = StorageAccount::restore(storage_info).map_err(|err| {
+            if !operator_sol_info.is_signer {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            let mut storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
@@ -520,14 +536,19 @@ fn process_instruction<'a>(
             debug_print!("Cancel");
             let storage_info = next_account_info(account_info_iter)?;
 
+            let operator_sol_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let block_acc = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[6..];
 
-            let storage = StorageAccount::restore(storage_info)?;
+            if !operator_sol_info.is_signer {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            let storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts)?;
             storage.check_accounts(program_id, trx_accounts)?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
