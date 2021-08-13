@@ -610,7 +610,7 @@ def send_transactions(args):
 
 
         collateral_pool_index = 2
-        collateral_pool_address = create_collateral_pool_address(client, sender_signer, collateral_pool_index, evm_loader_id)
+        collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
         trx = Transaction()

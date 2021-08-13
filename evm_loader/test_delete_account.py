@@ -38,9 +38,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        cls.collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
-        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
 
     def deploy_contract(self):

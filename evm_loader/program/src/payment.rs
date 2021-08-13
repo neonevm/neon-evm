@@ -11,13 +11,14 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-// use std::str::FromStr;
+/// Collaterall pool base address
+pub mod collateral_pool_base {
+    solana_program::declare_id!("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
-// TODO set collateral pool base address
-// const COLLATERAL_POOL_BASE: &str = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT";
+    /// `COLLATERAL_SEED_PREFIX`
+    pub const PREFIX: &str = "collateral_seed_";
+}
 
-/// `COLLATERAL_SEED_PREFIX`
-pub const COLLATERAL_SEED_PREFIX: &str = "collateral_seed_";
 /// `PAYMENT_TO_COLLATERAL_POOL`
 pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
 /// `PAYMENT_TO_DEPOSIT`
@@ -31,8 +32,6 @@ pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 /// or its key is not equal to generated
 fn check_collateral_account(
     program_id: &Pubkey,
-    // WARNING Only for tests when base is random
-    collateral_pool_base: &AccountInfo,
     collateral_pool_sol_info: &AccountInfo,
     collateral_pool_index: u32
 ) -> ProgramResult {
@@ -40,17 +39,14 @@ fn check_collateral_account(
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
     debug_print!("collateral_pool_index {}", collateral_pool_index);
 
-    // Owner of collateral_pool_sol_info is system: 11111111111111111111111111111111
-    /*if collateral_pool_sol_info.owner != program_id {
+    if collateral_pool_sol_info.owner != program_id {
         debug_print!("Wrong collateral pool owner {}", *collateral_pool_sol_info.owner);
         debug_print!("Must be program_id {}", program_id);
         return Err(ProgramError::InvalidArgument);
-    }*/
+    }
 
-    let collateral_pool_key = collateral_pool_base.key;
-
-    let seed = format!("{}{}", COLLATERAL_SEED_PREFIX, collateral_pool_index);
-    let pool_key = Pubkey::create_with_seed(collateral_pool_key, &seed, program_id)?;
+    let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
+    let pool_key = Pubkey::create_with_seed(&collateral_pool_base::id(), &seed, program_id)?;
     if *collateral_pool_sol_info.key != pool_key {
         debug_print!("Wrong seed pool key {}", pool_key);
         debug_print!("Must be collateral pool key {}", *collateral_pool_sol_info.key);
@@ -73,8 +69,6 @@ pub fn transfer_from_operator_to_collateral_pool<'a>(
 ) -> ProgramResult {
     check_collateral_account(
         program_id,
-        // WARNING Only for tests when base is random
-        operator_sol_info,
         collateral_pool_sol_info,
         collateral_pool_index)?;
     debug_print!("operator_to_collateral_pool");

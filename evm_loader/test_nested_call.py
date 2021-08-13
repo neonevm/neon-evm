@@ -75,9 +75,9 @@ class EventTest(unittest.TestCase):
         cls.reId_create_receiver_seed = b58encode(bytes.fromhex(cls.reId_create_receiver_eth.hex())).decode('utf8')
         cls.reId_create_receiver_code_account = accountWithSeed(cls.acc.public_key(), cls.reId_create_receiver_seed, PublicKey(evm_loader_id))
 
-        cls.collateral_pool_index = 2
-        cls.collateral_pool_address = create_collateral_pool_address(client, cls.acc, cls.collateral_pool_index, cls.loader.loader_id)
-        cls.collateral_pool_index_buf = cls.collateral_pool_index.to_bytes(4, 'little')
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
 
     def sol_instr_keccak(self, keccak_instruction):
