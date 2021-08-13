@@ -46,7 +46,7 @@ use solana_clap_utils::{
 
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcConfirmedTransactionConfig},
+    rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     tpu_client::{TpuClient, TpuClientConfig},
 };

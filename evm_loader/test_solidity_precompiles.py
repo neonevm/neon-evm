@@ -313,6 +313,7 @@ class PrecompilesTests(unittest.TestCase):
             result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
             self.assertEqual(result_hash[:40], test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_05_bigModExp_contract(self):
         for test_case in self.test_data["bigModExp"]:
             print("make_bigModExp() - test case ", test_case["Name"])
@@ -321,6 +322,7 @@ class PrecompilesTests(unittest.TestCase):
             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
             self.assertEqual(result_data[128:], test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_06_bn256Add_contract(self):
             for test_case in self.test_data["bn256Add"]:
                 print("make_bn256Add() - test case ", test_case["Name"])
@@ -332,6 +334,7 @@ class PrecompilesTests(unittest.TestCase):
                 result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
                 self.assertEqual(result_data, test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_07_bn256ScalarMul_contract(self):
             for test_case in self.test_data["bn256ScalarMul"]:
                 print("make_bn256ScalarMul() - test case ", test_case["Name"])
