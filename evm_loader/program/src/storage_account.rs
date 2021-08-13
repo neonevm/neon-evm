@@ -16,12 +16,12 @@ pub struct StorageAccount<'a> {
 }
 
 impl<'a> StorageAccount<'a> {
-    pub fn new(info: &'a AccountInfo<'a>, accounts: &[AccountInfo], caller: H160, nonce: u64) -> Result<Self, ProgramError> {
+    pub fn new(info: &'a AccountInfo<'a>, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64) -> Result<Self, ProgramError> {
         let account_data = info.try_borrow_data()?;
 
         if let AccountData::Empty = AccountData::unpack(&account_data)? {
             let data = AccountData::Storage(
-                Storage { caller, nonce, accounts_len: accounts.len(), executor_data_size: 0, evm_data_size: 0 }
+                Storage { caller, nonce, gas_limit, gas_price, accounts_len: accounts.len(), executor_data_size: 0, evm_data_size: 0 }
             );
             Ok(Self { info, data })
         } else {
@@ -59,6 +59,11 @@ impl<'a> StorageAccount<'a> {
     pub fn caller_and_nonce(&self) -> Result<(H160, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.caller, storage.nonce))
+    }
+
+    pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok((storage.gas_limit, storage.gas_price))
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {

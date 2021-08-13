@@ -30,10 +30,10 @@ pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 /// Will return: 
 /// `ProgramError::InvalidArgument` if `collateral_pool_sol_info` owner not `program_id` 
 /// or its key is not equal to generated
-pub fn check_collateral_account(
+fn check_collateral_account(
     program_id: &Pubkey,
     collateral_pool_sol_info: &AccountInfo,
-    collateral_pool_index: usize
+    collateral_pool_index: u32
 ) -> ProgramResult {
     debug_print!("program_id {}", program_id);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
@@ -61,10 +61,18 @@ pub fn check_collateral_account(
 ///
 /// Will return error only if `transfer` fail
 pub fn transfer_from_operator_to_collateral_pool<'a>(
+    program_id: &Pubkey,
+    collateral_pool_index: u32,
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult {
+    check_collateral_account(
+        program_id,
+        // WARNING Only for tests when base is random
+        operator_sol_info,
+        collateral_pool_sol_info,
+        collateral_pool_index)?;
     debug_print!("operator_to_collateral_pool");
     debug_print!("operator_sol_info {:?}", operator_sol_info);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
@@ -164,8 +172,8 @@ fn transfer<'a>(
             return Err(ProgramError::InsufficientFunds)
         }
 
-        **from_account_info.lamports.borrow_mut() = from_account_info.lamports() - PAYMENT_TO_DEPOSIT;
-        **to_account_info.lamports.borrow_mut() = to_account_info.lamports() + PAYMENT_TO_DEPOSIT;
+        **from_account_info.lamports.borrow_mut() -= PAYMENT_TO_DEPOSIT;
+        **to_account_info.lamports.borrow_mut() += PAYMENT_TO_DEPOSIT;
     }
 
     Ok(())

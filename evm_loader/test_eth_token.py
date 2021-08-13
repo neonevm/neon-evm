@@ -7,6 +7,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
+from decimal import Decimal
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -23,6 +24,7 @@ class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_event.py setUpClass")
+
         cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -36,9 +38,10 @@ class EthTokenTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -54,7 +57,6 @@ class EthTokenTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
@@ -69,9 +71,9 @@ class EthTokenTest(unittest.TestCase):
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -97,10 +99,12 @@ class EthTokenTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -173,14 +177,14 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(self.caller_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -189,14 +193,14 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(contract_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -206,47 +210,50 @@ class EthTokenTest(unittest.TestCase):
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 10
-        
+
         func_name = abi.function_signature_to_4byte_selector('nop()')
         result = self.call_partial_signed(func_name, value * (10**18))
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before + value)
-        self.assertEqual(caller_balance_after, caller_balance_before - value)
+        self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        self.token.transfer(ETH_TOKEN_MINT_ID, 100, contract_token)
+        self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 5
-        
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
         input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
-        self.assertEqual(caller_balance_after, caller_balance_before + value)
+        self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
 
 if __name__ == '__main__':
     unittest.main()

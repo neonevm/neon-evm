@@ -39,6 +39,10 @@ pub struct Storage {
     pub caller: H160,
     /// Ethereum transaction caller nonce
     pub nonce: u64,
+    /// Ethereum transaction gas limit
+    pub gas_limit: u64,
+    /// Ethereum transaction gas price
+    pub gas_price: u64,
     /// Stored accounts length
     pub accounts_len: usize,
     /// Stored executor data size
@@ -302,18 +306,20 @@ impl Contract {
 
 impl Storage {
     /// Storage struct serialized size
-    const SIZE: usize = 20+8+8+8+8;
+    const SIZE: usize = 20+8+8+8+8+8+8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Storage::SIZE];
-        let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8];
+        let (caller, nonce, gas_limit, gas_price, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8, 8, 8];
         
         Self {
             caller: H160::from(*caller),
             nonce: u64::from_le_bytes(*nonce),
+            gas_limit: u64::from_le_bytes(*gas_limit),
+            gas_price: u64::from_le_bytes(*gas_price),
             accounts_len: usize::from_le_bytes(*accounts_len),
             executor_data_size: usize::from_le_bytes(*executor_data_size),
             evm_data_size: usize::from_le_bytes(*evm_data_size),
@@ -324,9 +330,11 @@ impl Storage {
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Storage::SIZE];
-        let (caller, nonce, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8];
+        let (caller, nonce, gas_limit, gas_price, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8, 8, 8];
         *caller = self.caller.to_fixed_bytes();
         *nonce = self.nonce.to_le_bytes();
+        *gas_limit = self.gas_limit.to_le_bytes();
+        *gas_price = self.gas_price.to_le_bytes();
         *accounts_len = self.accounts_len.to_le_bytes();
         *executor_data_size = self.executor_data_size.to_le_bytes();
         *evm_data_size = self.evm_data_size.to_le_bytes();
