@@ -231,10 +231,14 @@ class DeployTest(unittest.TestCase):
     def create_storage_account(self, seed):
         storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
         print("Storage", storage)
+        
+        minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
+        print("Minimum balance required for account {}".format(minimum_balance))
+        balance = int(minimum_balance / 100)
 
         if getBalance(storage) == 0:
             trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, balance, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 
         return storage
@@ -258,6 +262,10 @@ class DeployTest(unittest.TestCase):
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
+                    # Check if storage balace were filled to rent exempt
+                    self.assertEqual(
+                        getBalance(storage), 
+                        client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
 
     def test_executeTrxFromAccountDataIterative(self):
