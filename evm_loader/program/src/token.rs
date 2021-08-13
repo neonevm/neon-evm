@@ -53,6 +53,7 @@ pub fn create_associated_token_account(
     }
 }
 
+
 /// Extract a token amount from the `AccountInfo`
 /// 
 /// # Errors
@@ -127,9 +128,10 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
+    debug_print!("transfer_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
-        debug_print!("source token owner {}", source_token_account.owner);
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
         debug_print!("source key {}", source_account.key);
         return Err(ProgramError::InvalidInstructionData)
     }
@@ -140,8 +142,6 @@ pub fn transfer_token(
     let value = u64::try_from(value).map_err(|_| ProgramError::InvalidInstructionData)?;
 
     debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-    debug_print!("Token {} balance {}", source_token_account.key, get_token_account_balance(source_token_account)?);
-    debug_print!("Token {} balance {}", target_token_account.key, get_token_account_balance(target_token_account)?);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
@@ -156,6 +156,136 @@ pub fn transfer_token(
 
     let (ether, nonce) = source_solidity_account.get_seeds();
     invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+
+    Ok(())
+}
+
+
+/// Transfer Tokens to block account
+/// 
+/// # Errors
+///
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
+pub fn block_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    let (ether, _nonce) = source_solidity_account.get_seeds();
+    debug_print!("block_token");
+    if *source_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
+        debug_print!("invalid user token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
+    }
+    if get_token_account_owner(target_token_account)? != *source_account.key {
+        debug_print!("target ownership");
+        debug_print!("target owner {}", get_token_account_owner(target_token_account)?);
+        debug_print!("source key {}", source_account.key);
+        return Err(ProgramError::InvalidInstructionData)
+    }
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *target_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", target_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+    }
+
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
+        value,
+    )?;
+
+    Ok(())
+}
+
+
+/// Transfer Tokens from block account to operator
+/// 
+/// # Errors
+///
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
+pub fn pay_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    let (ether, _nonce) = source_solidity_account.get_seeds();
+    debug_print!("pay_token");
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+    }
+
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
+        value,
+    )?;
+
+    Ok(())
+}
+
+
+/// Return Tokens from block account to user
+/// 
+/// # Errors
+///
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
+pub fn return_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    let (ether, _nonce) = source_solidity_account.get_seeds();
+    debug_print!("return_token");
+    let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+        debug_print!("invalid hold token account");
+        debug_print!("target: {}", source_token_account.key);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+    }
+    if get_token_account_owner(target_token_account)? != *source_account.key {
+        debug_print!("target ownership");
+        debug_print!("target owner {}", get_token_account_owner(target_token_account)?);
+        debug_print!("source key {}", source_account.key);
+        return Err(ProgramError::InvalidInstructionData)
+    }
+    if *target_token_account.key != spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()) {
+        debug_print!("invalid user token account");
+        debug_print!("target: {}", target_token_account.key);
+        debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
+    }
+
+    transfer_token(
+        accounts,
+        source_token_account,
+        target_token_account,
+        source_account,
+        source_solidity_account,
+        value,
+    )?;
 
     Ok(())
 }

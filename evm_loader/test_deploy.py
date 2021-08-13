@@ -2,8 +2,8 @@ import unittest
 from base58 import b58decode
 from solana_utils import *
 from eth_tx_utils import  make_instruction_data_from_tx, pack
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
+from spl.token.instructions import get_associated_token_address, initialize_account, InitializeAccountParams
 from sha3 import keccak_256
 from hashlib import sha256
 
@@ -42,32 +42,6 @@ def write_layout(offset, data):
             len(data).to_bytes(8, byteorder="little")+
             data)
 
-def createAccountWithSeed(funding, base, seed, lamports, space, program):
-    data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
-        dict(
-            instruction_type = SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
-            args=dict(
-                base=bytes(base),
-                seed=dict(length=len(seed), chars=seed),
-                lamports=lamports,
-                space=space,
-                program_id=bytes(program)
-            )
-        )
-    )
-    print("createAccountWithSeed", data.hex())
-    created = accountWithSeed(base, seed, program) #PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
-    print("created", created)
-    return TransactionInstruction(
-        keys=[
-            AccountMeta(pubkey=funding, is_signer=True, is_writable=True),
-            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=base, is_signer=True, is_writable=False),
-        ],
-        program_id=system,
-        data=data
-    )
-
 
 class DeployTest(unittest.TestCase):
     @classmethod
@@ -88,6 +62,8 @@ class DeployTest(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -160,11 +136,10 @@ class DeployTest(unittest.TestCase):
 
         base = self.acc.public_key()
         seed = b58encode(contract_eth).decode('utf8')
-        # Execute deploy transaction
+
+        # Create contract accounts
         trx = Transaction()
-
         trx.add(createAccountWithSeed(base, base, seed, 10**9, 1+32+4+len(msg)+2048, PublicKey(evm_loader_id)))
-
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
             data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
@@ -185,10 +160,9 @@ class DeployTest(unittest.TestCase):
             ]))
 
         result = send_transaction(client, trx, self.acc)["result"]
-        print("result executeTrxFromAccountData:", result)
+        print("result :", result)
 
         return (holder, contract_sol, code_sol)
-
 
     def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
         return TransactionInstruction(
@@ -203,9 +177,9 @@ class DeployTest(unittest.TestCase):
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -215,7 +189,10 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
@@ -228,10 +205,12 @@ class DeployTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -241,7 +220,10 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
@@ -258,17 +240,19 @@ class DeployTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, holder, contract_sol, code_sol):
-        storage = self.create_storage_account("001122334")
+        storage = self.create_storage_account("0123456789")
 
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call(storage, 50, holder, contract_sol, code_sol))
+        print(trx.instructions[-1].keys)
         result = send_transaction(client, trx, self.acc)["result"]
 
         while (True):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 50, contract_sol, code_sol))
+            print(trx.instructions[-1].keys)
             result = send_transaction(client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
