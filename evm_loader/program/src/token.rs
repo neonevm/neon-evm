@@ -190,10 +190,10 @@ pub fn block_token(
         return Err(ProgramError::InvalidInstructionData)
     }
     let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
-    if *target_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+    if *target_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())? {
         debug_print!("invalid hold token account");
         debug_print!("target: {}", target_token_account.key);
-        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())?);
         return Err(ProgramError::InvalidInstructionData)
     }
 
@@ -227,10 +227,10 @@ pub fn pay_token(
     let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("pay_token");
     let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
-    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())? {
         debug_print!("invalid hold token account");
         debug_print!("target: {}", source_token_account.key);
-        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())?);
         return Err(ProgramError::InvalidInstructionData)
     }
 
@@ -264,10 +264,10 @@ pub fn return_token(
     let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("return_token");
     let holder_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "hold";
-    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())? {
+    if *source_token_account.key != Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())? {
         debug_print!("invalid hold token account");
         debug_print!("target: {}", source_token_account.key);
-        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &spl_token::id())?);
         return Err(ProgramError::InvalidInstructionData)
     }
     if get_token_account_owner(target_token_account)? != *source_account.key {
