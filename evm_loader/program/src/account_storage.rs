@@ -287,7 +287,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let recipient = if let Some(some_operator) = operator {
                             some_operator
                         } else {
-                            self.get_caller_account_info().ok_or(E!(ProgramError::InvalidArgument))?
+                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?
                         };
 
                         debug_print!("Move funds from account");
