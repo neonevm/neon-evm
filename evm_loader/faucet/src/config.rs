@@ -1,36 +1,10 @@
 //! faucet config module.
 
-pub const DEFAULT_CONFIG: &str = "faucet.toml";
+pub const DEFAULT_CONFIG: &str = "faucet.conf";
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-/// Represents the main config.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Faucet {
-    pub environment: String,
-    pub rpc_port: u16,
-    pub ethereum_endpoint: String,
-    pub token_a: String,
-    pub token_b: String,
-    pub admin: String,
-    pub admin_key: String,
-}
-
-/// Implements construction of the config.
-impl Faucet {
-    pub fn load(filename: &Path) -> Result<Self> {
-        let text = read(filename)?;
-        let cfg: Faucet =
-            toml::from_str(&text).map_err(|e| Error::Parse(e, filename.to_owned()))?;
-        Ok(cfg)
-    }
-}
-
-/// Reads the main config from a file.
-fn read(filename: &Path) -> Result<String> {
-    std::fs::read_to_string(filename).map_err(|e| Error::Read(e, filename.to_owned()))
-}
+use std::sync::RwLock;
 
 /// Represents config errors.
 #[derive(thiserror::Error, Debug)]
@@ -42,3 +16,65 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Loads the config from a file.
+pub fn load(filename: &Path) -> Result<()> {
+    CONFIG.write().unwrap().load(filename)?;
+    Ok(())
+}
+
+/// Gets the `rpc_port` value.
+pub fn rpc_port() -> u16 {
+    CONFIG.read().unwrap().rpc_port
+}
+
+/// Gets the `ethereum_endpoint` value.
+pub fn ethereum_endpoint() -> String {
+    CONFIG.read().unwrap().ethereum_endpoint.clone()
+}
+
+/// Gets the `token_a` value.
+pub fn token_a() -> String {
+    CONFIG.read().unwrap().token_a.clone()
+}
+
+/// Gets the `token_b` value.
+pub fn token_b() -> String {
+    CONFIG.read().unwrap().token_b.clone()
+}
+
+/// Gets the `admin` value.
+pub fn admin() -> String {
+    CONFIG.read().unwrap().admin.clone()
+}
+
+/// Gets the `admin_key` value.
+pub fn admin_key() -> String {
+    CONFIG.read().unwrap().admin_key.clone()
+}
+
+/// Represents the main config.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct Faucet {
+    pub environment: String,
+    pub rpc_port: u16,
+    pub ethereum_endpoint: String,
+    pub token_a: String,
+    pub token_b: String,
+    pub admin: String,
+    pub admin_key: String,
+}
+
+impl Faucet {
+    /// Constructs config from a file.
+    fn load(&mut self, filename: &Path) -> Result<()> {
+        let text =
+            std::fs::read_to_string(filename).map_err(|e| Error::Read(e, filename.to_owned()))?;
+        *self = toml::from_str(&text).map_err(|e| Error::Parse(e, filename.to_owned()))?;
+        Ok(())
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
+}

@@ -7,7 +7,7 @@ WORKDIR /root
 ENV PATH="/root:${PATH}"
 
 COPY tmp/faucet .
-COPY tmp/faucet.toml .
+COPY tmp/faucet.conf .
 COPY entrypoint.sh .
 
 RUN chmod +x /root/faucet

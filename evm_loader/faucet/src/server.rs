@@ -1,38 +1,31 @@
 //! faucet server implementation.
 
-#![allow(unreachable_code)]
-
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use actix_web::web::{post, Bytes};
+use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Report;
-use ethers::prelude::*;
-use rouille::{input, router, Request, Response};
 use serde::Deserialize;
 use tracing::{error, info};
-use transaction::eip2718::TypedTransaction;
+
+use ethers::prelude::{
+    transaction::eip2718::TypedTransaction, Http, LocalWallet, Middleware, Provider,
+    SignerMiddleware,
+};
 
 use crate::{config, contract};
 
 pub type Account = SignerMiddleware<Provider<Http>, LocalWallet>;
-pub type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
 
 /// Starts the server in listening mode.
-#[allow(clippy::manual_strip)]
-pub fn start(cfg: config::Faucet) {
-    info!("Listening port {}...", cfg.rpc_port);
-    let url = format!("localhost:{}", cfg.rpc_port);
-
-    rouille::start_server(url, move |request| {
-        router!(request,
-            (POST) (/request_airdrop) => {
-                handle(request, cfg.clone())
-            },
-
-            _ => Response::empty_404()
-        )
-    });
+pub async fn start(rpc_port: u16) -> Result<(), Report> {
+    HttpServer::new(|| App::new().route("/request_airdrop", post().to(handle_request_airdrop)))
+        .bind(("localhost", rpc_port))?
+        .run()
+        .await?;
+    Ok(())
 }
 
 /// Represents packet of information needed for single airdrop operation.
@@ -42,89 +35,63 @@ struct Airdrop {
     amount: u64,
 }
 
-const ALLOW_ORIGIN: &str = "*";
-const ALLOW_METHODS: &str = "*";
-const ALLOW_HEADERS: &str = "*";
-
 /// Handles a request for airdrop.
-fn handle(request: &Request, cfg: config::Faucet) -> Response {
+async fn handle_request_airdrop(body: Bytes) -> impl Responder {
     println!();
-    info!("Handling {:?}...", request);
+    info!("Handling Request for Airdrop...");
 
-    let body = input::plain_text_body(request);
-    if let Err(err) = body {
-        error!("{}", err);
-        return Response::text(format!("Error: {}", err))
-            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
-            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
-    }
-
-    let input = serde_json::from_str(&body.unwrap());
+    let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
         error!("{}", err);
-        return Response::text(format!("Error: {}", err))
-            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
-            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
+        return HttpResponse::BadRequest();
     }
 
-    let input: Airdrop = input.unwrap();
-    info!("Requesting {:?}...", &input);
-
-    let rt = tokio::runtime::Runtime::new();
-    if let Err(err) = rt {
+    let airdrop = serde_json::from_str::<Airdrop>(&input.unwrap());
+    if let Err(err) = airdrop {
         error!("{}", err);
-        return Response::text(format!("Error: {}", err))
-            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
-            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
+        return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = rt.unwrap().block_on(process_airdrop(input, cfg)) {
+    if let Err(err) = process_airdrop(airdrop.unwrap()).await {
         error!("{}", err);
-        return Response::text(format!("Error: {}", err))
-            .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-            .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
-            .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS);
+        return HttpResponse::InternalServerError();
     }
 
-    info!("OK");
-    Response::text("OK")
-        .with_additional_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
-        .with_additional_header("Access-Control-Allow-Methods", ALLOW_METHODS)
-        .with_additional_header("Access-Control-Allow-Headers", ALLOW_HEADERS)
+    HttpResponse::Ok()
 }
 
 type Amount = ethers::types::U256;
 type Address = ethers::types::Address;
+type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
 
 /// Processes the aridrop: sends needed transactions into Ethereum.
-async fn process_airdrop(input: Airdrop, cfg: config::Faucet) -> Result<(), Report> {
-    info!("Processing Airdrop...");
+async fn process_airdrop(ad: Airdrop) -> Result<(), Report> {
+    info!("Processing {:?}...", ad);
 
-    let admin = address_from_str(&cfg.admin)?;
-    let provider = Provider::<Http>::try_from(cfg.ethereum_endpoint.clone())?.with_sender(admin);
-    let admin = Arc::new(import_account(provider.clone(), &cfg.admin_key)?);
+    let admin = address_from_str(&config::admin())?;
+    let provider = Provider::<Http>::try_from(config::ethereum_endpoint())?.with_sender(admin);
+    let admin = Arc::new(import_account(provider.clone(), &config::admin_key())?);
 
-    let token_a = address_from_str(&cfg.token_a)?;
+    let token_a = address_from_str(&config::token_a())?;
     let token_a = UniswapV2ERC20::new(token_a, admin.clone());
-    let token_b = address_from_str(&cfg.token_b)?;
+    let token_b = address_from_str(&config::token_b())?;
     let token_b = UniswapV2ERC20::new(token_b, admin.clone());
 
-    let amount = Amount::from(input.amount);
+    let amount = Amount::from(ad.amount);
 
-    info!("Depositing token A {}...", input.amount);
-    let tx = airdrop(&token_a, &input.wallet, amount).await?;
+    info!("Depositing {} -> token A...", ad.amount);
+    let tx = airdrop(&token_a, &ad.wallet, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
+    info!("OK");
 
-    info!("Depositing token B {}...", input.amount);
-    let tx = airdrop(&token_b, &input.wallet, amount).await?;
+    info!("Depositing {} -> token B...", ad.amount);
+    let tx = airdrop(&token_b, &ad.wallet, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
+    info!("OK");
 
     Ok(())
 }

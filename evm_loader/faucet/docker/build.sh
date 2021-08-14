@@ -6,7 +6,7 @@ set -e
 rm -rf tmp
 mkdir tmp
 cp ../target/release/faucet tmp/
-cp ../faucet.toml tmp/
+cp ../faucet.conf tmp/
 
 docker build --force-rm --file Dockerfile --tag faucet .
 

@@ -13,16 +13,17 @@ use color_eyre::Report;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-fn main() -> Result<(), Report> {
+#[actix_web::main]
+async fn main() -> Result<(), Report> {
     setup()?;
-    execute(cli::application())?;
+    execute(cli::application()).await?;
     Ok(())
 }
 
 /// Initializes the logger and error handler.
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "0") // set "1" to enable backtrace
+        std::env::set_var("RUST_LIB_BACKTRACE", "1")
     }
     color_eyre::install()?;
 
@@ -37,10 +38,10 @@ fn setup() -> Result<(), Report> {
 }
 
 /// Dispatches CLI commands.
-fn execute(app: cli::Application) -> Result<(), Report> {
+async fn execute(app: cli::Application) -> Result<(), Report> {
     match app.cmd {
         cli::Command::Run => {
-            run(&app.config)?;
+            run(&app.config).await?;
         }
     }
 
@@ -49,8 +50,8 @@ fn execute(app: cli::Application) -> Result<(), Report> {
 }
 
 /// Runs the server.
-fn run(config_file: &std::path::Path) -> Result<(), Report> {
-    let cfg = config::Faucet::load(config_file)?;
-    server::start(cfg);
+async fn run(config_file: &std::path::Path) -> Result<(), Report> {
+    config::load(config_file)?;
+    server::start(config::rpc_port()).await?;
     Ok(())
 }
