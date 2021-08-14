@@ -181,6 +181,7 @@ pub fn block_token(
         debug_print!("invalid user token account");
         debug_print!("target: {}", source_token_account.key);
         debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
+        return Err(ProgramError::InvalidInstructionData)
     }
     if get_token_account_owner(target_token_account)? != *source_account.key {
         debug_print!("target ownership");
@@ -193,6 +194,7 @@ pub fn block_token(
         debug_print!("invalid hold token account");
         debug_print!("target: {}", target_token_account.key);
         debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        return Err(ProgramError::InvalidInstructionData)
     }
 
     transfer_token(
@@ -229,6 +231,7 @@ pub fn pay_token(
         debug_print!("invalid hold token account");
         debug_print!("target: {}", source_token_account.key);
         debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        return Err(ProgramError::InvalidInstructionData)
     }
 
     transfer_token(
@@ -265,6 +268,7 @@ pub fn return_token(
         debug_print!("invalid hold token account");
         debug_print!("target: {}", source_token_account.key);
         debug_print!("expected: {}", Pubkey::create_with_seed(source_account.key, &holder_seed, &token_mint::id())?);
+        return Err(ProgramError::InvalidInstructionData)
     }
     if get_token_account_owner(target_token_account)? != *source_account.key {
         debug_print!("target ownership");
@@ -276,6 +280,7 @@ pub fn return_token(
         debug_print!("invalid user token account");
         debug_print!("target: {}", target_token_account.key);
         debug_print!("expected: {}", spl_associated_token_account::get_associated_token_address(source_account.key, &token_mint::id()));
+        return Err(ProgramError::InvalidInstructionData)
     }
 
     transfer_token(

@@ -4,8 +4,8 @@ from solana_utils import *
 import sys
 
 wallet = WalletAccount(sys.argv[1]).get_acc()
+collateral_pool_base = wallet.public_key()
 print(collateral_pool_base)
-print(wallet.public_key())
 for collateral_pool_index in range(0, 10):
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
@@ -18,3 +18,4 @@ for collateral_pool_index in range(0, 10):
         trx.add(createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance, 0, PublicKey(EVM_LOADER)))
         result = send_transaction(client, trx, wallet)
         print(result)
+print(collateral_pool_base)
