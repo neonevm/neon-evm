@@ -499,7 +499,7 @@ fn make_deploy_ethereum_transaction(
             to: None,
             nonce: trx_count,
             gas_limit: 9_999_999.into(),
-            gas_price: 1.into(),
+            gas_price: 1_000_000_000.into(),
             value: 0.into(),
             data: program_data.to_owned(),
             chain_id: 111.into(), // Will fixed in #61 issue
