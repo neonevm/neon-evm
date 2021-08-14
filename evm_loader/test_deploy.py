@@ -104,7 +104,7 @@ class DeployTest(unittest.TestCase):
             'to': None,
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1,
+            'gasPrice': 1_000_000_000,
             'nonce': trx_count,
             'data': content,
             'chainId': 111

@@ -131,7 +131,7 @@ class PrecompilesTests(unittest.TestCase):
             'to': solana2ether(self.owner_contract),
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1,
+            'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller),
             'data': call_data,
             'chainId': 111
@@ -281,7 +281,7 @@ class PrecompilesTests(unittest.TestCase):
 
 
     def call_with_holder_account(self, input):
-        tx = {'to': solana2ether(self.owner_contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.owner_contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
