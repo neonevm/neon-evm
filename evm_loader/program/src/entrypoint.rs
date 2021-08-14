@@ -135,16 +135,14 @@ fn process_instruction<'a>(
 
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             if expected_address != *account_info.key {
-                debug_print!("expected_address != *program_info.key");
-                return Err(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
             };
 
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
                     if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
-                        debug_print!("Code account is not rent exempt");
-                        return Err(ProgramError::InvalidArgument); 
+                        return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}", program_code.lamports(), program_code.data_len());
                     }
 
                     let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
@@ -193,20 +191,20 @@ fn process_instruction<'a>(
             let base_info = next_account_info(account_info_iter)?;
 
             //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
-            if base_info.owner != program_id {return Err(ProgramError::InvalidArgument);}
+            if base_info.owner != program_id {return Err!(ProgramError::InvalidArgument; "base_info.owner<{:?}> != program_id<{:?}>", base_info.owner, program_id);}
             let base_info_data = AccountData::unpack(&base_info.data.borrow())?;
             match base_info_data {
                 AccountData::Account(_) => (),
-                _ => return Err(ProgramError::InvalidAccountData),
+                _ => return Err!(ProgramError::InvalidAccountData),
             };
             let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
-            let space_as_usize = usize::try_from(space).map_err(|_| ProgramError::InvalidArgument)?;
+            let space_as_usize = usize::try_from(space).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
             let account_lamports = rent.minimum_balance(space_as_usize) + lamports;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
-            let seed = std::str::from_utf8(&seed).map_err(|_| ProgramError::InvalidArgument)?;
+            let seed = std::str::from_utf8(&seed).map_err(|e| E!(ProgramError::InvalidArgument; "Utf8Error={:?}", e))?;
             debug_print!("{}", account_lamports);
             debug_print!("{}", space);
             invoke_signed(
@@ -242,7 +240,7 @@ fn process_instruction<'a>(
         EvmInstruction::Write {offset, bytes} => {
             let account_info = next_account_info(account_info_iter)?;
             if account_info.owner != program_id {
-                return Err(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument; "account_info.owner<{:?}> != program_id<{:?}>", account_info.owner, program_id);
             }
 
             do_write(account_info, offset, bytes)
@@ -255,8 +253,7 @@ fn process_instruction<'a>(
             if let Sender::Solana(_addr) = account_storage.get_sender() {
                 // Success execution
             } else {
-                debug_print!("This method should used with Solana sender");
-                return Err(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
             }
 
             let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
@@ -292,14 +289,15 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidAccountData);
             }
 
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|_| ProgramError::MissingRequiredSignature)?;
+            let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &from_addr, trx.nonce, &trx.chain_id)?;
 
             let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, from_addr, trx.nonce, trx_gas_limit, trx_gas_price)?;
@@ -350,13 +348,13 @@ fn process_instruction<'a>(
                 return Err(ProgramError::InvalidAccountData);
             }
 
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
 
             payment::transfer_from_operator_to_collateral_pool(
@@ -416,9 +414,9 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             let caller = H160::from_slice(from_addr);
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|_| ProgramError::InvalidInstructionData)?;
-            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
             if !operator_sol_info.is_signer {
                 return Err(ProgramError::InvalidAccountData);
@@ -429,7 +427,7 @@ fn process_instruction<'a>(
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
             check_ethereum_authority(
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &caller, trx.nonce, &trx.chain_id)?;
 
             payment::transfer_from_operator_to_collateral_pool(
@@ -558,16 +556,10 @@ fn process_instruction<'a>(
                 AccountData::Account(ref mut acc) => {
                     let (caller, nonce) = storage.caller_and_nonce()?;
                     if acc.ether != caller {
-                        debug_print!("acc.ether != caller");
-                        debug_print!("acc.ether {:}", acc.ether);
-                        debug_print!("caller {:}", caller);
-                        return Err(ProgramError::InvalidAccountData);
+                        return Err!(ProgramError::InvalidAccountData; "acc.ether<{:?}> != caller<{:?}>", acc.ether, caller);
                     }
                     if acc.trx_count != nonce {
-                        debug_print!("acc.trx_count != nonce");
-                        debug_print!("acc.trx_count {}", acc.trx_count);
-                        debug_print!("nonce {}", nonce);
-                        return Err(ProgramError::InvalidAccountData);
+                        return Err!(ProgramError::InvalidAccountData; "acc.trx_count<{:?}> != nonce<{:?}>", acc.trx_count, nonce);
                     }
                     acc.trx_count += 1;
                 },
@@ -607,14 +599,14 @@ fn get_transaction_from_data(
     let account_info_data = AccountData::unpack(data)?;
     match account_info_data {
         AccountData::Empty => (),
-            _ => return Err(ProgramError::InvalidAccountData),
+            _ => return Err!(ProgramError::InvalidAccountData),
     };
 
     let (_header, rest) = data.split_at(account_info_data.size());
     let (signature, rest) = rest.split_at(65);
     let (trx_len, rest) = rest.split_at(8);
     let trx_len = trx_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-    let trx_len = usize::try_from(trx_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+    let trx_len = usize::try_from(trx_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let (trx, _rest) = rest.split_at(trx_len as usize);
 
     Ok((trx, signature))
@@ -626,18 +618,17 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
     let account_data = AccountData::unpack(&data)?;
     match account_data {
         AccountData::Account(_) | AccountData::Storage(_) => {
-            return Err(ProgramError::InvalidAccountData);
+            return Err!(ProgramError::InvalidAccountData);
         },
         AccountData::Contract(acc) if acc.code_size != 0 => {
-            return Err(ProgramError::InvalidAccountData);
+            return Err!(ProgramError::InvalidAccountData);
         },
         AccountData::Contract(_) | AccountData::Empty => { },
     };
 
     let offset = account_data.size() + offset as usize;
     if data.len() < offset + bytes.len() {
-        debug_print!("Account data too small");
-        return Err(ProgramError::AccountDataTooSmall);
+        return Err!(ProgramError::AccountDataTooSmall; "Account data too small data.len()={:?}, offset={:?}, bytes.len()={:?}", data.len(), offset, bytes.len());
     }
     data[offset .. offset+bytes.len()].copy_from_slice(bytes);
     Ok(())
@@ -661,13 +652,13 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             let contract_info_data = AccountData::unpack(&data)?;
             match contract_info_data {
                 AccountData::Contract (..) => (),
-                _ => return Err(ProgramError::InvalidAccountData),
+                _ => return Err!(ProgramError::InvalidAccountData),
             };
 
             let (_contract_header, rest) = data.split_at(contract_info_data.size());
             let (code_len, rest) = rest.split_at(8);
             let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-            let code_len = usize::try_from(code_len).map_err(|_| ProgramError::InvalidInstructionData)?;
+            let code_len = usize::try_from(code_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             let (code, _rest) = rest.split_at(code_len);
             code.to_vec()
         };
@@ -780,7 +771,7 @@ fn do_partial_call<'a>(
         gas_limit,
     )?;
 
-    executor.execute_n_steps(step_count).map_err(|_| ProgramError::InvalidInstructionData)?;
+    executor.execute_n_steps(step_count).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
     debug_print!("save");
     executor.save_into(storage);
@@ -951,21 +942,15 @@ fn check_ethereum_authority<'a>(
 ) -> ProgramResult
 {
     if sender.get_ether() != *recovered_address {
-        debug_print!("Invalid sender: actual {}, recovered {}",
-                sender.get_ether(), recovered_address);
-        return Err(ProgramError::InvalidArgument);
+        return Err!(ProgramError::InvalidArgument; "Invalid sender: actual {}, recovered {}", sender.get_ether(), recovered_address);
     }
 
     if sender.get_nonce() != trx_nonce {
-        debug_print!("Invalid Ethereum transaction nonce: acc {}, trx {}",
-                sender.get_nonce(), trx_nonce);
-        return Err(ProgramError::InvalidArgument);
+        return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender.get_nonce(), trx_nonce);
     }
 
     if SolanaBackend::<ProgramAccountStorage>::chain_id() != *chain_id {
-        debug_print!("Invalid chain_id: actual {}, expected {}",
-                chain_id, SolanaBackend::<ProgramAccountStorage>::chain_id());
-        return Err(ProgramError::InvalidArgument);
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, SolanaBackend::<ProgramAccountStorage>::chain_id());
     }
 
     Ok(())
@@ -996,7 +981,7 @@ mod tests {
         let mut bad_utf8 = bytes;
         bad_utf8[3] = 0xFF; // Invalid UTF-8 byte
         assert_eq!(
-            Err(ProgramError::InvalidInstructionData),
+            Err!(ProgramError::InvalidInstructionData),
             process_instruction(&program_id, &[], &bad_utf8)
         );
     }

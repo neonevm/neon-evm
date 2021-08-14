@@ -1,6 +1,5 @@
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
 
-
 use std::{
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
@@ -14,8 +13,6 @@ use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::token;
 
-
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub basic: Basic,
@@ -27,18 +24,18 @@ struct ExecutorAccount {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ExecutorMetadata<'config> {
-    gasometer: Gasometer<'config>,
+pub struct ExecutorMetadata {
+    gasometer: Gasometer,
     is_static: bool,
     depth: Option<usize>
 }
 
-impl<'config> ExecutorMetadata<'config> {
+impl ExecutorMetadata {
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new(gas_limit: u64, config: &'config evm::Config) -> Self {
+    pub fn new(gas_limit: u64) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit, config),
+            gasometer: Gasometer::new(gas_limit),
             is_static: false,
             depth: None
         }
@@ -75,7 +72,7 @@ impl<'config> ExecutorMetadata<'config> {
     #[must_use]
     pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
+            gasometer: Gasometer::new(gas_limit),
             is_static: is_static || self.is_static,
             depth: match self.depth {
                 None => Some(0),
@@ -89,7 +86,7 @@ impl<'config> ExecutorMetadata<'config> {
         &self.gasometer
     }
 
-    pub fn gasometer_mut(&mut self) -> &'config mut Gasometer {
+    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
         &mut self.gasometer
     }
 
@@ -106,9 +103,9 @@ impl<'config> ExecutorMetadata<'config> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ExecutorSubstate<'config> {
-    metadata: ExecutorMetadata<'config>,
-    parent: Option<Box<ExecutorSubstate<'config>>>,
+pub struct ExecutorSubstate {
+    metadata: ExecutorMetadata,
+    parent: Option<Box<ExecutorSubstate>>,
     logs: Vec<Log>,
     transfers: Vec<Transfer>,
     accounts: BTreeMap<H160, ExecutorAccount>,
@@ -116,12 +113,12 @@ pub struct ExecutorSubstate<'config> {
     deletes: BTreeSet<H160>,
 }
 
-impl<'config> ExecutorSubstate<'config> {
+impl ExecutorSubstate {
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn new(gas_limit: u64) -> Self {
         Self {
-            metadata: ExecutorMetadata::new(gas_limit, evm::Config::default()),
+            metadata: ExecutorMetadata::new(gas_limit),
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
@@ -132,11 +129,11 @@ impl<'config> ExecutorSubstate<'config> {
     }
 
     #[must_use]
-    pub const fn metadata(&self) -> &'config ExecutorMetadata {
+    pub const fn metadata(&self) -> &ExecutorMetadata {
         &self.metadata
     }
 
-    pub fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
+    pub fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
         &mut self.metadata
     }
 
@@ -491,12 +488,12 @@ pub trait StackState : Backend {
     fn touch(&mut self, address: H160);
 }
 
-pub struct ExecutorState<'config, B: Backend> {
+pub struct ExecutorState<B: Backend> {
     backend: B,
-    substate: ExecutorSubstate<'config>,
+    substate: ExecutorSubstate,
 }
 
-impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
+impl<B: Backend> Backend for ExecutorState<B> {
     fn gas_price(&self) -> U256 {
         self.backend.gas_price()
     }
@@ -588,12 +585,12 @@ impl<'config, B: Backend> Backend for ExecutorState<'config, B> {
     }
 }
 
-impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
-    fn metadata(&self) -> &'config ExecutorMetadata {
+impl<B: Backend> StackState for ExecutorState<B> {
+    fn metadata(&self) -> &ExecutorMetadata {
         self.substate.metadata()
     }
 
-    fn metadata_mut(&mut self) -> &'config mut ExecutorMetadata {
+    fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
         self.substate.metadata_mut()
     }
 
@@ -683,8 +680,8 @@ impl<'config, B: Backend> StackState for ExecutorState<'config, B> {
     }
 }
 
-impl<'config, B: Backend> ExecutorState<'config, B> {
-    pub fn new(substate: ExecutorSubstate<'config>, backend: B) -> Self {
+impl<B: Backend> ExecutorState<B> {
+    pub fn new(substate: ExecutorSubstate, backend: B) -> Self {
         Self {
             backend,
             substate,

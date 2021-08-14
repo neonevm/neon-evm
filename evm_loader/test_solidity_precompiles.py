@@ -378,6 +378,7 @@ class PrecompilesTests(unittest.TestCase):
             result = self.send_transaction(self.make_ripemd160(bin_input))
             self.assertEqual(result[:40], test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_05_bigModExp_contract(self):
         for test_case in self.test_data["bigModExp"][:-3]:
             print("make_bigModExp() - test case ", test_case["Name"])
@@ -385,6 +386,7 @@ class PrecompilesTests(unittest.TestCase):
             result = self.send_transaction(self.make_bigModExp(bin_input))
             self.assertEqual(result[128:], test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_06_bn256Add_contract(self):
             for test_case in self.test_data["bn256Add"]:
                 print("make_bn256Add() - test case ", test_case["Name"])
@@ -392,6 +394,7 @@ class PrecompilesTests(unittest.TestCase):
                 result = self.send_transaction(self.make_bn256Add(bin_input))
                 self.assertEqual(result, test_case["Expected"])
 
+    @unittest.skip("Too many instructions for testnet")
     def test_07_bn256ScalarMul_contract(self):
             for test_case in self.test_data["bn256ScalarMul"]:
                 print("make_bn256ScalarMul() - test case ", test_case["Name"])

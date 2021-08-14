@@ -84,17 +84,14 @@ impl<'a> ProgramAccountStorage<'a> {
         let construct_contract_account = |account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
         {
             if account_info.owner != program_id || code_info.owner != program_id {
-                debug_print!("Invalid owner for program info/code");
-                return Err(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument; "Invalid owner! account_info.owner={:?}, code_info.owner={:?}, program_id={:?}", account_info.owner, code_info.owner, program_id);
             }
 
             let account_data = AccountData::unpack(&account_info.data.borrow())?;
             let account = account_data.get_account()?;
     
             if *code_info.key != account.code_account {
-                debug_print!("code_info.key: {:?}", *code_info.key);
-                debug_print!("account.code_account: {:?}", account.code_account);
-                return Err(ProgramError::InvalidAccountData)
+                return Err!(ProgramError::InvalidAccountData; "code_info.key={:?}, account.code_account={:?}", *code_info.key, account.code_account)
             }
     
             let code_data = code_info.data.clone();
@@ -142,10 +139,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 Sender::Ethereum(caller_address)
             } else {
                 if !caller_info.is_signer {
-                    debug_print!("Caller must be signer");
-                    debug_print!("Caller pubkey: {}", &caller_info.key.to_string());
-
-                    return Err(ProgramError::InvalidArgument);
+                    return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
                 }
 
                 Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
@@ -183,7 +177,7 @@ impl<'a> ProgramAccountStorage<'a> {
         let clock_account = if let Some(clock_acc) = clock_account {
             clock_acc
         } else {
-            return Err(ProgramError::NotEnoughAccountKeys);
+            return Err!(ProgramError::NotEnoughAccountKeys);
         };
 
 
@@ -276,8 +270,7 @@ impl<'a> ProgramAccountStorage<'a> {
                                 continue;
                             }
                         }
-                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
-                        return Err(ProgramError::NotEnoughAccountKeys);
+                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
                     }
                 },
                 Apply::Delete { address } => {
@@ -288,14 +281,13 @@ impl<'a> ProgramAccountStorage<'a> {
                         let code_info = if let Some(code_info) = code_info {
                             code_info
                         } else {
-                            debug_print!("Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
-                            return Err(ProgramError::InvalidAccountData);
+                            return Err!(ProgramError::InvalidAccountData; "Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
                         };
 
                         let recipient = if let Some(some_operator) = operator {
                             some_operator
                         } else {
-                            self.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?
+                            self.get_caller_account_info().ok_or(E!(ProgramError::InvalidArgument))?
                         };
 
                         debug_print!("Move funds from account");
@@ -312,8 +304,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let mut code_data = code_info.try_borrow_mut_data()?;
                         AccountData::pack(&AccountData::Empty, &mut code_data)?;
                     } else {
-                        debug_print!("Apply can't be done. Not found account for address = {:?}.", address);
-                        return Err(ProgramError::NotEnoughAccountKeys);
+                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
                     }
                 }
             }
@@ -335,11 +326,11 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("apply_transfers {:?}", transfers);
 
         for transfer in transfers {
-            let source_account_index = self.find_account(&transfer.source).ok_or(ProgramError::NotEnoughAccountKeys)?;
+            let source_account_index = self.find_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: source_account, token: source_token_account, code: _ } = &self.account_metas[source_account_index];
             let source_solidity_account = &self.accounts[source_account_index];
 
-            let target_account_index = self.find_account(&transfer.target).ok_or(ProgramError::NotEnoughAccountKeys)?;
+            let target_account_index = self.find_account(&transfer.target).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
 
             transfer_token(
