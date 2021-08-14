@@ -15,7 +15,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "trx_payments" # TODO revert to ${PROXY_BRANCH:-develop}
+       branch: "trx_payments_with_user_to_operator_payment" # TODO revert to ${PROXY_BRANCH:-develop}
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"

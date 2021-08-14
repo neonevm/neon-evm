@@ -254,7 +254,7 @@ class EventTest(unittest.TestCase):
             confirm_transaction(http_client, rcpt)
 
     def call_partial_signed(self, input, contract, code):
-        tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000
+        tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
