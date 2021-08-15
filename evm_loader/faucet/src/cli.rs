@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
-#[structopt(about = "ERC20 Token Faucet Server")]
+#[structopt(about = "ERC20 Token Faucet Service")]
 pub struct Application {
     #[structopt(
     parse(from_os_str),

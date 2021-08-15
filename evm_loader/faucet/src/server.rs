@@ -43,18 +43,18 @@ async fn handle_request_airdrop(body: Bytes) -> impl Responder {
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("{}", err);
+        error!("BadRequest: {}", err);
         return HttpResponse::BadRequest();
     }
 
     let airdrop = serde_json::from_str::<Airdrop>(&input.unwrap());
     if let Err(err) = airdrop {
-        error!("{}", err);
+        error!("BadRequest: {}", err);
         return HttpResponse::BadRequest();
     }
 
     if let Err(err) = process_airdrop(airdrop.unwrap()).await {
-        error!("{}", err);
+        error!("InternalServerError: {}", err);
         return HttpResponse::InternalServerError();
     }
 
@@ -70,7 +70,6 @@ async fn process_airdrop(airdrop: Airdrop) -> Result<(), Report> {
     info!("Processing {:?}...", airdrop);
 
     let admin = derive_address(&config::admin_key())?;
-    dbg!(&admin);
     let provider = Provider::<Http>::try_from(config::ethereum_endpoint())?.with_sender(admin);
     let admin = Arc::new(import_account(provider.clone(), &config::admin_key())?);
 
