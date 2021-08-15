@@ -43,11 +43,6 @@ pub fn token_b() -> String {
     CONFIG.read().unwrap().token_b.clone()
 }
 
-/// Gets the `admin` value.
-pub fn admin() -> String {
-    CONFIG.read().unwrap().admin.clone()
-}
-
 /// Gets the `admin_key` value.
 pub fn admin_key() -> String {
     CONFIG.read().unwrap().admin_key.clone()
@@ -61,7 +56,6 @@ struct Faucet {
     pub ethereum_endpoint: String,
     pub token_a: String,
     pub token_b: String,
-    pub admin: String,
     pub admin_key: String,
 }
 

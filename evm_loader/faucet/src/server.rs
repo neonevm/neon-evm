@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tracing::{error, info};
 
 use ethers::prelude::{
-    transaction::eip2718::TypedTransaction, Http, LocalWallet, Middleware, Provider,
+    transaction::eip2718::TypedTransaction, Http, LocalWallet, Middleware, Provider, Signer,
     SignerMiddleware,
 };
 
@@ -69,7 +69,8 @@ type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
 async fn process_airdrop(airdrop: Airdrop) -> Result<(), Report> {
     info!("Processing {:?}...", airdrop);
 
-    let admin = address_from_str(&config::admin())?;
+    let admin = derive_address(&config::admin_key())?;
+    dbg!(&admin);
     let provider = Provider::<Http>::try_from(config::ethereum_endpoint())?.with_sender(admin);
     let admin = Arc::new(import_account(provider.clone(), &config::admin_key())?);
 
@@ -106,6 +107,12 @@ async fn create_transfer_tx(
     let recipient = address_from_str(recipient)?;
     let call = token.transfer(recipient, amount);
     Ok(call.tx)
+}
+
+/// Calculates address of given private key.
+fn derive_address(priv_key: &str) -> Result<Address, Report> {
+    let wallet = priv_key.parse::<LocalWallet>()?;
+    Ok(wallet.address())
 }
 
 /// Imports account from it's private key.
