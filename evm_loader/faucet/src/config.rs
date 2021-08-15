@@ -1,7 +1,5 @@
 //! faucet config module.
 
-pub const DEFAULT_CONFIG: &str = "faucet.conf";
-
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::RwLock;
@@ -16,6 +14,8 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+pub const DEFAULT_CONFIG: &str = "faucet.conf";
 
 /// Loads the config from a file.
 pub fn load(filename: &Path) -> Result<()> {

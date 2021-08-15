@@ -16,8 +16,7 @@ use tracing_subscriber::EnvFilter;
 #[actix_web::main]
 async fn main() -> Result<(), Report> {
     setup()?;
-    execute(cli::application()).await?;
-    Ok(())
+    execute(cli::application()).await
 }
 
 /// Initializes the logger and error handler.

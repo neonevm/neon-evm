@@ -17,6 +17,7 @@ use ethers::prelude::{
 
 use crate::{config, contract};
 
+/// Represents a signer account.
 pub type Account = SignerMiddleware<Provider<Http>, LocalWallet>;
 
 /// Starts the server in listening mode.
@@ -65,8 +66,8 @@ type Address = ethers::types::Address;
 type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
 
 /// Processes the aridrop: sends needed transactions into Ethereum.
-async fn process_airdrop(ad: Airdrop) -> Result<(), Report> {
-    info!("Processing {:?}...", ad);
+async fn process_airdrop(airdrop: Airdrop) -> Result<(), Report> {
+    info!("Processing {:?}...", airdrop);
 
     let admin = address_from_str(&config::admin())?;
     let provider = Provider::<Http>::try_from(config::ethereum_endpoint())?.with_sender(admin);
@@ -77,17 +78,17 @@ async fn process_airdrop(ad: Airdrop) -> Result<(), Report> {
     let token_b = address_from_str(&config::token_b())?;
     let token_b = UniswapV2ERC20::new(token_b, admin.clone());
 
-    let amount = Amount::from(ad.amount);
+    let amount = Amount::from(airdrop.amount);
 
-    info!("Depositing {} -> token A...", ad.amount);
-    let tx = airdrop(&token_a, &ad.wallet, amount).await?;
+    info!("Depositing {} -> token A...", airdrop.amount);
+    let tx = create_transfer_tx(&token_a, &airdrop.wallet, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
     info!("OK");
 
-    info!("Depositing {} -> token B...", ad.amount);
-    let tx = airdrop(&token_b, &ad.wallet, amount).await?;
+    info!("Depositing {} -> token B...", airdrop.amount);
+    let tx = create_transfer_tx(&token_b, &airdrop.wallet, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
@@ -97,7 +98,7 @@ async fn process_airdrop(ad: Airdrop) -> Result<(), Report> {
 }
 
 /// Creates transaction to perform one airdrop operation.
-async fn airdrop(
+async fn create_transfer_tx(
     token: &UniswapV2ERC20,
     recipient: &str,
     amount: Amount,
