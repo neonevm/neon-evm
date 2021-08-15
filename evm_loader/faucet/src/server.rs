@@ -78,17 +78,20 @@ async fn process_airdrop(airdrop: Airdrop) -> Result<(), Report> {
     let token_b = address_from_str(&config::token_b())?;
     let token_b = UniswapV2ERC20::new(token_b, admin.clone());
 
+    let recipient = &airdrop.wallet;
     let amount = Amount::from(airdrop.amount);
 
-    info!("Depositing {} -> token A...", airdrop.amount);
-    let tx = create_transfer_tx(&token_a, &airdrop.wallet, amount).await?;
+    info!("Depositing {} -> token A...", amount);
+    let tx = create_transfer_tx(&token_a, recipient, amount).await?;
+    info!("Sending transaction for token A...");
     let tx = provider.send_transaction(tx, None).await?;
+    info!("Waiting transaction for token A...");
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
     info!("OK");
 
-    info!("Depositing {} -> token B...", airdrop.amount);
-    let tx = create_transfer_tx(&token_b, &airdrop.wallet, amount).await?;
+    info!("Depositing {} -> token B...", amount);
+    let tx = create_transfer_tx(&token_b, recipient, amount).await?;
     let tx = provider.send_transaction(tx, None).await?;
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
