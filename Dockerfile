@@ -11,7 +11,7 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
-RUN bash -c 'NON_ERR_INFO=$(egrep -vn "(use|enum|Err\!|E\!|\/\/\/|==)" ./src/*.rs | grep "ProgramError::" | wc -l); if (("$NON_ERR_INFO" > 3)); then echo "Please, use macros Err! and E! to add error info!">&2; exit $NON_ERR_INFO; fi';
+RUN /opt/evm_loader/ci_checks.sh
 RUN cargo clippy
 RUN cargo build-bpf --features no-logs
 WORKDIR /opt/evm_loader/cli
