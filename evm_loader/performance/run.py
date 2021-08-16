@@ -508,7 +508,7 @@ def mint_spl(accounts, instance):
                                                   preflight_commitment="confirmed"))
         receipt_list.append((acc_eth_hex, res["result"]))
 
-        if total % 1000 == 0 or total == len(accounts) - 1:
+        if total % 100 == 0 or total == len(accounts) - 1:
             for (acc_eth_hex, receipt) in receipt_list:
                 confirm_transaction(client, receipt)
                 res = client.get_confirmed_transaction(receipt)
