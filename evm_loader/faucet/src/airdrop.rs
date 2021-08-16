@@ -4,6 +4,7 @@ use color_eyre::Report;
 use tracing::info;
 
 use web3::contract::{Contract, Options};
+use web3::types::U256;
 
 use crate::config;
 
@@ -24,6 +25,8 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     let web3 = web3::Web3::new(http);
 
     let admin_key = config::admin_key().parse()?;
+    let recipient = airdrop.wallet;
+    let amount = U256::from(airdrop.amount);
 
     info!("Transfer {} -> token A", airdrop.amount);
     let token_a = address_from_str(&config::token_a())?;
@@ -37,7 +40,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     token_a
         .signed_call_with_confirmations(
             "transfer",
-            (airdrop.wallet.clone(), airdrop.amount),
+            (recipient.clone(), amount),
             Options::default(),
             0,
             &admin_key,
@@ -58,7 +61,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     token_b
         .signed_call_with_confirmations(
             "transfer",
-            (airdrop.wallet.clone(), airdrop.amount),
+            (recipient.clone(), amount),
             Options::default(),
             0,
             &admin_key,
