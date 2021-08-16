@@ -1,4 +1,4 @@
-//! faucet config module.
+//! Faucet config module.
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;

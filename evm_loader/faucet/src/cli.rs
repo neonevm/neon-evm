@@ -1,4 +1,4 @@
-//! faucet options parser.
+//! Faucet options parser.
 
 use crate::config;
 use std::path::PathBuf;

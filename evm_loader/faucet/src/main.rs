@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
+mod airdrop;
 mod cli;
 mod config;
 mod contract;

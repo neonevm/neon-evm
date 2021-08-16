@@ -1,7 +1,8 @@
-//! faucet contract module: interface to ERC20 smart contract.
+//! Faucet contract module: interface to ERC20 smart contract.
 
-use crate::server::Account;
-use ethers::prelude::*;
+use ethers::prelude::abigen;
+
+use crate::airdrop::Account;
 
 impl UniswapV2ERC20<Account> {}
 
