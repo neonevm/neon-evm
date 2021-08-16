@@ -6,13 +6,10 @@ use color_eyre::Report;
 use tracing::info;
 
 use ethers::prelude::{
-    Http, LocalWallet, Middleware, Provider, SignerMiddleware, TransactionRequest,
+    abigen, Http, LocalWallet, Middleware, Provider, SignerMiddleware, TransactionRequest,
 };
 
-use crate::{config, contract};
-
-/// Represents a signer account.
-pub type Account = SignerMiddleware<Provider<Http>, LocalWallet>;
+use crate::config;
 
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
@@ -23,7 +20,13 @@ pub struct Airdrop {
 
 type Amount = ethers::types::U256;
 type Address = ethers::types::Address;
-type UniswapV2ERC20 = contract::UniswapV2ERC20<Account>;
+
+/// Represents a signer account.
+type Account = SignerMiddleware<Provider<Http>, LocalWallet>;
+
+/// Generates the type representing ERC20 contract.
+impl UniswapV2ERC20<Account> {}
+abigen!(UniswapV2ERC20, "abi/UniswapV2ERC20.abi");
 
 /// Processes the aridrop: sends needed transactions into Ethereum.
 pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
@@ -65,7 +68,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
 
 /// Creates transaction to perform one airdrop operation.
 async fn create_transfer_tx(
-    token: &UniswapV2ERC20,
+    token: &UniswapV2ERC20<Account>,
     recipient: &str,
     amount: Amount,
 ) -> Result<TransactionRequest, Report> {

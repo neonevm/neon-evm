@@ -7,7 +7,6 @@
 mod airdrop;
 mod cli;
 mod config;
-mod contract;
 mod server;
 
 use color_eyre::Report;
