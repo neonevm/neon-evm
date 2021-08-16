@@ -42,7 +42,7 @@ fn check_collateral_account(
     if collateral_pool_sol_info.owner != program_id {
         debug_print!("Wrong collateral pool owner {}", *collateral_pool_sol_info.owner);
         debug_print!("Must be program_id {}", program_id);
-        return Err(ProgramError::InvalidArgument);
+        return Err!(ProgramError::InvalidArgument; "Wrong collateral pool owner");
     }
 
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
@@ -50,7 +50,7 @@ fn check_collateral_account(
     if *collateral_pool_sol_info.key != pool_key {
         debug_print!("Wrong seed pool key {}", pool_key);
         debug_print!("Must be collateral pool key {}", *collateral_pool_sol_info.key);
-        return Err(ProgramError::InvalidArgument);
+        return Err!(ProgramError::InvalidArgument; "Wrong seed for collateral pool key");
     }
 
     Ok(())
@@ -142,7 +142,7 @@ pub fn burn_operators_deposit<'a>(
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult {
     if !incinerator::check_id(incinerator_info.key) {
-        return Err(ProgramError::InvalidAccountData)
+        return Err!(ProgramError::InvalidAccountData; "Must be incinerator key")
     }
 
     debug_print!("deposit_to_operator");
@@ -171,7 +171,7 @@ fn transfer<'a>(
         invoke(&transfer, &accounts)?;
     } else {
         if from_account_info.lamports() < PAYMENT_TO_DEPOSIT {
-            return Err(ProgramError::InsufficientFunds)
+            return Err!(ProgramError::InsufficientFunds)
         }
 
         **from_account_info.lamports.borrow_mut() -= PAYMENT_TO_DEPOSIT;

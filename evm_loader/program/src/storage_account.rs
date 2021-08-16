@@ -22,7 +22,7 @@ pub struct StorageAccount<'a> {
 
 impl<'a> StorageAccount<'a> {
     pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64) -> Result<Self, ProgramError> {
-        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or(ProgramError::InvalidAccountData)?;
+        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or_else(||E!(ProgramError::InvalidAccountData))?;
         let clock = Clock::from_account_info(clock_info)?;
 
         let account_data = info.try_borrow_data()?;
@@ -48,14 +48,14 @@ impl<'a> StorageAccount<'a> {
     }
 
     pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo]) -> Result<Self, ProgramError> {
-        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or(ProgramError::InvalidAccountData)?;
+        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or_else(||E!(ProgramError::InvalidAccountData))?;
         let clock = Clock::from_account_info(clock_info)?;
 
         let mut account_data = info.try_borrow_mut_data()?;
 
         if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
             if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             data.operator = *operator.key;

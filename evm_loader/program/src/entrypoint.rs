@@ -216,10 +216,10 @@ fn process_instruction<'a>(
             if let Some(token) = token {
                 let token_account_info = next_account_info(account_info_iter)?;
                 if *token_account_info.key != token {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err!(ProgramError::InvalidArgument; "");
                 }
                 if *token_account_info.key != *created_info.key {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err!(ProgramError::InvalidArgument; "");
                 }
 
                 invoke_signed(
@@ -286,7 +286,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             if !operator_sol_info.is_signer {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
@@ -316,13 +316,13 @@ fn process_instruction<'a>(
                 storage_info,
                 system_info)?;
             let fee = trx.gas_limit
-                .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?;
+                .checked_mul(trx.gas_price).ok_or_else(||E!(ProgramError::InvalidArgument))?;
             token::block_token(
                 accounts,
                 user_eth_info,
                 block_acc,
-                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &fee)?;
 
             if trx.to.is_some() {
@@ -347,7 +347,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[6..];
 
             if !operator_sol_info.is_signer {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
@@ -377,17 +377,17 @@ fn process_instruction<'a>(
                     debug_print!("operator ownership");
                     debug_print!("operator token owner {}", operator_eth_info.owner);
                     debug_print!("operator key {}", operator_sol_info.key);
-                    return Err(ProgramError::InvalidInstructionData)
+                    return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
                 }
                 let used_gas = call_results.1;
                 let fee = U256::from(used_gas)
-                    .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?;
+                    .checked_mul(trx.gas_price).ok_or_else(||E!(ProgramError::InvalidArgument))?;
                 token::transfer_token(
                     accounts,
                     user_eth_info,
                     operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                    account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                    account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &fee)?;
 
                 applies_and_invokes(
@@ -427,7 +427,7 @@ fn process_instruction<'a>(
             // }
 
             if !operator_sol_info.is_signer {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
@@ -449,13 +449,13 @@ fn process_instruction<'a>(
                 storage_info,
                 system_info)?;
             let fee = trx.gas_limit
-                .checked_mul(trx.gas_price).ok_or(ProgramError::InvalidArgument)?;
+                .checked_mul(trx.gas_price).ok_or_else(||E!(ProgramError::InvalidArgument))?;
             token::block_token(
                 accounts,
                 user_eth_info,
                 block_acc,
-                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &fee)?;
 
             do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
@@ -475,7 +475,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[6..];
 
             if !operator_sol_info.is_signer {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             let mut storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts).map_err(|err| {
@@ -497,31 +497,31 @@ fn process_instruction<'a>(
                     debug_print!("operator token ownership");
                     debug_print!("operator token owner {}", operator_eth_info.owner);
                     debug_print!("operator key {}", operator_sol_info.key);
-                    return Err(ProgramError::InvalidInstructionData)
+                    return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
                 }
                 let (gas_limit, gas_price) = storage.get_gas_params()?;
                 let used_gas = call_results.1;
                 if used_gas > gas_limit {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err!(ProgramError::InvalidArgument);
                 }
                 let gas_price_wei = U256::from(gas_price);
                 let fee = U256::from(used_gas)
-                    .checked_mul(gas_price_wei).ok_or(ProgramError::InvalidArgument)?;
+                    .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
                 let return_fee =  U256::from(gas_limit - used_gas)
-                    .checked_mul(gas_price_wei).ok_or(ProgramError::InvalidArgument)?;
+                    .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
                 token::pay_token(
                     accounts,
                     block_acc,
                     operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                    account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                    account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &fee)?;
                 token::return_token(
                     accounts,
                     block_acc,
                     user_eth_info,
-                    account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                    account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                    account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &return_fee)?;
 
                 applies_and_invokes(
@@ -549,7 +549,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[6..];
 
             if !operator_sol_info.is_signer {
-                return Err(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidAccountData);
             }
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts)?;
@@ -557,7 +557,7 @@ fn process_instruction<'a>(
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
-            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?.data.borrow())?;
+            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
             match caller_info_data {
                 AccountData::Account(ref mut acc) => {
                     let (caller, nonce) = storage.caller_and_nonce()?;
@@ -569,12 +569,12 @@ fn process_instruction<'a>(
                     }
                     acc.trx_count += 1;
                 },
-                _ => return Err(ProgramError::InvalidAccountData),
+                _ => return Err!(ProgramError::InvalidAccountData),
             };
 
             let (gas_limit, gas_price) = storage.get_gas_params()?;
             let return_fee = U256::from(gas_limit)
-                .checked_mul(U256::from(gas_price)).ok_or(ProgramError::InvalidArgument)?;
+                .checked_mul(U256::from(gas_price)).ok_or_else(||E!(ProgramError::InvalidArgument))?;
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
@@ -583,8 +583,8 @@ fn process_instruction<'a>(
                 accounts,
                 block_acc,
                 user_eth_info,
-                account_storage.get_caller_account_info().ok_or(ProgramError::InvalidArgument)?,
-                account_storage.get_caller_account().ok_or(ProgramError::InvalidArgument)?,
+                account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &return_fee)?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
