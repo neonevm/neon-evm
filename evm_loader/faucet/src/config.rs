@@ -43,10 +43,14 @@ pub fn token_b() -> String {
     CONFIG.read().unwrap().token_b.clone()
 }
 
-/// Gets the `admin_key` value.
-/// TODO: handle 0x prefix: remove it if any
+/// Gets the `admin_key` value. Removes prefix 0x if any.
 pub fn admin_key() -> String {
-    CONFIG.read().unwrap().admin_key.clone()
+    let key = &CONFIG.read().unwrap().admin_key;
+    if !key.starts_with("0x") {
+        key.to_owned()
+    } else {
+        key[2..].to_owned()
+    }
 }
 
 /// Represents the main config.
