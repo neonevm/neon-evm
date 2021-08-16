@@ -3,8 +3,12 @@
 use color_eyre::Report;
 use tracing::info;
 
+use secp256k1::SecretKey;
+use web3::api::Eth;
 use web3::contract::{Contract, Options};
+use web3::signing::Key;
 use web3::types::U256;
+use web3::Transport;
 
 use crate::config;
 
@@ -24,52 +28,59 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
     let web3 = web3::Web3::new(http);
 
-    let admin_key = config::admin_key().parse()?;
+    let admin_key: SecretKey = config::admin_key().parse()?;
     let recipient = address_from_str(&airdrop.wallet)?;
     let amount = U256::from(airdrop.amount);
 
-    info!("Transfer {} -> token A", airdrop.amount);
-    let token_a = address_from_str(&config::token_a())?;
-    let token_a = Contract::from_json(
+    transfer(
         web3.eth(),
-        token_a,
-        include_bytes!("../abi/UniswapV2ERC20.abi"),
-    )?;
+        address_from_str(&config::token_a())?,
+        "A",
+        &admin_key,
+        recipient,
+        amount,
+    )
+    .await?;
+    transfer(
+        web3.eth(),
+        address_from_str(&config::token_b())?,
+        "B",
+        &admin_key,
+        recipient,
+        amount,
+    )
+    .await?;
 
-    info!("Sending transaction for transfer of token A...");
-    token_a
+    Ok(())
+}
+
+/// Creates and sends a transfer transaction.
+async fn transfer<T: Transport>(
+    eth: Eth<T>,
+    token: Address,
+    token_name: &str,
+    admin_key: impl Key,
+    recipient: Address,
+    amount: U256,
+) -> Result<(), Report> {
+    info!("Transfer {} -> token {}", amount, token_name);
+    let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))?;
+
+    info!(
+        "Sending transaction for transfer of token {}...",
+        token_name
+    );
+    token
         .signed_call_with_confirmations(
             "transfer",
             (recipient, amount),
             Options::default(),
-            0,
-            &admin_key,
+            0, // confirmations
+            admin_key,
         )
         .await?;
 
     info!("OK");
-
-    info!("Transfer {} -> token B", airdrop.amount);
-    let token_b = address_from_str(&config::token_b())?;
-    let token_b = Contract::from_json(
-        web3.eth(),
-        token_b,
-        include_bytes!("../abi/UniswapV2ERC20.abi"),
-    )?;
-
-    info!("Sending transaction for transfer of token B...");
-    token_b
-        .signed_call_with_confirmations(
-            "transfer",
-            (recipient, amount),
-            Options::default(),
-            0,
-            &admin_key,
-        )
-        .await?;
-
-    info!("OK");
-
     Ok(())
 }
 
