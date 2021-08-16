@@ -13,7 +13,7 @@ COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader/program
 RUN cargo clippy
 RUN cargo build-bpf --features no-logs
-RUN bash -c 'NON_ERR_INFO=$(egrep -vn "(use|enum|Err\!|E\!|\/\/\/|==)" ./evm_loader/program/src/*.rs | grep "ProgramError::" | wc -l); if (("$NON_ERR_INFO" > 3)); then echo "Please, use macros Err! and E! to add error info!"; exit $NON_ERR_INFO; fi';
+RUN bash -c 'NON_ERR_INFO=$(egrep -vn "(use|enum|Err\!|E\!|\/\/\/|==)" ./src/*.rs | grep "ProgramError::" | wc -l); if (("$NON_ERR_INFO" > 3)); then echo "Please, use macros Err! and E! to add error info!"; exit $NON_ERR_INFO; fi';
 WORKDIR /opt/evm_loader/cli
 RUN cargo clippy
 RUN cargo build --release
