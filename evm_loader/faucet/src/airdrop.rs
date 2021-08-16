@@ -24,7 +24,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     let web3 = web3::Web3::new(http);
 
     let recipient = address_from_str(&airdrop.wallet)?;
-    let admin = address_from_str(&config::admin())?;
+    let admin_key = config::admin_key().parse()?;
 
     info!("Transfer {} -> token A", airdrop.amount);
     let token_a = address_from_str(&config::token_a())?;
@@ -36,11 +36,12 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
 
     info!("Sending transaction for transfer of token A...");
     token_a
-        .call(
+        .signed_call_with_confirmations(
             "transfer",
             (recipient, airdrop.amount),
-            admin,
             Options::default(),
+            0,
+            &admin_key,
         )
         .await?;
 
@@ -56,11 +57,12 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
 
     info!("Sending transaction for transfer of token B...");
     token_b
-        .call(
+        .signed_call_with_confirmations(
             "transfer",
             (recipient, airdrop.amount),
-            admin,
             Options::default(),
+            0,
+            &admin_key,
         )
         .await?;
 
