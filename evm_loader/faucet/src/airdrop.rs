@@ -25,7 +25,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     let web3 = web3::Web3::new(http);
 
     let admin_key = config::admin_key().parse()?;
-    let recipient = airdrop.wallet;
+    let recipient = address_from_str(&airdrop.wallet)?;
     let amount = U256::from(airdrop.amount);
 
     info!("Transfer {} -> token A", airdrop.amount);
@@ -40,7 +40,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     token_a
         .signed_call_with_confirmations(
             "transfer",
-            (recipient.clone(), amount),
+            (recipient, amount),
             Options::default(),
             0,
             &admin_key,
@@ -61,7 +61,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
     token_b
         .signed_call_with_confirmations(
             "transfer",
-            (recipient.clone(), amount),
+            (recipient, amount),
             Options::default(),
             0,
             &admin_key,
