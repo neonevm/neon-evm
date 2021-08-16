@@ -83,16 +83,18 @@ async fn process_airdrop(airdrop: Airdrop) -> Result<(), Report> {
 
     info!("Depositing {} -> token A...", amount);
     let tx = create_transfer_tx(&token_a, recipient, amount).await?;
-    info!("Sending transaction for token A...");
+    info!("Sending transaction for transfer of token A...");
     let tx = provider.send_transaction(tx, None).await?;
-    info!("Waiting transaction for token A...");
+    info!("Waiting transaction for transfer of token A...");
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
     info!("OK");
 
     info!("Depositing {} -> token B...", amount);
     let tx = create_transfer_tx(&token_b, recipient, amount).await?;
+    info!("Sending transaction for transfer of token B...");
     let tx = provider.send_transaction(tx, None).await?;
+    info!("Waiting transaction for transfer of token B...");
     let _receipt = tx.await?;
     //info!("{:?}", receipt);
     info!("OK");
