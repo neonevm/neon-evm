@@ -11,8 +11,7 @@ use serde::Deserialize;
 use tracing::{error, info};
 
 use ethers::prelude::{
-    transaction::eip2718::TypedTransaction, Http, LocalWallet, Middleware, Provider, Signer,
-    SignerMiddleware,
+    Http, LocalWallet, Middleware, Provider, SignerMiddleware, TransactionRequest,
 };
 
 use crate::{config, contract};
@@ -107,7 +106,7 @@ async fn create_transfer_tx(
     token: &UniswapV2ERC20,
     recipient: &str,
     amount: Amount,
-) -> Result<TypedTransaction, Report> {
+) -> Result<TransactionRequest, Report> {
     let recipient = address_from_str(recipient)?;
     let call = token.transfer(recipient, amount);
     Ok(call.tx)
