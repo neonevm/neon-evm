@@ -1,4 +1,7 @@
 from time import sleep
+
+import spl.token.client
+
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
@@ -11,6 +14,9 @@ from solana.blockhash import *
 import statistics
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
+from spl.token.client import *
+from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ignore
+from enum import Enum
 
 factory_path = "Factory.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
@@ -31,10 +37,12 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 trx_count = {}
 
+class transfer_type(Enum):
+    erc20 = 0,
+    spl = 1
 
 class init_senders():
-    @classmethod
-    def init(cls):
+    def __init__(cls):
         cls.accounts = []
         file = open(senders_file + args.postfix, mode='r')
         for line in file:
@@ -53,8 +61,7 @@ class init_senders():
 
 
 class init_wallet():
-    @classmethod
-    def init(cls):
+    def __init__(cls):
         print("\ntest_performance.py init")
         cls.token = SplToken(solana_url)
 
@@ -63,6 +70,13 @@ class init_wallet():
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
+
+        regular_wallet = WalletAccount(wallet_path())
+        cls.regular_acc = regular_wallet.get_acc()
+        cls.wallet_token = cls.token.create_token_account(ETH_TOKEN_MINT_ID, owner=wallet.get_path())
+        # cls.wallet_token = get_associated_token_address(PublicKey(wallet.get_acc().public_key()), ETH_TOKEN_MINT_ID)
+        cls.token.mint(ETH_TOKEN_MINT_ID, cls.wallet_token, 10000)
+
 
         assert (getBalance(wallet.get_acc().public_key()) > 0)
 
@@ -204,13 +218,13 @@ def get_filehash(factory, factory_code, factory_eth, acc):
     hash = data[61:93]
     return hash
 
-def get_trx(contract_eth, caller, caller_eth, input, pr_key):
+def get_trx(contract_eth, caller, caller_eth, input, pr_key, value):
     if trx_count.get(caller) != None:
         trx_count[caller] = trx_count[caller] + 1
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': 0, 'gas': 9999999999, 'gasPrice': 1,
+    tx = {'to': contract_eth, 'value': value, 'gas': 9999999999, 'gasPrice': 1,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 
@@ -227,12 +241,9 @@ def sol_instr_keccak(keccak_instruction):
 
 
 def sol_instr_05(evm_instruction, contract, contract_code, caller):
-    return TransactionInstruction(program_id=evm_loader_id,
-                               data=bytearray.fromhex("05") + evm_instruction,
-                               keys=[
+    account_meta= [
                                    AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                                   AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
                                    AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
                                    AccountMeta(
                                        pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
@@ -242,11 +253,16 @@ def sol_instr_05(evm_instruction, contract, contract_code, caller):
                                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                                    AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                               ])
+                               ]
+    if contract_code != "":
+        account_meta.insert(3, AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True))
+
+    return TransactionInstruction(program_id=evm_loader_id,
+                               data=bytearray.fromhex("05") + evm_instruction,
+                               keys=account_meta)
 
 def deploy_contracts(args):
     instance = init_wallet()
-    instance.init()
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
 
@@ -341,7 +357,7 @@ def deploy_contracts(args):
     print("receipt_error:", receipt_error)
 
 
-def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
+def mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
 
     func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
     trx_data = func_name + \
@@ -372,54 +388,7 @@ def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, s
     return (erc20_eth_hex, payer_eth, res["result"])
 
 
-def mint_create(accounts, acc, sum):
-    event_error = 0
-    receipt_error = 0
-    nonce_error = 0
-    too_small_error = 0
-    unknown_error = 0
-    account_minted =[]
-
-
-    with open(contracts_file+args.postfix, mode='r') as f:
-        contracts = json.loads(f.read())
-
-    receipt_list = []
-    ia = iter(accounts)
-    ic = iter(contracts)
-
-    total = 0
-    while total < args.count:
-        print("mint ", total)
-        try:
-            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
-        except StopIteration as err:
-            ic = iter(contracts)
-            continue
-
-        try:
-            (payer_eth, payer_sol) = next(ia)
-        except StopIteration as err:
-            ia = iter(accounts)
-            (payer_eth, payer_sol) = next(ia)
-
-        receipt_list.append(mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
-
-        if total % 1000 == 0 or total == args.count - 1:
-            (account_minted_, event_error_, receipt_error_, nonce_error_, unknown_error_, too_small_error_)  = mint_confirm(receipt_list, sum)
-            account_minted = account_minted + account_minted_
-            event_error = event_error + event_error_
-            receipt_error = receipt_error + receipt_error_
-            nonce_error = nonce_error + nonce_error_
-            unknown_error = unknown_error + unknown_error_
-            too_small_error = too_small_error + too_small_error_
-            receipt_list = []
-        total = total + 1
-
-    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
-
-
-def mint_confirm(receipt_list, sum):
+def mint_erc20_confirm(receipt_list, sum):
     event_error = 0
     receipt_error = 0
     nonce_error = 0
@@ -463,14 +432,112 @@ def mint_confirm(receipt_list, sum):
     return (account_minted, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
 
-def create_accounts(args):
+
+def mint_erc20(accounts, acc, sum):
+    event_error = 0
+    receipt_error = 0
+    nonce_error = 0
+    too_small_error = 0
+    unknown_error = 0
+    account_minted =[]
+
+
+    with open(contracts_file+args.postfix, mode='r') as f:
+        contracts = json.loads(f.read())
+
+    receipt_list = []
+    ia = iter(accounts)
+    ic = iter(contracts)
+
+    total = 0
+    while total < args.count:
+        print("mint ", total)
+        try:
+            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
+        except StopIteration as err:
+            ic = iter(contracts)
+            continue
+
+        try:
+            (payer_eth, payer_sol) = next(ia)
+        except StopIteration as err:
+            ia = iter(accounts)
+            (payer_eth, payer_sol) = next(ia)
+
+        receipt_list.append(mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
+
+        if total % 1000 == 0 or total == args.count - 1:
+            (account_minted_, event_error_, receipt_error_, nonce_error_, unknown_error_, too_small_error_)  = mint_erc20_confirm(receipt_list, sum)
+            account_minted = account_minted + account_minted_
+            event_error = event_error + event_error_
+            receipt_error = receipt_error + receipt_error_
+            nonce_error = nonce_error + nonce_error_
+            unknown_error = unknown_error + unknown_error_
+            too_small_error = too_small_error + too_small_error_
+            receipt_list = []
+        total = total + 1
+
+    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
+
+
+def mint_spl(accounts, instance):
+    receipt_list = []
+    for (acc_eth_hex, acc_sol) in accounts:
+        dest = get_associated_token_address(PublicKey(acc_sol), ETH_TOKEN_MINT_ID)
+        print("mint: ", dest)
+
+        data = spl.token._layouts.INSTRUCTIONS_LAYOUT.build(
+            dict(instruction_type=InstructionType.MINT_TO2, args=dict(amount=100*10**9, decimals=9)))
+
+        trx = Transaction()
+        trx.add(
+            TransactionInstruction(
+                program_id=TOKEN_PROGRAM_ID,
+                data=data,
+                keys=[
+                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=dest, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=instance.regular_acc.public_key(), is_signer=True, is_writable=False),
+                ]))
+
+        res = client.send_transaction(trx, instance.regular_acc,
+                                      opts=TxOpts(skip_confirmation=True, skip_preflight=True,
+                                                  preflight_commitment="confirmed"))
+        receipt_list.append((acc_eth_hex, res["result"]))
+
+    total = 0
+    receipt_error = 0
+    account_minted = []
+    for (acc_eth_hex, receipt) in receipt_list:
+        confirm_transaction(client, receipt)
+        res = client.get_confirmed_transaction(receipt)
+        if res['result'] == None:
+            receipt_error = receipt_error + 1
+            print(res['result'])
+        else:
+            account_minted.append(acc_eth_hex)
+            total = total + 1
+
+    event_error = 0
+    nonce_error = 0
+    unknown_error = 0
+    too_small_error = 0
+
+    return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
+
+
+def create_accounts(args, type=transfer_type.erc20):
     instance = init_wallet()
-    instance.init()
 
     ether_accounts = []
     receipt_list = []
     pr_key_list = {}
-    for i in range(args.count):
+
+    args_count = args.count
+    if type == transfer_type.spl:
+        args_count = args_count * 2  # one transaction needs two accounts
+
+    for i in range(args_count):
         print("create ethereum acc ", i)
 
         pr_key = w3.eth.account.from_key(os.urandom(32))
@@ -483,7 +550,7 @@ def create_accounts(args):
         receipt_list.append((acc_eth.hex(), acc_sol, res['result']))
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
-        if i % 1000 == 0 or i == args.count-1:
+        if i % 1000 == 0 or i == args_count-1:
             for (acc_eth_hex, acc_sol,  receipt) in receipt_list:
                 confirm_transaction(client, receipt)
                 res = client.get_confirmed_transaction(receipt)
@@ -494,8 +561,13 @@ def create_accounts(args):
                     ether_accounts.append((acc_eth_hex, acc_sol))
             receipt_list = []
 
-    # erc20.mint()
-    (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_create(ether_accounts, instance.acc, 1000 * 10 ** 18)
+    if type==transfer_type.spl:
+        # spl_token.mint()
+        (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_spl(ether_accounts, instance)
+    else:
+        # erc20.mint()
+        (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_erc20(ether_accounts, instance.acc, 1000 * 10 ** 18)
+
 
     to_file = []
     for acc_eth_hex in account_minted:
@@ -514,10 +586,8 @@ def create_accounts(args):
         f.write(json.dumps(to_file))
 
 
-
 def create_transactions(args):
     instance = init_wallet()
-    instance.init()
 
     with open(contracts_file+args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
@@ -568,7 +638,8 @@ def create_transactions(args):
             payer_sol,
             bytes().fromhex(payer_eth),
             trx_data,
-            bytes.fromhex(payer_prkey)
+            bytes.fromhex(payer_prkey),
+            0
         )
         trx = {}
         trx['from_addr'] = from_addr.hex()
@@ -596,9 +667,8 @@ def get_block_hash():
 
 def send_transactions(args):
     instance = init_wallet()
-    instance.init()
-    senders =init_senders()
-    senders.init()
+    senders = init_senders()
+
     count_err = 0
 
     eth_trx = open(transactions_file+args.postfix, mode='r')
@@ -715,6 +785,52 @@ def verify_trx(args):
     print("receipt_error:", receipt_error)
     print("revert_error:", revert_error)
 
+
+def verify_trx_spl(args):
+    verify = open(verify_file+args.postfix, 'r')
+    total = 0
+    receipt_error = 0
+    nonce_error = 0
+    unknown_error = 0
+    revert_error = 0
+
+    for line in verify:
+        total = total + 1
+        if args.count != None:
+            if total > args.count:
+                break
+        success = False
+        (erc20_eth, payer_eth, receiver_eth, receipt) = json.loads(line)
+        res = client.get_confirmed_transaction(receipt)
+        if res['result'] == None:
+            receipt_error = receipt_error + 1
+            print(success)
+        else:
+            if res['result']['meta']['err'] == None:
+                if found_revert(res['result']):
+                    revert_error = revert_error + 1
+                success = True
+            else:
+                print(res["result"])
+                found = False
+                for err in res['result']['meta']['err']['InstructionError']:
+                    if err == "InvalidArgument":
+                        found = True
+                        break
+                if found:
+                    nonce_error = nonce_error + 1
+                else:
+                    unknown_error = unknown_error + 1
+            print(success, res['result']['slot'])
+
+
+    print("\ntotal:", total)
+    print("nonce_error:", nonce_error)
+    print("unknown_error:", unknown_error)
+    print("receipt_error:", receipt_error)
+    print("revert_error:", revert_error)
+
+
 def create_senders(args):
     total = 0
     receipt_list = []
@@ -741,10 +857,64 @@ def create_senders(args):
 
     print ("\ntotal: ", total)
 
+
+def get_acc(accounts, ia):
+    try:
+        (payer_eth, payer_prkey, payer_sol) = next(ia)
+    except StopIteration as err:
+        ia = iter(accounts)
+        (payer_eth, payer_prkey, payer_sol) = next(ia)
+    return (payer_eth, payer_prkey, payer_sol)
+
+def create_transactions_spl(args):
+    # instance = init_wallet()
+
+    with open(accounts_file+args.postfix, mode='r') as f:
+        accounts = json.loads(f.read())
+    transactions = open(transactions_file+args.postfix, mode='w')
+    transactions = open(transactions_file+args.postfix, mode='a')
+
+    total = 0
+    if len(accounts) == 0:
+        print ("accounts not found" )
+        exit(1)
+
+    if len(accounts) == 1:
+        print ("accounts count too small" )
+        exit(1)
+
+    ia = iter(accounts)
+
+    while total < args.count:
+        (payer_eth, payer_prkey, payer_sol) = get_acc(accounts, ia)
+        (receiver_eth, _, receiver_sol) = get_acc(accounts, ia)
+
+        total = total + 1
+        (from_addr, sign,  msg) = get_trx(
+            bytes().fromhex(receiver_eth),
+            payer_sol,
+            bytes().fromhex(payer_eth),
+            "",
+            bytes.fromhex(payer_prkey),
+            transfer_sum*10**9
+        )
+        trx = {}
+        trx['from_addr'] = from_addr.hex()
+        trx['sign'] = sign.hex()
+        trx['msg']  = msg.hex()
+        trx['erc20_sol'] = receiver_sol
+        trx['erc20_eth'] = receiver_eth
+        trx['erc20_code'] = ""
+        trx['payer_sol'] = payer_sol
+        trx['payer_eth'] = payer_eth
+        trx['receiver_eth'] = receiver_eth
+
+        transactions.write(json.dumps(trx)+"\n")
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)', default=trx_cnt)
 parser.add_argument('--step', metavar="step of the test", type=str,  help='for ERC20.transfer: deploy, create_senders, create_acc, create_trx, send_trx, '
-                                                                           'veryfy_trx\n for spl-token transfer: create_senders,  ')
+                                                                           'veryfy_trx\n for spl-token transfer: create_senders, create_acc_spl, create_trx_spl,'
+                                                                          ' verify_trx_spl')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
 
 args = parser.parse_args()
@@ -753,13 +923,19 @@ if args.step == "deploy":
     deploy_contracts(args)
 elif args.step == "create_acc":
     create_accounts(args)
+elif args.step == "create_acc_spl":
+    create_accounts(args, transfer_type.spl)
 elif args.step == "create_trx":
     create_transactions(args)
+elif args.step == "create_trx_spl":
+    create_transactions_spl(args)
 elif args.step == "send_trx":
     send_transactions(args)
 elif args.step == "create_senders":
     create_senders(args)
 elif args.step == "verify_trx":
     verify_trx(args)
+elif args.step == "verify_trx_spl":
+    verify_trx_spl(args)
 
 

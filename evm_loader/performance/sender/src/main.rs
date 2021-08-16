@@ -254,28 +254,34 @@ fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey) -> Instruction {
     let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
 
     let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
-    let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
     let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
     let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
     let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
     let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::token::token_mint::id());
     let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::token::token_mint::id());
 
+    let mut acc_meta = vec![
+        AccountMeta::new(contract, false),
+        AccountMeta::new(contract_token, false),
+        // AccountMeta::new(contract_code, false),
+        AccountMeta::new(caller, false),
+        AccountMeta::new(caller_token, false),
+        AccountMeta::new_readonly(sysinstruct, false),
+        AccountMeta::new_readonly(*evm_loader, false),
+        AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(sysvarclock, false),
+    ];
+
+    if (trx.erc20_code != ""){
+        let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
+        acc_meta.insert(2, AccountMeta::new(contract_code, false));
+    }
+
     let instruction_05 = Instruction::new_with_bytes(
         *evm_loader,
         &data_05,
-        vec![
-            AccountMeta::new(contract, false),
-            AccountMeta::new(contract_token, false),
-            AccountMeta::new(contract_code, false),
-            AccountMeta::new(caller, false),
-            AccountMeta::new(caller_token, false),
-            AccountMeta::new_readonly(sysinstruct, false),
-            AccountMeta::new_readonly(*evm_loader, false),
-            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(sysvarclock, false),
-        ]);
+        acc_meta);
 
     instruction_05
 }
