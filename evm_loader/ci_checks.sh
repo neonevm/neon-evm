@@ -11,7 +11,7 @@ export NON_ERR_INFO=$(print_non_err_info | wc -l)
 if (("NON_ERR_INFO" > 0)); then
   print_non_err_info>&2
   echo "Please, use macros Err! and E! to add error info!">&2
-  exit "NON_ERR_INFO"
+  exit "$NON_ERR_INFO"
 fi
 
 echo "CI checks success"
