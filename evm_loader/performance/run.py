@@ -482,6 +482,9 @@ def mint_erc20(accounts, acc, sum):
 
 def mint_spl(accounts, instance):
     receipt_list = []
+    total = 0
+    receipt_error = 0
+    account_minted = []
     for (acc_eth_hex, acc_sol) in accounts:
         dest = get_associated_token_address(PublicKey(acc_sol), ETH_TOKEN_MINT_ID)
         print("mint: ", dest)
@@ -505,18 +508,18 @@ def mint_spl(accounts, instance):
                                                   preflight_commitment="confirmed"))
         receipt_list.append((acc_eth_hex, res["result"]))
 
-    total = 0
-    receipt_error = 0
-    account_minted = []
-    for (acc_eth_hex, receipt) in receipt_list:
-        confirm_transaction(client, receipt)
-        res = client.get_confirmed_transaction(receipt)
-        if res['result'] == None:
-            receipt_error = receipt_error + 1
-            print(res['result'])
-        else:
-            account_minted.append(acc_eth_hex)
-            total = total + 1
+        if total % 1000 == 0 or total == len(accounts) - 1:
+            for (acc_eth_hex, receipt) in receipt_list:
+                confirm_transaction(client, receipt)
+                res = client.get_confirmed_transaction(receipt)
+                if res['result'] == None:
+                    receipt_error = receipt_error + 1
+                    print(res['result'])
+                else:
+                    account_minted.append(acc_eth_hex)
+            receipt_list = []
+        total = total + 1
+
 
     event_error = 0
     nonce_error = 0
