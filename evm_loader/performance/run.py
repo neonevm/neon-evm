@@ -333,7 +333,7 @@ def deploy_contracts(args):
 
         receipt_list.append((str(erc20_id), erc20_ether, str(erc20_code), res["result"]))
 
-        if i % 1000 == 0 or i == args.count-1:
+        if i % 500 == 0 or i == args.count-1:
             for (erc20_id, erc20_ether, erc20_code, receipt) in receipt_list:
                 total = total + 1
                 confirm_transaction(client, receipt)
@@ -466,7 +466,7 @@ def mint_erc20(accounts, acc, sum):
 
         receipt_list.append(mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
 
-        if total % 1000 == 0 or total == args.count - 1:
+        if total % 500 == 0 or total == args.count - 1:
             (account_minted_, event_error_, receipt_error_, nonce_error_, unknown_error_, too_small_error_)  = mint_erc20_confirm(receipt_list, sum)
             account_minted = account_minted + account_minted_
             event_error = event_error + event_error_
@@ -553,7 +553,7 @@ def create_accounts(args, type=transfer_type.erc20):
         receipt_list.append((acc_eth.hex(), acc_sol, res['result']))
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
-        if i % 1000 == 0 or i == args_count-1:
+        if i % 500 == 0 or i == args_count-1:
             for (acc_eth_hex, acc_sol,  receipt) in receipt_list:
                 confirm_transaction(client, receipt)
                 res = client.get_confirmed_transaction(receipt)
@@ -848,7 +848,7 @@ def create_senders(args):
         tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
         receipt_list.append((tx['result'], acc.secret_key(), acc.public_key()) )
 
-        if total % 1000 == 0 or total == args.count-1:
+        if total % 500 == 0 or total == args.count-1:
             for (receipt, pr_key, pub_key ) in receipt_list:
                 confirm_transaction(client, receipt)
                 if getBalance(pub_key) == 0:
