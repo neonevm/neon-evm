@@ -11,6 +11,7 @@ use crate::{
     },
     Transport,
 };
+use ethabi::token::Token;
 use std::{collections::HashMap, hash::Hash, time};
 
 pub mod deploy;
@@ -328,14 +329,21 @@ mod contract_signing {
             key: impl signing::Key,
         ) -> crate::Result<TransactionReceipt> {
             let poll_interval = time::Duration::from_secs(1);
+            let tokens = params.into_tokens();
 
             let fn_data = self
                 .abi
                 .function(func)
-                .and_then(|function| function.encode_input(&params.into_tokens()))
+                .and_then(|function| function.encode_input(&tokens))
                 // TODO [ToDr] SendTransactionWithConfirmation should support custom error type (so that we can return
                 // `contract::Error` instead of more generic `Error`.
-                .map_err(|err| crate::error::Error::Decoder(format!("{:?}", err)))?;
+                .map_err(|err| {
+                    log::error!(
+                        "encode_input: {}",
+                        format_signed_call_with_confirmations_error(func, &tokens)
+                    );
+                    crate::error::Error::Decoder(format!("{:?}", err))
+                })?;
             let accounts = Accounts::new(self.eth.transport().clone());
             let mut tx = TransactionParameters {
                 nonce: options.nonce,
@@ -350,7 +358,15 @@ mod contract_signing {
             if let Some(value) = options.value {
                 tx.value = value;
             }
-            let signed = accounts.sign_transaction(tx, key).await?;
+            let signed = accounts.sign_transaction(tx.clone(), key).await.map_err(|e| {
+                log::error!(
+                    "sign_transaction: {} {:?}",
+                    format_signed_call_with_confirmations_error(func, &tokens),
+                    tx
+                );
+                e
+            })?;
+
             confirm::send_raw_transaction_with_confirmation(
                 self.eth.transport().clone(),
                 signed.raw_transaction,
@@ -358,8 +374,20 @@ mod contract_signing {
                 confirmations,
             )
             .await
+            .map_err(|e| {
+                log::error!(
+                    "send_raw_transaction_with_confirmation: {} {:?}",
+                    format_signed_call_with_confirmations_error(func, &tokens),
+                    tx
+                );
+                e
+            })
         }
     }
+}
+
+fn format_signed_call_with_confirmations_error(func: &str, tokens: &[Token]) -> String {
+    format!("func: {}, params: {:?}", func, tokens)
 }
 
 #[cfg(test)]

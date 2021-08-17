@@ -79,12 +79,21 @@ async fn send_transaction_with_confirmation_<T: Transport>(
         let confirmation_check = || transaction_receipt_block_number_check(&eth, hash);
         let eth_filter = EthFilter::new(transport.clone());
         let eth = eth.clone();
-        wait_for_confirmations(eth, eth_filter, poll_interval, confirmations, confirmation_check).await?;
+        wait_for_confirmations(eth, eth_filter, poll_interval, confirmations, confirmation_check)
+            .await
+            .map_err(|e| {
+                log::error!("wait_for_confirmations");
+                e
+            })?;
     }
     // TODO #397: We should remove this `expect`. No matter what happens inside the node, this shouldn't be a panic.
     let receipt = eth
         .transaction_receipt(hash)
-        .await?
+        .await
+        .map_err(|e| {
+            log::error!("transaction_receipt(hash) {}", hash);
+            e
+        })?
         .expect("receipt can't be null after wait for confirmations; qed");
     Ok(receipt)
 }
@@ -113,8 +122,20 @@ pub async fn send_raw_transaction_with_confirmation<T>(
 where
     T: Transport,
 {
-    let hash = Eth::new(&transport).send_raw_transaction(tx).await?;
-    send_transaction_with_confirmation_(hash, transport, poll_interval, confirmations).await
+    let hash = Eth::new(&transport)
+        .send_raw_transaction(tx.clone())
+        .await
+        .map_err(|e| {
+            log::error!("send_raw_transaction {:?}", tx);
+            e
+        })?;
+    let receipt = send_transaction_with_confirmation_(hash, transport, poll_interval, confirmations)
+        .await
+        .map_err(|e| {
+            log::error!("send_transaction_with_confirmation_(hash) {}", hash);
+            e
+        })?;
+    Ok(receipt)
 }
 
 #[cfg(test)]

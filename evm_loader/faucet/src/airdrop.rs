@@ -1,6 +1,6 @@
 //! Airdrop implementation: calls to the Ethereum network.
 
-use color_eyre::Result;
+use color_eyre::{eyre::WrapErr, Result};
 use tracing::info;
 
 use secp256k1::SecretKey;
@@ -40,7 +40,8 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
         recipient,
         amount,
     )
-    .await?;
+    .await
+    .wrap_err("Transfer A")?;
 
     transfer(
         web3.eth(),
@@ -50,7 +51,8 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
         recipient,
         amount,
     )
-    .await?;
+    .await
+    .wrap_err("Transfer B")?;
 
     Ok(())
 }
@@ -65,7 +67,8 @@ async fn transfer<T: Transport>(
     amount: U256,
 ) -> Result<()> {
     info!("Transfer {} -> token {}", amount, token_name);
-    let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))?;
+    let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))
+        .wrap_err("Contract")?;
 
     info!(
         "Sending transaction for transfer of token {}...",
@@ -79,7 +82,8 @@ async fn transfer<T: Transport>(
             0, // confirmations
             admin_key,
         )
-        .await?;
+        .await
+        .wrap_err("signed_call_with_confirmations")?;
 
     info!("OK");
     Ok(())
