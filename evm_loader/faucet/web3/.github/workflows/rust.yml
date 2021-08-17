@@ -1,0 +1,172 @@
+name:                              Compilation and Testing Suite
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+    paths-ignore:
+      - 'README.md'
+jobs:
+
+  check-test-build:
+    name:                          Check, test and build
+    runs-on:                       ubuntu-latest
+    env:
+      RUST_BACKTRACE:              full
+    steps:
+      - name:                      Cancel Previous Runs
+        uses:                      styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token:            ${{ github.token }}
+      - name:                      Checkout sources & submodules
+        uses:                      actions/checkout@master
+        with:
+          fetch-depth:             5
+          submodules:              recursive
+## Check Stage
+      - name:                      Checking rust-stable
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --all  --verbose
+
+## Test Stage
+      - name:                      Testing rust-stable
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 test
+          toolchain:               stable
+          args:                    --all  --verbose
+      - name:                      Testing rust-stable with arbitrary_precision
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 test
+          toolchain:               stable
+          args:                    --all  --verbose --features arbitrary_precision
+
+## Build Stage
+      - name:                      Building rust-stable
+        uses:                      actions-rs/cargo@master
+        if:                        github.ref == 'refs/heads/master'
+        with:
+          command:                 build
+          toolchain:               stable
+          args:                    --all --verbose
+
+  check-wasm:
+    name:                          Check WASM
+    runs-on:                       ubuntu-latest
+    env:
+      RUST_BACKTRACE:              full
+    steps:
+      - name:                      Cancel Previous Runs
+        uses:                      styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token:            ${{ github.token }}
+      - name:                      Checkout sources & submodules
+        uses:                      actions/checkout@master
+        with:
+          fetch-depth:             5
+          submodules:              recursive
+      - name:                      Add WASM Utilities
+        run:                       rustup target add wasm32-unknown-unknown --toolchain stable && cargo install wasm-bindgen-cli
+## Check Stage
+      - name:                      Checking wasm32
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --target wasm32-unknown-unknown --no-default-features --features eip-1193
+      - name:                      Checking wasm32 with http
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --target wasm32-unknown-unknown --no-default-features --features http,wasm
+      - name:                      Testing wasm32
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                test
+          toolchain:              stable
+          args:                   --target wasm32-unknown-unknown --no-default-features --features eip-1193 --tests
+
+  check-transports:
+    name:                          Check Transports
+    runs-on:                       ubuntu-latest
+    env:
+      RUST_BACKTRACE:              full
+    steps:
+      - name:                      Cancel Previous Runs
+        uses:                      styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token:            ${{ github.token }}
+      - name:                      Checkout sources & submodules
+        uses:                      actions/checkout@master
+        with:
+          fetch-depth:             5
+          submodules:              recursive
+## Check Stage
+      - name:                      Checking without transports
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features
+      - name:                      Checking http
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features http
+      - name:                      Checking http-tls
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features http-tls
+      - name:                      Checking http-native-tls
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features http-native-tls
+      - name:                      Checking http-rustls-tls
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features http-rustls-tls
+      - name:                      Checking ws-tokio
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features ws-tokio
+      - name:                      Checking ws-tls-tokio
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features ws-tls-tokio
+      - name:                      Checking ws-async-std
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features ws-async-std
+      - name:                      Checking ws-tls-async-std
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features ws-tls-async-std
+      - name:                      Checking ipc-tokio
+        uses:                      actions-rs/cargo@master
+        with:
+          command:                 check
+          toolchain:               stable
+          args:                    --no-default-features --features ipc-tokio
