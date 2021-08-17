@@ -9,18 +9,18 @@ mod cli;
 mod config;
 mod server;
 
-use color_eyre::Report;
+use color_eyre::Result;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
-async fn main() -> Result<(), Report> {
+async fn main() -> Result<()> {
     setup()?;
     execute(cli::application()).await
 }
 
 /// Initializes the logger and error handler.
-fn setup() -> Result<(), Report> {
+fn setup() -> Result<()> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
         std::env::set_var("RUST_LIB_BACKTRACE", "1")
     }
@@ -37,7 +37,7 @@ fn setup() -> Result<(), Report> {
 }
 
 /// Dispatches CLI commands.
-async fn execute(app: cli::Application) -> Result<(), Report> {
+async fn execute(app: cli::Application) -> Result<()> {
     match app.cmd {
         cli::Command::Run => {
             run(&app.config).await?;
@@ -49,7 +49,7 @@ async fn execute(app: cli::Application) -> Result<(), Report> {
 }
 
 /// Runs the server.
-async fn run(config_file: &std::path::Path) -> Result<(), Report> {
+async fn run(config_file: &std::path::Path) -> Result<()> {
     config::load(config_file)?;
     server::start(config::rpc_port()).await?;
     Ok(())

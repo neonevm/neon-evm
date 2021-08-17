@@ -2,13 +2,13 @@
 
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
-use color_eyre::Report;
+use color_eyre::Result;
 use tracing::{error, info};
 
 use crate::airdrop;
 
 /// Starts the server in listening mode.
-pub async fn start(rpc_port: u16) -> Result<(), Report> {
+pub async fn start(rpc_port: u16) -> Result<()> {
     HttpServer::new(|| App::new().route("/request_airdrop", post().to(handle_request_airdrop)))
         .bind(("localhost", rpc_port))?
         .run()

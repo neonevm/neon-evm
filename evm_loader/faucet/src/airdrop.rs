@@ -1,6 +1,6 @@
 //! Airdrop implementation: calls to the Ethereum network.
 
-use color_eyre::Report;
+use color_eyre::Result;
 use tracing::info;
 
 use secp256k1::SecretKey;
@@ -22,7 +22,7 @@ pub struct Airdrop {
 type Address = web3::types::Address;
 
 /// Processes the aridrop: sends needed transactions into Ethereum.
-pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
+pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
 
     let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
@@ -41,6 +41,7 @@ pub async fn process(airdrop: Airdrop) -> Result<(), Report> {
         amount,
     )
     .await?;
+
     transfer(
         web3.eth(),
         address_from_str(&config::token_b())?,
@@ -62,7 +63,7 @@ async fn transfer<T: Transport>(
     admin_key: impl Key,
     recipient: Address,
     amount: U256,
-) -> Result<(), Report> {
+) -> Result<()> {
     info!("Transfer {} -> token {}", amount, token_name);
     let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))?;
 
@@ -85,7 +86,7 @@ async fn transfer<T: Transport>(
 }
 
 /// Converts string representation of address to the H160 hash format.
-fn address_from_str(s: &str) -> Result<Address, Report> {
+fn address_from_str(s: &str) -> Result<Address> {
     use std::str::FromStr as _;
     let address = if !s.starts_with("0x") {
         Address::from_str(s)?
