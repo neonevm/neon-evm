@@ -422,7 +422,7 @@ class neon_cli:
         self.verbose_flags = verbose_flags
 
     def call(self, arguments):
-        cmd = 'neon-cli {} --url {} {}'.format(self.verbose_flags, solana_url, arguments)
+        cmd = 'neon-cli {} --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
