@@ -82,6 +82,7 @@ mod accounts_signing {
                 };
             }
             let from = key.address();
+            log::info!("Get transaction count, gas price and chain id from {}", from);
             let (nonce, gas_price, chain_id) = futures::future::try_join3(
                 maybe!(tx.nonce, self.web3().eth().transaction_count(from, None)),
                 maybe!(tx.gas_price, self.web3().eth().gas_price()),

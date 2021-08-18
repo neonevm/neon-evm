@@ -32,11 +32,13 @@ impl<T: Transport> Namespace<T> for Eth<T> {
 impl<T: Transport> Eth<T> {
     /// Get list of available accounts.
     pub fn accounts(&self) -> CallFuture<Vec<Address>, T::Out> {
+        log::info!("Executing eth_accounts...");
         CallFuture::new(self.transport.execute("eth_accounts", vec![]))
     }
 
     /// Get current block number
     pub fn block_number(&self) -> CallFuture<U64, T::Out> {
+        log::info!("Executing eth_blockNumber...");
         CallFuture::new(self.transport.execute("eth_blockNumber", vec![]))
     }
 
@@ -85,6 +87,7 @@ impl<T: Transport> Eth<T> {
 
     /// Get current recommended gas price
     pub fn gas_price(&self) -> CallFuture<U256, T::Out> {
+        log::info!("Executing eth_gasPrice...");
         CallFuture::new(self.transport.execute("eth_gasPrice", vec![]))
     }
 
@@ -170,6 +173,7 @@ impl<T: Transport> Eth<T> {
 
     /// Get chain id
     pub fn chain_id(&self) -> CallFuture<U256, T::Out> {
+        log::info!("Executing eth_chainId...");
         CallFuture::new(self.transport.execute("eth_chainId", vec![]))
     }
 
@@ -177,6 +181,7 @@ impl<T: Transport> Eth<T> {
     /// this will cause the popup that prompts the user to allow or deny access to their accounts
     /// to your app.
     pub fn request_accounts(&self) -> CallFuture<Vec<Address>, T::Out> {
+        log::info!("Executing eth_requestAccounts...");
         CallFuture::new(self.transport.execute("eth_requestAccounts", vec![]))
     }
 
@@ -194,6 +199,11 @@ impl<T: Transport> Eth<T> {
         let address = helpers::serialize(&address);
         let block = helpers::serialize(&block.unwrap_or(BlockNumber::Latest));
 
+        log::info!(
+            "Executing eth_getTransactionCount from address {} and block {}...",
+            address,
+            block
+        );
         CallFuture::new(self.transport.execute("eth_getTransactionCount", vec![address, block]))
     }
 
@@ -225,7 +235,7 @@ impl<T: Transport> Eth<T> {
     pub fn transaction_receipt(&self, hash: H256) -> CallFuture<Option<TransactionReceipt>, T::Out> {
         let hash = helpers::serialize(&hash);
 
-        log::info!("Executing eth_getTransactionReceipt...");
+        log::info!("Executing eth_getTransactionReceipt(hash) {}...", hash);
         CallFuture::new(self.transport.execute("eth_getTransactionReceipt", vec![hash]))
     }
 

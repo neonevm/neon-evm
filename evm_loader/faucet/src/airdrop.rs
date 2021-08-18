@@ -10,8 +10,6 @@ use web3::signing::Key;
 use web3::types::U256;
 use web3::Transport;
 
-use crate::config;
-
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
 pub struct Airdrop {
@@ -19,11 +17,10 @@ pub struct Airdrop {
     amount: u64,
 }
 
-type Address = web3::types::Address;
-
 /// Processes the aridrop: sends needed transactions into Ethereum.
 pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
+    use crate::config;
 
     let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
     let web3 = web3::Web3::new(http);
@@ -62,6 +59,8 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
 
     Ok(())
 }
+
+type Address = web3::types::Address;
 
 /// Creates and sends a transfer transaction.
 async fn transfer<T: Transport>(
