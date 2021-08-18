@@ -88,7 +88,11 @@ mod accounts_signing {
                 maybe!(tx.gas_price, self.web3().eth().gas_price()),
                 maybe!(tx.chain_id.map(U256::from), self.web3().eth().chain_id()),
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                log::error!("Failed getting transaction count, gas price or chain id");
+                e
+            })?;
             let chain_id = chain_id.as_u64();
             let tx = Transaction {
                 to: tx.to,
