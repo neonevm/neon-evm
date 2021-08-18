@@ -47,29 +47,34 @@ impl<T: Transport> Eth<T> {
         let req = helpers::serialize(&req);
         let block = helpers::serialize(&block.unwrap_or_else(|| BlockNumber::Latest.into()));
 
+        log::info!("Executing eth_call...");
         CallFuture::new(self.transport.execute("eth_call", vec![req, block]))
     }
 
     /// Get coinbase address
     pub fn coinbase(&self) -> CallFuture<Address, T::Out> {
+        log::info!("Executing eth_coinbase...");
         CallFuture::new(self.transport.execute("eth_coinbase", vec![]))
     }
 
     /// Compile LLL
     pub fn compile_lll(&self, code: String) -> CallFuture<Bytes, T::Out> {
         let code = helpers::serialize(&code);
+        log::info!("Executing eth_compileLLL...");
         CallFuture::new(self.transport.execute("eth_compileLLL", vec![code]))
     }
 
     /// Compile Solidity
     pub fn compile_solidity(&self, code: String) -> CallFuture<Bytes, T::Out> {
         let code = helpers::serialize(&code);
+        log::info!("Executing eth_compileSolidity...");
         CallFuture::new(self.transport.execute("eth_compileSolidity", vec![code]))
     }
 
     /// Compile Serpent
     pub fn compile_serpent(&self, code: String) -> CallFuture<Bytes, T::Out> {
         let code = helpers::serialize(&code);
+        log::info!("Executing eth_compileSerpent...");
         CallFuture::new(self.transport.execute("eth_compileSerpent", vec![code]))
     }
 
@@ -82,6 +87,7 @@ impl<T: Transport> Eth<T> {
             None => vec![req],
         };
 
+        log::info!("Executing eth_estimateGas...");
         CallFuture::new(self.transport.execute("eth_estimateGas", args))
     }
 
@@ -96,12 +102,14 @@ impl<T: Transport> Eth<T> {
         let address = helpers::serialize(&address);
         let block = helpers::serialize(&block.unwrap_or(BlockNumber::Latest));
 
+        log::info!("Executing eth_getBalance...");
         CallFuture::new(self.transport.execute("eth_getBalance", vec![address, block]))
     }
 
     /// Get all logs matching a given filter object
     pub fn logs(&self, filter: Filter) -> CallFuture<Vec<Log>, T::Out> {
         let filter = helpers::serialize(&filter);
+        log::info!("Executing eth_getLogs...");
         CallFuture::new(self.transport.execute("eth_getLogs", vec![filter]))
     }
 
@@ -112,10 +120,12 @@ impl<T: Transport> Eth<T> {
         let result = match block {
             BlockId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getBlockByHash...");
                 self.transport.execute("eth_getBlockByHash", vec![hash, include_txs])
             }
             BlockId::Number(num) => {
                 let num = helpers::serialize(&num);
+                log::info!("Executing eth_getBlockByNumber...");
                 self.transport.execute("eth_getBlockByNumber", vec![num, include_txs])
             }
         };
@@ -130,10 +140,12 @@ impl<T: Transport> Eth<T> {
         let result = match block {
             BlockId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getBlockByHash...");
                 self.transport.execute("eth_getBlockByHash", vec![hash, include_txs])
             }
             BlockId::Number(num) => {
                 let num = helpers::serialize(&num);
+                log::info!("Executing eth_getBlockByNumber...");
                 self.transport.execute("eth_getBlockByNumber", vec![num, include_txs])
             }
         };
@@ -146,10 +158,12 @@ impl<T: Transport> Eth<T> {
         let result = match block {
             BlockId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getBlockTransactionCountByHash...");
                 self.transport.execute("eth_getBlockTransactionCountByHash", vec![hash])
             }
             BlockId::Number(num) => {
                 let num = helpers::serialize(&num);
+                log::info!("Executing eth_getBlockTransactionCountByNumber...");
                 self.transport
                     .execute("eth_getBlockTransactionCountByNumber", vec![num])
             }
@@ -163,11 +177,13 @@ impl<T: Transport> Eth<T> {
         let address = helpers::serialize(&address);
         let block = helpers::serialize(&block.unwrap_or(BlockNumber::Latest));
 
+        log::info!("Executing eth_getCode...");
         CallFuture::new(self.transport.execute("eth_getCode", vec![address, block]))
     }
 
     /// Get supported compilers
     pub fn compilers(&self) -> CallFuture<Vec<String>, T::Out> {
+        log::info!("Executing eth_getCompilers...");
         CallFuture::new(self.transport.execute("eth_getCompilers", vec![]))
     }
 
@@ -191,6 +207,7 @@ impl<T: Transport> Eth<T> {
         let idx = helpers::serialize(&idx);
         let block = helpers::serialize(&block.unwrap_or(BlockNumber::Latest));
 
+        log::info!("Executing eth_getStorageAt...");
         CallFuture::new(self.transport.execute("eth_getStorageAt", vec![address, idx, block]))
     }
 
@@ -212,17 +229,20 @@ impl<T: Transport> Eth<T> {
         let result = match id {
             TransactionId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getTransactionByHash...");
                 self.transport.execute("eth_getTransactionByHash", vec![hash])
             }
             TransactionId::Block(BlockId::Hash(hash), index) => {
                 let hash = helpers::serialize(&hash);
                 let idx = helpers::serialize(&index);
+                log::info!("Executing eth_getTransactionByBlockHashAndIndex...");
                 self.transport
                     .execute("eth_getTransactionByBlockHashAndIndex", vec![hash, idx])
             }
             TransactionId::Block(BlockId::Number(number), index) => {
                 let number = helpers::serialize(&number);
                 let idx = helpers::serialize(&index);
+                log::info!("Executing eth_getTransactionByBlockNumberAndIndex...");
                 self.transport
                     .execute("eth_getTransactionByBlockNumberAndIndex", vec![number, idx])
             }
@@ -258,11 +278,13 @@ impl<T: Transport> Eth<T> {
         let result = match block {
             BlockId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getUncleByBlockHashAndIndex...");
                 self.transport
                     .execute("eth_getUncleByBlockHashAndIndex", vec![hash, index])
             }
             BlockId::Number(num) => {
                 let num = helpers::serialize(&num);
+                log::info!("Executing eth_getUncleByBlockNumberAndIndex...");
                 self.transport
                     .execute("eth_getUncleByBlockNumberAndIndex", vec![num, index])
             }
@@ -276,10 +298,12 @@ impl<T: Transport> Eth<T> {
         let result = match block {
             BlockId::Hash(hash) => {
                 let hash = helpers::serialize(&hash);
+                log::info!("Executing eth_getUncleCountByBlockHash...");
                 self.transport.execute("eth_getUncleCountByBlockHash", vec![hash])
             }
             BlockId::Number(num) => {
                 let num = helpers::serialize(&num);
+                log::info!("Executing eth_getUncleCountByBlockNumber...");
                 self.transport.execute("eth_getUncleCountByBlockNumber", vec![num])
             }
         };
@@ -289,43 +313,51 @@ impl<T: Transport> Eth<T> {
 
     /// Get work package
     pub fn work(&self) -> CallFuture<Work, T::Out> {
+        log::info!("Executing eth_getWork...");
         CallFuture::new(self.transport.execute("eth_getWork", vec![]))
     }
 
     /// Get hash rate
     pub fn hashrate(&self) -> CallFuture<U256, T::Out> {
+        log::info!("Executing eth_hashrate...");
         CallFuture::new(self.transport.execute("eth_hashrate", vec![]))
     }
 
     /// Get mining status
     pub fn mining(&self) -> CallFuture<bool, T::Out> {
+        log::info!("Executing eth_mining...");
         CallFuture::new(self.transport.execute("eth_mining", vec![]))
     }
 
     /// Start new block filter
     pub fn new_block_filter(&self) -> CallFuture<U256, T::Out> {
+        log::info!("Executing eth_newBlockFilter...");
         CallFuture::new(self.transport.execute("eth_newBlockFilter", vec![]))
     }
 
     /// Start new pending transaction filter
     pub fn new_pending_transaction_filter(&self) -> CallFuture<U256, T::Out> {
+        log::info!("Executing eth_newPendingTransactionFilter...");
         CallFuture::new(self.transport.execute("eth_newPendingTransactionFilter", vec![]))
     }
 
     /// Start new pending transaction filter
     pub fn protocol_version(&self) -> CallFuture<String, T::Out> {
+        log::info!("Executing eth_protocolVersion...");
         CallFuture::new(self.transport.execute("eth_protocolVersion", vec![]))
     }
 
     /// Sends a rlp-encoded signed transaction
     pub fn send_raw_transaction(&self, rlp: Bytes) -> CallFuture<H256, T::Out> {
         let rlp = helpers::serialize(&rlp);
+        log::info!("Executing eth_sendRawTransaction...");
         CallFuture::new(self.transport.execute("eth_sendRawTransaction", vec![rlp]))
     }
 
     /// Sends a transaction transaction
     pub fn send_transaction(&self, tx: TransactionRequest) -> CallFuture<H256, T::Out> {
         let tx = helpers::serialize(&tx);
+        log::info!("Executing eth_sendTransaction...");
         CallFuture::new(self.transport.execute("eth_sendTransaction", vec![tx]))
     }
 
@@ -333,6 +365,7 @@ impl<T: Transport> Eth<T> {
     pub fn sign(&self, address: Address, data: Bytes) -> CallFuture<H520, T::Out> {
         let address = helpers::serialize(&address);
         let data = helpers::serialize(&data);
+        log::info!("Executing eth_sign...");
         CallFuture::new(self.transport.execute("eth_sign", vec![address, data]))
     }
 
@@ -340,6 +373,7 @@ impl<T: Transport> Eth<T> {
     pub fn submit_hashrate(&self, rate: U256, id: H256) -> CallFuture<bool, T::Out> {
         let rate = helpers::serialize(&rate);
         let id = helpers::serialize(&id);
+        log::info!("Executing eth_submitHashrate...");
         CallFuture::new(self.transport.execute("eth_submitHashrate", vec![rate, id]))
     }
 
@@ -348,6 +382,7 @@ impl<T: Transport> Eth<T> {
         let nonce = helpers::serialize(&nonce);
         let pow_hash = helpers::serialize(&pow_hash);
         let mix_hash = helpers::serialize(&mix_hash);
+        log::info!("Executing eth_submitWork...");
         CallFuture::new(
             self.transport
                 .execute("eth_submitWork", vec![nonce, pow_hash, mix_hash]),
@@ -356,6 +391,7 @@ impl<T: Transport> Eth<T> {
 
     /// Get syncing status
     pub fn syncing(&self) -> CallFuture<SyncState, T::Out> {
+        log::info!("Executing eth_syncing...");
         CallFuture::new(self.transport.execute("eth_syncing", vec![]))
     }
 }
