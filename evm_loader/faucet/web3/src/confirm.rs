@@ -79,6 +79,7 @@ async fn send_transaction_with_confirmation_<T: Transport>(
         let confirmation_check = || transaction_receipt_block_number_check(&eth, hash);
         let eth_filter = EthFilter::new(transport.clone());
         let eth = eth.clone();
+        log::info!("Waiting for {} confirmations...", confirmations);
         wait_for_confirmations(eth, eth_filter, poll_interval, confirmations, confirmation_check)
             .await
             .map_err(|e| {

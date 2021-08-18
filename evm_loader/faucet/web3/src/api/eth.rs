@@ -225,6 +225,7 @@ impl<T: Transport> Eth<T> {
     pub fn transaction_receipt(&self, hash: H256) -> CallFuture<Option<TransactionReceipt>, T::Out> {
         let hash = helpers::serialize(&hash);
 
+        log::info!("Executing eth_getTransactionReceipt...");
         CallFuture::new(self.transport.execute("eth_getTransactionReceipt", vec![hash]))
     }
 
