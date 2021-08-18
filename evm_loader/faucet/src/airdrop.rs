@@ -1,7 +1,7 @@
 //! Airdrop implementation: calls to the Ethereum network.
 
-use color_eyre::{eyre::WrapErr, Result};
-use tracing::info;
+use color_eyre::Result;
+use tracing::{error, info};
 
 use secp256k1::SecretKey;
 use web3::api::Eth;
@@ -41,7 +41,10 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
         amount,
     )
     .await
-    .wrap_err("Transfer A")?;
+    .map_err(|e| {
+        error!("Transfer A");
+        e
+    })?;
 
     transfer(
         web3.eth(),
@@ -52,7 +55,10 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
         amount,
     )
     .await
-    .wrap_err("Transfer B")?;
+    .map_err(|e| {
+        error!("Transfer B");
+        e
+    })?;
 
     Ok(())
 }
@@ -62,13 +68,16 @@ async fn transfer<T: Transport>(
     eth: Eth<T>,
     token: Address,
     token_name: &str,
-    admin_key: impl Key,
+    admin_key: impl Key + std::fmt::Debug,
     recipient: Address,
     amount: U256,
 ) -> Result<()> {
     info!("Transfer {} -> token {}", amount, token_name);
     let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))
-        .wrap_err("Contract")?;
+        .map_err(|e| {
+            error!("Contract");
+            e
+        })?;
 
     info!(
         "Sending transaction for transfer of token {}...",
@@ -83,7 +92,10 @@ async fn transfer<T: Transport>(
             admin_key,
         )
         .await
-        .wrap_err("signed_call_with_confirmations")?;
+        .map_err(|e| {
+            error!("signed_call_with_confirmations");
+            e
+        })?;
 
     info!("OK");
     Ok(())

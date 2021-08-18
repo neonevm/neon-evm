@@ -66,7 +66,7 @@ mod accounts_signing {
         /// parameters required for signing `nonce`, `gas_price` and `chain_id`. Note
         /// that if all transaction parameters were provided, this future will resolve
         /// immediately.
-        pub async fn sign_transaction<K: signing::Key>(
+        pub async fn sign_transaction<K: signing::Key + std::fmt::Debug>(
             &self,
             tx: TransactionParameters,
             key: K,
@@ -97,6 +97,7 @@ mod accounts_signing {
                 value: tx.value,
                 data: tx.data.0,
             };
+            log::info!("Sign transaction {:?} with key {:?} and chain_id {}", tx, key, chain_id);
             let signed = tx.sign(key, chain_id);
             Ok(signed)
         }
@@ -165,6 +166,7 @@ mod accounts_signing {
         }
     }
     /// A transaction used for RLP encoding, hashing and signing.
+    #[derive(Debug)]
     pub struct Transaction {
         pub to: Option<Address>,
         pub nonce: U256,

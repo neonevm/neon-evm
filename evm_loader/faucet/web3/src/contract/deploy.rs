@@ -120,7 +120,7 @@ impl<T: Transport> Builder<T> {
     where
         P: Tokenize,
         V: AsRef<str>,
-        K: Key,
+        K: Key + std::fmt::Debug,
     {
         let transport = self.eth.transport().clone();
         let poll_interval = self.poll_interval;

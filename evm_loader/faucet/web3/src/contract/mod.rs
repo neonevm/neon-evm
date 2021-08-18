@@ -326,7 +326,7 @@ mod contract_signing {
             params: impl Tokenize,
             options: Options,
             confirmations: usize,
-            key: impl signing::Key,
+            key: impl signing::Key + std::fmt::Debug,
         ) -> crate::Result<TransactionReceipt> {
             let poll_interval = time::Duration::from_secs(1);
             let tokens = params.into_tokens();
