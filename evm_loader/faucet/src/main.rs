@@ -39,10 +39,12 @@ fn setup() -> Result<()> {
 /// Dispatches CLI commands.
 async fn execute(app: cli::Application) -> Result<()> {
     match app.cmd {
-        cli::Command::Run { mut workers } => {
-            if workers.to_string() == config::AUTO {
-                workers = num_cpus::get();
-            }
+        cli::Command::Run { workers } => {
+            let workers = if workers == config::AUTO {
+                num_cpus::get()
+            } else {
+                workers.parse::<usize>()?
+            };
             run(&app.config, workers).await?;
         }
     }

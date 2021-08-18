@@ -27,9 +27,9 @@ pub enum Command {
         #[structopt(
             long,
             default_value = &config::AUTO,
-            help = "Number of listening workers (derived from CPU capabilities if omitted)"
+            help = "Number of listening workers"
         )]
-        workers: usize,
+        workers: String,
     },
 }
 
