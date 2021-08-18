@@ -77,7 +77,7 @@ async fn transfer<T: Transport>(
     );
     let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))
         .map_err(|e| {
-            error!("Failed reading contract ABI: {}", e);
+            error!("Failed reading UniswapV2ERC20.abi: {}", e);
             e
         })?;
 

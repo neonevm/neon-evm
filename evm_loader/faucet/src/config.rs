@@ -16,6 +16,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub const DEFAULT_CONFIG: &str = "faucet.conf";
+pub const AUTO: &str = "0";
 
 /// Loads the config from a file.
 pub fn load(filename: &Path) -> Result<()> {

@@ -39,8 +39,11 @@ fn setup() -> Result<()> {
 /// Dispatches CLI commands.
 async fn execute(app: cli::Application) -> Result<()> {
     match app.cmd {
-        cli::Command::Run => {
-            run(&app.config).await?;
+        cli::Command::Run { mut workers } => {
+            if workers.to_string() == config::AUTO {
+                workers = num_cpus::get();
+            }
+            run(&app.config, workers).await?;
         }
     }
 
@@ -49,8 +52,8 @@ async fn execute(app: cli::Application) -> Result<()> {
 }
 
 /// Runs the server.
-async fn run(config_file: &std::path::Path) -> Result<()> {
+async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
     config::load(config_file)?;
-    server::start(config::rpc_port()).await?;
+    server::start(config::rpc_port(), workers).await?;
     Ok(())
 }

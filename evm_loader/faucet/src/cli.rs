@@ -23,7 +23,14 @@ pub struct Application {
 #[derive(StructOpt)]
 pub enum Command {
     #[structopt(about = "Starts listening for requests")]
-    Run,
+    Run {
+        #[structopt(
+            long,
+            default_value = &config::AUTO,
+            help = "Number of listening workers (derived from CPU capabilities if omitted)"
+        )]
+        workers: usize,
+    },
 }
 
 /// Constructs instance of Application.
