@@ -83,7 +83,7 @@ async fn send_transaction_with_confirmation_<T: Transport>(
         wait_for_confirmations(eth, eth_filter, poll_interval, confirmations, confirmation_check)
             .await
             .map_err(|e| {
-                log::error!("wait_for_confirmations");
+                log::error!("Failed wait_for_confirmations: {}", e);
                 e
             })?;
     }
@@ -92,7 +92,7 @@ async fn send_transaction_with_confirmation_<T: Transport>(
         .transaction_receipt(hash)
         .await
         .map_err(|e| {
-            log::error!("transaction_receipt(hash) {}", hash);
+            log::error!("Failed transaction_receipt(hash) {}: {}", hash, e);
             e
         })?
         .expect("receipt can't be null after wait for confirmations; qed");
@@ -127,13 +127,13 @@ where
         .send_raw_transaction(tx.clone())
         .await
         .map_err(|e| {
-            log::error!("send_raw_transaction {:?}", tx);
+            log::error!("Failed send_raw_transaction {:?}: {}", tx, e);
             e
         })?;
     let receipt = send_transaction_with_confirmation_(hash, transport, poll_interval, confirmations)
         .await
         .map_err(|e| {
-            log::error!("send_transaction_with_confirmation_(hash) {}", hash);
+            log::error!("Failed send_transaction_with_confirmation_(hash) {}: {}", hash, e);
             e
         })?;
     Ok(receipt)

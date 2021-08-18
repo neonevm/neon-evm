@@ -39,7 +39,7 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
     )
     .await
     .map_err(|e| {
-        error!("Transfer A");
+        error!("Failed transfer of token A: {}", e);
         e
     })?;
 
@@ -53,7 +53,7 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
     )
     .await
     .map_err(|e| {
-        error!("Transfer B");
+        error!("Failed transfer of token B: {}", e);
         e
     })?;
 
@@ -71,10 +71,13 @@ async fn transfer<T: Transport>(
     recipient: Address,
     amount: U256,
 ) -> Result<()> {
-    info!("Transfer {} -> token {}", amount, token_name);
+    info!(
+        "Transfer {} of token {} -> {}",
+        amount, token_name, recipient
+    );
     let token = Contract::from_json(eth, token, include_bytes!("../abi/UniswapV2ERC20.abi"))
         .map_err(|e| {
-            error!("Contract");
+            error!("Failed reading contract ABI: {}", e);
             e
         })?;
 
@@ -92,7 +95,7 @@ async fn transfer<T: Transport>(
         )
         .await
         .map_err(|e| {
-            error!("signed_call_with_confirmations");
+            error!("Failed signed_call_with_confirmations: {}", e);
             e
         })?;
 

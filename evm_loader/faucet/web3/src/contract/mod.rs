@@ -337,12 +337,13 @@ mod contract_signing {
                 .and_then(|function| function.encode_input(&tokens))
                 // TODO [ToDr] SendTransactionWithConfirmation should support custom error type (so that we can return
                 // `contract::Error` instead of more generic `Error`.
-                .map_err(|err| {
+                .map_err(|e| {
                     log::error!(
-                        "encode_input: {}",
-                        format_signed_call_with_confirmations_error(func, &tokens)
+                        "Failed encode_input: {} {}",
+                        format_signed_call_with_confirmations_error(func, &tokens),
+                        e
                     );
-                    crate::error::Error::Decoder(format!("{:?}", err))
+                    crate::error::Error::Decoder(format!("{:?}", e))
                 })?;
             let accounts = Accounts::new(self.eth.transport().clone());
             let mut tx = TransactionParameters {
@@ -360,9 +361,10 @@ mod contract_signing {
             }
             let signed = accounts.sign_transaction(tx.clone(), key).await.map_err(|e| {
                 log::error!(
-                    "sign_transaction: {} {:?}",
+                    "Failed sign_transaction: {} {:?} {}",
                     format_signed_call_with_confirmations_error(func, &tokens),
-                    tx
+                    tx,
+                    e
                 );
                 e
             })?;
@@ -376,9 +378,10 @@ mod contract_signing {
             .await
             .map_err(|e| {
                 log::error!(
-                    "send_raw_transaction_with_confirmation: {} {:?}",
+                    "Failed send_raw_transaction_with_confirmation: {} {:?} {}",
                     format_signed_call_with_confirmations_error(func, &tokens),
-                    tx
+                    tx,
+                    e
                 );
                 e
             })
