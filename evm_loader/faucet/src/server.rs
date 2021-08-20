@@ -34,10 +34,11 @@ async fn handle_request_airdrop(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = airdrop::process(airdrop.unwrap()).await {
-        error!("InternalServerError: {}", err);
-        return HttpResponse::InternalServerError();
-    }
+    dbg!(airdrop.unwrap());
+    //    if let Err(err) = airdrop::process(airdrop.unwrap()).await {
+    //        error!("InternalServerError: {}", err);
+    //        return HttpResponse::InternalServerError();
+    //    }
 
     HttpResponse::Ok()
 }

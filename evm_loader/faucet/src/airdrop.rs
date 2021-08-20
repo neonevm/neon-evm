@@ -18,6 +18,7 @@ pub struct Airdrop {
 }
 
 /// Processes the aridrop: sends needed transactions into Ethereum.
+#[allow(unused)]
 pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
     use crate::config;
