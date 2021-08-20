@@ -361,9 +361,8 @@ mod contract_signing {
             }
             let signed = accounts.sign_transaction(tx.clone(), key).await.map_err(|e| {
                 log::error!(
-                    "Failed sign_transaction: {} {:?} {}",
+                    "Failed sign_transaction: {} {}",
                     format_signed_call_with_confirmations_error(func, &tokens),
-                    tx,
                     e
                 );
                 e

@@ -123,6 +123,7 @@ pub async fn send_raw_transaction_with_confirmation<T>(
 where
     T: Transport,
 {
+    log::info!("Calling send_raw_transaction...");
     let hash = Eth::new(&transport)
         .send_raw_transaction(tx.clone())
         .await
@@ -130,12 +131,17 @@ where
             log::error!("Failed send_raw_transaction {:?}: {}", tx, e);
             e
         })?;
+    log::info!("Result send_raw_transaction hash={}", hash);
+
+    log::info!("Calling send_transaction_with_confirmation_...");
     let receipt = send_transaction_with_confirmation_(hash, transport, poll_interval, confirmations)
         .await
         .map_err(|e| {
             log::error!("Failed send_transaction_with_confirmation_(hash) {}: {}", hash, e);
             e
         })?;
+    log::info!("Result send_raw_transaction receipt={:?}", receipt.clone());
+
     Ok(receipt)
 }
 

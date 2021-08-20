@@ -68,9 +68,10 @@ mod accounts_signing {
         /// immediately.
         pub async fn sign_transaction<K: signing::Key + std::fmt::Debug>(
             &self,
-            tx: TransactionParameters,
+            mut tx: TransactionParameters,
             key: K,
         ) -> error::Result<SignedTransaction> {
+            #[allow(unused)]
             macro_rules! maybe {
                 ($o: expr, $f: expr) => {
                     async {
@@ -82,18 +83,45 @@ mod accounts_signing {
                 };
             }
             let from = key.address();
-            log::info!("Get transaction count, gas price and chain id from {}", from);
-            let (nonce, gas_price, chain_id) = futures::future::try_join3(
-                maybe!(tx.nonce, self.web3().eth().transaction_count(from, None)),
-                maybe!(tx.gas_price, self.web3().eth().gas_price()),
-                maybe!(tx.chain_id.map(U256::from), self.web3().eth().chain_id()),
-            )
-            .await
-            .map_err(|e| {
-                log::error!("Failed getting transaction count, gas price or chain id");
+
+            log::info!("Get transaction count from {}", from);
+            let nonce = self.web3().eth().transaction_count(from, None).await.map_err(|e| {
+                log::error!("Failed getting transaction count: {}", e);
                 e
             })?;
+            log::info!("nonce={}", nonce);
+            tx.nonce = Some(nonce);
+
+            log::info!("Get gas price");
+            let gas_price = self.web3().eth().gas_price_u64().await.map_err(|e| {
+                log::error!("Failed getting gas price: {}", e);
+                e
+            })?;
+            log::info!("gas_price={}", gas_price);
+            let gas_price = U256::from(gas_price);
+            tx.gas_price = Some(gas_price);
+
+            log::info!("Get chain id");
+            let chain_id = self.web3().eth().chain_id().await.map_err(|e| {
+                log::error!("Failed getting chain id: {}", e);
+                e
+            })?;
+            log::info!("chain_id={}", chain_id);
             let chain_id = chain_id.as_u64();
+            tx.chain_id = Some(chain_id);
+
+            //            log::info!("Get transaction count, gas price and chain id from {}", from);
+            //            let (nonce, gas_price, chain_id) = futures::future::try_join3(
+            //                maybe!(tx.nonce, self.web3().eth().transaction_count(from, None)),
+            //                maybe!(tx.gas_price, self.web3().eth().gas_price()),
+            //                maybe!(tx.chain_id.map(U256::from), self.web3().eth().chain_id()),
+            //            )
+            //            .await
+            //            .map_err(|e| {
+            //                log::error!("Failed getting transaction count, gas price or chain id");
+            //                e
+            //            })?;
+
             let tx = Transaction {
                 to: tx.to,
                 nonce,
