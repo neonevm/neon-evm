@@ -1,5 +1,6 @@
 //! Faucet server implementation.
 
+use actix_cors::Cors;
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Result;
@@ -9,11 +10,18 @@ use crate::airdrop;
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
-    HttpServer::new(|| App::new().route("/request_airdrop", post().to(handle_request_airdrop)))
-        .bind(("localhost", rpc_port))?
-        .workers(workers)
-        .run()
-        .await?;
+    HttpServer::new(|| {
+        let cors = Cors::default()
+            .allowed_origin("http://localhost")
+            .allowed_origin("http://neonlabs.org");
+        App::new()
+            .wrap(cors)
+            .route("/request_airdrop", post().to(handle_request_airdrop))
+    })
+    .bind(("localhost", rpc_port))?
+    .workers(workers)
+    .run()
+    .await?;
     Ok(())
 }
 
@@ -34,11 +42,10 @@ async fn handle_request_airdrop(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    dbg!(airdrop.unwrap());
-    //    if let Err(err) = airdrop::process(airdrop.unwrap()).await {
-    //        error!("InternalServerError: {}", err);
-    //        return HttpResponse::InternalServerError();
-    //    }
+    if let Err(err) = airdrop::process(airdrop.unwrap()).await {
+        error!("InternalServerError: {}", err);
+        return HttpResponse::InternalServerError();
+    }
 
     HttpResponse::Ok()
 }

@@ -7,6 +7,7 @@ version = "0.1.1"
 edition = "2018"
 
 [dependencies]
+actix-cors = "0.6.0-beta.2"
 actix-web = "4.0.0-beta.8"
 color-eyre = "0.5"
 lazy_static = "1.4"
