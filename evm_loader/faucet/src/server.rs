@@ -1,6 +1,7 @@
 //! Faucet server implementation.
 
 use actix_cors::Cors;
+use actix_web::http::header;
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Result;
@@ -13,7 +14,10 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
     HttpServer::new(|| {
         let cors = Cors::default()
             .allowed_origin("http://localhost")
-            .allowed_origin("http://neonlabs.org");
+            .allowed_origin("http://neonlabs.org")
+            .allowed_methods(vec!["POST"])
+            .allowed_header(header::CONTENT_TYPE)
+            .max_age(3600);
         App::new()
             .wrap(cors)
             .route("/request_airdrop", post().to(handle_request_airdrop))
