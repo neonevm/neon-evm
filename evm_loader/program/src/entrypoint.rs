@@ -214,6 +214,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
+            StorageAccount::check_for_blocked_accounts(program_id, accounts)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
             if let Sender::Solana(_addr) = account_storage.get_sender() {
                 // Success execution
@@ -235,6 +236,7 @@ fn process_instruction<'a>(
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
+            StorageAccount::check_for_blocked_accounts(program_id, &accounts[1..])?;
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             check_ethereum_authority(
@@ -258,6 +260,7 @@ fn process_instruction<'a>(
             let sysvar_info = find_sysvar_info(accounts)?;
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            StorageAccount::check_for_blocked_accounts(program_id, accounts)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 1_u16)?;
@@ -282,6 +285,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             let mut storage = StorageAccount::new(storage_info, accounts, caller, trx.nonce)?;
+            StorageAccount::check_for_blocked_accounts(program_id, &accounts[1..])?;
             let account_storage = ProgramAccountStorage::new(program_id, &accounts[1..])?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 9_u16)?;
