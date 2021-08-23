@@ -81,7 +81,7 @@ impl AccountData {
     /// Will return `ProgramError::InvalidAccountData` if `input` cannot be
     /// parsed to `AccountData`
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        let (&tag, rest) = input.split_first().ok_or(ProgramError::InvalidAccountData)?;
+        let (&tag, rest) = input.split_first().ok_or_else(||E!(ProgramError::InvalidAccountData))?;
         Ok(match tag {
             Self::EMPTY_TAG => Self::Empty,
             Self::ACCOUNT_TAG => Self::Account( Account::unpack(rest) ),
