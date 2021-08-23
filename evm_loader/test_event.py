@@ -337,7 +337,7 @@ class EventTest(unittest.TestCase):
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
-            
+
         err = "custom program error: 0x1"
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
@@ -371,9 +371,13 @@ class EventTest(unittest.TestCase):
 
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
-        # result = self.call_cancel(storage)
 
-        self.call_partial_signed(input)
+        err = "invalid account data for instruction"
+        with self.assertRaisesRegex(Exception,err):
+            result = self.call_partial_signed(input)
+            print(result)
+
+        result = self.call_cancel(storage)
 
 
     def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
@@ -387,9 +391,13 @@ class EventTest(unittest.TestCase):
 
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
-        # result = self.call_cancel(storage)
 
-        self.call_signed(input)
+        err = "invalid account data for instruction"
+        with self.assertRaisesRegex(Exception,err):
+            result = self.call_signed(input)
+            print(result)
+
+        result = self.call_cancel(storage)
 
 
 if __name__ == '__main__':
