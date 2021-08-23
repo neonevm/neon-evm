@@ -360,5 +360,37 @@ class EventTest(unittest.TestCase):
         self.call_partial_signed(input)
 
 
+    def test_caseFailOnBlockedWithOtherStorageIterative(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[-8:].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+        # result = self.call_cancel(storage)
+
+        self.call_partial_signed(input)
+
+
+    def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[-8:].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+        # result = self.call_cancel(storage)
+
+        self.call_signed(input)
+
+
 if __name__ == '__main__':
     unittest.main()
