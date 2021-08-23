@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::RwLock;
 
+pub const DEFAULT_CONFIG: &str = "faucet.conf";
+pub const AUTO: &str = "auto";
+
 /// Represents config errors.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -15,38 +18,30 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub const DEFAULT_CONFIG: &str = "faucet.conf";
-pub const AUTO: &str = "auto";
-
 /// Loads the config from a file.
 pub fn load(filename: &Path) -> Result<()> {
     CONFIG.write().unwrap().load(filename)?;
     Ok(())
 }
 
-/// Gets the `rpc_port` value.
+/// Gets the `rpc.port` value.
 pub fn rpc_port() -> u16 {
-    CONFIG.read().unwrap().rpc_port
+    CONFIG.read().unwrap().rpc.port
 }
 
-/// Gets the `ethereum_endpoint` value.
+/// Gets the CORS allowed origins.
+pub fn allowed_origins() -> Vec<String> {
+    CONFIG.read().unwrap().rpc.allowed_origins.clone()
+}
+
+/// Gets the `ethereum.endpoint` value.
 pub fn ethereum_endpoint() -> String {
-    CONFIG.read().unwrap().ethereum_endpoint.clone()
-}
-
-/// Gets the `token_a` value.
-pub fn token_a() -> String {
-    CONFIG.read().unwrap().token_a.clone()
-}
-
-/// Gets the `token_b` value.
-pub fn token_b() -> String {
-    CONFIG.read().unwrap().token_b.clone()
+    CONFIG.read().unwrap().ethereum.endpoint.clone()
 }
 
 /// Gets the `admin_key` value. Removes prefix 0x if any.
 pub fn admin_key() -> String {
-    let key = &CONFIG.read().unwrap().admin_key;
+    let key = &CONFIG.read().unwrap().ethereum.admin_key;
     if !key.starts_with("0x") {
         key.to_owned()
     } else {
@@ -54,15 +49,34 @@ pub fn admin_key() -> String {
     }
 }
 
-/// Represents the main config.
+/// Gets the `ethereum.tokens` addresses.
+pub fn tokens() -> Vec<String> {
+    CONFIG.read().unwrap().ethereum.tokens.clone()
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct General {
+    environment: String,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct Rpc {
+    port: u16,
+    allowed_origins: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct Ethereum {
+    endpoint: String,
+    admin_key: String,
+    tokens: Vec<String>,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Faucet {
-    pub environment: String,
-    pub rpc_port: u16,
-    pub ethereum_endpoint: String,
-    pub token_a: String,
-    pub token_b: String,
-    pub admin_key: String,
+    general: General,
+    rpc: Rpc,
+    ethereum: Ethereum,
 }
 
 impl Faucet {

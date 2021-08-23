@@ -23,9 +23,6 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
     use crate::config;
 
-    //dbg!(airdrop);
-    //return Ok(());
-
     let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
     let web3 = web3::Web3::new(http);
 
@@ -33,33 +30,21 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
     let recipient = address_from_str(&airdrop.wallet)?;
     let amount = U256::from(airdrop.amount);
 
-    transfer(
-        web3.eth(),
-        address_from_str(&config::token_a())?,
-        "A",
-        &admin_key,
-        recipient,
-        amount,
-    )
-    .await
-    .map_err(|e| {
-        error!("Failed transfer of token A: {}", e);
-        e
-    })?;
-
-    transfer(
-        web3.eth(),
-        address_from_str(&config::token_b())?,
-        "B",
-        &admin_key,
-        recipient,
-        amount,
-    )
-    .await
-    .map_err(|e| {
-        error!("Failed transfer of token B: {}", e);
-        e
-    })?;
+    for token in &config::tokens() {
+        transfer(
+            web3.eth(),
+            address_from_str(token)?,
+            token,
+            &admin_key,
+            recipient,
+            amount,
+        )
+        .await
+        .map_err(|e| {
+            error!("Failed transfer of token {}: {}", token, e);
+            e
+        })?;
+    }
 
     Ok(())
 }

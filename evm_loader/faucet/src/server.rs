@@ -7,17 +7,20 @@ use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Result;
 use tracing::{error, info};
 
-use crate::airdrop;
+use crate::{airdrop, config};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
+    info!("Allowed origins: {:?}", config::allowed_origins());
+
     HttpServer::new(|| {
-        let cors = Cors::default()
-            .allowed_origin("http://localhost")
-            .allowed_origin("http://neonlabs.org")
+        let mut cors = Cors::default()
             .allowed_methods(vec!["POST"])
             .allowed_header(header::CONTENT_TYPE)
             .max_age(3600);
+        for origin in &config::allowed_origins() {
+            cors = cors.allowed_origin(origin);
+        }
         App::new()
             .wrap(cors)
             .route("/request_airdrop", post().to(handle_request_airdrop))
@@ -26,6 +29,7 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
     .workers(workers)
     .run()
     .await?;
+
     Ok(())
 }
 
