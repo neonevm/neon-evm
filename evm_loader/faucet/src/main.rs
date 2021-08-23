@@ -36,9 +36,21 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
+/// Shows semantic version and revision hash.
+fn info_version() {
+    let ver = env!("VERGEN_GIT_SEMVER");
+    let rev = env!("VERGEN_GIT_SHA");
+    let rev = if rev.len() < 7 {
+        rev.to_string()
+    } else {
+        rev[..7].to_string()
+    };
+    info!("version {} (revision {})", ver, rev);
+}
+
 /// Dispatches CLI commands.
 async fn execute(app: cli::Application) -> Result<()> {
-    info!("version {}", env!("CARGO_PKG_VERSION"));
+    info_version();
 
     match app.cmd {
         cli::Command::Run { workers } => {
