@@ -720,9 +720,8 @@ fn create_ethereum_contract_accounts_in_solana(
 
     if let Some(_account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
-        // return Err("Account already exist".to_string().into());
-        debug!("Account already exist");
-        return Ok(());
+        return Err("Account already exist".to_string().into());
+        // debug!("Account already exist");
     }
 
     let instructions = vec![
