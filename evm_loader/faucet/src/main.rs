@@ -38,6 +38,8 @@ fn setup() -> Result<()> {
 
 /// Dispatches CLI commands.
 async fn execute(app: cli::Application) -> Result<()> {
+    info!("version {}", env!("CARGO_PKG_VERSION"));
+
     match app.cmd {
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {
