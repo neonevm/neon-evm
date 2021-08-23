@@ -44,7 +44,7 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
-                if let Some(_) = account.blocked {
+                if account.blocked.is_some() {
                     return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on blocked account {}", account_info.key);
                 }
             }
