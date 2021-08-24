@@ -8,11 +8,11 @@ use structopt::StructOpt;
 #[structopt(about = "ERC20 Token Faucet Service")]
 pub struct Application {
     #[structopt(
-    parse(from_os_str),
-    short,
-    long,
-    default_value = &config::DEFAULT_CONFIG,
-    help = "Path to the config file"
+        parse(from_os_str),
+        short,
+        long,
+        default_value = &config::DEFAULT_CONFIG,
+        help = "Path to the config file"
     )]
     pub config: PathBuf,
 

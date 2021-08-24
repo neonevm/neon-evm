@@ -29,7 +29,7 @@ pub fn rpc_port() -> u16 {
     CONFIG.read().unwrap().rpc.port
 }
 
-/// Gets the CORS allowed origins.
+/// Gets the CORS `rpc.allowed_origins` urls.
 pub fn allowed_origins() -> Vec<String> {
     CONFIG.read().unwrap().rpc.allowed_origins.clone()
 }
@@ -39,10 +39,10 @@ pub fn ethereum_endpoint() -> String {
     CONFIG.read().unwrap().ethereum.endpoint.clone()
 }
 
-/// Gets the `admin_key` value. Removes prefix 0x if any.
+/// Gets the `ethereum.admin_key` private key value. Removes prefix 0x if any.
 pub fn admin_key() -> String {
     let key = &CONFIG.read().unwrap().ethereum.admin_key;
-    if !key.starts_with("0x") {
+    if key.len() < 3 || !key.starts_with("0x") {
         key.to_owned()
     } else {
         key[2..].to_owned()

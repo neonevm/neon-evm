@@ -102,3 +102,20 @@ fn address_from_str(s: &str) -> Result<Address> {
     };
     Ok(address)
 }
+
+#[test]
+fn test_address_from_str() {
+    let r = address_from_str("ABC");
+    assert!(r.is_err());
+    assert_eq!(r.err().unwrap().to_string(), "Invalid input length");
+
+    let r = address_from_str("ZYX");
+    assert!(r.is_err());
+    assert_eq!(
+        r.err().unwrap().to_string(),
+        "Invalid character 'Z' at position 0"
+    );
+
+    let r = address_from_str("0x00000000000000000000000000000000DeadBeef");
+    assert!(r.is_ok());
+}
