@@ -139,6 +139,11 @@ pub fn transfer_token(
     let value = value / min_value;
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
 
+    let source_token_balance = get_token_account_balance(source_token_account)?;
+    if source_token_balance < value {
+        return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
+    }
+
     debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
