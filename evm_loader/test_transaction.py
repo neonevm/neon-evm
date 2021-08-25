@@ -18,6 +18,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_transaction.py setUpClass")
 
+        cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -25,11 +26,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_token = get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
             print("Done\n")
+            
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -42,9 +47,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             )
         cls.owner_contract = program_and_code[0]
         cls.contract_code = program_and_code[2]
-        
+
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
+
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
 
     def test_success_tx_send(self):  
@@ -52,30 +61,45 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': solana2ether(self.owner_contract),
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1,
+            'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller),
             'data': '3917b3df',
             'chainId': 111
         }
-        
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
 
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx_1, self.acc.secret_key())
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
         trx_data = self.caller_ether + sign + msg
-        
+
         trx = Transaction().add(
             TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
             ])).add(
-            TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
+            TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data, keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
 
@@ -91,7 +115,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #     }
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
         
     #     (caller, caller_nonce) = self.loader.ether2programAddress(from_addr)
     #     print(" ether: " + from_addr.hex())
@@ -108,7 +132,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())
@@ -127,7 +151,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
 
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
     #     trx = Transaction().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -136,7 +160,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())
@@ -146,7 +170,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         
     #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
 
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg))
+    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
     #     trx = Transaction().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
@@ -155,7 +179,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),  
+    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
     #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
     #         ]))
     #     result = client.send_transaction(trx, self.acc.get_acc())

@@ -128,15 +128,14 @@ pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160
     Ok(address)
 }
 
-pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
-    for account in accounts {
-        if solana_program::sysvar::instructions::check_id(account.key) {
-            return Ok(account);
-        }
-    }
-
-    Err!(ProgramError::InvalidInstructionData; "sysvar account not found in {:?}", accounts)
-}
+// pub fn find_sysvar_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
+//     for account in accounts {
+//         if solana_program::sysvar::instructions::check_id(account.key) {
+//             return Ok(account);
+//         }
+//     }
+// Err!(ProgramError::InvalidInstructionData; "sysvar account not found in {:?}", accounts)
+// }
 
 pub fn find_rent_info<'a>(accounts: &'a [AccountInfo<'a>]) -> Result<&'a AccountInfo<'a>, ProgramError> {
     for account in accounts {

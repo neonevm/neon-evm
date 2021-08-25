@@ -1,12 +1,13 @@
 from solana.publickey import PublicKey
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.instructions import get_associated_token_address
+from spl.token.constants import TOKEN_PROGRAM_ID, ACCOUNT_LEN
 import unittest
 from eth_utils import abi
 from base58 import b58decode
 import re
 
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, JsonEncoder
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -18,6 +19,7 @@ class PrecompilesTests(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_solidity_precompiles.py setUpClass")
 
+        cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -25,11 +27,15 @@ class PrecompilesTests(unittest.TestCase):
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_token = get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -46,8 +52,23 @@ class PrecompilesTests(unittest.TestCase):
         print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
         print("code id: ", cls.contract_code)
 
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+
         with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
             cls.test_data = json.load(json_data)
+
+    def send_transaction(self, data):
+        if len(data) > 512:
+            result = self.call_with_holder_account(data)
+            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
+        else:
+            trx = self.make_transactions(data)
+            result = send_transaction(client, trx, self.acc)
+            self.get_measurements(result)
+            result = result["result"]
+            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
     def extract_measurements_from_receipt(self, receipt):
         log_messages = receipt['result']['meta']['logMessages']
@@ -110,7 +131,7 @@ class PrecompilesTests(unittest.TestCase):
             'to': solana2ether(self.owner_contract),
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1,
+            'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller),
             'data': call_data,
             'chainId': 111
@@ -118,7 +139,7 @@ class PrecompilesTests(unittest.TestCase):
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg))
+        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
         
         solana_trx = Transaction().add(
                 self.sol_instr_keccak(keccak_instruction) 
@@ -134,33 +155,67 @@ class PrecompilesTests(unittest.TestCase):
                 ])
 
     def sol_instr_call(self, trx_data):
-        return TransactionInstruction(program_id=self.loader.loader_id, data=bytearray.fromhex("05") + trx_data, keys=[
-                    AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                ])
-    
+        return TransactionInstruction(
+            program_id=self.loader.loader_id, 
+            data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data, 
+            keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])
+
     def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count):
         return TransactionInstruction(
-                program_id=self.loader.loader_id, 
-                data=bytearray.fromhex("0B") + step_count.to_bytes(8, byteorder='little'),
-                keys=[
-                    AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
-                ])
+            program_id=self.loader.loader_id, 
+            data=bytearray.fromhex("0B") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+            ])
 
     def sol_instr_10_continue(self, storage_account, step_count):
         return TransactionInstruction(
@@ -168,13 +223,28 @@ class PrecompilesTests(unittest.TestCase):
             data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey("Sysvar1nstructions1111111111111111111111111"), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ])
 
@@ -184,7 +254,7 @@ class PrecompilesTests(unittest.TestCase):
         if getBalance(storage) == 0:
             trx = Transaction()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False))
+            client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="confirmed"))
 
         return storage
 
@@ -211,7 +281,7 @@ class PrecompilesTests(unittest.TestCase):
 
 
     def call_with_holder_account(self, input):
-        tx = {'to': solana2ether(self.owner_contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1,
+        tx = {'to': solana2ether(self.owner_contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -230,7 +300,10 @@ class PrecompilesTests(unittest.TestCase):
             print("Continue")
             trx = Transaction()
             trx.add(self.sol_instr_10_continue(storage, 400))
-            result = send_transaction(client, trx, self.acc)["result"]
+            result = send_transaction(client, trx, self.acc)
+
+            self.get_measurements(result)
+            result = result["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -295,81 +368,54 @@ class PrecompilesTests(unittest.TestCase):
         for test_case in self.test_data["sha256"]:
             print("make_sha256() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
-            trx = self.make_transactions(self.make_sha256(bin_input))
-            result = send_transaction(client, trx, self.acc)
-            self.get_measurements(result)
-            result = result["result"]
-            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            self.assertEqual(result_hash, test_case["Expected"])
+            result = self.send_transaction(self.make_sha256(bin_input))
+            self.assertEqual(result, test_case["Expected"])
 
     def test_03_ripemd160_contract(self):
         for test_case in self.test_data["ripemd160"]:
             print("make_ripemd160() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
-            trx = self.make_transactions(self.make_ripemd160(bin_input))
-            result = send_transaction(client, trx, self.acc)
-            self.get_measurements(result)
-            result = result["result"]
-            result_hash = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            self.assertEqual(result_hash[:40], test_case["Expected"])
+            result = self.send_transaction(self.make_ripemd160(bin_input))
+            self.assertEqual(result[:40], test_case["Expected"])
 
     @unittest.skip("Too many instructions for testnet")
     def test_05_bigModExp_contract(self):
-        for test_case in self.test_data["bigModExp"]:
+        for test_case in self.test_data["bigModExp"][:-3]:
             print("make_bigModExp() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
-            result = self.call_with_holder_account(self.make_bigModExp(bin_input))
-            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            self.assertEqual(result_data[128:], test_case["Expected"])
+            result = self.send_transaction(self.make_bigModExp(bin_input))
+            self.assertEqual(result[128:], test_case["Expected"])
 
     @unittest.skip("Too many instructions for testnet")
     def test_06_bn256Add_contract(self):
             for test_case in self.test_data["bn256Add"]:
                 print("make_bn256Add() - test case ", test_case["Name"])
                 bin_input = bytes.fromhex(test_case["Input"])
-                trx = self.make_transactions(self.make_bn256Add(bin_input))
-                result = send_transaction(client, trx, self.acc)
-                self.get_measurements(result)
-                result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-                self.assertEqual(result_data, test_case["Expected"])
+                result = self.send_transaction(self.make_bn256Add(bin_input))
+                self.assertEqual(result, test_case["Expected"])
 
     @unittest.skip("Too many instructions for testnet")
     def test_07_bn256ScalarMul_contract(self):
             for test_case in self.test_data["bn256ScalarMul"]:
                 print("make_bn256ScalarMul() - test case ", test_case["Name"])
                 bin_input = bytes.fromhex(test_case["Input"])
-                trx = self.make_transactions(self.make_bn256ScalarMul(bin_input))
-                result = send_transaction(client, trx, self.acc)
-                self.get_measurements(result)
-                result = result["result"]
-                result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-                self.assertEqual(result_data, test_case["Expected"])
+                result = self.send_transaction(self.make_bn256ScalarMul(bin_input))
+                self.assertEqual(result, test_case["Expected"])
 
     ### Couldn't be run run because of heavy instruction consuption
     # def test_08_bn256Pairing_contract(self):
     #         for test_case in self.test_data["bn256Pairing"]:
     #             print("make_bn256Pairing() - test case ", test_case["Name"])
     #             bin_input = bytes.fromhex(test_case["Input"])
-    #             trx = self.make_transactions(self.make_bn256Pairing(bin_input))
-    #             result = send_transaction(client, trx, self.acc)
-    #             self.get_measurements(result)
-    #             result = result["result"]
-    #             result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-    #             print("Result:   ", result_data)
-    #             print("Expected: ", test_case["Expected"])
-    #             self.assertEqual(result_data, test_case["Expected"])
+    #             result = self.send_transaction(self.make_bn256Pairing(bin_input))
+    #             self.assertEqual(result, test_case["Expected"])
 
     def test_09_blake2F_contract(self):
-        for test_case in self.test_data["blake2F"]:
+        for test_case in self.test_data["blake2F"][:-1]:
             print("make_blake2F() - test case ", test_case["Name"])
             bin_input = bytes.fromhex(test_case["Input"])
-            trx = self.make_transactions(self.make_blake2F(bin_input))
-            result = send_transaction(client, trx, self.acc)
-            self.get_measurements(result)
-            result = result["result"]
-            result_data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])[8+2:].hex()
-            self.assertEqual(result_data, test_case["Expected"])
+            result = self.send_transaction(self.make_blake2F(bin_input))
+            self.assertEqual(result, test_case["Expected"])
 
 if __name__ == '__main__':
     unittest.main()
