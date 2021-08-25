@@ -1,6 +1,6 @@
 //! Airdrop implementation: calls to the Ethereum network.
 
-use color_eyre::Result;
+use color_eyre::{eyre::eyre, Result};
 use tracing::{error, info};
 
 use secp256k1::SecretKey;
@@ -28,16 +28,19 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
 
     let admin_key: SecretKey = config::admin_key().parse()?;
     let recipient = address_from_str(&airdrop.wallet)?;
-    let amount = U256::from(airdrop.amount * tokens::multiplication_factor(&airdrop.wallet)?);
+    let amount = U256::from(airdrop.amount);
 
     for token in &config::tokens() {
+        let factor = U256::from(tokens::multiplication_factor(token)?);
         transfer(
             web3.eth(),
             address_from_str(token)?,
             token,
             &admin_key,
             recipient,
-            amount,
+            amount
+                .checked_mul(factor)
+                .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?,
         )
         .await
         .map_err(|e| {
