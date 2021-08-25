@@ -8,6 +8,7 @@ mod airdrop;
 mod cli;
 mod config;
 mod server;
+mod tokens;
 
 use color_eyre::Result;
 use tracing::info;

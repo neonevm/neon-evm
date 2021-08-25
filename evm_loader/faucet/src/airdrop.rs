@@ -21,14 +21,14 @@ pub struct Airdrop {
 #[allow(unused)]
 pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
-    use crate::config;
+    use crate::{config, tokens};
 
     let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
     let web3 = web3::Web3::new(http);
 
     let admin_key: SecretKey = config::admin_key().parse()?;
     let recipient = address_from_str(&airdrop.wallet)?;
-    let amount = U256::from(airdrop.amount);
+    let amount = U256::from(airdrop.amount * tokens::multiplication_factor(&airdrop.wallet));
 
     for token in &config::tokens() {
         transfer(
