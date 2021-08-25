@@ -13,6 +13,7 @@ use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
+    payment::collateral_pool_base,
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -29,7 +30,7 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
-    sysvar::{clock},
+    sysvar::{clock, rent},
 };
 use serde_json::json;
 use std::{
@@ -42,7 +43,7 @@ use std::{
     sync::Arc,
     thread::sleep,
     time::{Duration},
-    convert::{TryFrom},
+    convert::{TryFrom, TryInto},
     fmt,
     fmt::{Debug, Display,},
 };
@@ -306,11 +307,11 @@ fn command_create_ether_account (
 
 fn read_program_data(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location).map_err(|err| {
-        format!("Unable to open program file: {}", err)
+        format!("Unable to open program file '{}': {}", program_location, err)
     })?;
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).map_err(|err| {
-        format!("Unable to read program file: {}", err)
+        format!("Unable to read program file '{}': {}", program_location, err)
     })?;
 
     Ok(program_data)
@@ -498,7 +499,7 @@ fn make_deploy_ethereum_transaction(
             to: None,
             nonce: trx_count,
             gas_limit: 9_999_999.into(),
-            gas_price: 1.into(),
+            gas_price: 1_000_000_000.into(),
             value: 0.into(),
             data: program_data.to_owned(),
             chain_id: 111.into(), // Will fixed in #61 issue
@@ -574,9 +575,9 @@ fn fill_holder_account(
     Ok(())
 }
 
-//fn get_ethereum_caller_credentials(
-//    config: &Config,
-//) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
+// fn get_ethereum_caller_credentials(
+//     config: &Config,
+// ) -> (SecretKey, H160, Pubkey, u8, Pubkey, Pubkey) {
 //     use secp256k1::PublicKey;
 //     let caller_private = {
 //         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
@@ -587,13 +588,45 @@ fn fill_holder_account(
 //     let caller_public = PublicKey::from_secret_key(&caller_private);
 //     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
 //     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
-//    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     let caller_holder = create_block_token_account(config, &caller_ether, &caller_sol).unwrap();
 //     debug!("caller_sol = {}", caller_sol);
 //     debug!("caller_ether = {}", caller_ether);
-//    debug!("caller_token = {}", caller_token);
-//
-//    (caller_private, caller_ether, caller_sol, caller_nonce)
+//     debug!("caller_token = {}", caller_token);
+
+//     (caller_private, caller_ether, caller_sol, caller_nonce, caller_token, caller_holder)
 // }
+
+fn create_block_token_account(
+    config: &Config,
+    caller_ether: &H160,
+    caller_sol: &Pubkey,
+) -> Result<Pubkey, Error> {
+    use solana_sdk::program_pack::Pack;
+    let creator = &config.signer;
+    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN)?;
+    let holder_seed = bs58::encode(&caller_ether.to_fixed_bytes()).into_string() + "hold";
+    let caller_holder = Pubkey::create_with_seed(caller_sol, &holder_seed, &spl_token::id())?;
+    if config.rpc_client.get_account_with_commitment(&caller_holder, CommitmentConfig::confirmed())?.value.is_none() {
+        let instruction = Instruction::new_with_bincode(
+            config.evm_loader,
+            &(4_u32, caller_sol, holder_seed, minimum_balance_for_account, spl_token::state::Account::LEN, spl_token::id(), caller_holder),
+            vec![
+                AccountMeta::new(creator.pubkey(), true),
+                AccountMeta::new(caller_holder, false),
+                AccountMeta::new(*caller_sol, false),
+                AccountMeta::new(caller_holder, false),
+                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
+            ]
+        );
+
+        send_transaction(config, &[instruction])?;
+    }
+    Ok(caller_holder)
+}
 
 fn get_ether_account_nonce(
     config: &Config, 
@@ -723,7 +756,7 @@ fn create_ethereum_contract_accounts_in_solana(
     Ok(())
 }
 
-fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
+fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let creator = &config.signer;
@@ -731,6 +764,17 @@ fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
     let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024_u64)?;
     debug!("storage = {}", storage);
     Ok(storage)
+}
+
+fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
+    let collateral_pool_index = 2;
+    let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
+    let collateral_pool_account = Pubkey::create_with_seed(
+        &collateral_pool_base::id(), 
+        &seed, 
+        &config.evm_loader).unwrap();
+
+    (collateral_pool_account, collateral_pool_index)
 }
 
 fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
@@ -772,12 +816,13 @@ fn create_account_with_seed(
 
     if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Account not found");
+        let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(len.try_into().unwrap())?;
         let create_acc_instruction = system_instruction::create_account_with_seed(
             funding,
             &created_account,
             base,
             seed,
-            10_u64.pow(9),
+            minimum_balance_for_account,
             len,
             &config.evm_loader
         );
@@ -820,6 +865,7 @@ fn command_deploy(
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
+    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &evm_loader::token::token_mint::id());
 
     // Create ethereum caller private key from sign of array by signer
     // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
@@ -837,6 +883,7 @@ fn command_deploy(
 
     // Get caller nonce
     let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
+    let block_token = create_block_token_account(config, &caller_ether, &caller_arg)?;
 
     let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
@@ -862,30 +909,63 @@ fn command_deploy(
     fill_holder_account(config, &holder, &msg)?;
 
     // Create storage account if not exists
-    let storage = create_ctorage_accoiunt(config)?;
+    let storage = create_storage_account(config)?;
+
+    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config);
 
     let accounts = vec![AccountMeta::new(holder, false),
                         AccountMeta::new(storage, false),
+
+                        AccountMeta::new(creator.pubkey(), true),
+                        AccountMeta::new(collateral_pool_acc, false),
+                        AccountMeta::new(block_token, false),
+                        AccountMeta::new(caller_token, false),
+                        AccountMeta::new(system_program::id(), false),
+
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_token, false),
                         AccountMeta::new(program_code, false),
                         AccountMeta::new(caller_arg, false),
-			AccountMeta::new(caller_token, false),
+                        AccountMeta::new(caller_token, false),
+
                         AccountMeta::new_readonly(config.evm_loader, false),
+                        AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                        AccountMeta::new_readonly(spl_token::id(), false),
+                        AccountMeta::new(rent::id(), false),
                         AccountMeta::new(clock::id(), false),
                         ];
 
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, 0_u64), accounts.clone());
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
         send_transaction(config, &[trx_from_account_data_instruction])?;
     }
 
     // Continue while no result
     loop {
         debug!("continue");
-        let continue_accounts = accounts[1..].to_vec();
+        let continue_accounts = vec![
+                            AccountMeta::new(storage, false),
+    
+                            AccountMeta::new(creator.pubkey(), true),
+                            AccountMeta::new(operator_token, false),
+                            AccountMeta::new(caller_token, false),
+                            AccountMeta::new(block_token, false),
+                            AccountMeta::new(system_program::id(), false),
+
+                            AccountMeta::new(program_id, false),
+                            AccountMeta::new(program_token, false),
+                            AccountMeta::new(program_code, false),
+                            AccountMeta::new(caller_arg, false),
+                            AccountMeta::new(caller_token, false),
+
+                            AccountMeta::new_readonly(config.evm_loader, false),
+                            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                            AccountMeta::new_readonly(spl_token::id(), false),
+                            AccountMeta::new(rent::id(), false),
+                            AccountMeta::new(clock::id(), false),
+                            ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 

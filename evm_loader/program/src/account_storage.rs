@@ -4,7 +4,7 @@ use crate::{
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
     utils::keccak256_h256,
-    token::{get_token_account_balance, token_mint, check_token_account, eth_decimals},
+    token::{get_token_account_balance, check_token_account, transfer_token},
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -20,7 +20,6 @@ use solana_program::{
 use std::{
     cell::RefCell,
 };
-use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -229,6 +228,15 @@ impl<'a> ProgramAccountStorage<'a> {
         self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
+    /// Get caller account info
+    pub fn get_caller_account_info(&self) -> Option<&AccountInfo<'a>> {
+        if let Some(account_index) = self.find_account(&self.origin()) {
+            let AccountMeta{ account, token: _, code: _ } = &self.account_metas[account_index];
+            return Some(account);
+        }
+        None
+    }
+
     /// Apply contact execution results
     /// 
     /// # Errors
@@ -236,7 +244,11 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I>(
+        &mut self, values: A,
+        operator: Option<&AccountInfo<'a>>,
+        _delete_empty: bool
+    ) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
@@ -272,15 +284,18 @@ impl<'a> ProgramAccountStorage<'a> {
                             return Err!(ProgramError::InvalidAccountData; "Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
                         };
 
-                        let caller_account_index = self.find_account(&self.origin()).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-                        let AccountMeta{ account: caller_info, token: _, code: _ } = &self.account_metas[caller_account_index];
+                        let recipient = if let Some(some_operator) = operator {
+                            some_operator
+                        } else {
+                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?
+                        };
 
                         debug_print!("Move funds from account");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + account_info.lamports();
+                        **recipient.lamports.borrow_mut() += account_info.lamports();
                         **account_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Move funds from code");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + code_info.lamports();
+                        **recipient.lamports.borrow_mut() += code_info.lamports();
                         **code_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Mark accounts empty");
@@ -314,30 +329,18 @@ impl<'a> ProgramAccountStorage<'a> {
             let source_account_index = self.find_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: source_account, token: source_token_account, code: _ } = &self.account_metas[source_account_index];
             let source_solidity_account = &self.accounts[source_account_index];
-            
+
             let target_account_index = self.find_account(&transfer.target).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
-            
-            let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-            let min_value = U256::from(10_u64.pow(min_decimals));
-            let value = transfer.value / min_value;
-            let value = u64::try_from(value).map_err(|s| E!(ProgramError::InvalidInstructionData; "s={:?}", s))?;
 
-            debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-            let instruction = spl_token::instruction::transfer_checked(
-                &spl_token::id(),
-                source_token_account.key,
-                &token_mint::id(),
-                target_token_account.key,
-                source_account.key,
-                &[],
-                value,
-                token_mint::decimals(),
+            transfer_token(
+                accounts,
+                source_token_account,
+                target_token_account,
+                source_account,
+                source_solidity_account,
+                &transfer.value,
             )?;
-
-            let (ether, nonce) = source_solidity_account.get_seeds();
-            invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
         }
 
         debug_print!("apply_transfers done");

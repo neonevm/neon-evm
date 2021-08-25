@@ -6,9 +6,14 @@ use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
+    sysvar,
+    sysvar::Sysvar,
+    clock::Clock,
 };
 use serde::{ Serialize, de::DeserializeOwned };
 use std::convert::TryInto;
+
+const OPERATOR_PRIORITY_SLOTS: u64 = 3;
 
 pub struct StorageAccount<'a> {
     info: &'a AccountInfo<'a>,
@@ -16,12 +21,25 @@ pub struct StorageAccount<'a> {
 }
 
 impl<'a> StorageAccount<'a> {
-    pub fn new(info: &'a AccountInfo<'a>, accounts: &[AccountInfo], caller: H160, nonce: u64) -> Result<Self, ProgramError> {
+    pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64) -> Result<Self, ProgramError> {
+        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or_else(||E!(ProgramError::InvalidAccountData))?;
+        let clock = Clock::from_account_info(clock_info)?;
+
         let account_data = info.try_borrow_data()?;
 
         if let AccountData::Empty = AccountData::unpack(&account_data)? {
             let data = AccountData::Storage(
-                Storage { caller, nonce, accounts_len: accounts.len(), executor_data_size: 0, evm_data_size: 0 }
+                Storage { 
+                    caller,
+                    nonce,
+                    gas_limit,
+                    gas_price,
+                    slot: clock.slot,
+                    operator: *operator.key,
+                    accounts_len: accounts.len(),
+                    executor_data_size: 0,
+                    evm_data_size: 0
+                }
             );
             Ok(Self { info, data })
         } else {
@@ -29,11 +47,23 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
-    pub fn restore(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
-        let account_data = info.try_borrow_data()?;
+    pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo]) -> Result<Self, ProgramError> {
+        let clock_info = accounts.iter().find(|a| sysvar::clock::check_id(a.key)).ok_or_else(||E!(ProgramError::InvalidAccountData))?;
+        let clock = Clock::from_account_info(clock_info)?;
 
-        if let AccountData::Storage(data) = AccountData::unpack(&account_data)? {
+        let mut account_data = info.try_borrow_mut_data()?;
+
+        if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
+            if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
+                return Err!(ProgramError::InvalidAccountData);
+            }
+
+            data.operator = *operator.key;
+            data.slot = clock.slot;
+
             let data = AccountData::Storage(data);
+            AccountData::pack(&data, &mut account_data)?;
+
             Ok(Self { info, data })
         } else {
             Err!(ProgramError::InvalidAccountData)
@@ -58,6 +88,11 @@ impl<'a> StorageAccount<'a> {
     pub fn caller_and_nonce(&self) -> Result<(H160, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.caller, storage.nonce))
+    }
+
+    pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok((storage.gas_limit, storage.gas_price))
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {

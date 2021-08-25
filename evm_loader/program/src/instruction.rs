@@ -95,11 +95,16 @@ pub enum EvmInstruction<'a> {
 
         /// Owner program account address
         owner: Pubkey,
+
+        /// Associated token address to create
+        token: Option<Pubkey>,
     },
 
     /// Call Ethereum-contract action from raw transaction data
     /// #### Account references same as in Call
     CallFromRawEthereumTX {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
         /// Ethereum transaction sender address
         from_addr: &'a [u8],
         /// Ethereum transaction sign
@@ -132,6 +137,8 @@ pub enum EvmInstruction<'a> {
     ///   0. \[WRITE\] storage account
     ///   1. ... Account references same as in Call
     PartialCallFromRawEthereumTX {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
         step_count: u64,
         /// Ethereum transaction sender address
@@ -151,6 +158,8 @@ pub enum EvmInstruction<'a> {
 
     /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
     ExecuteTrxFromAccountDataIterative {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
@@ -169,6 +178,7 @@ impl<'a> EvmInstruction<'a> {
     /// # Errors
     ///
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `input`
+    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
     pub fn unpack(input: &'a[u8]) -> Result<Self, ProgramError> {
         use ProgramError::InvalidInstructionData;
 
@@ -207,28 +217,37 @@ impl<'a> EvmInstruction<'a> {
             4 => {
                 let (_, rest) = rest.split_at(3);
                 let (base, rest) = rest.split_at(32);
-                let (seed_len, rest) = rest.split_at(4);
-                let (_, rest) = rest.split_at(4);  // padding
-                let seed_len = seed_len.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (seed_len, rest) = rest.split_at(8);
+                let seed_len = seed_len.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (seed, rest) = rest.split_at(seed_len as usize);
 
                 let base = Pubkey::new(base);
                 let (lamports, rest) = rest.split_at(8);
                 let (space, rest) = rest.split_at(8);
 
-                let (owner, _rest) = rest.split_at(32);
+                let (owner, rest) = rest.split_at(32);
                 let owner = Pubkey::new(owner);
+
+                let token = if rest.len() >= 32 {
+                    let (token, _rest) = rest.split_at(32);
+                    let token = Pubkey::new(token);
+                    Some(token)
+                } else {
+                    None
+                };
 
                 let seed = seed.into();
                 let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
 
-                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner}
+                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner, token}
             },
             5 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::CallFromRawEthereumTX {from_addr, sign, unsigned_msg}
+                EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign, unsigned_msg}
             },
             6 => {
                 let (&status, bytes) = input.split_first().ok_or(InvalidInstructionData)?;
@@ -250,11 +269,13 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::OnEvent {address, topics, data: rest}
             },
             9 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::PartialCallFromRawEthereumTX {step_count, from_addr, sign, unsigned_msg}
+                EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
             },
             10 => {
                 let (step_count, _rest) = rest.split_at(8);
@@ -262,9 +283,11 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::Continue {step_count}
             },
             11 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::ExecuteTrxFromAccountDataIterative {step_count}
+                EvmInstruction::ExecuteTrxFromAccountDataIterative {collateral_pool_index, step_count}
             },
             12 => {
                 EvmInstruction::Cancel
