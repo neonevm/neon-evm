@@ -7,6 +7,7 @@
 mod airdrop;
 mod cli;
 mod config;
+mod ethereum;
 mod server;
 mod tokens;
 
@@ -71,7 +72,7 @@ async fn execute(app: cli::Application) -> Result<()> {
 /// Runs the server.
 async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
     config::load(config_file)?;
-    tokens::init(config::tokens())?;
+    tokens::init(config::tokens()).await?;
     server::start(config::rpc_port(), workers).await?;
     Ok(())
 }
