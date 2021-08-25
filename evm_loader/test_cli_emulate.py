@@ -1,15 +1,10 @@
 import unittest
 import solana
 from eth_utils import abi
-from solana.blockhash import Blockhash
 from web3.auto import w3
 from solana_utils import *
-from solana.rpc.commitment import Commitment, Confirmed
+from solana.transaction import AccountMeta
 
-tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-sysinstruct = "Sysvar1nstructions1111111111111111111111111"
-keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/ERC20/src")
@@ -140,7 +135,10 @@ class EmulateTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             cls.loader.createEtherAccount(cls.ethereum_caller)
+            cls.spl_token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+            
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.ethereum_caller)
 
         print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))
         print('Ethereum Caller: {}-{}'.format(cls.ethereum_caller.hex(), cls.caller_nonce))

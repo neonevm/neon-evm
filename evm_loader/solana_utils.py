@@ -1,26 +1,29 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.api import Client
-from solana.rpc.types import TxOpts
-from solana.rpc import types
-from solana.account import Account
-from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed
-import time
+import base64
+import json
 import os
 import subprocess
-from typing import NamedTuple
-import json
-from eth_keys import keys as eth_keys
-import base64
-from base58 import b58encode
-from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
-from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
-from hashlib import sha256
-from sha3 import keccak_256
-import rlp
+import time
 from enum import Enum
+from hashlib import sha256
+from typing import NamedTuple
+
+import base58
+import rlp
+from base58 import b58encode
+from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
+from eth_keys import keys as eth_keys
+from sha3 import keccak_256
+from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
+from solana.account import Account
+from solana.publickey import PublicKey
+from solana.rpc import types
+from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed
+from solana.rpc.types import TxOpts
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
 import base58
 
@@ -37,6 +40,9 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
+incinerator = "1nc1nerator11111111111111111111111111111111"
+
+collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -45,7 +51,6 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
-
 
 class SplToken:
     def __init__(self, url):
@@ -65,8 +70,9 @@ class SplToken:
         self.call("transfer {} {} {}".format(mint, amount, recipient))
 
     def balance(self, acc):
+        from decimal import Decimal
         res = self.call("balance --address {}".format(acc))
-        return int(res.rstrip())
+        return Decimal(res.rstrip())
 
     def mint(self, mint_id, recipient, amount, owner=None):
         if owner is None:
@@ -125,6 +131,11 @@ class NeonEvmClient:
         self.mode = ExecuteMode.SINGLE
         self.solana_wallet = solana_wallet
         self.evm_loader = evm_loader
+        self.token = SplToken(solana_url)
+
+        collateral_pool_index = 2
+        self.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        self.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def set_execute_mode(self, new_mode):
         self.mode = ExecuteMode(new_mode)
@@ -138,13 +149,27 @@ class NeonEvmClient:
 
     def send_ethereum_trx_iterative(self, ethereum_transaction) -> types.RPCResponse:
         assert (isinstance(ethereum_transaction, EthereumTransaction))
-        self.__send_neon_transaction(bytes.fromhex("09") +
-                                     ethereum_transaction.iterative_steps.to_bytes(8, byteorder='little'),
-                                     ethereum_transaction, need_storage=True)
+        (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
+        if ethereum_transaction._storage is None:
+            ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
+
+        data = from_address + sign + msg
+        keccak_data = make_keccak_instruction_data(1, len(msg), 13)
+        
+        solana_trx = Transaction().add(
+                self.__sol_instr_keccak(keccak_data) 
+            ).add( 
+                self.__sol_instr_09_partial_call(ethereum_transaction, ethereum_transaction.iterative_steps, data) 
+            )
+
+        self.__send_neon_transaction(ethereum_transaction, solana_trx)
+
         while True:
-            result = self.__send_neon_transaction(bytes.fromhex("0A") +
-                                                  ethereum_transaction.iterative_steps.to_bytes(8, byteorder='little'),
-                                                  ethereum_transaction, need_storage=True)
+            solana_trx = Transaction().add(
+                    self.__sol_instr_10_continue(ethereum_transaction, ethereum_transaction.iterative_steps) 
+                )
+            result = self.__send_neon_transaction(ethereum_transaction, solana_trx)
+
             if result['result']['meta']['innerInstructions'] \
                     and result['result']['meta']['innerInstructions'][0]['instructions']:
                 data = base58.b58decode(result['result']['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -154,7 +179,16 @@ class NeonEvmClient:
 
     def send_ethereum_trx_single(self, ethereum_transaction) -> types.RPCResponse:
         assert (isinstance(ethereum_transaction, EthereumTransaction))
-        return self.__send_neon_transaction(bytes.fromhex("05"), ethereum_transaction)
+        (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
+        data = from_address + sign + msg
+        keccak_data = make_keccak_instruction_data(1, len(msg), 5)
+
+        solana_trx = Transaction().add(
+                self.__sol_instr_keccak(keccak_data) 
+            ).add( 
+                self.__sol_instr_05(ethereum_transaction, data)
+            )
+        return self.__send_neon_transaction(ethereum_transaction, solana_trx)
 
     def __create_solana_ether_caller(self, ethereum_transaction):
         caller = self.evm_loader.ether2program(ethereum_transaction.ether_caller)[0]
@@ -165,6 +199,12 @@ class NeonEvmClient:
             print("Create solana ether caller account...")
             ethereum_transaction._solana_ether_caller = \
                 self.evm_loader.createEtherAccount(ethereum_transaction.ether_caller)
+            self.token.transfer(
+                ETH_TOKEN_MINT_ID, 
+                2000, 
+                get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
+                )
+        self.caller_holder = get_caller_hold_token(self.evm_loader, self.solana_wallet, ethereum_transaction.ether_caller)
         print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
 
     def __create_storage_account(self, seed):
@@ -187,50 +227,131 @@ class NeonEvmClient:
         self.__create_solana_ether_caller(ethereum_transaction)
         caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
         trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
-                   'value': 0, 'gas': 9999999, 'gasPrice': 1, 'nonce': caller_trx_cnt,
+                   'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000, 'nonce': caller_trx_cnt,
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
 
-    def __create_trx(self, ethereum_transaction, keccak_data, data):
-        print('create_trx with keccak:', keccak_data.hex(), 'and data:', data.hex())
-        trx = Transaction()
-        trx.add(TransactionInstruction(program_id=PublicKey(keccakprog), data=keccak_data, keys=
-        [
-            AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
-        ]))
-        trx.add(TransactionInstruction(program_id=self.evm_loader.loader_id, data=data, keys=
-        [
-            AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction.contract_account), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=self.evm_loader.loader_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
-        ]))
-        return trx
+    def __sol_instr_keccak(self, keccak_data):
+        return TransactionInstruction(
+            program_id = PublicKey(keccakprog), 
+            data = keccak_data, 
+            keys = [
+                AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False),
+            ]
+        )
 
-    def __send_neon_transaction(self, evm_trx_data, ethereum_transaction, need_storage=False) -> types.RPCResponse:
-        (from_address, sign, msg) = self.__create_instruction_data_from_tx(ethereum_transaction)
-        keccak_data = make_keccak_instruction_data(1, len(msg), 9 if need_storage else 1)
-        data = evm_trx_data + from_address + sign + msg
-        trx = self.__create_trx(ethereum_transaction, keccak_data, data)
-        if need_storage:
-            if ethereum_transaction._storage is None:
-                ethereum_transaction._storage = self.__create_storage_account(sign[:8].hex())
-            trx.instructions[-1].keys \
-                .insert(0, AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True))
+    def __sol_instr_05(self, ethereum_transaction, data):
+        return TransactionInstruction(
+            program_id=self.evm_loader.loader_id,
+            data=bytearray.fromhex("05") + self.collateral_pool_index_buf + data, 
+            keys=[
+                # Additional accounts for EvmInstruction::CallFromRawEthereumTX:
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.solana_wallet.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction.contract_account), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+            ])
+
+    def __sol_instr_09_partial_call(self, ethereum_transaction, step_count, data):
+        return TransactionInstruction(
+            program_id=self.evm_loader.loader_id,
+            data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + data,
+            keys=[
+                AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True),
+
+                # System instructions account:
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                # Operator address:
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction.contract_account), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+            ])
+
+    def __sol_instr_10_continue(self, ethereum_transaction, step_count):
+        return TransactionInstruction(
+            program_id=self.evm_loader.loader_id,
+            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=ethereum_transaction._storage, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.solana_wallet.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=ethereum_transaction.contract_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction.contract_account), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction.contract_code_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=ethereum_transaction._solana_ether_caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(self.evm_loader.loader_id), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=False, is_writable=False),
+            ])
+
+    def __send_neon_transaction(self, ethereum_transaction, trx) -> types.RPCResponse:
         if ethereum_transaction.trx_account_metas is not None:
             trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
-        trx.instructions[-1].keys \
-            .append(AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False))
+        trx.instructions[-1].keys.append(AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False))
+
         return send_transaction(client, trx, self.solana_wallet)
 
 
-def confirm_transaction(http_client, tx_sig, confirmations=1):
+def create_collateral_pool_address(collateral_pool_index):
+    COLLATERAL_SEED_PREFIX = "collateral_seed_"
+    seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
+    return accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
+
+
+def confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
-    TIMEOUT = 30  # 30 seconds  pylint: disable=invalid-name
+    TIMEOUT = 30  # 30 seconds pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
         print('confirm_transaction for %s', tx_sig)
@@ -241,7 +362,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=1):
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
                            and status['confirmations'] >= confirmations):
                 return
-        sleep_time = 1
+        sleep_time = 0.1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
@@ -265,8 +386,7 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
         )
     )
     print("createAccountWithSeed", data.hex())
-    created = accountWithSeed(base, seed,
-                              program)  # PublicKey(sha256(bytes(base)+bytes(seed, 'utf8')+bytes(program)).digest())
+    created = accountWithSeed(base, seed, program)
     print("created", created)
     return TransactionInstruction(
         keys=[
@@ -509,6 +629,41 @@ class EvmLoader:
                     AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
                 ]))
         return (trx, sol)
+
+
+def get_caller_hold_token(evm_loader, acc, caller_ether):
+    caller = evm_loader.ether2program(caller_ether)[0]
+    holder_seed = b58encode(caller_ether).decode('utf8') + "hold"
+    caller_holder = accountWithSeed(PublicKey(caller), holder_seed, PublicKey(tokenkeg))
+    if getBalance(caller_holder) == 0:
+        trx = Transaction()
+        trx.add(create_with_seed_loader_instruction(evm_loader.loader_id, acc.public_key(), caller_holder, PublicKey(caller), holder_seed, 10**9, ACCOUNT_LEN, PublicKey(tokenkeg)))
+        send_transaction(client, trx, acc)
+    return caller_holder
+
+
+def create_with_seed_loader_instruction(evm_loader_id, funding, created, base, seed, lamports, space, owner):
+    return TransactionInstruction(
+        program_id=evm_loader_id,
+        data=bytes.fromhex("04000000") + \
+            bytes(base) + \
+            len(seed).to_bytes(8, byteorder='little') + \
+            bytes(seed, 'utf8') + \
+            lamports.to_bytes(8, byteorder='little') + \
+            space.to_bytes(8, byteorder='little') + \
+            bytes(owner) + \
+            bytes(created),
+        keys=[
+            AccountMeta(pubkey=funding, is_signer=True, is_writable=False),
+            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=base, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(evm_loader_id), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(rentid), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=True),
+        ])
 
 
 def getBalance(account):

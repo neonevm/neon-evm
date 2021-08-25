@@ -9,10 +9,6 @@ from eth_utils import abi
 from web3.auto import w3
 from solana_utils import *
 
-tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-sysinstruct = "Sysvar1nstructions1111111111111111111111111"
-keccakprog = "KeccakSecp256k11111111111111111111111111111"
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
@@ -187,6 +183,7 @@ class ERC20test(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             cls.loader.createEtherAccount(cls.ethereum_caller)
+            cls.spl_token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.ethereum_caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account: {} ({})'.format(cls.acc.public_key(), bytes(cls.acc.public_key()).hex()))

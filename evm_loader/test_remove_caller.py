@@ -27,6 +27,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_remove_caller.py setUpClass")
 
+        cls.token = SplToken(solana_url)
         wallet = WalletAccount(wallet_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
@@ -38,7 +39,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+
+        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,

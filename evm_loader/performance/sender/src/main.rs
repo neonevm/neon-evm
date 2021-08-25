@@ -261,7 +261,7 @@ fn create_trx(
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
 
-        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 1);
+        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 5);
         let instruction_keccak = Instruction::new_with_bytes(
             keccakprog,
             &data_keccak,
