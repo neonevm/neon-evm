@@ -28,7 +28,7 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
 
     let admin_key: SecretKey = config::admin_key().parse()?;
     let recipient = address_from_str(&airdrop.wallet)?;
-    let amount = U256::from(airdrop.amount * tokens::multiplication_factor(&airdrop.wallet));
+    let amount = U256::from(airdrop.amount * tokens::multiplication_factor(&airdrop.wallet)?);
 
     for token in &config::tokens() {
         transfer(
