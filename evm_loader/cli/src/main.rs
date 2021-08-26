@@ -918,8 +918,6 @@ fn command_deploy(
 
                         AccountMeta::new(creator.pubkey(), true),
                         AccountMeta::new(collateral_pool_acc, false),
-                        AccountMeta::new(block_token, false),
-                        AccountMeta::new(caller_token, false),
                         AccountMeta::new(system_program::id(), false),
 
                         AccountMeta::new(program_id, false),
@@ -951,7 +949,6 @@ fn command_deploy(
                             AccountMeta::new(creator.pubkey(), true),
                             AccountMeta::new(operator_token, false),
                             AccountMeta::new(caller_token, false),
-                            AccountMeta::new(block_token, false),
                             AccountMeta::new(system_program::id(), false),
 
                             AccountMeta::new(program_id, false),
