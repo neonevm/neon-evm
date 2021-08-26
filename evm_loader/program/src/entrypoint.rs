@@ -249,6 +249,7 @@ fn process_instruction<'a>(
             do_finalize(program_id, accounts)
         },
         EvmInstruction::Call {bytes} => {
+            StorageAccount::check_for_blocked_accounts(program_id, accounts)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
             if let Sender::Solana(_addr) = account_storage.get_sender() {
                 // Success execution
@@ -296,6 +297,7 @@ fn process_instruction<'a>(
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
 
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
 
@@ -356,6 +358,7 @@ fn process_instruction<'a>(
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
@@ -431,6 +434,7 @@ fn process_instruction<'a>(
             }
 
             let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
