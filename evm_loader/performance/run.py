@@ -31,6 +31,7 @@ keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 contracts_file = "contract.json"
 accounts_file = "account.json"
+approve_file = "approve.json"
 transactions_file = "transaction.json"
 senders_file = "sender.json"
 verify_file = "verify.json"
@@ -40,7 +41,8 @@ trx_count = {}
 
 class transfer_type(Enum):
     erc20 = 0,
-    spl = 1
+    spl = 1,
+    uniswap = 2
 
 class init_senders():
     def __init__(cls):
@@ -116,6 +118,7 @@ def check_address_event(result, factory_eth, erc20_eth):
     assert(data[29:61] == abi.event_signature_to_log_topic('Address(address)'))  # topics
     assert(data[61:93] == bytes().fromhex("%024x" % 0)+erc20_eth)  # sum
 
+
 def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     # assert(result['meta']['err'] == None)
 
@@ -177,6 +180,11 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
         return False
 
     return True
+
+
+def check_approve_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
+    return True
+
 
 def get_filehash(factory, factory_code, factory_eth, acc):
     trx = Transaction()
@@ -358,11 +366,9 @@ def deploy_contracts(args):
     print("receipt_error:", receipt_error)
 
 
-def mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum):
-
-    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+def erc20_method_call(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum, func_name):
     trx_data = func_name + \
-               bytes().fromhex("%024x" % 0 + payer_eth) + \
+               bytes().fromhex("%024x" % 0 + account_eth) + \
                bytes().fromhex("%064x" % sum)
     trx = Transaction()
     trx.add(
@@ -375,8 +381,8 @@ def mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, 
                             is_signer=False, is_writable=True),
                 AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=payer_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(payer_sol), ETH_TOKEN_MINT_ID),
+                AccountMeta(pubkey=account_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(account_sol), ETH_TOKEN_MINT_ID),
                             is_signer=False, is_writable=True),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
@@ -386,16 +392,22 @@ def mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, 
     res = client.send_transaction(trx, acc,
                                   opts=TxOpts(skip_confirmation=True, skip_preflight=True,
                                               preflight_commitment="confirmed"))
-    return (erc20_eth_hex, payer_eth, res["result"])
+    return (erc20_eth_hex, account_eth, res["result"])
 
 
-def mint_erc20_confirm(receipt_list, sum):
+
+def mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum):
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+    return erc20_method_call(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum, func_name)
+
+
+def erc20_method_call_confirm(receipt_list, sum, event):
     event_error = 0
     receipt_error = 0
     nonce_error = 0
     too_small_error = 0
     unknown_error = 0
-    account_minted =[]
+    account_confirmed =[]
 
     for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
         confirm_transaction(client, receipt)
@@ -405,11 +417,19 @@ def mint_erc20_confirm(receipt_list, sum):
             receipt_error = receipt_error + 1
         else:
             if res['result']['meta']['err'] == None:
-                if check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11'):
-                    account_minted.append(acc_eth_hex)
-                    print("ok")
-                else:
-                    event_error = event_error + 1
+                if event == "Transfer":
+                    if check_transfer_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11'):
+                        account_confirmed.append(acc_eth_hex)
+                        print("ok")
+                    else:
+                        event_error = event_error + 1
+                elif event == "Approve":
+                    if check_approve_event(res['result'], erc20_eth_hex, bytes(20).hex(), acc_eth_hex, sum, b'\x11'):
+                        account_confirmed.append(acc_eth_hex)
+                        print("ok")
+                    else:
+                        event_error = event_error + 1
+
             else:
                 print(res['result'])
                 found_nonce = False
@@ -429,9 +449,11 @@ def mint_erc20_confirm(receipt_list, sum):
                 else:
                     unknown_error = unknown_error + 1
 
+    return (account_confirmed, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
-    return (account_minted, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
+def mint_erc20_confirm(receipt_list, sum):
+    return erc20_method_call_confirm(receipt_list, sum, "Transfer")
 
 
 def mint_erc20(accounts, acc, sum):
@@ -460,14 +482,15 @@ def mint_erc20(accounts, acc, sum):
             continue
 
         try:
-            (payer_eth, payer_sol) = next(ia)
+            (account_eth, account_sol) = next(ia)
         except StopIteration as err:
             ia = iter(accounts)
-            (payer_eth, payer_sol) = next(ia)
+            (account_eth, account_sol) = next(ia)
 
-        receipt_list.append(mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, sum))
-
-        if total % 500 == 0 or total == args.count - 1:
+        receipt_list.append(mint_erc20_send(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum))
+        print("total", total)
+        total = total + 1
+        if total % 500 == 0 or total == args.count :
             (account_minted_, event_error_, receipt_error_, nonce_error_, unknown_error_, too_small_error_)  = mint_erc20_confirm(receipt_list, sum)
             account_minted = account_minted + account_minted_
             event_error = event_error + event_error_
@@ -476,7 +499,6 @@ def mint_erc20(accounts, acc, sum):
             unknown_error = unknown_error + unknown_error_
             too_small_error = too_small_error + too_small_error_
             receipt_list = []
-        total = total + 1
 
     return (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
 
@@ -568,7 +590,7 @@ def create_accounts(args, type=transfer_type.erc20):
     if type==transfer_type.spl:
         # spl_token.mint()
         (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_spl(ether_accounts, instance)
-    else:
+    else:   # erc20, uniswap
         # erc20.mint()
         (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_erc20(ether_accounts, instance.acc, 1000 * 10 ** 18)
 
@@ -862,6 +884,75 @@ def create_senders(args):
     print ("\ntotal: ", total)
 
 
+def approve_send(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum):
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('approve(address,uint256)')
+    return erc20_method_call(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum, func_name)
+
+
+def approve_confirm(receipt_list, sum):
+    return erc20_method_call_confirm(receipt_list, sum, "Approve")
+
+
+def approve(sum):
+    event_error = 0
+    receipt_error = 0
+    nonce_error = 0
+    too_small_error = 0
+    unknown_error = 0
+    account_approved = []
+
+    instance = init_wallet()
+
+    with open(contracts_file + args.postfix, mode='r') as f:
+        contracts = json.loads(f.read())
+    with open(accounts_file+args.postfix, mode='r') as f:
+        accounts = json.loads(f.read())
+
+    receipt_list = []
+    ia = iter(accounts)
+    ic = iter(contracts)
+
+    pr_key_list = {}
+    total = 0
+    while total < args.count:
+        print("approve ", total)
+        try:
+            (erc20_sol, erc20_eth_hex, erc20_code) = next(ic)
+        except StopIteration as err:
+            ic = iter(contracts)
+            continue
+
+        try:
+            (account_eth, account_prkey, account_sol) = next(ia)
+        except StopIteration as err:
+            ia = iter(accounts)
+            (account_eth, account_prkey, account_sol) = next(ia)
+
+        pr_key_list[account_eth] = (account_prkey, account_sol)
+
+        receipt_list.append(approve_send(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, instance.acc, sum))
+
+        if total % 500 == 0 or total == args.count - 1:
+            (account_approved_, event_error_, receipt_error_, nonce_error_, unknown_error_,
+             too_small_error_) = approve_confirm(receipt_list, sum)
+
+            account_approved = account_approved + account_approved_
+            event_error = event_error + event_error_
+            receipt_error = receipt_error + receipt_error_
+            nonce_error = nonce_error + nonce_error_
+            unknown_error = unknown_error + unknown_error_
+            too_small_error = too_small_error + too_small_error_
+            receipt_list = []
+        total = total + 1
+
+    approved = []
+    for account_eth_hex in account_approved:
+        (pr_key_hex, account_sol) = pr_key_list.get(account_eth_hex)
+        approved.append((account_eth_hex, pr_key_hex, account_sol ))
+
+    return (approved, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error)
+
+
 def add_liquidity(args):
     instance = init_wallet()
 
@@ -874,6 +965,22 @@ def add_liquidity(args):
     print("router2_eth", router02_eth.hex())
     print("router2_code", router02_code)
 
+    (account_approved, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = approve(1000 * 10 ** 18)
+
+    to_file = []
+    for (account_eth_hex, pr_key_hex, account_sol) in account_approved:
+        to_file.append((account_eth_hex, pr_key_hex, account_sol))
+
+    print("\napprove total:", total)
+    print("approve event_error:", event_error)
+    print("approve receipt_error:", receipt_error)
+    print("approve nonce_error:", nonce_error)
+    print("approve unknown_error:", unknown_error)
+    print("approve AccountDataTooSmall:", too_small_error)
+    print("total accounts:", len(to_file))
+
+    with open(approve_file + args.postfix, mode='w') as f:
+        f.write(json.dumps(to_file))
 
 
 def get_acc(accounts, ia):
@@ -883,6 +990,8 @@ def get_acc(accounts, ia):
         ia = iter(accounts)
         (payer_eth, payer_prkey, payer_sol) = next(ia)
     return (payer_eth, payer_prkey, payer_sol)
+
+
 
 def create_transactions_spl(args):
     # instance = init_wallet()
