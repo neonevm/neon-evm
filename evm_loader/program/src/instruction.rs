@@ -61,7 +61,8 @@ pub enum EvmInstruction<'a> {
         nonce: u8,
     },
 
-    // TODO:
+    // TODO: EvmInstruction::Call
+    // https://github.com/neonlabsorg/neon-evm/issues/188
     // Does not fit in current vision.
     // It is needed to update behavior for all system in whole.
     // /// Call Ethereum-contract action
@@ -214,7 +215,8 @@ impl<'a> EvmInstruction<'a> {
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
             },
-            // TODO:
+            // TODO: EvmInstruction::Call
+            // https://github.com/neonlabsorg/neon-evm/issues/188
             // Does not fit in current vision.
             // It is needed to update behavior for all system in whole.
             // 3 => {
