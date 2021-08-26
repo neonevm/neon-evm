@@ -19,6 +19,7 @@ from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ign
 from enum import Enum
 
 factory_path = "Factory.binary"
+router02_path = "UniswapV2Router02.binary"
 evm_loader_id = os.environ.get("EVM_LOADER")
 trx_cnt = os.environ.get("CNT", 10)
 
@@ -861,6 +862,20 @@ def create_senders(args):
     print ("\ntotal: ", total)
 
 
+def add_liquidity(args):
+    instance = init_wallet()
+
+    res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
+
+    res = instance.loader.deploy(router02_path, caller=instance.caller, config="config.yml"+args.postfix)
+    (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+
+    print("router2", router02)
+    print("router2_eth", router02_eth.hex())
+    print("router2_code", router02_code)
+
+
+
 def get_acc(accounts, ia):
     try:
         (payer_eth, payer_prkey, payer_sol) = next(ia)
@@ -915,9 +930,10 @@ def create_transactions_spl(args):
         transactions.write(json.dumps(trx)+"\n")
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--count', metavar="count of the transaction",  type=int,  help='count transaction (>=1)', default=trx_cnt)
-parser.add_argument('--step', metavar="step of the test", type=str,  help='for ERC20.transfer: deploy, create_senders, create_acc, create_trx, send_trx, '
-                                                                           'veryfy_trx\n for spl-token transfer: create_senders, create_acc_spl, create_trx_spl,'
-                                                                          ' verify_trx_spl')
+parser.add_argument('--step', metavar="step of the test", type=str,
+                    help= ' For ERC20.transfers: deploy, create_senders, create_acc, create_trx, veryfy_trx.'
+                          ' For spl-token transfers: create_senders, create_acc_spl, create_trx_spl, verify_trx_spl'
+                          ' For uniswap-interface swap operations: deploy, create_senders, create_acc, add_liquidity, create_trx, verify_trx.')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
 
 args = parser.parse_args()
@@ -940,5 +956,7 @@ elif args.step == "verify_trx":
     verify_trx(args)
 elif args.step == "verify_trx_spl":
     verify_trx_spl(args)
+elif args.step == "add_liquidity":
+    add_liquidity(args)
 
 
