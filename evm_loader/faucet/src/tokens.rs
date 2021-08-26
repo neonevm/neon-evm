@@ -15,7 +15,7 @@ pub async fn init(addresses: Vec<String>) -> Result<()> {
     info!("Checking tokens...");
     use crate::config;
 
-    let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
+    let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
 
     for token_address in addresses {

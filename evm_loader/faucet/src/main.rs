@@ -55,6 +55,12 @@ async fn execute(app: cli::Application) -> Result<()> {
     info_version();
 
     match app.cmd {
+        cli::Command::Config { file } => {
+            config::show(&file)?;
+        }
+        cli::Command::Env {} => {
+            config::show_env();
+        }
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {
                 num_cpus::get()

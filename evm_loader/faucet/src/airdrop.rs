@@ -25,8 +25,8 @@ pub async fn process(airdrop: Airdrop) -> Result<()> {
     info!("Processing {:?}...", airdrop);
     use crate::{config, tokens};
 
-    let admin_key: SecretKey = config::admin_key().parse()?;
-    let http = web3::transports::Http::new(&config::ethereum_endpoint())?;
+    let admin_key: SecretKey = config::web3_private_key().parse()?;
+    let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
 
     let recipient = ethereum::address_from_str(&airdrop.wallet)?;

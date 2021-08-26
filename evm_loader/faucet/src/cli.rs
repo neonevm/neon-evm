@@ -22,6 +22,21 @@ pub struct Application {
 
 #[derive(StructOpt)]
 pub enum Command {
+    #[structopt(about = "Shows config")]
+    Config {
+        #[structopt(
+            parse(from_os_str),
+            short,
+            long,
+            default_value = &config::DEFAULT_CONFIG,
+            help = "Path to the config file"
+        )]
+        file: PathBuf,
+    },
+
+    #[structopt(about = "Shows environment variables")]
+    Env {},
+
     #[structopt(about = "Starts listening for requests")]
     Run {
         #[structopt(
