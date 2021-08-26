@@ -597,37 +597,6 @@ fn fill_holder_account(
 //     (caller_private, caller_ether, caller_sol, caller_nonce, caller_token, caller_holder)
 // }
 
-fn create_block_token_account(
-    config: &Config,
-    caller_ether: &H160,
-    caller_sol: &Pubkey,
-) -> Result<Pubkey, Error> {
-    use solana_sdk::program_pack::Pack;
-    let creator = &config.signer;
-    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN)?;
-    let holder_seed = bs58::encode(&caller_ether.to_fixed_bytes()).into_string() + "hold";
-    let caller_holder = Pubkey::create_with_seed(caller_sol, &holder_seed, &spl_token::id())?;
-    if config.rpc_client.get_account_with_commitment(&caller_holder, CommitmentConfig::confirmed())?.value.is_none() {
-        let instruction = Instruction::new_with_bincode(
-            config.evm_loader,
-            &(4_u32, caller_sol, holder_seed, minimum_balance_for_account, spl_token::state::Account::LEN, spl_token::id(), caller_holder),
-            vec![
-                AccountMeta::new(creator.pubkey(), true),
-                AccountMeta::new(caller_holder, false),
-                AccountMeta::new(*caller_sol, false),
-                AccountMeta::new(caller_holder, false),
-                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
-                AccountMeta::new_readonly(spl_token::id(), false),
-                AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(sysvar::rent::id(), false),
-            ]
-        );
-
-        send_transaction(config, &[instruction])?;
-    }
-    Ok(caller_holder)
-}
-
 fn get_ether_account_nonce(
     config: &Config, 
     caller_sol: &Pubkey
@@ -883,7 +852,6 @@ fn command_deploy(
 
     // Get caller nonce
     let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
-    let block_token = create_block_token_account(config, &caller_ether, &caller_arg)?;
 
     let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
