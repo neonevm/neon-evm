@@ -120,8 +120,18 @@ struct Rpc {
 
 impl std::fmt::Display for Rpc {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "\nrpc.port = {}", self.port)?;
-        write!(f, "rpc.allowed_origins = {:?}", self.allowed_origins)
+        write!(f, "rpc.port = {}", self.port)?;
+        if env::var(FAUCET_RPC_PORT).is_ok() {
+            writeln!(f, " (overridden by {})", FAUCET_RPC_PORT)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "rpc.allowed_origins = {:?}", self.allowed_origins)?;
+        if env::var(FAUCET_RPC_ALLOWED_ORIGINS).is_ok() {
+            write!(f, " (overridden by {})", FAUCET_RPC_ALLOWED_ORIGINS)
+        } else {
+            write!(f, "")
+        }
     }
 }
 
@@ -137,19 +147,24 @@ struct Web3 {
 
 impl std::fmt::Display for Web3 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "\nweb3.rpc_url = {}", self.rpc_url)?;
+        write!(f, "web3.rpc_url = {}", self.rpc_url)?;
         if env::var(WEB3_RPC_URL).is_ok() {
-            writeln!(f, " (overridden with {})", WEB3_RPC_URL)?;
+            writeln!(f, " (overridden by {})", WEB3_RPC_URL)?;
         } else {
             writeln!(f)?;
         }
         write!(f, "web3.private_key = {}", self.private_key)?;
         if env::var(WEB3_PRIVATE_KEY).is_ok() {
-            writeln!(f, " (overridden with {})", WEB3_PRIVATE_KEY)?;
+            writeln!(f, " (overridden by {})", WEB3_PRIVATE_KEY)?;
         } else {
             writeln!(f)?;
         }
-        write!(f, "web3.tokens = {:?}", self.tokens)
+        write!(f, "web3.tokens = {:?}", self.tokens)?;
+        if env::var(WEB3_TOKENS).is_ok() {
+            write!(f, " (overridden by {})", WEB3_TOKENS)
+        } else {
+            write!(f, "")
+        }
     }
 }
 
@@ -171,13 +186,13 @@ impl Faucet {
 
 impl std::fmt::Display for Faucet {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.rpc)?;
+        writeln!(f, "{}", self.rpc)?;
         write!(f, "{}", self.web3)
     }
 }
 
 /// Splits string as comma-separated list and trims whitespace.
-/// String `"A ,B, C "` will produce vector `["A","B","C"]`.
+/// String `"A ,B, C    "` will produce vector `["A","B","C"]`.
 fn split_comma_separated_list(s: String) -> Vec<String> {
     s.split(',').map(|s| s.trim().to_owned()).collect()
 }

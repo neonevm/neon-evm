@@ -40,12 +40,15 @@ fn setup() -> Result<()> {
 
 /// Shows semantic version and revision hash.
 fn info_version() {
-    let ver = env!("VERGEN_GIT_SEMVER");
-    let rev = env!("VERGEN_GIT_SHA");
-    let rev = if rev.len() < 7 {
-        rev.to_string()
+    let ver = env!("CARGO_PKG_VERSION");
+    let rev = if let Ok(rev) = std::env::var("VERGEN_GIT_SHA") {
+        if rev.len() < 7 {
+            rev
+        } else {
+            rev[..7].to_string()
+        }
     } else {
-        rev[..7].to_string()
+        "<unknown>".to_owned()
     };
     info!("version {} (revision {})", ver, rev);
 }
@@ -79,8 +82,6 @@ async fn execute(app: cli::Application) -> Result<()> {
 
 /// Runs the server.
 async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
-    config::show_env();
-
     check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
