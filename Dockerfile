@@ -1,5 +1,5 @@
 # Install BPF SDK
-FROM solanalabs/rust:1.53.0 AS builder
+FROM solanalabs/rust:1.54.0 AS builder
 RUN rustup component add clippy
 WORKDIR /opt
 RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.9/install)" && \
@@ -19,6 +19,9 @@ RUN cargo clippy
 RUN cargo build --release
 WORKDIR /opt/evm_loader/performance/sender
 RUN cargo clippy
+RUN cargo build --release
+WORKDIR /opt/evm_loader/faucet
+RUN cargo clippy --release
 RUN cargo build --release
 
 # Download and build spl-token
@@ -62,6 +65,7 @@ COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/sol
 COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/performance/sender/target/release/sender /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/faucet/target/release/faucet /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
