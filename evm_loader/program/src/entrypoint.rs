@@ -901,21 +901,21 @@ fn invoke_on_return<'a>(
             }
         },
         ExitReason::Error(error_code) => {
-            debug_print!("Error");
+            msg!("Error");
             match error_code {
-                ExitError::StackUnderflow => { debug_print!("Trying to pop from an empty stack."); 0xe1},
-                ExitError::StackOverflow => { debug_print!("Trying to push into a stack over stack limit."); 0xe2},
-                ExitError::InvalidJump => { debug_print!("Jump destination is invalid."); 0xe3},
-                ExitError::InvalidRange => { debug_print!("An opcode accesses memory region, but the region is invalid."); 0xe4},
-                ExitError::DesignatedInvalid => { debug_print!("Encountered the designated invalid opcode."); 0xe5},
-                ExitError::CallTooDeep => { debug_print!("Call stack is too deep (runtime)."); 0xe6},
-                ExitError::CreateCollision => { debug_print!("Create opcode encountered collision (runtime)."); 0xe7},
-                ExitError::CreateContractLimit => { debug_print!("Create init code exceeds limit (runtime)."); 0xe8},
-                ExitError::OutOfOffset => { debug_print!("An opcode accesses external information, but the request is off offset limit (runtime)."); 0xe9},
-                ExitError::OutOfGas => { debug_print!("Execution runs out of gas (runtime)."); 0xea},
-                ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
-                ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
-                ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
+                ExitError::StackUnderflow => { msg!("Trying to pop from an empty stack."); 0xe1},
+                ExitError::StackOverflow => { msg!("Trying to push into a stack over stack limit."); 0xe2},
+                ExitError::InvalidJump => { msg!("Jump destination is invalid."); 0xe3},
+                ExitError::InvalidRange => { msg!("An opcode accesses memory region, but the region is invalid."); 0xe4},
+                ExitError::DesignatedInvalid => { msg!("Encountered the designated invalid opcode."); 0xe5},
+                ExitError::CallTooDeep => { msg!("Call stack is too deep (runtime)."); 0xe6},
+                ExitError::CreateCollision => { msg!("Create opcode encountered collision (runtime)."); 0xe7},
+                ExitError::CreateContractLimit => { msg!("Create init code exceeds limit (runtime)."); 0xe8},
+                ExitError::OutOfOffset => { msg!("An opcode accesses external information, but the request is off offset limit (runtime)."); 0xe9},
+                ExitError::OutOfGas => { msg!("Execution runs out of gas (runtime)."); 0xea},
+                ExitError::OutOfFund => { msg!("Not enough fund to start the execution (runtime)."); 0xeb},
+                ExitError::PCUnderflow => { msg!("PC underflowed (unused)."); 0xec},
+                ExitError::CreateEmpty => { msg!("Attempt to create an empty account (runtime, unused)."); 0xed},
             }
         },
         ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
