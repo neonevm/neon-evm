@@ -61,18 +61,22 @@ pub enum EvmInstruction<'a> {
         nonce: u8,
     },
 
-    /// Call Ethereum-contract action
-    /// ### Account references
-    ///   0. \[WRITE\] Contract account for execution (Ether account)
-    ///   1. \[WRITE\] Contract code account (Code account)
-    ///   2. \[WRITE\] Caller (Ether account)
-    ///   3. \[SIGNER\] Signer for caller
-    ///   4. \[\] Clock sysvar
-    ///   ... other Ether accounts
-    Call {
-        /// Call data
-        bytes: &'a [u8],
-    },
+    // TODO: EvmInstruction::Call
+    // https://github.com/neonlabsorg/neon-evm/issues/188
+    // Does not fit in current vision.
+    // It is needed to update behavior for all system in whole.
+    // /// Call Ethereum-contract action
+    // /// ### Account references
+    // ///   0. \[WRITE\] Contract account for execution (Ether account)
+    // ///   1. \[WRITE\] Contract code account (Code account)
+    // ///   2. \[WRITE\] Caller (Ether account)
+    // ///   3. \[SIGNER\] Signer for caller
+    // ///   4. \[\] Clock sysvar
+    // ///   ... other Ether accounts
+    // Call {
+    //     /// Call data
+    //     bytes: &'a [u8],
+    // },
 
     ///
     /// Create ethereum account with seed
@@ -211,9 +215,13 @@ impl<'a> EvmInstruction<'a> {
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
             },
-            3 => {
-                EvmInstruction::Call {bytes: rest}
-            },
+            // TODO: EvmInstruction::Call
+            // https://github.com/neonlabsorg/neon-evm/issues/188
+            // Does not fit in current vision.
+            // It is needed to update behavior for all system in whole.
+            // 3 => {
+            //     EvmInstruction::Call {bytes: rest}
+            // },
             4 => {
                 let (_, rest) = rest.split_at(3);
                 let (base, rest) = rest.split_at(32);
