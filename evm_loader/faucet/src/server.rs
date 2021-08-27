@@ -11,8 +11,6 @@ use crate::{airdrop, config};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
-    info!("Allowed origins: {:?}", config::allowed_origins());
-
     HttpServer::new(|| {
         let mut cors = Cors::default()
             .allowed_methods(vec!["POST"])

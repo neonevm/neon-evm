@@ -7,9 +7,6 @@ use std::sync::RwLock;
 
 pub const DEFAULT_CONFIG: &str = "faucet.conf";
 pub const AUTO: &str = "auto";
-pub const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
-pub const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
-pub static ENV: &[&str] = &[WEB3_RPC_URL, WEB3_PRIVATE_KEY];
 
 /// Represents config errors.
 #[derive(thiserror::Error, Debug)]
@@ -28,6 +25,10 @@ pub fn show(filename: &Path) -> Result<()> {
     println!("{}", CONFIG.read().unwrap());
     Ok(())
 }
+
+const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
+const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
+static ENV: &[&str] = &[WEB3_RPC_URL, WEB3_PRIVATE_KEY];
 
 /// Shows the environment variables and their values.
 pub fn show_env() {

@@ -77,7 +77,9 @@ async fn execute(app: cli::Application) -> Result<()> {
 
 /// Runs the server.
 async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
+    config::show_env();
     config::load(config_file)?;
+    config::show(config_file)?;
     tokens::init(config::tokens()).await?;
     server::start(config::rpc_port(), workers).await?;
     Ok(())
