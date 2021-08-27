@@ -22,6 +22,7 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 client = Client(solana_url)
 
 
+@unittest.skip("Depends on 03 instruction that is disabled now")
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

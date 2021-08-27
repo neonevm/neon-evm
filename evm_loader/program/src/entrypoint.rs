@@ -30,7 +30,7 @@ use solana_program::{
 use crate::{
     //    bump_allocator::BumpAllocator,
     account_data::{Account, AccountData, Contract},
-    account_storage::{ProgramAccountStorage, Sender},
+    account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_rent_info},
@@ -248,40 +248,44 @@ fn process_instruction<'a>(
         EvmInstruction::Finalize => {
             do_finalize(program_id, accounts)
         },
-        EvmInstruction::Call {collateral_pool_index, bytes} => {
-            let operator_sol_info = next_account_info(account_info_iter)?;
-            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let system_info = next_account_info(account_info_iter)?;
+        // TODO: EvmInstruction::Call
+        // https://github.com/neonlabsorg/neon-evm/issues/188
+        // Does not fit in current vision.
+        // It is needed to update behavior for all system in whole.
+        // EvmInstruction::Call {collateral_pool_index, bytes} => {
+        //     let operator_sol_info = next_account_info(account_info_iter)?;
+        //     let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+        //     let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[3..];
+        //     let trx_accounts = &accounts[3..];
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            if let Sender::Solana(_addr) = account_storage.get_sender() {
-                // Success execution
-            } else {
-                return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
-            }
+        //     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+        //     if let Sender::Solana(_addr) = account_storage.get_sender() {
+        //         // Success execution
+        //     } else {
+        //         return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
+        //     }
 
-            payment::transfer_from_operator_to_collateral_pool(
-                program_id,
-                collateral_pool_index,
-                operator_sol_info,
-                collateral_pool_sol_info,
-                system_info)?;
+        //     payment::transfer_from_operator_to_collateral_pool(
+        //         program_id,
+        //         collateral_pool_index,
+        //         operator_sol_info,
+        //         collateral_pool_sol_info,
+        //         system_info)?;
 
-            let call_return = do_call(&mut account_storage, trx_accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+        //     let call_return = do_call(&mut account_storage, trx_accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
 
-            if let Some(call_results) = call_return {
-                applies_and_invokes(
-                    program_id,
-                    &mut account_storage,
-                    trx_accounts,
-                    None,
-                    call_results)?;
-            }
+        //     if let Some(call_results) = call_return {
+        //         applies_and_invokes(
+        //             program_id,
+        //             &mut account_storage,
+        //             trx_accounts,
+        //             None,
+        //             call_results)?;
+        //     }
 
-            Ok(())
-        },
+        //     Ok(())
+        // },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
@@ -309,6 +313,7 @@ fn process_instruction<'a>(
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
 
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
 
@@ -369,6 +374,7 @@ fn process_instruction<'a>(
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
@@ -444,6 +450,7 @@ fn process_instruction<'a>(
             }
 
             let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;

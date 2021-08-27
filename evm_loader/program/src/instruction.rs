@@ -61,20 +61,24 @@ pub enum EvmInstruction<'a> {
         nonce: u8,
     },
 
-    /// Call Ethereum-contract action
-    /// ### Account references
-    ///   0. \[WRITE\] Contract account for execution (Ether account)
-    ///   1. \[WRITE\] Contract code account (Code account)
-    ///   2. \[WRITE\] Caller (Ether account)
-    ///   3. \[SIGNER\] Signer for caller
-    ///   4. \[\] Clock sysvar
-    ///   ... other Ether accounts
-    Call {
-        /// Seed index for a collateral pool account
-        collateral_pool_index: u32,
-        /// Call data
-        bytes: &'a [u8],
-    },
+    // TODO: EvmInstruction::Call
+    // https://github.com/neonlabsorg/neon-evm/issues/188
+    // Does not fit in current vision.
+    // It is needed to update behavior for all system in whole.
+    // /// Call Ethereum-contract action
+    // /// ### Account references
+    // ///   0. \[WRITE\] Contract account for execution (Ether account)
+    // ///   1. \[WRITE\] Contract code account (Code account)
+    // ///   2. \[WRITE\] Caller (Ether account)
+    // ///   3. \[SIGNER\] Signer for caller
+    // ///   4. \[\] Clock sysvar
+    // ///   ... other Ether accounts
+    // Call {
+    //     /// Seed index for a collateral pool account
+    //     collateral_pool_index: u32,
+    //     /// Call data
+    //     bytes: &'a [u8],
+    // },
 
     ///
     /// Create ethereum account with seed
@@ -213,11 +217,15 @@ impl<'a> EvmInstruction<'a> {
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
                 EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
             },
-            3 => {
-                let (collateral_pool_index, rest) = rest.split_at(4);
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::Call {collateral_pool_index, bytes: rest}
-            },
+            // TODO: EvmInstruction::Call
+            // https://github.com/neonlabsorg/neon-evm/issues/188
+            // Does not fit in current vision.
+            // It is needed to update behavior for all system in whole.
+            // 3 => {
+            //     let (collateral_pool_index, rest) = rest.split_at(4);
+            //     let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+            //     EvmInstruction::Call {collateral_pool_index, bytes: rest}
+            // },
             4 => {
                 let (_, rest) = rest.split_at(3);
                 let (base, rest) = rest.split_at(32);
