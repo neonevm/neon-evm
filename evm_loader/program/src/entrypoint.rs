@@ -252,21 +252,34 @@ fn process_instruction<'a>(
         // https://github.com/neonlabsorg/neon-evm/issues/188
         // Does not fit in current vision.
         // It is needed to update behavior for all system in whole.
-        // EvmInstruction::Call {bytes} => {
-        //     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
+        // EvmInstruction::Call {collateral_pool_index, bytes} => {
+        //     let operator_sol_info = next_account_info(account_info_iter)?;
+        //     let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+        //     let system_info = next_account_info(account_info_iter)?;
+
+        //     let trx_accounts = &accounts[3..];
+
+        //     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
         //     if let Sender::Solana(_addr) = account_storage.get_sender() {
         //         // Success execution
         //     } else {
         //         return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
         //     }
 
-        //     let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+        //     payment::transfer_from_operator_to_collateral_pool(
+        //         program_id,
+        //         collateral_pool_index,
+        //         operator_sol_info,
+        //         collateral_pool_sol_info,
+        //         system_info)?;
+
+        //     let call_return = do_call(&mut account_storage, trx_accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
 
         //     if let Some(call_results) = call_return {
         //         applies_and_invokes(
         //             program_id,
         //             &mut account_storage,
-        //             accounts,
+        //             trx_accounts,
         //             None,
         //             call_results)?;
         //     }
