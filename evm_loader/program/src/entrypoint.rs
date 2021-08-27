@@ -478,7 +478,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let mut storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts).map_err(|err| {
+            let mut storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
@@ -552,7 +552,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info, trx_accounts)?;
+            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
             storage.check_accounts(program_id, trx_accounts)?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
