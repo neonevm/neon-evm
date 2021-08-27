@@ -30,7 +30,7 @@ use solana_program::{
 use crate::{
     //    bump_allocator::BumpAllocator,
     account_data::{Account, AccountData, Contract},
-    account_storage::{ProgramAccountStorage, Sender},
+    account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_rent_info},
@@ -248,28 +248,31 @@ fn process_instruction<'a>(
         EvmInstruction::Finalize => {
             do_finalize(program_id, accounts)
         },
-        EvmInstruction::Call {bytes} => {
-            StorageAccount::check_for_blocked_accounts(program_id, accounts)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
-            if let Sender::Solana(_addr) = account_storage.get_sender() {
-                // Success execution
-            } else {
-                return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
-            }
+        // TODO: EvmInstruction::Call
+        // https://github.com/neonlabsorg/neon-evm/issues/188
+        // Does not fit in current vision.
+        // It is needed to update behavior for all system in whole.
+        // EvmInstruction::Call {bytes} => {
+        //     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
+        //     if let Sender::Solana(_addr) = account_storage.get_sender() {
+        //         // Success execution
+        //     } else {
+        //         return Err!(ProgramError::InvalidArgument; "This method should used with Solana sender");
+        //     }
 
-            let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
+        //     let call_return = do_call(&mut account_storage, accounts, bytes.to_vec(), U256::zero(), u64::MAX)?;
 
-            if let Some(call_results) = call_return {
-                applies_and_invokes(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    None,
-                    call_results)?;
-            }
+        //     if let Some(call_results) = call_return {
+        //         applies_and_invokes(
+        //             program_id,
+        //             &mut account_storage,
+        //             accounts,
+        //             None,
+        //             call_results)?;
+        //     }
 
-            Ok(())
-        },
+        //     Ok(())
+        // },
         EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
