@@ -8,7 +8,7 @@ use std::sync::RwLock;
 pub const DEFAULT_CONFIG: &str = "faucet.conf";
 pub const AUTO: &str = "auto";
 
-/// Represents config errors.
+/// Represents the config errors.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed to read config '{1}': {0}")]
@@ -17,14 +17,8 @@ pub enum Error {
     Parse(#[source] toml::de::Error, std::path::PathBuf),
 }
 
+/// Represents the config result type.
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// Shows the current config.
-pub fn show(filename: &Path) -> Result<()> {
-    load(filename)?;
-    println!("{}", CONFIG.read().unwrap());
-    Ok(())
-}
 
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
@@ -40,7 +34,9 @@ pub fn show_env() {
 
 /// Loads the config from a file and applies defined environment variables.
 pub fn load(filename: &Path) -> Result<()> {
-    CONFIG.write().unwrap().load(filename)?;
+    if filename.exists() {
+        CONFIG.write().unwrap().load(filename)?;
+    }
 
     for e in ENV {
         if let Ok(val) = env::var(e) {
@@ -53,6 +49,11 @@ pub fn load(filename: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Shows the current config.
+pub fn show() {
+    println!("{}", CONFIG.read().unwrap())
 }
 
 /// Gets the `rpc.port` value.
@@ -83,17 +84,6 @@ pub fn web3_private_key() -> String {
 /// Gets the `ethereum.tokens` addresses.
 pub fn tokens() -> Vec<String> {
     CONFIG.read().unwrap().web3.tokens.clone()
-}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-struct General {
-    environment: String,
-}
-
-impl std::fmt::Display for General {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "general.environment = {}", self.environment)
-    }
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -138,7 +128,6 @@ impl std::fmt::Display for Web3 {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Faucet {
-    general: General,
     rpc: Rpc,
     web3: Web3,
 }
@@ -155,8 +144,7 @@ impl Faucet {
 
 impl std::fmt::Display for Faucet {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "{}", self.general)?;
-        writeln!(f, "{}", self.rpc)?;
+        write!(f, "{}", self.rpc)?;
         write!(f, "{}", self.web3)
     }
 }

@@ -12,7 +12,7 @@ mod server;
 mod tokens;
 
 use color_eyre::Result;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
@@ -56,7 +56,9 @@ async fn execute(app: cli::Application) -> Result<()> {
 
     match app.cmd {
         cli::Command::Config { file } => {
-            config::show(&file)?;
+            check_file_exists(&file);
+            config::load(&file)?;
+            config::show();
         }
         cli::Command::Env {} => {
             config::show_env();
@@ -78,9 +80,22 @@ async fn execute(app: cli::Application) -> Result<()> {
 /// Runs the server.
 async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
     config::show_env();
+
+    check_file_exists(config_file);
     config::load(config_file)?;
-    config::show(config_file)?;
+    config::show();
+
     tokens::init(config::tokens()).await?;
     server::start(config::rpc_port(), workers).await?;
+
     Ok(())
+}
+
+fn check_file_exists(file: &std::path::Path) {
+    if !file.exists() {
+        warn!(
+            "File {:?} is missing; will use settings from environment variables (if any)",
+            file
+        );
+    }
 }
