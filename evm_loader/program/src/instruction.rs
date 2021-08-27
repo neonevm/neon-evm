@@ -74,6 +74,8 @@ pub enum EvmInstruction<'a> {
     // ///   4. \[\] Clock sysvar
     // ///   ... other Ether accounts
     // Call {
+    //     /// Seed index for a collateral pool account
+    //     collateral_pool_index: u32,
     //     /// Call data
     //     bytes: &'a [u8],
     // },
@@ -220,7 +222,9 @@ impl<'a> EvmInstruction<'a> {
             // Does not fit in current vision.
             // It is needed to update behavior for all system in whole.
             // 3 => {
-            //     EvmInstruction::Call {bytes: rest}
+            //     let (collateral_pool_index, rest) = rest.split_at(4);
+            //     let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+            //     EvmInstruction::Call {collateral_pool_index, bytes: rest}
             // },
             4 => {
                 let (_, rest) = rest.split_at(3);
