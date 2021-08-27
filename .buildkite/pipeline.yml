@@ -15,7 +15,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "148-In_Remix_false_Transaction_mined_but_execution_failed_when_Out_of_Gas_in_neon-evm"
+       branch: "${PROXY_BRANCH:-develop}"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
