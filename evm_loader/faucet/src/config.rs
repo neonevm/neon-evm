@@ -5,6 +5,10 @@ use std::env;
 use std::path::Path;
 use std::sync::RwLock;
 
+lazy_static::lazy_static! {
+    static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
+}
+
 pub const DEFAULT_CONFIG: &str = "faucet.conf";
 pub const AUTO: &str = "auto";
 
@@ -13,16 +17,29 @@ pub const AUTO: &str = "auto";
 pub enum Error {
     #[error("Failed to read config '{1}': {0}")]
     Read(#[source] std::io::Error, std::path::PathBuf),
+
     #[error("Failed to parse config '{1}': {0}")]
     Parse(#[source] toml::de::Error, std::path::PathBuf),
+
+    #[error("Failed to parse RPC port")]
+    ParsePort(#[from] std::num::ParseIntError),
 }
 
 /// Represents the config result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+const FAUCET_RPC_PORT: &str = "FAUCET_RPC_PORT";
+const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
-static ENV: &[&str] = &[WEB3_RPC_URL, WEB3_PRIVATE_KEY];
+const WEB3_TOKENS: &str = "WEB3_TOKENS";
+static ENV: &[&str] = &[
+    FAUCET_RPC_PORT,
+    FAUCET_RPC_ALLOWED_ORIGINS,
+    WEB3_RPC_URL,
+    WEB3_PRIVATE_KEY,
+    WEB3_TOKENS,
+];
 
 /// Shows the environment variables and their values.
 pub fn show_env() {
@@ -41,8 +58,15 @@ pub fn load(filename: &Path) -> Result<()> {
     for e in ENV {
         if let Ok(val) = env::var(e) {
             match *e {
+                FAUCET_RPC_PORT => CONFIG.write().unwrap().rpc.port = val.parse::<u16>()?,
+                FAUCET_RPC_ALLOWED_ORIGINS => {
+                    CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(val)
+                }
                 WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
                 WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
+                WEB3_TOKENS => {
+                    CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(val)
+                }
                 _ => unreachable!(),
             }
         }
@@ -88,7 +112,9 @@ pub fn tokens() -> Vec<String> {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Rpc {
+    #[serde(default)]
     port: u16,
+    #[serde(default)]
     allowed_origins: Vec<String>,
 }
 
@@ -105,6 +131,7 @@ struct Web3 {
     rpc_url: String,
     #[serde(default)]
     private_key: String,
+    #[serde(default)]
     tokens: Vec<String>,
 }
 
@@ -149,6 +176,8 @@ impl std::fmt::Display for Faucet {
     }
 }
 
-lazy_static::lazy_static! {
-    static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
+/// Splits string as comma-separated list and trims whitespace.
+/// String `"A ,B, C "` will produce vector `["A","B","C"]`.
+fn split_comma_separated_list(s: String) -> Vec<String> {
+    s.split(',').map(|s| s.trim().to_owned()).collect()
 }
