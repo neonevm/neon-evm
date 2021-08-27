@@ -70,6 +70,19 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
+    pub fn check_for_blocked_accounts(program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+        for account_info in accounts.iter().filter(|a| a.owner == program_id) {
+            let data = account_info.try_borrow_data()?;
+            if let AccountData::Account(account) = AccountData::unpack(&data)? {
+                if account.blocked.is_some() {
+                    return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on blocked account {}", account_info.key);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn unblock_accounts_and_destroy(self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
