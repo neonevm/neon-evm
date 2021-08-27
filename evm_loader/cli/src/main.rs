@@ -30,7 +30,6 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
-    sysvar::{clock, rent},
 };
 use serde_json::json;
 use std::{
@@ -931,8 +930,6 @@ fn command_deploy(
                         AccountMeta::new_readonly(config.evm_loader, false),
                         AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
                         AccountMeta::new_readonly(spl_token::id(), false),
-                        AccountMeta::new(rent::id(), false),
-                        AccountMeta::new(clock::id(), false),
                         ];
 
     // Send trx_from_account_data_instruction
@@ -963,8 +960,6 @@ fn command_deploy(
                             AccountMeta::new_readonly(config.evm_loader, false),
                             AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
-                            AccountMeta::new(rent::id(), false),
-                            AccountMeta::new(clock::id(), false),
                             ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;

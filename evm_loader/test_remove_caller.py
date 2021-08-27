@@ -68,7 +68,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
         print(result)
@@ -94,7 +93,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
 
         #err = "invalid program argument"
