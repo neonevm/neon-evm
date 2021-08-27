@@ -33,7 +33,7 @@ use crate::{
     account_storage::{ProgramAccountStorage, Sender},
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction, find_rent_info},
+    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
     executor_state::{ ExecutorState, ExecutorSubstate },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
@@ -124,19 +124,19 @@ fn process_instruction<'a>(
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
         EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
-            let rent_info = find_rent_info(accounts)?;
-            let rent = Rent::from_account_info(rent_info)?;
-
+            let rent = Rent::get()?;
+            
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
-
+            
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
-
+            
             let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
             if expected_address != *account_info.key {
                 return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
             };
+            
 
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
@@ -183,9 +183,6 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner, token} => {
-            let rent_info = find_rent_info(accounts)?;
-            let rent = Rent::from_account_info(rent_info)?;
-
             let funding_info = next_account_info(account_info_iter)?;
             let created_info = next_account_info(account_info_iter)?;
             let base_info = next_account_info(account_info_iter)?;
@@ -200,7 +197,7 @@ fn process_instruction<'a>(
             let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
 
             let space_as_usize = usize::try_from(space).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
-            let account_lamports = rent.minimum_balance(space_as_usize) + lamports;
+            let account_lamports = Rent::get()?.minimum_balance(space_as_usize) + lamports;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
             let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
