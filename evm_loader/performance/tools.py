@@ -17,10 +17,6 @@ from spl.token.instructions import get_associated_token_address
 from spl.token.client import *
 from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ignore
 
-erc20_factory_path = "contracts/Factory.binary"
-router02_path = "contracts/uniswap/UniswapV2Router02.binary"
-weth9_path = "contracts/uniswap/WETH9.binary"
-factory_path = "contracts/uniswap/UniswapV2Factory.binary"
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 trx_cnt = os.environ.get("CNT", 10)
@@ -33,8 +29,6 @@ keccakprog = "KeccakSecp256k11111111111111111111111111111"
 sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 contracts_file = "contract.json"
 accounts_file = "account.json"
-approve_file = "approve.json"
-router02_file = "router02.json"
 transactions_file = "transaction.json"
 senders_file = "sender.json"
 verify_file = "verify.json"

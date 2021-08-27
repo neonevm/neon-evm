@@ -34,6 +34,6 @@ elif args.step == "verify_trx_spl":
 elif args.step == "add_liquidity":
     add_liquidity(args)
 elif args.step == "deploy_uniswap":
-    add_liquidity(args)
+    deploy_uniswap(args)
 
 

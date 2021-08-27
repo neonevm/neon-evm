@@ -1,6 +1,8 @@
 from tools import *
 from spl_ import mint_spl
 
+erc20_factory_path = "contracts/Factory.binary"
+
 def check_address_event(result, factory_eth, erc20_eth):
     assert (result['meta']['err'] == None)
     assert (len(result['meta']['innerInstructions']) == 2)

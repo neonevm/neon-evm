@@ -1,24 +1,95 @@
 from tools import *
 
+# weth9_path = "contracts/uniswap/WETH9.binary"
+# factory_path_src = "contracts/uniswap/UniswapV2Factory.bin"
+# factory_path_dest = "contracts/uniswap/UniswapV2Factory.binary"
+# router02_path_src = "contracts/uniswap/UniswapV2Router02.bin"
+# router02_path_dest = "contracts/uniswap/UniswapV2Router02.binary"
 
+approve_file = "approve.json"
+uniswap_contracts_file = "uniswap_contracts.json"
+
+factory_eth = "9D6A7a98721437Ae59D4b8253e80eBc642196d56"
+router_eth = "DeF2f37003e4FFeF6B94C6fb4961f0dCc97f15cA"
+weth_eth = "50dbC82D76409D19544d6ca95D844633E222aC71"
+
+def deploy_ctor_init(instance, src, dest, ctor_hex):
+    ctor = bytearray().fromhex(ctor_hex)
+
+    with open(src, mode='rb') as rbin:
+        binary = rbin.read() + ctor
+        with open(dest, mode='wb') as wbin:
+            wbin.write(binary)
+            res = instance.loader.deploy(dest, instance.caller)
+            return (res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 def deploy_uniswap(args):
+
+
     instance = init_wallet()
+    (weth_sol, _)  = instance.loader.ether2program(weth_eth)
+    (factory_sol, _)  = instance.loader.ether2program(factory_eth)
+    (router_sol, _)  = instance.loader.ether2program(router_eth)
 
-    res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
+    weth_code = instance.loader.ether2seed(weth_eth)[0]
+    factory_code = instance.loader.ether2seed(factory_eth)[0]
+    router_code = instance.loader.ether2seed(router_eth)[0]
 
-    res = instance.loader.deploy(router02_path, caller=instance.caller, config="config.yml" + args.postfix)
-    (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    # res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
 
-    print("router2", router02)
-    print("router2_eth", router02_eth.hex())
-    print("router2_code", router02_code)
+    # # deploy WETH
+    # res = instance.loader.deploy(weth9_path, caller=instance.caller, config="config.yml" + args.postfix)
+    # (weth9, weth9_eth, weth9_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    # print("weth9", weth9)
+    # print("weth9_eth", weth9_eth.hex())
+    # print("weth9_code", weth9_code)
+    #
+    # res = instance.loader.deploy(router02_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
+    # (weth9, weth9_eth, weth9_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    # print("weth9", weth9)
+    # print("weth9_eth", weth9_eth.hex())
+    # print("weth9_code", weth9_code)
+    #
+    # return;
+
+    # # deploy Factory
+    # ctor_hex =str("%024x" % 0) + instance.caller_ether.hex()
+    # print("ctor_hex", ctor_hex)
+    # with open(factory_path_src, mode='r') as r:
+    #     content = r.read() + ctor_hex
+    #     bin = bytearray().fromhex(content)
+    #     with open(factory_path_dest, mode='wb') as w:
+    #         w.write(bin)
+    #         res = instance.loader.deploy(factory_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
+    #         (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    #
+    #         print("factory", factory)
+    #         print("factory_eth", factory_eth.hex())
+    #         print("factory_code", factory_code)
+
+    # deploy Router02
+    #
+    # factory_eth = bytes().fromhex("c03a0611c7df00c760343b0752d6c572667ebb90")
+    # weth9_eth = bytes().fromhex("c03a0611c7df00c760343b0752d6c572667ebb90")
+    # ctor_hex = str("%024x" % 0) + factory_eth.hex() + str("%024x" % 0) + weth9_eth.hex()
+    # print("ctor_hex", ctor_hex)
+    # with open(router02_path_src, mode='rb') as rbin:
+    #     binary = rbin.read() + bytes().fromhex(ctor_hex)
+    #     with open(router02_path_dest, mode='wb') as wbin:
+    #         wbin.write(binary)
+    #         res = instance.loader.deploy(router02_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
+    #         (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    #
+    #         print("router02", router02)
+    #         print("router02_eth", router02_eth.hex())
+    #         print("router02_code", router02_code)
 
     to_file = []
-    to_file.append((router02, router02_eth.hex(), router02_code))
-    with open(router02_file + args.postfix, mode='w') as f:
+    to_file.append((weth_sol, weth_eth, str(weth_code)))
+    to_file.append((factory_sol, factory_eth, str(factory_code)))
+    to_file.append((router_sol, router_eth, str(router_code)))
+    with open(uniswap_contracts_file + args.postfix, mode='w') as f:
         f.write(json.dumps(to_file))
-
 
 
 
@@ -97,17 +168,23 @@ def add_liquidity(args):
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
 
-    res = instance.loader.deploy(router02_path, caller=instance.caller, config="config.yml"+args.postfix)
-    (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    # res = instance.loader.deploy(router02_path, caller=instance.caller, config="config.yml"+args.postfix)
+    # (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
-    print("router2", router02)
-    print("router2_eth", router02_eth.hex())
-    print("router2_code", router02_code)
+    # print("router2", router02)
+    # print("router2_eth", router02_eth.hex())
+    # print("router2_code", router02_code)
 
-    to_file = []
-    to_file.append((router02, router02_eth.hex(), router02_code))
-    with open(router02_file + args.postfix, mode='w') as f:
-        f.write(json.dumps(to_file))
+    with open(uniswap_contracts_file + args.postfix, mode='r') as f:
+        contracts = json.loads(f.read())
+
+    (weth_sol, weth_eth, weth_code) = contracts[0]
+    (factory_sol, factory_eth, factory_code)= contracts[1]
+    (router_sol, router_eth, router_code) = contracts[2]
+
+    print(weth_sol, weth_eth, weth_code)
+    print(factory_sol, factory_eth, factory_code)
+    print(router_sol, router_eth, router_code)
 
     (account_approved, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = approve(args, 1000 * 10 ** 18)
 
