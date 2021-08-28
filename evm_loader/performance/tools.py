@@ -58,6 +58,7 @@ class init_senders():
         if self.current >= len(self.accounts):
             self.current = 0
         return self.accounts[self.current]
+    print ("check event Approval")
 
 
 class init_wallet():
@@ -104,50 +105,61 @@ def check_approve_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     # assert(result['meta']['err'] == None)
 
     if (len(result['meta']['innerInstructions']) != 1):
+        print("check event Approval")
         print("len(result['meta']['innerInstructions']) != 1", len(result['meta']['innerInstructions']))
         return False
 
     if (len(result['meta']['innerInstructions'][0]['instructions']) != 2):
+        print("check event Approval")
         print("len(result['meta']['innerInstructions'][0]['instructions']) != 2",
               len(result['meta']['innerInstructions'][0]['instructions']))
         return False
 
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
     if (data[:1] != b'\x06'):  #  OnReturn
+        print("check event Approval")
         print("data[:1] != x06", data[:1].hex())
         return False
 
     if(data[1:2] != return_code):    # 11 - Machine encountered an explict stop,  # 12 - Machine encountered an explict return
+        print("check event Approval")
         print("data[1:2] != return_code", data[1:2].hex(), return_code.hex())
         return False
 
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
     if(data[:1] != b'\x07'):  # 7 means OnEvent
+        print("check event Approval")
         print("data[:1] != x07", data[:1].hex())
         return  False
 
 
     if (data[1:21] != bytes.fromhex(erc20_eth)):
+        print("check event Approval")
         print("data[1:21] != bytes.fromhex(erc20_eth)", data[1:21].hex(), erc20_eth)
         return False
 
     if(data[21:29] != bytes().fromhex('%016x' % 3)[::-1]):  # topics len
+        print("check event Approval")
         print("data[21:29] != bytes().fromhex('%016x' % 3)[::-1]", data[21:29].hex())
         return False
 
     if(data[29:61] != abi.event_signature_to_log_topic('Approval(address,address,uint256)')):  # topics
+        print("check event Approval")
         print("data[29:61] != abi.event_signature_to_log_topic('Approval(address,address,uint256)')",
               data[29:61].hex(),
               abi.event_signature_to_log_topic('Approval(address,address,uint256)').hex())
         return False
 
     if (data[61:93] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_from)):
+        print(result)
+        print("check event Approval")
         print("data[61:93] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)",
               data[61:93].hex(),
               (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)).hex())
         return False
 
     if(data[93:125] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_to)):  # from
+        print("check event Approval")
         print("data[93:125] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)",
               data[93:125].hex(),
               (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)).hex()
@@ -155,6 +167,7 @@ def check_approve_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
         return False
 
     if (data[125:157] != bytes().fromhex("%064x" % sum)):  # value
+        print("check event Approval")
         print("data[125:157] != bytes().fromhex('%064x' % sum)",
               data[125:157].hex(),
               '%064x' % sum)
@@ -167,50 +180,61 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     # assert(result['meta']['err'] == None)
 
     if (len(result['meta']['innerInstructions']) != 1):
+        print("check event Transfer")
         print("len(result['meta']['innerInstructions']) != 1", len(result['meta']['innerInstructions']))
         return False
 
     if (len(result['meta']['innerInstructions'][0]['instructions']) != 2):
+        print("check event Transfer")
+        print(result)
         print("len(result['meta']['innerInstructions'][0]['instructions']) != 2",
               len(result['meta']['innerInstructions'][0]['instructions']))
         return False
 
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][1]['data'])
     if (data[:1] != b'\x06'):  #  OnReturn
+        print("check event Transfer")
         print("data[:1] != x06", data[:1].hex())
         return False
 
     if(data[1:2] != return_code):    # 11 - Machine encountered an explict stop,  # 12 - Machine encountered an explict return
+        print("check event Transfer")
         print("data[1:2] != return_code", data[1:2].hex(), return_code.hex())
         return False
 
     data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
     if(data[:1] != b'\x07'):  # 7 means OnEvent
+        print("check event Transfer")
         print("data[:1] != x07", data[:1].hex())
         return  False
 
 
     if (data[1:21] != bytes.fromhex(erc20_eth)):
+        print("check event Transfer")
         print("data[1:21] != bytes.fromhex(erc20_eth)", data[1:21].hex(), erc20_eth)
         return False
 
     if(data[21:29] != bytes().fromhex('%016x' % 3)[::-1]):  # topics len
+        print("check event Transfer")
         print("data[21:29] != bytes().fromhex('%016x' % 3)[::-1]", data[21:29].hex())
         return False
 
     if(data[29:61] != abi.event_signature_to_log_topic('Transfer(address,address,uint256)')):  # topics
+        print("check event Transfer")
         print("data[29:61] != abi.event_signature_to_log_topic('Transfer(address,address,uint256)')",
               data[29:61].hex(),
               abi.event_signature_to_log_topic('Transfer(address,address,uint256)').hex())
         return False
 
     if (data[61:93] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_from)):
+        print("check event Transfer")
         print("data[61:93] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)",
               data[61:93].hex(),
               (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_from)).hex())
         return False
 
     if(data[93:125] != bytes().fromhex("%024x" % 0) + bytes.fromhex(acc_to)):  # from
+        print("check event Transfer")
         print("data[93:125] != bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)",
               data[93:125].hex(),
               (bytes().fromhex('%024x' % 0) + bytes.fromhex(acc_to)).hex()
@@ -218,6 +242,7 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
         return False
 
     if (data[125:157] != bytes().fromhex("%064x" % sum)):  # value
+        print("check event Transfer")
         print("data[125:157] != bytes().fromhex('%064x' % sum)",
               data[125:157].hex(),
               '%064x' % sum)
@@ -226,7 +251,37 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     return True
 
 
-def erc20_method_call(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account_sol, acc, sum, func_name):
+def sol_instr_keccak(keccak_instruction):
+    return TransactionInstruction(
+        program_id=keccakprog,
+        data=keccak_instruction,
+        keys=[AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False)]
+    )
+
+
+def sol_instr_05(evm_instruction, contract, contract_code, caller):
+    account_meta = [
+        AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+        AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+        AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+        # AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+    ]
+    if contract_code != "":
+        account_meta.insert(2, AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True))
+
+    return TransactionInstruction(program_id=evm_loader_id,
+                                  data=bytearray.fromhex("05") + evm_instruction,
+                                  keys=account_meta)
+
+
+def mint_erc20_send(erc20_sol, erc20_code, account_eth, account_sol, acc, sum):
+    func_name = bytearray.fromhex("03") + abi.function_signature_to_4byte_selector('mint(address,uint256)')
+
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + account_eth) + \
                bytes().fromhex("%064x" % sum)
@@ -252,10 +307,10 @@ def erc20_method_call(erc20_sol, erc20_eth_hex, erc20_code, account_eth, account
     res = client.send_transaction(trx, acc,
                                   opts=TxOpts(skip_confirmation=True, skip_preflight=True,
                                               preflight_commitment="confirmed"))
-    return (erc20_eth_hex, account_eth, res["result"])
+    return  res["result"]
 
 
-def erc20_method_call_confirm(receipt_list, sum, event, from_acc=bytes(20).hex()):
+def mint_or_approve_confirm(receipt_list, sum, event):
     event_error = 0
     receipt_error = 0
     nonce_error = 0
@@ -263,7 +318,7 @@ def erc20_method_call_confirm(receipt_list, sum, event, from_acc=bytes(20).hex()
     unknown_error = 0
     account_confirmed =[]
 
-    for (erc20_eth_hex, acc_eth_hex, receipt) in receipt_list:
+    for (erc20_eth_hex, acc_from, acc_to, receipt) in receipt_list:
         confirm_transaction(client, receipt)
         res = client.get_confirmed_transaction(receipt)
 
@@ -272,14 +327,14 @@ def erc20_method_call_confirm(receipt_list, sum, event, from_acc=bytes(20).hex()
         else:
             if res['result']['meta']['err'] == None:
                 if event == "Transfer":
-                    if check_transfer_event(res['result'], erc20_eth_hex, from_acc, acc_eth_hex, sum, b'\x11'):
-                        account_confirmed.append(acc_eth_hex)
+                    if check_transfer_event(res['result'], erc20_eth_hex, acc_from, acc_to, sum, b'\x11'):
+                        account_confirmed.append(acc_to)
                         print("ok")
                     else:
                         event_error = event_error + 1
-                elif event == "Approve":
-                    if check_approve_event(res['result'], erc20_eth_hex, from_acc, acc_eth_hex, sum, b'\x12'):
-                        account_confirmed.append(acc_eth_hex)
+                elif event == "Approval":
+                    if check_approve_event(res['result'], erc20_eth_hex, acc_from, acc_to,  sum, b'\x12'):
+                        account_confirmed.append(acc_from)
                         print("ok")
                     else:
                         event_error = event_error + 1
@@ -324,8 +379,8 @@ def get_acc(accounts, ia):
     return (payer_eth, payer_prkey, payer_sol)
 
 
-def get_trx(contract_eth, caller, caller_eth, input, pr_key, value):
-    if trx_count.get(caller) != None:
+def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_nonce_counter=True):
+    if trx_count.get(caller) != None and use_local_nonce_counter:
         trx_count[caller] = trx_count[caller] + 1
     else:
         trx_count[caller] = getTransactionCount(client, caller)
