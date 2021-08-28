@@ -58,7 +58,6 @@ class init_senders():
         if self.current >= len(self.accounts):
             self.current = 0
         return self.accounts[self.current]
-    print ("check event Approval")
 
 
 class init_wallet():
