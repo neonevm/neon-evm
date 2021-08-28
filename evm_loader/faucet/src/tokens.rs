@@ -3,6 +3,7 @@
 use crate::ethereum;
 
 use color_eyre::{eyre::eyre, Result};
+use derive_new::new;
 use tracing::{error, info};
 
 use std::sync::RwLock;
@@ -68,15 +69,9 @@ pub fn multiplication_factor(token_address: &str) -> Result<u64> {
     Ok(factor)
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(new, Debug, Default, Clone)]
 struct Token {
     decimals: u32,
-}
-
-impl Token {
-    fn new(decimals: u32) -> Self {
-        Token { decimals }
-    }
 }
 
 type Tokens = std::collections::HashMap<String, Token>;

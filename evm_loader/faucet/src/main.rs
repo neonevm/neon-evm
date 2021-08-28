@@ -85,11 +85,8 @@ async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
     check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
-
     tokens::init(config::tokens()).await?;
-    server::start(config::rpc_port(), workers).await?;
-
-    Ok(())
+    server::start(config::rpc_port(), workers).await
 }
 
 fn check_file_exists(file: &std::path::Path) {
