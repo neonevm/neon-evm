@@ -412,8 +412,15 @@ def create_pair(tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, inst
     pair_eth = bytes(Web3.keccak(b'\xff' + bytes.fromhex(factory_eth) + salt + hash)[-20:])
     (pair_sol, _) = instance.loader.ether2program(pair_eth)
 
-    seed = b58encode(bytes.fromhex(pair_eth.hex()))
-    pair_code = accountWithSeed(instance.acc.public_key(), str(seed, 'utf8'), PublicKey(evm_loader_id))
+    if getBalance(pair_sol) == 0:
+        seed = b58encode(bytes.fromhex(pair_eth.hex()))
+        pair_code = accountWithSeed(instance.acc.public_key(), str(seed, 'utf8'), PublicKey(evm_loader_id))
+    else:
+        data = getAccountData(client, pair_sol, ACCOUNT_INFO_LAYOUT.sizeof())
+        pair_code = PublicKey(ACCOUNT_INFO_LAYOUT.parse(data).code_acc)
+    print("\npair_info.code_acc",pair_code, "\n")
+
+
 
     # (pair_code, _) = instance.loader.ether2seed(pair_eth)
     print("")
@@ -436,7 +443,8 @@ def create_pair(tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, inst
     if getBalance(pair_sol) == 0:
         trx.add(instance.loader.createEtherAccountTrx(pair_eth, code_acc=pair_code)[0])
 
-    res = send_transaction(client, trx, instance.acc)
+    if len(trx.instructions):
+        res = send_transaction(client, trx, instance.acc)
 
     return (pair_sol, pair_eth, pair_code)
 
@@ -469,8 +477,10 @@ def add_liquidity(args):
         accounts = json.loads(f.read())
 
     total = 0
+    ok  = 0
     func_name = abi.function_signature_to_4byte_selector('addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)')
-    sum = 100 * 10 ** 18
+
+    sum = 10**18
     for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code) in accounts:
         if total >= args.count:
             break
@@ -483,7 +493,7 @@ def add_liquidity(args):
                    bytes().fromhex("%064x" % sum) +\
                    bytes().fromhex("%064x" % sum) + \
                    bytes().fromhex("%024x" % 0 + msg_sender_eth) + \
-                   bytes().fromhex("%064x" % 10*18)
+                   bytes().fromhex("%064x" % 10**18)
 
         (from_addr, sign, msg) = get_trx(
             bytes().fromhex(router_eth),
@@ -535,7 +545,7 @@ def add_liquidity(args):
             AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
         ]
 
-        print("Begin")
+        print("Begin", total)
         step = 0
         trx = Transaction()
         # trx.add(trx_create_pair)
@@ -546,7 +556,7 @@ def add_liquidity(args):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(sol_instr_10_continue(meta[1:], 50))
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
             res = send_transaction(client, trx, instance.acc)
             result = res["result"]
 
@@ -555,7 +565,8 @@ def add_liquidity(args):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     print("ok")
-                    return result
-
-
+                    ok = ok + 1
+                    break;
+    print("total", total)
+    print("success", ok)
 
