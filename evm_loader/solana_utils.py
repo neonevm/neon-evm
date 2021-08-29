@@ -331,7 +331,6 @@ class NeonEvmClient:
     def __send_neon_transaction(self, ethereum_transaction, trx) -> types.RPCResponse:
         if ethereum_transaction.trx_account_metas is not None:
             trx.instructions[-1].keys.extend(ethereum_transaction.trx_account_metas)
-        trx.instructions[-1].keys.append(AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False))
 
         return send_transaction(client, trx, self.solana_wallet)
 

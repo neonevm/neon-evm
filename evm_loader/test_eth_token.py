@@ -81,7 +81,6 @@ class EthTokenTest(unittest.TestCase):
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
     def sol_instr_10_continue(self, storage_account, step_count):
@@ -110,7 +109,6 @@ class EthTokenTest(unittest.TestCase):
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
             ])
 
     def sol_instr_keccak(self, keccak_instruction):
