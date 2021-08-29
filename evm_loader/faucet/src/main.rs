@@ -80,8 +80,10 @@ async fn execute(app: cli::Application) -> Result<()> {
     Ok(())
 }
 
+use std::path::Path;
+
 /// Runs the server.
-async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
+async fn run(config_file: &Path, workers: usize) -> Result<()> {
     check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
@@ -89,11 +91,8 @@ async fn run(config_file: &std::path::Path, workers: usize) -> Result<()> {
     server::start(config::rpc_port(), workers).await
 }
 
-fn check_file_exists(file: &std::path::Path) {
+fn check_file_exists(file: &Path) {
     if !file.exists() {
-        warn!(
-            "File {:?} is missing; will use settings from environment variables (if any)",
-            file
-        );
+        warn!("File {:?} is missing", file);
     }
 }

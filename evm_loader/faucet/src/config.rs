@@ -196,3 +196,25 @@ impl std::fmt::Display for Faucet {
 fn split_comma_separated_list(s: String) -> Vec<String> {
     s.split(',').map(|s| s.trim().to_owned()).collect()
 }
+
+#[test]
+fn test_split_comma_separated_list() {
+    let ss = split_comma_separated_list("".into());
+    assert_eq!(ss, vec!(""));
+    let ss = split_comma_separated_list("ABC".into());
+    assert_eq!(ss, vec!("ABC"));
+    let ss = split_comma_separated_list("ABC,DEF".into());
+    assert_eq!(ss, vec!("ABC", "DEF"));
+    let ss = split_comma_separated_list("ABC,DEF,GHI".into());
+    assert_eq!(ss, vec!("ABC", "DEF", "GHI"));
+    let ss = split_comma_separated_list("ABC,".into());
+    assert_eq!(ss, vec!("ABC", ""));
+    let ss = split_comma_separated_list("ABC,,".into());
+    assert_eq!(ss, vec!("ABC", "", ""));
+    let ss = split_comma_separated_list(",ABC".into());
+    assert_eq!(ss, vec!("", "ABC"));
+    let ss = split_comma_separated_list("  ,  ,  ABC".into());
+    assert_eq!(ss, vec!("", "", "ABC"));
+    let ss = split_comma_separated_list("   ABC   ,   DEF   ,   GHI   ".into());
+    assert_eq!(ss, vec!("ABC", "DEF", "GHI"));
+}
