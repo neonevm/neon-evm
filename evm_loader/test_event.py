@@ -36,8 +36,6 @@ class EventTest(unittest.TestCase):
             cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
-        cls.caller_holder = get_caller_hold_token(cls.loader, cls.acc, cls.caller_ether)
-
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
@@ -95,10 +93,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -126,8 +120,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -153,10 +145,6 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Incenirator
                 AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -402,7 +390,7 @@ class EventTest(unittest.TestCase):
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
-            
+
         err = "custom program error: 0x1"
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
@@ -428,6 +416,46 @@ class EventTest(unittest.TestCase):
         self.assertEqual(caller_balance_after_cancel, caller_balance_before_cancel)
 
         self.call_partial_signed(input)
+
+
+    def test_caseFailOnBlockedWithOtherStorageIterative(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[-8:].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+
+        err = "invalid account data for instruction"
+        with self.assertRaisesRegex(Exception,err):
+            result = self.call_partial_signed(input)
+            print(result)
+
+        result = self.call_cancel(storage)
+
+
+    def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[-8:].hex())
+
+        result = self.call_begin(storage, 10, msg, instruction)
+        result = self.call_continue(storage, 10)
+
+        err = "invalid account data for instruction"
+        with self.assertRaisesRegex(Exception,err):
+            result = self.call_signed(input)
+            print(result)
+
+        result = self.call_cancel(storage)
 
 
 if __name__ == '__main__':

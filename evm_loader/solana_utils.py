@@ -204,7 +204,6 @@ class NeonEvmClient:
                 2000, 
                 get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
                 )
-        self.caller_holder = get_caller_hold_token(self.evm_loader, self.solana_wallet, ethereum_transaction.ether_caller)
         print("Solana ether caller account:", ethereum_transaction._solana_ether_caller)
 
     def __create_storage_account(self, seed):
@@ -284,10 +283,6 @@ class NeonEvmClient:
                 AccountMeta(pubkey=self.solana_wallet.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -317,8 +312,6 @@ class NeonEvmClient:
                 AccountMeta(pubkey=get_associated_token_address(self.solana_wallet.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # User ETH address (stub for now):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(ethereum_transaction._solana_ether_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # Operator ETH address (stub for now):
-                AccountMeta(pubkey=self.caller_holder, is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -421,7 +414,7 @@ class neon_cli:
         self.verbose_flags = verbose_flags
 
     def call(self, arguments):
-        cmd = 'neon-cli {} --url {} {}'.format(self.verbose_flags, solana_url, arguments)
+        cmd = 'neon-cli {} --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -628,17 +621,6 @@ class EvmLoader:
                     AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
                 ]))
         return (trx, sol)
-
-
-def get_caller_hold_token(evm_loader, acc, caller_ether):
-    caller = evm_loader.ether2program(caller_ether)[0]
-    holder_seed = b58encode(caller_ether).decode('utf8') + "hold"
-    caller_holder = accountWithSeed(PublicKey(caller), holder_seed, PublicKey(tokenkeg))
-    if getBalance(caller_holder) == 0:
-        trx = Transaction()
-        trx.add(create_with_seed_loader_instruction(evm_loader.loader_id, acc.public_key(), caller_holder, PublicKey(caller), holder_seed, 10**9, ACCOUNT_LEN, PublicKey(tokenkeg)))
-        send_transaction(client, trx, acc)
-    return caller_holder
 
 
 def create_with_seed_loader_instruction(evm_loader_id, funding, created, base, seed, lamports, space, owner):

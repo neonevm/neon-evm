@@ -3,7 +3,7 @@ use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
-    utils::keccak256_h256,
+    // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
 };
 use evm::backend::Apply;
@@ -135,11 +135,17 @@ impl<'a> ProgramAccountStorage<'a> {
                 push_account(caller_acc, caller_info, caller_token_info, None);
                 Sender::Ethereum(caller_address)
             } else {
-                if !caller_info.is_signer {
-                    return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
-                }
+                // TODO: EvmInstruction::Call
+                // https://github.com/neonlabsorg/neon-evm/issues/188
+                // Does not fit in current vision.
+                // It is needed to update behavior for all system in whole.
+                return Err!(ProgramError::InvalidArgument; "Caller could not be Solana user. It must be neon-evm owned account");
 
-                Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
+                // if !caller_info.is_signer {
+                //     return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
+                // }
+
+                // Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
             }
         };
 
