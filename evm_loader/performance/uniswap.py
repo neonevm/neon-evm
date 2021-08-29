@@ -1,4 +1,5 @@
 from tools import *
+from sha3 import shake_256
 
 # weth9_path = "contracts/uniswap/WETH9.binary"
 # factory_path_src = "contracts/uniswap/UniswapV2Factory.bin"
@@ -32,9 +33,18 @@ def deploy_uniswap(args):
     (factory_sol, _)  = instance.loader.ether2program(factory_eth)
     (router_sol, _)  = instance.loader.ether2program(router_eth)
 
-    weth_code = instance.loader.ether2seed(weth_eth)[0]
-    factory_code = instance.loader.ether2seed(factory_eth)[0]
-    router_code = instance.loader.ether2seed(router_eth)[0]
+    # weth_code = instance.loader.ether2seed(weth_eth)[0]
+    # factory_code = instance.loader.ether2seed(factory_eth)[0]
+    # router_code = instance.loader.ether2seed(router_eth)[0]
+
+    weth_seed = b58encode(bytes.fromhex(weth_eth))
+    weth_code = accountWithSeed(instance.regular_acc.public_key(), str(weth_seed, 'utf8'), PublicKey(evm_loader_id))
+
+    factory_seed = b58encode(bytes.fromhex(factory_eth))
+    factory_code = accountWithSeed(instance.regular_acc.public_key(), str(factory_seed, 'utf8'), PublicKey(evm_loader_id))
+
+    router_seed = b58encode(bytes.fromhex(router_eth))
+    router_code = accountWithSeed(instance.regular_acc.public_key(), str(router_seed, 'utf8'), PublicKey(evm_loader_id))
 
     # res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
 
@@ -349,6 +359,87 @@ def get_salt(tool_sol, tool_code, tool_eth, token_a, token_b, acc):
     return hash
 
 
+def create_account_with_seed (acc, seed, storage_size):
+    account = accountWithSeed(acc.public_key(), seed, PublicKey(evm_loader_id))
+    print("HOLDER ACCOUNT:", account)
+    if getBalance(account) == 0:
+        trx = Transaction()
+        trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), seed, 10 ** 9, storage_size,
+                                      PublicKey(evm_loader_id)))
+        send_transaction(client, trx, acc)
+    return account
+
+
+def write_layout(offset, data):
+    return (bytes.fromhex("00000000")+
+            offset.to_bytes(4, byteorder="little")+
+            len(data).to_bytes(8, byteorder="little")+
+            data)
+
+
+def write_trx_to_holder_account(acc, holder, sign, unsigned_msg):
+    msg = sign + len(unsigned_msg).to_bytes(8, byteorder="little") + unsigned_msg
+
+    # Write transaction to transaction holder account
+    offset = 0
+    receipts = []
+    rest = msg
+    while len(rest):
+        (part, rest) = (rest[:1000], rest[1000:])
+        trx = Transaction()
+        # logger.debug("sender_sol %s %s %s", sender_sol, holder, acc.public_key())
+        trx.add(TransactionInstruction(program_id=evm_loader_id,
+                                       data=write_layout(offset, part),
+                                       keys=[
+                                           AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                                           AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
+                                       ]))
+        receipts.append(client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))["result"])
+        offset += len(part)
+    print("receipts %s", receipts)
+    for rcpt in receipts:
+        confirm_transaction(client, rcpt)
+        print("confirmed: %s", rcpt)
+
+    return holder
+
+
+def create_pair(tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, instance):
+    with open(pair_file, mode='rb') as f:
+        hash = Web3.keccak(f.read())
+    salt = get_salt(tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, instance.acc)
+
+    pair_eth = bytes(Web3.keccak(b'\xff' + bytes.fromhex(factory_eth) + salt + hash)[-20:])
+    (pair_sol, _) = instance.loader.ether2program(pair_eth)
+
+    seed = b58encode(bytes.fromhex(pair_eth.hex()))
+    pair_code = accountWithSeed(instance.acc.public_key(), str(seed, 'utf8'), PublicKey(evm_loader_id))
+
+    # (pair_code, _) = instance.loader.ether2seed(pair_eth)
+    print("")
+    print("pair_sol", pair_sol)
+    print("pair_eth", pair_eth.hex())
+    print("pair_code", pair_code)
+    print("")
+
+    trx = Transaction()
+    if getBalance(pair_code) == 0:
+        trx.add(
+            createAccountWithSeed(
+                instance.acc.public_key(),
+                instance.acc.public_key(),
+                str(seed, 'utf8'),
+                10 ** 9,
+                20000,
+                PublicKey(evm_loader_id))
+        )
+    if getBalance(pair_sol) == 0:
+        trx.add(instance.loader.createEtherAccountTrx(pair_eth, code_acc=pair_code)[0])
+
+    res = send_transaction(client, trx, instance.acc)
+
+    return (pair_sol, pair_eth, pair_code)
+
 
 def add_liquidity(args):
     instance = init_wallet()
@@ -363,15 +454,16 @@ def add_liquidity(args):
     (factory_sol, factory_eth, factory_code)= contracts[1]
     (router_sol, router_eth, router_code) = contracts[2]
 
-    print(weth_sol, weth_eth, weth_code)
-    print(factory_sol, factory_eth, factory_code)
-    print(router_sol, router_eth, router_code)
+    print(" WETH:", weth_sol, weth_eth, weth_code)
+    print(" FACTORY:", factory_sol, factory_eth, factory_code)
+    print(" ROUTER", router_sol, router_eth, router_code)
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
     res = instance.loader.deploy(user_tools_file, caller=instance.caller, config="config.yml" + args.postfix)
 
     (tools_sol, tools_eth, tools_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
+    holder = create_account_with_seed(instance.acc, os.urandom(5).hex(), 128 * 1024)
 
     with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
@@ -403,20 +495,16 @@ def add_liquidity(args):
 
         acc = senders.next_acc()
         storage = create_storage_account(sign[:8].hex(), acc)
+        # storage = create_storage_account(os.urandom(5).hex(), acc)
 
-        with open(pair_file, mode='rb') as f:
-            hash = Web3.keccak(f.read())
-        salt = get_salt(tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, instance.acc)
+        print("WRITE TO HOLDER ACCOUNT")
+        write_trx_to_holder_account(instance.acc, holder, sign, msg)
 
-        pair_eth = bytes(Web3.keccak(b'\xff' + bytes.fromhex(factory_eth) + salt + hash)[-20:])
-        (pair_sol, _) = instance.loader.ether2program(pair_eth)
-        (pair_code, _) = instance.loader.ether2seed(pair_eth)
-        print ("pair_sol", pair_sol)
-        print ("pair_eth", pair_eth.hex())
-        print ("pair_code", pair_code)
-
+        (pair_sol, pair_eth, pair_code) = create_pair(
+            tools_sol, tools_code, tools_eth, token_a_eth, token_b_eth, instance)
 
         meta = [
+            AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
             AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=router_sol, is_signer=False, is_writable=True),
@@ -448,17 +536,18 @@ def add_liquidity(args):
         ]
 
         print("Begin")
-        instruction = from_addr + sign + msg
+        step = 0
         trx = Transaction()
-        trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(sol_instr_09_partial_call(meta, 10, instruction))
+        # trx.add(trx_create_pair)
+        trx.add(TransactionInstruction(program_id=evm_loader_id, data=bytearray.fromhex("0B") + step.to_bytes(8, byteorder="little"), keys=meta))
+        print("ExecuteTrxFromAccountDataIterative:")
         res = send_transaction(client, trx, instance.acc)
 
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(sol_instr_10_continue(meta, 50))
-            res =  send_transaction(client, trx, instance.acc)
+            trx.add(sol_instr_10_continue(meta[1:], 50))
+            res = send_transaction(client, trx, instance.acc)
             result = res["result"]
 
             print(result)
