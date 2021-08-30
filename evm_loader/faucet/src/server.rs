@@ -7,7 +7,7 @@ use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Result;
 use tracing::{error, info};
 
-use crate::{airdrop, config};
+use crate::{config, tokens};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
@@ -42,13 +42,13 @@ async fn handle_request_airdrop(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    let airdrop = serde_json::from_str::<airdrop::Airdrop>(&input.unwrap());
+    let airdrop = serde_json::from_str::<tokens::Airdrop>(&input.unwrap());
     if let Err(err) = airdrop {
         error!("BadRequest: {}", err);
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = airdrop::process(airdrop.unwrap()).await {
+    if let Err(err) = tokens::airdrop(airdrop.unwrap()).await {
         error!("InternalServerError: {}", err);
         return HttpResponse::InternalServerError();
     }
