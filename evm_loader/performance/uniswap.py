@@ -479,12 +479,12 @@ def create_transactions_swap(args):
         accounts = json.loads(f.read())
 
     total = 0
-    ok  = 0
     func_name = abi.function_signature_to_4byte_selector('swapExactTokensForTokens(uint256,uint256,address[],address,uint256)')
 
-    holder = create_account_with_seed(instance.acc, os.urandom(5).hex(), 128 * 1024)
+    storage = create_storage_account(os.urandom(5).hex(), instance.acc)
 
     sum = 10**18
+    transactions = []
     for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code,
          pair_sol, pair_eth, pair_code) in accounts:
         if total >= args.count:
@@ -512,9 +512,25 @@ def create_transactions_swap(args):
             0)
 
         acc = senders.next_acc()
-        storage = create_storage_account(os.urandom(5).hex(), acc)
+        print("CREATE TO HOLDER ACCOUNT")
+        holder = create_account_with_seed(instance.acc, os.urandom(5).hex(), 128 * 1024)
         print("WRITE TO HOLDER ACCOUNT")
+
         write_trx_to_holder_account(instance.acc, holder, sign, msg)
+        transactions.append((holder, msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code,
+         pair_sol, pair_eth, pair_code))
+
+
+    print("EXECUTE TRX FROM HOLDER ACCOUNT")
+    total = 0
+    ok  = 0
+    start = time.time()
+    cycle_times = []
+
+
+    for (holder, msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code,
+         pair_sol, pair_eth, pair_code) in transactions:
+        cycle_start = time.time()
 
         meta = [
             AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
@@ -560,6 +576,10 @@ def create_transactions_swap(args):
             print("Continue")
             trx = Transaction()
             trx.add(sol_instr_10_continue(meta[1:], 1000))
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
             res = send_transaction(client, trx, instance.acc)
             result = res["result"]
 
@@ -570,7 +590,15 @@ def create_transactions_swap(args):
                     print("ok")
                     ok = ok + 1
                     break;
+        cycle_end = time.time()
+        cycle_times.append(cycle_end - cycle_start)
+
+
     print("total", total)
     print("success", ok)
+    end = time.time()
+    print("time:", end - start, "sec")
+    print("avg cycle time:                 ", statistics.mean(cycle_times), "sec")
+
 
 
