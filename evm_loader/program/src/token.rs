@@ -1,10 +1,9 @@
 //! `EVMLoader` token functions
 use crate::{
-    account_data::{AccountData},
+    account_data::{AccountData, ACCOUNT_VERSION},
     solidity_account::SolidityAccount
 };
 use evm::{U256};
-
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     account_info::{AccountInfo},

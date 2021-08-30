@@ -1,6 +1,6 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
-    account_data::AccountData,
+    account_data::{AccountData, ACCOUNT_VERSION},
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
