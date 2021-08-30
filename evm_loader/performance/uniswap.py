@@ -361,13 +361,17 @@ def add_liquidity(args):
     sum = 10**18
     to_file = []
 
+    storage = create_storage_account(os.urandom(10).hex(), instance.acc)
     for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code) in accounts:
-        print (" ")
-        print (" token_a_eth",token_a_eth)
-        print (" token_b_eth",token_b_eth)
         if total >= args.count:
             break
         total = total + 1
+
+        print (" ")
+        print ("add_liquidity:", total)
+        print (" token_a_eth",token_a_eth)
+        print (" token_b_eth",token_b_eth)
+
         input = func_name + \
                    bytes().fromhex("%024x" % 0 + token_a_eth) + \
                    bytes().fromhex("%024x" % 0 + token_b_eth) + \
@@ -387,7 +391,6 @@ def add_liquidity(args):
             0)
 
         acc = senders.next_acc()
-        storage = create_storage_account(os.urandom(5).hex(), acc)
 
         print("WRITE TO HOLDER ACCOUNT")
         write_trx_to_holder_account(instance.acc, holder, sign, msg)
@@ -437,7 +440,10 @@ def add_liquidity(args):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(sol_instr_10_continue(meta[1:], 1000))
+            trx.add(sol_instr_10_continue(meta[1:], 2000))
+            trx.add(sol_instr_10_continue(meta[1:], 2000))
+            # trx.add(sol_instr_10_continue(meta[1:], 2000))
+            # trx.add(sol_instr_10_continue(meta[1:], 1000))
             res = send_transaction(client, trx, instance.acc)
             result = res["result"]
 
@@ -570,17 +576,17 @@ def create_transactions_swap(args):
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=evm_loader_id, data=bytearray.fromhex("0B") + step.to_bytes(8, byteorder="little"), keys=meta))
         print("ExecuteTrxFromAccountDataIterative:")
-        res = send_transaction(client, trx, instance.acc)
+        # res = send_transaction(client, trx, instance.acc, 0)
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            # trx = Transaction()
             trx.add(sol_instr_10_continue(meta[1:], 1000))
             trx.add(sol_instr_10_continue(meta[1:], 1000))
             trx.add(sol_instr_10_continue(meta[1:], 1000))
             trx.add(sol_instr_10_continue(meta[1:], 1000))
             trx.add(sol_instr_10_continue(meta[1:], 1000))
-            res = send_transaction(client, trx, instance.acc)
+            res = send_transaction(client, trx, instance.acc, 0)
             result = res["result"]
 
             print(result)

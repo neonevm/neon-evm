@@ -241,7 +241,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=1):
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
                            and status['confirmations'] >= confirmations):
                 return
-        sleep_time = 1
+        sleep_time = 0.1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
@@ -535,8 +535,8 @@ def wallet_path():
     raise Exception("cannot get keypair path")
 
 
-def send_transaction(client, trx, acc):
+def send_transaction(client, trx, acc, confirm_count=1):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-    confirm_transaction(client, result["result"])
+    confirm_transaction(client, result["result"],  confirm_count)
     result = client.get_confirmed_transaction(result["result"])
     return result
