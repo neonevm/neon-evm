@@ -21,8 +21,10 @@ elif args.step == "create_acc":
 elif args.step == "create_trx":
     if args.type == "spl":
         create_transactions_spl(args)
-    else:
+    elif args.type == "erc20":
         create_transactions(args)
+    elif args.type == "swap":
+        create_transactions_swap(args)
 elif args.step == "send_trx":
     send_transactions(args)
 elif args.step == "create_senders":

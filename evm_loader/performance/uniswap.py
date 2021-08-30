@@ -11,9 +11,9 @@ uniswap_contracts_file = "uniswap_contracts.json"
 pair_file =  "contracts/uniswap/pair.bin"
 user_tools_file = "contracts/uniswap/UserTools.binary"
 
-factory_eth = "9D6A7a98721437Ae59D4b8253e80eBc642196d56"
-router_eth = "DeF2f37003e4FFeF6B94C6fb4961f0dCc97f15cA"
-weth_eth = "50dbC82D76409D19544d6ca95D844633E222aC71"
+factory_eth = "3ED1bc1418F305a530D41c764B44Bc6bb319DD03"
+router_eth = "109CFeD64057CbF40bb26c02BEEBc9f090A08B0e"
+weth_eth = "Fd91f022D16BE1B889f3d236Bcc2DaF80b92Cc4d"
 
 def deploy_ctor_init(instance, src, dest, ctor_hex):
     ctor = bytearray().fromhex(ctor_hex)
@@ -64,7 +64,12 @@ def deploy_uniswap(args):
     # return;
 
     # # deploy Factory
-    # ctor_hex =str("%024x" % 0) + instance.caller_ether.hex()
+
+    # res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
+    # res = instance.loader.deploy(user_tools_file, caller=instance.caller, config="config.yml" + args.postfix)
+
+    # instance.loader.deploy(user_tools_file, instance.caller)
+    # ctor_hex =str("%024x" % 0) + solana2ether(instance.caller).hex()
     # print("ctor_hex", ctor_hex)
     # with open(factory_path_src, mode='r') as r:
     #     content = r.read() + ctor_hex
@@ -72,9 +77,9 @@ def deploy_uniswap(args):
     #     with open(factory_path_dest, mode='wb') as w:
     #         w.write(bin)
     #         res = instance.loader.deploy(factory_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
-    #         (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
+    #         (factory_sol, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
     #
-    #         print("factory", factory)
+    #         print("factory", factory_sol)
     #         print("factory_eth", factory_eth.hex())
     #         print("factory_code", factory_code)
 
@@ -480,8 +485,13 @@ def add_liquidity(args):
     ok  = 0
     func_name = abi.function_signature_to_4byte_selector('addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)')
 
-    sum = 10**18
+    sum = 100**18
+    to_file = []
+
     for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code) in accounts:
+        print (" ")
+        print (" token_a_eth",token_a_eth)
+        print (" token_b_eth",token_b_eth)
         if total >= args.count:
             break
         total = total + 1
@@ -504,8 +514,7 @@ def add_liquidity(args):
             0)
 
         acc = senders.next_acc()
-        storage = create_storage_account(sign[:8].hex(), acc)
-        # storage = create_storage_account(os.urandom(5).hex(), acc)
+        storage = create_storage_account(os.urandom(5).hex(), acc)
 
         print("WRITE TO HOLDER ACCOUNT")
         write_trx_to_holder_account(instance.acc, holder, sign, msg)
@@ -566,7 +575,134 @@ def add_liquidity(args):
                 if (data[0] == 6):
                     print("ok")
                     ok = ok + 1
+                    to_file.append((msg_sender_eth, msg_sender_prkey, msg_sender_sol,
+                                    token_a_sol, token_a_eth, token_a_code,
+                                    token_b_sol, token_b_eth, token_b_code,
+                                    str(pair_sol), pair_eth.hex(), str(pair_code)))
+                    break;
+
+    print("total", total)
+    print("success", ok)
+    with open(liquidity_file + args.postfix, mode='w') as f:
+        f.write(json.dumps(to_file))
+
+
+def create_transactions_swap(args):
+    instance = init_wallet()
+    senders = init_senders(args)
+
+    with open(uniswap_contracts_file + args.postfix, mode='r') as f:
+        contracts = json.loads(f.read())
+
+    (weth_sol, weth_eth, weth_code) = contracts[0]
+    (factory_sol, factory_eth, factory_code)= contracts[1]
+    (router_sol, router_eth, router_code) = contracts[2]
+
+    print(" WETH:", weth_sol, weth_eth, weth_code)
+    print(" FACTORY:", factory_sol, factory_eth, factory_code)
+    print(" ROUTER", router_sol, router_eth, router_code)
+
+
+    with open(liquidity_file+args.postfix, mode='r') as f:
+        accounts = json.loads(f.read())
+
+    total = 0
+    ok  = 0
+    func_name = abi.function_signature_to_4byte_selector('swapExactTokensForTokens(uint256,uint256,address[],address,uint256)')
+
+    holder = create_account_with_seed(instance.acc, os.urandom(5).hex(), 128 * 1024)
+
+    sum = 10**18
+    for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code,
+         pair_sol, pair_eth, pair_code) in accounts:
+        if total >= args.count:
+            break
+        total = total + 1
+        input = func_name + \
+                bytes().fromhex("%064x" % sum) +\
+                bytes().fromhex("%064x" % 0) +\
+                bytes().fromhex("%064x" % 0xa0) +\
+                bytes().fromhex("%024x" % 0 + msg_sender_eth) + \
+                bytes().fromhex("%064x" % 10**18) + \
+                bytes().fromhex("%064x" % 2) + \
+                bytes().fromhex("%024x" % 0 + token_a_eth) + \
+                bytes().fromhex("%024x" % 0 + token_b_eth)
+        print("")
+        print("input:", input.hex())
+        print("")
+
+        (from_addr, sign, msg) = get_trx(
+            bytes().fromhex(router_eth),
+            msg_sender_sol,
+            bytes().fromhex(msg_sender_eth),
+            input,
+            bytes.fromhex(msg_sender_prkey),
+            0)
+
+        acc = senders.next_acc()
+        storage = create_storage_account(os.urandom(5).hex(), acc)
+        print("WRITE TO HOLDER ACCOUNT")
+        write_trx_to_holder_account(instance.acc, holder, sign, msg)
+
+        meta = [
+            AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=router_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(router_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=router_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=msg_sender_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(msg_sender_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=token_a_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(token_a_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=token_a_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=token_b_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(token_b_sol), ETH_TOKEN_MINT_ID), is_signer=False,is_writable=True),
+            AccountMeta(pubkey=token_b_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=factory_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(factory_sol), ETH_TOKEN_MINT_ID), is_signer=False,is_writable=True),
+            AccountMeta(pubkey=factory_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=pair_sol, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(pair_sol), ETH_TOKEN_MINT_ID), is_signer=False,is_writable=True),
+            AccountMeta(pubkey=pair_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
+        ]
+
+        instruction = from_addr + sign + msg
+        print("Begin", total)
+        step = 0
+        trx = Transaction()
+        trx.add(TransactionInstruction(program_id=evm_loader_id, data=bytearray.fromhex("0B") + step.to_bytes(8, byteorder="little"), keys=meta))
+        print("ExecuteTrxFromAccountDataIterative:")
+        res = send_transaction(client, trx, instance.acc)
+
+        while (True):
+            print("Continue")
+            trx = Transaction()
+            trx.add(sol_instr_10_continue(meta[1:], 1000))
+            res = send_transaction(client, trx, instance.acc)
+            result = res["result"]
+
+            print(result)
+            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if (data[0] == 6):
+                    print("ok")
+                    ok = ok + 1
+                    # to_file.append((msg_sender_eth, msg_sender_prkey, msg_sender_sol,
+                    #                 token_a_sol, token_a_eth, token_a_code,
+                    #                 token_b_sol, token_b_eth, token_b_code,
+                    #                 str(pair_sol), pair_eth.hex(), str(pair_code)))
                     break;
     print("total", total)
     print("success", ok)
+
 
