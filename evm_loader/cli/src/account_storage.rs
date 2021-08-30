@@ -18,7 +18,7 @@ use solana_sdk::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
 use evm_loader::{
-    account_data::AccountData,
+    account_data::{AccountData, ACCOUNT_VERSION},
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
     solana_backend::SolanaBackend,
@@ -154,7 +154,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, Option<Account>)> {
-        let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &config.evm_loader).0;
+        let (solana_address, _solana_nonce) = make_solana_program_address(address, &config.evm_loader);
         eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
         if let Some(acc) = config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::processed()).unwrap().value {
@@ -201,7 +201,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut accounts = self.accounts.borrow_mut(); 
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
-            let solana_address =  Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
+            let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
             if let Some((acc, code_account)) = Self::get_account_from_solana(self.config, address) {
                 accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
                 true
@@ -257,7 +257,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let accounts = self.accounts.borrow();
         for (address, acc) in accounts.iter() {
-            let solana_address = Pubkey::find_program_address(&[&address.to_fixed_bytes()], &self.config.evm_loader).0;
+            let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
 
             let contract_address = {
                 let addr = AccountData::unpack(&acc.account.data).unwrap().get_account().unwrap().code_account;
@@ -296,6 +296,13 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         arr
     }
+}
+
+pub fn make_solana_program_address(
+    ether_address: &H160,
+    program_id: &Pubkey
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[&ACCOUNT_VERSION.to_le_bytes(), ether_address.as_bytes()], program_id)
 }
 
 pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>

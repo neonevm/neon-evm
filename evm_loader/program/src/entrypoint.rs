@@ -29,7 +29,7 @@ use solana_program::{
 
 use crate::{
     //    bump_allocator::BumpAllocator,
-    account_data::{Account, AccountData, Contract},
+    account_data::{Account, AccountData, Contract, ACCOUNT_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
@@ -132,7 +132,8 @@ fn process_instruction<'a>(
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
             
-            let expected_address = Pubkey::create_program_address(&[ether.as_bytes(), &[nonce]], program_id)?;
+            let program_seeds = [&ACCOUNT_VERSION.to_le_bytes(), ether.as_bytes(), &[nonce]];
+            let expected_address = Pubkey::create_program_address(&program_seeds, program_id)?;
             if expected_address != *account_info.key {
                 return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
             };
@@ -165,9 +166,8 @@ fn process_instruction<'a>(
 
             let account_lamports = rent.minimum_balance(account_data.size()) + lamports;
 
-            let program_seeds = [ether.as_bytes(), &[nonce]];
             invoke_signed(
-                &create_account(funding_info.key, account_info.key, account_lamports, account_data.size() as u64, program_id),
+                &create_account(funding_info.key, account_info.key, account_lamports, ACCOUNT_MAX_SIZE, program_id),
                 accounts, &[&program_seeds[..]]
             )?;
             debug_print!("create_account done");

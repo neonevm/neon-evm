@@ -6,6 +6,11 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
+/// Ethereum account version
+pub const ACCOUNT_VERSION: u32 = 1_u32;
+/// Ethereum account allocated data size
+pub const ACCOUNT_MAX_SIZE: u64 = 256;
+
 /// Ethereum account data
 #[derive(Debug,Clone)]
 pub struct Account {
