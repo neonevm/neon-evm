@@ -158,7 +158,8 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+    let program_seeds = [&ACCOUNT_VERSION.to_le_bytes(), ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
 
     Ok(())
 }

@@ -200,7 +200,7 @@ fn process_instruction<'a>(
             let account_lamports = Rent::get()?.minimum_balance(space_as_usize) + lamports;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
-            let program_seeds = [caller_ether.as_bytes(), &[caller_nonce]];
+            let program_seeds = [&ACCOUNT_VERSION.to_le_bytes(), caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|e| E!(ProgramError::InvalidArgument; "Utf8Error={:?}", e))?;
             debug_print!("{}", account_lamports);
             debug_print!("{}", space);
