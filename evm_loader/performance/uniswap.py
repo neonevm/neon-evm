@@ -1,13 +1,6 @@
 from tools import *
-from sha3 import shake_256
 
-# weth9_path = "contracts/uniswap/WETH9.binary"
-# factory_path_src = "contracts/uniswap/UniswapV2Factory.bin"
-# factory_path_dest = "contracts/uniswap/UniswapV2Factory.binary"
-# router02_path_src = "contracts/uniswap/UniswapV2Router02.bin"
-# router02_path_dest = "contracts/uniswap/UniswapV2Router02.binary"
-
-uniswap_contracts_file = "uniswap_contracts.json"
+swap_contracts_file = "swap_contracts.json"
 pair_file =  "contracts/uniswap/pair.bin"
 user_tools_file = "contracts/uniswap/UserTools.binary"
 
@@ -26,86 +19,32 @@ def deploy_ctor_init(instance, src, dest, ctor_hex):
             return (res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 
-def deploy_uniswap(args):
+def deploy_swap(args):
 
     instance = init_wallet()
     (weth_sol, _)  = instance.loader.ether2program(weth_eth)
     (factory_sol, _)  = instance.loader.ether2program(factory_eth)
     (router_sol, _)  = instance.loader.ether2program(router_eth)
 
-    # weth_code = instance.loader.ether2seed(weth_eth)[0]
-    # factory_code = instance.loader.ether2seed(factory_eth)[0]
-    # router_code = instance.loader.ether2seed(router_eth)[0]
+    data = getAccountData(client, weth_sol, ACCOUNT_INFO_LAYOUT.sizeof())
+    weth_code = PublicKey(ACCOUNT_INFO_LAYOUT.parse(data).code_acc)
 
-    weth_seed = b58encode(bytes.fromhex(weth_eth))
-    weth_code = accountWithSeed(instance.regular_acc.public_key(), str(weth_seed, 'utf8'), PublicKey(evm_loader_id))
+    data = getAccountData(client, factory_sol, ACCOUNT_INFO_LAYOUT.sizeof())
+    factory_code = PublicKey(ACCOUNT_INFO_LAYOUT.parse(data).code_acc)
 
-    factory_seed = b58encode(bytes.fromhex(factory_eth))
-    factory_code = accountWithSeed(instance.regular_acc.public_key(), str(factory_seed, 'utf8'), PublicKey(evm_loader_id))
-
-    router_seed = b58encode(bytes.fromhex(router_eth))
-    router_code = accountWithSeed(instance.regular_acc.public_key(), str(router_seed, 'utf8'), PublicKey(evm_loader_id))
-
-    # res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
-
-    # # deploy WETH
-    # res = instance.loader.deploy(weth9_path, caller=instance.caller, config="config.yml" + args.postfix)
-    # (weth9, weth9_eth, weth9_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
-    # print("weth9", weth9)
-    # print("weth9_eth", weth9_eth.hex())
-    # print("weth9_code", weth9_code)
-    #
-    # res = instance.loader.deploy(router02_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
-    # (weth9, weth9_eth, weth9_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
-    # print("weth9", weth9)
-    # print("weth9_eth", weth9_eth.hex())
-    # print("weth9_code", weth9_code)
-    #
-    # return;
-
-    # # deploy Factory
-
-    # res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml" + args.postfix)
-    # res = instance.loader.deploy(user_tools_file, caller=instance.caller, config="config.yml" + args.postfix)
-
-    # instance.loader.deploy(user_tools_file, instance.caller)
-    # ctor_hex =str("%024x" % 0) + solana2ether(instance.caller).hex()
-    # print("ctor_hex", ctor_hex)
-    # with open(factory_path_src, mode='r') as r:
-    #     content = r.read() + ctor_hex
-    #     bin = bytearray().fromhex(content)
-    #     with open(factory_path_dest, mode='wb') as w:
-    #         w.write(bin)
-    #         res = instance.loader.deploy(factory_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
-    #         (factory_sol, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
-    #
-    #         print("factory", factory_sol)
-    #         print("factory_eth", factory_eth.hex())
-    #         print("factory_code", factory_code)
-
-    # deploy Router02
-    #
-    # factory_eth = bytes().fromhex("c03a0611c7df00c760343b0752d6c572667ebb90")
-    # weth9_eth = bytes().fromhex("c03a0611c7df00c760343b0752d6c572667ebb90")
-    # ctor_hex = str("%024x" % 0) + factory_eth.hex() + str("%024x" % 0) + weth9_eth.hex()
-    # print("ctor_hex", ctor_hex)
-    # with open(router02_path_src, mode='rb') as rbin:
-    #     binary = rbin.read() + bytes().fromhex(ctor_hex)
-    #     with open(router02_path_dest, mode='wb') as wbin:
-    #         wbin.write(binary)
-    #         res = instance.loader.deploy(router02_path_dest, caller=instance.caller, config="config.yml" + args.postfix)
-    #         (router02, router02_eth, router02_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
-    #
-    #         print("router02", router02)
-    #         print("router02_eth", router02_eth.hex())
-    #         print("router02_code", router02_code)
+    data = getAccountData(client, router_sol, ACCOUNT_INFO_LAYOUT.sizeof())
+    router_code = PublicKey(ACCOUNT_INFO_LAYOUT.parse(data).code_acc)
 
     to_file = []
     to_file.append((weth_sol, weth_eth, str(weth_code)))
     to_file.append((factory_sol, factory_eth, str(factory_code)))
     to_file.append((router_sol, router_eth, str(router_code)))
-    with open(uniswap_contracts_file + args.postfix, mode='w') as f:
+    with open(swap_contracts_file + args.postfix, mode='w') as f:
         f.write(json.dumps(to_file))
+
+    print(" WETH:", weth_sol, weth_eth, weth_code)
+    print(" FACTORY:", factory_sol, factory_eth, factory_code)
+    print(" ROUTER", router_sol, router_eth, router_code)
 
 
 def approve_send(erc20_sol, erc20_eth, erc20_code, msg_sender_sol, msg_sender_eth, msg_sender_prkey, router_eth,   acc, sum,):
@@ -130,33 +69,12 @@ def approve_send(erc20_sol, erc20_eth, erc20_code, msg_sender_sol, msg_sender_et
     return res["result"]
 
 
-def sol_instr_09_partial_call(meta, step_count, evm_instruction):
-    return TransactionInstruction(program_id=evm_loader_id,
-                                  data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-                                  keys=meta
-                                  )
-
 
 def sol_instr_10_continue(meta, step_count):
     return TransactionInstruction(program_id=evm_loader_id,
                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
                                   keys=meta)
 
-
-# def call_begin(storage, steps, msg, instruction, instance):
-#     print("Begin")
-#     trx = Transaction()
-#     trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-#     trx.add(sol_instr_09_partial_call(storage, steps, instruction, instance))
-#     return send_transaction(client, trx, instance.acc)
-#
-#
-# def call_continue(storage, steps, instance):
-#     print("Continue")
-#     trx = Transaction()
-#     trx.add(sol_instr_10_continue(storage, steps, instance))
-#     return send_transaction(client, trx, instance.acc)
-#
 
 
 def sol_instr_keccak(keccak_instruction):
@@ -178,51 +96,6 @@ def create_storage_account(seed, acc):
     return storage
 
 
-# def call_partial_signed(meta, from_addr, sign, msg, acc):
-#     instruction = from_addr + sign + msg
-#
-#     storage = create_storage_account(sign[:8].hex(), acc)
-#     call_begin(storage, 10, msg, instruction, instance)
-
-    # while (True):
-    #     result = call_continue(storage, 50, instance)["result"]
-    #
-    #     if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-    #         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-    #         if (data[0] == 6):
-    #             return result
-
-
-# def add_liquidity_call(tokenA_eth, tokenB_eth, caller_eth, sum, to):
-#
-#     trx = Transaction()
-#     trx.add(
-#         TransactionInstruction(
-#             program_id=evm_loader_id,
-#             data=trx_data,
-#             keys=[
-#                 AccountMeta(pubkey=erc20_sol, is_signer=False, is_writable=True),
-#                 AccountMeta(pubkey=get_associated_token_address(PublicKey(erc20_sol), ETH_TOKEN_MINT_ID),
-#                             is_signer=False, is_writable=True),
-#                 AccountMeta(pubkey=erc20_code, is_signer=False, is_writable=True),
-#                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
-#                 AccountMeta(pubkey=account_sol, is_signer=False, is_writable=True),
-#                 AccountMeta(pubkey=get_associated_token_address(PublicKey(account_sol), ETH_TOKEN_MINT_ID),
-#                             is_signer=False, is_writable=True),
-#                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
-#                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-#                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-#                 AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False)
-#             ]))
-#     res = client.send_transaction(trx, acc,
-#                                   opts=TxOpts(skip_confirmation=True, skip_preflight=True,
-#                                               preflight_commitment="confirmed"))
-#     return (erc20_eth_hex, account_eth, res["result"])
-
-
-
-
-
 def mint_and_approve_swap(args, accounts, sum, pr_key_list):
     event_error = 0
     receipt_error = 0
@@ -234,9 +107,9 @@ def mint_and_approve_swap(args, accounts, sum, pr_key_list):
     with open(contracts_file + args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
 
-    with open(uniswap_contracts_file + args.postfix, mode='r') as f:
-        uniswap_contracts = json.loads(f.read())
-    (router_sol, router_eth, router_code) = uniswap_contracts[2]
+    with open(swap_contracts_file + args.postfix, mode='r') as f:
+        swap_contracts = json.loads(f.read())
+    (router_sol, router_eth, router_code) = swap_contracts[2]
     print(router_sol, router_eth, router_code)
 
     senders = init_senders(args)
@@ -460,7 +333,7 @@ def add_liquidity(args):
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
 
-    with open(uniswap_contracts_file + args.postfix, mode='r') as f:
+    with open(swap_contracts_file + args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
 
     (weth_sol, weth_eth, weth_code) = contracts[0]
@@ -485,7 +358,7 @@ def add_liquidity(args):
     ok  = 0
     func_name = abi.function_signature_to_4byte_selector('addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)')
 
-    sum = 100**18
+    sum = 10**18
     to_file = []
 
     for (msg_sender_eth, msg_sender_prkey, msg_sender_sol, token_a_sol, token_a_eth, token_a_code, token_b_sol, token_b_eth, token_b_code) in accounts:
@@ -557,7 +430,6 @@ def add_liquidity(args):
         print("Begin", total)
         step = 0
         trx = Transaction()
-        # trx.add(trx_create_pair)
         trx.add(TransactionInstruction(program_id=evm_loader_id, data=bytearray.fromhex("0B") + step.to_bytes(8, byteorder="little"), keys=meta))
         print("ExecuteTrxFromAccountDataIterative:")
         res = send_transaction(client, trx, instance.acc)
@@ -591,7 +463,7 @@ def create_transactions_swap(args):
     instance = init_wallet()
     senders = init_senders(args)
 
-    with open(uniswap_contracts_file + args.postfix, mode='r') as f:
+    with open(swap_contracts_file + args.postfix, mode='r') as f:
         contracts = json.loads(f.read())
 
     (weth_sol, weth_eth, weth_code) = contracts[0]
@@ -697,10 +569,6 @@ def create_transactions_swap(args):
                 if (data[0] == 6):
                     print("ok")
                     ok = ok + 1
-                    # to_file.append((msg_sender_eth, msg_sender_prkey, msg_sender_sol,
-                    #                 token_a_sol, token_a_eth, token_a_code,
-                    #                 token_b_sol, token_b_eth, token_b_code,
-                    #                 str(pair_sol), pair_eth.hex(), str(pair_code)))
                     break;
     print("total", total)
     print("success", ok)
