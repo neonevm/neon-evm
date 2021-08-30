@@ -897,7 +897,7 @@ fn invoke_on_return<'a>(
         ExitReason::StepLimitReached => unreachable!(),
     };
 
-    msg!("{} exit_status={:x?}", exit_message, exit_status);
+    msg!("{} exit_status={:#04X?}", exit_message, exit_status);
     debug_print!("used gas {}", used_gas);
     debug_print!("result {}", &hex::encode(&result));
 
