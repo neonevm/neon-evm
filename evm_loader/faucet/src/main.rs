@@ -8,6 +8,7 @@ mod cli;
 mod config;
 mod ethereum;
 mod server;
+mod solana;
 mod tokens;
 
 use color_eyre::Result;

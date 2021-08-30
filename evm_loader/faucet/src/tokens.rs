@@ -1,6 +1,4 @@
-//! Faucet tokens module.
-
-use crate::ethereum;
+//! Faucet ERC20 tokens module.
 
 use color_eyre::{eyre::eyre, Result};
 use derive_new::new;
@@ -14,6 +12,8 @@ use web3::signing::Key;
 use web3::types::U256;
 use web3::Transport;
 
+use crate::ethereum;
+
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
 pub struct Airdrop {
@@ -21,9 +21,29 @@ pub struct Airdrop {
     amount: u64,
 }
 
-/// Processes the aridrop: sends needed transactions into Ethereum.
+/// Initializes local cache of tokens properties.
+pub async fn init(addresses: Vec<String>) -> Result<()> {
+    info!("Checking tokens...");
+    use crate::config;
+
+    let http = web3::transports::Http::new(&config::web3_rpc_url())?;
+    let web3 = web3::Web3::new(http);
+
+    for token_address in addresses {
+        let a = ethereum::address_from_str(&token_address)?;
+        TOKENS.write().unwrap().insert(
+            token_address,
+            Token::new(get_decimals(web3.eth(), a).await?),
+        );
+    }
+
+    info!("All tokens are deployed and sane");
+    Ok(())
+}
+
+/// Processes the airdrop: sends needed transactions into Ethereum.
 pub async fn airdrop(params: Airdrop) -> Result<()> {
-    info!("Processing {:?}...", params);
+    info!("Processing ERC20 {:?}...", params);
     use crate::{config, tokens};
 
     let admin_key: SecretKey = config::web3_private_key().parse()?;
@@ -97,26 +117,6 @@ async fn transfer<T: Transport>(
     Ok(())
 }
 
-/// Initializes local cache of tokens properties.
-pub async fn init(addresses: Vec<String>) -> Result<()> {
-    info!("Checking tokens...");
-    use crate::config;
-
-    let http = web3::transports::Http::new(&config::web3_rpc_url())?;
-    let web3 = web3::Web3::new(http);
-
-    for token_address in addresses {
-        let a = ethereum::address_from_str(&token_address)?;
-        TOKENS.write().unwrap().insert(
-            token_address,
-            Token::new(get_decimals(web3.eth(), a).await?),
-        );
-    }
-
-    info!("All tokens are deployed and sane");
-    Ok(())
-}
-
 async fn get_decimals<T: Transport>(
     eth: Eth<T>,
     token_address: ethereum::Address,
@@ -140,7 +140,7 @@ async fn get_decimals<T: Transport>(
 }
 
 /// Returns multiplication factor to convert whole token value to fractions.
-pub fn multiplication_factor(token_address: &str) -> Result<u64> {
+fn multiplication_factor(token_address: &str) -> Result<u64> {
     let decimals = {
         TOKENS
             .read()
