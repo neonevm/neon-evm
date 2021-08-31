@@ -85,6 +85,7 @@ struct SolanaAccount {
     key: Pubkey,
     writable: bool,
     code_size: Option<usize>,
+    balance: u64,
 }
 
 struct SolanaNewAccount {
@@ -94,9 +95,9 @@ struct SolanaNewAccount {
 }
 
 impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
+    pub fn new(account: Account, key: Pubkey, balance: u64, code_account: Option<Account>) -> Self {
         eprintln!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account, code_size: None}
+        Self{account, key, balance, writable: false, code_account, code_size: None}
     }
 }
 
@@ -153,7 +154,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, Option<Account>)> {
+    pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, u64, Option<Account>)> {
         let (solana_address, _solana_nonce) = make_solana_program_address(address, &config.evm_loader);
         eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
@@ -187,8 +188,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                     None
                 }
             };
+            let token_amount = config.rpc_client.get_token_account_balance_with_commitment(&account_data.eth_token_account, CommitmentConfig::processed()).unwrap().value;
+            let balance = token_amount.amount.parse::<u64>().unwrap();
 
-            Some((acc, code_account))
+            Some((acc, balance, code_account))
         }
         else {
             eprintln!("Account not found {}", &address.to_string());
@@ -202,8 +205,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
             let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
-            if let Some((acc, code_account)) = Self::get_account_from_solana(self.config, address) {
-                accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
+            if let Some((acc, balance, code_account)) = Self::get_account_from_solana(self.config, address) {
+                accounts.insert(*address, SolanaAccount::new(acc, solana_address, balance, code_account));
                 true
             }
             else {
@@ -242,7 +245,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                     } else {
                         eprintln!("Account not found {}", &address.to_string());
                     }
-                    eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance.as_u64(), &reset_storage.to_string());
+                    eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance, &reset_storage.to_string());
                 },
                 Apply::Delete {address: addr} => {
                     eprintln!("Delete: {}", addr.to_string());
@@ -400,10 +403,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                         Err(_) => return d(),
                     };
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, Some((contract_data, code_data)));
+                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, Some((contract_data, code_data)));
                     f(&account)
                 } else {
-                    let account = SolidityAccount::new(&acc.key, acc.account.lamports, account_data, None);
+                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, None);
                     f(&account)
                 }
             },
