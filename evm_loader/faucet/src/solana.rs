@@ -36,9 +36,10 @@ pub fn create_program_address(seed: &str) -> Result<Pubkey> {
 
 /// Transfers `amount` of tokens to `recipient` from a known account.
 /// Creates the `recipient` account if it doesn't exist.
-pub fn transfer_token(owner: Keypair, recipient: Pubkey, _amount: u64) -> Result<()> {
+pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<()> {
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
+
         let payer = owner.pubkey();
         let mut instructions = vec![];
         let token_account = client.get_token_account(&recipient);
@@ -51,11 +52,25 @@ pub fn transfer_token(owner: Keypair, recipient: Pubkey, _amount: u64) -> Result
                 &evm_loader::token::token_mint::id(),
             ));
         }
+
+        let decimals = 9;
+        instructions.push(spl_token::instruction::transfer_checked(
+            &spl_token::id(),
+            &payer,
+            &evm_loader::token::token_mint::id(),
+            &recipient,
+            &payer,
+            &[],
+            amount,
+            decimals,
+        )?);
+
         let message = Message::new(&instructions, Some(&payer));
         let mut tx = Transaction::new_unsigned(message);
         let (blockhash, _) = client.get_recent_blockhash()?;
         tx.try_sign(&[&owner], blockhash)?;
-        get_client().send_and_confirm_transaction(&tx)?;
+        client.send_and_confirm_transaction(&tx)?;
+
         Ok(())
     })
     .join()
