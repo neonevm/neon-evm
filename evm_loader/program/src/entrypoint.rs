@@ -24,7 +24,8 @@ use solana_program::{
     system_instruction::{create_account, create_account_with_seed},
     program::{invoke_signed, invoke},
     rent::Rent,
-    sysvar::Sysvar
+    sysvar::Sysvar,
+    msg,
 };
 
 use crate::{
@@ -860,46 +861,43 @@ fn invoke_on_return<'a>(
     result: &[u8],
 ) -> ProgramResult
 {
-    let exit_status = match exit_reason {
+    let (exit_message, exit_status) = match exit_reason {
         ExitReason::Succeed(success_code) => {
-            debug_print!("Succeed");
             match success_code {
-                ExitSucceed::Stopped => { debug_print!("Machine encountered an explict stop."); 0x11},
-                ExitSucceed::Returned => { debug_print!("Machine encountered an explict return."); 0x12},
-                ExitSucceed::Suicided => { debug_print!("Machine encountered an explict suicide."); 0x13},
+                ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11)},
+                ExitSucceed::Returned => {("ExitSucceed: Machine encountered an explict return.", 0x12)},
+                ExitSucceed::Suicided => {("ExitSucceed: Machine encountered an explict suicide.", 0x13)},
             }
         },
         ExitReason::Error(error_code) => {
-            debug_print!("Error");
             match error_code {
-                ExitError::StackUnderflow => { debug_print!("Trying to pop from an empty stack."); 0xe1},
-                ExitError::StackOverflow => { debug_print!("Trying to push into a stack over stack limit."); 0xe2},
-                ExitError::InvalidJump => { debug_print!("Jump destination is invalid."); 0xe3},
-                ExitError::InvalidRange => { debug_print!("An opcode accesses memory region, but the region is invalid."); 0xe4},
-                ExitError::DesignatedInvalid => { debug_print!("Encountered the designated invalid opcode."); 0xe5},
-                ExitError::CallTooDeep => { debug_print!("Call stack is too deep (runtime)."); 0xe6},
-                ExitError::CreateCollision => { debug_print!("Create opcode encountered collision (runtime)."); 0xe7},
-                ExitError::CreateContractLimit => { debug_print!("Create init code exceeds limit (runtime)."); 0xe8},
-                ExitError::OutOfOffset => { debug_print!("An opcode accesses external information, but the request is off offset limit (runtime)."); 0xe9},
-                ExitError::OutOfGas => { debug_print!("Execution runs out of gas (runtime)."); 0xea},
-                ExitError::OutOfFund => { debug_print!("Not enough fund to start the execution (runtime)."); 0xeb},
-                ExitError::PCUnderflow => { debug_print!("PC underflowed (unused)."); 0xec},
-                ExitError::CreateEmpty => { debug_print!("Attempt to create an empty account (runtime, unused)."); 0xed},
+                ExitError::StackUnderflow => {("ExitError: Trying to pop from an empty stack.", 0xe1)},
+                ExitError::StackOverflow => {("ExitError: Trying to push into a stack over stack limit.", 0xe2)},
+                ExitError::InvalidJump => {("ExitError: Jump destination is invalid.", 0xe3)},
+                ExitError::InvalidRange => {("ExitError: An opcode accesses memory region, but the region is invalid.", 0xe4)},
+                ExitError::DesignatedInvalid => {("ExitError: Encountered the designated invalid opcode.", 0xe5)},
+                ExitError::CallTooDeep => {("ExitError: Call stack is too deep (runtime).", 0xe6)},
+                ExitError::CreateCollision => {("ExitError: Create opcode encountered collision (runtime).", 0xe7)},
+                ExitError::CreateContractLimit => {("ExitError: Create init code exceeds limit (runtime).", 0xe8)},
+                ExitError::OutOfOffset => {("ExitError: An opcode accesses external information, but the request is off offset limit (runtime).", 0xe9)},
+                ExitError::OutOfGas => {("ExitError: Execution runs out of gas (runtime).", 0xea)},
+                ExitError::OutOfFund => {("ExitError: Not enough fund to start the execution (runtime).", 0xeb)},
+                ExitError::PCUnderflow => {("ExitError: PC underflowed (unused).", 0xec)},
+                ExitError::CreateEmpty => {("ExitError: Attempt to create an empty account (runtime, unused).", 0xed)},
             }
         },
-        ExitReason::Revert(_) => { debug_print!("Revert"); 0xd0},
+        ExitReason::Revert(_) => {("Revert", 0xd0)},
         ExitReason::Fatal(fatal_code) => {
-            debug_print!("Fatal");
             match fatal_code {
-                ExitFatal::NotSupported => { debug_print!("The operation is not supported."); 0xf1},
-                ExitFatal::UnhandledInterrupt => { debug_print!("The trap (interrupt) is unhandled."); 0xf2},
-                ExitFatal::CallErrorAsFatal(_) => { debug_print!("The environment explictly set call errors as fatal error."); 0xf3},
+                ExitFatal::NotSupported => {("Fatal: The operation is not supported.", 0xf1)},
+                ExitFatal::UnhandledInterrupt => {("Fatal: The trap (interrupt) is unhandled.", 0xf2)},
+                ExitFatal::CallErrorAsFatal(_) => {("Fatal: The environment explictly set call errors as fatal error.", 0xf3)},
             }
         },
         ExitReason::StepLimitReached => unreachable!(),
     };
 
-    debug_print!("exit status {}", exit_status);
+    msg!("{} exit_status={:#04X?}", exit_message, exit_status);
     debug_print!("used gas {}", used_gas);
     debug_print!("result {}", &hex::encode(&result));
 
