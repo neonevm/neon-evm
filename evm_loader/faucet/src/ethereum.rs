@@ -1,4 +1,4 @@
-//! Faucet ethereum utilities module.
+//! Faucet Ethereum utilities module.
 
 use color_eyre::Result;
 

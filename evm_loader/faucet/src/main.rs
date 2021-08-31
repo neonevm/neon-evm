@@ -6,6 +6,7 @@
 
 mod cli;
 mod config;
+mod eth_token;
 mod ethereum;
 mod server;
 mod solana;
