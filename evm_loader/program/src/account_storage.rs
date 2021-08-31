@@ -3,7 +3,7 @@ use crate::{
     account_data::AccountData,
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
-    utils::keccak256_h256,
+    // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
 };
 use evm::backend::Apply;
@@ -13,7 +13,7 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::Instruction,
     program_error::ProgramError,
-    sysvar::{clock, clock::Clock, Sysvar},
+    sysvar::{clock::Clock, Sysvar},
     program::invoke_signed,
     entrypoint::ProgramResult,
 };
@@ -40,7 +40,6 @@ struct AccountMeta<'a> {
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
-    clock_account: &'a AccountInfo<'a>,
     account_metas: Vec<AccountMeta<'a>>,
     contract_id: H160,
     sender: Sender,
@@ -55,7 +54,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 0. contract account info
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
-    /// 3. ... other accounts (with `clock_account` in any place)
+    /// 3. ... other accounts
     /// 
     /// # Errors
     ///
@@ -72,8 +71,6 @@ impl<'a> ProgramAccountStorage<'a> {
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
         let mut account_metas = Vec::with_capacity(account_infos.len());
-
-        let mut clock_account = None;
 
         let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: Option<&'a AccountInfo<'a>>| {
             aliases.push((sol_account.get_ether(), accounts.len()));
@@ -138,11 +135,17 @@ impl<'a> ProgramAccountStorage<'a> {
                 push_account(caller_acc, caller_info, caller_token_info, None);
                 Sender::Ethereum(caller_address)
             } else {
-                if !caller_info.is_signer {
-                    return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
-                }
+                // TODO: EvmInstruction::Call
+                // https://github.com/neonlabsorg/neon-evm/issues/188
+                // Does not fit in current vision.
+                // It is needed to update behavior for all system in whole.
+                return Err!(ProgramError::InvalidArgument; "Caller could not be Solana user. It must be neon-evm owned account");
 
-                Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
+                // if !caller_info.is_signer {
+                //     return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
+                // }
+
+                // Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
             }
         };
 
@@ -168,18 +171,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 };
 
                 push_account(sol_account, account_info, token_info, code_info);
-            } else if clock::check_id(account_info.key) {
-                debug_print!("Clock account {}", account_info.key);
-                clock_account = Some(account_info);
             }
         }
-
-        let clock_account = if let Some(clock_acc) = clock_account {
-            clock_acc
-        } else {
-            return Err!(ProgramError::NotEnoughAccountKeys);
-        };
-
 
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
@@ -187,7 +180,6 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(Self {
             accounts,
             aliases: RefCell::new(aliases),
-            clock_account,
             account_metas,
             contract_id,
             sender
@@ -365,12 +357,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_number(&self) -> U256 {
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
+        let clock = Clock::get().unwrap();
         clock.slot.into()
     }
 
     fn block_timestamp(&self) -> U256 {
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
+        let clock = Clock::get().unwrap();
         clock.unix_timestamp.into()
     }
 
