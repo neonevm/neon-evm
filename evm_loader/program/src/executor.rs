@@ -408,7 +408,7 @@ impl<B: Backend> Machine<B> {
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
-        let context = evm::Context{address: code_address, caller, apparent_value: U256::zero()};
+        let context = evm::Context{address: code_address, caller, apparent_value: transfer_value};
 
         let runtime = evm::Runtime::new(code, valids, input, context);
 
