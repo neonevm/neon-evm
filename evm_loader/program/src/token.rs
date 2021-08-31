@@ -1,6 +1,9 @@
 //! `EVMLoader` token functions
-use crate::account_data::{AccountData};
-
+use crate::{
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    solidity_account::SolidityAccount
+};
+use evm::{U256};
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     account_info::{AccountInfo},
@@ -8,8 +11,10 @@ use solana_program::{
     system_program, sysvar,
     program_error::ProgramError,
     program_pack::Pack,
+    program::invoke_signed,
 };
 use std::vec;
+use std::convert::TryFrom;
 
 /// Token Mint ID
 pub mod token_mint {
@@ -47,6 +52,7 @@ pub fn create_associated_token_account(
     }
 }
 
+
 /// Extract a token amount from the `AccountInfo`
 /// 
 /// # Errors
@@ -59,7 +65,24 @@ pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramEr
     }
 
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
     Ok(data.amount)
+}
+
+/// Extract a token owner from `AccountInfo`
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramError> {
+    if *account.owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "Invalid account owner");
+    }
+
+    let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
+    Ok(data.owner)
 }
 
 
@@ -83,6 +106,59 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
     }
 
     debug_print!("check_token_account success");
+
+    Ok(())
+}
+
+
+/// Transfer Tokens
+/// 
+/// # Errors
+///
+/// Could return: 
+/// `ProgramError::InvalidInstructionData`
+pub fn transfer_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    debug_print!("transfer_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        debug_print!("source ownership");
+        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
+        debug_print!("source key {}", source_account.key);
+        return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
+    }
+
+    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
+    let min_value = U256::from(10_u64.pow(min_decimals));
+    let value = value / min_value;
+    let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
+
+    let source_token_balance = get_token_account_balance(source_token_account)?;
+    if source_token_balance < value {
+        return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
+    }
+
+    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+
+    let instruction = spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        source_token_account.key,
+        &token_mint::id(),
+        target_token_account.key,
+        source_account.key,
+        &[],
+        value,
+        token_mint::decimals(),
+    )?;
+
+    let (ether, nonce) = source_solidity_account.get_seeds();
+    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
 
     Ok(())
 }

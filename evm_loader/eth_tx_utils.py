@@ -202,7 +202,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
         raise Exception("function gets ")
 
 
-def make_keccak_instruction_data(check_instruction_index, msg_len, data_start=1):
+def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
     if 255 < check_instruction_index < 0:
         raise Exception("Invalid index for instruction - {}".format(check_instruction_index))
 
