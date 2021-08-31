@@ -49,7 +49,7 @@ type LogApplies = Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Tran
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, LogApplies);
 type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
 
-const HEAP_LENGTH: usize = 1024*1024;
+const HEAP_LENGTH: usize = 256*1024;
 
 /// Developers can implement their own heap by defining their own
 /// `#[global_allocator]`.  The following implements a dummy for test purposes
