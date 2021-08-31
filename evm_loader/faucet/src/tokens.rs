@@ -12,19 +12,20 @@ use web3::signing::Key;
 use web3::types::U256;
 use web3::Transport;
 
-use crate::ethereum;
+use crate::{config, ethereum};
 
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
 pub struct Airdrop {
+    /// Ethereum address of the recipient.
     wallet: String,
+    /// Amount of a token to be received.
     amount: u64,
 }
 
 /// Initializes local cache of tokens properties.
 pub async fn init(addresses: Vec<String>) -> Result<()> {
     info!("Checking tokens...");
-    use crate::config;
 
     let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
@@ -44,7 +45,6 @@ pub async fn init(addresses: Vec<String>) -> Result<()> {
 /// Processes the airdrop: sends needed transactions into Ethereum.
 pub async fn airdrop(params: Airdrop) -> Result<()> {
     info!("Processing ERC20 {:?}...", params);
-    use crate::{config, tokens};
 
     if params.amount > config::web3_max_amount() {
         return Err(eyre!(
@@ -62,7 +62,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     let amount = U256::from(params.amount);
 
     for token in &config::tokens() {
-        let factor = U256::from(tokens::multiplication_factor(token)?);
+        let factor = U256::from(multiplication_factor(token)?);
         let internal_amount = amount
             .checked_mul(factor)
             .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;

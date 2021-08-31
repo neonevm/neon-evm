@@ -22,6 +22,7 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
+#[allow(unused)]
 pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
     const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
@@ -49,6 +50,7 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
     instruction_data
 }
 
+#[allow(unused)]
 pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
 {
     let message_len = u16::try_from(message_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
@@ -117,6 +119,7 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
+#[allow(unused)]
 pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, Secp256k1RecoverError> {
     let digest = keccak256_digest(unsigned_trx);
 

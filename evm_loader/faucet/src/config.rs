@@ -5,6 +5,8 @@ use std::env;
 use std::path::Path;
 use std::sync::RwLock;
 
+use crate::ethereum;
+
 lazy_static::lazy_static! {
     static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
 }
@@ -35,6 +37,7 @@ const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
 const WEB3_TOKENS: &str = "WEB3_TOKENS";
 const WEB3_MAX_AMOUNT: &str = "WEB3_MAX_AMOUNT";
 const SOLANA_URL: &str = "SOLANA_URL";
+const EVM_LOADER: &str = "EVM_LOADER";
 const SOLANA_KEYFILE: &str = "SOLANA_KEYFILE";
 const SOLANA_MAX_AMOUNT: &str = "SOLANA_MAX_AMOUNT";
 static ENV: &[&str] = &[
@@ -45,6 +48,7 @@ static ENV: &[&str] = &[
     WEB3_TOKENS,
     WEB3_MAX_AMOUNT,
     SOLANA_URL,
+    EVM_LOADER,
     SOLANA_KEYFILE,
     SOLANA_MAX_AMOUNT,
 ];
@@ -77,6 +81,7 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 WEB3_MAX_AMOUNT => CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?,
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
+                EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
                 SOLANA_KEYFILE => CONFIG.write().unwrap().solana.keyfile = val,
                 SOLANA_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
@@ -112,11 +117,7 @@ pub fn web3_rpc_url() -> String {
 /// Gets the `web3.private_key` value. Removes prefix 0x if any.
 pub fn web3_private_key() -> String {
     let key = &CONFIG.read().unwrap().web3.private_key;
-    if key.len() < 3 || !key.starts_with("0x") {
-        key.to_owned()
-    } else {
-        key[2..].to_owned()
-    }
+    ethereum::strip_0x_prefix(key).to_owned()
 }
 
 /// Gets the `web3.tokens` addresses.
@@ -129,7 +130,17 @@ pub fn web3_max_amount() -> u64 {
     CONFIG.read().unwrap().web3.max_amount
 }
 
-/// Gets the `solana.max_amount` value.
+/// Gets the `solana.url` value.
+pub fn solana_url() -> String {
+    CONFIG.read().unwrap().solana.url.clone()
+}
+
+/// Gets the `solana.evm_loader` address value.
+pub fn solana_evm_loader() -> String {
+    CONFIG.read().unwrap().solana.evm_loader.clone()
+}
+
+/// Gets the `solana.max_amount` value
 pub fn solana_max_amount() -> u64 {
     CONFIG.read().unwrap().solana.max_amount
 }
@@ -205,6 +216,8 @@ struct Solana {
     #[serde(default)]
     url: String,
     #[serde(default)]
+    evm_loader: String,
+    #[serde(default)]
     keyfile: String,
     #[serde(default)]
     max_amount: u64,
@@ -215,6 +228,12 @@ impl std::fmt::Display for Solana {
         write!(f, "solana.url = {}", self.url)?;
         if env::var(SOLANA_URL).is_ok() {
             writeln!(f, " (overridden by {})", SOLANA_URL)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "solana.evm_loader = {:?}", self.evm_loader)?;
+        if env::var(EVM_LOADER).is_ok() {
+            writeln!(f, " (overridden by {})", EVM_LOADER)?;
         } else {
             writeln!(f)?;
         }

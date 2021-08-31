@@ -22,7 +22,10 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
         App::new()
             .wrap(cors)
             .route("/request_eth_token", post().to(handle_request_eth_token))
-            .route("/request_airdrop", post().to(handle_request_airdrop))
+            .route(
+                "/request_erc20_tokens",
+                post().to(handle_request_erc20_tokens),
+            )
     })
     .bind(("localhost", rpc_port))?
     .workers(workers)
@@ -58,7 +61,7 @@ async fn handle_request_eth_token(body: Bytes) -> impl Responder {
 }
 
 /// Handles a request for ERC20 tokens airdrop.
-async fn handle_request_airdrop(body: Bytes) -> impl Responder {
+async fn handle_request_erc20_tokens(body: Bytes) -> impl Responder {
     println!();
     info!("Handling Request for ERC20 Airdrop...");
 

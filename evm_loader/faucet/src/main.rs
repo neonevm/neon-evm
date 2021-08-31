@@ -88,7 +88,10 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
-    tokens::init(config::tokens()).await?;
+    //ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+    if false {
+        tokens::init(config::tokens()).await?;
+    }
     server::start(config::rpc_port(), workers).await
 }
 
