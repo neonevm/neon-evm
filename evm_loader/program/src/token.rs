@@ -1,10 +1,9 @@
 //! `EVMLoader` token functions
 use crate::{
-    account_data::{AccountData},
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solidity_account::SolidityAccount
 };
 use evm::{U256};
-
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     account_info::{AccountInfo},
@@ -158,7 +157,8 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
+    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
 
     Ok(())
 }
