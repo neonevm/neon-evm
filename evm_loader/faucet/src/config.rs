@@ -1,9 +1,12 @@
 //! Faucet config module.
 
-use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::Path;
 use std::sync::RwLock;
+
+use serde::{Deserialize, Serialize};
+
+use solana_sdk::signer::keypair::Keypair;
 
 use crate::ethereum;
 
@@ -23,8 +26,11 @@ pub enum Error {
     #[error("Failed to parse config '{1}': {0}")]
     Parse(#[source] toml::de::Error, std::path::PathBuf),
 
-    #[error("Failed to parse RPC port")]
-    ParsePort(#[from] std::num::ParseIntError),
+    #[error("Failed to parse integer number from config")]
+    ParseInt(#[from] std::num::ParseIntError),
+
+    #[error("Failed to parse keypair from config")]
+    ParseKeypair(#[from] ed25519_dalek::SignatureError),
 }
 
 /// Represents the config result type.
@@ -34,23 +40,23 @@ const FAUCET_RPC_PORT: &str = "FAUCET_RPC_PORT";
 const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
-const WEB3_TOKENS: &str = "WEB3_TOKENS";
-const WEB3_MAX_AMOUNT: &str = "WEB3_MAX_AMOUNT";
+const NEON_ERC20_TOKENS: &str = "NEON_ERC20_TOKENS";
+const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
-const SOLANA_KEYFILE: &str = "SOLANA_KEYFILE";
-const SOLANA_MAX_AMOUNT: &str = "SOLANA_MAX_AMOUNT";
+const NEON_ETH_TOKEN_OWNER: &str = "NEON_ETH_TOKEN_OWNER";
+const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
     FAUCET_RPC_ALLOWED_ORIGINS,
     WEB3_RPC_URL,
     WEB3_PRIVATE_KEY,
-    WEB3_TOKENS,
-    WEB3_MAX_AMOUNT,
+    NEON_ERC20_TOKENS,
+    NEON_ERC20_MAX_AMOUNT,
     SOLANA_URL,
     EVM_LOADER,
-    SOLANA_KEYFILE,
-    SOLANA_MAX_AMOUNT,
+    NEON_ETH_TOKEN_OWNER,
+    NEON_ETH_MAX_AMOUNT,
 ];
 
 /// Shows the environment variables and their values.
@@ -76,14 +82,16 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
                 WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
-                WEB3_TOKENS => {
+                NEON_ERC20_TOKENS => {
                     CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(val)
                 }
-                WEB3_MAX_AMOUNT => CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?,
+                NEON_ERC20_MAX_AMOUNT => {
+                    CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?
+                }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
-                SOLANA_KEYFILE => CONFIG.write().unwrap().solana.keyfile = val,
-                SOLANA_MAX_AMOUNT => {
+                NEON_ETH_TOKEN_OWNER => CONFIG.write().unwrap().solana.eth_token_owner = val,
+                NEON_ETH_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
                 }
                 _ => unreachable!(),
@@ -138,6 +146,16 @@ pub fn solana_url() -> String {
 /// Gets the `solana.evm_loader` address value.
 pub fn solana_evm_loader() -> String {
     CONFIG.read().unwrap().solana.evm_loader.clone()
+}
+
+/// Gets the `solana.eth_token_owner` keypair value.
+pub fn solana_eth_token_owner() -> Result<Keypair> {
+    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.eth_token_owner.clone());
+    let mut bytes = Vec::with_capacity(ss.len());
+    for s in ss {
+        bytes.push(s.parse::<u8>()?);
+    }
+    Ok(Keypair::from_bytes(&bytes)?)
 }
 
 /// Gets the `solana.max_amount` value
@@ -197,14 +215,14 @@ impl std::fmt::Display for Web3 {
             writeln!(f)?;
         }
         write!(f, "web3.tokens = {:?}", self.tokens)?;
-        if env::var(WEB3_TOKENS).is_ok() {
-            writeln!(f, " (overridden by {})", WEB3_TOKENS)?;
+        if env::var(NEON_ERC20_TOKENS).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_ERC20_TOKENS)?;
         } else {
             writeln!(f)?;
         }
         write!(f, "web3.max_amount = {}", self.max_amount)?;
-        if env::var(WEB3_MAX_AMOUNT).is_ok() {
-            write!(f, " (overridden by {})", WEB3_MAX_AMOUNT)
+        if env::var(NEON_ERC20_MAX_AMOUNT).is_ok() {
+            write!(f, " (overridden by {})", NEON_ERC20_MAX_AMOUNT)
         } else {
             write!(f, "")
         }
@@ -218,7 +236,7 @@ struct Solana {
     #[serde(default)]
     evm_loader: String,
     #[serde(default)]
-    keyfile: String,
+    eth_token_owner: String,
     #[serde(default)]
     max_amount: u64,
 }
@@ -237,15 +255,15 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(f, "solana.keyfile = {:?}", self.keyfile)?;
-        if env::var(SOLANA_KEYFILE).is_ok() {
-            writeln!(f, " (overridden by {})", SOLANA_KEYFILE)?;
+        write!(f, "solana.eth_token_owner = {:?}", self.eth_token_owner)?;
+        if env::var(NEON_ETH_TOKEN_OWNER).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_ETH_TOKEN_OWNER)?;
         } else {
             writeln!(f)?;
         }
         write!(f, "solana.max_amount = {}", self.max_amount)?;
-        if env::var(SOLANA_MAX_AMOUNT).is_ok() {
-            write!(f, " (overridden by {})", SOLANA_MAX_AMOUNT)
+        if env::var(NEON_ETH_MAX_AMOUNT).is_ok() {
+            write!(f, " (overridden by {})", NEON_ETH_MAX_AMOUNT)
         } else {
             write!(f, "")
         }

@@ -8,9 +8,11 @@ use color_eyre::{eyre::eyre, Result};
 
 //use solana_client::client_error::Result as ClientResult;
 use solana_client::rpc_client::RpcClient;
-//use solana_sdk::message::Message;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
-//use solana_sdk::transaction::Transaction;
+use solana_sdk::signature::Signer as _;
+use solana_sdk::signer::keypair::Keypair;
+use solana_sdk::transaction::Transaction;
 
 use crate::{config, ethereum};
 
@@ -32,32 +34,28 @@ pub fn create_program_address(seed: &str) -> Result<Pubkey> {
     Ok(address)
 }
 
-//pub fn get_token_account_balance(pubkey: &Pubkey) -> Result<UiTokenAmount> {
-//    let r = thread::spawn(move || -> ClientResult<UiTokenAmount> {
-//        get_client().get_token_account_balance(&token_address)
-//    })
-//    .join();
-//    dbg!(&r);
-//    match r {
-//        Ok(r) => info!("{:?}", r),
-//        Err(e) => error!("{:?}", e),
-//    }
-//}
-
 /// Transfers `amount` of tokens to `recipient` from a known account.
 /// Creates the `recipient` account if it doesn't exist.
-pub fn transfer_token(recipient: Pubkey, _amount: u64) -> Result<()> {
+pub fn transfer_token(owner: Keypair, recipient: Pubkey, _amount: u64) -> Result<()> {
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
-        let a = client.get_token_account(&recipient);
-        if let Err(e) = a {
-            return Err(eyre!("{:?}", e));
+        let payer = owner.pubkey();
+        let mut instructions = vec![];
+        let token_account = client.get_token_account(&recipient);
+        let account_missing = token_account.is_err();
+        if account_missing {
+            instructions.push(evm_loader::token::create_associated_token_account(
+                &payer,
+                &payer,
+                &recipient,
+                &evm_loader::token::token_mint::id(),
+            ));
         }
-        //        let instructions = vec![spl_token::instruction::transfer(amount)];
-        //        let payer = Some(&recipient);
-        //        let message = Message::new(&instructions, payer);
-        //        let tx = Transaction::new_unsigned(message);
-        //        get_client().send_and_confirm_transaction(&tx)
+        let message = Message::new(&instructions, Some(&payer));
+        let mut tx = Transaction::new_unsigned(message);
+        let (blockhash, _) = client.get_recent_blockhash()?;
+        tx.try_sign(&[&owner], blockhash)?;
+        get_client().send_and_confirm_transaction(&tx)?;
         Ok(())
     })
     .join()

@@ -3,8 +3,6 @@
 use color_eyre::{eyre::eyre, Result};
 use tracing::info;
 
-use evm_loader::token::token_mint;
-
 use crate::{config, solana};
 
 /// Represents packet of information needed for single airdrop operation.
@@ -30,9 +28,12 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
 
     let address = solana::create_program_address(&params.wallet)?;
     info!("Address: {}", &address);
-    info!("Token mint id: {}", &token_mint::id());
-    let token_address =
-        spl_associated_token_account::get_associated_token_address(&address, &token_mint::id());
+    info!("Token mint id: {}", &evm_loader::token::token_mint::id());
+    let token_address = spl_associated_token_account::get_associated_token_address(
+        &address,
+        &evm_loader::token::token_mint::id(),
+    );
     info!("Token address: {}", &token_address);
-    solana::transfer_token(token_address, params.amount)
+    let owner = config::solana_eth_token_owner()?;
+    solana::transfer_token(owner, token_address, params.amount)
 }
