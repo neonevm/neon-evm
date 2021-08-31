@@ -33,16 +33,20 @@ const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
 const WEB3_TOKENS: &str = "WEB3_TOKENS";
+const WEB3_MAX_AMOUNT: &str = "WEB3_MAX_AMOUNT";
 const SOLANA_URL: &str = "SOLANA_URL";
 const SOLANA_KEYFILE: &str = "SOLANA_KEYFILE";
+const SOLANA_MAX_AMOUNT: &str = "SOLANA_MAX_AMOUNT";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
     FAUCET_RPC_ALLOWED_ORIGINS,
     WEB3_RPC_URL,
     WEB3_PRIVATE_KEY,
     WEB3_TOKENS,
+    WEB3_MAX_AMOUNT,
     SOLANA_URL,
     SOLANA_KEYFILE,
+    SOLANA_MAX_AMOUNT,
 ];
 
 /// Shows the environment variables and their values.
@@ -71,8 +75,12 @@ pub fn load(filename: &Path) -> Result<()> {
                 WEB3_TOKENS => {
                     CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(val)
                 }
+                WEB3_MAX_AMOUNT => CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?,
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 SOLANA_KEYFILE => CONFIG.write().unwrap().solana.keyfile = val,
+                SOLANA_MAX_AMOUNT => {
+                    CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
+                }
                 _ => unreachable!(),
             }
         }
@@ -111,9 +119,19 @@ pub fn web3_private_key() -> String {
     }
 }
 
-/// Gets the `ethereum.tokens` addresses.
+/// Gets the `web3.tokens` addresses.
 pub fn tokens() -> Vec<String> {
     CONFIG.read().unwrap().web3.tokens.clone()
+}
+
+/// Gets the `web3.max_amount` value.
+pub fn web3_max_amount() -> u64 {
+    CONFIG.read().unwrap().web3.max_amount
+}
+
+/// Gets the `solana.max_amount` value.
+pub fn solana_max_amount() -> u64 {
+    CONFIG.read().unwrap().solana.max_amount
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -149,6 +167,8 @@ struct Web3 {
     private_key: String,
     #[serde(default)]
     tokens: Vec<String>,
+    #[serde(default)]
+    max_amount: u64,
 }
 
 impl std::fmt::Display for Web3 {
@@ -167,7 +187,13 @@ impl std::fmt::Display for Web3 {
         }
         write!(f, "web3.tokens = {:?}", self.tokens)?;
         if env::var(WEB3_TOKENS).is_ok() {
-            write!(f, " (overridden by {})", WEB3_TOKENS)
+            writeln!(f, " (overridden by {})", WEB3_TOKENS)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "web3.max_amount = {}", self.max_amount)?;
+        if env::var(WEB3_MAX_AMOUNT).is_ok() {
+            write!(f, " (overridden by {})", WEB3_MAX_AMOUNT)
         } else {
             write!(f, "")
         }
@@ -180,6 +206,8 @@ struct Solana {
     url: String,
     #[serde(default)]
     keyfile: String,
+    #[serde(default)]
+    max_amount: u64,
 }
 
 impl std::fmt::Display for Solana {
@@ -192,7 +220,13 @@ impl std::fmt::Display for Solana {
         }
         write!(f, "solana.keyfile = {:?}", self.keyfile)?;
         if env::var(SOLANA_KEYFILE).is_ok() {
-            write!(f, " (overridden by {})", SOLANA_KEYFILE)
+            writeln!(f, " (overridden by {})", SOLANA_KEYFILE)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "solana.max_amount = {}", self.max_amount)?;
+        if env::var(SOLANA_MAX_AMOUNT).is_ok() {
+            write!(f, " (overridden by {})", SOLANA_MAX_AMOUNT)
         } else {
             write!(f, "")
         }
@@ -219,7 +253,8 @@ impl Faucet {
 impl std::fmt::Display for Faucet {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         writeln!(f, "{}", self.rpc)?;
-        write!(f, "{}", self.web3)
+        writeln!(f, "{}", self.web3)?;
+        write!(f, "{}", self.solana)
     }
 }
 

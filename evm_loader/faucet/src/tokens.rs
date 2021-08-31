@@ -46,6 +46,14 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     info!("Processing ERC20 {:?}...", params);
     use crate::{config, tokens};
 
+    if params.amount > config::web3_max_amount() {
+        return Err(eyre!(
+            "Requested value {} exceeds the limit {}",
+            params.amount,
+            config::web3_max_amount()
+        ));
+    }
+
     let admin_key: SecretKey = config::web3_private_key().parse()?;
     let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
