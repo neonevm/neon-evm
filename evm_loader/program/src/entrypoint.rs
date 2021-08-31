@@ -29,7 +29,7 @@ use solana_program::{
 
 use crate::{
     //    bump_allocator::BumpAllocator,
-    account_data::{Account, AccountData, Contract, ACCOUNT_VERSION, ACCOUNT_MAX_SIZE},
+    account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{SolanaBackend, AccountStorage},
     solidity_account::SolidityAccount,
@@ -132,7 +132,7 @@ fn process_instruction<'a>(
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
             
-            let program_seeds = [&[ACCOUNT_VERSION], ether.as_bytes(), &[nonce]];
+            let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
             let expected_address = Pubkey::create_program_address(&program_seeds, program_id)?;
             if expected_address != *account_info.key {
                 return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
@@ -200,7 +200,7 @@ fn process_instruction<'a>(
             let account_lamports = Rent::get()?.minimum_balance(space_as_usize) + lamports;
 
             let (caller_ether, caller_nonce) = caller.get_seeds();
-            let program_seeds = [&[ACCOUNT_VERSION], caller_ether.as_bytes(), &[caller_nonce]];
+            let program_seeds = [&[ACCOUNT_SEED_VERSION], caller_ether.as_bytes(), &[caller_nonce]];
             let seed = std::str::from_utf8(&seed).map_err(|e| E!(ProgramError::InvalidArgument; "Utf8Error={:?}", e))?;
             debug_print!("{}", account_lamports);
             debug_print!("{}", space);

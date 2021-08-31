@@ -1,6 +1,6 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
-    account_data::{AccountData, ACCOUNT_VERSION},
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
@@ -372,11 +372,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         account_infos: &[AccountInfo]
     ) -> ProgramResult {
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-        let contract_seeds = [&[ACCOUNT_VERSION], contract_eth.as_bytes(), &[contract_nonce]];
+        let contract_seeds = [&[ACCOUNT_SEED_VERSION], contract_eth.as_bytes(), &[contract_nonce]];
 
         match self.seeds(&self.origin()) {
             Some((sender_eth, sender_nonce)) => {
-                let sender_seeds = [&[ACCOUNT_VERSION], sender_eth.as_bytes(), &[sender_nonce]];
+                let sender_seeds = [&[ACCOUNT_SEED_VERSION], sender_eth.as_bytes(), &[sender_nonce]];
                 invoke_signed(
                     instruction,
                     account_infos,

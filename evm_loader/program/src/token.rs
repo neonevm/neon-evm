@@ -1,6 +1,6 @@
 //! `EVMLoader` token functions
 use crate::{
-    account_data::{AccountData, ACCOUNT_VERSION},
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solidity_account::SolidityAccount
 };
 use evm::{U256};
@@ -157,7 +157,7 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    let program_seeds = [&[ACCOUNT_VERSION], ether.as_bytes(), &[nonce]];
+    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
     invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
 
     Ok(())
