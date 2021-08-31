@@ -959,7 +959,7 @@ fn command_get_ether_account_data (
     ether_address: &H160,
 ) {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
-        Some((acc, code_account)) => {
+        Some((acc, balance, code_account)) => {
             let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
@@ -973,6 +973,8 @@ fn command_get_ether_account_data (
             println!("    trx_count: {}", &account_data.trx_count);
             println!("    code_account: {}", &account_data.code_account);
             println!("    blocked: {}", &account_data.blocked.is_some());
+            println!("    token_account: {}", &account_data.eth_token_account);
+            println!("    token_amount: {}", &balance);
         
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
