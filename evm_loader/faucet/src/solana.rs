@@ -10,7 +10,7 @@ pub struct Airdrop {
     amount: u64,
 }
 
-/// Processes the airdrop: sends needed transactions into Ethereum.
+/// Processes the airdrop: sends needed transactions into Solana.
 pub async fn airdrop(params: Airdrop) -> Result<()> {
     info!("Processing ETH {:?}...", params);
     Ok(())

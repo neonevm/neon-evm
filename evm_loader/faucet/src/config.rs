@@ -33,12 +33,16 @@ const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
 const WEB3_TOKENS: &str = "WEB3_TOKENS";
+const SOLANA_URL: &str = "SOLANA_URL";
+const SOLANA_KEYFILE: &str = "SOLANA_KEYFILE";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
     FAUCET_RPC_ALLOWED_ORIGINS,
     WEB3_RPC_URL,
     WEB3_PRIVATE_KEY,
     WEB3_TOKENS,
+    SOLANA_URL,
+    SOLANA_KEYFILE,
 ];
 
 /// Shows the environment variables and their values.
@@ -67,6 +71,8 @@ pub fn load(filename: &Path) -> Result<()> {
                 WEB3_TOKENS => {
                     CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(val)
                 }
+                SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
+                SOLANA_KEYFILE => CONFIG.write().unwrap().solana.keyfile = val,
                 _ => unreachable!(),
             }
         }
@@ -169,9 +175,35 @@ impl std::fmt::Display for Web3 {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct Solana {
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    keyfile: String,
+}
+
+impl std::fmt::Display for Solana {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "solana.url = {}", self.url)?;
+        if env::var(SOLANA_URL).is_ok() {
+            writeln!(f, " (overridden by {})", SOLANA_URL)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "solana.keyfile = {:?}", self.keyfile)?;
+        if env::var(SOLANA_KEYFILE).is_ok() {
+            write!(f, " (overridden by {})", SOLANA_KEYFILE)
+        } else {
+            write!(f, "")
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Faucet {
     rpc: Rpc,
     web3: Web3,
+    solana: Solana,
 }
 
 impl Faucet {
