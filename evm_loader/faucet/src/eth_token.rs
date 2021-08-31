@@ -3,8 +3,6 @@
 use color_eyre::{eyre::eyre, Result};
 use tracing::info;
 
-use solana_client::rpc_client::RpcClient;
-
 use evm_loader::token::token_mint;
 
 use crate::{config, solana};
@@ -31,16 +29,10 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     }
 
     let address = solana::create_program_address(&params.wallet)?;
+    info!("Address: {}", &address);
+    info!("Token mint id: {}", &token_mint::id());
     let token_address =
         spl_associated_token_account::get_associated_token_address(&address, &token_mint::id());
-
-    let client = RpcClient::new(config::solana_url());
-
-    let r = client.get_token_account_balance(&token_address)?;
-
-    //let r = client.send_and_confirm_transaction()?;
-
-    dbg!(r);
-
-    Ok(())
+    info!("Token address: {}", &token_address);
+    solana::transfer_token(token_address, params.amount)
 }

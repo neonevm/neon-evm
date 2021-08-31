@@ -22,8 +22,10 @@ serde_json = "1.0"
 solana-client = "=1.7.9"
 solana-sdk = "=1.7.9"
 spl-associated-token-account = { version = "1.0", default_features = false, features = ["no-entrypoint"] }
+spl-token = { version = "3.2", default_features = false, features = ["no-entrypoint"] }
 structopt = "0.3"
 thiserror = "1.0"
+tokio = { version = "1.10", features = ["rt-multi-thread"] }
 toml = "0.5"
 tracing = "0.1"
 tracing-subscriber = "0.2"

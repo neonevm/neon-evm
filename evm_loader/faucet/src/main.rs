@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 /// Initializes the logger and error handler.
 fn setup() -> Result<()> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "1")
+        std::env::set_var("RUST_LIB_BACKTRACE", "0")
     }
     color_eyre::install()?;
 
@@ -88,10 +88,13 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
+    solana::init_client(config::solana_url());
+
     //ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
     if false {
         tokens::init(config::tokens()).await?;
     }
+
     server::start(config::rpc_port(), workers).await
 }
 
