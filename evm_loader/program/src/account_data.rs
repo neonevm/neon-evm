@@ -7,7 +7,7 @@ use solana_program::{
 };
 
 /// Ethereum account version
-pub const ACCOUNT_VERSION: u32 = 1_u32;
+pub const ACCOUNT_VERSION: u8 = 1_u8;
 /// Ethereum account allocated data size
 pub const ACCOUNT_MAX_SIZE: u64 = 256;
 

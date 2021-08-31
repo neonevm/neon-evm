@@ -302,7 +302,7 @@ pub fn make_solana_program_address(
     ether_address: &H160,
     program_id: &Pubkey
 ) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[&ACCOUNT_VERSION.to_le_bytes(), ether_address.as_bytes()], program_id)
+    Pubkey::find_program_address(&[&[ACCOUNT_VERSION], ether_address.as_bytes()], program_id)
 }
 
 pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
