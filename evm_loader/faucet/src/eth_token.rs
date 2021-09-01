@@ -26,7 +26,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         ));
     }
 
-    let address = solana::create_program_address(&params.wallet)?;
+    let address = solana::make_program_address(&params.wallet)?;
     info!("Address: {}", &address);
     info!("Token mint id: {}", &evm_loader::token::token_mint::id());
     let token_address = spl_associated_token_account::get_associated_token_address(

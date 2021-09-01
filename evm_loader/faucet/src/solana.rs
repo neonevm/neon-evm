@@ -1,6 +1,6 @@
 //! Faucet Solana utilities module.
 
-use std::str::FromStr;
+use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -26,11 +26,10 @@ pub fn init_client(url: String) {
 }
 
 /// Generates a Solana address by corresponding Ethereum address.
-pub fn create_program_address(seed: &str) -> Result<Pubkey> {
-    let seed = hex::decode(ethereum::strip_0x_prefix(seed))?;
-    let seeds = vec![&seed[..]];
+pub fn make_program_address(ether_address: &str) -> Result<Pubkey> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
-    let (address, _nonce) = Pubkey::find_program_address(&seeds, &evm_loader_id);
+    let (address, _nonce) =
+        make_solana_program_address(&ethereum::address_from_str(ether_address)?, &evm_loader_id);
     Ok(address)
 }
 
@@ -79,6 +78,21 @@ pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<
         return Err(eyre!("{:?}", e));
     }
     Ok(())
+}
+
+/// Maps an Ethereum address into a Solana address.
+/// Copied here from evm_loader/cli/src/account_storage.rs.
+fn make_solana_program_address(
+    ether_address: &ethereum::Address,
+    program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            &[evm_loader::account_data::ACCOUNT_SEED_VERSION],
+            ether_address.as_bytes(),
+        ],
+        program_id,
+    )
 }
 
 struct Client(Arc<RpcClient>);

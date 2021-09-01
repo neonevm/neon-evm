@@ -16,12 +16,7 @@ pub fn strip_0x_prefix(s: &str) -> &str {
 /// Converts string representation of address to the H160 hash format.
 pub fn address_from_str(s: &str) -> Result<Address> {
     use std::str::FromStr as _;
-    let address = if !s.starts_with("0x") {
-        Address::from_str(s)?
-    } else {
-        Address::from_str(&s[2..])?
-    };
-    Ok(address)
+    Ok(Address::from_str(strip_0x_prefix(s))?)
 }
 
 #[test]
