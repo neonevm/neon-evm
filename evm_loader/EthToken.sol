@@ -15,5 +15,5 @@ contract EthToken {
         sender.transfer(amount);
     }
 
-    function nop() public { }
+    function nop() public payable { }
 }

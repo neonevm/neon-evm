@@ -4,6 +4,7 @@
 mod account_storage;
 use crate::{
     account_storage::{
+        make_solana_program_address,
         EmulatorAccountStorage,
         AccountJSON,
     },
@@ -12,7 +13,11 @@ use crate::{
 use evm_loader::{
     instruction::EvmInstruction,
     solana_backend::SolanaBackend,
-    account_data::{AccountData, Account, Contract},
+    account_data::{
+        AccountData,
+        Account,
+        Contract
+    },
     payment::collateral_pool_base,
 };
 
@@ -132,7 +137,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
             EmulatorAccountStorage::new(config, *program_id, caller_id)
         },
         None => {
-            let solana_address = Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
+            let (solana_address, _nonce) = make_solana_program_address(&caller_id, &config.evm_loader);
             let trx_count = get_ether_account_nonce(config, &solana_address)?;
             let trx_count= trx_count.0;
             let program_id = get_program_ether(&caller_id, trx_count);
@@ -241,17 +246,10 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
 fn command_create_program_address (
     config: &Config,
-    seed: &str,
+    ether_address: &H160,
 ) {
-    let strings = seed.split_whitespace().collect::<Vec<_>>();
-    let mut seeds = vec![];
-    let mut seeds_vec = vec![];
-    for s in strings {
-        seeds_vec.push(hex::decode(s).unwrap());
-    }
-    for i in &seeds_vec {seeds.push(&i[..]);}
-    let (address,nonce) = Pubkey::find_program_address(&seeds, &config.evm_loader);
-    println!("{} {}", address, nonce);
+    let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
+    println!("{} {}", solana_address, nonce);
 }
 
 fn command_create_ether_account (
@@ -260,7 +258,7 @@ fn command_create_ether_account (
     lamports: u64,
     space: u64
 ) -> CommandResult {
-    let (solana_address, nonce) = Pubkey::find_program_address(&[ether_address.as_bytes()], &config.evm_loader);
+    let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
     let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::token::token_mint::id());
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
@@ -586,7 +584,7 @@ fn fill_holder_account(
 //     };
 //     let caller_public = PublicKey::from_secret_key(&caller_private);
 //     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
-//     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
+//     let (caller_sol, caller_nonce) = make_solana_program_address(&caller_ether, &config.evm_loader);
 //     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
 //     let caller_holder = create_block_token_account(config, &caller_ether, &caller_sol).unwrap();
 //     debug!("caller_sol = {}", caller_sol);
@@ -647,8 +645,7 @@ fn get_ethereum_contract_account_credentials(
 
     let (program_id, program_ether, program_nonce) = {
         let ether = get_program_ether(caller_ether, trx_count);
-        let seeds = [ether.as_bytes()];
-        let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
+        let (address, nonce) = make_solana_program_address(&ether, &config.evm_loader);
         (address, ether, nonce)
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
@@ -962,8 +959,8 @@ fn command_get_ether_account_data (
     ether_address: &H160,
 ) {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
-        Some((acc, code_account)) => {
-            let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
+        Some((acc, balance, code_account)) => {
+            let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
 
@@ -976,6 +973,8 @@ fn command_get_ether_account_data (
             println!("    trx_count: {}", &account_data.trx_count);
             println!("    code_account: {}", &account_data.code_account);
             println!("    blocked: {}", &account_data.blocked.is_some());
+            println!("    token_account: {}", &account_data.eth_token_account);
+            println!("    token_amount: {}", &balance);
         
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
@@ -1354,9 +1353,9 @@ fn main() {
                 command_emulate(&config, contract, sender, data, value)
             }
             ("create-program-address", Some(arg_matches)) => {
-                let seed = arg_matches.value_of("seed").unwrap().to_string();
+                let ether = h160_of(arg_matches, "seed").unwrap();
 
-                command_create_program_address(&config, &seed);
+                command_create_program_address(&config, &ether);
 
                 Ok(())
             }
