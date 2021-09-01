@@ -34,19 +34,20 @@ pub fn make_program_address(ether_address: &str) -> Result<Pubkey> {
     Ok(address)
 }
 
-/// Transfers `amount` of tokens to `recipient` from a known account.
-/// Creates the `recipient` account if it doesn't exist.
+/// Transfers `amount` of tokens to `token_account` from a known account.
+/// Creates the `token_account` account if it doesn't exist.
 pub fn transfer_token(
-    operator: Keypair,
+    signer: Keypair,
     token_owner: Pubkey,
-    recipient: Pubkey,
+    _account: Pubkey,
+    token_account: Pubkey,
     amount: u64,
 ) -> Result<()> {
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
 
-        let balance = client.get_token_account_balance(&recipient);
+        let balance = client.get_token_account_balance(&token_account);
         let account_exists = balance.is_ok();
         if account_exists {
             info!("Balance of recipient is {:?}", balance.unwrap());
@@ -54,7 +55,7 @@ pub fn transfer_token(
             instructions.push(evm_loader::token::create_associated_token_account(
                 &token_owner,
                 &token_owner,
-                &recipient,
+                &token_account,
                 &evm_loader::token::token_mint::id(),
             ));
         }
@@ -64,17 +65,17 @@ pub fn transfer_token(
             &spl_token::id(),
             &token_owner,
             &evm_loader::token::token_mint::id(),
-            &recipient,
+            &token_account,
             &token_owner,
             &[],
             amount,
             decimals,
         )?);
 
-        let message = Message::new(&instructions, Some(&operator.pubkey()));
+        let message = Message::new(&instructions, Some(&signer.pubkey()));
         let mut tx = Transaction::new_unsigned(message);
         let (blockhash, _) = client.get_recent_blockhash()?;
-        tx.try_sign(&[&operator], blockhash)?;
+        tx.try_sign(&[&signer], blockhash)?;
         client.send_and_confirm_transaction(&tx)?;
 
         Ok(())
