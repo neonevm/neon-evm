@@ -93,12 +93,11 @@ mod accounts_signing {
             tx.nonce = Some(nonce);
 
             log::info!("Get gas price");
-            let gas_price = self.web3().eth().gas_price_u64().await.map_err(|e| {
+            let gas_price = self.web3().eth().gas_price().await.map_err(|e| {
                 log::error!("Failed getting gas price: {}", e);
                 e
             })?;
             log::info!("gas_price={}", gas_price);
-            let gas_price = U256::from(gas_price);
             tx.gas_price = Some(gas_price);
 
             log::info!("Get chain id");

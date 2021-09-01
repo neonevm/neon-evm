@@ -97,12 +97,6 @@ impl<T: Transport> Eth<T> {
         CallFuture::new(self.transport.execute("eth_gasPrice", vec![]))
     }
 
-    /// Get current recommended gas price expecting integer
-    pub fn gas_price_u64(&self) -> CallFuture<u64, T::Out> {
-        log::info!("Executing eth_gasPrice...");
-        CallFuture::new(self.transport.execute("eth_gasPrice", vec![]))
-    }
-
     /// Get balance of given address
     pub fn balance(&self, address: Address, block: Option<BlockNumber>) -> CallFuture<U256, T::Out> {
         let address = helpers::serialize(&address);
