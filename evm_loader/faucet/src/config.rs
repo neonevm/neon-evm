@@ -44,7 +44,8 @@ const NEON_ERC20_TOKENS: &str = "NEON_ERC20_TOKENS";
 const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
-const NEON_ETH_TOKEN_OWNER: &str = "NEON_ETH_TOKEN_OWNER";
+const NEON_OPERATOR_KEY: &str = "NEON_OPERATOR_KEY";
+const NEON_ETH_TOKEN_OWNER_KEY: &str = "NEON_ETH_TOKEN_OWNER_KEY";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
@@ -55,7 +56,8 @@ static ENV: &[&str] = &[
     NEON_ERC20_MAX_AMOUNT,
     SOLANA_URL,
     EVM_LOADER,
-    NEON_ETH_TOKEN_OWNER,
+    NEON_OPERATOR_KEY,
+    NEON_ETH_TOKEN_OWNER_KEY,
     NEON_ETH_MAX_AMOUNT,
 ];
 
@@ -90,7 +92,10 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
-                NEON_ETH_TOKEN_OWNER => CONFIG.write().unwrap().solana.eth_token_owner = val,
+                NEON_OPERATOR_KEY => CONFIG.write().unwrap().solana.operator_key = val,
+                NEON_ETH_TOKEN_OWNER_KEY => {
+                    CONFIG.write().unwrap().solana.eth_token_owner_key = val
+                }
                 NEON_ETH_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
                 }
@@ -148,9 +153,20 @@ pub fn solana_evm_loader() -> String {
     CONFIG.read().unwrap().solana.evm_loader.clone()
 }
 
+/// Gets the `solana.operator` keypair value.
+#[allow(unused)]
+pub fn solana_operator_keypair() -> Result<Keypair> {
+    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.operator_key.clone());
+    let mut bytes = Vec::with_capacity(ss.len());
+    for s in ss {
+        bytes.push(s.parse::<u8>()?);
+    }
+    Ok(Keypair::from_bytes(&bytes)?)
+}
+
 /// Gets the `solana.eth_token_owner` keypair value.
-pub fn solana_eth_token_owner() -> Result<Keypair> {
-    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.eth_token_owner.clone());
+pub fn solana_eth_token_owner_keypair() -> Result<Keypair> {
+    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.eth_token_owner_key.clone());
     let mut bytes = Vec::with_capacity(ss.len());
     for s in ss {
         bytes.push(s.parse::<u8>()?);
@@ -236,7 +252,9 @@ struct Solana {
     #[serde(default)]
     evm_loader: String,
     #[serde(default)]
-    eth_token_owner: String,
+    operator_key: String,
+    #[serde(default)]
+    eth_token_owner_key: String,
     #[serde(default)]
     max_amount: u64,
 }
@@ -255,9 +273,19 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(f, "solana.eth_token_owner = {:?}", self.eth_token_owner)?;
-        if env::var(NEON_ETH_TOKEN_OWNER).is_ok() {
-            writeln!(f, " (overridden by {})", NEON_ETH_TOKEN_OWNER)?;
+        write!(f, "solana.operator_key = {:?}", self.operator_key)?;
+        if env::var(NEON_OPERATOR_KEY).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_OPERATOR_KEY)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(
+            f,
+            "solana.eth_token_owner_key = {:?}",
+            self.eth_token_owner_key
+        )?;
+        if env::var(NEON_ETH_TOKEN_OWNER_KEY).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_ETH_TOKEN_OWNER_KEY)?;
         } else {
             writeln!(f)?;
         }

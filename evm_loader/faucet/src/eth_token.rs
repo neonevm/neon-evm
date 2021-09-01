@@ -34,6 +34,6 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         &evm_loader::token::token_mint::id(),
     );
     info!("Token address: {}", &token_address);
-    let owner = config::solana_eth_token_owner()?;
+    let owner = config::solana_eth_token_owner_keypair()?;
     solana::transfer_token(owner, token_address, params.amount)
 }

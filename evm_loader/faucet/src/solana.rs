@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use color_eyre::{eyre::eyre, Result};
+use tracing::info;
 
 //use solana_client::client_error::Result as ClientResult;
 use solana_client::rpc_client::RpcClient;
@@ -37,13 +38,15 @@ pub fn make_program_address(ether_address: &str) -> Result<Pubkey> {
 /// Creates the `recipient` account if it doesn't exist.
 pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<()> {
     let r = thread::spawn(move || -> Result<()> {
-        let client = get_client();
-
         let payer = owner.pubkey();
+        let client = get_client();
         let mut instructions = vec![];
-        let token_account = client.get_token_account(&recipient);
-        let account_missing = token_account.is_err();
-        if account_missing {
+
+        let balance = client.get_token_account_balance(&recipient);
+        let account_exists = balance.is_ok();
+        if account_exists {
+            info!("Balance of recipient is {:?}", balance.unwrap());
+        } else {
             instructions.push(evm_loader::token::create_associated_token_account(
                 &payer,
                 &payer,
