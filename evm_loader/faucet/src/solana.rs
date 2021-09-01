@@ -36,9 +36,15 @@ pub fn make_program_address(ether_address: &str) -> Result<Pubkey> {
 
 /// Transfers `amount` of tokens to `recipient` from a known account.
 /// Creates the `recipient` account if it doesn't exist.
-pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<()> {
+pub fn transfer_token(
+    operator: Keypair,
+    token_owner: Keypair,
+    recipient: Pubkey,
+    amount: u64,
+) -> Result<()> {
     let r = thread::spawn(move || -> Result<()> {
-        let payer = owner.pubkey();
+        let payer = operator.pubkey();
+        let owner = token_owner.pubkey();
         let client = get_client();
         let mut instructions = vec![];
 
@@ -49,7 +55,7 @@ pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<
         } else {
             instructions.push(evm_loader::token::create_associated_token_account(
                 &payer,
-                &payer,
+                &owner,
                 &recipient,
                 &evm_loader::token::token_mint::id(),
             ));
@@ -61,7 +67,7 @@ pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<
             &payer,
             &evm_loader::token::token_mint::id(),
             &recipient,
-            &payer,
+            &owner,
             &[],
             amount,
             decimals,
@@ -70,7 +76,7 @@ pub fn transfer_token(owner: Keypair, recipient: Pubkey, amount: u64) -> Result<
         let message = Message::new(&instructions, Some(&payer));
         let mut tx = Transaction::new_unsigned(message);
         let (blockhash, _) = client.get_recent_blockhash()?;
-        tx.try_sign(&[&owner], blockhash)?;
+        tx.try_sign(&[&token_owner], blockhash)?;
         client.send_and_confirm_transaction(&tx)?;
 
         Ok(())

@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::RwLock;
 
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use solana_sdk::signer::keypair::Keypair;
 
@@ -60,6 +61,13 @@ static ENV: &[&str] = &[
     NEON_ETH_TOKEN_OWNER_KEY,
     NEON_ETH_MAX_AMOUNT,
 ];
+
+/// Reports if no file exists (it's normal, will be another source of config).
+pub fn check_file_exists(file: &Path) {
+    if !file.exists() {
+        warn!("File {:?} is missing", file);
+    }
+}
 
 /// Shows the environment variables and their values.
 pub fn show_env() {
@@ -154,7 +162,6 @@ pub fn solana_evm_loader() -> String {
 }
 
 /// Gets the `solana.operator` keypair value.
-#[allow(unused)]
 pub fn solana_operator_keypair() -> Result<Keypair> {
     let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.operator_key.clone());
     let mut bytes = Vec::with_capacity(ss.len());

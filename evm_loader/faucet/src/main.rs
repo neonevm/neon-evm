@@ -13,7 +13,7 @@ mod solana;
 mod tokens;
 
 use color_eyre::Result;
-use tracing::{info, warn};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
@@ -60,7 +60,7 @@ async fn execute(app: cli::Application) -> Result<()> {
 
     match app.cmd {
         cli::Command::Config { file } => {
-            check_file_exists(&file);
+            config::check_file_exists(&file);
             config::load(&file)?;
             config::show();
         }
@@ -85,7 +85,7 @@ use std::path::Path;
 
 /// Runs the server.
 async fn run(config_file: &Path, workers: usize) -> Result<()> {
-    check_file_exists(config_file);
+    config::check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
     solana::init_client(config::solana_url());
@@ -96,10 +96,4 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     }
 
     server::start(config::rpc_port(), workers).await
-}
-
-fn check_file_exists(file: &Path) {
-    if !file.exists() {
-        warn!("File {:?} is missing", file);
-    }
 }
