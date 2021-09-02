@@ -154,7 +154,7 @@ fn multiplication_factor(token_address: &str) -> Result<u64> {
             .read()
             .unwrap()
             .get(token_address)
-            .ok_or_else(|| eyre!("Token not found: {}", token_address))?
+            .ok_or_else(|| eyre!("Token info in cache not found: {}", token_address))?
             .decimals
     };
     let factor = 10_u64

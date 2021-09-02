@@ -91,7 +91,7 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     solana::init_client(config::solana_url());
 
     //ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-    if false {
+    if true {
         tokens::init(config::tokens()).await?;
     }
 
