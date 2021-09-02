@@ -1,7 +1,6 @@
 //! # ERC20 Token Faucet (Airdrop)
 //! ERC20 Token Faucet is a service which performs airdrop of tokens on user request.
 
-#![forbid(unsafe_code)]
 #![deny(warnings)]
 
 mod cli;
@@ -89,11 +88,6 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::load(config_file)?;
     config::show();
     solana::init_client(config::solana_url());
-
-    //ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-    if true {
-        tokens::init(config::tokens()).await?;
-    }
-
+    tokens::init(config::tokens()).await?;
     server::start(config::rpc_port(), workers).await
 }

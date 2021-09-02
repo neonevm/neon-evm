@@ -7,13 +7,14 @@ use std::thread;
 use color_eyre::{eyre::eyre, Result};
 use tracing::info;
 
-//use solana_client::client_error::Result as ClientResult;
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::{system_program, sysvar};
 
 use crate::{config, ethereum};
 
@@ -31,10 +32,11 @@ pub fn init_client(url: String) {
 pub fn transfer_token(
     signer: Keypair,
     token_owner: Pubkey,
-    eth_acc: &str,
+    ether_address: ethereum::Address,
     amount: u64,
 ) -> Result<()> {
-    let account = make_program_address(eth_acc)?;
+    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
+    let (account, _nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
     let token_account = spl_associated_token_account::get_associated_token_address(
         &account,
         &evm_loader::token::token_mint::id(),
@@ -55,7 +57,13 @@ pub fn transfer_token(
                 info!("Ether {:?}", ether_account.unwrap());
             } else {
                 info!("Ether account doesn not exist; will be created");
-                /* instructions.push(create_ether_account()); */
+                instructions.push(create_ether_account_instruction(
+                    signer.pubkey(),
+                    evm_loader_id,
+                    ether_address,
+                    0,
+                    0,
+                ));
             }
         }
 
@@ -92,14 +100,6 @@ pub fn transfer_token(
     Ok(())
 }
 
-/// Generates a Solana address by corresponding Ethereum address.
-fn make_program_address(ether_address: &str) -> Result<Pubkey> {
-    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
-    let (address, _nonce) =
-        make_solana_program_address(&ethereum::address_from_str(ether_address)?, &evm_loader_id);
-    Ok(address)
-}
-
 /// Maps an Ethereum address into a Solana address.
 /// Copied here from evm_loader/cli/src/account_storage.rs.
 fn make_solana_program_address(
@@ -112,6 +112,41 @@ fn make_solana_program_address(
             ether_address.as_bytes(),
         ],
         program_id,
+    )
+}
+
+/// Returns instruction for creation of account.
+fn create_ether_account_instruction(
+    signer: Pubkey,
+    evm_loader_id: Pubkey,
+    ether_address: ethereum::Address,
+    lamports: u64,
+    space: u64,
+) -> Instruction {
+    let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
+    let token_address = spl_associated_token_account::get_associated_token_address(
+        &solana_address,
+        &evm_loader::token::token_mint::id(),
+    );
+
+    Instruction::new_with_bincode(
+        evm_loader_id,
+        &evm_loader::instruction::EvmInstruction::CreateAccount {
+            lamports,
+            space,
+            ether: unsafe { core::mem::transmute(ether_address) },
+            nonce,
+        },
+        vec![
+            AccountMeta::new(signer, true),
+            AccountMeta::new(solana_address, false),
+            AccountMeta::new(token_address, false),
+            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_associated_token_account::id(), false),
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+        ],
     )
 }
 

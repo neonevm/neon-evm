@@ -5,7 +5,7 @@ use tracing::info;
 
 use solana_sdk::signature::Signer as _;
 
-use crate::{config, solana};
+use crate::{config, ethereum, solana};
 
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
@@ -30,10 +30,6 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
 
     let operator = config::solana_operator_keypair()?;
     let token_owner = config::solana_eth_token_owner_keypair()?;
-    solana::transfer_token(
-        operator,
-        token_owner.pubkey(),
-        &params.wallet,
-        params.amount,
-    )
+    let ether_address = ethereum::address_from_str(&params.wallet)?;
+    solana::transfer_token(operator, token_owner.pubkey(), ether_address, params.amount)
 }
