@@ -73,6 +73,13 @@ pub fn transfer_token(
             }
         }
 
+        let decimals = evm_loader::token::token_mint::decimals();
+        let factor = 10_u64
+            .checked_pow(decimals as u32)
+            .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
+        let internal_amount = amount
+            .checked_mul(factor)
+            .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -80,7 +87,7 @@ pub fn transfer_token(
             &token_account,
             &signer_account,
             &[],
-            amount,
+            internal_amount,
             evm_loader::token::token_mint::decimals(),
         )?);
 
