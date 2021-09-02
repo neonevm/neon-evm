@@ -37,18 +37,15 @@ pub fn transfer_token(
     amount: u64,
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
+    let token_mint_id = evm_loader::token::token_mint::id();
 
     let signer_account = signer.pubkey();
-    let signer_token_account = spl_associated_token_account::get_associated_token_address(
-        &signer_account,
-        &evm_loader::token::token_mint::id(),
-    );
+    let signer_token_account =
+        spl_associated_token_account::get_associated_token_address(&signer_account, &token_mint_id);
 
     let (account, _nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
-    let token_account = spl_associated_token_account::get_associated_token_address(
-        &account,
-        &evm_loader::token::token_mint::id(),
-    );
+    let token_account =
+        spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
@@ -83,12 +80,12 @@ pub fn transfer_token(
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
-            &evm_loader::token::token_mint::id(),
+            &token_mint_id,
             &token_account,
             &signer_account,
             &[],
             amount,
-            evm_loader::token::token_mint::decimals(),
+            token_decimals,
         )?);
 
         info!("Creating message...");
@@ -137,11 +134,11 @@ fn create_ether_account_instruction(
     lamports: u64,
     space: u64,
 ) -> Instruction {
+    let token_mint_id = evm_loader::token::token_mint::id();
+
     let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
-    let token_address = spl_associated_token_account::get_associated_token_address(
-        &solana_address,
-        &evm_loader::token::token_mint::id(),
-    );
+    let token_address =
+        spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint_id);
 
     Instruction::new_with_bincode(
         evm_loader_id,
@@ -156,7 +153,7 @@ fn create_ether_account_instruction(
             AccountMeta::new(solana_address, false),
             AccountMeta::new(token_address, false),
             AccountMeta::new_readonly(system_program::id(), false),
-            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+            AccountMeta::new_readonly(token_mint_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(spl_associated_token_account::id(), false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
