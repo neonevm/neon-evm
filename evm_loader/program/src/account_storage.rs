@@ -1,10 +1,10 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
-    account_data::AccountData,
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solana_backend::{AccountStorage, SolanaBackend},
     solidity_account::SolidityAccount,
-    utils::keccak256_h256,
-    token::{get_token_account_balance, token_mint, check_token_account, eth_decimals},
+    // utils::keccak256_h256,
+    token::{get_token_account_balance, check_token_account, transfer_token},
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -13,14 +13,13 @@ use solana_program::{
     pubkey::Pubkey,
     instruction::Instruction,
     program_error::ProgramError,
-    sysvar::{clock, clock::Clock, Sysvar},
+    sysvar::{clock::Clock, Sysvar},
     program::invoke_signed,
     entrypoint::ProgramResult,
 };
 use std::{
     cell::RefCell,
 };
-use std::convert::TryFrom;
 
 /// Sender
 pub enum Sender {
@@ -41,7 +40,6 @@ struct AccountMeta<'a> {
 pub struct ProgramAccountStorage<'a> {
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
-    clock_account: &'a AccountInfo<'a>,
     account_metas: Vec<AccountMeta<'a>>,
     contract_id: H160,
     sender: Sender,
@@ -56,7 +54,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// 0. contract account info
     /// 1. contract code info
     /// 2. caller or caller account info(for ether account)
-    /// 3. ... other accounts (with `clock_account` in any place)
+    /// 3. ... other accounts
     /// 
     /// # Errors
     ///
@@ -73,8 +71,6 @@ impl<'a> ProgramAccountStorage<'a> {
         let mut accounts = Vec::with_capacity(account_infos.len());
         let mut aliases = Vec::with_capacity(account_infos.len());
         let mut account_metas = Vec::with_capacity(account_infos.len());
-
-        let mut clock_account = None;
 
         let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: Option<&'a AccountInfo<'a>>| {
             aliases.push((sol_account.get_ether(), accounts.len()));
@@ -139,11 +135,17 @@ impl<'a> ProgramAccountStorage<'a> {
                 push_account(caller_acc, caller_info, caller_token_info, None);
                 Sender::Ethereum(caller_address)
             } else {
-                if !caller_info.is_signer {
-                    return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
-                }
+                // TODO: EvmInstruction::Call
+                // https://github.com/neonlabsorg/neon-evm/issues/188
+                // Does not fit in current vision.
+                // It is needed to update behavior for all system in whole.
+                return Err!(ProgramError::InvalidArgument; "Caller could not be Solana user. It must be neon-evm owned account");
 
-                Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
+                // if !caller_info.is_signer {
+                //     return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
+                // }
+
+                // Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
             }
         };
 
@@ -169,18 +171,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 };
 
                 push_account(sol_account, account_info, token_info, code_info);
-            } else if clock::check_id(account_info.key) {
-                debug_print!("Clock account {}", account_info.key);
-                clock_account = Some(account_info);
             }
         }
-
-        let clock_account = if let Some(clock_acc) = clock_account {
-            clock_acc
-        } else {
-            return Err!(ProgramError::NotEnoughAccountKeys);
-        };
-
 
         debug_print!("Accounts was read");
         aliases.sort_by_key(|v| v.0);
@@ -188,7 +180,6 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(Self {
             accounts,
             aliases: RefCell::new(aliases),
-            clock_account,
             account_metas,
             contract_id,
             sender
@@ -229,6 +220,15 @@ impl<'a> ProgramAccountStorage<'a> {
         self.find_account(address).map(|pos| &self.accounts[pos])
     }
 
+    /// Get caller account info
+    pub fn get_caller_account_info(&self) -> Option<&AccountInfo<'a>> {
+        if let Some(account_index) = self.find_account(&self.origin()) {
+            let AccountMeta{ account, token: _, code: _ } = &self.account_metas[account_index];
+            return Some(account);
+        }
+        None
+    }
+
     /// Apply contact execution results
     /// 
     /// # Errors
@@ -236,7 +236,11 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply<A, I>(&mut self, values: A, _delete_empty: bool) -> Result<(), ProgramError>
+    pub fn apply<A, I>(
+        &mut self, values: A,
+        operator: Option<&AccountInfo<'a>>,
+        _delete_empty: bool
+    ) -> Result<(), ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
@@ -272,15 +276,18 @@ impl<'a> ProgramAccountStorage<'a> {
                             return Err!(ProgramError::InvalidAccountData; "Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
                         };
 
-                        let caller_account_index = self.find_account(&self.origin()).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-                        let AccountMeta{ account: caller_info, token: _, code: _ } = &self.account_metas[caller_account_index];
+                        let recipient = if let Some(some_operator) = operator {
+                            some_operator
+                        } else {
+                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?
+                        };
 
                         debug_print!("Move funds from account");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + account_info.lamports();
+                        **recipient.lamports.borrow_mut() += account_info.lamports();
                         **account_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Move funds from code");
-                        **caller_info.lamports.borrow_mut() = caller_info.lamports() + code_info.lamports();
+                        **recipient.lamports.borrow_mut() += code_info.lamports();
                         **code_info.lamports.borrow_mut() = 0;
 
                         debug_print!("Mark accounts empty");
@@ -314,30 +321,18 @@ impl<'a> ProgramAccountStorage<'a> {
             let source_account_index = self.find_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: source_account, token: source_token_account, code: _ } = &self.account_metas[source_account_index];
             let source_solidity_account = &self.accounts[source_account_index];
-            
+
             let target_account_index = self.find_account(&transfer.target).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
-            
-            let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-            let min_value = U256::from(10_u64.pow(min_decimals));
-            let value = transfer.value / min_value;
-            let value = u64::try_from(value).map_err(|s| E!(ProgramError::InvalidInstructionData; "s={:?}", s))?;
 
-            debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
-
-            let instruction = spl_token::instruction::transfer_checked(
-                &spl_token::id(),
-                source_token_account.key,
-                &token_mint::id(),
-                target_token_account.key,
-                source_account.key,
-                &[],
-                value,
-                token_mint::decimals(),
+            transfer_token(
+                accounts,
+                source_token_account,
+                target_token_account,
+                source_account,
+                source_solidity_account,
+                &transfer.value,
             )?;
-
-            let (ether, nonce) = source_solidity_account.get_seeds();
-            invoke_signed(&instruction, accounts, &[&[ether.as_bytes(), &[nonce]]])?;
         }
 
         debug_print!("apply_transfers done");
@@ -362,12 +357,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_number(&self) -> U256 {
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
+        let clock = Clock::get().unwrap();
         clock.slot.into()
     }
 
     fn block_timestamp(&self) -> U256 {
-        let clock = &Clock::from_account_info(self.clock_account).unwrap();
+        let clock = Clock::get().unwrap();
         clock.unix_timestamp.into()
     }
 
@@ -377,11 +372,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         account_infos: &[AccountInfo]
     ) -> ProgramResult {
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-        let contract_seeds = [contract_eth.as_bytes(), &[contract_nonce]];
+        let contract_seeds = [&[ACCOUNT_SEED_VERSION], contract_eth.as_bytes(), &[contract_nonce]];
 
         match self.seeds(&self.origin()) {
             Some((sender_eth, sender_nonce)) => {
-                let sender_seeds = [sender_eth.as_bytes(), &[sender_nonce]];
+                let sender_seeds = [&[ACCOUNT_SEED_VERSION], sender_eth.as_bytes(), &[sender_nonce]];
                 invoke_signed(
                     instruction,
                     account_infos,
