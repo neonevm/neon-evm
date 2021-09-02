@@ -88,12 +88,12 @@ pub fn load(filename: &Path) -> Result<()> {
             match *e {
                 FAUCET_RPC_PORT => CONFIG.write().unwrap().rpc.port = val.parse::<u16>()?,
                 FAUCET_RPC_ALLOWED_ORIGINS => {
-                    CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(val)
+                    CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(&val)
                 }
                 WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
                 WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
                 NEON_ERC20_TOKENS => {
-                    CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(val)
+                    CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(&val)
                 }
                 NEON_ERC20_MAX_AMOUNT => {
                     CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?
@@ -163,7 +163,7 @@ pub fn solana_evm_loader() -> String {
 
 /// Gets the `solana.operator` keypair value.
 pub fn solana_operator_keypair() -> Result<Keypair> {
-    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.operator_key.clone());
+    let ss = split_comma_separated_list(&CONFIG.read().unwrap().solana.operator_key.clone());
     let mut bytes = Vec::with_capacity(ss.len());
     for s in ss {
         bytes.push(s.parse::<u8>()?);
@@ -173,7 +173,7 @@ pub fn solana_operator_keypair() -> Result<Keypair> {
 
 /// Gets the `solana.eth_token_owner` keypair value.
 pub fn solana_eth_token_owner_keypair() -> Result<Keypair> {
-    let ss = split_comma_separated_list(CONFIG.read().unwrap().solana.eth_token_owner_key.clone());
+    let ss = split_comma_separated_list(&CONFIG.read().unwrap().solana.eth_token_owner_key.clone());
     let mut bytes = Vec::with_capacity(ss.len());
     for s in ss {
         bytes.push(s.parse::<u8>()?);
@@ -231,7 +231,11 @@ impl std::fmt::Display for Web3 {
         } else {
             writeln!(f)?;
         }
-        write!(f, "web3.private_key = {}", self.private_key)?;
+        write!(
+            f,
+            "web3.private_key = {}",
+            obfuscate_ethereum_private_key(&self.private_key)
+        )?;
         if env::var(WEB3_PRIVATE_KEY).is_ok() {
             writeln!(f, " (overridden by {})", WEB3_PRIVATE_KEY)?;
         } else {
@@ -280,7 +284,11 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(f, "solana.operator_key = {:?}", self.operator_key)?;
+        write!(
+            f,
+            "solana.operator_key = {:?}",
+            obfuscate_solana_private_key(&self.operator_key)
+        )?;
         if env::var(NEON_OPERATOR_KEY).is_ok() {
             writeln!(f, " (overridden by {})", NEON_OPERATOR_KEY)?;
         } else {
@@ -289,7 +297,7 @@ impl std::fmt::Display for Solana {
         write!(
             f,
             "solana.eth_token_owner_key = {:?}",
-            self.eth_token_owner_key
+            obfuscate_solana_private_key(&self.eth_token_owner_key)
         )?;
         if env::var(NEON_ETH_TOKEN_OWNER_KEY).is_ok() {
             writeln!(f, " (overridden by {})", NEON_ETH_TOKEN_OWNER_KEY)?;
@@ -330,9 +338,61 @@ impl std::fmt::Display for Faucet {
     }
 }
 
+/// Cuts middle part of the key.
+fn obfuscate_ethereum_private_key(key: &str) -> String {
+    let len = key.len();
+    let prefix_len = if key.starts_with("0x") { 6 } else { 4 };
+    let suffix_len = 4;
+    if len <= prefix_len + suffix_len {
+        key.into()
+    } else {
+        format!("{}•••{}", &key[..prefix_len], &key[len - suffix_len..])
+    }
+}
+
+/// Cuts middle part of the key.
+fn obfuscate_solana_private_key(key: &str) -> String {
+    let ss = split_comma_separated_list(key);
+    let len = ss.len();
+    if len <= 8 {
+        key.into()
+    } else {
+        format!(
+            "{},{},{},{}•••{},{},{},{}",
+            ss[0],
+            ss[1],
+            ss[2],
+            ss[3],
+            ss[len - 4],
+            ss[len - 3],
+            ss[len - 2],
+            ss[len - 1]
+        )
+    }
+}
+
+#[test]
+fn test_obfuscate() {
+    let s = obfuscate_ethereum_private_key("123");
+    assert_eq!(s, "123");
+    let s = obfuscate_ethereum_private_key("123456789");
+    assert_eq!(s, "1234•••6789");
+    let s = obfuscate_ethereum_private_key("0x123456789");
+    assert_eq!(s, "0x1234•••6789");
+
+    let s = obfuscate_solana_private_key("123");
+    assert_eq!(s, "123");
+    let s = obfuscate_solana_private_key("1,2,3");
+    assert_eq!(s, "1,2,3");
+    let s = obfuscate_solana_private_key("1,2,3,4,5,6,7,8");
+    assert_eq!(s, "1,2,3,4,5,6,7,8");
+    let s = obfuscate_solana_private_key("1,2,3,4,5,6,7,8,9");
+    assert_eq!(s, "1,2,3,4•••6,7,8,9");
+}
+
 /// Splits string as comma-separated list and trims whitespace.
 /// String `"A ,B, C    "` will produce vector `["A","B","C"]`.
-fn split_comma_separated_list(s: String) -> Vec<String> {
+fn split_comma_separated_list(s: &str) -> Vec<String> {
     s.split(',').map(|s| s.trim().to_owned()).collect()
 }
 

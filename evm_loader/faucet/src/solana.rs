@@ -32,7 +32,7 @@ pub fn transfer_token(
     signer: Keypair,
     token_owner: Pubkey,
     eth_acc: &str,
-    amount: u64,
+    _amount: u64,
 ) -> Result<()> {
     let account = make_program_address(eth_acc)?;
     let token_account = spl_associated_token_account::get_associated_token_address(
@@ -58,23 +58,29 @@ pub fn transfer_token(
             ));
         }
 
-        let decimals = 9;
-        instructions.push(spl_token::instruction::transfer_checked(
-            &spl_token::id(),
-            &token_owner,
-            &evm_loader::token::token_mint::id(),
-            &token_account,
-            &token_owner,
-            &[],
-            amount,
-            decimals,
-        )?);
+        //        let decimals = 9;
+        //        instructions.push(spl_token::instruction::transfer_checked(
+        //            &spl_token::id(),
+        //            &token_owner,
+        //            &evm_loader::token::token_mint::id(),
+        //            &token_account,
+        //            &token_owner,
+        //            &[],
+        //            amount,
+        //            decimals,
+        //        )?);
 
+        info!("1");
         let message = Message::new(&instructions, Some(&signer.pubkey()));
+        info!("2");
         let mut tx = Transaction::new_unsigned(message);
+        info!("3");
         let (blockhash, _) = client.get_recent_blockhash()?;
+        info!("4");
         tx.try_sign(&[&signer], blockhash)?;
+        info!("5");
         client.send_and_confirm_transaction(&tx)?;
+        info!("6");
 
         Ok(())
     })
