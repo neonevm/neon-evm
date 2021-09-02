@@ -3,8 +3,6 @@
 use color_eyre::{eyre::eyre, Result};
 use tracing::info;
 
-use solana_sdk::signature::Signer as _;
-
 use crate::{config, ethereum, solana};
 
 /// Represents packet of information needed for single airdrop operation.
@@ -29,7 +27,6 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     }
 
     let operator = config::solana_operator_keypair()?;
-    let token_owner = config::solana_eth_token_owner_keypair()?;
     let ether_address = ethereum::address_from_str(&params.wallet)?;
-    solana::transfer_token(operator, token_owner.pubkey(), ether_address, params.amount)
+    solana::transfer_token(operator, ether_address, params.amount)
 }

@@ -27,20 +27,26 @@ pub fn init_client(url: String) {
     thread::spawn(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
 }
 
-/// Transfers `amount` of tokens to `token_account` from a known account.
-/// Creates the `token_account` account if it doesn't exist.
+/// Transfers `amount` of tokens.
 pub fn transfer_token(
     signer: Keypair,
-    token_owner: Pubkey,
     ether_address: ethereum::Address,
     amount: u64,
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
+
+    let signer_account = signer.pubkey();
+    let signer_token_account = spl_associated_token_account::get_associated_token_address(
+        &signer_account,
+        &evm_loader::token::token_mint::id(),
+    );
+
     let (account, _nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
     let token_account = spl_associated_token_account::get_associated_token_address(
         &account,
         &evm_loader::token::token_mint::id(),
     );
+
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
@@ -58,7 +64,7 @@ pub fn transfer_token(
             } else {
                 info!("Ether account doesn not exist; will be created");
                 instructions.push(create_ether_account_instruction(
-                    signer.pubkey(),
+                    signer_account,
                     evm_loader_id,
                     ether_address,
                     0,
@@ -69,10 +75,10 @@ pub fn transfer_token(
 
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
-            &token_owner,
+            &signer_token_account,
             &evm_loader::token::token_mint::id(),
             &token_account,
-            &token_owner,
+            &signer_account,
             &[],
             amount,
             evm_loader::token::token_mint::decimals(),
@@ -97,6 +103,7 @@ pub fn transfer_token(
     if let Err(e) = r {
         return Err(eyre!("{:?}", e));
     }
+
     Ok(())
 }
 
