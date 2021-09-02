@@ -18,6 +18,9 @@ use solana_sdk::{system_program, sysvar};
 
 use crate::{config, ethereum};
 
+/// Number of base 10 digits to the right of the decimal place of ETH value.
+const ETH_DECIMALS: u8 = 18;
+
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
 }
@@ -73,13 +76,10 @@ pub fn transfer_token(
             }
         }
 
-        let decimals = evm_loader::token::token_mint::decimals();
-        let factor = 10_u64
-            .checked_pow(decimals as u32)
-            .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
-        let internal_amount = amount
-            .checked_mul(factor)
-            .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
+        let token_decimals = evm_loader::token::token_mint::decimals();
+        let min_decimals = u32::from(ETH_DECIMALS - token_decimals);
+        let min_amount = 10_u64.pow(min_decimals);
+        let amount = amount / min_amount;
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -87,7 +87,7 @@ pub fn transfer_token(
             &token_account,
             &signer_account,
             &[],
-            internal_amount,
+            amount,
             evm_loader::token::token_mint::decimals(),
         )?);
 
