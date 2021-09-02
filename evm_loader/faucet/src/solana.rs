@@ -32,7 +32,7 @@ pub fn transfer_token(
     signer: Keypair,
     token_owner: Pubkey,
     eth_acc: &str,
-    _amount: u64,
+    amount: u64,
 ) -> Result<()> {
     let account = make_program_address(eth_acc)?;
     let token_account = spl_associated_token_account::get_associated_token_address(
@@ -46,41 +46,41 @@ pub fn transfer_token(
         let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
         if balance_exists {
-            info!("Balance of recipient is {:?}", balance.unwrap());
+            info!("Token balance of recipient is {:?}", balance.unwrap());
         } else {
-            let a = client.get_account(&account)?;
-            dbg!(a);
-            instructions.push(evm_loader::token::create_associated_token_account(
-                &token_owner,
-                &token_owner,
-                &token_account,
-                &evm_loader::token::token_mint::id(),
-            ));
+            info!("Token balance doesn not exist");
+            let ether_account = client.get_account(&account);
+            let ether_account_exists = ether_account.is_ok();
+            if ether_account_exists {
+                info!("Ether {:?}", ether_account.unwrap());
+            } else {
+                info!("Ether account doesn not exist; will be created");
+                /* instructions.push(create_ether_account()); */
+            }
         }
 
-        //        let decimals = 9;
-        //        instructions.push(spl_token::instruction::transfer_checked(
-        //            &spl_token::id(),
-        //            &token_owner,
-        //            &evm_loader::token::token_mint::id(),
-        //            &token_account,
-        //            &token_owner,
-        //            &[],
-        //            amount,
-        //            decimals,
-        //        )?);
+        instructions.push(spl_token::instruction::transfer_checked(
+            &spl_token::id(),
+            &token_owner,
+            &evm_loader::token::token_mint::id(),
+            &token_account,
+            &token_owner,
+            &[],
+            amount,
+            evm_loader::token::token_mint::decimals(),
+        )?);
 
-        info!("1");
+        info!("Creating message...");
         let message = Message::new(&instructions, Some(&signer.pubkey()));
-        info!("2");
+        info!("Creating transaction...");
         let mut tx = Transaction::new_unsigned(message);
-        info!("3");
+        info!("Getting recent blockhash...");
         let (blockhash, _) = client.get_recent_blockhash()?;
-        info!("4");
+        info!("Signing transaction...");
         tx.try_sign(&[&signer], blockhash)?;
-        info!("5");
+        info!("Sending and confirming transaction...");
         client.send_and_confirm_transaction(&tx)?;
-        info!("6");
+        info!("Transaction is confirmed");
 
         Ok(())
     })
