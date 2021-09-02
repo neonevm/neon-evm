@@ -28,19 +28,12 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         ));
     }
 
-    let eth_acc = params.wallet.clone();
-    let account = solana::make_program_address(&eth_acc)?;
-    let token_account = spl_associated_token_account::get_associated_token_address(
-        &account,
-        &evm_loader::token::token_mint::id(),
-    );
     let operator = config::solana_operator_keypair()?;
     let token_owner = config::solana_eth_token_owner_keypair()?;
     solana::transfer_token(
         operator,
         token_owner.pubkey(),
-        account,
-        token_account,
+        &params.wallet,
         params.amount,
     )
 }

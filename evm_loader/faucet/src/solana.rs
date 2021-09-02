@@ -26,32 +26,30 @@ pub fn init_client(url: String) {
     thread::spawn(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
 }
 
-/// Generates a Solana address by corresponding Ethereum address.
-pub fn make_program_address(ether_address: &str) -> Result<Pubkey> {
-    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
-    let (address, _nonce) =
-        make_solana_program_address(&ethereum::address_from_str(ether_address)?, &evm_loader_id);
-    Ok(address)
-}
-
 /// Transfers `amount` of tokens to `token_account` from a known account.
 /// Creates the `token_account` account if it doesn't exist.
 pub fn transfer_token(
     signer: Keypair,
     token_owner: Pubkey,
-    _account: Pubkey,
-    token_account: Pubkey,
+    eth_acc: &str,
     amount: u64,
 ) -> Result<()> {
+    let account = make_program_address(eth_acc)?;
+    let token_account = spl_associated_token_account::get_associated_token_address(
+        &account,
+        &evm_loader::token::token_mint::id(),
+    );
     let r = thread::spawn(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
 
         let balance = client.get_token_account_balance(&token_account);
-        let account_exists = balance.is_ok();
-        if account_exists {
+        let balance_exists = balance.is_ok();
+        if balance_exists {
             info!("Balance of recipient is {:?}", balance.unwrap());
         } else {
+            let a = client.get_account(&account)?;
+            dbg!(a);
             instructions.push(evm_loader::token::create_associated_token_account(
                 &token_owner,
                 &token_owner,
@@ -86,6 +84,14 @@ pub fn transfer_token(
         return Err(eyre!("{:?}", e));
     }
     Ok(())
+}
+
+/// Generates a Solana address by corresponding Ethereum address.
+fn make_program_address(ether_address: &str) -> Result<Pubkey> {
+    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
+    let (address, _nonce) =
+        make_solana_program_address(&ethereum::address_from_str(ether_address)?, &evm_loader_id);
+    Ok(address)
 }
 
 /// Maps an Ethereum address into a Solana address.
