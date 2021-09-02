@@ -189,18 +189,12 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
         let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
-
-        let mut refunded_gas_abs : u64 = 0;
-        if refunded_gas > 0 {
-            refunded_gas_abs = refunded_gas as u64;
-        }
-
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)), used_gas + refunded_gas_abs)
+            (exit_reason, result, Some((applies, logs)), used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 }))
         } else {
-            (exit_reason, result, None, used_gas + refunded_gas_abs)
+            (exit_reason, result, None, used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 }))
         }
     };
 
