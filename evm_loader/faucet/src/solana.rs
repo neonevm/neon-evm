@@ -3,7 +3,6 @@
 use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use color_eyre::{eyre::eyre, Result};
 use tracing::info;
@@ -28,11 +27,11 @@ lazy_static::lazy_static! {
 
 /// Creates the signleton instance of RpcClient.
 pub fn init_client(url: String) {
-    thread::spawn(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
+    tokio::task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
 }
 
 /// Transfers `amount` of tokens.
-pub fn transfer_token(
+pub async fn transfer_token(
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
@@ -48,7 +47,7 @@ pub fn transfer_token(
     let token_account =
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
-    let r = thread::spawn(move || -> Result<()> {
+    let r = tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
 
@@ -101,8 +100,7 @@ pub fn transfer_token(
 
         Ok(())
     })
-    .join()
-    .expect("thread::spawn join failed");
+    .await?;
     if let Err(e) = r {
         return Err(eyre!("{:?}", e));
     }

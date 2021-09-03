@@ -28,5 +28,5 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
 
     let operator = config::solana_operator_keypair()?;
     let ether_address = ethereum::address_from_str(&params.wallet)?;
-    solana::transfer_token(operator, ether_address, params.amount)
+    solana::transfer_token(operator, ether_address, params.amount).await
 }

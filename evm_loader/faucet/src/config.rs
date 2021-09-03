@@ -291,6 +291,7 @@ impl std::fmt::Display for Solana {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Faucet {
     rpc: Rpc,
