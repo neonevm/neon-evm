@@ -413,7 +413,7 @@ class EventTest(unittest.TestCase):
         result = self.call_cancel(storage)
 
         caller_balance_after_cancel = self.token.balance(self.caller_token)
-        self.assertEqual(caller_balance_after_cancel, caller_balance_before_cancel)
+        self.assertNotEqual(caller_balance_after_cancel, caller_balance_before_cancel)
 
         self.call_partial_signed(input)
 
