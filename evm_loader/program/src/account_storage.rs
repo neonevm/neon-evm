@@ -221,10 +221,10 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     /// Get caller account info
-    pub fn get_caller_account_info(&self) -> Option<&AccountInfo<'a>> {
+    pub fn get_caller_account_info(&self) -> Option<(&AccountInfo<'a>, &AccountInfo<'a>)> {
         if let Some(account_index) = self.find_account(&self.origin()) {
-            let AccountMeta{ account, token: _, code: _ } = &self.account_metas[account_index];
-            return Some(account);
+            let AccountMeta{ account, token, code: _ } = &self.account_metas[account_index];
+            return Some((account, token));
         }
         None
     }
@@ -279,7 +279,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         let recipient = if let Some(some_operator) = operator {
                             some_operator
                         } else {
-                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?
+                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?.0
                         };
 
                         debug_print!("Move funds from account");
