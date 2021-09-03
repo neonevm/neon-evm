@@ -562,9 +562,11 @@ fn process_instruction<'a>(
 
             let backend = SolanaBackend::new(&mut account_storage, Some(trx_accounts));
             debug_print!("  backend initialized");
-            let mut executor = Machine::restore(&mut storage, backend);
+
+            let executor = Machine::restore(&mut storage, backend);
             debug_print!("Executor restored");
 
+            let executor_state = executor.into_state();
             let used_gas = executor_state.substate().metadata().gasometer().used_gas();
 
             let (gas_limit, gas_price) = storage.get_gas_params()?;
@@ -574,7 +576,6 @@ fn process_instruction<'a>(
             let gas_price_wei = U256::from(gas_price);
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-            let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &token_mint::id(),);
 
             token::burn_token(
                 trx_accounts,
