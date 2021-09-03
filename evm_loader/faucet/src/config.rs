@@ -221,14 +221,18 @@ impl std::fmt::Display for Web3 {
         write!(
             f,
             "web3.private_key = {}",
-            obfuscate_ethereum_private_key(&self.private_key)
+            obfuscate_string(&self.private_key)
         )?;
         if env::var(WEB3_PRIVATE_KEY).is_ok() {
             writeln!(f, " (overridden by {})", WEB3_PRIVATE_KEY)?;
         } else {
             writeln!(f)?;
         }
-        write!(f, "web3.tokens = {:?}", self.tokens)?;
+        write!(
+            f,
+            "web3.tokens = {:?}",
+            obfuscate_list_of_strings(&self.tokens)
+        )?;
         if env::var(NEON_ERC20_TOKENS).is_ok() {
             writeln!(f, " (overridden by {})", NEON_ERC20_TOKENS)?;
         } else {
@@ -264,7 +268,11 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(f, "solana.evm_loader = {:?}", self.evm_loader)?;
+        write!(
+            f,
+            "solana.evm_loader = {:?}",
+            obfuscate_string(&self.evm_loader)
+        )?;
         if env::var(EVM_LOADER).is_ok() {
             writeln!(f, " (overridden by {})", EVM_LOADER)?;
         } else {
@@ -315,8 +323,12 @@ impl std::fmt::Display for Faucet {
     }
 }
 
-/// Cuts middle part of the key.
-fn obfuscate_ethereum_private_key(key: &str) -> String {
+fn obfuscate_list_of_strings(keys: &[String]) -> Vec<String> {
+    keys.iter().map(|s| obfuscate_string(s)).collect()
+}
+
+/// Cuts middle part of a key like `0x1234ABC`.
+fn obfuscate_string(key: &str) -> String {
     let len = key.len();
     let prefix_len = if key.starts_with("0x") { 6 } else { 4 };
     let suffix_len = 4;
@@ -327,7 +339,7 @@ fn obfuscate_ethereum_private_key(key: &str) -> String {
     }
 }
 
-/// Cuts middle part of the key.
+/// Cuts middle part of a key like `[1,2,3...N]`.
 fn obfuscate_solana_private_key(key: &str) -> String {
     let ss = split_comma_separated_list(key);
     let len = ss.len();
@@ -350,12 +362,17 @@ fn obfuscate_solana_private_key(key: &str) -> String {
 
 #[test]
 fn test_obfuscate() {
-    let s = obfuscate_ethereum_private_key("123");
+    let s = obfuscate_string("123");
     assert_eq!(s, "123");
-    let s = obfuscate_ethereum_private_key("123456789");
+    let s = obfuscate_string("123456789");
     assert_eq!(s, "1234•••6789");
-    let s = obfuscate_ethereum_private_key("0x123456789");
+    let s = obfuscate_string("0x123456789");
     assert_eq!(s, "0x1234•••6789");
+
+    let s = obfuscate_list_of_strings(&vec!["AAA".to_string(), "BBB".to_string()]);
+    assert_eq!(s, vec!["AAA", "BBB"]);
+    let s = obfuscate_list_of_strings(&vec!["CCCCCCCCC".to_string(), "DDDDDDDDD".to_string()]);
+    assert_eq!(s, vec!["CCCC•••CCCC", "DDDD•••DDDD"]);
 
     let s = obfuscate_solana_private_key("123");
     assert_eq!(s, "123");
