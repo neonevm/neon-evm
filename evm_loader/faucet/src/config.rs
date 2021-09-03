@@ -172,6 +172,7 @@ pub fn solana_max_amount() -> u64 {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Rpc {
     #[serde(default)]
     port: u16,
@@ -197,6 +198,7 @@ impl std::fmt::Display for Rpc {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Web3 {
     #[serde(default)]
     rpc_url: String,
@@ -242,6 +244,7 @@ impl std::fmt::Display for Web3 {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Solana {
     #[serde(default)]
     url: String,
@@ -287,6 +290,7 @@ impl std::fmt::Display for Solana {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Faucet {
     rpc: Rpc,
     web3: Web3,
