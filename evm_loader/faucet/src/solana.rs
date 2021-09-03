@@ -18,9 +18,6 @@ use solana_sdk::{system_program, sysvar};
 
 use crate::{config, ethereum};
 
-/// Number of base 10 digits to the right of the decimal place of ETH value.
-const ETH_DECIMALS: u8 = 18;
-
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
 }
@@ -55,6 +52,7 @@ pub async fn transfer_token(
         let balance_exists = balance.is_ok();
         if balance_exists {
             info!("Token balance of recipient is {:?}", balance.unwrap());
+            info!("Ether {:?}", client.get_account(&account)?);
         } else {
             info!("Token balance doesn not exist");
             let ether_account = client.get_account(&account);
@@ -72,9 +70,16 @@ pub async fn transfer_token(
         }
 
         let token_decimals = evm_loader::token::token_mint::decimals();
-        let min_decimals = u32::from(ETH_DECIMALS - token_decimals);
-        let min_amount = 10_u64.pow(min_decimals);
-        let amount = amount / min_amount;
+        let factor = 10_u64.pow(token_decimals as u32);
+        let amount = amount * factor;
+
+        info!("spl_token id = {}", spl_token::id());
+        info!("signer_token_account = {}", signer_token_account);
+        info!("token_mint_id = {}", token_mint_id);
+        info!("token_account = {}", token_account);
+        info!("signer_account = {}", signer_account);
+        info!("amount = {}", amount);
+        info!("token_decimals = {}", token_decimals);
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -85,6 +90,10 @@ pub async fn transfer_token(
             amount,
             token_decimals,
         )?);
+
+        if instructions.is_empty() {
+            return Err(eyre!("No instructions to submit"));
+        }
 
         info!("Creating message...");
         let message = Message::new(&instructions, Some(&signer.pubkey()));
@@ -101,6 +110,7 @@ pub async fn transfer_token(
         Ok(())
     })
     .await?;
+
     if let Err(e) = r {
         return Err(eyre!("{:?}", e));
     }
