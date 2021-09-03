@@ -1,5 +1,6 @@
 //! Faucet Solana utilities module.
 
+use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -67,8 +68,6 @@ pub fn transfer_token(
                     signer_account,
                     evm_loader_id,
                     ether_address,
-                    0,
-                    0,
                 ));
             }
         }
@@ -131,8 +130,6 @@ fn create_ether_account_instruction(
     signer: Pubkey,
     evm_loader_id: Pubkey,
     ether_address: ethereum::Address,
-    lamports: u64,
-    space: u64,
 ) -> Instruction {
     let token_mint_id = evm_loader::token::token_mint::id();
 
@@ -140,12 +137,14 @@ fn create_ether_account_instruction(
     let token_address =
         spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint_id);
 
+    let lamports = 0;
+    let space = 0;
     Instruction::new_with_bincode(
         evm_loader_id,
         &evm_loader::instruction::EvmInstruction::CreateAccount {
             lamports,
             space,
-            ether: unsafe { core::mem::transmute(ether_address) },
+            ether: unsafe { mem::transmute(ether_address) },
             nonce,
         },
         vec![
