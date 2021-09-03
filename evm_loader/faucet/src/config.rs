@@ -172,11 +172,10 @@ pub fn solana_max_amount() -> u64 {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Rpc {
-    #[serde(default)]
     port: u16,
-    #[serde(default)]
     allowed_origins: Vec<String>,
 }
 
@@ -198,15 +197,12 @@ impl std::fmt::Display for Rpc {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Web3 {
-    #[serde(default)]
     rpc_url: String,
-    #[serde(default)]
     private_key: String,
-    #[serde(default)]
     tokens: Vec<String>,
-    #[serde(default)]
     max_amount: u64,
 }
 
@@ -248,15 +244,12 @@ impl std::fmt::Display for Web3 {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Solana {
-    #[serde(default)]
     url: String,
-    #[serde(default)]
     evm_loader: String,
-    #[serde(default)]
     operator_key: String,
-    #[serde(default)]
     max_amount: u64,
 }
 
