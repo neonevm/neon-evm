@@ -538,13 +538,13 @@ fn process_instruction<'a>(
             }
 
 
-            let mut storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
+            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
             storage.check_accounts(program_id, trx_accounts)?;
 
-            let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
             match caller_info_data {
                 AccountData::Account(ref mut acc) => {
@@ -560,10 +560,10 @@ fn process_instruction<'a>(
                 _ => return Err!(ProgramError::InvalidAccountData),
             };
 
-            let backend = SolanaBackend::new(&mut account_storage, Some(trx_accounts));
+            let backend = SolanaBackend::new(&account_storage, Some(trx_accounts));
             debug_print!("  backend initialized");
 
-            let executor = Machine::restore(&mut storage, backend);
+            let executor = Machine::restore(&storage, backend);
             debug_print!("Executor restored");
 
             let executor_state = executor.into_state();
