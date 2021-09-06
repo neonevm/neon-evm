@@ -592,7 +592,7 @@ fn process_instruction<'a>(
             let mut begin: bool = false;
             let mut storage = match StorageAccount::restore(storage_info, operator_sol_info) {
                 Ok(restored_storage) => Ok(restored_storage),
-                Err(ProgramError::InvalidAccountData) => {
+                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
                     begin = true;
                     StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)
                 },
