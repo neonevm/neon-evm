@@ -78,6 +78,7 @@ static SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0,
 static SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
 static SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 static SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
+static SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10]);
 
 impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     /// Create `SolanaBackend`
@@ -104,6 +105,7 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
         || *address == SYSTEM_ACCOUNT_BN256_PAIRING
         || *address == SYSTEM_ACCOUNT_BLAKE2F
+        || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
     }
 
     /// Call inner `ecrecover`
@@ -646,6 +648,15 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output_buf.to_vec())))
     }
 
+    /// Call inner `erc20_wrapper`
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub fn call_inner_erc20_wrapper(
+        input: &[u8],
+    ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
+        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
+    }
+
     /// Get chain id
     #[must_use]
     pub fn chain_id() -> U256 { U256::from(111) }
@@ -740,6 +751,9 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         }
         if code_address == SYSTEM_ACCOUNT_BLAKE2F {
             return Self::call_inner_blake2_f(&input);
+        }
+        if code_address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
+            return Self::call_inner_erc20_wrapper(&input);
         }
 
         if !self.is_solana_address(&code_address) {
