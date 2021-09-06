@@ -565,6 +565,53 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+            debug_print!("Execute from raw ethereum transaction iterative");
+            let storage_info = next_account_info(account_info_iter)?;
+
+            let sysvar_info = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
+
+            let trx_accounts = &accounts[5..];
+
+            let caller = H160::from_slice(from_addr);
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+            // if trx_gas_price < 1_000_000_000_u64 {
+            //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
+            // }
+
+            if !operator_sol_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData);
+            }
+
+            let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
+            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+
+            check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+            check_ethereum_authority(
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                &caller, trx.nonce, &trx.chain_id)?;
+
+            payment::transfer_from_operator_to_collateral_pool(
+                program_id,
+                collateral_pool_index,
+                operator_sol_info,
+                collateral_pool_sol_info,
+                system_info)?;
+            payment::transfer_from_operator_to_deposit(
+                operator_sol_info,
+                storage_info,
+                system_info)?;
+
+            do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+
+            storage.block_accounts(program_id, trx_accounts)
+        },
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
