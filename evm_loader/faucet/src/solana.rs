@@ -54,13 +54,13 @@ pub async fn transfer_token(
             info!("Token balance of recipient is {:?}", balance.unwrap());
             info!("Ether {:?}", client.get_account(&account)?);
         } else {
-            info!("Token balance doesn not exist");
+            info!("No token balance");
             let ether_account = client.get_account(&account);
             let ether_account_exists = ether_account.is_ok();
             if ether_account_exists {
                 info!("Ether {:?}", ether_account.unwrap());
             } else {
-                info!("Ether account doesn not exist; will be created");
+                info!("No ether account; will be created");
                 instructions.push(create_ether_account_instruction(
                     signer_account,
                     evm_loader_id,
