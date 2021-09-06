@@ -22,8 +22,10 @@ pub struct Account {
     pub trx_count: u64,
     /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
+    /// 0-not blocked, 1-blocked on read, 2-blocked on write
+    pub is_blocked: u8,
     /// Ethereum address
-    pub blocked: Option<Pubkey>,
+    pub blocked: Pubkey,
     /// ETH token account
     pub eth_token_account: Pubkey
 }
@@ -249,7 +251,8 @@ impl Account {
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
             code_account: Pubkey::new_from_array(*code_account),
-            blocked: if is_blocked[0] > 0 { Some(Pubkey::new_from_array(*blocked_by)) } else { None },
+            is_blocked: is_blocked[0],
+            blocked: Pubkey::new_from_array(*blocked_by),
             eth_token_account: Pubkey::new_from_array(*eth)
         }
     }
@@ -258,17 +261,17 @@ impl Account {
     pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
-        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst, eth_dst) = 
+        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst, eth_dst) =
                 mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32];
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
         *trx_count_dst = acc.trx_count.to_le_bytes();
         code_account_dst.copy_from_slice(acc.code_account.as_ref());
-        if let Some(blocked) = acc.blocked {
-            is_blocked_dst[0] = 1;
-            blocked_by_dst.copy_from_slice(blocked.as_ref());
+        is_blocked_dst[0] = acc.is_blocked;
+        if is_blocked_dst[0] !=0  {
+            blocked_by_dst.copy_from_slice(acc.blocked.as_ref());
         } else {
-            is_blocked_dst[0] = 0;
+            *blocked_by_dst = Pubkey::new_from_array([0_u8; 32]).to_bytes();
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
 

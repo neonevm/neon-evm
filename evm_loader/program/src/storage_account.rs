@@ -70,7 +70,7 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
-                if account.blocked.is_some() {
+                if account.is_blocked == 2 {
                     return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on blocked account {}", account_info.key);
                 }
             }
@@ -83,7 +83,8 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
-                account.blocked = None;
+                account.is_blocked = 0;
+                account.blocked = Pubkey::new_from_array([0_u8; 32]);
                 AccountData::pack(&AccountData::Account(account), &mut data)?;
             }
         }
@@ -134,7 +135,7 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
-                if Some(self.info.unsigned_key()) != account.blocked.as_ref() {
+                if account.is_blocked == 0 ||  self.info.unsigned_key() != &account.blocked{
                     return Err!(ProgramError::NotEnoughAccountKeys);
                 }
             }
@@ -170,7 +171,13 @@ impl<'a> StorageAccount<'a> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
-                account.blocked = Some(*self.info.unsigned_key());
+                account.blocked = *self.info.unsigned_key();
+                if account_info.is_writable {
+                    account.is_blocked = 2;
+                }
+                else {
+                    account.is_blocked = 1;
+                }
                 AccountData::pack(&AccountData::Account(account), &mut data)?;
             }
         }

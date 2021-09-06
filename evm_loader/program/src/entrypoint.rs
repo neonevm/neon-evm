@@ -161,7 +161,8 @@ fn process_instruction<'a>(
                 nonce,
                 trx_count: 0_u64,
                 code_account: code_account_key,
-                blocked: None,
+                is_blocked : 0_u8,
+                blocked: Pubkey::new_from_array([0_u8; 32]),
                 eth_token_account: *token_account_info.key,
             });
 
