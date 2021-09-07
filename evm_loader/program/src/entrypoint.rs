@@ -633,10 +633,10 @@ fn process_instruction<'a>(
                         operator_sol_info,
                         system_info)?;
                     if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-                        debug_print!("operator token ownership");
-                        debug_print!("operator token owner {}", operator_eth_info.owner);
-                        debug_print!("operator key {}", operator_sol_info.key);
-                        return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
+                        return Err!(ProgramError::InvalidInstructionData;
+                            "Wrong operator token ownership: operator token owner = {:?}, operator key = {:?}",
+                            operator_eth_info.owner,
+                            operator_sol_info.key)
                     }
                     let (gas_limit, gas_price) = storage.get_gas_params()?;
                     let used_gas = call_results.1;
