@@ -280,12 +280,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
 
         with self.assertRaisesRegex(RuntimeError, 'transaction too large'):
             response = send_transaction(client, trx, self.acc)
             print(response)
+
+        print('the solana transaction is too large')
 
     # def test_fail_on_no_signature(self):
     #     tx_1 = {
