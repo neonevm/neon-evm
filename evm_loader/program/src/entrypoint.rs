@@ -527,10 +527,11 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[4..];
+            let trx_accounts = &accounts[5..];
 
             if !operator_sol_info.is_signer {
                 return Err!(ProgramError::InvalidAccountData);
@@ -577,9 +578,11 @@ fn process_instruction<'a>(
                 .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
             let (caller_info, caller_token_info) = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
-            token::burn_token(
-                trx_accounts,
+
+            token::transfer_token(
+                accounts,
                 caller_token_info,
+                operator_eth_info,
                 caller_info,
                 account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &fee)?;

@@ -33,8 +33,8 @@ class EventTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...") 
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -143,6 +143,10 @@ class EventTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Operator ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID),
+                            is_signer=False, is_writable=True),
+
                 # Incenirator
                 AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
                 # System program account:
@@ -407,13 +411,16 @@ class EventTest(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
 
         caller_balance_before_cancel = self.token.balance(self.caller_token)
+        operator_balance_before_cancel = self.token.balance(get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID))
 
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage)
 
         caller_balance_after_cancel = self.token.balance(self.caller_token)
+        operator_balance_after_cancel = self.token.balance(get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID))
         self.assertNotEqual(caller_balance_after_cancel, caller_balance_before_cancel)
+        self.assertEqual(caller_balance_before_cancel+operator_balance_before_cancel, caller_balance_after_cancel+operator_balance_after_cancel)
 
         self.call_partial_signed(input)
 
