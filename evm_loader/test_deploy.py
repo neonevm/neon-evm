@@ -307,14 +307,14 @@ class DeployTest(unittest.TestCase):
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_01_executeTrxFromAccountDataIterative(self):
         (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
 
         result = self.call_partial_signed_and_continues(holder, contract_sol, code_sol)
         print("result", result)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_02_executeTrxFromAccountDataIterativeOrContinue(self):
         (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
 
