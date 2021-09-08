@@ -173,6 +173,16 @@ pub enum EvmInstruction<'a> {
     /// Partial call Ethereum-contract action from raw transaction data
     /// ### Account references same as in PartialCallFromRawEthereumTX
     Cancel,
+
+    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    /// or
+    /// Continue
+    ExecuteTrxFromAccountDataIterativeOrContinue {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
+        /// Steps of ethereum contract to execute
+        step_count: u64,
+    },
 }
 
 
@@ -303,6 +313,13 @@ impl<'a> EvmInstruction<'a> {
             },
             12 => {
                 EvmInstruction::Cancel
+            },
+            14 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             _ => return Err(InvalidInstructionData),
         })
