@@ -48,14 +48,14 @@ pub fn method(id: &[u8]) -> Method {
     }
 }
 
-pub fn total_supply() {}
+// pub fn total_supply() {}
 
-pub fn balance_of() {}
+// pub fn balance_of() {}
 
-pub fn transfer() {}
+// pub fn transfer() {}
 
-pub fn transfer_from() {}
+// pub fn transfer_from() {}
 
-pub fn approve() {}
+// pub fn approve() {}
 
-pub fn allowance() {}
+// pub fn allowance() {}

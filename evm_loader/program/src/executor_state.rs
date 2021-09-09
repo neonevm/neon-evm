@@ -10,7 +10,7 @@ use evm::gasometer::Gasometer;
 use evm::backend::{Apply, Backend, Basic, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
-use crate::utils::{keccak256_h256, keccak256_h256_v};
+use crate::utils::{keccak256_h256};
 use crate::token;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -562,26 +562,6 @@ impl<B: Backend> Backend for ExecutorState<B> {
 
     fn create(&self, scheme: &evm::CreateScheme, address: &H160) {
         self.backend.create(scheme, address);
-    }
-
-    fn call_inner(&self, // todo remove
-        code_address: H160,
-        transfer: Option<evm::Transfer>,
-        input: Vec<u8>,
-        target_gas: Option<u64>,
-        is_static: bool,
-        take_l64: bool,
-        take_stipend: bool,
-    ) -> Option<evm::Capture<(evm::ExitReason, Vec<u8>), std::convert::Infallible>> {
-        self.backend.call_inner(code_address, transfer, input, target_gas, is_static, take_l64, take_stipend)
-    }
-
-    fn keccak256_h256(&self, data: &[u8]) -> H256 {
-        keccak256_h256(data)
-    }
-
-    fn keccak256_h256_v(&self, data: &[&[u8]]) -> H256 {
-        keccak256_h256_v(data)
     }
 }
 

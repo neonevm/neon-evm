@@ -21,7 +21,7 @@ use evm_loader::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
-    solana_backend::SolanaBackend,
+    precompile_contracts::is_precompile_address
 };
 #[allow(unused)]
 use std::{
@@ -271,7 +271,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 }
             };
 
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+            if !is_precompile_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
@@ -285,7 +285,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+            if !is_precompile_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,

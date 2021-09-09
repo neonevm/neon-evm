@@ -14,6 +14,7 @@ use solana_program::program_error::ProgramError;
 use crate::executor_state::{ExecutorState, StackState};
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
+use crate::precompile_contracts::call_precompile;
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -260,7 +261,7 @@ impl<B: Backend> Handler for Executor<B> {
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
         target_gas: Option<u64>,
-        is_static: bool,
+        _is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
@@ -302,7 +303,7 @@ impl<B: Backend> Handler for Executor<B> {
             }
         }
 
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
+        let hook_res = call_precompile(code_address, &input);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {

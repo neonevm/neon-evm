@@ -1,10 +1,11 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solana_backend::{AccountStorage, SolanaBackend},
+    solana_backend::{AccountStorage},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
+    precompile_contracts::is_precompile_address
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -248,7 +249,7 @@ impl<'a> ProgramAccountStorage<'a> {
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
-                    if SolanaBackend::<ProgramAccountStorage>::is_system_address(&address) {
+                    if is_precompile_address(&address) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
