@@ -4,10 +4,8 @@ Implements EIP20 token standard: https://github.com/ethereum/EIPs/blob/master/EI
 
 pragma solidity >=0.5.12;
 
-import "./EIP20Interface.sol";
-
-contract ERC20Wrapper is EIP20Interface {
-    address constant solana = 0xFF00000000000000000000000000000000000001;
+contract ERC20Wrapper {
+    address constant solana = 0xff00000000000000000000000000000000000001;
 
     string public name;
     uint8 public decimals;
@@ -29,9 +27,13 @@ contract ERC20Wrapper is EIP20Interface {
     function() external {
 	bool status;
 	bytes memory result;
-	(status, result) = solana.call(msg.data);
+	bytes memory call_data = abi.encodePacked(tokenMint, msg.data);
+	(status, result) = solana.call(call_data);
 	if (!status) {
 	    revert();
 	}
+        assembly {
+            return(add(result, 0x20), mload(result))
+        }
     }
 }

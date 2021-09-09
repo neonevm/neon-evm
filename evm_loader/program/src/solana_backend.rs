@@ -650,7 +650,6 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
 
     /// Call inner `erc20_wrapper`
     #[must_use]
-    #[allow(clippy::too_many_lines)]
     pub fn call_inner_erc20_wrapper(
         input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
@@ -722,7 +721,7 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        debug_print!(">>call_inner code_address: {}", code_address);
+        debug_print!("call_inner code_address: {}", code_address);
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
         }
