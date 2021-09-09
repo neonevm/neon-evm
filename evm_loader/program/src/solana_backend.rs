@@ -661,41 +661,47 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
         debug_print!("call_inner_erc20_wrapper token_mint: {}", hex::encode(&token_mint));
         debug_print!("call_inner_erc20_wrapper method_id: {:?}", method_id);
 
-        match erc20::method(method_id){
+        match erc20::method(method_id) {
             Method::TotalSupply => {
                 debug_print!("call_inner_erc20_wrapper totalSupply");
+                let r = erc20.total_supply(token_mint);
                 let output = [1_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::BalanceOf => {
                 debug_print!("call_inner_erc20_wrapper balanceOf");
+                let r = erc20.balance_of(token_mint);
                 let output = [2_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::Transfer => {
                 debug_print!("call_inner_erc20_wrapper transfer");
+                let r = erc20.transfer(token_mint);
                 let output = [3_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::TransferFrom => {
                 debug_print!("call_inner_erc20_wrapper transferFrom");
+                let r = erc20.transfer_from(token_mint);
                 let output = [4_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::Approve => {
                 debug_print!("call_inner_erc20_wrapper approve");
+                let r = erc20.approve(token_mint);
                 let output = [5_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::Allowance => {
                 debug_print!("call_inner_erc20_wrapper allowance");
+                let r = erc20.allowance(token_mint);
                 let output = [6_u8; 32];
                 Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
             },
             Method::Unknown => {
                 debug_print!("call_inner_erc20_wrapper UNKNOWN");
-                let output = [0_u8; 32];
-                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+                let zero = [0_u8; 32]; // how to return false?
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), zero.to_vec())))
             },
         }
     }
@@ -764,7 +770,6 @@ impl<'a, 's, S> Backend for SolanaBackend<'a, 's, S> where S: AccountStorage {
         _take_l64: bool,
         _take_stipend: bool,
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        debug_print!("call_inner code_address: {}", code_address);
         if code_address == SYSTEM_ACCOUNT_ECRECOVER {
             return Self::call_inner_ecrecover(&input);
         }

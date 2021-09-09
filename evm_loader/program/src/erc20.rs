@@ -47,3 +47,15 @@ pub fn method(id: &[u8]) -> Method {
         _ => Method::Unknown,
     }
 }
+
+pub fn total_supply() {}
+
+pub fn balance_of() {}
+
+pub fn transfer() {}
+
+pub fn transfer_from() {}
+
+pub fn approve() {}
+
+pub fn allowance() {}
