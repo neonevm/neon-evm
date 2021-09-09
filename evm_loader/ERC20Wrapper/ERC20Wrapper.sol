@@ -28,8 +28,8 @@ contract ERC20Wrapper {
 	bool status;
 	bytes memory result;
 	bytes memory call_data = abi.encodePacked(tokenMint, msg.data);
-	(status, result) = solana.call(call_data);
-	if (!status) {
+	(ok, result) = solana.call(call_data);
+	if (!ok) {
 	    revert();
 	}
         assembly {

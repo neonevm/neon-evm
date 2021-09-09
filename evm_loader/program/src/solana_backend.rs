@@ -653,8 +653,51 @@ impl<'a, 's, S> SolanaBackend<'a, 's, S> where S: AccountStorage {
     pub fn call_inner_erc20_wrapper(
         input: &[u8],
     ) -> Option<Capture<(ExitReason, Vec<u8>), Infallible>> {
-        debug_print!("call_inner_erc20_wrapper({})", &hex::encode(&input));
-        Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec())))
+        use crate::{erc20, erc20::Method};
+        debug_print!("call_inner_erc20_wrapper({})", hex::encode(&input));
+
+        let (token_mint, rest) = input.split_at(32);
+        let (method_id, _) = rest.split_at(4);
+        debug_print!("call_inner_erc20_wrapper token_mint: {}", hex::encode(&token_mint));
+        debug_print!("call_inner_erc20_wrapper method_id: {:?}", method_id);
+
+        match erc20::method(method_id){
+            Method::TotalSupply => {
+                debug_print!("call_inner_erc20_wrapper totalSupply");
+                let output = [1_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::BalanceOf => {
+                debug_print!("call_inner_erc20_wrapper balanceOf");
+                let output = [2_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::Transfer => {
+                debug_print!("call_inner_erc20_wrapper transfer");
+                let output = [3_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::TransferFrom => {
+                debug_print!("call_inner_erc20_wrapper transferFrom");
+                let output = [4_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::Approve => {
+                debug_print!("call_inner_erc20_wrapper approve");
+                let output = [5_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::Allowance => {
+                debug_print!("call_inner_erc20_wrapper allowance");
+                let output = [6_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+            Method::Unknown => {
+                debug_print!("call_inner_erc20_wrapper UNKNOWN");
+                let output = [0_u8; 32];
+                Some(Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec())))
+            },
+        }
     }
 
     /// Get chain id

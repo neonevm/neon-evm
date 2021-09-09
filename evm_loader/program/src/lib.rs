@@ -25,6 +25,7 @@ pub mod executor_state;
 pub mod utils;
 pub mod payment;
 pub mod token;
+mod erc20;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
