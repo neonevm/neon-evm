@@ -437,17 +437,19 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
+        let min_decimals = u32::from(token::eth_decimals() - token::token_mint::decimals());
+        let min_value = U256::from(10_u64.pow(min_decimals));
+        let transfer_value_without_min_value = transfer.value - transfer.value % min_value;
         {
             let source = self.account_mut(transfer.source, backend);
-            if source.basic.balance < transfer.value {
-                return Err(ExitError::OutOfFund);
-            }
-            source.basic.balance -= transfer.value;
+            source.basic.balance
+                .checked_sub(transfer_value_without_min_value)
+                .ok_or(ExitError::OutOfFund)?;
         }
 
         {
             let target = self.account_mut(transfer.target, backend);
-            target.basic.balance = target.basic.balance.saturating_add(transfer.value);
+            target.basic.balance = target.basic.balance.saturating_add(transfer_value_without_min_value);
         }
 
         self.transfers.push(*transfer);
@@ -660,12 +662,6 @@ impl<B: Backend> StackState for ExecutorState<B> {
         debug_print!("executor transfer from={} to={} value={}", transfer.source, transfer.target, transfer.value);
         if transfer.value.is_zero() {
             return Ok(())
-        }
-
-        let min_decimals = u32::from(token::eth_decimals() - token::token_mint::decimals());
-        let min_value = U256::from(10_u64.pow(min_decimals));
-        if !(transfer.value % min_value).is_zero() {
-            return Err(ExitError::OutOfFund);
         }
 
         self.substate.transfer(transfer, &self.backend)
