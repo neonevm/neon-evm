@@ -191,6 +191,16 @@ pub enum EvmInstruction<'a> {
         /// Unsigned ethereum transaction
         unsigned_msg: &'a [u8],
     },
+
+    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    /// or
+    /// Continue
+    ExecuteTrxFromAccountDataIterativeOrContinue {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
+        /// Steps of ethereum contract to execute
+        step_count: u64,
+    },
 }
 
 
@@ -330,6 +340,13 @@ impl<'a> EvmInstruction<'a> {
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
                 EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
+            },
+            14 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             _ => return Err(InvalidInstructionData),
         })

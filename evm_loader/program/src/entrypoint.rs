@@ -420,9 +420,9 @@ fn process_instruction<'a>(
                 else {err}
             })?;
 
-            do_continue_top_level(storage, step_count, program_id, 
-                accounts, trx_accounts, storage_info, 
-                operator_sol_info, operator_eth_info, user_eth_info, 
+            do_continue_top_level(storage, step_count, program_id,
+                accounts, trx_accounts, storage_info,
+                operator_sol_info, operator_eth_info, user_eth_info,
                 system_info)?;
 
             Ok(())
@@ -496,10 +496,44 @@ fn process_instruction<'a>(
                              system_info)?;
                 },
                 Ok(storage) => {
-                    do_continue_top_level(storage, step_count, program_id, 
-                        accounts, trx_accounts, storage_info, 
-                        operator_sol_info, operator_eth_info, user_eth_info, 
+                    do_continue_top_level(storage, step_count, program_id,
+                        accounts, trx_accounts, storage_info,
+                        operator_sol_info, operator_eth_info, user_eth_info,
                         system_info)?;
+                },
+                Err(err) => return Err(err),
+            }
+            Ok(())
+        },
+        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue{collateral_pool_index, step_count} => {
+            debug_print!("Execute iterative transaction from account data or continue");
+            let holder_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
+
+            let trx_accounts = &accounts[7..];
+
+            match StorageAccount::restore(storage_info, operator_sol_info) {
+                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
+                    let holder_data = holder_info.data.borrow();
+                    let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
+                    let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+
+                    do_begin(collateral_pool_index, step_count, caller, trx,
+                             program_id, trx_accounts, storage_info,
+                             operator_sol_info, collateral_pool_sol_info,
+                             system_info)?;
+                },
+                Ok(storage) => {
+                    do_continue_top_level(storage, step_count, program_id,
+                                          accounts, trx_accounts, storage_info,
+                                          operator_sol_info, operator_eth_info, user_eth_info,
+                                          system_info)?;
                 },
                 Err(err) => return Err(err),
             }
