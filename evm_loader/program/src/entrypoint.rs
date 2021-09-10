@@ -584,9 +584,9 @@ fn process_instruction<'a>(
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
                     do_begin(collateral_pool_index, step_count, from_addr, unsigned_msg,
-                             program_id, trx_accounts,
+                             program_id, trx_accounts, storage_info,
                              operator_sol_info, collateral_pool_sol_info,
-                             storage_info, system_info, sysvar_info)?
+                             system_info, sysvar_info)?;
                 },
                 Ok(mut storage) => {
                     storage.check_accounts(program_id, trx_accounts)?;
@@ -627,10 +627,10 @@ fn process_instruction<'a>(
                             Some(operator_sol_info),
                             call_results)?;
 
-                        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?
+                        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
                     }
                 },
-                Err(err) => return Err(err)?,
+                Err(err) => return Err(err),
             }
             Ok(())
         },
@@ -788,18 +788,19 @@ fn do_call<'a>(
     Ok(Some(call_results))
 }
 
-fn do_begin<'a,'b>(
+#[allow(clippy::too_many_arguments)]
+fn do_begin<'a>(
     collateral_pool_index: u32,
     step_count: u64,
-    from_addr: &'a [u8],
-    unsigned_msg: &'a [u8],
+    from_addr: &[u8],
+    unsigned_msg: &[u8],
     program_id: &Pubkey,
-    trx_accounts: &'b [AccountInfo<'b>],
-    operator_sol_info: &'b AccountInfo<'b>,
-    collateral_pool_sol_info: &'b AccountInfo<'b>,
-    storage_info: &'b AccountInfo<'b>,
-    system_info: &'b AccountInfo<'b>,
-    sysvar_info: &'b AccountInfo<'b>
+    trx_accounts: &'a [AccountInfo<'a>],
+    storage_info: &'a AccountInfo<'a>,
+    operator_sol_info: &'a AccountInfo<'a>,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
+    sysvar_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
     let caller = H160::from_slice(from_addr);
