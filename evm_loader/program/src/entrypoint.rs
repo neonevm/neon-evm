@@ -427,51 +427,15 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let mut storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
+            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
 
-            storage.check_accounts(program_id, trx_accounts)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            let call_return = do_continue(&mut storage, step_count, &mut account_storage, trx_accounts)?;
-
-            if let Some(call_results) = call_return {
-                payment::transfer_from_deposit_to_operator(
-                    storage_info,
-                    operator_sol_info,
-                    system_info)?;
-                if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-                    debug_print!("operator token ownership");
-                    debug_print!("operator token owner {}", operator_eth_info.owner);
-                    debug_print!("operator key {}", operator_sol_info.key);
-                    return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
-                }
-                let (gas_limit, gas_price) = storage.get_gas_params()?;
-                let used_gas = call_results.1;
-                if used_gas > gas_limit {
-                    return Err!(ProgramError::InvalidArgument);
-                }
-                let gas_price_wei = U256::from(gas_price);
-                let fee = U256::from(used_gas)
-                    .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-                token::transfer_token(
-                    accounts,
-                    user_eth_info,
-                    operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                    account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                    &fee)?;
-
-                applies_and_invokes(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    Some(operator_sol_info),
-                    call_results)?;
-
-                storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
-            }
+            do_continue_top_level(storage, step_count, program_id, 
+                accounts, trx_accounts, storage_info, 
+                operator_sol_info, operator_eth_info, user_eth_info, 
+                system_info)?;
 
             Ok(())
         },
