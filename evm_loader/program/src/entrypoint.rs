@@ -302,42 +302,15 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            // if trx_gas_price < 1_000_000_000_u64 {
-            //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
-            // }
-
-            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
-            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                &from_addr, trx.nonce, &trx.chain_id)?;
-
-            let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, from_addr, trx.nonce, trx_gas_limit, trx_gas_price)?;
-
-            payment::transfer_from_operator_to_collateral_pool(
-                program_id,
-                collateral_pool_index,
-                operator_sol_info,
-                collateral_pool_sol_info,
-                system_info)?;
-            payment::transfer_from_operator_to_deposit(
-                operator_sol_info,
-                storage_info,
+            do_begin(collateral_pool_index, step_count, from_addr, trx,
+                program_id, trx_accounts, storage_info,
+                operator_sol_info, collateral_pool_sol_info,
                 system_info)?;
 
-            if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
-            }
-            else {
-                do_partial_create(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
-            }
-
-            storage.block_accounts(program_id, trx_accounts)
+            Ok(())
         },
         EvmInstruction::CallFromRawEthereumTX {collateral_pool_index, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction");
@@ -422,41 +395,22 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[5..];
 
-            let caller = H160::from_slice(from_addr);
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            // if trx_gas_price < 1_000_000_000_u64 {
-            //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
-            // }
-
             if !operator_sol_info.is_signer {
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
-            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
-            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
-            check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                &caller, trx.nonce, &trx.chain_id)?;
 
-            payment::transfer_from_operator_to_collateral_pool(
-                program_id,
-                collateral_pool_index,
-                operator_sol_info,
-                collateral_pool_sol_info,
-                system_info)?;
-            payment::transfer_from_operator_to_deposit(
-                operator_sol_info,
-                storage_info,
-                system_info)?;
+            let caller = H160::from_slice(from_addr);
+            let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
+                .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+            do_begin(collateral_pool_index, step_count, caller, trx,
+                     program_id, trx_accounts, storage_info,
+                     operator_sol_info, collateral_pool_sol_info,
+                     system_info)?;
 
-            storage.block_accounts(program_id, trx_accounts)
+            Ok(())
         },
         EvmInstruction::Continue { step_count } => {
             debug_print!("Continue");
@@ -583,10 +537,16 @@ fn process_instruction<'a>(
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
-                    do_begin(collateral_pool_index, step_count, from_addr, unsigned_msg,
+                    check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+
+                    let caller = H160::from_slice(from_addr);
+                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
+                        .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+
+                    do_begin(collateral_pool_index, step_count, caller, trx,
                              program_id, trx_accounts, storage_info,
                              operator_sol_info, collateral_pool_sol_info,
-                             system_info, sysvar_info)?;
+                             system_info)?;
                 },
                 Ok(mut storage) => {
                     storage.check_accounts(program_id, trx_accounts)?;
@@ -792,19 +752,16 @@ fn do_call<'a>(
 fn do_begin<'a>(
     collateral_pool_index: u32,
     step_count: u64,
-    from_addr: &[u8],
-    unsigned_msg: &[u8],
+    caller: H160,
+    trx: UnsignedTransaction,
     program_id: &Pubkey,
     trx_accounts: &'a [AccountInfo<'a>],
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>,
-    sysvar_info: &'a AccountInfo<'a>
+    system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
-    let caller = H160::from_slice(from_addr);
-    let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
     let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     // if trx_gas_price < 1_u64 {
@@ -814,7 +771,6 @@ fn do_begin<'a>(
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
     check_ethereum_authority(
         account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
         &storage.caller_and_nonce()?.0, trx.nonce, &trx.chain_id)?;
@@ -830,7 +786,12 @@ fn do_begin<'a>(
         storage_info,
         system_info)?;
 
-    do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+    if trx.to.is_some() {
+        do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+    }
+    else {
+        do_partial_create(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+    }
 
     storage.block_accounts(program_id, trx_accounts)
 }
