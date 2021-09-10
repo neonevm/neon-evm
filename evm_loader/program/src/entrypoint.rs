@@ -298,10 +298,6 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[5..];
 
-            if !operator_sol_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
-            }
-
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
@@ -395,10 +391,6 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[5..];
 
-            if !operator_sol_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
-            }
-
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
             let caller = H160::from_slice(from_addr);
@@ -422,10 +414,6 @@ fn process_instruction<'a>(
             let system_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[5..];
-
-            if !operator_sol_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
-            }
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
@@ -493,10 +481,6 @@ fn process_instruction<'a>(
             let system_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[7..];
-
-            if !operator_sol_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
-            }
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
@@ -689,6 +673,10 @@ fn do_begin<'a>(
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
+    if !operator_sol_info.is_signer {
+        return Err!(ProgramError::InvalidAccountData);
+    }
+
     let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
@@ -736,6 +724,10 @@ fn do_continue_top_level<'a>(
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
+    if !operator_sol_info.is_signer {
+        return Err!(ProgramError::InvalidAccountData);
+    }
+
     storage.check_accounts(program_id, trx_accounts)?;
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let call_return = do_continue(&mut storage, step_count, &mut account_storage, trx_accounts)?;
