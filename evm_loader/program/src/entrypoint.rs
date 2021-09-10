@@ -519,99 +519,25 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[7..];
 
-            if !operator_sol_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
-            }
-
-            let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
-            let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            // if trx_gas_price < 1_000_000_000_u64 {
-            //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
-            // }
-
-            let mut begin: bool = false;
-            let mut storage = match StorageAccount::restore(storage_info, operator_sol_info) {
-                Ok(restored_storage) => Ok(restored_storage),
+            match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
-                    begin = true;
-                    StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)
+                    let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+
+                    do_begin(collateral_pool_index, step_count, caller, trx,
+                             program_id, trx_accounts, storage_info,
+                             operator_sol_info, collateral_pool_sol_info,
+                             system_info)?;
+                },
+                Ok(storage) => {
+                    do_continue_top_level(storage, step_count, program_id,
+                                          accounts, trx_accounts, storage_info,
+                                          operator_sol_info, operator_eth_info, user_eth_info,
+                                          system_info)?;
                 },
                 Err(err) => return Err(err),
-            }?;
-
-            if begin {
-                StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
-                let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-
-                check_ethereum_authority(
-                    account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
-                    &caller, trx.nonce, &trx.chain_id)?;
-
-                payment::transfer_from_operator_to_collateral_pool(
-                    program_id,
-                    collateral_pool_index,
-                    operator_sol_info,
-                    collateral_pool_sol_info,
-                    system_info)?;
-                payment::transfer_from_operator_to_deposit(
-                    operator_sol_info,
-                    storage_info,
-                    system_info)?;
-
-                if trx.to.is_some() {
-                    do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
-                } else {
-                    do_partial_create(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
-                }
-
-                storage.block_accounts(program_id, trx_accounts)
             }
-            else {
-                storage.check_accounts(program_id, trx_accounts)?;
-                let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-                let call_return = do_continue(&mut storage, step_count, &mut account_storage, trx_accounts)?;
-
-                if let Some(call_results) = call_return {
-                    payment::transfer_from_deposit_to_operator(
-                        storage_info,
-                        operator_sol_info,
-                        system_info)?;
-                    if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-                        return Err!(ProgramError::InvalidInstructionData;
-                            "Wrong operator token ownership: operator token owner = {:?}, operator key = {:?}",
-                            operator_eth_info.owner,
-                            operator_sol_info.key)
-                    }
-                    let (gas_limit, gas_price) = storage.get_gas_params()?;
-                    let used_gas = call_results.1;
-                    if used_gas > gas_limit {
-                        return Err!(ProgramError::InvalidArgument);
-                    }
-                    let gas_price_wei = U256::from(gas_price);
-                    let fee = U256::from(used_gas)
-                        .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-                    token::transfer_token(
-                        accounts,
-                        user_eth_info,
-                        operator_eth_info,
-                        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                        account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                        &fee)?;
-
-                    applies_and_invokes(
-                        program_id,
-                        &mut account_storage,
-                        accounts,
-                        Some(operator_sol_info),
-                        call_results)?;
-
-                    storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
-                }
-
-                Ok(())
-            }
+            Ok(())
         },
     };
 
