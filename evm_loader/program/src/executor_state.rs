@@ -442,10 +442,9 @@ impl ExecutorSubstate {
         let transfer_value_without_min_value = transfer.value - transfer.value % min_value;
         {
             let source = self.account_mut(transfer.source, backend);
-            if source.basic.balance < transfer.value {
-                return Err(ExitError::OutOfFund);
-            }
-            source.basic.balance -= transfer_value_without_min_value;
+            source.basic.balance
+                .checked_sub(transfer_value_without_min_value)
+                .ok_or(ExitError::OutOfFund)?;
         }
 
         {
