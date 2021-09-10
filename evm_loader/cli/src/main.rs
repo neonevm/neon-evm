@@ -12,7 +12,6 @@ use crate::{
 
 use evm_loader::{
     instruction::EvmInstruction,
-    solana_backend::SolanaBackend,
     account_data::{
         AccountData,
         Account,
@@ -59,7 +58,6 @@ use clap::{
 
 use solana_program::{
     keccak::{hash,},
-    account_info::AccountInfo
 };
 
 use solana_clap_utils::{
@@ -147,13 +145,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     };
 
     let (exit_reason, result, applies_logs, used_gas) = {
-        let accounts : Vec<AccountInfo> = Vec::new();
-        let backend = SolanaBackend::new(&storage, Some(&accounts[..]));
         // u64::MAX is too large, remix gives this error:
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
         let gas_limit = 50_000_000;
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
 
@@ -192,7 +188,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
+            let (applies, logs, _transfer) = executor_state.deconstruct();
             (exit_reason, result, Some((applies, logs)), used_gas)
         } else {
             (exit_reason, result, None, used_gas)

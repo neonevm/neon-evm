@@ -7,11 +7,12 @@ use std::{
 };
 use core::mem;
 use evm::gasometer::Gasometer;
-use evm::backend::{Apply, Backend, Basic, Log};
+use evm::backend::{Apply, Basic, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256};
 use crate::token;
+use crate::solana_backend::AccountStorage;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -141,7 +142,7 @@ impl ExecutorSubstate {
     /// executor is not in the top-level substate.
     #[must_use]
     #[allow(clippy::type_complexity)]
-    pub fn deconstruct<B: Backend>(
+    pub fn deconstruct<B: AccountStorage>(
         mut self,
         backend: &B,
     ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>) {
@@ -174,7 +175,7 @@ impl ExecutorSubstate {
             let apply = {
                 let account = self.accounts.remove(&address).unwrap_or_else(
                     || ExecutorAccount {
-                        basic: backend.basic(address),
+                        basic: backend.basic(&address),
                         code: None,
                         valids: None,
                         reset: false,
@@ -368,12 +369,12 @@ impl ExecutorSubstate {
         false
     }
 
-    fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut ExecutorAccount {
+    fn account_mut<B: AccountStorage>(&mut self, address: H160, backend: &B) -> &mut ExecutorAccount {
         #[allow(clippy::map_entry)]
         if !self.accounts.contains_key(&address) {
             let account = self.known_account(address).cloned().map_or_else(
                 || ExecutorAccount {
-                    basic: backend.basic(address),
+                    basic: backend.basic(&address),
                     code: None,
                     valids: None,
                     reset: false,
@@ -391,7 +392,7 @@ impl ExecutorSubstate {
             .expect("New account was just inserted")
     }
 
-    pub fn inc_nonce<B: Backend>(&mut self, address: H160, backend: &B) {
+    pub fn inc_nonce<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.nonce += U256::one();
     }
 
@@ -399,7 +400,7 @@ impl ExecutorSubstate {
         self.storages.insert((address, key), value);
     }
 
-    pub fn reset_storage<B: Backend>(&mut self, address: H160, backend: &B) {
+    pub fn reset_storage<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let mut removing = Vec::new();
 
         for (oa, ok) in self.storages.keys() {
@@ -427,12 +428,12 @@ impl ExecutorSubstate {
         self.deletes.insert(address);
     }
 
-    pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
+    pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
     }
 
-    pub fn transfer<B: Backend>(
+    pub fn transfer<B: AccountStorage>(
         &mut self,
         transfer: &Transfer,
         backend: &B,
@@ -455,188 +456,159 @@ impl ExecutorSubstate {
         Ok(())
     }
 
-    pub fn reset_balance<B: Backend>(&mut self, address: H160, backend: &B) {
+    pub fn reset_balance<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend).basic.balance = U256::zero();
     }
 
-    pub fn touch<B: Backend>(&mut self, address: H160, backend: &B) {
+    pub fn touch<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         self.account_mut(address, backend);
     }
 }
 
-pub trait StackState : Backend {
-    fn metadata(&self) -> &ExecutorMetadata;
-    fn metadata_mut(&mut self) -> &mut ExecutorMetadata;
-
-    fn enter(&mut self, gas_limit: u64, is_static: bool);
-    fn exit_commit(&mut self) -> Result<(), ExitError>;
-    fn exit_revert(&mut self) -> Result<(), ExitError>;
-    fn exit_discard(&mut self) -> Result<(), ExitError>;
-
-    fn is_empty(&self, address: H160) -> bool;
-    fn deleted(&self, address: H160) -> bool;
-
-    fn inc_nonce(&mut self, address: H160);
-    fn set_storage(&mut self, address: H160, key: U256, value: U256);
-    fn reset_storage(&mut self, address: H160);
-    fn original_storage(&self, address: H160, key: U256) -> Option<U256>;
-    fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>);
-    fn set_deleted(&mut self, address: H160);
-    fn set_code(&mut self, address: H160, code: Vec<u8>);
-    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError>;
-    fn reset_balance(&mut self, address: H160);
-    fn touch(&mut self, address: H160);
-}
-
-pub struct ExecutorState<B: Backend> {
-    backend: B,
+pub struct ExecutorState<'a, B: AccountStorage> {
+    backend: &'a B,
     substate: ExecutorSubstate,
 }
 
-impl<B: Backend> Backend for ExecutorState<B> {
-    fn gas_price(&self) -> U256 {
-        self.backend.gas_price()
+impl<'a, B: AccountStorage> ExecutorState<'a, B> {
+    pub fn gas_price(&self) -> U256 {
+        // TODO correct gas price
+        U256::zero()
     }
-    fn origin(&self) -> H160 {
+    pub fn origin(&self) -> H160 {
         self.backend.origin()
     }
-    fn block_hash(&self, number: U256) -> H256 {
-        self.backend.block_hash(number)
+    pub fn block_hash(&self, _number: U256) -> H256 {
+        H256::default()
     }
-    fn block_number(&self) -> U256 {
+    pub fn block_number(&self) -> U256 {
         self.backend.block_number()
     }
-    fn block_coinbase(&self) -> H160 {
-        self.backend.block_coinbase()
+    pub fn block_coinbase(&self) -> H160 {
+        H160::default()
     }
-    fn block_timestamp(&self) -> U256 {
+    pub fn block_timestamp(&self) -> U256 {
         self.backend.block_timestamp()
     }
-    fn block_difficulty(&self) -> U256 {
-        self.backend.block_difficulty()
+    pub fn block_difficulty(&self) -> U256 {
+        U256::zero()
     }
-    fn block_gas_limit(&self) -> U256 {
-        self.backend.block_gas_limit()
+    pub fn block_gas_limit(&self) -> U256 {
+        U256::from(u64::MAX)
     }
-    fn chain_id(&self) -> U256 {
-        self.backend.chain_id()
-    }
-
-    fn exists(&self, address: H160) -> bool {
-        self.substate.known_account(address).is_some() || self.backend.exists(address)
+    pub fn chain_id(&self) -> U256 {
+        crate::solana_backend::chain_id()
     }
 
-    fn basic(&self, address: H160) -> Basic {
+    pub fn exists(&self, address: H160) -> bool {
+        self.substate.known_account(address).is_some() || self.backend.exists(&address)
+    }
+
+    pub fn basic(&self, address: H160) -> Basic {
         self.substate
             .known_basic(address)
-            .unwrap_or_else(|| self.backend.basic(address))
+            .unwrap_or_else(|| self.backend.basic(&address))
     }
 
-    fn code(&self, address: H160) -> Vec<u8> {
+    pub fn code(&self, address: H160) -> Vec<u8> {
         self.substate
             .known_code(address)
-            .unwrap_or_else(|| self.backend.code(address))
+            .unwrap_or_else(|| self.backend.code(&address))
     }
 
-    fn code_hash(&self, address: H160) -> H256 {
+    pub fn code_hash(&self, address: H160) -> H256 {
         self.substate.known_code(address)
-            .map_or_else(|| self.backend.code_hash(address), |code| keccak256_h256(&code))
+            .map_or_else(|| self.backend.code_hash(&address), |code| keccak256_h256(&code))
     }
 
-    fn code_size(&self, address: H160) -> usize {
+    pub fn code_size(&self, address: H160) -> usize {
          self.substate.known_code(address)
-            .map_or_else(|| self.backend.code_size(address), |code| code.len())
+            .map_or_else(|| self.backend.code_size(&address), |code| code.len())
     }
 
-    fn valids(&self, address: H160) -> Vec<u8> {
+    pub fn valids(&self, address: H160) -> Vec<u8> {
         self.substate
             .known_valids(address)
-            .unwrap_or_else(|| self.backend.valids(address))
+            .unwrap_or_else(|| self.backend.valids(&address))
     }
 
-    fn storage(&self, address: H160, key: U256) -> U256 {
+    pub fn storage(&self, address: H160, key: U256) -> U256 {
         self.substate
             .known_storage(address, key)
-            .unwrap_or_else(|| self.backend.storage(address, key))
+            .unwrap_or_else(|| self.backend.storage(&address, &key))
     }
 
-    fn create(&self, scheme: &evm::CreateScheme, address: &H160) {
-        self.backend.create(scheme, address);
-    }
-}
-
-impl<B: Backend> StackState for ExecutorState<B> {
-    fn metadata(&self) -> &ExecutorMetadata {
+    pub fn metadata(&self) -> &ExecutorMetadata {
         self.substate.metadata()
     }
 
-    fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
+    pub fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
         self.substate.metadata_mut()
     }
 
-    fn enter(&mut self, gas_limit: u64, is_static: bool) {
+    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
         self.substate.enter(gas_limit, is_static);
     }
 
-    fn exit_commit(&mut self) -> Result<(), ExitError> {
+    pub fn exit_commit(&mut self) -> Result<(), ExitError> {
         self.substate.exit_commit()
     }
 
-    fn exit_revert(&mut self) -> Result<(), ExitError> {
+    pub fn exit_revert(&mut self) -> Result<(), ExitError> {
         self.substate.exit_revert()
     }
 
-    fn exit_discard(&mut self) -> Result<(), ExitError> {
+    pub fn exit_discard(&mut self) -> Result<(), ExitError> {
         self.substate.exit_discard()
     }
 
-    fn is_empty(&self, address: H160) -> bool {
+    pub fn is_empty(&self, address: H160) -> bool {
         if let Some(known_empty) = self.substate.known_empty(address) {
             return known_empty;
         }
 
-        self.backend.basic(address).balance == U256::zero()
-            && self.backend.basic(address).nonce == U256::zero()
-            && self.backend.code(address).len() == 0
+        self.backend.basic(&address).balance == U256::zero()
+            && self.backend.basic(&address).nonce == U256::zero()
+            && self.backend.code(&address).len() == 0
     }
 
-    fn deleted(&self, address: H160) -> bool {
+    pub fn deleted(&self, address: H160) -> bool {
         self.substate.deleted(address)
     }
 
-    fn inc_nonce(&mut self, address: H160) {
-        self.substate.inc_nonce(address, &self.backend);
+    pub fn inc_nonce(&mut self, address: H160) {
+        self.substate.inc_nonce(address, self.backend);
     }
 
-    fn set_storage(&mut self, address: H160, key: U256, value: U256) {
+    pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.substate.set_storage(address, key, value);
     }
 
-    fn reset_storage(&mut self, address: H160) {
-        self.substate.reset_storage(address, &self.backend);
+    pub fn reset_storage(&mut self, address: H160) {
+        self.substate.reset_storage(address, self.backend);
     }
 
-    fn original_storage(&self, address: H160, key: U256) -> Option<U256> {
+    pub fn original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.substate.known_original_storage(address, key) {
             return Some(value);
         }
 
-        Some(self.backend.storage(address, key)) // todo backend.original_storage
+        Some(self.backend.storage(&address, &key)) // todo backend.original_storage
     }
 
-    fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
+    pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
         self.substate.log(address, topics, data);
     }
 
-    fn set_deleted(&mut self, address: H160) {
+    pub fn set_deleted(&mut self, address: H160) {
         self.substate.set_deleted(address);
     }
 
-    fn set_code(&mut self, address: H160, code: Vec<u8>) {
-        self.substate.set_code(address, code, &self.backend);
+    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
+        self.substate.set_code(address, code, self.backend);
     }
 
-    fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
+    pub fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
         debug_print!("executor transfer from={} to={} value={}", transfer.source, transfer.target, transfer.value);
         if transfer.value.is_zero() {
             return Ok(())
@@ -648,24 +620,19 @@ impl<B: Backend> StackState for ExecutorState<B> {
             return Err(ExitError::OutOfFund);
         }
 
-        self.substate.transfer(transfer, &self.backend)
+        self.substate.transfer(transfer, self.backend)
     }
 
-    fn reset_balance(&mut self, address: H160) {
-        self.substate.reset_balance(address, &self.backend);
+    pub fn reset_balance(&mut self, address: H160) {
+        self.substate.reset_balance(address, self.backend);
     }
 
-    fn touch(&mut self, address: H160) {
-        self.substate.touch(address, &self.backend);
+    pub fn touch(&mut self, address: H160) {
+        self.substate.touch(address, self.backend);
     }
-}
 
-impl<B: Backend> ExecutorState<B> {
-    pub fn new(substate: ExecutorSubstate, backend: B) -> Self {
-        Self {
-            backend,
-            substate,
-        }
+    pub fn new(substate: ExecutorSubstate, backend: &'a B) -> Self {
+        Self { backend, substate }
     }
 
     pub fn substate(&self) -> &ExecutorSubstate {
@@ -676,8 +643,7 @@ impl<B: Backend> ExecutorState<B> {
     #[allow(clippy::type_complexity)]
     pub fn deconstruct(
         self,
-    ) -> (B, (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)) {
-        let (applies, logs, transfer) = self.substate.deconstruct(&self.backend);
-        (self.backend, (applies, logs, transfer))
+    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>) {
+        self.substate.deconstruct(self.backend)
     }
 }

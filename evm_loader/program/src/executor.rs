@@ -4,17 +4,18 @@ use std::convert::Infallible;
 use std::mem;
 
 use evm::{
-    backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
+    Capture, ExitError, ExitFatal, ExitReason,
     gasometer, H160, H256, Handler, Resolve, Valids, U256,
 };
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
-use crate::executor_state::{ExecutorState, StackState};
+use crate::executor_state::ExecutorState;
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::call_precompile;
+use crate::solana_backend::AccountStorage;
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -48,11 +49,11 @@ enum RuntimeApply{
     Exit(ExitReason),
 }
 
-struct Executor<B: Backend> {
-    state: ExecutorState<B>,
+struct Executor<'a, B: AccountStorage> {
+    state: ExecutorState<'a, B>,
 }
 
-impl<B: Backend> Handler for Executor<B> {
+impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     type CreateInterrupt = crate::executor::CreateInterrupt;
     type CreateFeedback = Infallible;
     type CallInterrupt = crate::executor::CallInterrupt;
@@ -230,7 +231,6 @@ impl<B: Backend> Handler for Executor<B> {
                 },
             };
 
-        self.state.create(&scheme, &address);
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
 
@@ -354,14 +354,14 @@ pub enum CreateReason {
 
 type RuntimeInfo = (evm::Runtime, CreateReason);
 
-pub struct Machine<B: Backend> {
-    executor: Executor<B>,
+pub struct Machine<'a, B: AccountStorage> {
+    executor: Executor<'a, B>,
     runtime: Vec<RuntimeInfo>
 }
 
-impl<B: Backend> Machine<B> {
+impl<'a, B: AccountStorage> Machine<'a, B> {
 
-    pub fn new(state: ExecutorState<B>) -> Self {
+    pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
         Self{ executor, runtime: Vec::new() }
     }
@@ -370,7 +370,7 @@ impl<B: Backend> Machine<B> {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
-    pub fn restore(storage: &StorageAccount, backend: B) -> Self {
+    pub fn restore(storage: &StorageAccount, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
 
         let state = ExecutorState::new(substate, backend);
@@ -627,7 +627,7 @@ impl<B: Backend> Machine<B> {
         Ok(())
     }
 
-    pub fn into_state(self) -> ExecutorState<B> {
+    pub fn into_state(self) -> ExecutorState<'a, B> {
         self.executor.state
     }
 }

@@ -32,7 +32,7 @@ use crate::{
     //    bump_allocator::BumpAllocator,
     account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
-    solana_backend::{SolanaBackend, AccountStorage},
+    solana_backend::{AccountStorage},
     solidity_account::SolidityAccount,
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
     executor_state::{ ExecutorState, ExecutorSubstate },
@@ -331,10 +331,10 @@ fn process_instruction<'a>(
                 system_info)?;
 
             if trx.to.is_some() {
-                do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+                do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
             }
             else {
-                do_partial_create(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+                do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
             }
 
             storage.block_accounts(program_id, trx_accounts)
@@ -376,7 +376,7 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let call_return = do_call(&mut account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+            let call_return = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
             if let Some(call_results) = call_return {
                 if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
@@ -454,7 +454,7 @@ fn process_instruction<'a>(
                 storage_info,
                 system_info)?;
 
-            do_partial_call(&mut storage, step_count, &account_storage, trx_accounts, trx.call_data, trx.value, trx_gas_limit)?;
+            do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
             storage.block_accounts(program_id, trx_accounts)
         },
@@ -480,8 +480,7 @@ fn process_instruction<'a>(
             storage.check_accounts(program_id, trx_accounts)?;
 
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-
-            let call_return = do_continue(&mut storage, step_count, &mut account_storage, trx_accounts)?;
+            let call_return = do_continue(&mut storage, step_count, &mut account_storage)?;
 
             if let Some(call_results) = call_return {
                 payment::transfer_from_deposit_to_operator(
@@ -623,9 +622,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
 
     let call_results = {
-        let backend = SolanaBackend::new(&account_storage, Some(accounts));
-        debug_print!("  backend initialized");
-
         let code_data = {
             let data = program_code.data.borrow();
             let contract_info_data = AccountData::unpack(&data)?;
@@ -642,7 +638,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
             code.to_vec()
         };
 
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), &account_storage);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -654,7 +650,7 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            let (applies, logs, transfers) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
@@ -673,7 +669,6 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
 
 fn do_call<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
@@ -685,10 +680,7 @@ fn do_call<'a>(
     debug_print!(" contract: {}", account_storage.contract());
 
     let call_results = {
-        let backend = SolanaBackend::new(account_storage, Some(accounts));
-        debug_print!("  backend initialized");
-
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -709,7 +701,7 @@ fn do_call<'a>(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            let (applies, logs, transfers) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
@@ -723,7 +715,6 @@ fn do_partial_call<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
@@ -731,10 +722,7 @@ fn do_partial_call<'a>(
 {
     debug_print!("do_partial_call");
 
-    let backend = SolanaBackend::new(account_storage, Some(accounts));
-    debug_print!("  backend initialized");
-
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -763,7 +751,6 @@ fn do_partial_create<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
@@ -771,10 +758,7 @@ fn do_partial_create<'a>(
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
-    let backend = SolanaBackend::new(account_storage, Some(accounts));
-    debug_print!("  backend initialized");
-
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -794,16 +778,12 @@ fn do_continue<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &mut ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
 ) -> CallResult
 {
     debug_print!("do_continue");
 
     let call_results = {
-        let backend = SolanaBackend::new(account_storage, Some(accounts));
-        debug_print!("  backend initialized");
-
-        let mut executor = Machine::restore(storage, backend);
+        let mut executor = Machine::restore(storage, account_storage);
         debug_print!("Executor restored");
 
         let (result, exit_reason) = match executor.execute_n_steps(step_count) {
@@ -821,7 +801,7 @@ fn do_continue<'a>(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (_, (applies, logs, transfers)) = executor_state.deconstruct();
+            let (applies, logs, transfers) = executor_state.deconstruct();
             (exit_reason, used_gas, result, Some((applies, logs, transfers)))
         } else {
             (exit_reason, used_gas, result, None)
@@ -925,8 +905,8 @@ fn check_ethereum_authority<'a>(
         return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender.get_nonce(), trx_nonce);
     }
 
-    if SolanaBackend::<ProgramAccountStorage>::chain_id() != *chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, SolanaBackend::<ProgramAccountStorage>::chain_id());
+    if crate::solana_backend::chain_id() != *chain_id {
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::solana_backend::chain_id());
     }
 
     Ok(())
