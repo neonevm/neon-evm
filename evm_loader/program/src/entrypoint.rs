@@ -161,8 +161,8 @@ fn process_instruction<'a>(
                 nonce,
                 trx_count: 0_u64,
                 code_account: code_account_key,
-                is_blocked : 0_u8,
-                blocked: Pubkey::new_from_array([0_u8; 32]),
+                ro_blocked_cnt: 0_u8,
+                rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
             });
 
@@ -478,7 +478,16 @@ fn process_instruction<'a>(
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
-            storage.check_accounts(program_id, trx_accounts)?;
+
+            match storage.check_accounts(program_id, trx_accounts) {
+                Ok(()) => {},
+                Err(reason) => {
+                    match reason {
+                        ProgramError::Custom(_) => return Ok(()),
+                        _ => return Err!(reason)
+                    }
+                }
+            };
 
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
@@ -538,7 +547,16 @@ fn process_instruction<'a>(
             }
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
-            storage.check_accounts(program_id, trx_accounts)?;
+
+            match storage.check_accounts(program_id, trx_accounts) {
+                Ok(()) => {},
+                Err(reason) => {
+                    match reason {
+                        ProgramError::Custom(_) => return Ok(()),
+                        _ => return Err!(reason)
+                    }
+                }
+            };
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 

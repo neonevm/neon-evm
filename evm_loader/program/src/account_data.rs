@@ -23,9 +23,9 @@ pub struct Account {
     /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
     /// 0-not blocked, 1-blocked on read, 2-blocked on write
-    pub is_blocked: u8,
+    pub ro_blocked_cnt: u8,
     /// Ethereum address
-    pub blocked: Pubkey,
+    pub rw_blocked_acc: Option<Pubkey>,
     /// ETH token account
     pub eth_token_account: Pubkey
 }
@@ -237,22 +237,22 @@ impl AccountData {
 
 impl Account {
     /// Account struct serialized size
-    pub const SIZE: usize = 20+1+8+32+1+32+32;
+    pub const SIZE: usize = 20+1+8+32+1+1+32+32;
 
     /// Deserialize `Account` struct from input data
     #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Account::SIZE];
-        let (ether, nonce, trx_count, code_account, is_blocked, blocked_by, eth) = array_refs![data, 20, 1, 8, 32, 1, 32, 32];
+        let (ether, nonce, trx_count, code_account, ro_blocked_cnt, is_rw_blocked, rw_blocked_by, eth) = array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
 
         Self {
             ether: H160::from_slice(&*ether),
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
             code_account: Pubkey::new_from_array(*code_account),
-            is_blocked: is_blocked[0],
-            blocked: Pubkey::new_from_array(*blocked_by),
+            ro_blocked_cnt: ro_blocked_cnt[0],
+            rw_blocked_acc: if is_rw_blocked[0] > 0 { Some(Pubkey::new_from_array(*rw_blocked_by)) } else { None },
             eth_token_account: Pubkey::new_from_array(*eth)
         }
     }
@@ -261,17 +261,19 @@ impl Account {
     pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
-        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst, eth_dst) =
-                mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32];
+        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, ro_blocked_cnt_dst, is_rw_blocked_dst, rw_blocked_by_dst, eth_dst) =
+                mut_array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
         *trx_count_dst = acc.trx_count.to_le_bytes();
         code_account_dst.copy_from_slice(acc.code_account.as_ref());
-        is_blocked_dst[0] = acc.is_blocked;
-        if is_blocked_dst[0] !=0  {
-            blocked_by_dst.copy_from_slice(acc.blocked.as_ref());
-        } else {
-            *blocked_by_dst = Pubkey::new_from_array([0_u8; 32]).to_bytes();
+        ro_blocked_cnt_dst[0] = acc.ro_blocked_cnt;
+        if let Some(blocked_acc) = acc.rw_blocked_acc{
+            is_rw_blocked_dst[0] = 1;
+            rw_blocked_by_dst.copy_from_slice(blocked_acc.as_ref());
+        }
+        else{
+            is_rw_blocked_dst[0] = 0;
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
 

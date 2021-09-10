@@ -236,17 +236,34 @@ impl<'a> EmulatorAccountStorage<'a> {
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
-                    let mut storage_iter = storage.into_iter().peekable();
-                    let exist_items: bool = matches!(storage_iter.peek(), Some(_));
-                    let writable : bool = reset_storage || exist_items;
 
                     if let Some(acc) = accounts.get_mut(&address) {
-                        *acc.writable.borrow_mut() = writable;
+                        let account_data = AccountData::unpack(&acc.account.data).unwrap();
+
+                        let mut storage_iter = storage.into_iter().peekable();
+                        let exist_items: bool = matches!(storage_iter.peek(), Some(_));
+
+                        if reset_storage || exist_items {
+                            match account_data {
+                                AccountData::Account(_) => {
+                                    if acc.code_account.is_some() {
+                                        *acc.writable.borrow_mut() = true;
+                                    }
+                                    else{
+                                        eprintln!("Changes in the storage of non-existent account were found {}", &address.to_string());
+                                    }
+                                },
+                                _ => {eprintln!("Changes in the storage of incorrect account were found {}", &address.to_string());},
+                            };
+                        }
                         *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
-                    } else if let Some(acc) = new_accounts.get_mut(&address) {
+
+                    }
+                    else if let Some(acc) = new_accounts.get_mut(&address) {
                         *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
-                        *acc.writable.borrow_mut() = writable;
-                    } else {
+                        *acc.writable.borrow_mut() = true;
+                    }
+                    else {
                         eprintln!("Account not found {}", &address.to_string());
                     }
                     eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance, &reset_storage.to_string());

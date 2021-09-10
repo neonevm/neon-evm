@@ -80,7 +80,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
+    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, writable_code=True):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
@@ -98,7 +98,7 @@ class EventTest(unittest.TestCase):
 
                 AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=writable_code),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
@@ -107,7 +107,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_10_continue(self, storage_account, step_count):
+    def sol_instr_10_continue(self, storage_account, step_count, writable_code=True):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
@@ -125,7 +125,7 @@ class EventTest(unittest.TestCase):
 
                 AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=writable_code),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
@@ -160,17 +160,17 @@ class EventTest(unittest.TestCase):
             ])
 
 
-    def call_begin(self, storage, steps, msg, instruction):
+    def call_begin(self, storage, steps, msg, instruction, writable_code=True):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
+        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction, writable_code))
         return send_transaction(client, trx, self.acc)
 
-    def call_continue(self, storage, steps):
+    def call_continue(self, storage, steps, writable_code=True):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, steps))
+        trx.add(self.sol_instr_10_continue(storage, steps, writable_code))
         return send_transaction(client, trx, self.acc)
 
     def call_cancel(self, storage):
@@ -179,9 +179,9 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_12_cancel(storage))
         return send_transaction(client, trx, self.acc)
 
-    def get_call_parameters(self, input):
+    def get_call_parameters(self, input, tx_count_add=0):
         tx = {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
+            'nonce': getTransactionCount(client, self.caller)+tx_count_add, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
         return (from_addr, sign, msg)
@@ -395,6 +395,53 @@ class EventTest(unittest.TestCase):
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
             print(result)
+
+
+    def check_continue_result(self, result):
+        if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+            data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+            assert (data[0] == 6)
+
+    def test_caseReadWriteBlocking(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr1, sign1,  msg1) = self.get_call_parameters(input)
+        (from_addr2, sign2,  msg2) = self.get_call_parameters(input, 1)
+
+        instruction1 = from_addr1 + sign1 + msg1
+        instruction2 = from_addr2 + sign2 + msg2
+
+        storage1 = self.create_storage_account(sign1[:8].hex())
+        storage2 = self.create_storage_account(sign2[:8].hex())
+
+        result = self.call_begin(storage1, 10, msg1, instruction1, writable_code=False)
+        result = self.call_begin(storage2, 10, msg2, instruction2, writable_code=False)
+        result = self.call_continue(storage1, 10, writable_code=False)
+        result = self.call_continue(storage2, 10, writable_code=False)
+        result1 = self.call_continue(storage1, 1000, writable_code=False)["result"]
+        result2 = self.call_continue(storage2, 1000, writable_code=False)["result"]
+
+        self.check_continue_result(result1["result"])
+        self.check_continue_result(result2["result"])
+
+
+        # self.assertEqual(result['meta']['err'], None)
+        # self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        # self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+        # self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+        # self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        # self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
+        # self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
+
+        # result = self.call_cancel(storage)
+
+        # err = "custom program error: 0x1"
+        # with self.assertRaisesRegex(Exception,err):
+        #     result = self.call_continue(storage, 10)
+        #     print(result)
 
 
     def test_caseSuccessRunOtherTransactionAfterCancel(self):
