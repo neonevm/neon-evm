@@ -1,17 +1,13 @@
 //! `EVMLoader` precompile contracts
 
-use evm::{
-    Capture, ExitReason,
-    H160, U256
-};
-use core::convert::Infallible;
-use solana_program::{
-    secp256k1_recover::secp256k1_recover,
-};
-use std::convert::TryInto;
+use crate::executor_state::ExecutorState;
+use crate::solana_backend::AccountStorage;
+use crate::utils::keccak256_digest;
 use arrayref::{array_ref, array_refs};
-use crate::utils::{keccak256_digest};
-
+use core::convert::Infallible;
+use evm::{Capture, ExitReason, H160, U256};
+use solana_program::secp256k1_recover::secp256k1_recover;
+use std::convert::{TryInto};
 
 const SYSTEM_ACCOUNT_SOLANA: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
@@ -29,31 +25,35 @@ const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
     *address == SYSTEM_ACCOUNT_SOLANA
-    || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
-    || *address == SYSTEM_ACCOUNT_ECRECOVER
-    || *address == SYSTEM_ACCOUNT_SHA_256
-    || *address == SYSTEM_ACCOUNT_RIPEMD160
-    || *address == SYSTEM_ACCOUNT_DATACOPY
-    || *address == SYSTEM_ACCOUNT_BIGMODEXP
-    || *address == SYSTEM_ACCOUNT_BN256_ADD
-    || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
-    || *address == SYSTEM_ACCOUNT_BN256_PAIRING
-    || *address == SYSTEM_ACCOUNT_BLAKE2F
+        || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+        || *address == SYSTEM_ACCOUNT_ECRECOVER
+        || *address == SYSTEM_ACCOUNT_SHA_256
+        || *address == SYSTEM_ACCOUNT_RIPEMD160
+        || *address == SYSTEM_ACCOUNT_DATACOPY
+        || *address == SYSTEM_ACCOUNT_BIGMODEXP
+        || *address == SYSTEM_ACCOUNT_BN256_ADD
+        || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
+        || *address == SYSTEM_ACCOUNT_BN256_PAIRING
+        || *address == SYSTEM_ACCOUNT_BLAKE2F
 }
 
 type PrecompileResult = Capture<(ExitReason, Vec<u8>), Infallible>;
 
 /// Call a precompile function
 #[must_use]
-pub fn call_precompile(address: H160, input: &[u8]) -> Option<PrecompileResult> {
+pub fn call_precompile<'a, B: AccountStorage>(
+    address: H160,
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>,
+) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_SOLANA {
-        return Some(solana(input));
+        return Some(solana(input, state));
+    }
+    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
+        return Some(erc20_wrapper(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input));
-    }
-    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input));
     }
     if address == SYSTEM_ACCOUNT_SHA_256 {
         return Some(sha256(input));
@@ -83,26 +83,24 @@ pub fn call_precompile(address: H160, input: &[u8]) -> Option<PrecompileResult> 
     None
 }
 
+// TODO rewrite after mainnet
+fn solana<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+    use solana_program::pubkey::Pubkey;
+    use solana_program::instruction::Instruction;
+    use solana_program::instruction::AccountMeta;
 
-fn solana(
-    _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
-    // TODO rewrite after mainnet
-    return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new()));
-
-    /*
     debug_print!("solana call");
     debug_print!("input: {}", &hex::encode(&input));
+
+    let backend = state.backend();
 
     let (cmd, input) = input.split_at(1);
     match cmd[0] {
         0 => {
             let (program_id, input) = input.split_at(32);
             let program_id = Pubkey::new(program_id);
-    
             let (acc_length, input) = input.split_at(2);
             let acc_length = acc_length.try_into().ok().map(u16::from_be_bytes).unwrap();
-            
             let mut accounts = Vec::new();
             for i in 0..acc_length {
                 let data = array_ref![input, 35*i as usize, 35];
@@ -110,7 +108,7 @@ fn solana(
                 let pubkey = if translate[0] == 0 {
                     Pubkey::new(pubkey)
                 } else {
-                    match self.account_storage.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {
+                    match backend.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {
                         Some(key) => key,
                         None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
                     }
@@ -122,20 +120,13 @@ fn solana(
                 });
                 debug_print!("Acc: {}", pubkey);
             };
-    
             let (_, input) = input.split_at(35 * acc_length as usize);
             debug_print!("{}", &hex::encode(&input));
 
-            debug_print!("account_infos[");
-            #[allow(unused_variables)]
-            for info in self.account_infos.unwrap() {
-                debug_print!("  {}", info.key);
-            };
-            debug_print!("]");
 
-            let result = self.account_storage.external_call(
+            let result = backend.external_call(
                 &Instruction { program_id, accounts, data: input.to_vec() },
-                self.account_infos.unwrap(),
+                &[],
             );
 
             debug_print!("result: {:?}", result);
@@ -154,7 +145,7 @@ fn solana(
             let base = if tr_base[0] == 0 {
                 Pubkey::new(base)
             } else {
-                match self.account_storage.get_account_solana_address(&H160::from_slice(&base[12..])) {
+                match backend.get_account_solana_address(&H160::from_slice(&base[12..])) {
                     Some(key) => key,
                     None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
                 }
@@ -163,7 +154,7 @@ fn solana(
             let owner = if tr_owner[0] == 0 {
                 Pubkey::new(owner)
             } else {
-                match self.account_storage.get_account_solana_address(&H160::from_slice(&owner[12..])) {
+                match backend.get_account_solana_address(&H160::from_slice(&owner[12..])) {
                     Some(key) => key,
                     None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
                 }
@@ -183,15 +174,120 @@ fn solana(
             Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))
         }
     }
-    */
+}
+
+// ERC20 method ids:
+//--------------------------------------------------
+// totalSupply()                         => 18160ddd
+// balanceOf(address)                    => 70a08231
+// transfer(address,uint256)             => a9059cbb
+// transferFrom(address,address,uint256) => 23b872dd
+// approve(address,uint256)              => 095ea7b3
+// allowance(address,address)            => dd62ed3e
+//--------------------------------------------------
+
+const ERC20_METHOD_TOTAL_SUPPLY_ID: &[u8; 4]  = &[0x18, 0x16, 0x0d, 0xdd];
+const ERC20_METHOD_BALANCE_OF_ID: &[u8; 4]    = &[0x70, 0xa0, 0x82, 0x31];
+const ERC20_METHOD_TRANSFER_ID: &[u8; 4]      = &[0xa9, 0x05, 0x9c, 0xbb];
+const ERC20_METHOD_TRANSFER_FROM_ID: &[u8; 4] = &[0x23, 0xb8, 0x72, 0xdd];
+const ERC20_METHOD_APPROVE_ID: &[u8; 4]       = &[0x09, 0x5e, 0xa7, 0xb3];
+const ERC20_METHOD_ALLOWANCE_ID: &[u8; 4]     = &[0xdd, 0x62, 0xed, 0x3e];
+
+/// Call inner `erc20_wrapper`
+#[must_use]
+pub fn erc20_wrapper<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+    use solana_program::pubkey::Pubkey;
+
+    debug_print!("erc20_wrapper({})", hex::encode(&input));
+
+    let (token_mint, rest) = input.split_at(32);
+    let token_mint = Pubkey::new(token_mint);
+
+    let (method_id, rest) = rest.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap();
+
+    match method_id {
+        ERC20_METHOD_TOTAL_SUPPLY_ID => {
+            debug_print!("erc20_wrapper totalSupply");
+            let supply = state.erc20_total_supply(&token_mint);
+            let mut output = vec![0_u8; 32];
+            supply.into_big_endian_fast(&mut output);
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        }
+        ERC20_METHOD_BALANCE_OF_ID => {
+            debug_print!("erc20_wrapper balanceOf");
+
+            let arguments = array_ref![rest, 0, 32];
+            let (_, address) = array_refs!(arguments, 12, 20);
+
+            let address = H160::from_slice(address);
+
+            let balance = state.erc20_balance_of(&token_mint, address);
+            let mut output = vec![0_u8; 32];
+            balance.into_big_endian_fast(&mut output);
+
+            debug_print!("erc20_wrapper balanceOf result {:?}", output);
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        }
+        ERC20_METHOD_TRANSFER_ID => {
+            debug_print!("erc20_wrapper transfer");
+
+            let arguments = array_ref![rest, 0, 64];
+            let (_, address, value) = array_refs!(arguments, 12, 20, 32);
+
+            let address = H160::from_slice(address);
+            let value = U256::from_big_endian_fast(value);
+
+            let status = state.erc20_transfer(&token_mint, address, value);
+            if !status {
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+            }
+
+            let mut output = vec![0_u8; 32];
+            output[31] = 1; // return true
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        }
+        ERC20_METHOD_TRANSFER_FROM_ID => {
+            debug_print!("erc20_wrapper transferFrom");
+            // let r = erc20::transfer_from(token_mint);
+            let output = [4_u8; 32];
+            Capture::Exit((
+                ExitReason::Succeed(evm::ExitSucceed::Returned),
+                output.to_vec(),
+            ))
+        }
+        ERC20_METHOD_APPROVE_ID => {
+            debug_print!("erc20_wrapper approve");
+            // let r = erc20::approve(token_mint);
+            let output = [5_u8; 32];
+            Capture::Exit((
+                ExitReason::Succeed(evm::ExitSucceed::Returned),
+                output.to_vec(),
+            ))
+        }
+        ERC20_METHOD_ALLOWANCE_ID => {
+            debug_print!("erc20_wrapper allowance");
+            // let r = erc20::allowance(token_mint);
+            let output = [6_u8; 32];
+            Capture::Exit((
+                ExitReason::Succeed(evm::ExitSucceed::Returned),
+                output.to_vec(),
+            ))
+        }
+        _ => {
+            debug_print!("erc20_wrapper UNKNOWN");
+            return Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
 }
 
 
 /// Call inner `ecrecover`
 #[must_use]
-pub fn ecrecover(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn ecrecover(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("ecrecover");
     debug_print!("input: {}", &hex::encode(&input));
 
@@ -210,7 +306,9 @@ pub fn ecrecover(
     let recovery_id = v - 27;
     let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
         Ok(key) => key,
-        Err(_) => return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]))
+        Err(_) => {
+            return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]))
+        }
     };
 
     let mut address = keccak256_digest(&public_key.to_bytes());
@@ -222,9 +320,7 @@ pub fn ecrecover(
 
 /// Call inner `sha256`
 #[must_use]
-pub fn sha256(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {        
+pub fn sha256(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use solana_program::hash::hash as sha256_digest;
     debug_print!("sha256");
 
@@ -232,15 +328,16 @@ pub fn sha256(
 
     debug_print!("{}", &hex::encode(hash.to_bytes()));
 
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), hash.to_bytes().to_vec()))
+    Capture::Exit((
+        ExitReason::Succeed(evm::ExitSucceed::Returned),
+        hash.to_bytes().to_vec(),
+    ))
 }
 
 /// Call inner `ripemd160`
 #[must_use]
-pub fn ripemd160(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
-    use ripemd160::{Ripemd160, Digest};
+pub fn ripemd160(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+    use ripemd160::{Digest, Ripemd160};
     debug_print!("ripemd160");
 
     let mut hasher = Ripemd160::new();
@@ -261,20 +358,19 @@ pub fn ripemd160(
 
 /// Call inner datacopy
 #[must_use]
-pub fn datacopy(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn datacopy(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("datacopy");
     debug_print!("input: {}", &hex::encode(&input));
 
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), input.to_vec()))
+    Capture::Exit((
+        ExitReason::Succeed(evm::ExitSucceed::Returned),
+        input.to_vec(),
+    ))
 }
 
 /// Call inner `big_mod_exp`
 #[must_use]
-pub fn big_mod_exp(
-    _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn big_mod_exp(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -335,7 +431,6 @@ pub fn big_mod_exp(
 #[must_use]
 #[allow(clippy::unused_self)]
 fn get_g1(
-     
     input: &[u8]
 ) -> Option<G1> {
     use tbn::{AffineG1, Fq, Group, GroupError};
@@ -378,13 +473,10 @@ fn get_g1(
     Some(a)
 }*/
 
- 
 /// Call inner `bn256Add`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_add(
-    _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_add(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -439,13 +531,10 @@ pub fn bn256_add(
     return_buf(buf)*/
 }
 
-
 /// Call inner `bn256ScalarMul`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_scalar_mul(
-    _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_scalar_mul(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -504,12 +593,10 @@ pub fn bn256_scalar_mul(
 /// Call inner `bn256Pairing`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_pairing(
-    _input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_pairing(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
-/*
+    /*
     use tbn::{AffineG1, AffineG2, Fq, Fq2, pairing_batch, G1, G2, Gt, Group, GroupError};
     debug_print!("bn256Pairing");
 
@@ -605,9 +692,7 @@ pub fn bn256_pairing(
 /// Call inner `blake2F`
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn blake2_f(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn blake2_f(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     const BLAKE2_F_ARG_LEN: usize = 213;
     debug_print!("blake2F");
 
@@ -662,13 +747,11 @@ pub fn blake2_f(
             g(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
             g(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
             g(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
-    
             g(&mut v, 0, 5, 10, 15, m[s[8]], m[s[9]]);
             g(&mut v, 1, 6, 11, 12, m[s[10]], m[s[11]]);
             g(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
             g(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
         }
-    
         for i in 0..8 {
             h[i] ^= v[i] ^ v[i + 8];
         }
@@ -676,7 +759,7 @@ pub fn blake2_f(
 
     if input.len() != BLAKE2_F_ARG_LEN {
         // return Err(ExitError::Other("input length for Blake2 F precompile should be exactly 213 bytes".into()));
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()))
+        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()));
     }
 
     let mut rounds_arr: [u8; 4] = Default::default();
@@ -716,9 +799,13 @@ pub fn blake2_f(
     t_1_arr.copy_from_slice(t_1_buf);
     let t_1 = u64::from_le_bytes(t_1_arr);
 
-    let f = if input[0] == 1 { true } else if input[0] == 0 { false } else {
+    let f = if input[0] == 1 {
+        true
+    } else if input[0] == 0 {
+        false
+    } else {
         // return Err(ExitError::Other("incorrect final block indicator flag".into()))
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()))
+        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()));
     };
 
     compress(&mut h, m, [t_0, t_1], f, rounds as usize);
@@ -730,63 +817,8 @@ pub fn blake2_f(
 
     debug_print!("{}", &hex::encode(&output_buf));
 
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output_buf.to_vec()))
-}
-
-/// Call inner `erc20_wrapper`
-#[must_use]
-pub fn erc20_wrapper(
-    input: &[u8],
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
-    use crate::{erc20, erc20::Method};
-    debug_print!("erc20_wrapper({})", hex::encode(&input));
-
-    let (_token_mint, rest) = input.split_at(32);
-    let (method_id, _) = rest.split_at(4);
-    // debug_print!("erc20_wrapper token_mint: {}", hex::encode(&token_mint));
-    debug_print!("erc20_wrapper method_id: {:?}", method_id);
-
-    match erc20::method(method_id) {
-        Method::TotalSupply => {
-            debug_print!("erc20_wrapper totalSupply");
-            // let r = erc20::total_supply(token_mint);
-            let output = [1_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::BalanceOf => {
-            debug_print!("erc20_wrapper balanceOf");
-            // let r = erc20::balance_of(token_mint);
-            let output = [2_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::Transfer => {
-            debug_print!("erc20_wrapper transfer");
-            // let r = erc20::transfer(token_mint);
-            let output = [3_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::TransferFrom => {
-            debug_print!("erc20_wrapper transferFrom");
-            // let r = erc20::transfer_from(token_mint);
-            let output = [4_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::Approve => {
-            debug_print!("erc20_wrapper approve");
-            // let r = erc20::approve(token_mint);
-            let output = [5_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::Allowance => {
-            debug_print!("erc20_wrapper allowance");
-            // let r = erc20::allowance(token_mint);
-            let output = [6_u8; 32];
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output.to_vec()))
-        },
-        Method::Unknown => {
-            debug_print!("erc20_wrapper UNKNOWN");
-            let zero = [0_u8; 32]; //how to return false?
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), zero.to_vec()))
-        },
-    }
+    Capture::Exit((
+        ExitReason::Succeed(evm::ExitSucceed::Returned),
+        output_buf.to_vec(),
+    ))
 }

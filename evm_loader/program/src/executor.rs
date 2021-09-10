@@ -303,7 +303,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        let hook_res = call_precompile(code_address, &input);
+        let hook_res = call_precompile(code_address, &input, &mut self.state);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
@@ -360,7 +360,7 @@ pub struct Machine<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
-
+    #[must_use]
     pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
         Self{ executor, runtime: Vec::new() }
@@ -370,6 +370,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
+    #[must_use]
     pub fn restore(storage: &StorageAccount, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
 
@@ -627,6 +628,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    #[must_use]
     pub fn into_state(self) -> ExecutorState<'a, B> {
         self.executor.state
     }

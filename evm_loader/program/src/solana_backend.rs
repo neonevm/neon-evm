@@ -57,6 +57,7 @@ pub trait AccountStorage {
 }
 
 /// Chain ID
+#[must_use]
 pub fn chain_id() -> U256 {
     U256::from(111)
 }

@@ -667,8 +667,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
     Ok(())
 }
 
-fn do_call<'a>(
-    account_storage: &mut ProgramAccountStorage<'a>,
+fn do_call(
+    account_storage: &mut ProgramAccountStorage<'_>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
