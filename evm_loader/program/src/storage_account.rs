@@ -71,7 +71,7 @@ impl<'a> StorageAccount<'a> {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
                 if account.rw_blocked_acc.is_some() {
-                    return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw blocked account {}", account_info.key);
+                    return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw locked account {}", account_info.key);
                 }
             }
         }
@@ -80,26 +80,58 @@ impl<'a> StorageAccount<'a> {
     }
 
     pub fn unblock_accounts_and_destroy(self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+        let is_writable_code_acc = |code_acc: & Pubkey| -> bool {
+            for meta in accounts.iter().filter(|a| a.owner == program_id) {
+                if *meta.key == *code_acc && meta.is_writable {
+                    return true
+                }
+            }
+            return false
+        };
+
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
-            let mut data = account_info.try_borrow_mut_data()?;
-            if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
-                if account_info.is_writable {
-                    if account.rw_blocked_acc.is_some() {
-                        account.rw_blocked_acc = None;
-                    }
-                    else {
-                        return Err!(ProgramError::InvalidAccountData; "trying to execute transaction without rw blocking account {}", account_info.key);
+            let mut is_rw_block: bool = false;
+            let mut is_ro_block: bool = false;
+            {
+                let data = account_info.try_borrow_data()?;
+
+                if let AccountData::Account(account) = AccountData::unpack(&data)? {
+                    // only accounts of the contracts are locked
+                    if account.code_account != Pubkey::new_from_array([0_u8; 32]) {
+                        debug_print!("unlock account {}", account_info.key);
+
+                        if is_writable_code_acc(&account.code_account) {
+                            is_rw_block = true;
+                            debug_print!("found lock rw");
+                        } else {
+                            is_ro_block = true;
+                            debug_print!("found lock ro");
+                        }
                     }
                 }
-                else{
-                    if account.ro_blocked_cnt > 0{
-                        account.ro_blocked_cnt = account.ro_blocked_cnt - 1;
+            }
+
+            if is_rw_block || is_ro_block {
+                let mut data = account_info.try_borrow_mut_data()?;
+                if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
+                    if is_rw_block {
+                        if account.rw_blocked_acc.is_some() {
+                            account.rw_blocked_acc = None;
+                        }
+                        else {
+                            return Err!(ProgramError::InvalidAccountData; "trying to unlock account without rw locking {}", account_info.key);
+                        }
                     }
                     else{
-                        return Err!(ProgramError::InvalidAccountData; "trying to execute transaction without ro blocking account {}", account_info.key);
+                        if account.ro_blocked_cnt > 0{
+                            account.ro_blocked_cnt = account.ro_blocked_cnt - 1;
+                        }
+                        else{
+                            return Err!(ProgramError::InvalidAccountData; "trying to unlock account without ro locking {}", account_info.key);
+                        }
                     }
+                    AccountData::pack(&AccountData::Account(account), &mut data)?;
                 }
-                AccountData::pack(&AccountData::Account(account), &mut data)?;
             }
         }
 
@@ -157,18 +189,18 @@ impl<'a> StorageAccount<'a> {
 
                             if account.ro_blocked_cnt > 0 {
                                 // wait for unlock
-                                return Err!(ProgramError::Custom(0); "read-only blocks found");
+                                return Err!(ProgramError::Custom(0); "read-only locks found");
                             }
                         }
                         else{
                             if account.ro_blocked_cnt == 0 {
-                                return Err!(ProgramError::NotEnoughAccountKeys; "there is no read-only lock");
+                                return Err!(ProgramError::NotEnoughAccountKeys; "there are no read-only locks");
                             }
                         }
                     }
                     else {
                         if account.ro_blocked_cnt == 0 {
-                            return Err!(ProgramError::NotEnoughAccountKeys; "there is no read-only lock");
+                            return Err!(ProgramError::NotEnoughAccountKeys; "there are no read-only locks");
                         }
                     }
                 }
@@ -212,37 +244,39 @@ impl<'a> StorageAccount<'a> {
         };
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
+            let mut to_rw_block: bool = false;
+            let mut to_ro_block: bool = false;
+            {
+                let data = account_info.try_borrow_data()?;
 
-            let data = account_info.try_borrow_data()?;
-            let mut to_rw_block : bool = false;
-            let mut to_ro_block : bool = false;
-
-            if let AccountData::Account(account) = AccountData::unpack(&data)? {
-                // only accounts of the contracts are locked
-                if account.code_account != Pubkey::new_from_array([0_u8; 32]){
-                    // rw lock found
-                    if account.rw_blocked_acc.is_some() {
-                        return Err!(ProgramError::InvalidAccountData; "trying to block rw-blocked account {}", account_info.key);
-                    }
-                    if is_writable_code_acc(&account.code_account){
-                        to_rw_block = true;
-                    }
-                    else{
-                        to_ro_block = true;
+                if let AccountData::Account(account) = AccountData::unpack(&data)? {
+                    // only accounts of the contracts are locked
+                    if account.code_account != Pubkey::new_from_array([0_u8; 32]) {
+                        // rw lock found
+                        if account.rw_blocked_acc.is_some() {
+                            return Err!(ProgramError::InvalidAccountData; "trying to lock rw-locked account {}", account_info.key);
+                        }
+                        if is_writable_code_acc(&account.code_account) {
+                            to_rw_block = true;
+                        } else {
+                            to_ro_block = true;
+                        }
                     }
                 }
             }
-
             // lock is needed
             if to_rw_block || to_ro_block {
+                debug_print!("lock account {}", account_info.key);
                 let mut data = account_info.try_borrow_mut_data()?;
 
                 if let AccountData::Account(mut account) = AccountData::unpack(&data)? {
                     if to_rw_block {
                         account.rw_blocked_acc = Some(*self.info.unsigned_key());
+                        debug_print!("set lock rw");
                     }
                     else {
                         account.ro_blocked_cnt = account.ro_blocked_cnt + 1;
+                        debug_print!("set lock ro");
                     }
                     AccountData::pack(&AccountData::Account(account), &mut data)?;
                 }

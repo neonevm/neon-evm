@@ -33,8 +33,8 @@ class EventTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...") 
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -179,9 +179,9 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_12_cancel(storage))
         return send_transaction(client, trx, self.acc)
 
-    def get_call_parameters(self, input, tx_count_add=0):
+    def get_call_parameters(self, input):
         tx = {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, self.caller)+tx_count_add, 'data': input, 'chainId': 111}
+            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
         return (from_addr, sign, msg)
@@ -402,46 +402,41 @@ class EventTest(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             assert (data[0] == 6)
 
-    def test_caseReadWriteBlocking(self):
+
+    def test_caseReadOlnyBlocking(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1,  msg1) = self.get_call_parameters(input)
-        (from_addr2, sign2,  msg2) = self.get_call_parameters(input, 1)
+        (from_addr2, sign2,  msg2) = self.get_call_parameters(input)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex())
-        storage2 = self.create_storage_account(sign2[:8].hex())
+        storage2 = self.create_storage_account(sign2[1:9].hex())
 
         result = self.call_begin(storage1, 10, msg1, instruction1, writable_code=False)
         result = self.call_begin(storage2, 10, msg2, instruction2, writable_code=False)
         result = self.call_continue(storage1, 10, writable_code=False)
         result = self.call_continue(storage2, 10, writable_code=False)
-        result1 = self.call_continue(storage1, 1000, writable_code=False)["result"]
-        result2 = self.call_continue(storage2, 1000, writable_code=False)["result"]
+        result1 = self.call_continue(storage1, 1000, writable_code=False)
+        result2 = self.call_continue(storage2, 1000, writable_code=False)
 
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
+        for result in ([result1["result"], result2["result"]]):
+            self.assertEqual(result['meta']['err'], None)
+            self.assertEqual(len(result['meta']['innerInstructions']), 1)
+            self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+            self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+            self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+            self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
+            self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
-        # self.assertEqual(result['meta']['err'], None)
-        # self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-        # self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
-        # data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-        # self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
-        # self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        # self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
-        # self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
-
-        # result = self.call_cancel(storage)
-
-        # err = "custom program error: 0x1"
-        # with self.assertRaisesRegex(Exception,err):
-        #     result = self.call_continue(storage, 10)
-        #     print(result)
 
 
     def test_caseSuccessRunOtherTransactionAfterCancel(self):
