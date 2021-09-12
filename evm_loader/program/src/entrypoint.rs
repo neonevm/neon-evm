@@ -5,15 +5,12 @@
 use std::{
     alloc::Layout,
     convert::{TryFrom, TryInto},
-    collections::BTreeMap,
     mem::size_of, 
     ptr::null_mut, 
     usize
 };
 
 use evm::{
-    backend::{Log, Apply},
-    Transfer,
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
@@ -35,7 +32,7 @@ use crate::{
     solana_backend::{AccountStorage},
     solidity_account::SolidityAccount,
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
-    executor_state::{ ExecutorState, ExecutorSubstate },
+    executor_state::{ ExecutorState, ExecutorSubstate, ApplyState },
     storage_account::{ StorageAccount },
     error::EvmLoaderError,
     executor::Machine,
@@ -45,8 +42,8 @@ use crate::{
     token::{token_mint, create_associated_token_account, get_token_account_owner},
 };
 
-type LogApplies = Option<(Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>)>;
-type SuccessExitResults = (ExitReason, u64, Vec<u8>, LogApplies);
+
+type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
 
 const HEAP_LENGTH: usize = 256*1024;
@@ -454,6 +451,8 @@ fn process_instruction<'a>(
                 storage_info,
                 system_info)?;
 
+            debug_print!("payment complete");
+
             do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
             storage.block_accounts(program_id, trx_accounts)
@@ -595,7 +594,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
     let account_data = AccountData::unpack(&data)?;
     match account_data {
-        AccountData::Account(_) | AccountData::Storage(_) => {
+        AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) => {
             return Err!(ProgramError::InvalidAccountData);
         },
         AccountData::Contract(acc) if acc.code_size != 0 => {
@@ -650,8 +649,8 @@ fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> Prog
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs, transfers) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
+            let apply = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some(apply))
         } else {
             (exit_reason, used_gas, result, None)
         }
@@ -701,8 +700,8 @@ fn do_call(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs, transfers) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
+            let apply = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some(apply))
         } else {
             (exit_reason, used_gas, result, None)
         }
@@ -801,8 +800,8 @@ fn do_continue<'a>(
         let used_gas = executor_state.substate().metadata().gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
-            let (applies, logs, transfers) = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some((applies, logs, transfers)))
+            let apply = executor_state.deconstruct();
+            (exit_reason, used_gas, result, Some(apply))
         } else {
             (exit_reason, used_gas, result, None)
         }
@@ -819,9 +818,22 @@ fn applies_and_invokes<'a>(
     call_results: SuccessExitResults
 ) -> ProgramResult {
     let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
-    if let Some((applies, logs, transfers)) = applies_logs_transfers {
+    if let Some(applies_logs_transfers) = applies_logs_transfers {
+        let (
+            applies,
+            logs,
+            transfers,
+            spl_transfers,
+            spl_approves,
+            erc20_approves,
+        ) = applies_logs_transfers;
+
         account_storage.apply_transfers(accounts, transfers)?;
+        account_storage.apply_spl_approves(accounts, spl_approves)?;
+        account_storage.apply_spl_transfers(accounts, spl_transfers)?;
+        account_storage.apply_erc20_approves(accounts, operator, erc20_approves)?;
         account_storage.apply(applies, operator, false)?;
+
         debug_print!("Applies done");
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;

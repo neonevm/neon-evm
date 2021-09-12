@@ -66,7 +66,6 @@ use std::borrow::{Borrow, BorrowMut};
 
 use evm_loader::{
     instruction::EvmInstruction,
-    solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
 };
 use evm::{H160, H256, U256};

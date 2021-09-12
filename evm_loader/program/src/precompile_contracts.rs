@@ -44,13 +44,14 @@ type PrecompileResult = Capture<(ExitReason, Vec<u8>), Infallible>;
 pub fn call_precompile<'a, B: AccountStorage>(
     address: H160,
     input: &[u8],
+    context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_SOLANA {
-        return Some(solana(input, state));
+        return Some(solana_call(input, state));
     }
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input, state));
+        return Some(erc20_wrapper(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input));
@@ -83,8 +84,8 @@ pub fn call_precompile<'a, B: AccountStorage>(
     None
 }
 
-// TODO rewrite after mainnet
-fn solana<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+
+fn solana_call<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use solana_program::pubkey::Pubkey;
     use solana_program::instruction::Instruction;
     use solana_program::instruction::AccountMeta;
@@ -125,8 +126,7 @@ fn solana<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>)
 
 
             let result = backend.external_call(
-                &Instruction { program_id, accounts, data: input.to_vec() },
-                &[],
+                &Instruction { program_id, accounts, data: input.to_vec() }
             );
 
             debug_print!("result: {:?}", result);
@@ -178,24 +178,35 @@ fn solana<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>)
 
 // ERC20 method ids:
 //--------------------------------------------------
+// decimals()                            => 313ce567
 // totalSupply()                         => 18160ddd
 // balanceOf(address)                    => 70a08231
 // transfer(address,uint256)             => a9059cbb
 // transferFrom(address,address,uint256) => 23b872dd
 // approve(address,uint256)              => 095ea7b3
 // allowance(address,address)            => dd62ed3e
+// approveSolana(bytes32,uint64)         => 93e29346
 //--------------------------------------------------
 
-const ERC20_METHOD_TOTAL_SUPPLY_ID: &[u8; 4]  = &[0x18, 0x16, 0x0d, 0xdd];
-const ERC20_METHOD_BALANCE_OF_ID: &[u8; 4]    = &[0x70, 0xa0, 0x82, 0x31];
-const ERC20_METHOD_TRANSFER_ID: &[u8; 4]      = &[0xa9, 0x05, 0x9c, 0xbb];
-const ERC20_METHOD_TRANSFER_FROM_ID: &[u8; 4] = &[0x23, 0xb8, 0x72, 0xdd];
-const ERC20_METHOD_APPROVE_ID: &[u8; 4]       = &[0x09, 0x5e, 0xa7, 0xb3];
-const ERC20_METHOD_ALLOWANCE_ID: &[u8; 4]     = &[0xdd, 0x62, 0xed, 0x3e];
+const ERC20_METHOD_DECIMALS_ID: &[u8; 4]       = &[0x31, 0x3c, 0xe5, 0x67];
+const ERC20_METHOD_TOTAL_SUPPLY_ID: &[u8; 4]   = &[0x18, 0x16, 0x0d, 0xdd];
+const ERC20_METHOD_BALANCE_OF_ID: &[u8; 4]     = &[0x70, 0xa0, 0x82, 0x31];
+const ERC20_METHOD_TRANSFER_ID: &[u8; 4]       = &[0xa9, 0x05, 0x9c, 0xbb];
+const ERC20_METHOD_TRANSFER_FROM_ID: &[u8; 4]  = &[0x23, 0xb8, 0x72, 0xdd];
+const ERC20_METHOD_APPROVE_ID: &[u8; 4]        = &[0x09, 0x5e, 0xa7, 0xb3];
+const ERC20_METHOD_ALLOWANCE_ID: &[u8; 4]      = &[0xdd, 0x62, 0xed, 0x3e];
+const ERC20_METHOD_APPROVE_SOLANA_ID: &[u8; 4] = &[0x93, 0xe2, 0x93, 0x46];
 
 /// Call inner `erc20_wrapper`
 #[must_use]
-pub fn erc20_wrapper<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+#[allow(clippy::too_many_lines)]
+pub fn erc20_wrapper<'a, B: AccountStorage>(
+    input: &[u8],
+    context: &evm::Context,
+    state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
     use solana_program::pubkey::Pubkey;
 
     debug_print!("erc20_wrapper({})", hex::encode(&input));
@@ -204,17 +215,26 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorSt
     let token_mint = Pubkey::new(token_mint);
 
     let (method_id, rest) = rest.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap();
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
 
     match method_id {
-        ERC20_METHOD_TOTAL_SUPPLY_ID => {
-            debug_print!("erc20_wrapper totalSupply");
-            let supply = state.erc20_total_supply(&token_mint);
+        ERC20_METHOD_DECIMALS_ID => {
+            debug_print!("erc20_wrapper decimals");
+            let supply = state.erc20_decimals(token_mint);
+            let supply = U256::from(supply);
             let mut output = vec![0_u8; 32];
             supply.into_big_endian_fast(&mut output);
 
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
-        }
+        },
+        ERC20_METHOD_TOTAL_SUPPLY_ID => {
+            debug_print!("erc20_wrapper totalSupply");
+            let supply = state.erc20_total_supply(token_mint);
+            let mut output = vec![0_u8; 32];
+            supply.into_big_endian_fast(&mut output);
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        },
         ERC20_METHOD_BALANCE_OF_ID => {
             debug_print!("erc20_wrapper balanceOf");
 
@@ -223,14 +243,14 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorSt
 
             let address = H160::from_slice(address);
 
-            let balance = state.erc20_balance_of(&token_mint, address);
+            let balance = state.erc20_balance_of(token_mint, address);
             let mut output = vec![0_u8; 32];
             balance.into_big_endian_fast(&mut output);
 
             debug_print!("erc20_wrapper balanceOf result {:?}", output);
 
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
-        }
+        },
         ERC20_METHOD_TRANSFER_ID => {
             debug_print!("erc20_wrapper transfer");
 
@@ -240,46 +260,89 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorSt
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
 
-            let status = state.erc20_transfer(&token_mint, address, value);
+            let status = state.erc20_transfer(token_mint, context,address, value);
             if !status {
-                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+                let revert_message = b"ERC20 transfer failed".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
             }
 
             let mut output = vec![0_u8; 32];
             output[31] = 1; // return true
 
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
-        }
+        },
         ERC20_METHOD_TRANSFER_FROM_ID => {
             debug_print!("erc20_wrapper transferFrom");
-            // let r = erc20::transfer_from(token_mint);
-            let output = [4_u8; 32];
-            Capture::Exit((
-                ExitReason::Succeed(evm::ExitSucceed::Returned),
-                output.to_vec(),
-            ))
-        }
+
+            let arguments = array_ref![rest, 0, 96];
+            let (_, source, _, target, value) = array_refs!(arguments, 12, 20, 12, 20, 32);
+
+            let source = H160::from_slice(source);
+            let target = H160::from_slice(target);
+            let value = U256::from_big_endian_fast(value);
+
+            let status = state.erc20_transfer_from(token_mint, context,source, target, value);
+            if !status {
+                let revert_message = b"ERC20 transferFrom failed".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
+            let mut output = vec![0_u8; 32];
+            output[31] = 1; // return true
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        },
         ERC20_METHOD_APPROVE_ID => {
             debug_print!("erc20_wrapper approve");
-            // let r = erc20::approve(token_mint);
-            let output = [5_u8; 32];
-            Capture::Exit((
-                ExitReason::Succeed(evm::ExitSucceed::Returned),
-                output.to_vec(),
-            ))
-        }
+
+            let arguments = array_ref![rest, 0, 64];
+            let (_, spender, value) = array_refs!(arguments, 12, 20, 32);
+
+            let spender = H160::from_slice(spender);
+            let value = U256::from_big_endian_fast(value);
+
+            state.erc20_approve(token_mint, context, spender, value);
+
+            let mut output = vec![0_u8; 32];
+            output[31] = 1; // return true
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        },
         ERC20_METHOD_ALLOWANCE_ID => {
             debug_print!("erc20_wrapper allowance");
-            // let r = erc20::allowance(token_mint);
-            let output = [6_u8; 32];
-            Capture::Exit((
-                ExitReason::Succeed(evm::ExitSucceed::Returned),
-                output.to_vec(),
-            ))
-        }
+
+            let arguments = array_ref![rest, 0, 64];
+            let (_, owner, _, spender) = array_refs!(arguments, 12, 20, 12, 20);
+
+            let owner = H160::from_slice(owner);
+            let spender = H160::from_slice(spender);
+
+            let allowance = state.erc20_allowance(token_mint, owner, spender);
+
+            let mut output = vec![0_u8; 32];
+            allowance.into_big_endian_fast(&mut output);
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        },
+        ERC20_METHOD_APPROVE_SOLANA_ID => {
+            debug_print!("erc20_wrapper approve solana");
+
+            let arguments = array_ref![rest, 0, 64];
+            let (spender, _, value) = array_refs!(arguments, 32, 24, 8);
+
+            let spender = Pubkey::new_from_array(*spender);
+            let value = u64::from_be_bytes(*value);
+
+            state.erc20_approve_solana(token_mint, context, spender, value);
+
+            let mut output = vec![0_u8; 32];
+            output[31] = 1; // return true
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        },
         _ => {
             debug_print!("erc20_wrapper UNKNOWN");
-            return Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
         }
     }
 }

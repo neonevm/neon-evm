@@ -7,6 +7,7 @@ use crate::{
         make_solana_program_address,
         EmulatorAccountStorage,
         AccountJSON,
+        TokenAccountJSON,
     },
 };
 
@@ -121,6 +122,7 @@ impl Debug for Config {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, value: Option<U256>) -> CommandResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -188,8 +190,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let (applies, logs, _transfer) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)), used_gas)
+            let apply = executor_state.deconstruct();
+            (exit_reason, result, Some(apply), used_gas)
         } else {
             (exit_reason, result, None, used_gas)
         }
@@ -198,9 +200,12 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs) = applies_logs.unwrap();
+            let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
     
             storage.apply(applies);
+            storage.apply_spl_approves(spl_approves);
+            storage.apply_spl_transfers(spl_transfers);
+            storage.apply_erc20_approves(erc20_approves);
 
             debug!("Applies done");
             "succeed".to_string()
@@ -222,14 +227,22 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
     let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
         .borrow()
-        .iter()
+        .values()
         .cloned()
         .map(SolanaAccountJSON::from)
+        .collect();
+
+    let token_accounts: Vec<TokenAccountJSON> = storage.token_accounts
+        .borrow()
+        .values()
+        .cloned()
+        .map(TokenAccountJSON::from)
         .collect();
 
     let js = json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
+        "token_accounts": token_accounts,
         "result": &hex::encode(&result),
         "exit_status": status,
         "used_gas": used_gas,

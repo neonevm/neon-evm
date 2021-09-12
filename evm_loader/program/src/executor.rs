@@ -303,7 +303,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        let hook_res = call_precompile(code_address, &input, &mut self.state);
+        let hook_res = call_precompile(code_address, &input, &context, &mut self.state);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
@@ -584,17 +584,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+        let (exited_runtime, create_reason) = match self.runtime.pop() {
+            Some((runtime, reason)) => (runtime, reason),
+            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
+        };
+
         match reason {
             ExitReason::Succeed(_) => Ok(()),
             ExitReason::Revert(_) => self.executor.state.exit_revert(),
             ExitReason::Error(_) | ExitReason::Fatal(_) => self.executor.state.exit_discard(),
             ExitReason::StepLimitReached => unreachable!()
-        }.map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-
-        let (exited_runtime, create_reason) = match self.runtime.pop() {
-            Some((runtime, reason)) => (runtime, reason),
-            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
-        };
+        }.map_err(|e| (exited_runtime.machine().return_value(), ExitReason::from(e)))?;
 
         match create_reason {
             CreateReason::Call => self.apply_exit_call(&exited_runtime, reason),

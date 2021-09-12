@@ -14,6 +14,8 @@ use crate::utils::{keccak256_h256};
 use crate::token;
 use crate::solana_backend::AccountStorage;
 use solana_program::pubkey::Pubkey;
+use spl_associated_token_account::get_associated_token_address;
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -104,6 +106,32 @@ impl ExecutorMetadata {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SplTransfer {
+    pub source: H160,
+    pub target: H160,
+    pub mint: Pubkey,
+    pub source_token: Pubkey,
+    pub target_token: Pubkey,
+    pub value: u64
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SplApprove {
+    pub owner: H160,
+    pub spender: Pubkey,
+    pub mint: Pubkey,
+    pub value: u64
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ERC20Approve {
+    pub owner: H160,
+    pub spender: H160,
+    pub mint: Pubkey,
+    pub value: U256
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate {
     metadata: ExecutorMetadata,
@@ -112,8 +140,14 @@ pub struct ExecutorSubstate {
     transfers: Vec<Transfer>,
     accounts: BTreeMap<H160, ExecutorAccount>,
     storages: BTreeMap<(H160, U256), U256>,
+    spl_balances: BTreeMap<Pubkey, u64>,
+    spl_transfers: Vec<SplTransfer>,
+    spl_approves: Vec<SplApprove>,
+    erc20_allowances: BTreeMap<(H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
 }
+
+pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
 
 impl ExecutorSubstate {
     #[allow(clippy::missing_const_for_fn)]
@@ -126,6 +160,10 @@ impl ExecutorSubstate {
             transfers: Vec::new(),
             accounts: BTreeMap::new(),
             storages: BTreeMap::new(),
+            spl_balances: BTreeMap::new(),
+            spl_transfers: Vec::new(),
+            spl_approves: Vec::new(),
+            erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
         }
     }
@@ -142,11 +180,10 @@ impl ExecutorSubstate {
     /// Deconstruct the executor, return state to be applied. Panic if the
     /// executor is not in the top-level substate.
     #[must_use]
-    #[allow(clippy::type_complexity)]
     pub fn deconstruct<B: AccountStorage>(
         mut self,
         backend: &B,
-    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>) {
+    ) -> ApplyState {
         assert!(self.parent.is_none());
 
         let mut applies = Vec::<Apply<BTreeMap<U256, U256>>>::new();
@@ -199,7 +236,13 @@ impl ExecutorSubstate {
             applies.push(Apply::Delete { address });
         }
 
-        (applies, self.logs, self.transfers)
+        let mut erc20_approves = Vec::with_capacity(self.erc20_allowances.len());
+        for ((owner, spender, mint), value) in self.erc20_allowances {
+            let approve = ERC20Approve { owner, spender, mint, value };
+            erc20_approves.push(approve);
+        }
+
+        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
@@ -210,6 +253,10 @@ impl ExecutorSubstate {
             transfers: Vec::new(),
             accounts: BTreeMap::new(),
             storages: BTreeMap::new(),
+            spl_balances: BTreeMap::new(),
+            spl_transfers: Vec::new(),
+            spl_approves: Vec::new(),
+            erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
         };
         mem::swap(&mut entering, self);
@@ -224,6 +271,12 @@ impl ExecutorSubstate {
         self.metadata.swallow_commit(exited.metadata)?;
         self.logs.append(&mut exited.logs);
         self.transfers.append(&mut exited.transfers);
+
+        self.spl_balances.append(&mut exited.spl_balances);
+        self.spl_transfers.append(&mut exited.spl_transfers);
+        self.spl_approves.append(&mut exited.spl_approves);
+
+        self.erc20_allowances.append(&mut exited.erc20_allowances);
 
         let mut resets = BTreeSet::new();
         for (address, account) in &exited.accounts {
@@ -465,6 +518,89 @@ impl ExecutorSubstate {
     pub fn touch<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let _unused = self.account_mut(address, backend);
     }
+
+    fn known_spl_balance(&self, address: &Pubkey) -> Option<&u64> {
+        match self.spl_balances.get(address) {
+            Some(balance) => Some(balance),
+            None => self.parent.as_ref().and_then(|parent| parent.known_spl_balance(address))
+        }
+    }
+
+    #[must_use]
+    pub fn spl_balance<B: AccountStorage>(&self, address: &Pubkey, backend: &B) -> u64 {
+        self.known_spl_balance(address)
+            .copied()
+            .unwrap_or_else(|| backend.get_spl_token_balance(address))
+    }
+
+    #[must_use]
+    fn spl_balance_mut<B: AccountStorage>(&mut self, address: &Pubkey, backend: &B) -> &mut u64 {
+        #[allow(clippy::map_entry)]
+        if !self.spl_balances.contains_key(address) {
+            let balance = self.spl_balance(address, backend);
+            self.spl_balances.insert(*address, balance);
+        }
+
+        self.spl_balances
+            .get_mut(address)
+            .expect("New balance was just inserted")
+    }
+
+    fn spl_transfer<B: AccountStorage>(&mut self, transfer: SplTransfer, backend: &B) -> Result<(), ExitError> {
+        {
+            let source_balance = self.spl_balance_mut(&transfer.source_token, backend);
+            if *source_balance < transfer.value {
+                return Err(ExitError::OutOfFund);
+            }
+
+            *source_balance -= transfer.value;
+        }
+        {
+            let target_balance = self.spl_balance_mut(&transfer.target_token, backend);
+            *target_balance += transfer.value;
+        }
+
+        self.spl_transfers.push(transfer);
+
+        Ok(())
+    }
+
+    fn spl_approve(&mut self, approve: SplApprove) {
+        self.spl_approves.push(approve);
+    }
+
+    fn known_erc20_allowance(&self, owner: H160, spender: H160, mint: Pubkey) -> Option<&U256> {
+        match self.erc20_allowances.get(&(owner, spender, mint)) {
+            Some(allowance) => Some(allowance),
+            None => self.parent.as_ref().and_then(|parent| parent.known_erc20_allowance(owner, spender, mint))
+        }
+    }
+
+    #[must_use]
+    pub fn erc20_allowance<B: AccountStorage>(&self, owner: H160, spender: H160, mint: Pubkey, backend: &B) -> U256 {
+        self.known_erc20_allowance(owner, spender, mint)
+            .copied()
+            .unwrap_or_else(|| backend.get_erc20_allowance(&owner, &spender, &mint))
+    }
+
+    #[must_use]
+    pub fn erc20_allowance_mut<B: AccountStorage>(&mut self, owner: H160, spender: H160, mint: Pubkey, backend: &B) -> &mut U256 {
+        let key = (owner, spender, mint);
+
+        #[allow(clippy::map_entry)]
+        if !self.erc20_allowances.contains_key(&key) {
+            let allowance = self.erc20_allowance(owner, spender, mint, backend);
+            self.erc20_allowances.insert(key, allowance);
+        }
+
+        self.erc20_allowances
+            .get_mut(&key)
+            .expect("New allowance was just inserted")
+    }
+
+    fn erc20_approve(&mut self, approve: &ERC20Approve) {
+        self.erc20_allowances.insert((approve.owner, approve.spender, approve.mint), approve.value);
+    }
 }
 
 pub struct ExecutorState<'a, B: AccountStorage> {
@@ -669,39 +805,141 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn erc20_total_supply(&self, _mint: &Pubkey) -> U256
+    pub fn erc20_decimals(&self, mint: Pubkey) -> u8
     {
-        U256::zero()
+        self.backend.get_spl_token_decimals(&mint)
     }
 
     #[must_use]
-    pub fn erc20_balance_of(&self, _mint: &Pubkey, _address: H160) -> U256
+    pub fn erc20_total_supply(&self, mint: Pubkey) -> U256
     {
-        U256::from(42)
+        let supply = self.backend.get_spl_token_supply(&mint);
+        U256::from(supply)
     }
 
     #[must_use]
-    pub fn erc20_transfer(&mut self, _mint: &Pubkey, _to: H160, _value: U256) -> bool
+    pub fn erc20_balance_of(&self, mint: Pubkey, address: H160) -> U256
     {
-        false
+        let solana_address = self.backend.get_account_solana_address(&address).unwrap();
+        let token_account = get_associated_token_address(&solana_address, &mint);
+
+        let balance = self.substate.spl_balance(&token_account, self.backend);
+        U256::from(balance)
+    }
+
+    fn erc20_emit_transfer_event(&mut self, contract: H160, source: H160, target: H160, value: u64) {
+        // event Transfer(address indexed from, address indexed to, uint256 value);
+
+        let topics = vec![
+            H256::from_str("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").unwrap(),
+            H256::from(source),
+            H256::from(target)
+        ];
+
+        let mut data = vec![0_u8; 32];
+        U256::from(value).into_big_endian_fast(&mut data);
+
+        self.log(contract, topics, data);
     }
 
     #[must_use]
-    pub fn erc20_transfer_from(&mut self, _mint: &Pubkey, _from: H160, _to: H160, _value: U256) -> bool
+    fn erc20_transfer_impl(&mut self, mint: Pubkey, contract: H160, source: H160, target: H160, value: U256) -> bool
     {
-        false
+        if value > U256::from(u64::MAX) {
+            return false;
+        }
+        let value = value.as_u64();
+
+        let source_solana = self.backend.get_account_solana_address(&source).unwrap();
+        let source_token = get_associated_token_address(&source_solana, &mint);
+
+        let target_solana = self.backend.get_account_solana_address(&target).unwrap();
+        let target_token = get_associated_token_address(&target_solana, &mint);
+
+        let transfer = SplTransfer { source, target, mint, source_token, target_token, value };
+        if self.substate.spl_transfer(transfer, self.backend).is_err() {
+            return false;
+        }
+
+        self.erc20_emit_transfer_event(contract, source, target, value);
+
+        true
     }
 
     #[must_use]
-    pub fn erc20_approve(&mut self, _mint: &Pubkey, _spender: H160, _value: U256) -> bool
+    pub fn erc20_transfer(&mut self, mint: Pubkey, context: &evm::Context, target: H160, value: U256) -> bool
     {
-        false
+        self.erc20_transfer_impl(mint, context.address, context.caller, target, value)
     }
 
     #[must_use]
-    pub fn erc20_allowance(&mut self, _mint: &Pubkey, _owner: H160, _spender: H160) -> U256
+    pub fn erc20_transfer_from(&mut self, mint: Pubkey, context: &evm::Context, source: H160, target: H160, value: U256) -> bool
     {
-        U256::zero()
+        {
+            let allowance = self.substate.erc20_allowance_mut(source, context.caller, mint, self.backend);
+            if *allowance < value {
+                return false;
+            }
+            *allowance -= value;
+        }
+
+        self.erc20_transfer_impl(mint, context.address, source, target, value)
+    }
+
+    fn erc20_emit_approval_event(&mut self, contract: H160, owner: H160, spender: H160, value: U256) {
+        // event Approval(address indexed owner, address indexed spender, uint256 value);
+
+        let topics = vec![
+            H256::from_str("8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925").unwrap(),
+            H256::from(owner),
+            H256::from(spender)
+        ];
+
+        let mut data = vec![0_u8; 32];
+        value.into_big_endian_fast(&mut data);
+
+        self.log(contract, topics, data);
+    }
+
+    pub fn erc20_approve(&mut self, mint: Pubkey, context: &evm::Context, spender: H160, value: U256)
+    {
+        let owner = context.caller;
+
+        let approve = ERC20Approve { owner, spender, mint, value };
+        self.substate.erc20_approve(&approve);
+
+        self.erc20_emit_approval_event(context.address, owner, spender, value);
+    }
+
+    #[must_use]
+    pub fn erc20_allowance(&mut self, mint: Pubkey, owner: H160, spender: H160) -> U256
+    {
+        self.substate.erc20_allowance(owner, spender, mint, self.backend)
+    }
+
+    fn erc20_emit_approval_solana_event(&mut self, contract: H160, owner: H160, spender: Pubkey, value: u64) {
+        // event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 value);
+
+        let topics = vec![
+            H256::from_str("f2d0a01e4c49f3439199c8f8950e366e85c4d1bd845552f6da1009b3bb2c1a70").unwrap(),
+            H256::from(owner),
+            H256::from(spender.to_bytes())
+        ];
+
+        let mut data = vec![0_u8; 32];
+        U256::from(value).into_big_endian_fast(&mut data);
+
+        self.log(contract, topics, data);
+    }
+
+    pub fn erc20_approve_solana(&mut self, mint: Pubkey, context: &evm::Context, spender: Pubkey, value: u64)
+    {
+        let owner = context.caller;
+
+        let approve = SplApprove { owner, spender, mint, value };
+        self.substate.spl_approve(approve);
+
+        self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
 
@@ -720,10 +958,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    #[allow(clippy::type_complexity)]
     pub fn deconstruct(
         self,
-    ) -> (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>) {
+    ) -> ApplyState {
         self.substate.deconstruct(self.backend)
     }
 }

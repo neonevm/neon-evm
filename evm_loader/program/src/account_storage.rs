@@ -20,7 +20,13 @@ use solana_program::{
 };
 use std::{
     cell::RefCell,
+    collections::BTreeMap
 };
+use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
+use solana_program::system_instruction::create_account;
+use solana_program::rent::Rent;
+use crate::account_data::ERC20Allowance;
+use spl_associated_token_account::get_associated_token_address;
 
 /// Sender
 pub enum Sender {
@@ -39,11 +45,13 @@ struct AccountMeta<'a> {
 
 /// `AccountStorage` for solana program realization
 pub struct ProgramAccountStorage<'a> {
+    solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     accounts: Vec<SolidityAccount<'a>>,
     aliases: RefCell<Vec<(H160, usize)>>,
     account_metas: Vec<AccountMeta<'a>>,
     contract_id: H160,
     sender: Sender,
+    program_id: Pubkey
 }
 
 
@@ -66,6 +74,11 @@ impl<'a> ProgramAccountStorage<'a> {
     #[allow(clippy::too_many_lines)]
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
+
+        let mut solana_accounts = BTreeMap::new();
+        for info in account_infos {
+            solana_accounts.insert(*info.key, info);
+        }
 
         let account_info_iter = &mut account_infos.iter();
 
@@ -179,11 +192,13 @@ impl<'a> ProgramAccountStorage<'a> {
         aliases.sort_by_key(|v| v.0);
 
         Ok(Self {
+            solana_accounts,
             accounts,
             aliases: RefCell::new(aliases),
             account_metas,
             contract_id,
-            sender
+            sender,
+            program_id: *program_id
         })
     }
 
@@ -308,7 +323,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    /// Apply token transfers
+    /// Apply value token transfers
     /// 
     /// # Errors
     ///
@@ -340,16 +355,149 @@ impl<'a> ProgramAccountStorage<'a> {
 
         Ok(())
     }
-}
 
-impl<'a> AccountStorage for ProgramAccountStorage<'a> {    
-    fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
-    where F: FnOnce(&SolidityAccount) -> U,
-          D: FnOnce() -> U
-    {
-        self.get_account(address).map_or_else(d, f)
+    /// Apply spl token transfers
+    ///
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
+    /// or `account.update` errors
+    pub fn apply_spl_transfers(&mut self, accounts: &[AccountInfo], transfers: Vec<SplTransfer>) -> Result<(), ProgramError> {
+        debug_print!("apply_spl_transfers {:?}", transfers);
+
+        for transfer in transfers {
+            let source = self.get_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
+
+            let instruction = spl_token::instruction::transfer(
+                &spl_token::id(),
+                &transfer.source_token,
+                &transfer.target_token,
+                &source.get_solana_address(),
+                &[],
+                transfer.value
+            )?;
+
+            let (ether, nonce) = source.get_seeds();
+            let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+            invoke_signed(&instruction, accounts, &[program_seeds])?;
+        }
+
+        debug_print!("apply_spl_transfers done");
+
+        Ok(())
     }
 
+    /// Apply spl token approves
+    ///
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
+    /// or `account.update` errors
+    pub fn apply_spl_approves(&mut self, accounts: &[AccountInfo], approves: Vec<SplApprove>) -> Result<(), ProgramError> {
+        debug_print!("apply_spl_approves {:?}", approves);
+
+        for approve in approves {
+            let source = self.get_account(&approve.owner).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
+            let source_token = get_associated_token_address(&source.get_solana_address(), &approve.mint);
+
+            let instruction = spl_token::instruction::approve(
+                &spl_token::id(),
+                &source_token,
+                &approve.spender,
+                &source.get_solana_address(),
+                &[],
+                approve.value
+            )?;
+
+            let (ether, nonce) = source.get_seeds();
+            let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+            invoke_signed(&instruction, accounts, &[program_seeds])?;
+        }
+
+        debug_print!("apply_spl_approves done");
+
+        Ok(())
+    }
+
+    /// Apply ERC20 approves
+    ///
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
+    /// or `account.update` errors
+    pub fn apply_erc20_approves(&mut self, accounts: &[AccountInfo], operator: Option<&AccountInfo>, approves: Vec<ERC20Approve>) -> ProgramResult {
+        debug_print!("apply_erc20_approves {:?}", approves);
+
+        for approve in approves {
+            let data = AccountData::ERC20Allowance(ERC20Allowance{
+                owner: approve.owner,
+                spender: approve.spender,
+                mint: approve.mint,
+                value: approve.value
+            });
+
+            let seeds: &[&[u8]] = &[
+                &[ACCOUNT_SEED_VERSION],
+                b"ERC20Allowance",
+                &approve.mint.to_bytes(),
+                approve.owner.as_bytes(),
+                approve.spender.as_bytes()
+            ];
+            let (account_address, bump_seed) = Pubkey::find_program_address(seeds, self.program_id());
+
+            let bump_seed = &[bump_seed];
+            let mut seeds = seeds.to_vec();
+            seeds.push(bump_seed);
+
+            let account = self.solana_accounts[&account_address];
+            if account.data_is_empty() {
+                let operator = match operator {
+                    Some(operator) => operator.key,
+                    None => return Err!(ProgramError::NotEnoughAccountKeys)
+                };
+
+                let rent = Rent::get()?;
+                let balance = rent.minimum_balance(data.size());
+
+                let instruction = create_account(
+                    operator,
+                    account.key,
+                    balance,
+                    data.size() as u64,
+                    self.program_id()
+                );
+                invoke_signed(&instruction, accounts, &[&seeds])?;
+            }
+
+            data.pack(&mut account.try_borrow_mut_data()?)?;
+        }
+
+        debug_print!("apply_erc20_approves done");
+
+        Ok(())
+    }
+}
+
+impl<'a> AccountStorage for ProgramAccountStorage<'a> {
+    fn apply_to_account<U, D, F>(&self, address: &H160, _d: D, f: F) -> U
+        where F: FnOnce(&SolidityAccount) -> U,
+              D: FnOnce() -> U
+    {
+        f(self.get_account(address).unwrap())
+    }
+
+    fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
+        where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+              D: FnOnce() -> U
+    {
+        let account_info = self.solana_accounts[address];
+        f(&account_info.data.borrow(), account_info.owner)
+    }
+
+    fn program_id(&self) -> &Pubkey { &self.program_id }
     fn contract(&self) -> H160 { self.contract_id }
     fn origin(&self) -> H160 {
         match self.sender {
@@ -367,20 +515,30 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         clock.unix_timestamp.into()
     }
 
+    fn exists(&self, address: &H160) -> bool {
+        self.find_account(address).is_some()
+    }
+
     fn external_call(
         &self,
-        instruction: &Instruction,
-        account_infos: &[AccountInfo]
+        instruction: &Instruction
     ) -> ProgramResult {
         let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
         let contract_seeds = [&[ACCOUNT_SEED_VERSION], contract_eth.as_bytes(), &[contract_nonce]];
+
+        let mut account_infos: Vec<AccountInfo> = vec![
+            self.solana_accounts[&instruction.program_id].clone()
+        ];
+        for meta in &instruction.accounts {
+            account_infos.push(self.solana_accounts[&meta.pubkey].clone());
+        }
 
         match self.seeds(&self.origin()) {
             Some((sender_eth, sender_nonce)) => {
                 let sender_seeds = [&[ACCOUNT_SEED_VERSION], sender_eth.as_bytes(), &[sender_nonce]];
                 invoke_signed(
                     instruction,
-                    account_infos,
+                    &account_infos,
                     &[&sender_seeds[..], &contract_seeds[..]]
                 )
                 // Todo: neon-evm does not return an external call error.
@@ -391,7 +549,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             None => {
                 invoke_signed(
                     instruction,
-                    account_infos,
+                    &account_infos,
                     &[&contract_seeds[..]]
                 )
             }
