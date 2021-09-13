@@ -60,6 +60,10 @@ pub fn create_associated_token_account(
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
+    if account.data_len() == 0 {
+        return Ok(0_u64);
+    }
+
     if *account.owner != spl_token::id() {
         return Err!(ProgramError::IncorrectProgramId; "*account.owner<{:?}> != spl_token::id()<{:?}>", *account.owner,  spl_token::id());
     }
@@ -83,6 +87,34 @@ pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramE
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
 
     Ok(data.owner)
+}
+
+/// Extract a token mint data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_mint_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Mint, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Mint::unpack(data)
+}
+
+/// Extract a token account data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_account_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Account, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Account::unpack(data)
 }
 
 

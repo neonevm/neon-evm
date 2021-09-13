@@ -189,6 +189,37 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
+    def sol_instr_14_partial_call_or_continue(self, storage_account, step_count, holder, contract_sol, code_sol):
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0E") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            keys=[
+                AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
+
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator ETH address:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User ETH address:
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+            ])
+
     def sol_instr_10_continue(self, storage_account, step_count, contract_sol, code_sol):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
@@ -217,7 +248,6 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-
     def create_storage_account(self, seed):
         storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
         print("Storage", storage)
@@ -233,7 +263,7 @@ class DeployTest(unittest.TestCase):
 
         return storage
 
-    def call_partial_signed(self, holder, contract_sol, code_sol):
+    def call_partial_signed_and_continues(self, holder, contract_sol, code_sol):
         storage = self.create_storage_account("0123456789")
 
         print("Begin")
@@ -258,11 +288,39 @@ class DeployTest(unittest.TestCase):
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
 
-    def test_executeTrxFromAccountDataIterative(self):
+    def call_instr_14_several_times(self, holder, contract_sol, code_sol):
+        storage = self.create_storage_account("0123456789")
+
+        while (True):
+            print("Continue")
+            trx = Transaction()
+            trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
+            print(trx.instructions[-1].keys)
+            result = send_transaction(client, trx, self.acc)["result"]
+
+            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if (data[0] == 6):
+                    # Check if storage balace were filled to rent exempt
+                    self.assertEqual(
+                        getBalance(storage),
+                        client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
+                    return result
+
+    # @unittest.skip("a.i.")
+    def test_01_executeTrxFromAccountDataIterative(self):
         (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
 
-        result = self.call_partial_signed(holder, contract_sol, code_sol)
+        result = self.call_partial_signed_and_continues(holder, contract_sol, code_sol)
         print("result", result)
+
+    # @unittest.skip("a.i.")
+    def test_02_executeTrxFromAccountDataIterativeOrContinue(self):
+        (holder, contract_sol, code_sol) = self.executeTrxFromAccountData()
+
+        result = self.call_instr_14_several_times(holder, contract_sol, code_sol)
+        print("result", result)
+
 
 if __name__ == '__main__':
     unittest.main()
