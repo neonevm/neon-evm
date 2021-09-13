@@ -1,6 +1,6 @@
 //! Structures stored in account data
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use evm::H160;
+use evm::{H160, U256};
 use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -60,6 +60,19 @@ pub struct Storage {
     pub evm_data_size: usize
 }
 
+/// Ethereum ERC20 allowance data account
+#[derive(Debug,Clone)]
+pub struct ERC20Allowance {
+    /// Token owner
+    pub owner: H160,
+    /// Token spender
+    pub spender: H160,
+    /// Token mint
+    pub mint: Pubkey,
+    /// Amount
+    pub value: U256
+}
+
 /// Structured data stored in account data
 #[derive(Debug,Clone)]
 pub enum AccountData {
@@ -69,6 +82,8 @@ pub enum AccountData {
     Contract(Contract),
     /// Storage data
     Storage(Storage),
+    /// ERC20 allowance data
+    ERC20Allowance(ERC20Allowance),
     /// Empty account data
     Empty
 }
@@ -78,6 +93,7 @@ impl AccountData {
     const ACCOUNT_TAG: u8 = 1;
     const CONTRACT_TAG: u8 = 2;
     const STORAGE_TAG: u8 = 3;
+    const ERC20_ALLOWANCE_TAG: u8 = 4;
 
     /// Unpack `AccountData` from Solana's account data
     /// ```
@@ -100,6 +116,7 @@ impl AccountData {
             Self::ACCOUNT_TAG => Self::Account( Account::unpack(rest) ),
             Self::CONTRACT_TAG => Self::Contract( Contract::unpack(rest) ),
             Self::STORAGE_TAG => Self::Storage( Storage::unpack(rest) ),
+            Self::ERC20_ALLOWANCE_TAG => Self::ERC20Allowance( ERC20Allowance::unpack(rest) ),
 
             _ => return Err!(ProgramError::InvalidAccountData; "tag={:?}", tag),
         })
@@ -146,6 +163,12 @@ impl AccountData {
                 dst[0] = Self::STORAGE_TAG;
                 Storage::pack(acc, &mut dst[1..])
             },
+            Self::ERC20Allowance(acc) => {
+                if dst[0] != Self::ERC20_ALLOWANCE_TAG && dst[0] != Self::EMPTY_TAG { return Err!(ProgramError::InvalidAccountData; "dst[0]={:?}", dst[0]); }
+                if dst.len() < self.size() { return Err!(ProgramError::AccountDataTooSmall; "dst.len()={:?} < self.size()={:?}", dst.len(), self.size()); }
+                dst[0] = Self::ERC20_ALLOWANCE_TAG;
+                ERC20Allowance::pack(acc, &mut dst[1..])
+            },
         })
     }
 
@@ -156,6 +179,7 @@ impl AccountData {
             Self::Account(_acc) => Account::size() + 1,
             Self::Contract(_acc) => Contract::size() + 1,
             Self::Storage(_acc) => Storage::size() + 1,
+            Self::ERC20Allowance(_acc) => ERC20Allowance::size() + 1,
             Self::Empty => 1,
         }
     }
@@ -229,6 +253,30 @@ impl AccountData {
         match self {
             Self::Storage(ref mut acc) => Ok(acc),
             _ => Err!(ProgramError::InvalidAccountData),
+        }
+    }
+
+    /// Get `ERC20Allowance` struct  reference from `AccountData` if it is stored in
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
+    pub const fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
+        match self {
+            Self::ERC20Allowance(ref acc) => Ok(acc),
+            _ => Err(ProgramError::InvalidAccountData),
+        }
+    }
+
+    /// Get mutable `ERC20Allowance` struct  reference from `AccountData` if it is stored in
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
+    pub fn get_mut_erc20_allowance(&mut self) -> Result<&mut ERC20Allowance, ProgramError>  {
+        match self {
+            Self::ERC20Allowance(ref mut acc) => Ok(acc),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 }
@@ -365,3 +413,44 @@ impl Storage {
         Self::SIZE
     }
 }
+
+impl ERC20Allowance {
+    /// Allowance struct serialized size
+    const SIZE: usize = 20+20+32+32;
+
+    /// Deserialize `ERC20Allowance` struct from input data
+    #[must_use]
+    pub fn unpack(src: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
+        let data = array_ref![src, 0, ERC20Allowance::SIZE];
+        let (owner, spender, mint, value) = array_refs![data, 20, 20, 32, 32];
+
+        Self {
+            owner: H160::from(*owner),
+            spender: H160::from(*spender),
+            mint: Pubkey::new_from_array(*mint),
+            value: U256::from_little_endian(value)
+        }
+    }
+
+    /// Serialize `ERC20Allowance` struct into given destination
+    pub fn pack(&self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
+        let data = array_mut_ref![dst, 0, ERC20Allowance::SIZE];
+        let (owner, spender, mint, value) = mut_array_refs![data, 20, 20, 32, 32];
+
+        *owner = self.owner.to_fixed_bytes();
+        *spender = self.spender.to_fixed_bytes();
+        mint.copy_from_slice(self.mint.as_ref());
+        self.value.to_little_endian(value);
+
+        Self::SIZE
+    }
+
+    /// Get `Storage` struct size
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
+    }
+}
+
