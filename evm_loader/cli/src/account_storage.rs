@@ -238,24 +238,25 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
 
                     if let Some(acc) = accounts.get_mut(&address) {
+
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
+                        match account_data {
+                            AccountData::Account(_) => {
+                                if acc.code_account.is_some() {
+                                    let mut storage_iter = storage.into_iter().peekable();
+                                    let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
-                        let mut storage_iter = storage.into_iter().peekable();
-                        let exist_items: bool = matches!(storage_iter.peek(), Some(_));
-
-                        if reset_storage || exist_items {
-                            match account_data {
-                                AccountData::Account(_) => {
-                                    if acc.code_account.is_some() {
+                                    if reset_storage || exist_items {
                                         *acc.writable.borrow_mut() = true;
                                     }
-                                    else{
-                                        eprintln!("Changes in the storage of non-existent account were found {}", &address.to_string());
-                                    }
-                                },
-                                _ => {eprintln!("Changes in the storage of incorrect account were found {}", &address.to_string());},
-                            };
-                        }
+                                }
+                                else{
+                                    *acc.writable.borrow_mut() = true;
+                                }
+                            },
+                            _ => {eprintln!("Changes of incorrect account were found {}", &address.to_string());},
+                        };
+
                         *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
 
                     }
