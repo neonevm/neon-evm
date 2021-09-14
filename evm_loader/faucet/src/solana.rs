@@ -54,7 +54,7 @@ pub async fn transfer_token(
             info!("Token balance of recipient is {:?}", balance.unwrap());
             info!("Ether {:?}", client.get_account(&account)?);
         } else {
-            info!("No token balance");
+            info!("Empty balance of token account '{}'", token_account);
             let ether_account = client.get_account(&account);
             let ether_account_exists = ether_account.is_ok();
             if ether_account_exists {

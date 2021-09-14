@@ -33,11 +33,11 @@ pub enum Error {
     #[error("Failed to parse integer number from config")]
     ParseInt(#[from] std::num::ParseIntError),
 
-    #[error("Failed to parse keypair")]
-    ParseKeypair(#[from] ed25519_dalek::SignatureError),
-
     #[error("Invalid keypair '{0}' from file '{1}'")]
     InvalidKeypair(String, std::path::PathBuf),
+
+    #[error("Failed to parse keypair")]
+    ParseKeypair(#[from] ed25519_dalek::SignatureError),
 }
 
 /// Represents the config result type.
