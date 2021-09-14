@@ -1,7 +1,7 @@
 //! Faucet config module.
 
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ pub const AUTO: &str = "auto";
 /// Represents the config errors.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Failed to read config '{1}': {0}")]
+    #[error("Failed to read file '{1}': {0}")]
     Read(#[source] std::io::Error, std::path::PathBuf),
 
     #[error("Failed to parse config '{1}': {0}")]
@@ -33,8 +33,11 @@ pub enum Error {
     #[error("Failed to parse integer number from config")]
     ParseInt(#[from] std::num::ParseIntError),
 
-    #[error("Failed to parse keypair from config")]
+    #[error("Failed to parse keypair")]
     ParseKeypair(#[from] ed25519_dalek::SignatureError),
+
+    #[error("Invalid keypair '{0}' from file '{1}'")]
+    InvalidKeypair(String, std::path::PathBuf),
 }
 
 /// Represents the config result type.
@@ -50,7 +53,7 @@ const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const FAUCET_SOLANA_ENABLE: &str = "FAUCET_SOLANA_ENABLE";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
-const NEON_OPERATOR_KEY: &str = "NEON_OPERATOR_KEY";
+const NEON_OPERATOR_KEYFILE: &str = "NEON_OPERATOR_KEYFILE";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
@@ -63,7 +66,7 @@ static ENV: &[&str] = &[
     FAUCET_SOLANA_ENABLE,
     SOLANA_URL,
     EVM_LOADER,
-    NEON_OPERATOR_KEY,
+    NEON_OPERATOR_KEYFILE,
     NEON_ETH_MAX_AMOUNT,
 ];
 
@@ -109,7 +112,9 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
-                NEON_OPERATOR_KEY => CONFIG.write().unwrap().solana.operator_key = val,
+                NEON_OPERATOR_KEYFILE => {
+                    CONFIG.write().unwrap().solana.operator_keyfile = val.into()
+                }
                 NEON_ETH_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
                 }
@@ -179,7 +184,12 @@ pub fn solana_evm_loader() -> String {
 
 /// Gets the `solana.operator` keypair value.
 pub fn solana_operator_keypair() -> Result<Keypair> {
-    let ss = split_comma_separated_list(&CONFIG.read().unwrap().solana.operator_key.clone());
+    let keyfile = CONFIG.read().unwrap().solana.operator_keyfile.clone();
+    let key = std::fs::read_to_string(&keyfile).map_err(|e| Error::Read(e, keyfile.clone()))?;
+    if !(key.starts_with('[') && key.ends_with(']')) {
+        return Err(Error::InvalidKeypair(key, keyfile));
+    }
+    let ss = split_comma_separated_list(trim_first_and_last_chars(&key));
     let mut bytes = Vec::with_capacity(ss.len());
     for s in ss {
         bytes.push(s.parse::<u8>()?);
@@ -282,7 +292,7 @@ struct Solana {
     enable: bool,
     url: String,
     evm_loader: String,
-    operator_key: String,
+    operator_keyfile: PathBuf,
     max_amount: u64,
 }
 
@@ -314,13 +324,9 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(
-            f,
-            "solana.operator_key = {:?}",
-            obfuscate_solana_private_key(&self.operator_key)
-        )?;
-        if env::var(NEON_OPERATOR_KEY).is_ok() {
-            writeln!(f, " (overridden by {})", NEON_OPERATOR_KEY)?;
+        write!(f, "solana.operator_keyfile = {:?}", self.operator_keyfile)?;
+        if env::var(NEON_OPERATOR_KEYFILE).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_OPERATOR_KEYFILE)?;
         } else {
             writeln!(f)?;
         }
@@ -377,6 +383,7 @@ fn obfuscate_string(key: &str) -> String {
 }
 
 /// Cuts middle part of a key like `[1,2,3...N]`.
+#[allow(unused)]
 fn obfuscate_solana_private_key(key: &str) -> String {
     let ss = split_comma_separated_list(key);
     let len = ss.len();
@@ -447,4 +454,27 @@ fn test_split_comma_separated_list() {
     assert_eq!(ss, vec!("", "", "ABC"));
     let ss = split_comma_separated_list("   ABC   ,   DEF   ,   GHI   ".into());
     assert_eq!(ss, vec!("ABC", "DEF", "GHI"));
+}
+
+/// Returns string without it's first and last characters.
+/// Works with multi-byte characters and empty strings.
+fn trim_first_and_last_chars(value: &str) -> &str {
+    let mut chars = value.chars();
+    chars.next();
+    chars.next_back();
+    chars.as_str()
+}
+
+#[test]
+fn test_trim_first_and_last_chars() {
+    let s = trim_first_and_last_chars("");
+    assert!(s.is_empty());
+    let s = trim_first_and_last_chars("A");
+    assert!(s.is_empty());
+    let s = trim_first_and_last_chars("AB");
+    assert!(s.is_empty());
+    let s = trim_first_and_last_chars("ABC");
+    assert_eq!(s, "B");
+    let s = trim_first_and_last_chars("语言处理");
+    assert_eq!(s, "言处");
 }

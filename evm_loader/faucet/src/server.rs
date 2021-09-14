@@ -42,13 +42,14 @@ async fn handle_request_eth_token(body: Bytes) -> impl Responder {
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest: {}", err);
+        error!("BadRequest (body): {}", err);
         return HttpResponse::BadRequest();
     }
 
-    let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input.unwrap());
+    let input = input.unwrap();
+    let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
     if let Err(err) = airdrop {
-        error!("BadRequest: {}", err);
+        error!("BadRequest (json): {} in '{}'", err, input);
         return HttpResponse::BadRequest();
     }
 
@@ -67,13 +68,14 @@ async fn handle_request_erc20_tokens(body: Bytes) -> impl Responder {
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest: {}", err);
+        error!("BadRequest (body): {}", err);
         return HttpResponse::BadRequest();
     }
 
-    let airdrop = serde_json::from_str::<tokens::Airdrop>(&input.unwrap());
+    let input = input.unwrap();
+    let airdrop = serde_json::from_str::<tokens::Airdrop>(&input);
     if let Err(err) = airdrop {
-        error!("BadRequest: {}", err);
+        error!("BadRequest (json): {} in '{}'", err, input);
         return HttpResponse::BadRequest();
     }
 
