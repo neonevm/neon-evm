@@ -22,10 +22,10 @@ pub const AUTO: &str = "auto";
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed to read file '{1}': {0}")]
-    Read(#[source] std::io::Error, std::path::PathBuf),
+    Read(#[source] std::io::Error, PathBuf),
 
     #[error("Failed to parse config '{1}': {0}")]
-    Parse(#[source] toml::de::Error, std::path::PathBuf),
+    Parse(#[source] toml::de::Error, PathBuf),
 
     #[error("Failed to parse boolean literal from config")]
     ParseBool(#[from] std::str::ParseBoolError),
@@ -34,7 +34,7 @@ pub enum Error {
     ParseInt(#[from] std::num::ParseIntError),
 
     #[error("Invalid keypair '{0}' from file '{1}'")]
-    InvalidKeypair(String, std::path::PathBuf),
+    InvalidKeypair(String, PathBuf),
 
     #[error("Failed to parse keypair")]
     ParseKeypair(#[from] ed25519_dalek::SignatureError),
