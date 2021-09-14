@@ -483,7 +483,7 @@ fn process_instruction<'a>(
                 Ok(()) => {},
                 Err(reason) => {
                     match reason {
-                        ProgramError::Custom(_) => return Ok(()),
+                        ProgramError::Custom(0) => return Ok(()),
                         _ => return Err!(reason)
                     }
                 }
@@ -552,7 +552,7 @@ fn process_instruction<'a>(
                 Ok(()) => {},
                 Err(reason) => {
                     match reason {
-                        ProgramError::Custom(_) => return Ok(()),
+                        ProgramError::Custom(0) => return Ok(()),
                         _ => return Err!(reason)
                     }
                 }
