@@ -27,6 +27,9 @@ pub enum Error {
     #[error("Failed to parse config '{1}': {0}")]
     Parse(#[source] toml::de::Error, std::path::PathBuf),
 
+    #[error("Failed to parse boolean literal from config")]
+    ParseBool(#[from] std::str::ParseBoolError),
+
     #[error("Failed to parse integer number from config")]
     ParseInt(#[from] std::num::ParseIntError),
 
@@ -39,10 +42,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 const FAUCET_RPC_PORT: &str = "FAUCET_RPC_PORT";
 const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
+const FAUCET_WEB3_ENABLE: &str = "FAUCET_WEB3_ENABLE";
 const WEB3_RPC_URL: &str = "WEB3_RPC_URL";
 const WEB3_PRIVATE_KEY: &str = "WEB3_PRIVATE_KEY";
 const NEON_ERC20_TOKENS: &str = "NEON_ERC20_TOKENS";
 const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
+const FAUCET_SOLANA_ENABLE: &str = "FAUCET_SOLANA_ENABLE";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
 const NEON_OPERATOR_KEY: &str = "NEON_OPERATOR_KEY";
@@ -50,10 +55,12 @@ const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
     FAUCET_RPC_PORT,
     FAUCET_RPC_ALLOWED_ORIGINS,
+    FAUCET_WEB3_ENABLE,
     WEB3_RPC_URL,
     WEB3_PRIVATE_KEY,
     NEON_ERC20_TOKENS,
     NEON_ERC20_MAX_AMOUNT,
+    FAUCET_SOLANA_ENABLE,
     SOLANA_URL,
     EVM_LOADER,
     NEON_OPERATOR_KEY,
@@ -88,6 +95,7 @@ pub fn load(filename: &Path) -> Result<()> {
                 FAUCET_RPC_ALLOWED_ORIGINS => {
                     CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(&val)
                 }
+                FAUCET_WEB3_ENABLE => CONFIG.write().unwrap().web3.enable = val.parse::<bool>()?,
                 WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
                 WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
                 NEON_ERC20_TOKENS => {
@@ -95,6 +103,9 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 NEON_ERC20_MAX_AMOUNT => {
                     CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?
+                }
+                FAUCET_SOLANA_ENABLE => {
+                    CONFIG.write().unwrap().solana.enable = val.parse::<bool>()?
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
@@ -125,6 +136,11 @@ pub fn allowed_origins() -> Vec<String> {
     CONFIG.read().unwrap().rpc.allowed_origins.clone()
 }
 
+/// Gets the `web3.enable` value.
+pub fn web3_enabled() -> bool {
+    CONFIG.read().unwrap().web3.enable
+}
+
 /// Gets the `web3.rpc_url` value.
 pub fn web3_rpc_url() -> String {
     CONFIG.read().unwrap().web3.rpc_url.clone()
@@ -144,6 +160,11 @@ pub fn tokens() -> Vec<String> {
 /// Gets the `web3.max_amount` value.
 pub fn web3_max_amount() -> u64 {
     CONFIG.read().unwrap().web3.max_amount
+}
+
+/// Gets the `solana.enable` value.
+pub fn solana_enabled() -> bool {
+    CONFIG.read().unwrap().solana.enable
 }
 
 /// Gets the `solana.url` value.
@@ -200,6 +221,7 @@ impl std::fmt::Display for Rpc {
 #[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Web3 {
+    enable: bool,
     rpc_url: String,
     private_key: String,
     tokens: Vec<String>,
@@ -208,6 +230,16 @@ struct Web3 {
 
 impl std::fmt::Display for Web3 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "web3.enable = {}", self.enable)?;
+        if env::var(FAUCET_WEB3_ENABLE).is_ok() {
+            write!(f, " (overridden by {})", FAUCET_WEB3_ENABLE)?;
+        } else {
+            write!(f, "")?;
+        }
+        if !self.enable {
+            return Ok(());
+        }
+        writeln!(f)?;
         write!(f, "web3.rpc_url = {}", self.rpc_url)?;
         if env::var(WEB3_RPC_URL).is_ok() {
             writeln!(f, " (overridden by {})", WEB3_RPC_URL)?;
@@ -247,6 +279,7 @@ impl std::fmt::Display for Web3 {
 #[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Solana {
+    enable: bool,
     url: String,
     evm_loader: String,
     operator_key: String,
@@ -255,6 +288,16 @@ struct Solana {
 
 impl std::fmt::Display for Solana {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "solana.enable = {}", self.enable)?;
+        if env::var(FAUCET_SOLANA_ENABLE).is_ok() {
+            write!(f, " (overridden by {})", FAUCET_SOLANA_ENABLE)?;
+        } else {
+            write!(f, "")?;
+        }
+        if !self.enable {
+            return Ok(());
+        }
+        writeln!(f)?;
         write!(f, "solana.url = {}", self.url)?;
         if env::var(SOLANA_URL).is_ok() {
             writeln!(f, " (overridden by {})", SOLANA_URL)?;
