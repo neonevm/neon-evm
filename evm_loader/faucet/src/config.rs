@@ -186,10 +186,11 @@ pub fn solana_evm_loader() -> String {
 pub fn solana_operator_keypair() -> Result<Keypair> {
     let keyfile = CONFIG.read().unwrap().solana.operator_keyfile.clone();
     let key = std::fs::read_to_string(&keyfile).map_err(|e| Error::Read(e, keyfile.clone()))?;
+    let key = key.trim();
     if !(key.starts_with('[') && key.ends_with(']')) {
-        return Err(Error::InvalidKeypair(key, keyfile));
+        return Err(Error::InvalidKeypair(key.into(), keyfile));
     }
-    let ss = split_comma_separated_list(trim_first_and_last_chars(&key));
+    let ss = split_comma_separated_list(trim_first_and_last_chars(key));
     let mut bytes = Vec::with_capacity(ss.len());
     for s in ss {
         bytes.push(s.parse::<u8>()?);
