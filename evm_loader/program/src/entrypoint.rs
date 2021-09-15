@@ -772,7 +772,16 @@ fn do_continue_top_level<'a>(
         return Err!(ProgramError::InvalidAccountData);
     }
 
-    storage.check_accounts(program_id, trx_accounts)?;
+    match storage.check_accounts(program_id, trx_accounts) {
+        Ok(()) => {},
+        Err(reason) => {
+            match reason {
+                ProgramError::Custom(0) => return Ok(()),
+                _ => return Err!(reason)
+            }
+        }
+    };
+
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let call_return = do_continue(&mut storage, step_count, &mut account_storage)?;
 
