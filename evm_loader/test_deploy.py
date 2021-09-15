@@ -347,7 +347,7 @@ class DeployTest(unittest.TestCase):
         print("Create a storage account")
         storage = self.create_storage_account()
 
-        print("Execute combined continue from an account (neon instruction 0x0e)")
+        print("Execute combined continue for a holder account (neon instruction 0x0e)")
         trx = Transaction()
         trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
@@ -355,6 +355,13 @@ class DeployTest(unittest.TestCase):
         with self.assertRaisesRegex(Exception, 'incorrect program id for instruction'):
             response = send_transaction(client, trx, self.operator_acc)
             print('response:', response)
+
+        print("Create contract accounts")
+        (contract_sol, code_sol) = self.create_contract_accounts(base, seed, contract_eth, contract_sol, contract_nonce,
+                                                                 code_sol, code_size)
+        print("Execute combined continue for a holder account (neon instruction 0x0e) again")
+        result = self.call_instr_14_several_times(holder, contract_sol, code_sol)
+        print("result", result)
 
 
 if __name__ == '__main__':
