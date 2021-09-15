@@ -1,5 +1,6 @@
 use crate::{
-    account_data::{ Storage, AccountData }
+    account_data::{ Storage, AccountData },
+    error::EvmLoaderError
 };
 use evm::{ H160 };
 use solana_program::{
@@ -66,12 +67,15 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
-    pub fn check_for_blocked_accounts(program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn check_for_blocked_accounts(program_id: &Pubkey, accounts: &[AccountInfo], required_exclusive_access : bool) -> Result<(), ProgramError> {
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let data = account_info.try_borrow_data()?;
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
                 if account.rw_blocked_acc.is_some() {
                     return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw locked account {}", account_info.key);
+                }
+                if required_exclusive_access && account.ro_blocked_cnt > 0{
+                    return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on ro locked account {}", account_info.key);
                 }
             }
         }
@@ -137,7 +141,7 @@ impl<'a> StorageAccount<'a> {
         Ok(keys)
     }
 
-    pub fn check_accounts(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn check_accounts(&self, program_id: &Pubkey, accounts: &[AccountInfo], required_exclusive_access : bool) -> Result<(), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         
         if storage.accounts_len != accounts.len() {
@@ -154,10 +158,9 @@ impl<'a> StorageAccount<'a> {
             if let AccountData::Account(account) = AccountData::unpack(&data)? {
                     if let Some(rw_blocked_acc) = account.rw_blocked_acc {
                         if *self.info.unsigned_key() == rw_blocked_acc {
-
-                            if account.ro_blocked_cnt > 0 {
-                                // wait for unlock
-                                return Err!(ProgramError::Custom(0); "read-only locks found");
+                            if required_exclusive_access && account.ro_blocked_cnt > 0 {
+                                // read-only locks found, wait for unlock
+                                return Err(EvmLoaderError::ExclusiveAccessUnvailable.into());
                             }
                         }
                         else if account.ro_blocked_cnt == 0 {
