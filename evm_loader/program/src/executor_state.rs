@@ -813,14 +813,19 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         U256::from(supply)
     }
 
+    /// Returns the account balance of another account with `address`.
+    /// Returns zero if the account is not yet known.
     #[must_use]
     pub fn erc20_balance_of(&self, mint: Pubkey, address: H160) -> U256
     {
-        let solana_address = self.backend.get_account_solana_address(&address).unwrap();
-        let token_account = get_associated_token_address(&solana_address, &mint);
-
-        let balance = self.substate.spl_balance(&token_account, self.backend);
-        U256::from(balance)
+        match self.backend.get_account_solana_address(&address) {
+            None => U256::zero(),
+            Some(solana_address) => {
+                let token_account = get_associated_token_address(&solana_address, &mint);
+                let balance = self.substate.spl_balance(&token_account, self.backend);
+                U256::from(balance)
+            }
+        }
     }
 
     fn erc20_emit_transfer_event(&mut self, contract: H160, source: H160, target: H160, value: u64) {
