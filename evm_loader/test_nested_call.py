@@ -317,7 +317,7 @@ class EventTest(unittest.TestCase):
 
     def call_with_holder_account(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
+              'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -331,7 +331,7 @@ class EventTest(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(self.storage, 400, contract, code))
+            trx.add(self.sol_instr_10_continue(self.storage, 200, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):
@@ -339,7 +339,7 @@ class EventTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
-    def call_with_holder_account_0x0e(self, input, contract, code):
+    def call_with_holder_account_by_0x0e(self, input, contract, code):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
@@ -350,7 +350,6 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))
-        send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Combined Continue")
@@ -493,7 +492,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('creator()')
         print("Expecting Exception: Program failed to complete")
         with self.assertRaisesRegex(Exception, 'Program failed to complete'):
-            response = self.call_with_holder_account_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+            response = self.call_with_holder_account_by_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
             print('response:', response)
 
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -513,7 +512,7 @@ class EventTest(unittest.TestCase):
         print('Ok: code owner account has been created')
 
         print('Call creator() with holder account:')
-        result = self.call_with_holder_account_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+        result = self.call_with_holder_account_by_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
         print('result:', result)
 
         self.assertEqual(result['meta']['err'], None)
@@ -544,7 +543,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
