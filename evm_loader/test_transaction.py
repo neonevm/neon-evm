@@ -89,8 +89,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'chainId': 111
         }
 
-    def get_keccak_instruction_and_trx_data(self, data_start, secret_key, caller, caller_ether):
-        tx = self.get_tx(0)
+    def get_keccak_instruction_and_trx_data(self, data_start, secret_key, caller, caller_ether, trx_cnt=None):
+        if trx_cnt is None:
+            trx_cnt = getTransactionCount(client, self.caller)
+        tx = self.get_tx(trx_cnt)
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, secret_key)
         keccak_instruction_data = make_keccak_instruction_data(1, len(msg), data_start)
         trx_data = caller_ether + sign + msg
@@ -307,7 +309,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
 
