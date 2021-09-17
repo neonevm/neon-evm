@@ -88,13 +88,13 @@ pub trait AccountStorage {
 
     /// Get solana address for given ethereum account
     fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> {
-        let find_solana_address = || {
+        let make_solana_address = || {
             let (sa, _) = crate::account_data::make_solana_program_address(address, self.program_id());
             Some(sa)
         };
         self.apply_to_account(
             address,
-            find_solana_address,
+            make_solana_address,
             |account| Some(account.get_solana_address()),
         )
     }

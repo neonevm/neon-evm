@@ -818,14 +818,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn erc20_balance_of(&self, mint: Pubkey, address: H160) -> U256
     {
-        match self.backend.get_account_solana_address(&address) {
-            None => U256::zero(),
-            Some(solana_address) => {
-                let token_account = get_associated_token_address(&solana_address, &mint);
-                let balance = self.substate.spl_balance(&token_account, self.backend);
-                U256::from(balance)
-            }
+        if !self.backend.exists(&address) {
+            return U256::zero();
         }
+
+        let solana_address = self.backend.get_account_solana_address(&address).unwrap();
+        let token_account = get_associated_token_address(&solana_address, &mint);
+
+        let balance = self.substate.spl_balance(&token_account, self.backend);
+        U256::from(balance)
     }
 
     fn erc20_emit_transfer_event(&mut self, contract: H160, source: H160, target: H160, value: u64) {
