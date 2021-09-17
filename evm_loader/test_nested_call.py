@@ -45,10 +45,8 @@ class EventTest(unittest.TestCase):
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
-        # Create ethereum account for user account
-        user_wallet = RandomAccount()
-        cls.user_acc = user_wallet.get_acc()
-        cls.caller_ether = eth_keys.PrivateKey(cls.user_acc.secret_key()).public_key.to_canonical_address()
+        # Create ethereum account for operator account
+        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.caller) < 20:
@@ -57,7 +55,7 @@ class EventTest(unittest.TestCase):
             cls.token.transfer(ETH_TOKEN_MINT_ID, 20, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
-        print('Account:', cls.user_acc.public_key(), bytes(cls.user_acc.public_key()).hex())
+        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
@@ -97,7 +95,7 @@ class EventTest(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
         cls.holder = create_storage_account(cls.acc, '1236')
-        cls.storage = create_storage_account(cls.acc)
+        cls.storage = create_storage_account(cls.acc, '123435456776')
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -298,7 +296,7 @@ class EventTest(unittest.TestCase):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9_999_999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.user_acc.secret_key())
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
         instruction = from_addr + sign + msg
 
@@ -321,7 +319,7 @@ class EventTest(unittest.TestCase):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.user_acc.secret_key())
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
@@ -345,7 +343,7 @@ class EventTest(unittest.TestCase):
         tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.user_acc.secret_key())
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
