@@ -53,7 +53,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
         wallet_2 = RandomAccount()
-        cls.loader_2 = EvmLoader(wallet_2, evm_loader_id)
         cls.acc_2 = wallet_2.get_acc()
         print("wallet_2: ", wallet_2.path)
 
@@ -79,53 +78,30 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         return storage
 
-    def get_tx(self):
+    def get_tx(self, nonce):
         return {
             'to': solana2ether(self.owner_contract),
             'value': 0,
             'gas': 9999999,
             'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, self.caller),
+            'nonce': nonce,
             'data': '3917b3df',
             'chainId': 111
         }
 
-    def get_tx_2(self):
-        return {
-            'to': solana2ether(self.owner_contract),
-            'value': 0,
-            'gas': 9999999,
-            'gasPrice': 1_000_000_000,
-            'nonce': 0,
-            'data': '3917b3df',
-            'chainId': 111
-        }
-
-    def get_keccak_instruction_and_trx_data(self, data_start):
-        tx = self.get_tx()
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+    def get_keccak_instruction_and_trx_data(self, data_start, secret_key, caller, caller_ether):
+        tx = self.get_tx(0)
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, secret_key)
         keccak_instruction_data = make_keccak_instruction_data(1, len(msg), data_start)
-        trx_data = self.caller_ether + sign + msg
+        trx_data = caller_ether + sign + msg
 
         keccak_instruction = TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111",
                                                     data=keccak_instruction_data,
-                                                    keys=[AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False)]
+                                                    keys=[AccountMeta(pubkey=caller, is_signer=False, is_writable=False)]
                                                     )
         return keccak_instruction, trx_data, sign
 
-    def get_keccak_instruction_and_trx_data_2(self, data_start):
-        tx = self.get_tx_2()
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc_2.secret_key())
-        keccak_instruction_data = make_keccak_instruction_data(1, len(msg), data_start)
-        trx_data = self.caller_ether_2 + sign + msg
-
-        keccak_instruction = TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111",
-                                                    data=keccak_instruction_data,
-                                                    keys=[AccountMeta(pubkey=self.caller_2, is_signer=False, is_writable=False)]
-                                                    )
-        return keccak_instruction, trx_data, sign
-
-    def get_account_metas_for_instr_05(self):
+    def get_account_metas_for_instr_05(self, caller):
         return [
             # System instructions account:
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
@@ -137,7 +113,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID),
                         is_signer=False, is_writable=True),
             # User ETH address (stub for now):
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
                         is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
@@ -146,8 +122,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID),
                         is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID),
+            AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
                         is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
@@ -155,61 +131,21 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ]
 
-    def get_account_metas_for_instr_05_2(self):
-        return [
-            # System instructions account:
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            # Operator address:
-            AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-            # Collateral pool address:
-            AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator ETH address:
-            AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
-            # User ETH address:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller_2), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
-            # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+    def get_account_metas_for_instr_0D(self, storage, caller):
+        return [AccountMeta(pubkey=storage, is_signer=False, is_writable=True)] + self.get_account_metas_for_instr_05(caller)
 
-            AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=self.caller_2, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller_2), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=self.loader_2.loader_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-        ]
-
-    def get_account_metas_for_instr_0D(self, storage):
-        return [AccountMeta(pubkey=storage, is_signer=False, is_writable=True)] + self.get_account_metas_for_instr_05()
-
-    def get_account_metas_for_instr_0D_2(self, storage):
-        return [AccountMeta(pubkey=storage, is_signer=False, is_writable=True)] + self.get_account_metas_for_instr_05_2()
-
-    def neon_emv_instr_05(self, trx_data):
+    def neon_emv_instr_05(self, trx_data, caller):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("05") + self.collateral_pool_index_buf + trx_data,
-            keys=self.get_account_metas_for_instr_05()
+            keys=self.get_account_metas_for_instr_05(caller)
         )
 
-    def neon_emv_instr_0D(self, step_count, trx_data, storage):
+    def neon_emv_instr_0D(self, step_count, trx_data, storage, caller):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("0D") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + trx_data,
-            keys=self.get_account_metas_for_instr_0D(storage)
-        )
-
-    def neon_emv_instr_0D_2(self, step_count, trx_data, storage):
-        return TransactionInstruction(
-            program_id=self.loader_2.loader_id,
-            data=bytearray.fromhex("0D") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + trx_data,
-            keys=self.get_account_metas_for_instr_0D_2(storage)
+            keys=self.get_account_metas_for_instr_0D(storage, caller)
         )
 
     def check_err_is_invalid_nonce(self, err):
@@ -228,10 +164,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
         trx = Transaction() \
             .add(keccak_instruction) \
-            .add(self.neon_emv_instr_05(trx_data))
+            .add(self.neon_emv_instr_05(trx_data, self.caller))
 
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
@@ -239,9 +175,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage)
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
             .add(keccak_instruction) \
@@ -262,9 +198,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage)
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
             .add(keccak_instruction) \
@@ -291,9 +227,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage)
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
             .add(keccak_instruction) \
@@ -312,9 +248,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage)
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
             .add(keccak_instruction) \
@@ -350,9 +286,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_06_failure_tx_send_iteratively_transaction_too_large(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage)
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
             .add(keccak_instruction) \
@@ -371,9 +307,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data_2(13)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d_2 = self.neon_emv_instr_0D_2(step_count, trx_data, storage)
+        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
 
         trx = Transaction() \
             .add(keccak_instruction) \
