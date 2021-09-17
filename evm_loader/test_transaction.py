@@ -62,7 +62,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         # Create ethereum account for user 2 account
         cls.caller_ether_2 = eth_keys.PrivateKey(cls.acc_2.secret_key()).public_key.to_canonical_address()
-        (cls.caller_2, cls.caller_nonce_2) = cls.loader_2.ether2program(cls.caller_ether_2)
+        (cls.caller_2, cls.caller_nonce_2) = cls.loader.ether2program(cls.caller_ether_2)
         cls.caller_token_2 = get_associated_token_address(PublicKey(cls.caller_2), ETH_TOKEN_MINT_ID)
 
     def create_storage_account(self, seed):
@@ -323,7 +323,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(self.caller_2) == 0:
             print("Send a transaction to create an account - wait for the confirmation and make sure of successful "
                   "completion")
-            _ = self.loader_2.createEtherAccount(self.caller_ether_2)
+            _ = self.loader.createEtherAccount(self.caller_ether_2)
             self.token.transfer(ETH_TOKEN_MINT_ID, 10, self.caller_token_2)
             print("Done\n")
 
