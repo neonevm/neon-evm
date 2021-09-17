@@ -1,5 +1,6 @@
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from solana.rpc.types import TxOpts
+from solana.rpc.api  import SendTransactionError
 import unittest
 from base58 import b58decode
 from solana_utils import *
@@ -137,6 +138,34 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
+    def neon_emv_instr_cancel_0C(self, acc, caller, storage):
+        meta = [
+            AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
+            # Operator address:
+            AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=True),
+            AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID),
+                        is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
+                        is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        ]
+
+        return TransactionInstruction(
+            program_id=self.loader.loader_id,
+            data=bytearray.fromhex("0C"),
+            keys=meta
+        )
+
 
     def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller):
         print("Begin")
@@ -214,6 +243,30 @@ class EventTest(unittest.TestCase):
             self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
+
+    def test_caseWriteBlocking(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr1, sign1,  msg1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
+        (from_addr2, sign2,  msg2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
+
+        instruction1 = from_addr1 + sign1 + msg1
+        instruction2 = from_addr2 + sign2 + msg2
+
+        storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
+        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc2)
+
+        result = self.call_begin(storage1, 10, msg1, instruction1, True, self.acc1, self.caller1)
+
+        try:
+            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.acc2, self.caller2)
+        except SendTransactionError as err:
+            print("Ok")
+
+        # removing the rw-lock
+        trx = Transaction().add(self.neon_emv_instr_cancel_0C(self.acc1, self.caller1, storage1))
+        response = send_transaction(client, trx, self.acc1)
 
 
 if __name__ == '__main__':
