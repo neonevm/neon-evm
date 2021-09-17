@@ -30,7 +30,8 @@ class EventTest(unittest.TestCase):
             tx = client.request_airdrop(wallet1.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
 
-        cls.token.mint(ETH_TOKEN_MINT_ID, get_associated_token_address(PublicKey(wallet1.get_acc().public_key()), ETH_TOKEN_MINT_ID), 10000)
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(wallet1.get_acc().public_key(), ETH_TOKEN_MINT_ID))
+        # cls.token.mint(ETH_TOKEN_MINT_ID, get_associated_token_address(PublicKey(wallet1.get_acc().public_key()), ETH_TOKEN_MINT_ID), 10000)
 
 
         # Create ethereum account for user account
