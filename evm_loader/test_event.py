@@ -146,7 +146,9 @@ class EventTest(unittest.TestCase):
                 # Operator ETH address (stub for now):
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID),
                             is_signer=False, is_writable=True),
-
+                # User ETH address (stub for now):
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID),
+                            is_signer=False, is_writable=True),
                 # Incenirator
                 AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
                 # System program account:

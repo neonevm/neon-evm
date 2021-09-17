@@ -392,7 +392,7 @@ fn process_instruction<'a>(
                     accounts,
                     user_eth_info,
                     operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.0,
+                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &fee)?;
 
@@ -506,7 +506,7 @@ fn process_instruction<'a>(
                     accounts,
                     user_eth_info,
                     operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.0,
+                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &fee)?;
 
@@ -528,6 +528,7 @@ fn process_instruction<'a>(
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
@@ -545,7 +546,7 @@ fn process_instruction<'a>(
             storage.check_accounts(program_id, trx_accounts)?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.0.data.borrow())?;
+            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
             match caller_info_data {
                 AccountData::Account(ref mut acc) => {
                     let (caller, nonce) = storage.caller_and_nonce()?;
@@ -577,11 +578,11 @@ fn process_instruction<'a>(
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
-            let (caller_info, caller_token_info) = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+            let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
             token::transfer_token(
                 accounts,
-                caller_token_info,
+                user_eth_info,
                 operator_eth_info,
                 caller_info,
                 account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
