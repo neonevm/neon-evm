@@ -532,7 +532,7 @@ fn process_instruction<'a>(
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[6..];
 
             if !operator_sol_info.is_signer {
                 return Err!(ProgramError::InvalidAccountData);
