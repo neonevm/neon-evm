@@ -859,6 +859,7 @@ fn command_deploy(
         command_create_ether_account(config, &caller_ether, 10_u64.pow(9), 0  )?;
     } else {
         debug!(" Caller account found");
+        debug!(" Caller account found");
     }
 
     // Get caller nonce
