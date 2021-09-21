@@ -34,7 +34,7 @@ pub async fn transfer_token(
     amount: u64,
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
-    let token_mint_id = evm_loader::token::token_mint::id();
+    let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id())?;
 
     let signer_account = signer.pubkey();
     let signer_token_account =
@@ -69,7 +69,7 @@ pub async fn transfer_token(
             }
         }
 
-        let token_decimals = evm_loader::token::token_mint::decimals();
+        let token_decimals = config::solana_token_mint_decimals();
         let factor = 10_u64.pow(token_decimals as u32);
         let amount = amount * factor;
 
@@ -139,7 +139,8 @@ fn create_ether_account_instruction(
     evm_loader_id: Pubkey,
     ether_address: ethereum::Address,
 ) -> Instruction {
-    let token_mint_id = evm_loader::token::token_mint::id();
+    let token_mint_id =
+        Pubkey::from_str(&config::solana_token_mint_id()).expect("invalid token mint id");
 
     let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
     let token_address =

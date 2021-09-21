@@ -3,7 +3,7 @@ name = "faucet"
 description = "Ethereum ERC20 Token Faucet Service"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
-version = "0.2.1"
+version = "0.2.2"
 build = "build.rs"
 edition = "2018"
 
@@ -13,6 +13,7 @@ actix-web = { version = "4.0.0-beta.8", default-features = false }
 color-eyre = "0.5"
 derive-new = "0.5"
 ed25519-dalek = "1.0"
+evm-loader = { path = "../program", default_features = false, features = ["no-entrypoint"] }
 hex = "0.4"
 lazy_static = "1.4"
 num_cpus = "1.13"

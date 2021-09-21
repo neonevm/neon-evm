@@ -53,6 +53,8 @@ const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const FAUCET_SOLANA_ENABLE: &str = "FAUCET_SOLANA_ENABLE";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
+const NEON_TOKEN_MINT: &str = "NEON_TOKEN_MINT";
+const NEON_TOKEN_MINT_DECIMALS: &str = "NEON_TOKEN_MINT_DECIMALS";
 const NEON_OPERATOR_KEYFILE: &str = "NEON_OPERATOR_KEYFILE";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
@@ -66,6 +68,8 @@ static ENV: &[&str] = &[
     FAUCET_SOLANA_ENABLE,
     SOLANA_URL,
     EVM_LOADER,
+    NEON_TOKEN_MINT,
+    NEON_TOKEN_MINT_DECIMALS,
     NEON_OPERATOR_KEYFILE,
     NEON_ETH_MAX_AMOUNT,
 ];
@@ -112,6 +116,10 @@ pub fn load(filename: &Path) -> Result<()> {
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
+                NEON_TOKEN_MINT => CONFIG.write().unwrap().solana.token_mint = val,
+                NEON_TOKEN_MINT_DECIMALS => {
+                    CONFIG.write().unwrap().solana.token_mint_decimals = val.parse::<u8>()?
+                }
                 NEON_OPERATOR_KEYFILE => {
                     CONFIG.write().unwrap().solana.operator_keyfile = val.into()
                 }
@@ -180,6 +188,16 @@ pub fn solana_url() -> String {
 /// Gets the `solana.evm_loader` address value.
 pub fn solana_evm_loader() -> String {
     CONFIG.read().unwrap().solana.evm_loader.clone()
+}
+
+/// Gets the `solana.token_mint` address value.
+pub fn solana_token_mint_id() -> String {
+    CONFIG.read().unwrap().solana.token_mint.clone()
+}
+
+/// Gets the `solana.token_mint_decimals` value.
+pub fn solana_token_mint_decimals() -> u8 {
+    CONFIG.read().unwrap().solana.token_mint_decimals
 }
 
 /// Gets the `solana.operator` keypair value.
@@ -293,6 +311,8 @@ struct Solana {
     enable: bool,
     url: String,
     evm_loader: String,
+    token_mint: String,
+    token_mint_decimals: u8,
     operator_keyfile: PathBuf,
     max_amount: u64,
 }
@@ -322,6 +342,26 @@ impl std::fmt::Display for Solana {
         )?;
         if env::var(EVM_LOADER).is_ok() {
             writeln!(f, " (overridden by {})", EVM_LOADER)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(
+            f,
+            "solana.token_mint = {:?}",
+            obfuscate_string(&self.token_mint)
+        )?;
+        if env::var(NEON_TOKEN_MINT).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_TOKEN_MINT)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(
+            f,
+            "solana.token_mint_decimals = {}",
+            self.token_mint_decimals
+        )?;
+        if env::var(NEON_TOKEN_MINT_DECIMALS).is_ok() {
+            writeln!(f, " (overridden by {})", NEON_TOKEN_MINT_DECIMALS)?;
         } else {
             writeln!(f)?;
         }
