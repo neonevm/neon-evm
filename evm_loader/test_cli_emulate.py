@@ -142,7 +142,7 @@ class EmulateTest(unittest.TestCase):
         print('Ethereum Caller: {}-{} key={}'.format(cls.ethereum_caller.hex(), cls.caller_nonce, eth_keys.PrivateKey(cls.acc.secret_key())))
         print('Solana Caller: {} ({})'.format(cls.caller, bytes(PublicKey(cls.caller)).hex()))
 
-        res = cls.loader.deploy(CONTRACTS_DIR + "ExternalCall.binary", cls.caller)
+        res = cls.loader.deploy(CONTRACTS_DIR + "ExternalCall.binary")
         cls.contract = ExternalCall(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
         cls.contract.set_neon_evm_client(cls.neon_evm_client)
 

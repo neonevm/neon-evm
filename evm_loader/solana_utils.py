@@ -45,9 +45,10 @@ incinerator = "1nc1nerator11111111111111111111111111111111"
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-EVM_LOADER = os.environ.get("EVM_LOADER")
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
-
+# EVM_LOADER = os.environ.get("EVM_LOADER")
+# ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+EVM_LOADER="DZs4oh51XqbgneUKcHgLxES4f1LfME5oTndzcU8qxHvi"
+ETH_TOKEN_MINT_ID : PublicKey = PublicKey("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
@@ -495,13 +496,13 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def deploy(self, contract_path, caller=None, config=None):
-        print('deploy caller:', caller)
+    def deploy(self, contract_path, config=None):
+        print('deploy contract')
         if config == None:
-            output = neon_cli().call("deploy --evm_loader {} {} {}".format(self.loader_id, contract_path, caller))
+            output = neon_cli().call("deploy --evm_loader {} {}".format(self.loader_id, contract_path))
         else:
-            output = neon_cli().call("deploy --evm_loader {} --config {} {} {}".format(self.loader_id, config,
-                                                                                       contract_path, caller))
+            output = neon_cli().call("deploy --evm_loader {} --config {} {}".format(self.loader_id, config,
+                                                                                       contract_path))
         print(type(output), output)
         result = json.loads(output.splitlines()[-1])
         return result
@@ -568,7 +569,7 @@ class EvmLoader:
         code = self.ether2seed(ether)
         info = client.get_account_info(program[0])
         if info['result']['value'] is None:
-            res = self.deploy(location, caller)
+            res = self.deploy(location)
             return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))

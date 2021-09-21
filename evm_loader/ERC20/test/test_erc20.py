@@ -161,7 +161,7 @@ def deploy_erc20(loader, location_hex, location_bin, mint_id, balance_erc20, cal
         binary = bytearray.fromhex(hex.read() + ctor_init)
         with open(location_bin, mode='wb') as bin:
             bin.write(binary)
-            res = loader.deploy(location_bin, caller)
+            res = loader.deploy(location_bin)
             return ERC20(res['programId'], res['codeId'], bytes.fromhex(res['ethereum'][2:]))
 
 
