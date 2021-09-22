@@ -77,7 +77,10 @@ static ENV: &[&str] = &[
 /// Reports if no file exists (it's normal, will be another source of config).
 pub fn check_file_exists(file: &Path) {
     if !file.exists() {
-        warn!("File {:?} is missing", file);
+        warn!(
+            "File {:?} is missing; environment variables will be used",
+            file
+        );
     }
 }
 

@@ -86,6 +86,7 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::check_file_exists(config_file);
     config::load(config_file)?;
     config::show();
+
     let mut enabled = false;
     if config::web3_enabled() {
         tokens::init(config::tokens()).await?;
@@ -98,5 +99,6 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     if enabled {
         server::start(config::rpc_port(), workers).await?;
     }
+
     Ok(())
 }
