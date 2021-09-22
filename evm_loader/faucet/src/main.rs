@@ -18,6 +18,7 @@ use tracing_subscriber::EnvFilter;
 #[actix_web::main]
 async fn main() -> Result<()> {
     setup()?;
+    show_version();
     execute(cli::application()).await
 }
 
@@ -39,7 +40,7 @@ fn setup() -> Result<()> {
 }
 
 /// Shows semantic version and revision hash.
-fn info_version() {
+fn show_version() {
     let ver = env!("CARGO_PKG_VERSION");
     let rev = if let Ok(rev) = std::env::var("VERGEN_GIT_SHA") {
         if rev.len() < 7 {
@@ -55,8 +56,6 @@ fn info_version() {
 
 /// Dispatches CLI commands.
 async fn execute(app: cli::Application) -> Result<()> {
-    info_version();
-
     match app.cmd {
         cli::Command::Config { file } => {
             config::check_file_exists(&file);
