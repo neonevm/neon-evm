@@ -453,12 +453,3 @@ impl ERC20Allowance {
         Self::SIZE
     }
 }
-
-/// Returns PDA (program derived account) address for given Ethereum address.
-#[must_use]
-pub fn make_solana_program_address(
-    ether_address: &H160,
-    program_id: &Pubkey
-) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()], program_id)
-}

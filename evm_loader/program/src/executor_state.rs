@@ -818,10 +818,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn erc20_balance_of(&self, mint: Pubkey, address: H160) -> U256
     {
-        if !self.backend.exists(&address) {
-            return U256::zero();
-        }
-
         let solana_address = self.backend.get_account_solana_address(&address);
         let token_account = get_associated_token_address(&solana_address, &mint);
 
