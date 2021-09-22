@@ -1,5 +1,5 @@
-//! # ERC20 Token Faucet (Airdrop)
-//! ERC20 Token Faucet is a service which performs airdrop of tokens on user request.
+//! # NeonLabs Token Faucet (Airdrop)
+//! NeonLabs Token Faucet is a service which performs airdrop of tokens on user request.
 
 #![deny(warnings)]
 
