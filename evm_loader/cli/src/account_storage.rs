@@ -535,6 +535,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
 
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        make_solana_program_address(address, &self.config.evm_loader).0
+    }
+
     fn external_call(
         &self,
         instruction: &Instruction

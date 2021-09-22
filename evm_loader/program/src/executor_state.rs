@@ -822,7 +822,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             return U256::zero();
         }
 
-        let solana_address = self.backend.get_account_solana_address(&address).unwrap();
+        let solana_address = self.backend.get_account_solana_address(&address);
         let token_account = get_associated_token_address(&solana_address, &mint);
 
         let balance = self.substate.spl_balance(&token_account, self.backend);
@@ -852,10 +852,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         }
         let value = value.as_u64();
 
-        let source_solana = self.backend.get_account_solana_address(&source).unwrap();
+        let source_solana = self.backend.get_account_solana_address(&source);
         let source_token = get_associated_token_address(&source_solana, &mint);
 
-        let target_solana = self.backend.get_account_solana_address(&target).unwrap();
+        let target_solana = self.backend.get_account_solana_address(&target);
         let target_token = get_associated_token_address(&target_solana, &mint);
 
         let transfer = SplTransfer { source, target, mint, source_token, target_token, value };

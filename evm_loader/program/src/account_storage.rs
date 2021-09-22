@@ -519,6 +519,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         self.find_account(address).is_some()
     }
 
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        self.get_account(address).unwrap().get_solana_address()
+    }
+
     fn external_call(
         &self,
         instruction: &Instruction

@@ -43,6 +43,9 @@ pub trait AccountStorage {
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
 
+    /// Get solana address for given ethereum account
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey;
+
     /// Get SPL token balance
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
         self.apply_to_solana_account(
@@ -84,19 +87,6 @@ pub trait AccountStorage {
         account_data
             .and_then(|d| d.get_erc20_allowance().ok().map(|a| a.value))
             .unwrap_or_else(U256::zero)
-    }
-
-    /// Get solana address for given ethereum account
-    fn get_account_solana_address(&self, address: &H160) -> Option<Pubkey> {
-        let make_solana_address = || {
-            let (sa, _) = crate::account_data::make_solana_program_address(address, self.program_id());
-            Some(sa)
-        };
-        self.apply_to_account(
-            address,
-            make_solana_address,
-            |account| Some(account.get_solana_address()),
-        )
     }
 
     /// Check if ethereum account exists
