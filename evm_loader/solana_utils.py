@@ -225,7 +225,7 @@ class NeonEvmClient:
     def __create_instruction_data_from_tx(self, ethereum_transaction):
         self.__create_solana_ether_caller(ethereum_transaction)
         caller_trx_cnt = getTransactionCount(client, ethereum_transaction._solana_ether_caller)
-        trx_raw = {'to': solana2ether(ethereum_transaction.contract_account),
+        trx_raw = {'to': None, # TODO FIX IT #solana2ether(ethereum_transaction.contract_account),
                    'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000, 'nonce': caller_trx_cnt,
                    'data': ethereum_transaction.trx_data, 'chainId': 111}
         return make_instruction_data_from_tx(trx_raw, self.solana_wallet.secret_key())
@@ -649,11 +649,6 @@ def create_with_seed_loader_instruction(evm_loader_id, funding, created, base, s
 
 def getBalance(account):
     return client.get_balance(account, commitment=Confirmed)['result']['value']
-
-
-def solana2ether(public_key):
-    from web3 import Web3
-    return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
 
 
 ACCOUNT_INFO_LAYOUT = cStruct(

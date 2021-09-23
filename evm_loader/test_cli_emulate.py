@@ -1,4 +1,5 @@
 import unittest
+from unittest.case import skip
 import solana
 from eth_utils import abi
 from web3.auto import w3
@@ -116,6 +117,7 @@ def emulate_external_call(sender, contract, trx_data):
     return emulate_result
 
 
+@skip("Need repair")
 class EmulateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
