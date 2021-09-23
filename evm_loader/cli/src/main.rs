@@ -7,12 +7,12 @@ use crate::{
         make_solana_program_address,
         EmulatorAccountStorage,
         AccountJSON,
+        TokenAccountJSON,
     },
 };
 
 use evm_loader::{
     instruction::EvmInstruction,
-    solana_backend::SolanaBackend,
     account_data::{
         AccountData,
         Account,
@@ -59,7 +59,6 @@ use clap::{
 
 use solana_program::{
     keccak::{hash,},
-    account_info::AccountInfo
 };
 
 use solana_clap_utils::{
@@ -123,6 +122,7 @@ impl Debug for Config {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, value: Option<U256>) -> CommandResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -147,13 +147,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     };
 
     let (exit_reason, result, applies_logs, used_gas) = {
-        let accounts : Vec<AccountInfo> = Vec::new();
-        let backend = SolanaBackend::new(&storage, Some(&accounts[..]));
         // u64::MAX is too large, remix gives this error:
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
         let gas_limit = 50_000_000;
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
+        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
 
@@ -188,22 +186,26 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let executor_state = executor.into_state();
         let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
         let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)), used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 }))
+            let apply = executor_state.deconstruct();
+            (exit_reason, result, Some(apply), needed_gas)
         } else {
-            (exit_reason, result, None, used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 }))
+            (exit_reason, result, None, needed_gas)
         }
     };
 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs) = applies_logs.unwrap();
+            let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
     
             storage.apply(applies);
+            storage.apply_spl_approves(spl_approves);
+            storage.apply_spl_transfers(spl_transfers);
+            storage.apply_erc20_approves(erc20_approves);
 
             debug!("Applies done");
             "succeed".to_string()
@@ -225,14 +227,22 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
     let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
         .borrow()
-        .iter()
+        .values()
         .cloned()
         .map(SolanaAccountJSON::from)
+        .collect();
+
+    let token_accounts: Vec<TokenAccountJSON> = storage.token_accounts
+        .borrow()
+        .values()
+        .cloned()
+        .map(TokenAccountJSON::from)
         .collect();
 
     let js = json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
+        "token_accounts": token_accounts,
         "result": &hex::encode(&result),
         "exit_status": status,
         "used_gas": used_gas,

@@ -5,7 +5,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 print_non_err_info()
 {
-  egrep -vn "(use|enum|Err\!|E\!|\/\/\/|==|\_\ =>)" $SCRIPTPATH/program/src/*.rs | grep "ProgramError::"
+  egrep -vn "(use|enum|Err\!|E\!|\/\/\/|==|\_\ =>|EXCLUDE\ Err\!)" $SCRIPTPATH/program/src/*.rs | grep "ProgramError::"
 }
 export NON_ERR_INFO=$(print_non_err_info | wc -l)
 if (("NON_ERR_INFO" > 0)); then
