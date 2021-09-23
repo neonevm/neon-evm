@@ -486,15 +486,24 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         where F: FnOnce(&SolidityAccount) -> U,
               D: FnOnce() -> U
     {
-        f(self.get_account(address).unwrap())
+        let account = self.get_account(address);
+        if let Some(account) = account {
+            f(account)
+        } else {
+            panic!("Solidity account {} must be present in the transaction", address)
+        }
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
         where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
               D: FnOnce() -> U
     {
-        let account_info = self.solana_accounts[address];
-        f(&account_info.data.borrow(), account_info.owner)
+        let account_info = self.solana_accounts.get(address);
+        if let Some(account_info) = account_info {
+            f(&account_info.data.borrow(), account_info.owner)
+        } else {
+            panic!("Solana account {} must be present in the transaction", address)
+        }
     }
 
     fn program_id(&self) -> &Pubkey { &self.program_id }
@@ -517,6 +526,15 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
     fn exists(&self, address: &H160) -> bool {
         self.find_account(address).is_some()
+    }
+
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        let account = self.get_account(address);
+        if let Some(account) = account {
+            account.get_solana_address()
+        } else {
+            panic!("Solidity account {} must be present in the transaction", address)
+        }
     }
 
     fn external_call(

@@ -300,7 +300,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                 }
             );
 
-            let target_token_exists = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed()).unwrap().value.is_some();
+            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed());
+            let target_token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
+
             let (target_solana_address, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
             token_accounts.entry(transfer.target_token).or_insert(
                 TokenAccount {
@@ -532,6 +534,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_number(&self) -> U256 { self.block_number.into() }
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
+
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        make_solana_program_address(address, &self.config.evm_loader).0
+    }
 
     fn external_call(
         &self,
