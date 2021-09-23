@@ -292,7 +292,7 @@ class EventTest(unittest.TestCase):
         for rcpt in receipts:
             confirm_transaction(http_client, rcpt)
 
-    def call_partial_signed(self, input, contract, code):
+    def call_partial_signed(self, input, contract_eth, contract, code):
         tx = {'to': contract_eth, 'value': 0, 'gas': 9_999_999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
@@ -315,7 +315,7 @@ class EventTest(unittest.TestCase):
                 if data[0] == 6:
                     return result
 
-    def call_with_holder_account(self, input, contract, code):
+    def call_with_holder_account(self, input, contract_eth, contract, code):
         tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
@@ -339,8 +339,8 @@ class EventTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
-    def call_with_holder_account_by_0x0e(self, input, contract, code):
-        tx = {'to': solana2ether(contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+    def call_with_holder_account_by_0x0e(self, input, contract_eth, contract, code):
+        tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -492,7 +492,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('creator()')
         print("Expecting Exception: Program failed to complete")
         with self.assertRaisesRegex(Exception, 'Program failed to complete'):
-            response = self.call_with_holder_account_by_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+            response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
             print('response:', response)
 
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -512,7 +512,7 @@ class EventTest(unittest.TestCase):
         print('Ok: code owner account has been created')
 
         print('Call creator() with holder account:')
-        result = self.call_with_holder_account_by_0x0e(input=func_name, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+        result = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
         print('result:', result)
 
         self.assertEqual(result['meta']['err'], None)
