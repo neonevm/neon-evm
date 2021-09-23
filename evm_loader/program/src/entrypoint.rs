@@ -18,7 +18,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
-    system_instruction::{create_account, create_account_with_seed},
+    system_instruction::{create_account},
     program::{invoke_signed, invoke},
     rent::Rent,
     sysvar::Sysvar,
@@ -177,58 +177,6 @@ fn process_instruction<'a>(
             debug_print!("create_associated_token_account done");
 
             account_data.pack(&mut account_info.data.borrow_mut())?;
-
-            Ok(())
-        },
-        EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner, token} => {
-            let funding_info = next_account_info(account_info_iter)?;
-            let created_info = next_account_info(account_info_iter)?;
-            let base_info = next_account_info(account_info_iter)?;
-
-            //debug_print!(&("Ether:".to_owned()+&(hex::encode(ether))+" "+&hex::encode([nonce])));
-            if base_info.owner != program_id {return Err!(ProgramError::InvalidArgument; "base_info.owner<{:?}> != program_id<{:?}>", base_info.owner, program_id);}
-            let base_info_data = AccountData::unpack(&base_info.data.borrow())?;
-            match base_info_data {
-                AccountData::Account(_) => (),
-                _ => return Err!(ProgramError::InvalidAccountData),
-            };
-            let caller = SolidityAccount::new(base_info.key, base_info.lamports(), base_info_data, None);
-
-            let space_as_usize = usize::try_from(space).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
-            let account_lamports = Rent::get()?.minimum_balance(space_as_usize) + lamports;
-
-            let (caller_ether, caller_nonce) = caller.get_seeds();
-            let program_seeds = [&[ACCOUNT_SEED_VERSION], caller_ether.as_bytes(), &[caller_nonce]];
-            let seed = std::str::from_utf8(&seed).map_err(|e| E!(ProgramError::InvalidArgument; "Utf8Error={:?}", e))?;
-            debug_print!("{}", account_lamports);
-            debug_print!("{}", space);
-            invoke_signed(
-                &create_account_with_seed(funding_info.key, created_info.key, &base, seed, account_lamports, space, &owner),
-                accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_account_with_seed done");
-
-            if let Some(token) = token {
-                let token_account_info = next_account_info(account_info_iter)?;
-                if *token_account_info.key != token {
-                    return Err!(ProgramError::InvalidArgument; "");
-                }
-                if *token_account_info.key != *created_info.key {
-                    return Err!(ProgramError::InvalidArgument; "");
-                }
-
-                invoke_signed(
-                    &spl_token::instruction::initialize_account(
-                        &spl_token::id(),
-                        token_account_info.key,
-                        &token_mint::id(),
-                        base_info.key,
-                    )?,
-                    accounts, &[&program_seeds[..]]
-                )?;
-                debug_print!("create_associated_token_account done");
-
-            }
 
             Ok(())
         },
