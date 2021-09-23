@@ -4,7 +4,8 @@ use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::eyre::{eyre, WrapErr};
+use color_eyre::Result;
 use tracing::info;
 
 use solana_client::rpc_client::RpcClient;
@@ -33,8 +34,18 @@ pub async fn transfer_token(
     ether_address: ethereum::Address,
     amount: u64,
 ) -> Result<()> {
-    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader())?;
-    let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id())?;
+    let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader()).wrap_err_with(|| {
+        format!(
+            "config::solana_evm_loader() returns {}",
+            &config::solana_evm_loader()
+        )
+    })?;
+    let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id()).wrap_err_with(|| {
+        format!(
+            "config::solana_token_mint_id() returns {}",
+            &config::solana_token_mint_id(),
+        )
+    })?;
 
     let signer_account = signer.pubkey();
     let signer_token_account =
