@@ -30,7 +30,6 @@ use crate::{
     account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{AccountStorage},
-    solidity_account::SolidityAccount,
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
     executor_state::{ ExecutorState, ExecutorSubstate, ApplyState },
     storage_account::{ StorageAccount },
