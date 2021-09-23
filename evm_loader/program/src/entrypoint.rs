@@ -188,9 +188,6 @@ fn process_instruction<'a>(
 
             do_write(account_info, offset, bytes)
         },
-        EvmInstruction::Finalize => {
-            do_finalize(program_id, accounts)
-        },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
         // Does not fit in current vision.
@@ -529,61 +526,6 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
         return Err!(ProgramError::AccountDataTooSmall; "Account data too small data.len()={:?}, offset={:?}, bytes.len()={:?}", data.len(), offset, bytes.len());
     }
     data[offset .. offset+bytes.len()].copy_from_slice(bytes);
-    Ok(())
-}
-
-fn do_finalize<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>]) -> ProgramResult {
-    debug_print!("do_finalize");
-
-    let account_info_iter = &mut accounts.iter();
-    let _program_info = next_account_info(account_info_iter)?;
-    let program_code = next_account_info(account_info_iter)?;
-
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts)?;
-
-    let call_results = {
-        let code_data = {
-            let data = program_code.data.borrow();
-            let contract_info_data = AccountData::unpack(&data)?;
-            match contract_info_data {
-                AccountData::Contract (..) => (),
-                _ => return Err!(ProgramError::InvalidAccountData),
-            };
-
-            let (_contract_header, rest) = data.split_at(contract_info_data.size());
-            let (code_len, rest) = rest.split_at(8);
-            let code_len = code_len.try_into().ok().map(u64::from_le_bytes).unwrap();
-            let code_len = usize::try_from(code_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            let (code, _rest) = rest.split_at(code_len);
-            code.to_vec()
-        };
-
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(u64::MAX), &account_storage);
-        let mut executor = Machine::new(executor_state);
-
-        debug_print!("Executor initialized");
-        executor.create_begin(account_storage.origin(), code_data, U256::zero(), u64::MAX)?;
-        let (result, exit_reason) = executor.execute();
-        debug_print!("Call done");
-
-        let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
-        if exit_reason.is_succeed() {
-            debug_print!("Succeed execution");
-            let apply = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some(apply))
-        } else {
-            (exit_reason, used_gas, result, None)
-        }
-    };
-
-    applies_and_invokes(
-        program_id,
-        &mut account_storage,
-        accounts,
-        None,
-        call_results)?;
-
     Ok(())
 }
 
