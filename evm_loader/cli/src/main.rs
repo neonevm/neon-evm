@@ -100,6 +100,7 @@ use evm_loader::{
     executor::Machine,
     solana_backend::AccountStorage,
 };
+// use object::Object;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -1018,6 +1019,29 @@ fn command_get_ether_account_data (
     }
 }
 
+fn command_neon_elf(
+    _config: &Config,
+    program_location: &str,
+) -> CommandResult {
+    eprintln!("command_neon_elf path={}", &program_location.to_string());
+    // let program_data = read_program_data(program_location)?;
+    // let program_data = &program_data[..];
+    // let elf = object::read::elf::ElfFile::parse(program_data)?;
+    // for val in elf.symbols() {
+    //     println!("Got symbol: {:?}", val);
+    // }
+    Ok(())
+}
+
+fn get_file_as_byte_vec(filename: &String) -> Vec<u8> {
+    let mut f = File::open(&filename).expect("no file found");
+    let metadata = fs::metadata(&filename).expect("unable to read metadata");
+    let mut buffer = vec![0; metadata.len() as usize];
+    f.read(&mut buffer).expect("buffer overflow");
+
+    buffer
+}
+
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
@@ -1281,6 +1305,18 @@ fn main() {
                         .help("Ethereum address"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("get-neon-config")
+                .about("Get values stored in elf")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/evm_loader.so"),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1388,6 +1424,11 @@ fn main() {
                 command_get_ether_account_data(&config, &ether);
 
                 Ok(())
+            }
+            ("get-neon-config", Some(arg_matches)) => {
+                let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+
+                command_neon_elf(&config, &program_location)
             }
             _ => unreachable!(),
         };

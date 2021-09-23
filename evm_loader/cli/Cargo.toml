@@ -34,3 +34,4 @@ solana-program = { version = "1.7.9", default_features = false }
 rand = "0.8"
 ethereum-types = "0.11.0"
 base64 = { version = "0.13.0" }
+#object = "0.26.2"
