@@ -1,6 +1,6 @@
 //! Faucet ETH token module.
 
-use color_eyre::eyre::{eyre, WrapErr};
+use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use tracing::info;
 
@@ -33,6 +33,12 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
     solana::transfer_token(operator, ether_address, params.amount)
         .await
-        .wrap_err_with(|| format!("solana::transfer_token(operator, {})", ether_address,))?;
+        .map_err(|e| {
+            eyre!(
+                "solana::transfer_token(operator, {}): {:?}",
+                ether_address,
+                e
+            )
+        })?;
     Ok(())
 }

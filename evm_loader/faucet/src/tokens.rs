@@ -23,25 +23,6 @@ pub struct Airdrop {
     amount: u64,
 }
 
-/// Initializes local cache of tokens properties.
-pub async fn init(addresses: Vec<String>) -> Result<()> {
-    info!("Checking tokens...");
-
-    let http = web3::transports::Http::new(&config::web3_rpc_url())?;
-    let web3 = web3::Web3::new(http);
-
-    for token_address in addresses {
-        let a = ethereum::address_from_str(&token_address)?;
-        TOKENS.write().unwrap().insert(
-            token_address,
-            Token::new(get_decimals(web3.eth(), a).await?),
-        );
-    }
-
-    info!("All tokens are deployed and sane");
-    Ok(())
-}
-
 /// Processes the airdrop: sends needed transactions into Ethereum.
 pub async fn airdrop(params: Airdrop) -> Result<()> {
     info!("Processing ERC20 {:?}...", params);
@@ -57,6 +38,10 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     let admin_key: SecretKey = config::web3_private_key().parse()?;
     let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
+
+    if TOKENS.write().unwrap().is_empty() {
+        init(web3.eth().clone(), config::tokens()).await?;
+    }
 
     let recipient = ethereum::address_from_str(&params.wallet)?;
     let amount = U256::from(params.amount);
@@ -81,6 +66,22 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         })?;
     }
 
+    Ok(())
+}
+
+/// Initializes local cache of tokens properties.
+async fn init<T: Transport>(eth: Eth<T>, addresses: Vec<String>) -> Result<()> {
+    info!("Checking tokens...");
+
+    for token_address in addresses {
+        let a = ethereum::address_from_str(&token_address)?;
+        TOKENS.write().unwrap().insert(
+            token_address,
+            Token::new(get_decimals(eth.clone(), a).await?),
+        );
+    }
+
+    info!("All tokens are deployed and sane");
     Ok(())
 }
 

@@ -87,16 +87,11 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::load(config_file)?;
     config::show();
 
-    let mut enabled = false;
-    if config::web3_enabled() {
-        tokens::init(config::tokens()).await?;
-        enabled = true;
-    }
     if config::solana_enabled() {
         solana::init_client(config::solana_url());
-        enabled = true;
     }
-    if enabled {
+
+    if config::web3_enabled() || config::solana_enabled() {
         server::start(config::rpc_port(), workers).await?;
     }
 

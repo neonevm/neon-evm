@@ -11,7 +11,7 @@ use crate::{config, eth_token, tokens};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
-    info!("Start listening port {}", rpc_port);
+    info!("Port {}", rpc_port);
 
     HttpServer::new(|| {
         let mut cors = Cors::default()

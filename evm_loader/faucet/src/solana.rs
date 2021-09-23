@@ -36,13 +36,13 @@ pub async fn transfer_token(
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader()).wrap_err_with(|| {
         format!(
-            "config::solana_evm_loader() returns {}",
+            "config::solana_evm_loader returns {}",
             &config::solana_evm_loader()
         )
     })?;
     let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id()).wrap_err_with(|| {
         format!(
-            "config::solana_token_mint_id() returns {}",
+            "config::solana_token_mint_id returns {}",
             &config::solana_token_mint_id(),
         )
     })?;
