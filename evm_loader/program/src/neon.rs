@@ -10,17 +10,27 @@ use crate::account_data::ACCOUNT_SEED_VERSION;
 #[used]
 pub static NEON_VERSION: &str = NEON_CONST_VERSION;
 
+/// NEON REVISION AS STR
+#[no_mangle]
+#[used]
+pub static NEON_REVISION_AS_STR: &str = NEON_CONST_REVISION;
+
 /// NEON REVISION
 #[no_mangle]
 #[used]
-pub static NEON_REVISION: &str = NEON_CONST_REVISION;
+pub static NEON_REVISION_AS_BYTES: &[u8] = NEON_CONST_REVISION.as_bytes();
 
 /// NEON SEED VERSION
 #[no_mangle]
 #[used]
-pub static NEON_SEED_VERSION: u8 = ACCOUNT_SEED_VERSION;
+pub static NEON_SEED_VERSION_AS_U8: u8 = ACCOUNT_SEED_VERSION;
+
+/// NEON BYTE ARRAY AS REF
+#[no_mangle]
+#[used]
+pub static NEON_BYTE_ARRAY_AS_REF_ON_4_BYTES: &[u8; 4] = &[0x12, 0x34, 0x56, 0x78];
 
 /// NEON BYTE ARRAY
 #[no_mangle]
 #[used]
-pub static NEON_BYTE_ARRAY: &[u8; 4] = &[0x12, 0x34, 0x56, 0x78];
+pub static NEON_BYTE_ARRAY: &[u8] = b"byte array from string";
