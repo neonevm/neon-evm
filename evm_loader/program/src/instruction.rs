@@ -25,21 +25,6 @@ pub enum EvmInstruction<'a> {
         bytes: &'a [u8],
     },
 
-    /// Finalize an account loaded with program data for execution
-    ///
-    /// The exact preparation steps is loader specific but on success the loader must set the executable
-    /// bit of the account.
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] The account to prepare for execution
-    ///   1. \[WRITE\] Contract code account (Code account)
-    ///   2. \[WRITE\] Caller (Ether account)
-    ///   3. \[SIGNER\] Signer for Ether account
-    ///   4. \[\] Clock sysvar
-    ///   5. \[\] Rent sysvar
-    ///   ... other Ether accounts
-    Finalize,
-
     ///
     /// Create Ethereum account (create program_address account and write data)
     /// # Account references
@@ -227,10 +212,6 @@ impl<'a> EvmInstruction<'a> {
                 let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
                 let (bytes, _) = rest.split_at(length);
                 EvmInstruction::Write {offset, bytes}
-            },
-            1 => {
-                let (_, _rest) = rest.split_at(3);
-                EvmInstruction::Finalize
             },
             2 => {
                 let (_, rest) = rest.split_at(3);
