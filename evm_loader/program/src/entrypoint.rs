@@ -331,9 +331,7 @@ fn process_instruction<'a>(
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
-            check_ethereum_authority(
-                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                &H160::from_slice(from_addr), trx.nonce, &trx.chain_id)?;
+            check_ethereum_transaction(&account_storage, &H160::from_slice(from_addr), &trx)?;
 
             payment::transfer_from_operator_to_collateral_pool(
                 program_id,
@@ -706,10 +704,9 @@ fn do_begin<'a>(
 
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
+
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    check_ethereum_authority(
-        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
-        &storage.caller_and_nonce()?.0, trx.nonce, &trx.chain_id)?;
+    check_ethereum_transaction(&account_storage, &caller, &trx)?;
 
     payment::transfer_from_operator_to_collateral_pool(
         program_id,
@@ -988,24 +985,42 @@ fn invoke_on_return<'a>(
     Ok(())
 }
 
-fn check_ethereum_authority<'a>(
-   sender: &SolidityAccount<'a>,
+fn check_ethereum_transaction(
+   account_storage: &ProgramAccountStorage,
    recovered_address: &H160,
-   trx_nonce: u64,
-   chain_id: &U256,
+   transaction: &UnsignedTransaction
 ) -> ProgramResult
 {
-    if sender.get_ether() != *recovered_address {
-        return Err!(ProgramError::InvalidArgument; "Invalid sender: actual {}, recovered {}", sender.get_ether(), recovered_address);
+    let sender_account = account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+
+    if sender_account.get_ether() != *recovered_address {
+        return Err!(ProgramError::InvalidArgument; "Invalid sender: actual {}, recovered {}", sender_account.get_ether(), recovered_address);
     }
 
-    if sender.get_nonce() != trx_nonce {
-        return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender.get_nonce(), trx_nonce);
+    if sender_account.get_nonce() != transaction.nonce {
+        return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender_account.get_nonce(), transaction.nonce);
     }
 
-    if crate::solana_backend::chain_id() != *chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::solana_backend::chain_id());
+    let contract_address: H160 = transaction.to.map_or_else(
+        || {
+            let mut stream = rlp::RlpStream::new_list(2);
+            stream.append(recovered_address);
+            stream.append(&U256::from(transaction.nonce));
+            crate::utils::keccak256_h256(&stream.out()).into()
+        },
+        |to| to
+    );
+    let contract_account = account_storage.get_contract_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+
+    if contract_account.get_ether() != contract_address {
+        return Err!(ProgramError::InvalidArgument; "Invalid contract: actual {}, expected {}", contract_account.get_ether(), contract_address);
     }
+
+
+    if crate::solana_backend::chain_id() != transaction.chain_id {
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::solana_backend::chain_id());
+    }
+
 
     Ok(())
 }

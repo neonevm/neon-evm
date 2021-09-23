@@ -37,15 +37,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        program_and_code = cls.loader.deployChecked(
+        (cls.owner_contract, cls.eth_contract, cls.contract_code) = cls.loader.deployChecked(
             CONTRACTS_DIR + 'helloWorld.binary',
             cls.caller,
             cls.caller_ether
         )
-        cls.owner_contract = program_and_code[0]
-        cls.contract_code = program_and_code[2]
 
-        print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
+        print("contract id: ", cls.owner_contract, cls.eth_contract)
         print("code id: ", cls.contract_code)
 
         collateral_pool_index = 2
@@ -67,7 +65,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     def get_tx(self):
         return {
-            'to': solana2ether(self.owner_contract),
+            'to': self.eth_contract,
             'value': 0,
             'gas': 9999999,
             'gasPrice': 1_000_000_000,
@@ -290,7 +288,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # def test_fail_on_no_signature(self):
     #     tx_1 = {
-    #         'to': solana2ether(self.owner_contract),
+    #         'to': self.eth_contract,
     #         'value': 0,
     #         'gas': 1,
     #         'gasPrice': 1,
@@ -324,7 +322,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # def test_check_wo_checks(self):
     #     tx_1 = {
-    #         'to': solana2ether(self.owner_contract),
+    #         'to': self.eth_contract,
     #         'value': 0,
     #         'gas': 0,
     #         'gasPrice': 0,
