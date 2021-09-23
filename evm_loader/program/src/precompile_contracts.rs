@@ -109,10 +109,7 @@ fn solana_call<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a
                 let pubkey = if translate[0] == 0 {
                     Pubkey::new(pubkey)
                 } else {
-                    match backend.get_account_solana_address(&H160::from_slice(&pubkey[12..])) {
-                        Some(key) => key,
-                        None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
-                    }
+                    backend.get_account_solana_address(&H160::from_slice(&pubkey[12..]))
                 };
                 accounts.push(AccountMeta {
                     is_signer: signer[0] != 0,
@@ -145,19 +142,13 @@ fn solana_call<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a
             let base = if tr_base[0] == 0 {
                 Pubkey::new(base)
             } else {
-                match backend.get_account_solana_address(&H160::from_slice(&base[12..])) {
-                    Some(key) => key,
-                    None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
-                }
+                backend.get_account_solana_address(&H160::from_slice(&base[12..]))
             };
 
             let owner = if tr_owner[0] == 0 {
                 Pubkey::new(owner)
             } else {
-                match backend.get_account_solana_address(&H160::from_slice(&owner[12..])) {
-                    Some(key) => key,
-                    None => { return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new())); },
-                }
+                backend.get_account_solana_address(&H160::from_slice(&owner[12..]))
             };
 
             let (_, seed) = input.split_at(66);
