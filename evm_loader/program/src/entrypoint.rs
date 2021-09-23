@@ -130,12 +130,17 @@ fn process_instruction<'a>(
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
             
-            let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-            let expected_address = Pubkey::create_program_address(&program_seeds, program_id)?;
+            let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
+            let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
             if expected_address != *account_info.key {
                 return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
             };
-            
+            if expected_nonce != nonce {
+                return Err!(ProgramError::InvalidArgument; "expected_nonce<{:?}> != nonce<{:?}>", expected_nonce, nonce);
+            };
+
+            let nonce_bytes = &[nonce];
+            program_seeds.push(nonce_bytes);
 
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
