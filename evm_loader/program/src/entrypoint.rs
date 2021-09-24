@@ -633,9 +633,7 @@ fn do_begin<'a>(
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    check_ethereum_authority(
-        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
-        &storage.caller_and_nonce()?.0, trx.nonce, &trx.chain_id)?;
+    check_ethereum_transaction(&account_storage, &caller, &trx)?;
 
     payment::transfer_from_operator_to_collateral_pool(
         program_id,
