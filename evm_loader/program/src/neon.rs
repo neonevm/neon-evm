@@ -4,7 +4,7 @@
 use const_format::formatcp;
 
 const NEON_CONST_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-const NEON_CONST_REVISION: &str = "a972362fe1b6d4bea87ffe2cd3bda854fd80c60d";
+const NEON_CONST_REVISION: &str = env!("BUILDKITE_COMMIT");
 use crate::account_data::ACCOUNT_SEED_VERSION;
 const NEON_CONST_SEED_VERSION: &str = formatcp!("{:?}", ACCOUNT_SEED_VERSION);
 use crate::account_data::ACCOUNT_MAX_SIZE;
