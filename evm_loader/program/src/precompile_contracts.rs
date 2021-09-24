@@ -9,7 +9,6 @@ use evm::{Capture, ExitReason, H160, U256};
 use solana_program::secp256k1_recover::secp256k1_recover;
 use std::convert::{TryInto};
 
-const SYSTEM_ACCOUNT_SOLANA: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
@@ -24,8 +23,7 @@ const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
-    *address == SYSTEM_ACCOUNT_SOLANA
-        || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+           *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -47,9 +45,6 @@ pub fn call_precompile<'a, B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
 ) -> Option<PrecompileResult> {
-    if address == SYSTEM_ACCOUNT_SOLANA {
-        return Some(solana_call(input, state));
-    }
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
         return Some(erc20_wrapper(input, context, state));
     }
@@ -82,89 +77,6 @@ pub fn call_precompile<'a, B: AccountStorage>(
     }
 
     None
-}
-
-
-fn solana_call<'a, B: AccountStorage>(input: &[u8], state: &mut ExecutorState<'a, B>) -> Capture<(ExitReason, Vec<u8>), Infallible> {
-    use solana_program::pubkey::Pubkey;
-    use solana_program::instruction::Instruction;
-    use solana_program::instruction::AccountMeta;
-
-    debug_print!("solana call");
-    debug_print!("input: {}", &hex::encode(&input));
-
-    let backend = state.backend();
-
-    let (cmd, input) = input.split_at(1);
-    match cmd[0] {
-        0 => {
-            let (program_id, input) = input.split_at(32);
-            let program_id = Pubkey::new(program_id);
-            let (acc_length, input) = input.split_at(2);
-            let acc_length = acc_length.try_into().ok().map(u16::from_be_bytes).unwrap();
-            let mut accounts = Vec::new();
-            for i in 0..acc_length {
-                let data = array_ref![input, 35*i as usize, 35];
-                let (translate, signer, writable, pubkey) = array_refs![data, 1, 1, 1, 32];
-                let pubkey = if translate[0] == 0 {
-                    Pubkey::new(pubkey)
-                } else {
-                    backend.get_account_solana_address(&H160::from_slice(&pubkey[12..]))
-                };
-                accounts.push(AccountMeta {
-                    is_signer: signer[0] != 0,
-                    is_writable: writable[0] != 0,
-                    pubkey,
-                });
-                debug_print!("Acc: {}", pubkey);
-            };
-            let (_, input) = input.split_at(35 * acc_length as usize);
-            debug_print!("{}", &hex::encode(&input));
-
-
-            let result = backend.external_call(
-                &Instruction { program_id, accounts, data: input.to_vec() }
-            );
-
-            debug_print!("result: {:?}", result);
-
-            #[allow(unused_variables)]
-            if let Err(err) = result {
-                debug_print!("result/err: {}", err);
-                return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()));
-            };
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Stopped), Vec::new()))
-        },
-        1 => {
-            let data = array_ref![input, 0, 66];
-            let (tr_base, tr_owner, base, owner) = array_refs![data, 1, 1, 32, 32];
-
-            let base = if tr_base[0] == 0 {
-                Pubkey::new(base)
-            } else {
-                backend.get_account_solana_address(&H160::from_slice(&base[12..]))
-            };
-
-            let owner = if tr_owner[0] == 0 {
-                Pubkey::new(owner)
-            } else {
-                backend.get_account_solana_address(&H160::from_slice(&owner[12..]))
-            };
-
-            let (_, seed) = input.split_at(66);
-            let seed = if let Ok(seed) = std::str::from_utf8(seed) {seed}
-            else {return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()));};
-
-            let pubkey = if let Ok(pubkey) = Pubkey::create_with_seed(&base, seed, &owner) {pubkey}
-            else {return Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()));};
-
-            debug_print!("result: {}", &hex::encode(pubkey.as_ref()));
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), pubkey.as_ref().to_vec()))
-        },
-        _ => {
-            Capture::Exit((ExitReason::Error(evm::ExitError::InvalidRange), Vec::new()))
-        }
-    }
 }
 
 // ERC20 method ids:

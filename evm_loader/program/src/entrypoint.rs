@@ -376,20 +376,25 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[4..];
+            let trx_accounts = &accounts[6..];
 
             if !operator_sol_info.is_signer {
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
+
+            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
+                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
+                else {err}
+            })?;
             storage.check_accounts(program_id, trx_accounts)?;
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-
             let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
             match caller_info_data {
                 AccountData::Account(ref mut acc) => {
@@ -404,6 +409,30 @@ fn process_instruction<'a>(
                 },
                 _ => return Err!(ProgramError::InvalidAccountData),
             };
+
+            let executor = Machine::restore(&storage, &account_storage);
+            debug_print!("Executor restored");
+
+            let executor_state = executor.into_state();
+            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+
+            let (gas_limit, gas_price) = storage.get_gas_params()?;
+            if used_gas > gas_limit {
+                return Err!(ProgramError::InvalidArgument);
+            }
+            let gas_price_wei = U256::from(gas_price);
+            let fee = U256::from(used_gas)
+                .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
+
+            let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+
+            token::transfer_token(
+                accounts,
+                user_eth_info,
+                operator_eth_info,
+                caller_info,
+                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                &fee)?;
 
             payment::burn_operators_deposit(
                 storage_info,
