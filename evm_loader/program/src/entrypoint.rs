@@ -410,10 +410,7 @@ fn process_instruction<'a>(
                 _ => return Err!(ProgramError::InvalidAccountData),
             };
 
-            let backend = SolanaBackend::new(&account_storage, Some(trx_accounts));
-            debug_print!("  backend initialized");
-
-            let executor = Machine::restore(&storage, backend);
+            let executor = Machine::restore(&storage, &account_storage);
             debug_print!("Executor restored");
 
             let executor_state = executor.into_state();
