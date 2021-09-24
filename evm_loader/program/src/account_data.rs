@@ -453,4 +453,3 @@ impl ERC20Allowance {
         Self::SIZE
     }
 }
-

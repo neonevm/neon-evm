@@ -300,7 +300,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                 }
             );
 
-            let target_token_exists = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed()).unwrap().value.is_some();
+            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed());
+            let target_token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
+
             let (target_solana_address, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
             token_accounts.entry(transfer.target_token).or_insert(
                 TokenAccount {
@@ -404,74 +406,6 @@ pub fn make_solana_program_address(
     Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()], program_id)
 }
 
-pub fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
-    where
-        F: Fn() -> client_error::Result<T>,
-{
-    loop {
-        let result = op();
-
-        if let Err(client_error::ClientError {
-                       kind: client_error::ClientErrorKind::Reqwest(ref reqwest_error),
-                       ..
-                   }) = result
-        {
-            let can_retry = reqwest_error.is_timeout()
-                || reqwest_error.status()
-                .map_or(false,|s| s == StatusCode::BAD_GATEWAY || s == StatusCode::GATEWAY_TIMEOUT);
-            if can_retry && retries > 0 {
-                eprintln!("RPC request timeout, {} retries remaining", retries);
-                retries -= 1;
-                continue;
-            }
-        }
-        return result;
-    }
-}
-
-fn simulate_transaction(
-    rpc_client: &RpcClient,
-    transaction: Transaction,
-) -> ProgramResult {
-    eprintln!("Simulating transaction {:?}", transaction,);
-    let mut t = transaction;
-
-    let response = retry_rpc_operation(10, || rpc_client.get_recent_blockhash());
-    let blockhash = match response {
-        Ok(res) => res,
-        Err(fail)  => panic!("rpc_client.get_recent_blockhash failed {:?}", fail),
-    };
-    t.message.recent_blockhash = blockhash.0;
-
-    let sim_result = rpc_client.simulate_transaction_with_config(
-        &t,
-        RpcSimulateTransactionConfig {
-            sig_verify: false,
-            commitment: Option::from(CommitmentConfig::confirmed()),
-            ..RpcSimulateTransactionConfig::default()
-        },
-    );
-
-    eprintln!("sim_result: {:?}", sim_result);
-
-    match sim_result {
-        Ok(success) => {
-            if success.value.err.is_some() {
-                #[allow(unused_variables)]
-                if let TransactionError::InstructionError(n, instruction_error) = success.value.err.unwrap() {
-                    eprintln!("InstructionError: {:?}", instruction_error);
-                    return Err(ProgramError::try_from(instruction_error).unwrap());
-                }
-            }
-            else {
-                return Ok(());
-            }
-        }
-        Err(fail) => panic!("rpc_client.simulate_transaction_with_config failed {:?}", fail),
-    }
-    Ok(())
-}
-
 impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
     where F: FnOnce(&SolidityAccount) -> U,
@@ -533,30 +467,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
 
-    fn external_call(
-        &self,
-        instruction: &Instruction
-    ) -> ProgramResult {
-        {
-            let mut external_account_metas = self.solana_accounts.borrow_mut();
-            for account in &instruction.accounts {
-                external_account_metas.insert(account.pubkey, account.clone());
-            }
-
-            let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
-            external_account_metas.insert(contract_meta.pubkey, contract_meta);
-        }
-        let instructions = [instruction.clone()];
-        let msg = Message::new(
-            &instructions,
-            Some(&self.config.signer.pubkey()));
-        let transaction = Transaction::new_unsigned(msg,);
-
-        // simulate transaction instead of a call
-        //         invoke_signed(
-        //             instruction,
-        //             account_infos,
-        //             &[&contract_seeds[..]]
-        simulate_transaction(&*self.config.rpc_client, transaction)
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        make_solana_program_address(address, &self.config.evm_loader).0
     }
 }

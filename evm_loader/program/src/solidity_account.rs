@@ -41,7 +41,7 @@ impl<'a> SolidityAccount<'a> {
         let balance = U256::from(balance);
         let balance = balance * min_value;
 
-        debug_print!("  SolidityAccount::new solana_adress={} balance={}", solana_address, balance);
+        debug_print!("  SolidityAccount::new solana_address={} balance={}", solana_address, balance);
         Self{account_data, solana_address, code_data, balance}
     }
 
