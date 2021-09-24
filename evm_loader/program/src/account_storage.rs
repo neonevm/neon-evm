@@ -12,7 +12,6 @@ use evm::{H160,  U256};
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     pubkey::Pubkey,
-    instruction::Instruction,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
     program::invoke_signed,
@@ -534,43 +533,6 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             account.get_solana_address()
         } else {
             panic!("Solidity account {} must be present in the transaction", address)
-        }
-    }
-
-    fn external_call(
-        &self,
-        instruction: &Instruction
-    ) -> ProgramResult {
-        let (contract_eth, contract_nonce) = self.seeds(&self.contract()).unwrap();   // do_call already check existence of Ethereum account with such index
-        let contract_seeds = [&[ACCOUNT_SEED_VERSION], contract_eth.as_bytes(), &[contract_nonce]];
-
-        let mut account_infos: Vec<AccountInfo> = vec![
-            self.solana_accounts[&instruction.program_id].clone()
-        ];
-        for meta in &instruction.accounts {
-            account_infos.push(self.solana_accounts[&meta.pubkey].clone());
-        }
-
-        match self.seeds(&self.origin()) {
-            Some((sender_eth, sender_nonce)) => {
-                let sender_seeds = [&[ACCOUNT_SEED_VERSION], sender_eth.as_bytes(), &[sender_nonce]];
-                invoke_signed(
-                    instruction,
-                    &account_infos,
-                    &[&sender_seeds[..], &contract_seeds[..]]
-                )
-                // Todo: neon-evm does not return an external call error.
-                // https://github.com/neonlabsorg/neon-evm/issues/120
-                // debug_print!("invoke_signed done.");
-                // debug_print!("invoke_signed returned: {:?}", program_result);
-            }
-            None => {
-                invoke_signed(
-                    instruction,
-                    &account_infos,
-                    &[&contract_seeds[..]]
-                )
-            }
         }
     }
 }
