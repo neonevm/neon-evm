@@ -211,49 +211,9 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
-                AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_recover), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_create_receiver), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
-
-    def sol_instr_10_continue_with_holder(self, storage_account, step_count, contract, code):
-        return TransactionInstruction(
-            program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-            keys=[
-                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-
-                # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # System program account:
-                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-
-                AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=code, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
+                # AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
 
                 AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
@@ -298,20 +258,26 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=code, is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.reId_caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_caller_code, is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.reId_reciever, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_reciever), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_reciever_code, is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.reId_recover, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_recover), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_recover_code, is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.reId_create_receiver, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_create_receiver), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_create_receiver_code_account, is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.reId_revert, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId_revert), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.reId_revert_code, is_signer=False, is_writable=True),
