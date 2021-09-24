@@ -10,16 +10,11 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 # Note: create stub Cargo.toml to speedup build
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
-WORKDIR /opt/evm_loader/program
-RUN /opt/evm_loader/ci_checks.sh
-RUN cargo clippy
-RUN cargo build-bpf --features no-logs
-WORKDIR /opt/evm_loader/cli
-RUN cargo clippy
-RUN cargo build --release
-WORKDIR /opt/evm_loader/performance/sender
-RUN cargo clippy
-RUN cargo build --release
+WORKDIR /opt/evm_loader
+RUN cd program && /opt/evm_loader/ci_checks.sh
+RUN cargo clippy && \
+    cargo build --release && \
+    cargo build-bpf --features no-logs
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
@@ -37,7 +32,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/*.sol /opt/
 COPY evm_loader/precompiles_testdata.json /opt/
-COPY evm_loader/ERC20/src/*.sol /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
@@ -59,14 +53,13 @@ RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=evm-loader-builder /opt/evm_loader/program/target/deploy/evm_loader.so /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/cli/target/release/neon-cli /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/performance/sender/target/release/sender /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader.so /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/release/sender /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh evm_loader/test_token_keypair evm_loader/test_token_owner evm_loader/test_token_config.yml /opt/
-COPY evm_loader/ERC20/test/test_*.py /opt/
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/

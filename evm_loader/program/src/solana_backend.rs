@@ -4,9 +4,7 @@ use crate::{
     utils::keccak256_h256,
 };
 use evm::{backend::Basic, H160, H256, U256};
-use solana_program::{
-    entrypoint::ProgramResult, instruction::Instruction, pubkey::Pubkey,
-};
+use solana_program::pubkey::Pubkey;
 use crate::token::{get_token_account_data, get_token_mint_data};
 use crate::account_data::{AccountData, ACCOUNT_SEED_VERSION};
 
@@ -138,12 +136,5 @@ pub trait AccountStorage {
     /// Get account seeds
     fn seeds(&self, address: &H160) -> Option<(H160, u8)> {
         self.apply_to_account(address, || None, |account| Some(account.get_seeds()))
-    }
-
-    /// External call
-    /// # Errors
-    /// Will return `Err` if the external call returns err
-    fn external_call(&self, _: &Instruction) -> ProgramResult {
-        Ok(())
     }
 }

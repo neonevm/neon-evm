@@ -253,7 +253,7 @@ def deploy_contracts(args):
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
 
-    res = instance.loader.deploy(factory_path, caller=instance.caller, config="config.yml"+args.postfix)
+    res = instance.loader.deploy(factory_path, config="config.yml"+args.postfix)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
     print("factory", factory)
