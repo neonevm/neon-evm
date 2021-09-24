@@ -87,6 +87,7 @@ use solana_transaction_status::{
 };
 
 use libsecp256k1::SecretKey;
+use libsecp256k1::PublicKey;
 
 use rlp::RlpStream;
 
@@ -186,14 +187,14 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         let executor_state = executor.into_state();
         let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
         let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
-
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), used_gas)
+            (exit_reason, result, Some(apply), needed_gas)
         } else {
-            (exit_reason, result, None, used_gas)
+            (exit_reason, result, None, needed_gas)
         }
     };
 
@@ -505,7 +506,7 @@ fn make_deploy_ethereum_transaction(
             to: None,
             nonce: trx_count,
             gas_limit: 9_999_999.into(),
-            gas_price: 1_000_000_000.into(),
+            gas_price: 0.into(),
             value: 0.into(),
             data: program_data.to_owned(),
             chain_id: 111.into(), // Will fixed in #61 issue
@@ -682,7 +683,7 @@ fn create_ethereum_contract_accounts_in_solana(
     program_code: &Pubkey,
     program_seed: &str,
     program_code_len: usize,
-) -> Result<(), Error> {
+) -> Result<Vec<Instruction>, Error> {
     let account_header_size = 1+Account::SIZE;
     let contract_header_size = 1+Contract::SIZE;
 
@@ -725,9 +726,7 @@ fn create_ethereum_contract_accounts_in_solana(
         )
     ];
 
-    send_transaction(config, &instructions)?;
-
-    Ok(())
+    Ok(instructions)
 }
 
 fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
@@ -834,8 +833,7 @@ fn send_transaction(
 
 fn command_deploy(
     config: &Config,
-    program_location: &str,
-    caller_arg: Pubkey
+    program_location: &str
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
@@ -844,25 +842,33 @@ fn command_deploy(
     // Create ethereum caller private key from sign of array by signer
     // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
 
-    let caller_private_eth = {
+    let (caller_private_eth, caller_ether) = {
         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
         let mut sign_arr: [u8;32] = Default::default();
         sign_arr.clone_from_slice(&private_bytes[..32]);
-        SecretKey::parse(&sign_arr).unwrap()
+        let caller_private = SecretKey::parse(&sign_arr).unwrap();
+        let caller_public = PublicKey::from_secret_key(&caller_private);
+        let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
+        (caller_private, caller_ether)
     };
 
-    // if caller_sol != caller_arg {
-    //     return Err("Could not acquire caller account private key".to_string().into());
-    // }
+    let (caller_sol, _) = make_solana_program_address(&caller_ether, &config.evm_loader);
+
+    if config.rpc_client.get_account_with_commitment(&caller_sol, CommitmentConfig::confirmed())?.value.is_none() {
+        debug!("Caller account not found");
+        command_create_ether_account(config, &caller_ether, 10_u64.pow(9), 0  )?;
+    } else {
+        debug!(" Caller account found");
+    }
 
     // Get caller nonce
-    let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
+    let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_sol)?;
 
     let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
-    create_ethereum_contract_accounts_in_solana(
+    let mut instrstruction = create_ethereum_contract_accounts_in_solana(
         config,
         &program_id,
         &program_ether,
@@ -896,7 +902,7 @@ fn command_deploy(
                         AccountMeta::new(program_id, false),
                         AccountMeta::new(program_token, false),
                         AccountMeta::new(program_code, false),
-                        AccountMeta::new(caller_arg, false),
+                        AccountMeta::new(caller_sol, false),
                         AccountMeta::new(caller_token, false),
 
                         AccountMeta::new_readonly(config.evm_loader, false),
@@ -908,7 +914,8 @@ fn command_deploy(
     {
         debug!("trx_from_account_data_instruction");
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
-        send_transaction(config, &[trx_from_account_data_instruction])?;
+        instrstruction.push(trx_from_account_data_instruction);
+        send_transaction(config, &instrstruction)?;
     }
 
     // Continue while no result
@@ -925,7 +932,7 @@ fn command_deploy(
                             AccountMeta::new(program_id, false),
                             AccountMeta::new(program_token, false),
                             AccountMeta::new(program_code, false),
-                            AccountMeta::new(caller_arg, false),
+                            AccountMeta::new(caller_sol, false),
                             AccountMeta::new(caller_token, false),
 
                             AccountMeta::new_readonly(config.evm_loader, false),
@@ -1267,14 +1274,6 @@ fn main() {
                         .required(true)
                         .help("/path/to/program.o"),
                 )
-                .arg(
-                    Arg::with_name("caller")
-                        .value_name("CALLER")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_pubkey)
-                        .help("Solana pubkey of the caller"),
-                )
         )
         .subcommand(
             SubCommand::with_name("get-ether-account-data")
@@ -1385,10 +1384,8 @@ fn main() {
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-                let val = arg_matches.value_of("caller").unwrap().to_string();
-                let caller = Pubkey::from_str(&val).unwrap();
 
-                command_deploy(&config, &program_location, caller)
+                command_deploy(&config, &program_location)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
