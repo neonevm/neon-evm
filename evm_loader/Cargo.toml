@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    'cli',
+    'program',
+    'performance/sender'
+]
+exclude = [
+    'rust-evm'
+]
