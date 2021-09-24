@@ -45,10 +45,9 @@ incinerator = "1nc1nerator11111111111111111111111111111111"
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-# EVM_LOADER = os.environ.get("EVM_LOADER")
-# ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
-EVM_LOADER="DZs4oh51XqbgneUKcHgLxES4f1LfME5oTndzcU8qxHvi"
-ETH_TOKEN_MINT_ID : PublicKey = PublicKey("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU")
+EVM_LOADER = os.environ.get("EVM_LOADER")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 client = Client(solana_url)
 path_to_solana = 'solana'
