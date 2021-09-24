@@ -32,7 +32,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/*.sol /opt/
 COPY evm_loader/precompiles_testdata.json /opt/
-COPY evm_loader/ERC20/src/*.sol /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
@@ -61,7 +60,6 @@ COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py evm_loader/deploy-test.sh evm_loader/test_token_keypair evm_loader/test_token_owner evm_loader/test_token_config.yml /opt/
-COPY evm_loader/ERC20/test/test_*.py /opt/
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
