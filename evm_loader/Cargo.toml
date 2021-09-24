@@ -1,6 +1,7 @@
 [workspace]
 members = [
     'cli',
+    'faucet',
     'program',
     'performance/sender'
 ]
