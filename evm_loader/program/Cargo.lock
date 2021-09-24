@@ -381,6 +381,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_format"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4556f63e28a78fa5e6f310cfea5647a25636def49a338ab69e33b34a3382057b"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552782506c398da94466b364973b563887e0ca078bf33a76d4163736165e3594"
+dependencies = [
+ "proc-macro2 1.0.27",
+ "quote 1.0.9",
+ "unicode-xid 0.2.2",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -760,6 +780,7 @@ dependencies = [
  "arrayref",
  "bincode",
  "bs58",
+ "const_format",
  "evm",
  "evm-runtime",
  "getrandom 0.1.16",

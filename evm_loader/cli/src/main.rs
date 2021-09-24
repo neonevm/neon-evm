@@ -1021,7 +1021,7 @@ fn command_get_ether_account_data (
 fn command_neon_elf(
     _config: &Config,
     program_location: &str,
-) -> CommandResult {
+) {
     let program_data = read_program_data(program_location).unwrap();
     let program_data = &program_data[..];
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
@@ -1029,10 +1029,16 @@ fn command_neon_elf(
         let name = String::from(&elf.dynstrtab[sym.st_name]);
         if name.starts_with("NEON")
         {
-            println!("symbol: name={:?}, sym={:?}", name, sym);
+            let end = program_data.len();
+            let from = usize::try_from(sym.st_value).unwrap_or_else(|_| panic!("Unable to cast usize from u64:{:?}", sym.st_value));
+            let to = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {}", sym.st_value + sym.st_size, err));
+            if to < end && from < end {
+                let buf = &program_data[from..to];
+                let value = std::str::from_utf8(buf).unwrap();
+                println!("{}={}", name, value);
+            }
         }
     });
-    Ok(())
 }
 
 fn make_clean_hex(in_str: &str) -> &str {
@@ -1299,8 +1305,8 @@ fn main() {
                 )
         )
         .subcommand(
-            SubCommand::with_name("get-neon-config")
-                .about("Get values stored in elf")
+            SubCommand::with_name("neon-elf")
+                .about("Get NEON values stored in elf")
                 .arg(
                     Arg::with_name("program_location")
                         .index(1)
@@ -1418,10 +1424,12 @@ fn main() {
 
                 Ok(())
             }
-            ("get-neon-config", Some(arg_matches)) => {
+            ("neon-elf", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
-                command_neon_elf(&config, &program_location)
+                command_neon_elf(&config, &program_location);
+
+                Ok(())
             }
             _ => unreachable!(),
         };
