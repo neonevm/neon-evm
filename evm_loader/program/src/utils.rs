@@ -1,7 +1,6 @@
 //! `EVMLoader` helper functions
 
-use evm::{H160, H256, U256};
-use solana_program::pubkey::Pubkey;
+use evm::{H256, U256};
 use solana_program::keccak::{hash, hashv};
 
 /// Get Keccak256 hash as `H256`
@@ -28,10 +27,4 @@ pub fn u256_to_h256(value: U256) -> H256 {
     let mut v = vec![0_u8; 32];
     value.to_big_endian(&mut v);
     H256::from_slice(&v)
-}
-
-/// Get ethereum address from solana `Pubkey`
-#[must_use]
-pub fn solidity_address(key: &Pubkey) -> H160 {
-    H256::from_slice(key.as_ref()).into()
 }

@@ -21,7 +21,8 @@ use evm_loader::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
-    solana_backend::SolanaBackend,
+    precompile_contracts::is_precompile_address,
+    executor_state::{SplTransfer, SplApprove, ERC20Approve}
 };
 #[allow(unused)]
 use std::{
@@ -49,6 +50,33 @@ use solana_client::{
     client_error::reqwest::StatusCode,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
 };
+
+
+#[derive(Debug, Clone)]
+pub struct TokenAccount {
+    owner: Pubkey,
+    mint: Pubkey,
+    key: Pubkey,
+    new: bool
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenAccountJSON {
+    owner: String,
+    mint: String,
+    key: String,
+    new: bool
+}
+impl From<TokenAccount> for TokenAccountJSON {
+    fn from(account: TokenAccount) -> Self {
+        Self {
+            owner: bs58::encode(&account.owner).into_string(),
+            mint: bs58::encode(&account.mint).into_string(),
+            key: bs58::encode(&account.key).into_string(),
+            new: account.new,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountJSON {
@@ -111,7 +139,8 @@ impl SolanaNewAccount {
 pub struct EmulatorAccountStorage<'a> {
     accounts: RefCell<HashMap<H160, SolanaAccount>>,
     new_accounts: RefCell<HashMap<H160, SolanaNewAccount>>,
-    pub solana_accounts: RefCell<Vec<AccountMeta>>,
+    pub solana_accounts: RefCell<HashMap<Pubkey, AccountMeta>>,
+    pub token_accounts: RefCell<HashMap<Pubkey, TokenAccount>>,
     config: &'a Config,
     contract_id: H160,
     caller_id: H160,
@@ -145,7 +174,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         Self {
             accounts: RefCell::new(HashMap::new()),
             new_accounts: RefCell::new(HashMap::new()),
-            solana_accounts: RefCell::new(vec![]),
+            solana_accounts: RefCell::new(HashMap::new()),
+            token_accounts: RefCell::new(HashMap::new()),
             config,
             contract_id,
             caller_id,
@@ -254,6 +284,74 @@ impl<'a> EmulatorAccountStorage<'a> {
         };
     }
 
+    pub fn apply_spl_transfers(&self, transfers: Vec<SplTransfer>) {
+        let mut token_accounts = self.token_accounts.borrow_mut();
+        for transfer in transfers {
+            self.create_acc_if_not_exists(&transfer.source);
+            self.create_acc_if_not_exists(&transfer.target);
+
+            let (source_solana_address, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
+            token_accounts.entry(transfer.source_token).or_insert(
+                TokenAccount {
+                    owner: source_solana_address,
+                    mint: transfer.mint,
+                    key: transfer.source_token,
+                    new: false
+                }
+            );
+
+            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&transfer.target_token, CommitmentConfig::processed());
+            let target_token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
+
+            let (target_solana_address, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
+            token_accounts.entry(transfer.target_token).or_insert(
+                TokenAccount {
+                    owner: target_solana_address,
+                    mint: transfer.mint,
+                    key: transfer.target_token,
+                    new: !target_token_exists
+                }
+            );
+        } 
+    }
+
+    pub fn apply_spl_approves(&self, approves: Vec<SplApprove>) {
+        let mut token_accounts = self.token_accounts.borrow_mut();
+
+        for approve in approves {
+            self.create_acc_if_not_exists(&approve.owner);
+
+            let (owner_solana_address, _) = make_solana_program_address(&approve.owner, &self.config.evm_loader);
+            let token_address = spl_associated_token_account::get_associated_token_address(&owner_solana_address, &approve.mint);
+            let token_exists = self.config.rpc_client.get_token_account_with_commitment(&token_address, CommitmentConfig::processed()).unwrap().value.is_some();
+            token_accounts.entry(token_address).or_insert(
+                TokenAccount {
+                    owner: owner_solana_address,
+                    mint: approve.mint,
+                    key: token_address,
+                    new: !token_exists
+                }
+            );
+        }
+    }
+
+    pub fn apply_erc20_approves(&self, approves: Vec<ERC20Approve>) {
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+
+        for approve in approves {
+            let seeds: &[&[u8]] = &[
+                &[ACCOUNT_SEED_VERSION],
+                b"ERC20Allowance",
+                &approve.mint.to_bytes(),
+                approve.owner.as_bytes(),
+                approve.spender.as_bytes()
+            ];
+            let address = Pubkey::find_program_address(seeds, self.program_id()).0;
+
+            solana_accounts.insert(address, AccountMeta::new(address, false));
+        }
+    }
+
     pub fn get_used_accounts(&self) -> Vec<AccountJSON>
     {
         let mut arr = Vec::new();
@@ -271,7 +369,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 }
             };
 
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+            if !is_precompile_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
@@ -285,7 +383,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let new_accounts = self.new_accounts.borrow();
         for (address, acc) in new_accounts.iter() {
-            if !SolanaBackend::<EmulatorAccountStorage>::is_system_address(address) {
+            if !is_precompile_address(address) {
                 arr.push(AccountJSON{
                         address: "0x".to_string() + &hex::encode(&address.to_fixed_bytes()),
                         writable: acc.writable,
@@ -413,6 +511,22 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
     }
 
+    fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, d: D, f: F) -> U
+    where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+          D: FnOnce() -> U
+    {
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        solana_accounts.entry(*address).or_insert_with(|| AccountMeta::new_readonly(*address, false));
+
+        let account = self.config.rpc_client.get_account_with_commitment(address, CommitmentConfig::processed()).unwrap().value;
+        match account {
+            Some(account) => f(&account.data, &account.owner),
+            None => d()
+        }
+    }
+
+    fn program_id(&self) -> &Pubkey { &self.config.evm_loader }
+
     fn contract(&self) -> H160 { self.contract_id }
 
     fn origin(&self) -> H160 { self.caller_id }
@@ -421,16 +535,22 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
 
+    fn get_account_solana_address(&self, address: &H160) -> Pubkey {
+        make_solana_program_address(address, &self.config.evm_loader).0
+    }
+
     fn external_call(
         &self,
-        instruction: &Instruction,
-        _: &[AccountInfo]
+        instruction: &Instruction
     ) -> ProgramResult {
         {
             let mut external_account_metas = self.solana_accounts.borrow_mut();
-            external_account_metas.extend(instruction.accounts.iter().cloned());
+            for account in &instruction.accounts {
+                external_account_metas.insert(account.pubkey, account.clone());
+            }
+
             let contract_meta = AccountMeta::new_readonly(instruction.program_id, false);
-            external_account_metas.insert(0,contract_meta);
+            external_account_metas.insert(contract_meta.pubkey, contract_meta);
         }
         let instructions = [instruction.clone()];
         let msg = Message::new(
