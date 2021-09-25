@@ -181,12 +181,8 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_10_continue(storage, steps, writable_code, acc, caller))
         return send_transaction(client, trx, acc)
 
-    def solana2ether(public_key):
-        from web3 import Web3
-        return bytes(Web3.keccak(bytes(PublicKey(public_key)))[-20:])
-
     def get_call_parameters(self, input, acc, caller, caller_ether):
-        tx = {'to': solana2ether(self.reId), 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)
