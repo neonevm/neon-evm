@@ -12,8 +12,8 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
-RUN export NEON_REVISION=$(git rev-parse HEAD) && echo "NEON_REVISION=$NEON_REVISION" && \
-    cargo clippy && \
+RUN export NEON_REVISION=$(git rev-parse HEAD) && echo "NEON_REVISION=$NEON_REVISION"
+RUN cargo clippy && \
     cargo build --release && \
     cargo build-bpf --features no-logs
 
