@@ -12,7 +12,7 @@ FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
-ENV NEON_REVISION=$REVISION
+ENV NEON_REVISION=${REVISION}
 RUN env
 RUN cargo clippy && \
     cargo build --release && \
