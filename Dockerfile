@@ -13,7 +13,7 @@ COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
 RUN env
-RUN export NEON_REVISION=$(git rev-parse HEAD) && echo "NEON_REVISION=$NEON_REVISION"
+ENV NEON_REVISION=${REVISION}
 RUN cargo clippy && \
     cargo build --release && \
     cargo build-bpf --features no-logs
