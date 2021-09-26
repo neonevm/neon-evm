@@ -5,4 +5,4 @@ REVISION=$(git rev-parse HEAD)
 
 echo "REVISION=$REVISION"
 
-docker build --build-arg -t cybercoredev/evm_loader:${REVISION} .
+docker build --build-arg REVISION=$REVISION -t cybercoredev/evm_loader:${REVISION} .
