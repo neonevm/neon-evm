@@ -162,7 +162,8 @@ fn process_instruction<'a>(
                 nonce,
                 trx_count: 0_u64,
                 code_account: code_account_key,
-                blocked: None,
+                ro_blocked_cnt: 0_u8,
+                rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
             });
 
@@ -276,7 +277,7 @@ fn process_instruction<'a>(
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
-            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
+            StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, true)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
@@ -387,12 +388,16 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
-            storage.check_accounts(program_id, trx_accounts)?;
+
+            let custom_error: ProgramError = EvmLoaderError::ExclusiveAccessUnvailable.into();
+            if let Err(err) = storage.check_accounts(program_id, trx_accounts, false){
+                if err == custom_error {return Ok(())}
+                return Err(err)
+            }
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
             let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
@@ -626,8 +631,7 @@ fn do_begin<'a>(
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
-    StorageAccount::check_for_blocked_accounts(program_id, trx_accounts)?;
-
+    StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     check_ethereum_transaction(&account_storage, &caller, &trx)?;
 
@@ -672,7 +676,13 @@ fn do_continue_top_level<'a>(
         return Err!(ProgramError::InvalidAccountData);
     }
 
-    storage.check_accounts(program_id, trx_accounts)?;
+    let custom_error: ProgramError = EvmLoaderError::ExclusiveAccessUnvailable.into();
+    if let Err(err) = storage.check_accounts(program_id, trx_accounts, true){
+        if err == custom_error {
+            return Ok(())}
+        return Err(err)
+    }
+
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let call_return = do_continue(&mut storage, step_count, &mut account_storage)?;
 

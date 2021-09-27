@@ -265,14 +265,36 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code_and_valids, storage: _, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
+
                     if let Some(acc) = accounts.get_mut(&address) {
-                        *acc.writable.borrow_mut() = true;
+
+                        let account_data = AccountData::unpack(&acc.account.data).unwrap();
+                        match account_data {
+                            AccountData::Account(_) => {
+                                if acc.code_account.is_some() {
+                                    let mut storage_iter = storage.into_iter().peekable();
+                                    let exist_items: bool = matches!(storage_iter.peek(), Some(_));
+
+                                    if reset_storage || exist_items {
+                                        *acc.writable.borrow_mut() = true;
+                                    }
+                                }
+                                else{
+                                    *acc.writable.borrow_mut() = true;
+                                }
+                            },
+                            _ => {eprintln!("Changes of incorrect account were found {}", &address.to_string());},
+                        };
+
                         *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
-                    } else if let Some(acc) = new_accounts.get_mut(&address) {
+
+                    }
+                    else if let Some(acc) = new_accounts.get_mut(&address) {
                         *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
                         *acc.writable.borrow_mut() = true;
-                    } else {
+                    }
+                    else {
                         eprintln!("Account not found {}", &address.to_string());
                     }
                     eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance, &reset_storage.to_string());

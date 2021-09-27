@@ -14,6 +14,9 @@ pub enum EvmLoaderError {
     /// Storage Account is uninitialized.
     #[error("Storage Account is uninitialized")]
     StorageAccountUninitialized,
+    /// Exclusive access to the account is not available
+    #[error("Exclusive access to the account is not available")]
+    ExclusiveAccessUnvailable,
 }
 
 impl From<EvmLoaderError> for ProgramError {
