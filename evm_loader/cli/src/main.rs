@@ -988,7 +988,15 @@ fn command_get_ether_account_data (
             println!("    nonce: {}", &account_data.nonce);
             println!("    trx_count: {}", &account_data.trx_count);
             println!("    code_account: {}", &account_data.code_account);
-            println!("    blocked: {}", &account_data.blocked.is_some());
+            println!("    ro_blocked_cnt: {}", &account_data.ro_blocked_cnt);
+            println!("    rw_blocked_acc: {}",
+                     if account_data.rw_blocked_acc.is_some() {
+                         account_data.rw_blocked_acc.unwrap().to_string()
+                     }
+                     else {
+                         "".to_string()
+                     }
+            );
             println!("    token_account: {}", &account_data.eth_token_account);
             println!("    token_amount: {}", &balance);
         
