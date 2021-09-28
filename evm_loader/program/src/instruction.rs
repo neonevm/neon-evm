@@ -25,6 +25,10 @@ pub enum EvmInstruction<'a> {
         bytes: &'a [u8],
     },
 
+    /// Deprecated: Finalize an account loaded with program data for execution
+    #[deprecated(note = "Instruction not supported")]
+    Finalise,
+
     ///
     /// Create Ethereum account (create program_address account and write data)
     /// # Account references
@@ -64,6 +68,10 @@ pub enum EvmInstruction<'a> {
     //     /// Call data
     //     bytes: &'a [u8],
     // },
+
+    /// Deprecated: Create ethereum account with seed
+    #[deprecated(note = "Instruction not supported")]
+    CreateAccountWithSeed,
 
     /// Call Ethereum-contract action from raw transaction data
     /// #### Account references same as in Call
