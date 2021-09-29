@@ -32,7 +32,7 @@ macro_rules! neon_elf {
     }
 }
 
-neon_elf!(NEON_PKG_VERSION, env!("CARGO_PKG_VERSION"));
-neon_elf!(NEON_REVISION, env!("NEON_REVISION"));
-neon_elf!(NEON_SEED_VERSION, formatcp!("{:?}", ACCOUNT_SEED_VERSION));
-neon_elf!(NEON_ACCOUNT_MAX_SIZE, formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+neon_elf!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
+neon_elf!( NEON_REVISION             , env!("NEON_REVISION"));
+neon_elf!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
+neon_elf!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
