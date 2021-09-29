@@ -5,13 +5,13 @@ while getopts t: option; do
 case "${option}" in
     t) IMAGETAG=${OPTARG};;
     *) echo "Usage: $0 [OPTIONS]. Where OPTIONS can be:"
-       echo "    -t <IMAGETAG>  tag for cybercoredev/evm_loader Docker-image"
+       echo "    -t <IMAGETAG>  tag for neonlabsorg/evm_loader Docker-image"
        exit 1;;
 esac
 done
 
 REVISION=$(git rev-parse HEAD)
-EVM_LOADER_IMAGE=cybercoredev/evm_loader:${IMAGETAG:-$REVISION}
+EVM_LOADER_IMAGE=neonlabsorg/evm_loader:${IMAGETAG:-$REVISION}
 
 echo "Currently runned Docker-containers"
 docker ps -a
