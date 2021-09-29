@@ -15,7 +15,7 @@ else
     TAG=${BUILDKITE_BRANCH}
 fi
 
-docker pull cybercoredev/evm_loader:${REVISION}
-docker tag cybercoredev/evm_loader:${REVISION} cybercoredev/evm_loader:${TAG}
-docker push cybercoredev/evm_loader:${TAG}
+docker pull neonlabsorg/evm_loader:${REVISION}
+docker tag neonlabsorg/evm_loader:${REVISION} neonlabsorg/evm_loader:${TAG}
+docker push neonlabsorg/evm_loader:${TAG}
 
