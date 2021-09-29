@@ -17,6 +17,8 @@ macro_rules! str_as_bytes_len {
 macro_rules! neon_elf {
     ($identifier:ident,$value:expr) => {
         /// NEON DOCS MUST BE HERE
+        #[no_mangle]
+        #[used]
         pub static $identifier: [u8; str_as_bytes_len!($value)] = 
             {
                 let mut array: [u8; str_as_bytes_len!($value)] = [0; str_as_bytes_len!($value)];
