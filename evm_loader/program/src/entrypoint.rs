@@ -517,6 +517,8 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
+
+        EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
