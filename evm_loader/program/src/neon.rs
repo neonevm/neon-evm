@@ -4,8 +4,6 @@
 use const_format::formatcp;
 use crate::account_data::ACCOUNT_SEED_VERSION;
 use crate::account_data::ACCOUNT_MAX_SIZE;
-// use crate::token::token_mint::TOKEN_MINT_ID;
-// use crate::payment::collateral_pool_base::COLLATERAL_POOL_BASE;
 
 macro_rules! str_as_bytes_len {
     ($value:expr) => {
