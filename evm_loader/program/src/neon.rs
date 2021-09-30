@@ -38,27 +38,29 @@ macro_rules! declare_param_id {
     }
 }
 
-neon_elf_param!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
-neon_elf_param!( NEON_REVISION             , env!("NEON_REVISION"));
-neon_elf_param!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
-neon_elf_param!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+/// Token Mint ID
+pub mod token_mint {
+
+    declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+    /// Ethereum account version
+    pub const DECIMALS: u8 = 9;
+
+    /// Number of base 10 digits to the right of the decimal place
+    #[must_use]
+    pub const fn decimals() -> u8 { DECIMALS }
+}
 
 /// Collateral pool base address
 pub mod collateral_pool_base {
 
-    declare_param_id!(NEON_POOL_BASE, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+    declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
     /// `COLLATERAL_SEED_PREFIX`
     pub const PREFIX: &str = "collateral_seed_";
 }
 
-
-/// Token Mint ID
-pub mod token_mint {
-
-    declare_param_id!(NEON_TOKEN_MINT, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
-
-    /// Number of base 10 digits to the right of the decimal place
-    #[must_use]
-    pub const fn decimals() -> u8 { 9 }
-}
+neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
+neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
+neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
+neon_elf_param!( NEON_ACCOUNT_MAX_SIZE      , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECIMALS));
