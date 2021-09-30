@@ -13,7 +13,10 @@ use solana_program::{
 
 /// Collaterall pool base address
 pub mod collateral_pool_base {
-    solana_program::declare_id!("4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
+    /// COLLATERAL POOL BASE
+    pub const COLLATERAL_POOL_BASE: &str = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU";
+
+    solana_program::declare_id!(COLLATERAL_POOL_BASE);
 
     /// `COLLATERAL_SEED_PREFIX`
     pub const PREFIX: &str = "collateral_seed_";

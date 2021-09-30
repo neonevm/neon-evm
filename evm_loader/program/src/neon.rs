@@ -4,7 +4,8 @@
 use const_format::formatcp;
 use crate::account_data::ACCOUNT_SEED_VERSION;
 use crate::account_data::ACCOUNT_MAX_SIZE;
-
+use crate::token::token_mint::TOKEN_MINT_ID;
+use crate::payment::collateral_pool_base::COLLATERAL_POOL_BASE;
 
 macro_rules! str_as_bytes_len {
     ($value:expr) => {
@@ -14,7 +15,7 @@ macro_rules! str_as_bytes_len {
     }
 }
 
-macro_rules! neon_elf {
+macro_rules! neon_elf_params {
     ($identifier:ident,$value:expr) => {
         /// NEON DOCS MUST BE HERE
         #[no_mangle]
@@ -32,7 +33,9 @@ macro_rules! neon_elf {
     }
 }
 
-neon_elf!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
-neon_elf!( NEON_REVISION             , env!("NEON_REVISION"));
-neon_elf!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
-neon_elf!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+neon_elf_params!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
+neon_elf_params!( NEON_REVISION             , env!("NEON_REVISION"));
+neon_elf_params!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
+neon_elf_params!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+neon_elf_params!( NEON_TOKEN_MINT           , formatcp!("{:?}", TOKEN_MINT_ID));
+neon_elf_params!( NEON_POOL_BASE            , formatcp!("{:?}", COLLATERAL_POOL_BASE));
