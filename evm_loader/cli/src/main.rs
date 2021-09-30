@@ -1052,6 +1052,9 @@ fn command_neon_elf(
                 let value = std::str::from_utf8(buf).unwrap();
                 println!("{}={}", name, value);
             }
+            else {
+                println!("{} is out of bounds", name);
+            }
         }
     });
 }
@@ -1312,7 +1315,7 @@ fn main() {
                 )
         )
         .subcommand(
-            SubCommand::with_name("neon-elf")
+            SubCommand::with_name("neon-elf-params")
                 .about("Get NEON values stored in elf")
                 .arg(
                     Arg::with_name("program_location")
@@ -1429,7 +1432,7 @@ fn main() {
 
                 Ok(())
             }
-            ("neon-elf", Some(arg_matches)) => {
+            ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
                 command_neon_elf(&config, &program_location);

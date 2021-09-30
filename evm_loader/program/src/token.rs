@@ -18,10 +18,13 @@ use std::convert::TryFrom;
 
 /// Token Mint ID
 pub mod token_mint {
+    use solana_program::pubkey::Pubkey;
+    use std::str::FromStr;
+
     /// TOKEN MINT ID
     pub const TOKEN_MINT_ID: &str = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU";
 
-    solana_program::declare_id!(TOKEN_MINT_ID);
+    solana_program::declare_id!(Pubkey::from_str(TOKEN_MINT_ID).unwrap());
 
     /// Number of base 10 digits to the right of the decimal place
     #[must_use]

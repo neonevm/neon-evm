@@ -15,7 +15,7 @@ macro_rules! str_as_bytes_len {
     }
 }
 
-macro_rules! neon_elf_params {
+macro_rules! neon_elf_param {
     ($identifier:ident,$value:expr) => {
         /// NEON DOCS MUST BE HERE
         #[no_mangle]
@@ -33,9 +33,9 @@ macro_rules! neon_elf_params {
     }
 }
 
-neon_elf_params!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
-neon_elf_params!( NEON_REVISION             , env!("NEON_REVISION"));
-neon_elf_params!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
-neon_elf_params!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
-neon_elf_params!( NEON_TOKEN_MINT           , formatcp!("{:?}", TOKEN_MINT_ID));
-neon_elf_params!( NEON_POOL_BASE            , formatcp!("{:?}", COLLATERAL_POOL_BASE));
+neon_elf_param!( NEON_PKG_VERSION          , env!("CARGO_PKG_VERSION"));
+neon_elf_param!( NEON_REVISION             , env!("NEON_REVISION"));
+neon_elf_param!( NEON_SEED_VERSION         , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
+neon_elf_param!( NEON_ACCOUNT_MAX_SIZE     , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
+neon_elf_param!( NEON_TOKEN_MINT           , formatcp!("{:?}", TOKEN_MINT_ID));
+neon_elf_param!( NEON_POOL_BASE            , formatcp!("{:?}", COLLATERAL_POOL_BASE));

@@ -11,12 +11,16 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-/// Collaterall pool base address
+
+/// Collateral pool base address
 pub mod collateral_pool_base {
+    use solana_program::pubkey::Pubkey;
+    use std::str::FromStr;
+
     /// COLLATERAL POOL BASE
     pub const COLLATERAL_POOL_BASE: &str = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU";
 
-    solana_program::declare_id!(COLLATERAL_POOL_BASE);
+    solana_program::declare_id!(Pubkey::from_str(COLLATERAL_POOL_BASE).unwrap());
 
     /// `COLLATERAL_SEED_PREFIX`
     pub const PREFIX: &str = "collateral_seed_";
