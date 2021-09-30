@@ -18,7 +18,7 @@ use evm_loader::{
         Account,
         Contract
     },
-    payment::collateral_pool_base,
+    neon::collateral_pool_base,
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -269,7 +269,7 @@ fn command_create_ether_account (
     space: u64
 ) -> CommandResult {
     let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::token::token_mint::id());
+    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::neon::token_mint::id());
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let instruction = Instruction::new_with_bincode(
@@ -280,7 +280,7 @@ fn command_create_ether_account (
                 AccountMeta::new(solana_address, false),
                 AccountMeta::new(token_address, false),
                 AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                 AccountMeta::new_readonly(spl_token::id(), false),
                 AccountMeta::new_readonly(spl_associated_token_account::id(), false),
                 AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -595,7 +595,7 @@ fn fill_holder_account(
 //     let caller_public = PublicKey::from_secret_key(&caller_private);
 //     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
 //     let (caller_sol, caller_nonce) = make_solana_program_address(&caller_ether, &config.evm_loader);
-//     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::neon::token_mint::id());
 //     let caller_holder = create_block_token_account(config, &caller_ether, &caller_sol).unwrap();
 //     debug!("caller_sol = {}", caller_sol);
 //     debug!("caller_ether = {}", caller_ether);
@@ -626,7 +626,7 @@ fn get_ether_account_nonce(
     };
     trx_count = account.trx_count;
     let caller_ether = account.ether;
-    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::token::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::neon::token_mint::id());
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
     debug!("Caller trx_count: {} ", trx_count);
@@ -660,7 +660,7 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
 
-    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::token::token_mint::id());
+    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::neon::token_mint::id());
 
     let (program_code, program_seed) = {
         let seed = bs58::encode(&program_ether.to_fixed_bytes()).into_string();
@@ -718,7 +718,7 @@ fn create_ethereum_contract_accounts_in_solana(
                 AccountMeta::new(*program_token, false),
                 AccountMeta::new(*program_code, false),
                 AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                 AccountMeta::new_readonly(spl_token::id(), false),
                 AccountMeta::new_readonly(spl_associated_token_account::id(), false),
                 AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -743,7 +743,7 @@ fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let collateral_pool_index = 2;
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
-        &collateral_pool_base::id(), 
+        &collateral_pool_base::id(),
         &seed, 
         &config.evm_loader).unwrap();
 
@@ -837,7 +837,7 @@ fn command_deploy(
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
-    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &evm_loader::token::token_mint::id());
+    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &evm_loader::neon::token_mint::id());
 
     // Create ethereum caller private key from sign of array by signer
     // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
@@ -906,7 +906,7 @@ fn command_deploy(
                         AccountMeta::new(caller_token, false),
 
                         AccountMeta::new_readonly(config.evm_loader, false),
-                        AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                        AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                         AccountMeta::new_readonly(spl_token::id(), false),
                         ];
 
@@ -936,7 +936,7 @@ fn command_deploy(
                             AccountMeta::new(caller_token, false),
 
                             AccountMeta::new_readonly(config.evm_loader, false),
-                            AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+                            AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
@@ -1031,6 +1031,32 @@ fn command_get_ether_account_data (
             eprintln!("Account not found {}", &ether_address.to_string());
         }
     }
+}
+
+fn command_neon_elf(
+    _config: &Config,
+    program_location: &str,
+) {
+    let program_data = read_program_data(program_location).unwrap();
+    let program_data = &program_data[..];
+    let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
+    elf.dynsyms.iter().for_each(|sym| {
+        let name = String::from(&elf.dynstrtab[sym.st_name]);
+        if name.starts_with("NEON")
+        {
+            let end = program_data.len();
+            let from = usize::try_from(sym.st_value).unwrap_or_else(|_| panic!("Unable to cast usize from u64:{:?}", sym.st_value));
+            let to = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {}", sym.st_value + sym.st_size, err));
+            if to < end && from < end {
+                let buf = &program_data[from..to];
+                let value = std::str::from_utf8(buf).unwrap();
+                println!("{}={}", name, value);
+            }
+            else {
+                println!("{} is out of bounds", name);
+            }
+        }
+    });
 }
 
 fn make_clean_hex(in_str: &str) -> &str {
@@ -1288,6 +1314,18 @@ fn main() {
                         .help("Ethereum address"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("neon-elf-params")
+                .about("Get NEON values stored in elf")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/evm_loader.so"),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1391,6 +1429,13 @@ fn main() {
                 let ether = h160_of(arg_matches, "ether").unwrap();
 
                 command_get_ether_account_data(&config, &ether);
+
+                Ok(())
+            }
+            ("neon-elf-params", Some(arg_matches)) => {
+                let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+
+                command_neon_elf(&config, &program_location);
 
                 Ok(())
             }

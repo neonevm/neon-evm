@@ -1375,11 +1375,12 @@ dependencies = [
 
 [[package]]
 name = "evm-loader"
-version = "2.0.8"
+version = "0.3.0-rc0"
 dependencies = [
  "arrayref",
  "bincode",
  "bs58 0.3.1",
+ "const_format",
  "evm",
  "evm-runtime",
  "getrandom 0.1.16",
@@ -1789,6 +1790,17 @@ name = "goblin"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "669cdc3826f69a51d3f8fc3f86de81c2378110254f678b8407977736122057a4"
+dependencies = [
+ "log",
+ "plain",
+ "scroll",
+]
+
+[[package]]
+name = "goblin"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32401e89c6446dcd28185931a01b1093726d0356820ac744023e6850689bf926"
 dependencies = [
  "log",
  "plain",
@@ -2562,6 +2574,7 @@ dependencies = [
  "evm",
  "evm-loader",
  "getrandom 0.1.16",
+ "goblin 0.4.3",
  "hex",
  "libsecp256k1",
  "log",
@@ -4566,7 +4579,7 @@ checksum = "7c1c5bdfa63c68d848d95024c7f4335bae4b1917f7df2e48e2d945f4664a8b45"
 dependencies = [
  "byteorder",
  "combine",
- "goblin",
+ "goblin 0.3.4",
  "hash32",
  "libc",
  "log",

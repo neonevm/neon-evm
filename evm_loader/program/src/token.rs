@@ -16,14 +16,8 @@ use solana_program::{
 use std::vec;
 use std::convert::TryFrom;
 
-/// Token Mint ID
-pub mod token_mint {
-    solana_program::declare_id!("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+use crate::neon::token_mint;
 
-    /// Number of base 10 digits to the right of the decimal place
-    #[must_use]
-    pub const fn decimals() -> u8 { 9 }
-}
 
 #[must_use]
 /// Number of base 10 digits to the right of the decimal place of ETH value
