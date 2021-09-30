@@ -11,7 +11,7 @@ use evm::backend::{Apply, Basic, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256};
-use crate::token;
+use crate::{token, neon};
 use crate::solana_backend::AccountStorage;
 use solana_program::pubkey::Pubkey;
 use spl_associated_token_account::get_associated_token_address;
@@ -493,7 +493,7 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
-        let min_decimals = u32::from(token::eth_decimals() - token::token_mint::decimals());
+        let min_decimals = u32::from(token::eth_decimals() - neon::token_mint::decimals());
         let min_value = U256::from(10_u64.pow(min_decimals));
         let transfer_value_without_min_value = transfer.value - transfer.value % min_value;
         {

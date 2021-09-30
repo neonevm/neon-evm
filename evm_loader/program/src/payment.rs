@@ -11,20 +11,8 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
+use crate::neon::collateral_pool_base;
 
-/// Collateral pool base address
-pub mod collateral_pool_base {
-    use solana_program::pubkey::Pubkey;
-    use std::str::FromStr;
-
-    /// COLLATERAL POOL BASE
-    pub const COLLATERAL_POOL_BASE: &str = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU";
-
-    solana_program::declare_id!(Pubkey::from_str(COLLATERAL_POOL_BASE).unwrap());
-
-    /// `COLLATERAL_SEED_PREFIX`
-    pub const PREFIX: &str = "collateral_seed_";
-}
 
 /// `PAYMENT_TO_COLLATERAL_POOL`
 pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;

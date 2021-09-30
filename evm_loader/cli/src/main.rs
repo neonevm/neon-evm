@@ -743,7 +743,7 @@ fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let collateral_pool_index = 2;
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
-        &collateral_pool_base::id(), 
+        &collateral_pool_base::id(),
         &seed, 
         &config.evm_loader).unwrap();
 
