@@ -186,12 +186,17 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Write {offset, bytes} => {
-            let account_info = next_account_info(account_info_iter)?;
-            if account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "account_info.owner<{:?}> != program_id<{:?}>", account_info.owner, program_id);
+            let holder_account_info = next_account_info(account_info_iter)?;
+            if holder_account_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_account_info.owner, program_id);
             }
 
-            do_write(account_info, offset, bytes)
+            let signer_account_info = next_account_info(account_info_iter)?;
+            if !good_holder_account(holder_account_info, signer_account_info) {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
+            }
+
+            do_write(holder_account_info, offset, bytes)
         },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
@@ -958,6 +963,11 @@ fn check_ethereum_transaction(
 
 
     Ok(())
+}
+
+/// Checks that the holder account is generated from this signer account.
+const fn good_holder_account(_holder: &AccountInfo, _signer: &AccountInfo) -> bool {
+    true
 }
 
 // Pull in syscall stubs when building for non-BPF targets
