@@ -16,6 +16,12 @@ solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
 path_to_solana = 'solana'
 client = Client(solana_url)
 
+def write_layout(offset, data):
+    return (bytes.fromhex('00000000') +
+            offset.to_bytes(4, byteorder='little') +
+            len(data).to_bytes(8, byteorder='little') +
+            data)
+
 class Test_Write(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -41,26 +47,42 @@ class Test_Write(unittest.TestCase):
             values = bytes(nums)
             self.signer = solana_Account(values)
         print('Signer:', self.signer.public_key())
+        print('Balance of signer:', getBalance(self.signer.public_key()))
 
     def create_account(self):
-        print('Creating account...')
         proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
         signer_public_key_bytes = bytes(self.signer.public_key())
         seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
-        self.account = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
-        if getBalance(self.account) == 0:
+        self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
+        if getBalance(self.account_address) == 0:
+            print('Creating account...')
             trx = Transaction()
             trx.add(createAccountWithSeed(self.signer.public_key(), self.signer.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             client.send_transaction(trx, self.signer, opts=TxOpts(skip_confirmation=False, preflight_commitment='confirmed'))
-        print('Account to write:', self.account)
+        print('Account to write:', self.account_address)
+        print('Balance of account:', getBalance(self.account_address))
+
+    def write_to_account(self, data):
+        tx = Transaction()
+        metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
+                 AccountMeta(pubkey=self.signer.public_key(), is_signer=True, is_writable=False)]
+        tx.add(TransactionInstruction(program_id=evm_loader_id,
+                                      data=write_layout(0, data),
+                                      keys=metas))
+        opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
+        return client.send_transaction(tx, self.signer, opts=opts))['result']
 
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
+        r = self.write_to_account(b'Chancellor on brink of second bailout for banks')
+        print('r:', r)
 
     @unittest.skip("a.i.")
     def test_instruction_write_fails(self):
         print()
+        r = self.write_to_account(b'Chancellor on brink of second bailout for banks')
+        print('r:', r)
 
     @classmethod
     def tearDownClass(cls):
