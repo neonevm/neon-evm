@@ -7,9 +7,11 @@ import unittest
 from sha3 import shake_256
 from solana.publickey import PublicKey
 from solana.account import Account as solana_Account
+from solana.rpc.api import SendTransactionError
 from solana_utils import *
 
 issue = 'https://github.com/neonlabsorg/neon-evm/issues/261'
+test_data = b'Chancellor on brink of second bailout for banks'
 proxy_id = 1000;
 evm_loader_id = os.environ.get('EVM_LOADER')
 solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
@@ -21,6 +23,10 @@ def write_layout(offset, data):
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
+
+def read_account(address):
+    r = solana_cli().call('account ' + str(address))
+    return r
 
 class Test_Write(unittest.TestCase):
     @classmethod
@@ -70,19 +76,29 @@ class Test_Write(unittest.TestCase):
                                       data=write_layout(0, data),
                                       keys=metas))
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
-        return client.send_transaction(tx, self.signer, opts=opts))['result']
+        return client.send_transaction(tx, self.signer, opts=opts)['id']
 
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
-        r = self.write_to_account(b'Chancellor on brink of second bailout for banks')
-        print('r:', r)
+        id = self.write_to_account(test_data)
+        print('id:', id)
+        self.assertGreater(id, 0)
 
     @unittest.skip("a.i.")
     def test_instruction_write_fails(self):
         print()
-        r = self.write_to_account(b'Chancellor on brink of second bailout for banks')
-        print('r:', r)
+        try:
+            self.write_to_account(test_data)
+        except SendTransactionError as err:
+            self.check_err_is_invalid_program_argument(str(err))
+        except Exception as err:
+            print('type(err):', type(err))
+            print('err:', str(err))
+            raise
+
+    def check_err_is_invalid_program_argument(self, message):
+        self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
 
     @classmethod
     def tearDownClass(cls):
