@@ -18,8 +18,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
-    system_instruction::{create_account},
-    program::{invoke_signed, invoke},
+    program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
     msg,
@@ -40,6 +39,7 @@ use crate::{
     token,
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
+    system::create_pda_account
 };
 
 
@@ -121,7 +121,7 @@ fn process_instruction<'a>(
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
-        EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
+        EvmInstruction::CreateAccount {lamports: _, space: _, ether, nonce} => {
             let rent = Rent::get()?;
             
             let funding_info = next_account_info(account_info_iter)?;
@@ -158,7 +158,23 @@ fn process_instruction<'a>(
                 }
             };
 
-            let account_data = AccountData::Account(Account {
+            create_pda_account(
+                program_id,
+                accounts,
+                account_info,
+                &program_seeds,
+                funding_info.key,
+                ACCOUNT_MAX_SIZE
+            )?;
+            debug_print!("create_account done");
+
+            invoke(
+                &create_associated_token_account(funding_info.key, account_info.key, token_account_info.key, &token_mint::id()),
+                accounts,
+            )?;
+            debug_print!("create_associated_token_account done");
+
+            AccountData::Account(Account {
                 ether,
                 nonce,
                 trx_count: 0_u64,
@@ -166,23 +182,7 @@ fn process_instruction<'a>(
                 ro_blocked_cnt: 0_u8,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
-            });
-
-            let account_lamports = rent.minimum_balance(account_data.size()) + lamports;
-
-            invoke_signed(
-                &create_account(funding_info.key, account_info.key, account_lamports, ACCOUNT_MAX_SIZE, program_id),
-                accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_account done");
-
-            invoke_signed(
-                &create_associated_token_account(funding_info.key, account_info.key, token_account_info.key, &token_mint::id()),
-                accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_associated_token_account done");
-
-            account_data.pack(&mut account_info.data.borrow_mut())?;
+            }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())
         },
