@@ -102,6 +102,7 @@ class Test_Write(unittest.TestCase):
 
     def check_err_is_invalid_program_argument(self, message):
         self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
+        print('This exception is expected')
 
     @classmethod
     def tearDownClass(cls):

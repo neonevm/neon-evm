@@ -41,7 +41,6 @@ use crate::{
     token::{token_mint, create_associated_token_account, get_token_account_owner},
 };
 
-
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
 
@@ -966,19 +965,29 @@ fn check_ethereum_transaction(
 }
 
 /// Checks that the holder account is generated from this signer account.
-fn good_holder_account(_nonce: u64, holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
+fn good_holder_account(nonce: u64, holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
+    use tiny_keccak::{Hasher, Shake};
+
     // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
     // signer_public_key_bytes = bytes(self.signer.public_key())
     // seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
+    let mut shake = Shake::v256();
+    let bytes_count = std::mem::size_of_val(&nonce);
+    let bits_count = bytes_count * 8;
+    let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
+    let significant_bytes_count = (nonce_bit_length + 7) / 8;
+    shake.update(b"holder");
+    shake.update(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
+    shake.update(&signer_address.to_bytes());
+    let mut output = [0_u8; 32];
+    shake.finalize(&mut output);
+    let seed = &hex::encode(output)[..32];
 
-    let seed = "some_hash";
     let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
     if must_holder.is_err() {
-        debug_print!("Pubkey::create_with_seed: {:?}", must_holder.err());
+        debug_print!("Pubkey::create_with_seed error: {:?}", must_holder.err());
         return false;
     }
-    debug_print!("holder_address: {}", holder_address);
-    debug_print!("must_holder_address: {}", must_holder.clone().unwrap());
     *holder_address == must_holder.unwrap()
 }
 
