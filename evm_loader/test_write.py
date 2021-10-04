@@ -18,8 +18,9 @@ solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
 path_to_solana = 'solana'
 client = Client(solana_url)
 
-def write_layout(offset, data):
+def write_layout(proxy_id, offset, data):
     return (bytes.fromhex('00000000') +
+            proxy_id.to_bytes(8, byteorder='little') +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -56,7 +57,7 @@ class Test_Write(unittest.TestCase):
         print('Balance of signer:', getBalance(self.signer.public_key()))
 
     def create_account(self):
-        proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+        proxy_id_bytes = proxy_id.to_bytes(8, byteorder='little')
         signer_public_key_bytes = bytes(self.signer.public_key())
         seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
@@ -68,12 +69,12 @@ class Test_Write(unittest.TestCase):
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
-    def write_to_account(self, data):
+    def write_to_account(self, nonce, data):
         tx = Transaction()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
                  AccountMeta(pubkey=self.signer.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,
-                                      data=write_layout(0, data),
+                                      data=write_layout(nonce, 0, data),
                                       keys=metas))
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
         return client.send_transaction(tx, self.signer, opts=opts)['id']
@@ -81,7 +82,7 @@ class Test_Write(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
-        id = self.write_to_account(test_data)
+        id = self.write_to_account(proxy_id, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
@@ -89,7 +90,8 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails(self):
         print()
         try:
-            self.write_to_account(test_data)
+            wrong_nonce = proxy_id + 1
+            self.write_to_account(wrong_nonce, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:

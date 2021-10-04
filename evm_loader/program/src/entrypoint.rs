@@ -185,14 +185,14 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::Write {offset, bytes} => {
+        EvmInstruction::Write {nonce, offset, bytes} => {
             let holder_account_info = next_account_info(account_info_iter)?;
             if holder_account_info.owner != program_id {
                 return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_account_info.owner, program_id);
             }
 
             let signer_account_info = next_account_info(account_info_iter)?;
-            if !good_holder_account(holder_account_info, signer_account_info) {
+            if !good_holder_account(nonce, holder_account_info, signer_account_info) {
                 return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
             }
 
@@ -966,8 +966,8 @@ fn check_ethereum_transaction(
 }
 
 /// Checks that the holder account is generated from this signer account.
-const fn good_holder_account(_holder: &AccountInfo, _signer: &AccountInfo) -> bool {
-    true
+const fn good_holder_account(nonce: u64, _holder: &AccountInfo, _signer: &AccountInfo) -> bool {
+    nonce == 1000
 }
 
 // Pull in syscall stubs when building for non-BPF targets
