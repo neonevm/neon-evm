@@ -192,7 +192,7 @@ fn process_instruction<'a>(
             }
 
             let signer_account_info = next_account_info(account_info_iter)?;
-            if !good_holder_account(nonce, holder_account_info, signer_account_info) {
+            if !good_holder_account(nonce, holder_account_info.key, signer_account_info.key, program_id) {
                 return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
             }
 
@@ -966,8 +966,20 @@ fn check_ethereum_transaction(
 }
 
 /// Checks that the holder account is generated from this signer account.
-const fn good_holder_account(nonce: u64, _holder: &AccountInfo, _signer: &AccountInfo) -> bool {
-    nonce == 1000
+fn good_holder_account(_nonce: u64, holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
+    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+    // signer_public_key_bytes = bytes(self.signer.public_key())
+    // seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
+
+    let seed = "some_hash";
+    let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
+    if must_holder.is_err() {
+        debug_print!("Pubkey::create_with_seed: {:?}", must_holder.err());
+        return false;
+    }
+    debug_print!("holder_address: {}", holder_address);
+    debug_print!("must_holder_address: {}", must_holder.clone().unwrap());
+    *holder_address == must_holder.unwrap()
 }
 
 // Pull in syscall stubs when building for non-BPF targets

@@ -1,7 +1,8 @@
 # File: test_write.py
 # Test for the Write instruction.
-# 1. Checks the operator can write something to a holder account.
-# 2. Checks no one other can write to a holder account.
+# 1. Checks the operator can write to a holder account.
+# 2. Checks the operator cannot write to a holder account with wrong proxy_id.
+# 3. Checks no one other can write to a holder account.
 
 import unittest
 from sha3 import shake_256
@@ -18,9 +19,9 @@ solana_url = os.environ.get('SOLANA_URL', 'http://localhost:8899')
 path_to_solana = 'solana'
 client = Client(solana_url)
 
-def write_layout(proxy_id, offset, data):
+def write_layout(id, offset, data):
     return (bytes.fromhex('00000000') +
-            proxy_id.to_bytes(8, byteorder='little') +
+            id.to_bytes(8, byteorder='little') +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -57,7 +58,7 @@ class Test_Write(unittest.TestCase):
         print('Balance of signer:', getBalance(self.signer.public_key()))
 
     def create_account(self):
-        proxy_id_bytes = proxy_id.to_bytes(8, byteorder='little')
+        proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
         signer_public_key_bytes = bytes(self.signer.public_key())
         seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
@@ -86,7 +87,7 @@ class Test_Write(unittest.TestCase):
         print('id:', id)
         self.assertGreater(id, 0)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_instruction_write_fails(self):
         print()
         try:
