@@ -14,6 +14,7 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
+
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
@@ -22,6 +23,7 @@ use solana_program::{
     program::{invoke_signed, invoke},
     rent::Rent,
     sysvar::Sysvar,
+    keccak::Hasher,
     msg,
 };
 
@@ -964,24 +966,22 @@ fn check_ethereum_transaction(
     Ok(())
 }
 
-/// Checks that the holder account is generated from this signer account.
-fn good_holder_account(nonce: u64, holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
-    use tiny_keccak::{Hasher, Shake};
-
+/// Checks that the holder account is generated from these signer account and nonce.
+fn good_holder_account(nonce: u64,
+                       holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
     // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
     // signer_public_key_bytes = bytes(self.signer.public_key())
-    // seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
-    let mut shake = Shake::v256();
+    // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
     let bytes_count = std::mem::size_of_val(&nonce);
     let bits_count = bytes_count * 8;
     let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
     let significant_bytes_count = (nonce_bit_length + 7) / 8;
-    shake.update(b"holder");
-    shake.update(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
-    shake.update(&signer_address.to_bytes());
-    let mut output = [0_u8; 32];
-    shake.finalize(&mut output);
-    let seed = &hex::encode(output)[..32];
+    let mut hasher = Hasher::default();
+    hasher.hash(b"holder");
+    hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
+    hasher.hash(&signer_address.to_bytes());
+    let output = hasher.result();
+    let seed = &hex::encode(output);
 
     let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
     if must_holder.is_err() {

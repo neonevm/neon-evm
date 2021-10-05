@@ -5,7 +5,7 @@
 # 3. Checks no one other can write to a holder account.
 
 import unittest
-from sha3 import shake_256
+from sha3 import keccak_256, shake_256
 from solana.publickey import PublicKey
 from solana.account import Account as solana_Account
 from solana.rpc.api import SendTransactionError
@@ -36,6 +36,7 @@ class Test_Write(unittest.TestCase):
         print('\n\n' + issue)
         print('Test_Write')
         cls.init_signer(cls)
+        cls.init_attacker(cls)
         cls.create_account(cls)
 
     def init_signer(self):
@@ -57,10 +58,18 @@ class Test_Write(unittest.TestCase):
         print('Signer:', self.signer.public_key())
         print('Balance of signer:', getBalance(self.signer.public_key()))
 
+    def init_attacker(self):
+        print('Initializing attacker...')
+        values = bytes([1] * 32)
+        self.attacker = solana_Account(values)
+        solana_cli().call('transfer' + ' --allow-unfunded-recipient ' + str(self.attacker.public_key()) + ' 1')
+        print('Attacker:', self.attacker.public_key())
+        print('Balance of attacker:', getBalance(self.attacker.public_key()))
+
     def create_account(self):
         proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
         signer_public_key_bytes = bytes(self.signer.public_key())
-        seed = shake_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest(16)
+        seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
         if getBalance(self.account_address) == 0:
             print('Creating account...')
@@ -70,29 +79,41 @@ class Test_Write(unittest.TestCase):
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
-    def write_to_account(self, nonce, data):
+    def write_to_account(self, signer, nonce, data):
         tx = Transaction()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=self.signer.public_key(), is_signer=True, is_writable=False)]
+                 AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,
                                       data=write_layout(nonce, 0, data),
                                       keys=metas))
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
-        return client.send_transaction(tx, self.signer, opts=opts)['id']
+        return client.send_transaction(tx, signer, opts=opts)['id']
 
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
-        id = self.write_to_account(proxy_id, test_data)
+        id = self.write_to_account(self.signer, proxy_id, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
     # @unittest.skip("a.i.")
-    def test_instruction_write_fails(self):
+    def test_instruction_write_fails_wrong_nonce(self):
         print()
         try:
             wrong_nonce = proxy_id + 1
-            self.write_to_account(wrong_nonce, test_data)
+            self.write_to_account(self.signer, wrong_nonce, test_data)
+        except SendTransactionError as err:
+            self.check_err_is_invalid_program_argument(str(err))
+        except Exception as err:
+            print('type(err):', type(err))
+            print('err:', str(err))
+            raise
+
+    # @unittest.skip("a.i.")
+    def test_instruction_write_fails_wrong_signer(self):
+        print()
+        try:
+            self.write_to_account(self.attacker, proxy_id, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
@@ -102,7 +123,7 @@ class Test_Write(unittest.TestCase):
 
     def check_err_is_invalid_program_argument(self, message):
         self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
-        print('This exception is expected')
+        print('!!!! This error is expected')
 
     @classmethod
     def tearDownClass(cls):
