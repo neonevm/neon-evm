@@ -40,7 +40,8 @@ use crate::{
     instruction::{EvmInstruction, on_event, on_return},
     payment,
     token,
-    token::{token_mint, create_associated_token_account, get_token_account_owner},
+    token::{create_associated_token_account, get_token_account_owner},
+    neon::token_mint,
 };
 
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
