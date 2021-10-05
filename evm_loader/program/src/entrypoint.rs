@@ -982,7 +982,7 @@ fn good_holder_account(nonce: u64,
     hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
     hasher.hash(&signer_address.to_bytes());
     let output = hasher.result();
-    let seed = &hex::encode(output);
+    let seed = &hex::encode(output)[..32];
 
     let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
     if must_holder.is_err() {
