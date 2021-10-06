@@ -23,7 +23,6 @@ use solana_program::{
     program::{invoke_signed, invoke},
     rent::Rent,
     sysvar::Sysvar,
-    keccak::Hasher,
     msg,
 };
 
@@ -186,19 +185,6 @@ fn process_instruction<'a>(
             account_data.pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())
-        },
-        EvmInstruction::Write {nonce, offset, bytes} => {
-            let holder_account_info = next_account_info(account_info_iter)?;
-            if holder_account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_account_info.owner, program_id);
-            }
-
-            let signer_account_info = next_account_info(account_info_iter)?;
-            if !good_holder_account(nonce, holder_account_info.key, signer_account_info.key, program_id) {
-                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
-            }
-
-            do_write(holder_account_info, offset, bytes)
         },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
@@ -524,8 +510,24 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
+        EvmInstruction::WriteHolder {seed, offset, bytes} => {
+            let holder_account_info = next_account_info(account_info_iter)?;
+            if holder_account_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_account_info.owner, program_id);
+            }
 
-        EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+            let signer_account_info = next_account_info(account_info_iter)?;
+            if !good_holder_account(&hex::encode(seed),
+                                    holder_account_info.key, signer_account_info.key, program_id) {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
+            }
+
+            do_write(holder_account_info, offset, bytes)
+        },
+
+        EvmInstruction::Write |
+        EvmInstruction::Finalise |
+        EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
@@ -968,22 +970,8 @@ fn check_ethereum_transaction(
 }
 
 /// Checks that the holder account is generated from these signer account and nonce.
-fn good_holder_account(nonce: u64,
+fn good_holder_account(seed: &str,
                        holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
-    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
-    // signer_public_key_bytes = bytes(self.signer.public_key())
-    // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
-    let bytes_count = std::mem::size_of_val(&nonce);
-    let bits_count = bytes_count * 8;
-    let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
-    let significant_bytes_count = (nonce_bit_length + 7) / 8;
-    let mut hasher = Hasher::default();
-    hasher.hash(b"holder");
-    hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
-    hasher.hash(&signer_address.to_bytes());
-    let output = hasher.result();
-    let seed = &hex::encode(output)[..32];
-
     let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
     if must_holder.is_err() {
         debug_print!("Pubkey::create_with_seed error: {:?}", must_holder.err());

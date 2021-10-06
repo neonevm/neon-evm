@@ -13,19 +13,9 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
 /// `EvmInstruction` serialized in instruction data
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction<'a> {
-    /// Write program data into an account
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] Account to write to
-    ///   1. \[SIGNER\] Signer for Ether account
-    Write {
-        /// Magical number
-        nonce: u64,
-        /// Offset at which to write the given bytes
-        offset: u32,
-        /// Data to write
-        bytes: &'a [u8],
-    },
+    /// Deprecated: Write to an account
+    #[deprecated(note = "Instruction not supported")]
+    Write,
 
     /// Deprecated: Finalize an account loaded with program data for execution
     #[deprecated(note = "Instruction not supported")]
@@ -170,8 +160,21 @@ pub enum EvmInstruction<'a> {
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
-}
 
+    /// Write program data into a holder account
+    ///
+    /// # Account references
+    ///   0. \[WRITE\] Account to write to
+    ///   1. \[SIGNER\] Signer for Ether account
+    WriteHolder {
+        /// Seed with which the account had been created
+        seed: &'a [u8],
+        /// Offset at which to write the given bytes
+        offset: u32,
+        /// Data to write
+        bytes: &'a [u8],
+    },
+}
 
 impl<'a> EvmInstruction<'a> {
     /// Unpack `EvmInstruction`
@@ -187,18 +190,6 @@ impl<'a> EvmInstruction<'a> {
 
         let (&tag, rest) = input.split_first().ok_or(InvalidInstructionData)?;
         Ok(match tag {
-            0 => {
-                let (_, rest) = rest.split_at(3);
-                let (nonce, rest) = rest.split_at(8);
-                let (offset, rest) = rest.split_at(4);
-                let (length, rest) = rest.split_at(8);
-                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
-                let (bytes, _) = rest.split_at(length);
-                EvmInstruction::Write {nonce, offset, bytes}
-            },
             2 => {
                 let (_, rest) = rest.split_at(3);
                 let (lamports, rest) = rest.split_at(8);
@@ -286,6 +277,16 @@ impl<'a> EvmInstruction<'a> {
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
+            },
+            15 => {
+                let (seed, rest) = rest.split_at(16);
+                let (offset, rest) = rest.split_at(4);
+                let (length, rest) = rest.split_at(8);
+                let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
+                let (bytes, _) = rest.split_at(length);
+                EvmInstruction::WriteHolder {seed, offset, bytes}
             },
             _ => return Err(InvalidInstructionData),
         })
