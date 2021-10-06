@@ -13,7 +13,6 @@ client = Client(solana_url)
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
-proxy_id = 1000;
 
 contract_name = "helloWorld.binary"
 # "ERC20Wrapper.binary"
@@ -36,9 +35,9 @@ def create_account_layout(lamports, space, ether, nonce):
         nonce=nonce
     ))
 
-def write_layout(id, offset, data):
-    return (bytes.fromhex('00000000') +
-            id.to_bytes(8, byteorder='little') +
+def write_holder_layout(seed, offset, data):
+    return (bytes.fromhex('0F') +
+            bytes.fromhex(seed) +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -121,7 +120,7 @@ class DeployTest(unittest.TestCase):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=write_layout(proxy_id, offset, part),
+                data=write_holder_layout(seed, offset, part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.operator_acc.public_key(), is_signer=True, is_writable=False),

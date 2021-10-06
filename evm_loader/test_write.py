@@ -19,8 +19,6 @@ path_to_solana = 'solana'
 client = Client(solana_url)
 
 def write_holder_layout(seed, offset, data):
-    print('seed:', seed)
-    print('seed len:', len(bytes.fromhex(seed)))
     return (bytes.fromhex('0F') +
             bytes.fromhex(seed) +
             offset.to_bytes(4, byteorder='little') +
