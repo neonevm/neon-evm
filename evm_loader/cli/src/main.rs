@@ -26,7 +26,6 @@ use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
     instruction::{AccountMeta, Instruction},
-    loader_instruction::LoaderInstruction,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer, Signature},
@@ -532,7 +531,8 @@ fn make_deploy_ethereum_transaction(
 
 fn fill_holder_account(
     config: &Config,
-    holder: &Pubkey, 
+    holder: &Pubkey,
+    holder_seed: &str,
     msg: &[u8],
 ) -> Result<(), Error> {
     let creator = &config.signer;
@@ -540,12 +540,13 @@ fn fill_holder_account(
 
     // Write code to holder account
     debug!("Write code");
+    let seed = holder_seed.as_bytes();
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &LoaderInstruction::Write {offset, bytes: chunk.to_vec()},
+            &EvmInstruction::WriteHolder {seed, offset, bytes: chunk},
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
@@ -883,9 +884,10 @@ fn command_deploy(
     let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
-    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), "1236", 128*1024_u64)?;
+    let holder_seed = "00000000000000000000000000000000"; // 32 digits -> 16 bytes
+    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), holder_seed, 128*1024_u64)?;
 
-    fill_holder_account(config, &holder, &msg)?;
+    fill_holder_account(config, &holder, holder_seed, &msg)?;
 
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
