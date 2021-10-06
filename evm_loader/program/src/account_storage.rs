@@ -5,7 +5,8 @@ use crate::{
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
-    precompile_contracts::is_precompile_address
+    precompile_contracts::is_precompile_address,
+    system::create_pda_account
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -22,8 +23,6 @@ use std::{
     collections::BTreeMap
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
-use solana_program::system_instruction::create_account;
-use solana_program::rent::Rent;
 use crate::account_data::ERC20Allowance;
 use spl_associated_token_account::get_associated_token_address;
 
@@ -458,17 +457,14 @@ impl<'a> ProgramAccountStorage<'a> {
                     None => return Err!(ProgramError::NotEnoughAccountKeys)
                 };
 
-                let rent = Rent::get()?;
-                let balance = rent.minimum_balance(data.size());
-
-                let instruction = create_account(
+                create_pda_account(
+                    self.program_id(),
+                    accounts,
+                    account,
+                    &seeds,
                     operator,
-                    account.key,
-                    balance,
-                    data.size() as u64,
-                    self.program_id()
-                );
-                invoke_signed(&instruction, accounts, &[&seeds])?;
+                    data.size()
+                )?;
             }
 
             data.pack(&mut account.try_borrow_mut_data()?)?;
