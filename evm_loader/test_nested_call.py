@@ -360,7 +360,7 @@ class EventTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
-        self.write_transaction_to_holder_account(self.holder, sign, msg)
+        self.write_transaction_to_holder_account(self.holder, self.holder_seed, sign, msg)
 
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call_from_account(self.holder, self.storage, 0, contract, code))
@@ -384,7 +384,7 @@ class EventTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
-        self.write_transaction_to_holder_account(self.holder, sign, msg)
+        self.write_transaction_to_holder_account(self.holder, self.holder_seed, sign, msg)
 
         trx = Transaction()
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))
