@@ -25,6 +25,7 @@ use evm::{H160, H256, U256, ExitReason,};
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    incinerator,
     instruction::{AccountMeta, Instruction},
     loader_instruction::LoaderInstruction,
     message::Message,
@@ -1009,6 +1010,69 @@ fn command_get_ether_account_data (
     }
 }
 
+fn command_cancel_trx(
+    config: &Config,
+    storage_account: &Pubkey,
+) -> CommandResult {
+    let storage = config.rpc_client.get_account_with_commitment(&storage_account, CommitmentConfig::processed()).unwrap().value;
+
+    if let Some(acc) = storage {
+        if acc.owner != config.evm_loader {
+            return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
+        }
+        let data = AccountData::unpack(&acc.data)?;
+        let data_end = data.size();
+        let storage = if let AccountData::Storage(storage) = data {storage}
+                else {return Err(format!("Not storage account").into());};
+
+        println!("{:?}", storage);
+        let accounts_begin = data_end;
+        let accounts_end = accounts_begin + storage.accounts_len * 32;
+        if acc.data.len() < accounts_end {
+            return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
+        };
+        let keys:Vec<Pubkey> = acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect();
+
+        let mut accounts_meta : Vec<AccountMeta> = vec!();
+        accounts_meta.push(AccountMeta::new(*storage_account, false));               // Storage account
+        accounts_meta.push(AccountMeta::new(config.signer.pubkey(), true));          // Operator
+        accounts_meta.push(AccountMeta::new(incinerator::id(), false));              // Incinerator
+        accounts_meta.push(AccountMeta::new_readonly(system_program::id(), false));  // System
+
+        let mut system_accounts : Vec<Pubkey> = vec!();
+        system_accounts.push(Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap());
+        for key in keys {
+            let writable = if system_accounts.contains(&key) {false} else {
+                let acc = config.rpc_client.get_account_with_commitment(&key, CommitmentConfig::processed()).unwrap().value;
+                if let Some(acc) = acc {
+                    if acc.owner == config.evm_loader {
+                        if let AccountData::Account(_) = AccountData::unpack(&acc.data)? {true}
+                        else {false}
+                    } else {
+                        false
+                    }
+                } else {return Err(format!("Missed account {}", key).into());}
+            };
+
+            if writable {
+                accounts_meta.push(AccountMeta::new(key, false));
+            } else {
+                accounts_meta.push(AccountMeta::new_readonly(key, false));
+            }
+        }
+        for meta in &accounts_meta {
+            println!("\t{:?}", meta);
+        }
+        
+        let instruction = Instruction::new_with_bincode(config.evm_loader, &(12_u8), accounts_meta);
+        send_transaction(config, &[instruction])?;
+
+    } else {
+        return Err(format!("Account not found {}", &storage_account.to_string()).into());
+    }
+    Ok(())
+}
+
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
@@ -1272,6 +1336,19 @@ fn main() {
                         .help("Ethereum address"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("cancel-trx")
+                .about("Cancel NEON transaction")
+                .arg(
+                    Arg::with_name("storage_account")
+                        .index(1)
+                        .value_name("STORAGE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("storage account for transaction"),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1379,6 +1456,11 @@ fn main() {
                 command_get_ether_account_data(&config, &ether);
 
                 Ok(())
+            }
+            ("cancel-trx", Some(arg_matches)) => {
+                let storage_account = pubkey_of(&arg_matches, "storage_account").unwrap();
+                
+                command_cancel_trx(&config, &storage_account)
             }
             _ => unreachable!(),
         };
