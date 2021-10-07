@@ -461,7 +461,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     self.program_id(),
                     accounts,
                     account,
-                    &seeds,
+                    seeds,
                     operator,
                     data.size()
                 )?;
