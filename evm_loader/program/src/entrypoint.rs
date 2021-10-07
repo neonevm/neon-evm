@@ -511,18 +511,27 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::WriteHolder {seed, offset, bytes} => {
-            let holder_account_info = next_account_info(account_info_iter)?;
-            if holder_account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_account_info.owner, program_id);
+            let holder_info = next_account_info(account_info_iter)?;
+            if holder_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
             }
 
-            let signer_account_info = next_account_info(account_info_iter)?;
-            if !good_holder_account(&hex::encode(seed),
-                                    holder_account_info.key, signer_account_info.key, program_id) {
-                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_account_info.key);
+            let operator_info = next_account_info(account_info_iter)?;
+            if !operator_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData);
             }
 
-            do_write(holder_account_info, offset, bytes)
+            let seed = &hex::encode(seed);
+            let must_holder = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if must_holder.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
+            }
+
+            if *holder_info.key != must_holder.unwrap() {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
+            }
+
+            do_write(holder_info, offset, bytes)
         },
 
         EvmInstruction::Write |
@@ -967,17 +976,6 @@ fn check_ethereum_transaction(
 
 
     Ok(())
-}
-
-/// Checks that the holder account is generated from these signer account and nonce.
-fn good_holder_account(seed: &str,
-                       holder_address: &Pubkey, signer_address: &Pubkey, owner_address: &Pubkey) -> bool {
-    let must_holder = Pubkey::create_with_seed(signer_address, seed, owner_address);
-    if must_holder.is_err() {
-        debug_print!("Pubkey::create_with_seed error: {:?}", must_holder.err());
-        return false;
-    }
-    *holder_address == must_holder.unwrap()
 }
 
 // Pull in syscall stubs when building for non-BPF targets

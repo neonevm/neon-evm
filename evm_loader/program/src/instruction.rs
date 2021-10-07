@@ -167,7 +167,7 @@ pub enum EvmInstruction<'a> {
     ///   0. \[WRITE\] Account to write to
     ///   1. \[SIGNER\] Signer for Ether account
     WriteHolder {
-        /// Seed with which the account had been created
+        /// Seed with which the account was created
         seed: &'a [u8],
         /// Offset at which to write the given bytes
         offset: u32,
