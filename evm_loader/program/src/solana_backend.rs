@@ -71,10 +71,21 @@ pub trait AccountStorage {
         )
     }
 
+    /// Get ERC20 token account address and bump seed
+    fn get_erc20_token_address(&self, owner: &H160, contract: &H160, mint: &Pubkey) -> (Pubkey, u8) {
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ERC20Balance", &mint.to_bytes(), contract.as_bytes(), owner.as_bytes()];
+        Pubkey::find_program_address(seeds, self.program_id())
+    }
+
+    /// Get ERC20 allowance account address and bump seed
+    fn get_erc20_allowance_address(&self, owner: &H160, spender: &H160, contract: &H160, mint: &Pubkey) -> (Pubkey, u8) {
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ERC20Allowance", &mint.to_bytes(), contract.as_bytes(), owner.as_bytes(), spender.as_bytes()];
+        Pubkey::find_program_address(seeds, self.program_id())
+    }
+
     /// Get ERC20 allowance
-    fn get_erc20_allowance(&self, owner: &H160, spender: &H160, mint: &Pubkey) -> U256 {
-        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ERC20Allowance", &mint.to_bytes(), owner.as_bytes(), spender.as_bytes()];
-        let allowance_address = Pubkey::find_program_address(seeds, self.program_id()).0;
+    fn get_erc20_allowance(&self, owner: &H160, spender: &H160, contract: &H160, mint: &Pubkey) -> U256 {
+        let (allowance_address, _) = self.get_erc20_allowance_address(owner, spender, contract, mint);
 
         let account_data = self.apply_to_solana_account(
             &allowance_address,
