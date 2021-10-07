@@ -5,7 +5,7 @@
 # 3. Checks no one other can write to a holder account.
 
 import unittest
-from sha3 import keccak_256, shake_256
+from sha3 import keccak_256
 from solana.publickey import PublicKey
 from solana.account import Account as solana_Account
 from solana.rpc.api import SendTransactionError
@@ -79,10 +79,10 @@ class Test_Write(unittest.TestCase):
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
-    def write_to_account(self, signer, seed, data):
+    def write_to_account(self, operator, signer, seed, data):
         tx = Transaction()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
-                 AccountMeta(pubkey=signer.public_key(), is_signer=True, is_writable=False)]
+                 AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,
                                       data=write_holder_layout(seed, 0, data),
                                       keys=metas))
@@ -92,7 +92,7 @@ class Test_Write(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
-        id = self.write_to_account(self.signer, self.seed, test_data)
+        id = self.write_to_account(self.signer, self.signer, self.seed, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
@@ -101,7 +101,7 @@ class Test_Write(unittest.TestCase):
         print()
         try:
             wrong_seed = '00000000000000000000000000000000' # 32 digits = 16 bytes
-            self.write_to_account(self.signer, wrong_seed, test_data)
+            self.write_to_account(self.signer, self.signer, wrong_seed, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
@@ -113,7 +113,20 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_signer(self):
         print()
         try:
-            self.write_to_account(self.attacker, self.seed, test_data)
+            self.write_to_account(self.attacker, self.attacker, self.seed, test_data)
+        except SendTransactionError as err:
+            self.check_err_is_invalid_program_argument(str(err))
+        except Exception as err:
+            print('type(err):', type(err))
+            print('err:', str(err))
+            raise
+
+    @unittest.skip("a.i.")
+    # TODO: debug this test
+    def test_instruction_write_fails_wrong_operator(self):
+        print()
+        try:
+            self.write_to_account(self.attacker, self.signer, self.seed, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:

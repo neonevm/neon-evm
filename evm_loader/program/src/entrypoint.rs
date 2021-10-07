@@ -518,7 +518,7 @@ fn process_instruction<'a>(
 
             let operator_info = next_account_info(account_info_iter)?;
             if !operator_info.is_signer {
-                return Err!(ProgramError::InvalidAccountData);
+                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
             }
 
             let seed = &hex::encode(seed);
