@@ -206,7 +206,7 @@ pub fn block_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    let (ether, _nonce) = source_solidity_account.get_seeds();
+    // let (ether, _nonce) = source_solidity_account.get_seeds();
     debug_print!("block_token from={:?}; to={:?}; source={:?}; source_solidity={:?}; value={:?}",
         source_token_account, target_token_account, source_account, source_solidity_account, value);
 
@@ -218,9 +218,9 @@ pub fn block_token(
             *source_token_account.key, user_token_account)
     }
 
-    let target_token_account_owner = get_token_account_owner(target_token_account)?;
-    debug_print!("target_token_account_owner={:?}; source_account.key={:?}",
-        target_token_account_owner, *source_account.key);
+    // let target_token_account_owner = get_token_account_owner(target_token_account)?;
+    // debug_print!("target_token_account_owner={:?}; source_account.key={:?}",
+    //     target_token_account_owner, *source_account.key);
     // if target_token_account_owner != *source_account.key {
     //     return Err!(ProgramError::InvalidInstructionData;
     //         "Invalid target token account owner: target_token_account_owner != source_account; target_token_account_owner={:?}; source_account={:?}",
@@ -229,7 +229,7 @@ pub fn block_token(
 
     // let blocking_seed = bs58::encode(&ether.to_fixed_bytes()).into_string() + "blocking_account";
     let blocking_seed = "blocking_account";
-    debug_print!("ether={:?}; blocking_seed={:?}", ether, blocking_seed);
+    // debug_print!("ether={:?}; blocking_seed={:?}", ether, blocking_seed);
     let blocking_address = Pubkey::create_with_seed(source_account.key, blocking_seed, &spl_token::id())?;
     let blocking_token_account = spl_associated_token_account::get_associated_token_address(&blocking_address, &token_mint::id());
     debug_print!("target_token_account={:?}; blocking_address={:?}; blocking_token_account={:?}", blocking_address, blocking_token_account, *target_token_account.key);
