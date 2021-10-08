@@ -66,8 +66,13 @@ class SplToken:
             print("ERR: spl-token error {}".format(err))
             raise
 
-    def transfer(self, mint, amount, recipient):
-        self.call("transfer {} {} {}".format(mint, amount, recipient))
+    def transfer(self, mint, amount, recipient, owner=None):
+        if owner is None:
+            res = self.call("transfer {} {} {} --allow-unfunded-recipient --fund-recipient".format(mint, amount, recipient))
+        else:
+            res = self.call("transfer {} {} {} --allow-unfunded-recipient --fund-recipient --owner {}".format(mint, amount, recipient, owner))
+        print('transfer res:', res)
+        return res
 
     def balance(self, acc):
         from decimal import Decimal
@@ -130,6 +135,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
 def accountWithSeed(base, seed, program):
     print(type(base), type(seed), type(program))
     return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
+
 
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
@@ -390,6 +396,18 @@ class EvmLoader:
         return (trx, sol)
 
 
+def get_blocking_account(caller_sol_acc):
+    blocking_seed = "blocking_account"
+    print('blocking_seed:', blocking_seed)
+    blocking_sol_account = accountWithSeed(PublicKey(caller_sol_acc), blocking_seed, PublicKey(tokenkeg))
+    print('blocking_sol_account:', blocking_sol_account)
+    res = SplToken(solana_url).transfer(ETH_TOKEN_MINT_ID, 0, blocking_sol_account)
+    words = res.split()
+    blocking_account = words[-5]
+    print('blocking_account:', blocking_account)
+    return blocking_account
+
+
 def create_with_seed_loader_instruction(evm_loader_id, funding, created, base, seed, lamports, space, owner):
     return TransactionInstruction(
         program_id=evm_loader_id,
@@ -474,3 +492,81 @@ def send_transaction(client, trx, acc):
     confirm_transaction(client, result["result"])
     result = client.get_confirmed_transaction(result["result"])
     return result
+
+
+def create_neon_evm_instr_10_continue(evm_loader_program_id,
+                                      caller_sol_acc,
+                                      operator_sol_acc,
+                                      storage_sol_acc,
+                                      contract_sol_acc,
+                                      code_sol_acc,
+                                      step_count):
+    return TransactionInstruction(
+        program_id=evm_loader_program_id,
+        data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+        keys=[
+            # Operator's storage account:
+            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
+            # Operator's SOL account:
+            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
+            # Operator's NEON token account:
+            AccountMeta(pubkey=get_associated_token_address(storage_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # User's NEON token account:
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # User's NEON blocking token account:
+            AccountMeta(pubkey=get_blocking_account(caller_sol_acc), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        ])
+
+
+def create_neon_evm_instr_11_begin(evm_loader_program_id,
+                                   caller_sol_acc,
+                                   operator_sol_acc,
+                                   storage_sol_acc,
+                                   holder_sol_acc,
+                                   contract_sol_acc,
+                                   code_sol_acc,
+                                   collateral_pool_index_buf,
+                                   collateral_pool_address,
+                                   step_count):
+    return TransactionInstruction(
+        program_id=evm_loader_program_id,
+        data=bytearray.fromhex("0B") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+        keys=[
+            AccountMeta(pubkey=holder_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
+
+            # Operator's SOL account:
+            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
+            # User's NEON token account:
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # User's NEON blocking token account:
+            AccountMeta(pubkey=get_blocking_account(caller_sol_acc), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        ])
