@@ -87,7 +87,7 @@ class EventTest(unittest.TestCase):
         print ("reId_create_receiver", cls.reId_create_receiver)
         print ("reId_create_receiver_eth", cls.reId_create_receiver_eth.hex())
 
-        cls.reId_create_receiver_seed = b58encode(bytes.fromhex(cls.reId_create_receiver_eth.hex())).decode('utf8')
+        cls.reId_create_receiver_seed = b58encode(ACCOUNT_SEED_VERSION+bytes.fromhex(cls.reId_create_receiver_eth.hex())).decode('utf8')
         cls.reId_create_receiver_code_account = accountWithSeed(cls.acc.public_key(), cls.reId_create_receiver_seed, PublicKey(evm_loader_id))
 
         collateral_pool_index = 2

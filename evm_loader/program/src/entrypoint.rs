@@ -150,7 +150,9 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
-                    let code_address_seed = bs58::encode(ether).into_string();
+                    let code_address_seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], ether.as_bytes() ].concat();
+                    let code_address_seed = bs58::encode(code_address_seed).into_string();
+                    debug_print!("Code account seed: {}", code_address_seed);
                     let expected_code_address = Pubkey::create_with_seed(funding_info.key, &code_address_seed, program_id)?;
                     if *program_code.key != expected_code_address {
                         return Err!(ProgramError::InvalidArgument; "Unexpected code account. Actual<{:?}> != Expected<{:?}>", program_code.key, expected_code_address);

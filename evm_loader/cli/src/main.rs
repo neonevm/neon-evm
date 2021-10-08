@@ -14,6 +14,7 @@ use crate::{
 use evm_loader::{
     instruction::EvmInstruction,
     account_data::{
+        ACCOUNT_SEED_VERSION,
         AccountData,
         Account,
         Contract
@@ -663,7 +664,8 @@ fn get_ethereum_contract_account_credentials(
     let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::neon::token_mint::id());
 
     let (program_code, program_seed) = {
-        let seed = bs58::encode(&program_ether.to_fixed_bytes()).into_string();
+        let seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], program_ether.as_bytes() ].concat();
+        let seed = bs58::encode(seed).into_string();
         debug!("Code account seed {} and len {}", &seed, &seed.len());
         let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
         (address, seed)
