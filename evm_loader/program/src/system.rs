@@ -17,7 +17,7 @@ use solana_program::{
 /// `ProgramError::AccountBorrowFailed` is `new_account` data already borrowed
 /// `ProgramError::Custom` from `invoke_signed`
 pub fn create_pda_account(
-    program_id: &Pubkey,
+    owner: &Pubkey,
     accounts: &[AccountInfo],
     new_account: &AccountInfo,
     new_account_seeds: &[&[u8]],
@@ -44,7 +44,7 @@ pub fn create_pda_account(
         )?;
 
         invoke_signed(
-            &system_instruction::assign(new_account.key, program_id),
+            &system_instruction::assign(new_account.key, owner),
             accounts,
             &[new_account_seeds]
         )
@@ -55,7 +55,7 @@ pub fn create_pda_account(
                 new_account.key,
                 minimum_balance,
                 space as u64,
-                program_id,
+                owner,
             ),
             accounts,
             &[new_account_seeds],

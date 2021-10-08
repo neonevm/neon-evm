@@ -41,6 +41,7 @@ use crate::{
     neon::token_mint,
     system::create_pda_account
 };
+use crate::solana_program::program_pack::Pack;
 
 
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
@@ -185,6 +186,82 @@ fn process_instruction<'a>(
             }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())
+        },
+        EvmInstruction::ERC20CreateTokenAccount => {
+            let payer = next_account_info(account_info_iter)?;
+            let account = next_account_info(account_info_iter)?;
+            let wallet = next_account_info(account_info_iter)?;
+            let contract = next_account_info(account_info_iter)?;
+            let token_mint = next_account_info(account_info_iter)?;
+            let system_program = next_account_info(account_info_iter)?;
+            let token_program = next_account_info(account_info_iter)?;
+            let rent = next_account_info(account_info_iter)?;
+
+            if !payer.is_signer {
+                return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
+            }
+
+            let wallet_data = AccountData::unpack(&wallet.try_borrow_data()?)?;
+            let wallet_data = wallet_data.get_account()?;
+
+            let contract_data = AccountData::unpack(&contract.try_borrow_data()?)?;
+            let contract_data = contract_data.get_account()?;
+            if contract_data.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                return Err!(ProgramError::InvalidArgument; "contract_data.code_account == Pubkey::new_from_array([0_u8; 32])");
+            }
+
+            if *token_mint.owner != spl_token::id() {
+                return Err!(ProgramError::InvalidArgument; "*token_mint.owner<{:?}> != spl_token::id()", token_mint.owner);
+            }
+            spl_token::state::Mint::unpack(&token_mint.try_borrow_data()?)?;
+
+            if *system_program.key != solana_program::system_program::id() {
+                return Err!(ProgramError::InvalidArgument; "*system_program.key<{:?}> != solana_program::system_program::id()", system_program.key);
+            }
+
+            if *token_program.key != spl_token::id() {
+                return Err!(ProgramError::InvalidArgument; "*token_program.key<{:?}> != spl_token::id()", token_program.key);
+            }
+
+            if *rent.key != solana_program::sysvar::rent::id() {
+                return Err!(ProgramError::InvalidArgument; "*rent.key<{:?}> != solana_program::sysvar::rent::id()", rent.key);
+            }
+
+            let token_mint_key_bytes = token_mint.key.to_bytes();
+            let mut seeds: Vec<&[u8]> = vec![
+                &[ACCOUNT_SEED_VERSION],
+                b"ERC20Balance",
+                &token_mint_key_bytes,
+                contract_data.ether.as_bytes(),
+                wallet_data.ether.as_bytes()
+            ];
+            let (expected_address, nonce) = Pubkey::find_program_address(&seeds, program_id);
+
+            if *account.key != expected_address {
+                return Err!(ProgramError::InvalidArgument; "*account.key<{:?}> != expected_address", account.key);
+            }
+
+            let nonce_bytes = &[nonce];
+            seeds.push(nonce_bytes);
+
+            debug_print!("Create program derived account");
+            create_pda_account(
+                &spl_token::id(),
+                accounts,
+                account,
+                &seeds,
+                payer.key,
+                spl_token::state::Account::LEN
+            )?;
+
+            debug_print!("Initialize token");
+            let instruction = spl_token::instruction::initialize_account(
+                &spl_token::id(),
+                account.key,
+                token_mint.key,
+                wallet.key
+            )?;
+            invoke(&instruction, accounts)
         },
         EvmInstruction::Write {offset, bytes} => {
             let account_info = next_account_info(account_info_iter)?;

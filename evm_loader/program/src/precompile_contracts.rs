@@ -146,7 +146,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let address = H160::from_slice(address);
 
-            let balance = state.erc20_balance_of(token_mint, address);
+            let balance = state.erc20_balance_of(token_mint, context, address);
             let mut output = vec![0_u8; 32];
             balance.into_big_endian_fast(&mut output);
 
@@ -220,7 +220,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let owner = H160::from_slice(owner);
             let spender = H160::from_slice(spender);
 
-            let allowance = state.erc20_allowance(token_mint, owner, spender);
+            let allowance = state.erc20_allowance(token_mint, context, owner, spender);
 
             let mut output = vec![0_u8; 32];
             allowance.into_big_endian_fast(&mut output);

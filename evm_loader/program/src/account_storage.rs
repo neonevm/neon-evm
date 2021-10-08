@@ -433,22 +433,22 @@ impl<'a> ProgramAccountStorage<'a> {
             let data = AccountData::ERC20Allowance(ERC20Allowance{
                 owner: approve.owner,
                 spender: approve.spender,
+                contract: approve.contract,
                 mint: approve.mint,
                 value: approve.value
             });
+
+            let (account_address, bump_seed) = self.get_erc20_allowance_address(&approve.owner, &approve.spender, &approve.contract, &approve.mint);
 
             let seeds: &[&[u8]] = &[
                 &[ACCOUNT_SEED_VERSION],
                 b"ERC20Allowance",
                 &approve.mint.to_bytes(),
+                approve.contract.as_bytes(),
                 approve.owner.as_bytes(),
-                approve.spender.as_bytes()
+                approve.spender.as_bytes(),
+                &[bump_seed]
             ];
-            let (account_address, bump_seed) = Pubkey::find_program_address(seeds, self.program_id());
-
-            let bump_seed = &[bump_seed];
-            let mut seeds = seeds.to_vec();
-            seeds.push(bump_seed);
 
             let account = self.solana_accounts[&account_address];
             if account.data_is_empty() {
@@ -461,7 +461,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     self.program_id(),
                     accounts,
                     account,
-                    &seeds,
+                    seeds,
                     operator,
                     data.size()
                 )?;
