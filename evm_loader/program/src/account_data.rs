@@ -9,7 +9,7 @@ use solana_program::{
 /// Ethereum account version
 pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
 /// Ethereum account allocated data size
-pub const ACCOUNT_MAX_SIZE: u64 = 256;
+pub const ACCOUNT_MAX_SIZE: usize = 256;
 
 /// Ethereum account data
 #[derive(Debug,Clone)]
@@ -69,6 +69,8 @@ pub struct ERC20Allowance {
     pub owner: H160,
     /// Token spender
     pub spender: H160,
+    /// Token contract
+    pub contract: H160,
     /// Token mint
     pub mint: Pubkey,
     /// Amount
@@ -421,18 +423,19 @@ impl Storage {
 
 impl ERC20Allowance {
     /// Allowance struct serialized size
-    const SIZE: usize = 20+20+32+32;
+    const SIZE: usize = 20+20+20+32+32;
 
     /// Deserialize `ERC20Allowance` struct from input data
     #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, ERC20Allowance::SIZE];
-        let (owner, spender, mint, value) = array_refs![data, 20, 20, 32, 32];
+        let (owner, spender, contract, mint, value) = array_refs![data, 20, 20, 20, 32, 32];
 
         Self {
             owner: H160::from(*owner),
             spender: H160::from(*spender),
+            contract: H160::from(*contract),
             mint: Pubkey::new_from_array(*mint),
             value: U256::from_little_endian(value)
         }
@@ -442,10 +445,11 @@ impl ERC20Allowance {
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, ERC20Allowance::SIZE];
-        let (owner, spender, mint, value) = mut_array_refs![data, 20, 20, 32, 32];
+        let (owner, spender, contract, mint, value) = mut_array_refs![data, 20, 20, 20, 32, 32];
 
         *owner = self.owner.to_fixed_bytes();
         *spender = self.spender.to_fixed_bytes();
+        *contract = self.contract.to_fixed_bytes();
         mint.copy_from_slice(self.mint.as_ref());
         self.value.to_little_endian(value);
 

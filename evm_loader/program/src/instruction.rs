@@ -161,6 +161,19 @@ pub enum EvmInstruction<'a> {
         step_count: u64,
     },
 
+    /// Creates an ERC20 token account for the given Ethereum wallet address, contract address and token mint
+    ///
+    /// ### Account references
+    ///   0. `[writeable,signer]` Funding account (must be a system account)
+    ///   1. `[writeable]` ERC20 token account address to be created
+    ///   2. `[]` Wallet address for the new ERC20 token account
+    ///   3. '[]' Contract address
+    ///   4. `[]` The token mint for the new ERC20 token account
+    ///   5. `[]` System program
+    ///   6. `[]` SPL Token program
+    ///   7. '[]' Rent sysvar
+    ERC20CreateTokenAccount,
+
     /// Write program data into a holder account
     ///
     /// # Account references
@@ -278,7 +291,8 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
-            15 => {
+            15 => EvmInstruction::ERC20CreateTokenAccount,
+            16 => {
                 let (seed, rest) = rest.split_at(16);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);

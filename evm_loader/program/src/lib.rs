@@ -27,6 +27,7 @@ pub mod utils;
 pub mod neon;
 pub mod payment;
 pub mod token;
+pub mod system;
 pub mod precompile_contracts;
 
 // Export current solana-sdk types for downstream users who may also be building with a different

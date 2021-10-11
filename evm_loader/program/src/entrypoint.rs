@@ -19,8 +19,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
-    system_instruction::{create_account},
-    program::{invoke_signed, invoke},
+    program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
     msg,
@@ -41,7 +40,9 @@ use crate::{
     token,
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
+    system::create_pda_account
 };
+use crate::solana_program::program_pack::Pack;
 
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
@@ -121,7 +122,7 @@ fn process_instruction<'a>(
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
-        EvmInstruction::CreateAccount {lamports, space: _, ether, nonce} => {
+        EvmInstruction::CreateAccount {lamports: _, space: _, ether, nonce} => {
             let rent = Rent::get()?;
             
             let funding_info = next_account_info(account_info_iter)?;
@@ -158,7 +159,23 @@ fn process_instruction<'a>(
                 }
             };
 
-            let account_data = AccountData::Account(Account {
+            create_pda_account(
+                program_id,
+                accounts,
+                account_info,
+                &program_seeds,
+                funding_info.key,
+                ACCOUNT_MAX_SIZE
+            )?;
+            debug_print!("create_account done");
+
+            invoke(
+                &create_associated_token_account(funding_info.key, account_info.key, token_account_info.key, &token_mint::id()),
+                accounts,
+            )?;
+            debug_print!("create_associated_token_account done");
+
+            AccountData::Account(Account {
                 ether,
                 nonce,
                 trx_count: 0_u64,
@@ -166,25 +183,85 @@ fn process_instruction<'a>(
                 ro_blocked_cnt: 0_u8,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
-            });
-
-            let account_lamports = rent.minimum_balance(account_data.size()) + lamports;
-
-            invoke_signed(
-                &create_account(funding_info.key, account_info.key, account_lamports, ACCOUNT_MAX_SIZE, program_id),
-                accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_account done");
-
-            invoke_signed(
-                &create_associated_token_account(funding_info.key, account_info.key, token_account_info.key, &token_mint::id()),
-                accounts, &[&program_seeds[..]]
-            )?;
-            debug_print!("create_associated_token_account done");
-
-            account_data.pack(&mut account_info.data.borrow_mut())?;
+            }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())
+        },
+        EvmInstruction::ERC20CreateTokenAccount => {
+            let payer = next_account_info(account_info_iter)?;
+            let account = next_account_info(account_info_iter)?;
+            let wallet = next_account_info(account_info_iter)?;
+            let contract = next_account_info(account_info_iter)?;
+            let token_mint = next_account_info(account_info_iter)?;
+            let system_program = next_account_info(account_info_iter)?;
+            let token_program = next_account_info(account_info_iter)?;
+            let rent = next_account_info(account_info_iter)?;
+
+            if !payer.is_signer {
+                return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
+            }
+
+            let wallet_data = AccountData::unpack(&wallet.try_borrow_data()?)?;
+            let wallet_data = wallet_data.get_account()?;
+
+            let contract_data = AccountData::unpack(&contract.try_borrow_data()?)?;
+            let contract_data = contract_data.get_account()?;
+            if contract_data.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                return Err!(ProgramError::InvalidArgument; "contract_data.code_account == Pubkey::new_from_array([0_u8; 32])");
+            }
+
+            if *token_mint.owner != spl_token::id() {
+                return Err!(ProgramError::InvalidArgument; "*token_mint.owner<{:?}> != spl_token::id()", token_mint.owner);
+            }
+            spl_token::state::Mint::unpack(&token_mint.try_borrow_data()?)?;
+
+            if *system_program.key != solana_program::system_program::id() {
+                return Err!(ProgramError::InvalidArgument; "*system_program.key<{:?}> != solana_program::system_program::id()", system_program.key);
+            }
+
+            if *token_program.key != spl_token::id() {
+                return Err!(ProgramError::InvalidArgument; "*token_program.key<{:?}> != spl_token::id()", token_program.key);
+            }
+
+            if *rent.key != solana_program::sysvar::rent::id() {
+                return Err!(ProgramError::InvalidArgument; "*rent.key<{:?}> != solana_program::sysvar::rent::id()", rent.key);
+            }
+
+            let token_mint_key_bytes = token_mint.key.to_bytes();
+            let mut seeds: Vec<&[u8]> = vec![
+                &[ACCOUNT_SEED_VERSION],
+                b"ERC20Balance",
+                &token_mint_key_bytes,
+                contract_data.ether.as_bytes(),
+                wallet_data.ether.as_bytes()
+            ];
+            let (expected_address, nonce) = Pubkey::find_program_address(&seeds, program_id);
+
+            if *account.key != expected_address {
+                return Err!(ProgramError::InvalidArgument; "*account.key<{:?}> != expected_address", account.key);
+            }
+
+            let nonce_bytes = &[nonce];
+            seeds.push(nonce_bytes);
+
+            debug_print!("Create program derived account");
+            create_pda_account(
+                &spl_token::id(),
+                accounts,
+                account,
+                &seeds,
+                payer.key,
+                spl_token::state::Account::LEN
+            )?;
+
+            debug_print!("Initialize token");
+            let instruction = spl_token::instruction::initialize_account(
+                &spl_token::id(),
+                account.key,
+                token_mint.key,
+                wallet.key
+            )?;
+            invoke(&instruction, accounts)
         },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188

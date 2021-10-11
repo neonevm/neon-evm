@@ -55,6 +55,7 @@ use solana_client::{
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
     owner: Pubkey,
+    contract: Pubkey,
     mint: Pubkey,
     key: Pubkey,
     new: bool
@@ -63,6 +64,7 @@ pub struct TokenAccount {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenAccountJSON {
     owner: String,
+    contract: String,
     mint: String,
     key: String,
     new: bool
@@ -71,6 +73,7 @@ impl From<TokenAccount> for TokenAccountJSON {
     fn from(account: TokenAccount) -> Self {
         Self {
             owner: bs58::encode(&account.owner).into_string(),
+            contract: bs58::encode(&account.contract).into_string(),
             mint: bs58::encode(&account.mint).into_string(),
             key: bs58::encode(&account.key).into_string(),
             new: account.new,
@@ -312,10 +315,13 @@ impl<'a> EmulatorAccountStorage<'a> {
             self.create_acc_if_not_exists(&transfer.source);
             self.create_acc_if_not_exists(&transfer.target);
 
+            let (contract_solana_address, _) = make_solana_program_address(&transfer.contract, &self.config.evm_loader);
+
             let (source_solana_address, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
             token_accounts.entry(transfer.source_token).or_insert(
                 TokenAccount {
                     owner: source_solana_address,
+                    contract: contract_solana_address,
                     mint: transfer.mint,
                     key: transfer.source_token,
                     new: false
@@ -329,6 +335,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             token_accounts.entry(transfer.target_token).or_insert(
                 TokenAccount {
                     owner: target_solana_address,
+                    contract: contract_solana_address,
                     mint: transfer.mint,
                     key: transfer.target_token,
                     new: !target_token_exists
@@ -343,12 +350,17 @@ impl<'a> EmulatorAccountStorage<'a> {
         for approve in approves {
             self.create_acc_if_not_exists(&approve.owner);
 
+            let (contract_solana_address, _) = make_solana_program_address(&approve.contract, &self.config.evm_loader);
             let (owner_solana_address, _) = make_solana_program_address(&approve.owner, &self.config.evm_loader);
-            let token_address = spl_associated_token_account::get_associated_token_address(&owner_solana_address, &approve.mint);
-            let token_exists = self.config.rpc_client.get_token_account_with_commitment(&token_address, CommitmentConfig::processed()).unwrap().value.is_some();
+
+            let (token_address, _) = self.get_erc20_token_address(&approve.owner, &approve.contract, &approve.mint);
+            let ui_token_account = self.config.rpc_client.get_token_account_with_commitment(&token_address, CommitmentConfig::processed());
+            let token_exists = ui_token_account.map(|r| r.value.is_some()).unwrap_or(false);
+
             token_accounts.entry(token_address).or_insert(
                 TokenAccount {
                     owner: owner_solana_address,
+                    contract: contract_solana_address,
                     mint: approve.mint,
                     key: token_address,
                     new: !token_exists
@@ -361,14 +373,12 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
         for approve in approves {
-            let seeds: &[&[u8]] = &[
-                &[ACCOUNT_SEED_VERSION],
-                b"ERC20Allowance",
-                &approve.mint.to_bytes(),
-                approve.owner.as_bytes(),
-                approve.spender.as_bytes()
-            ];
-            let address = Pubkey::find_program_address(seeds, self.program_id()).0;
+            let (address, _) = self.get_erc20_allowance_address(
+                &approve.owner,
+                &approve.spender,
+                &approve.contract,
+                &approve.mint
+            );
 
             solana_accounts.insert(address, AccountMeta::new(address, false));
         }

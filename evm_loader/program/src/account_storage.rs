@@ -5,7 +5,8 @@ use crate::{
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
-    precompile_contracts::is_precompile_address
+    precompile_contracts::is_precompile_address,
+    system::create_pda_account
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
@@ -22,8 +23,6 @@ use std::{
     collections::BTreeMap
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
-use solana_program::system_instruction::create_account;
-use solana_program::rent::Rent;
 use crate::account_data::ERC20Allowance;
 use spl_associated_token_account::get_associated_token_address;
 
@@ -434,22 +433,22 @@ impl<'a> ProgramAccountStorage<'a> {
             let data = AccountData::ERC20Allowance(ERC20Allowance{
                 owner: approve.owner,
                 spender: approve.spender,
+                contract: approve.contract,
                 mint: approve.mint,
                 value: approve.value
             });
+
+            let (account_address, bump_seed) = self.get_erc20_allowance_address(&approve.owner, &approve.spender, &approve.contract, &approve.mint);
 
             let seeds: &[&[u8]] = &[
                 &[ACCOUNT_SEED_VERSION],
                 b"ERC20Allowance",
                 &approve.mint.to_bytes(),
+                approve.contract.as_bytes(),
                 approve.owner.as_bytes(),
-                approve.spender.as_bytes()
+                approve.spender.as_bytes(),
+                &[bump_seed]
             ];
-            let (account_address, bump_seed) = Pubkey::find_program_address(seeds, self.program_id());
-
-            let bump_seed = &[bump_seed];
-            let mut seeds = seeds.to_vec();
-            seeds.push(bump_seed);
 
             let account = self.solana_accounts[&account_address];
             if account.data_is_empty() {
@@ -458,17 +457,14 @@ impl<'a> ProgramAccountStorage<'a> {
                     None => return Err!(ProgramError::NotEnoughAccountKeys)
                 };
 
-                let rent = Rent::get()?;
-                let balance = rent.minimum_balance(data.size());
-
-                let instruction = create_account(
+                create_pda_account(
+                    self.program_id(),
+                    accounts,
+                    account,
+                    seeds,
                     operator,
-                    account.key,
-                    balance,
-                    data.size() as u64,
-                    self.program_id()
-                );
-                invoke_signed(&instruction, accounts, &[&seeds])?;
+                    data.size()
+                )?;
             }
 
             data.pack(&mut account.try_borrow_mut_data()?)?;
