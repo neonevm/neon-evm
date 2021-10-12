@@ -274,6 +274,7 @@ fn command_create_ether_account (
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let (blocking_token_address, blocking_nonce) = make_blocking_token_address(&solana_address, &evm_loader::neon::token_mint::id());
+    debug!("Create blocking token account {} <- {} {}", blocking_token_address, solana_address, nonce);
 
     let instruction = Instruction::new_with_bincode(
             config.evm_loader,
