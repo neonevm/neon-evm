@@ -39,6 +39,7 @@ use crate::{
     token,
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
+    operator::authorized_operator_check,
     system::create_pda_account
 };
 use crate::solana_program::program_pack::Pack;
@@ -128,6 +129,8 @@ fn process_instruction<'a>(
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(funding_info)?;
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
             
@@ -196,6 +199,8 @@ fn process_instruction<'a>(
             let system_program = next_account_info(account_info_iter)?;
             let token_program = next_account_info(account_info_iter)?;
             let rent = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(payer)?;
 
             if !payer.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
@@ -318,6 +323,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
@@ -342,6 +349,8 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -412,6 +421,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -436,6 +447,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
@@ -459,6 +472,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -536,6 +551,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -571,6 +588,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+            
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
