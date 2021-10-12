@@ -18,6 +18,7 @@ use solana_sdk::transaction::Transaction;
 use solana_sdk::{system_program, sysvar};
 
 use crate::{config, ethereum};
+use evm_loader::token::make_blocking_token_address;
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
@@ -156,6 +157,7 @@ fn create_ether_account_instruction(
     let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
     let token_address =
         spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint_id);
+    let (blocking_token_address, blocking_nonce) = make_blocking_token_address(&solana_address, &evm_loader::neon::token_mint::id());
 
     let lamports = 0;
     let space = 0;
@@ -166,11 +168,13 @@ fn create_ether_account_instruction(
             space,
             ether: unsafe { mem::transmute(ether_address) },
             nonce,
+            blocking_nonce,
         },
         vec![
             AccountMeta::new(signer, true),
             AccountMeta::new(solana_address, false),
             AccountMeta::new(token_address, false),
+            AccountMeta::new(blocking_token_address, false),
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new_readonly(token_mint_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
