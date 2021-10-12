@@ -257,7 +257,7 @@ class PrecompilesTests(unittest.TestCase):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=(bytes.fromhex("00000000") + proxy_id.to_bytes(8, byteorder='little') + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
+                data=(bytes.fromhex('10') + proxy_id.to_bytes(8, byteorder='little') + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
