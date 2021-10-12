@@ -544,12 +544,16 @@ fn fill_holder_account(
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
-        let instruction = Instruction::new_with_bincode(
+        let mut instruction = Instruction::new_with_bincode(
             config.evm_loader,
             &EvmInstruction::WriteHolder {seed, offset, bytes: chunk},
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
+
+        // Force correct instruction tag
+        instruction.data[0] = 16;
+
         let message = Message::new(&[instruction], Some(&creator.pubkey()));
         write_messages.push(message);
     }
