@@ -1,6 +1,11 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    account_data::{
+        AccountData,
+        ERC20Allowance,
+        ACCOUNT_SEED_VERSION,
+        BLOCKING_TOKEN_ACCOUNT_SEED_VERSION,
+    },
     solana_backend::{AccountStorage},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
@@ -23,7 +28,6 @@ use std::{
     collections::BTreeMap
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
-use crate::account_data::ERC20Allowance;
 use spl_associated_token_account::get_associated_token_address;
 
 /// Sender
@@ -377,8 +381,23 @@ impl<'a> ProgramAccountStorage<'a> {
             )?;
 
             let (ether, nonce) = source.get_seeds();
-            let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-            invoke_signed(&instruction, accounts, &[program_seeds])?;
+            let pda_ether_seeds : &[&[u8]] = &[
+                &[ACCOUNT_SEED_VERSION],
+                ether.as_bytes(),
+                &[nonce]
+            ];
+            let blocking_token_seeds: &[&[u8]] = &[
+                &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
+                &source.get_solana_address().to_bytes(),
+                &spl_token::id().to_bytes(),
+                &crate::neon::token_mint::id().to_bytes(),
+            ];
+
+            invoke_signed(
+                &instruction,
+                accounts,
+                &[pda_ether_seeds, blocking_token_seeds]
+            )?;
         }
 
         debug_print!("apply_spl_transfers done");
@@ -410,8 +429,23 @@ impl<'a> ProgramAccountStorage<'a> {
             )?;
 
             let (ether, nonce) = source.get_seeds();
-            let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-            invoke_signed(&instruction, accounts, &[program_seeds])?;
+            let pda_ether_seeds : &[&[u8]] = &[
+                &[ACCOUNT_SEED_VERSION],
+                ether.as_bytes(),
+                &[nonce]
+            ];
+            let blocking_token_seeds: &[&[u8]] = &[
+                &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
+                &source.get_solana_address().to_bytes(),
+                &spl_token::id().to_bytes(),
+                &crate::neon::token_mint::id().to_bytes(),
+            ];
+
+            invoke_signed(
+                &instruction,
+                accounts,
+                &[pda_ether_seeds, blocking_token_seeds]
+            )?;
         }
 
         debug_print!("apply_spl_approves done");

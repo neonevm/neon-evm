@@ -3,7 +3,8 @@ use crate::{
     account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
-    token, neon::token_mint
+    token,
+    neon::token_mint,
 };
 use evm::backend::Basic;
 use evm::{H160, H256, U256};

@@ -48,6 +48,9 @@ pub enum EvmInstruction<'a> {
 
         /// Nonce for create valid program_address from ethereum address
         nonce: u8,
+
+        /// Nonce for create valid blocking token address from pda of ethereum address
+        blocking_nonce: u8,
     },
 
     // TODO: EvmInstruction::Call
@@ -206,7 +209,8 @@ impl<'a> EvmInstruction<'a> {
                 let (ether, rest) = rest.split_at(20);
                 let ether = H160::from_slice(&*ether); //ether.try_into().map_err(|_| InvalidInstructionData)?;
                 let (nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
-                EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce}
+                let (blocking_nonce, _rest) = rest.split_first().ok_or(InvalidInstructionData)?;
+                EvmInstruction::CreateAccount {lamports, space, ether, nonce: *nonce, blocking_nonce: *blocking_nonce}
             },
             // TODO: EvmInstruction::Call
             // https://github.com/neonlabsorg/neon-evm/issues/188

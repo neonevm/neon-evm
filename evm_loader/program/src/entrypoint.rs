@@ -37,7 +37,11 @@ use crate::{
     instruction::{EvmInstruction, on_event, on_return},
     payment,
     token,
-    token::{create_associated_token_account, get_token_account_owner},
+    token::{
+        create_associated_token_account,
+        get_token_account_owner,
+        make_blocking_token_address,
+    },
     neon::token_mint,
     system::create_pda_account
 };
@@ -121,7 +125,7 @@ fn process_instruction<'a>(
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
-        EvmInstruction::CreateAccount {lamports: _, space: _, ether, nonce} => {
+        EvmInstruction::CreateAccount {lamports: _, space: _, ether, nonce, blocking_nonce} => {
             let rent = Rent::get()?;
 
             let funding_info = next_account_info(account_info_iter)?;
@@ -141,6 +145,16 @@ fn process_instruction<'a>(
 
             let nonce_bytes = &[nonce];
             program_seeds.push(nonce_bytes);
+
+            let blocking_token_account_info = next_account_info(account_info_iter)?;
+            let (expected_blocking_address, expected_blocking_nonce) = make_blocking_token_address(account_info.key, &crate::neon::token_mint::id());
+            if expected_blocking_address != *blocking_token_account_info.key {
+                return Err!(ProgramError::InvalidArgument; "expected_blocking_address<{:?}> != *blocking_token_account_info.key<{:?}>", expected_blocking_address, *blocking_token_account_info.key);
+            };
+            if expected_blocking_nonce != blocking_nonce {
+                return Err!(ProgramError::InvalidArgument; "expected_blocking_nonce<{:?}> != blocking_nonce<{:?}>", expected_blocking_nonce, blocking_nonce);
+            };
+
 
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
@@ -174,6 +188,12 @@ fn process_instruction<'a>(
             )?;
             debug_print!("create_associated_token_account done");
 
+            invoke(
+                &create_associated_token_account(funding_info.key, account_info.key, blocking_token_account_info.key, &token_mint::id()),
+                accounts,
+            )?;
+            debug_print!("create_blocking_token_account done");
+
             AccountData::Account(Account {
                 ether,
                 nonce,
@@ -182,6 +202,8 @@ fn process_instruction<'a>(
                 ro_blocked_cnt: 0_u8,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
+                blocking_token_nonce: blocking_nonce,
+                eth_blocking_token_account: *blocking_token_account_info.key,
             }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())

@@ -100,6 +100,7 @@ use evm_loader::{
     },
     executor::Machine,
     solana_backend::AccountStorage,
+    token::make_blocking_token_address,
 };
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -272,13 +273,16 @@ fn command_create_ether_account (
     let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::neon::token_mint::id());
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
+    let (blocking_token_address, blocking_nonce) = make_blocking_token_address(&solana_address, &evm_loader::neon::token_mint::id());
+
     let instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &EvmInstruction::CreateAccount {lamports, space, ether: *ether_address, nonce},
+            &EvmInstruction::CreateAccount {lamports, space, ether: *ether_address, nonce, blocking_nonce},
             vec![
                 AccountMeta::new(config.signer.pubkey(), true),
                 AccountMeta::new(solana_address, false),
                 AccountMeta::new(token_address, false),
+                AccountMeta::new(blocking_token_address, false),
                 AccountMeta::new_readonly(system_program::id(), false),
                 AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                 AccountMeta::new_readonly(spl_token::id(), false),
@@ -307,6 +311,8 @@ fn command_create_ether_account (
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
         "nonce": nonce,
+        "blocking_token": blocking_token_address.to_string(),
+        "blocking_nonce": blocking_nonce,
     }).to_string());
 
     Ok(())

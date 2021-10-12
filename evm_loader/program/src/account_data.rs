@@ -10,6 +10,8 @@ use solana_program::{
 pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
 /// Ethereum account allocated data size
 pub const ACCOUNT_MAX_SIZE: usize = 256;
+/// Blocking token account seed version
+pub const BLOCKING_TOKEN_ACCOUNT_SEED_VERSION: u16 = 100_u16;
 
 /// Ethereum account data
 #[derive(Debug,Clone)]
@@ -27,7 +29,11 @@ pub struct Account {
     /// Ethereum address
     pub rw_blocked_acc: Option<Pubkey>,
     /// ETH token account
-    pub eth_token_account: Pubkey
+    pub eth_token_account: Pubkey,
+    /// Spl token account nonce
+    pub blocking_token_nonce: u8,
+    /// ETH blocking token account
+    pub eth_blocking_token_account: Pubkey,
 }
 
 /// Ethereum contract data account
@@ -285,14 +291,24 @@ impl AccountData {
 
 impl Account {
     /// Account struct serialized size
-    pub const SIZE: usize = 20+1+8+32+1+1+32+32;
+    pub const SIZE: usize = 20+1+8+32+1+1+32+32+1+32;
 
     /// Deserialize `Account` struct from input data
     #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Account::SIZE];
-        let (ether, nonce, trx_count, code_account, ro_blocked_cnt, is_rw_blocked, rw_blocked_by, eth) = array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
+        let (ether,
+            nonce,
+            trx_count,
+            code_account,
+            ro_blocked_cnt,
+            is_rw_blocked,
+            rw_blocked_by,
+            eth,
+            blocking_token_nonce,
+            eth_blocking_token_account
+        ) = array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32, 1, 32];
 
         Self {
             ether: H160::from_slice(&*ether),
@@ -301,7 +317,9 @@ impl Account {
             code_account: Pubkey::new_from_array(*code_account),
             ro_blocked_cnt: ro_blocked_cnt[0],
             rw_blocked_acc: if is_rw_blocked[0] > 0 { Some(Pubkey::new_from_array(*rw_blocked_by)) } else { None },
-            eth_token_account: Pubkey::new_from_array(*eth)
+            eth_token_account: Pubkey::new_from_array(*eth),
+            blocking_token_nonce: blocking_token_nonce[0],
+            eth_blocking_token_account: Pubkey::new_from_array(*eth_blocking_token_account),
         }
     }
 
@@ -309,8 +327,17 @@ impl Account {
     pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
-        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, ro_blocked_cnt_dst, is_rw_blocked_dst, rw_blocked_by_dst, eth_dst) =
-                mut_array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
+        let (ether_dst,
+            nonce_dst,
+            trx_count_dst,
+            code_account_dst,
+            ro_blocked_cnt_dst,
+            is_rw_blocked_dst,
+            rw_blocked_by_dst,
+            eth_dst,
+            blocking_token_nonce_dst,
+            eth_blocking_token_account_dst
+        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32, 1, 32];
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
         *trx_count_dst = acc.trx_count.to_le_bytes();
@@ -324,6 +351,8 @@ impl Account {
             is_rw_blocked_dst[0] = 0;
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
+        blocking_token_nonce_dst[0] = acc.blocking_token_nonce;
+        eth_blocking_token_account_dst.copy_from_slice(acc.eth_blocking_token_account.as_ref());
 
         Self::SIZE
     }

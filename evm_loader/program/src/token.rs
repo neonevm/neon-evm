@@ -1,6 +1,8 @@
 //! `EVMLoader` token functions
 use crate::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    account_data::{
+        AccountData,
+    },
     solidity_account::SolidityAccount
 };
 use evm::{U256};
@@ -17,6 +19,10 @@ use std::vec;
 use std::convert::TryFrom;
 
 use crate::neon::token_mint;
+use crate::account_data::{
+    ACCOUNT_SEED_VERSION,
+    BLOCKING_TOKEN_ACCOUNT_SEED_VERSION
+};
 
 
 #[must_use]
@@ -136,6 +142,34 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
     Ok(())
 }
 
+/// Make an blocking token account address and nonce for the given wallet address and token mint
+#[must_use]
+pub fn make_blocking_token_address(
+    wallet_address: &Pubkey,
+    spl_token_mint_address: &Pubkey
+) -> (Pubkey, u8)  {
+    Pubkey::find_program_address(
+        &[
+            br"blocking_account",
+            &wallet_address.to_bytes(),
+            &spl_token::id().to_bytes(),
+            &spl_token_mint_address.to_bytes(),
+        ],
+        &spl_associated_token_account::id(),
+    )
+}
+
+/// get an blocking token account address for the given wallet address and token mint
+#[must_use]
+pub fn get_blocking_token_address(
+    wallet_address: &Pubkey,
+    spl_token_mint_address: &Pubkey
+) -> Pubkey {
+    make_blocking_token_address(
+        wallet_address,
+        spl_token_mint_address,
+    ).0
+}
 
 /// Transfer Tokens
 /// 
@@ -183,9 +217,23 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    let blocking_seed = br"blocking_account";
-    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce], blocking_seed];
-    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
+    let pda_ether_seeds : &[&[u8]] = &[
+        &[ACCOUNT_SEED_VERSION],
+        ether.as_bytes(),
+        &[nonce]
+    ];
+    let blocking_token_seeds: &[&[u8]] = &[
+        &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
+        &source_solidity_account.get_solana_address().to_bytes(),
+        &spl_token::id().to_bytes(),
+        &crate::neon::token_mint::id().to_bytes(),
+    ];
+
+    invoke_signed(
+        &instruction,
+        accounts,
+        &[pda_ether_seeds, blocking_token_seeds]
+    )?;
 
     Ok(())
 }
