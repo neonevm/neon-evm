@@ -2,7 +2,7 @@
 set -xeuo pipefail
 
 echo "Deploy test..."
-[ -f $HOME/.solana/config/id.json ] || solana-keygen new --no-passphrase
+[ -f $HOME/.config/solana/id.json ] || solana-keygen new --no-passphrase
 ACCOUNT=$(solana address)
 
 solana config set --url $SOLANA_URL
