@@ -1,5 +1,6 @@
 //! OPERATOR LIST
 #![allow(clippy::use_self)]
+#![deny(missing_docs)]
 
 use solana_program::account_info::AccountInfo;
 use crate::error::EvmLoaderError;
