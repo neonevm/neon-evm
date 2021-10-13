@@ -261,65 +261,86 @@ impl<'a> EmulatorAccountStorage<'a> {
     //     SolidityAccount::new(&account.key, data_rc, account.account.lamports).unwrap()
     // }
 
+
     pub fn apply<A, I>(&self, values: A)
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(U256, U256)>,
-    {             
-        let mut accounts = self.accounts.borrow_mut(); 
+    {
+
+        let mut accounts = self.accounts.borrow_mut();
         let mut new_accounts = self.new_accounts.borrow_mut();
 
         for apply in values {
             match apply {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
 
-                    let mut empty_data: Vec<u8> = Vec::new();
-                    empty_data.resize(10*2_u8.pow(20) as usize, 0);
-
                     let mut code_begin = 0;
                     let mut code_size = 0;
                     let mut valids_size = 0;
-                    let mut hamt_size : u32 = 0;
 
                     let mut storage_iter = storage.into_iter().peekable();
                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
-                    if let Some(acc) = accounts.get_mut(&address) {
+                    let hamt_size = |code_data : &Vec<u8>, hamt_begin : usize| -> usize {
+                        let mut empty_data: Vec<u8> = Vec::new();
+                        empty_data.resize(10*2_u8.pow(20) as usize, 0);
 
-                        if code_and_valids.is_some(){
-                            eprintln!("AccountAlreadyInitialized; account={:?}", acc.key);
-                            exit(1)
+                        empty_data.copy_from_slice(code_data);
+                        let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
+                        for (key, value) in storage_iter {
+                            eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                            storage.insert(key, value).unwrap();
                         }
+                        storage.last_used() as usize
+                    };
+
+
+                    if let Some(acc) = accounts.get_mut(&address) {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
                         match account_data {
-                            AccountData::Account(_) => {
+                            AccountData::Account(acc_desc) => {
                                 if let Some(ref mut code_account) = acc.code_account{
 
-                                    if reset_storage || exist_items {
-                                        let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
-                                        let contract = AccountData::get_contract(&account_data_contract).unwrap();
+                                    let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
+                                    let contract = AccountData::get_contract(&account_data_contract).unwrap();
 
-
+                                    if let Some((code, valids)) = code_and_valids.clone() {
+                                        if contract.code_size != 0 {
+                                            eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                            exit(1)
+                                        }
+                                        code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
+                                        code_size = code.len();
+                                        valids_size = valids.len();
+                                    }
+                                    else{
                                         if contract.code_size == 0 {
-                                            eprintln!("UninitializedAccount; contract.code_size={:?}", contract.code_size);
+                                            eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                             exit(1)
                                         }
                                         code_begin = account_data_contract.size();
                                         code_size = contract.code_size as usize;
                                         valids_size = (code_size / 8) + 1;
-
-                                        let mut storage = Hamt::new(&mut empty_data[code_begin+code_size+valids_size..], reset_storage).unwrap();
-                                        for (key, value) in storage_iter {
-                                            eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                                            storage.insert(key, value).unwrap();
-                                        }
-                                        hamt_size = storage.last_used();
-
-                                        *acc.code_size.borrow_mut() = Some(code_begin + code_size + valids_size + hamt_size as usize);
-                                        *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
-                                        *acc.writable.borrow_mut() = true;
                                     }
+
+                                    let hamt_begin = code_begin + code_size + valids_size;
+
+                                    if reset_storage || exist_items {
+                                        *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
+                                    }
+                                    else {
+                                        if Hamt::is_init(&code_account.data).unwrap(){
+                                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
+                                        }
+                                        else{
+                                            *acc.code_size.borrow_mut() = Some(hamt_begin );
+                                        }
+                                    }
+
+                                    *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
+                                    *acc.writable.borrow_mut() = true;
                                 }
                                 else{
                                     if reset_storage || exist_items {
@@ -349,16 +370,15 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                         }
 
+                        let hamt_begin = code_begin + code_size + valids_size;
+
                         if reset_storage || exist_items {
-                            let mut storage = Hamt::new(&mut empty_data[code_begin+code_size+valids_size..], reset_storage).unwrap();
-                            for (key, value) in storage_iter {
-                                eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                                storage.insert(key, value).unwrap();
-                            }
-                            hamt_size = storage.last_used();
+                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
+                        }
+                        else{
+                            *acc.code_size.borrow_mut() = Some(hamt_begin);
                         }
 
-                        *acc.code_size.borrow_mut() = Some(code_begin + code_size + valids_size + hamt_size as usize);
                         *acc.writable.borrow_mut() = true;
                     }
                     else {

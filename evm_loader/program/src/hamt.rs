@@ -257,6 +257,23 @@ impl<'a> Hamt<'a> {
     pub fn last_used(&self) -> u32{
         self.last_used
     }
+
+    /// Is hamt initialized?
+    pub fn is_init(data: &'a [u8]) -> Result<bool, ProgramError> {
+        let header_len = size_of::<u32>() * 32 * 2;
+
+        if data.len() < header_len {
+            return Err!(ProgramError::AccountDataTooSmall; "data.len()={:?} < header_len={:?}", data.len(), header_len);
+        }
+
+        let last_used_ptr = array_ref![data, 0, 4];
+        let last_used = u32::from_le_bytes(*last_used_ptr);
+        if last_used < header_len as u32 {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
 }
 
 #[cfg(test)]
