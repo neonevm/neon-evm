@@ -155,7 +155,6 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "expected_blocking_nonce<{:?}> != blocking_nonce<{:?}>", expected_blocking_nonce, blocking_nonce);
             };
 
-
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {

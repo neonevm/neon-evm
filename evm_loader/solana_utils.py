@@ -31,7 +31,8 @@ CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
     "space" / Int64ul,
     "ether" / Bytes(20),
-    "nonce" / Int8ul
+    "nonce" / Int8ul,
+    "blocking_nonce" / Int8ul
 )
 
 system = "11111111111111111111111111111111"
@@ -164,6 +165,17 @@ def createAccountWithSeed(funding, base, seed, lamports, space, program):
     )
 
 
+def pubkey2program(pubkey, program_id, seeds=[]):
+    """
+    wrapper of Pubkey::find_program_address
+    Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()], program_id)
+    """
+    return pubkey.find_program_address(
+        seeds=[bytes(pubkey)] + seeds,
+        program_id=program_id,
+    )
+
+
 class solana_cli:
     def __init__(self, acc=None):
         self.acc = acc
@@ -188,6 +200,7 @@ class neon_cli:
 
     def call(self, arguments):
         cmd = 'neon-cli {} --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
+        print('cmd:', cmd)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -279,14 +292,16 @@ class EvmLoader:
         result = json.loads(output.splitlines()[-1])
         return result
 
-    def createEtherAccount(self, ether):
+    def createEtherAccounts(self, ether):
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
-        (sol, nonce) = self.ether2program(ether)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+        (sol, nonce, blocking_token_account, blocking_nonce) = self.ether2neon(ether)
+        print('createEtherAccounts: solana account from {} {} => {}'.format(ether, nonce, sol))
         associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
+        print('createEtherAccounts: token account from {} {} => {}'.format(sol, ETH_TOKEN_MINT_ID, associated_token))
+        print('createEtherAccounts: blocking token account from {} {} => {}'.format(sol, blocking_nonce, blocking_token_account))
         trx = Transaction()
         base = self.acc.get_acc().public_key()
         trx.add(TransactionInstruction(
@@ -295,11 +310,13 @@ class EvmLoader:
                 lamports=10 ** 9,
                 space=0,
                 ether=bytes.fromhex(ether),
-                nonce=nonce)),
+                nonce=nonce,
+                blocking_nonce=blocking_nonce)),
             keys=[
                 AccountMeta(pubkey=base, is_signer=True, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=blocking_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -320,14 +337,29 @@ class EvmLoader:
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
 
-    def ether2program(self, ether):
+    def ether2program(self, ether, program=None):
+        if program is None:
+            program = self.loader_id
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
-        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
-        items = output.rstrip().split(' ')
+        output = neon_cli().call("create-program-address --evm_loader {} {}".format(program, ether))
+        items = output.replace('\n', ' ').rstrip().split(' ')
+        print("ether2program returned:", items)
         return items[0], int(items[1])
+
+    def ether2neon(self, ether, program=None):
+        if program is None:
+            program = self.loader_id
+        if isinstance(ether, str):
+            if ether.startswith('0x'): ether = ether[2:]
+        else:
+            ether = ether.hex()
+        output = neon_cli().call("create-program-address --evm_loader {} {}".format(program, ether))
+        items = output.replace('\n', ' ').rstrip().split(' ')
+        print("ether2program returned:", items)
+        return items[0], int(items[1]), items[6], int(items[7])
 
     def checkAccount(self, solana):
         info = client.get_account_info(solana)

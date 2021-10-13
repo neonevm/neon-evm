@@ -60,11 +60,11 @@ class DeployTest(unittest.TestCase):
 
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.user_acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        (cls.caller, cls.caller_nonce, cls.blocking_token_account, cls.blocking_nonce) = cls.loader.ether2neon(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
-            _ = cls.loader.createEtherAccount(cls.caller_ether)
+            _ = cls.loader.createEtherAccounts(cls.caller_ether)
             cls.token.transfer(ETH_TOKEN_MINT_ID, 20,
                                get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
@@ -72,6 +72,12 @@ class DeployTest(unittest.TestCase):
         print('Account:', cls.user_acc.public_key(), bytes(cls.user_acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
+        print('Caller Token account:', get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+
+        (sol_blocking, nonce_blocking) = pubkey2program(PublicKey(cls.caller_ether), cls.loader.loader_id, )
+        print('sol_blocking: {} {} => {}'.format(cls.caller_ether, nonce_blocking, sol_blocking))
+        cls.blocking_token_account = get_associated_token_address(PublicKey(sol_blocking), ETH_TOKEN_MINT_ID)
+        print('Caller Blocking Token account:', cls.blocking_token_account)
 
         collateral_pool_index = 2
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)

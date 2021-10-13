@@ -150,9 +150,9 @@ pub fn make_blocking_token_address(
 ) -> (Pubkey, u8)  {
     Pubkey::find_program_address(
         &[
-            br"blocking_account",
+            &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
             &wallet_address.to_bytes(),
-            &spl_token::id().to_bytes(),
+            &spl_associated_token_account::id().to_bytes(),
             &spl_token_mint_address.to_bytes(),
         ],
         &spl_associated_token_account::id(),

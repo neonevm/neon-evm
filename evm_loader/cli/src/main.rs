@@ -260,7 +260,9 @@ fn command_create_program_address (
     ether_address: &H160,
 ) {
     let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-    println!("{} {}", solana_address, nonce);
+    println!("{:?} {:?} <- {:?} + {:?}", solana_address, nonce, ether_address, config.evm_loader);
+    let (blocking_token_address, blocking_nonce) = make_blocking_token_address(&solana_address, &evm_loader::neon::token_mint::id());
+    println!("{:?} {:?} <- {:?} + {:?}", blocking_token_address, blocking_nonce, solana_address, evm_loader::neon::token_mint::id());
 }
 
 fn command_create_ether_account (
