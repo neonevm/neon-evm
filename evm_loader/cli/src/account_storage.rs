@@ -17,8 +17,10 @@ use solana_sdk::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap};
+use std::process::exit;
 use evm_loader::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    hamt::Hamt,
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount,
     precompile_contracts::is_precompile_address,
@@ -272,14 +274,52 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                     if let Some(acc) = accounts.get_mut(&address) {
 
+                        let mut hamt_size : u32 = 0;
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
                         match account_data {
                             AccountData::Account(_) => {
-                                if acc.code_account.is_some() {
+                                if let Some(ref mut code_account) = acc.code_account{
+
                                     let mut storage_iter = storage.into_iter().peekable();
                                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
                                     if reset_storage || exist_items {
+                                        let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
+                                        let contract = AccountData::get_contract(&account_data_contract).unwrap();
+
+                                        let mut new_data: Vec<u8> = Vec::new();
+                                        new_data.resize(10*2_u8.pow(20) as usize, 0);
+
+                                        let mut code_begin = 0;
+                                        let mut code_size = 0;
+                                        let mut valid_size = 0;
+
+                                        if let Some((code, valids)) = code_and_valids.clone() {
+                                            if contract.code_size != 0 {
+                                                eprintln!("AccountAlreadyInitialized; contract.code_size={:?}", contract.code_size);
+                                                exit(1)
+                                            }
+                                            code_begin = account_data_contract.size();
+                                            code_size = code.len();
+                                            valids_size = valids.len();
+                                        }
+                                        else{
+                                            if contract.code_size == 0 {
+                                                eprintln!("UninitializedAccount; contract.code_size={:?}", contract.code_size);
+                                                exit(1)
+                                            }
+                                            code_begin = account_data_contract.size();
+                                            code_size = contract.code_size as usize;
+                                            valids_size = (code_size / 8) + 1;
+                                        }
+
+                                        let mut storage = Hamt::new(&mut new_data[code_begin+code_size+valids_size..], reset_storage).unwrap();
+                                        for (key, value) in storage_iter {
+                                            eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                                            storage.insert(key, value).unwrap();
+                                        }
+                                        hamt_size = storage.last_used();
+
                                         *acc.writable.borrow_mut() = true;
                                     }
                                 }
@@ -289,8 +329,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                             },
                             _ => {eprintln!("Changes of incorrect account were found {}", &address.to_string());},
                         };
-
-                        *acc.code_size.borrow_mut() = code_and_valids.map(|(c, _v)| c.len());
+                        let code_size = code_and_valids.map(|(c, _v)| c.len()).unwrap_or(0);
+                        *acc.code_size.borrow_mut() = Some(code_size + hamt_size as usize);
 
                     }
                     else if let Some(acc) = new_accounts.get_mut(&address) {

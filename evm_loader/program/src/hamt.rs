@@ -20,6 +20,7 @@ struct HamtHeader {
     free: [u32;32],
 }*/
 
+/// Hamt implementation
 #[derive(Debug)]
 pub struct Hamt<'a> {
     data: &'a mut [u8],
@@ -36,6 +37,8 @@ enum ItemType {
 }
 
 impl<'a> Hamt<'a> {
+
+    /// Hamt constructor
     pub fn new(data: &'a mut [u8], reset: bool) -> Result<Self, ProgramError> {
         let header_len = size_of::<u32>() * 32 * 2;
 
@@ -143,6 +146,7 @@ impl<'a> Hamt<'a> {
         }
     }
 
+    /// insert value
     pub fn insert(&mut self, key: U256, value: U256) -> Result<(), ProgramError> {
         let (key, tag) = (key >> 5, key.low_u32() & 0b11111);
         let ptr_pos = 32*4 + tag * 4;
@@ -216,6 +220,7 @@ impl<'a> Hamt<'a> {
         Ok(())
     }
 
+    /// find key
     pub fn find(&self, key: U256) -> Option<U256> {
         let (key, tag) = (key >> 5, key.low_u32() & 0b11111);
         let ptr_pos = 32*4 + tag * 4;
@@ -246,6 +251,11 @@ impl<'a> Hamt<'a> {
                 }
             },
         }
+    }
+
+    /// get last_used value
+    pub fn last_used(&self) -> u32{
+        self.last_used
     }
 }
 
