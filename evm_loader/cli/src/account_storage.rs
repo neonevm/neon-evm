@@ -284,9 +284,9 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                     let hamt_size = |code_data : &Vec<u8>, hamt_begin : usize| -> usize {
                         let mut empty_data: Vec<u8> = Vec::new();
-                        empty_data.resize(10*2_u8.pow(20) as usize, 0);
+                        empty_data.resize(1048576, 0);
+                        empty_data[0..code_data.len()].copy_from_slice(code_data);
 
-                        empty_data.copy_from_slice(code_data);
                         let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
                         for (key, value) in storage_iter {
                             eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
