@@ -1,4 +1,6 @@
 //! OPERATOR LIST
+#![allow(clippy::use_self)]
+
 use solana_program::account_info::AccountInfo;
 use crate::error::EvmLoaderError;
 
@@ -10,7 +12,7 @@ macros::pubkey_array!(
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz3",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz4",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz5",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz6",
+        "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
     ]
 );
