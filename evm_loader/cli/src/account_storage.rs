@@ -91,6 +91,7 @@ pub struct AccountJSON {
     writable: bool,
     new: bool,
     code_size: Option<usize>,
+    code_size_current: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -493,6 +494,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: solana_address.to_string(),
                         contract: contract_address.map(|v| v.to_string()),
                         code_size: acc.code_size,
+                        code_size_current: acc.code_size_current
                 });
             }
         }
@@ -507,6 +509,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: acc.key.to_string(),
                         contract: None,
                         code_size: acc.code_size,
+                        code_size_current : None
                 });
             }
         }
