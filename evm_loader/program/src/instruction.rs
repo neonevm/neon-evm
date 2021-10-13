@@ -180,7 +180,10 @@ pub enum EvmInstruction<'a> {
     ///   5. `[]` System program
     ///   6. `[]` SPL Token program
     ///   7. '[]' Rent sysvar
-    ERC20CreateTokenAccount
+    ERC20CreateTokenAccount,
+
+    /// copying the content of the one code_account to the new code_account
+    ResizeStorageAccount
 }
 
 
@@ -297,6 +300,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
+            16 => EvmInstruction::ResizeStorageAccount,
             _ => return Err(InvalidInstructionData),
         })
     }
