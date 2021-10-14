@@ -18,7 +18,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("\ntest_transaction.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -50,7 +50,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        wallet_2 = RandomAccount()
+        wallet_2 = OperatorAccount(operator2_keypair_path())
         cls.acc_2 = wallet_2.get_acc()
         print("wallet_2: ", wallet_2.path)
 

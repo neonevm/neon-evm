@@ -4,6 +4,8 @@ set -xeuo pipefail
 echo "Deploy test..."
 [ -f $HOME/.config/solana/id.json ] || solana-keygen new --no-passphrase
 ACCOUNT=$(solana address)
+[ -f $HOME/.config/solana/id2.json ] || solana-keygen new --no-passphrase
+ACCOUNT2=$(solana address --keypair /root/.config/solana/id2.json)
 
 solana config set --url $SOLANA_URL
 for i in {1..10}; do
@@ -13,6 +15,7 @@ done
 
 solana airdrop 5000
 solana account $ACCOUNT
+solana account $ACCOUNT2
 
 echo "Run tests for EVM Loader"
 

@@ -12,7 +12,7 @@ macros::pubkey_array!(
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz2",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz3",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz4",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz5",
+        "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
         "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
         "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
     ]
