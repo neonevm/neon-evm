@@ -638,7 +638,8 @@ fn process_instruction<'a>(
                 }
 
                 AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
-                code_account_new_data[AccountData::Contract(data).size()..].copy_from_slice(&code_account_data);
+                let header_size = AccountData::Contract(data).size();
+                code_account_new_data[header_size..].copy_from_slice(&code_account_data[header_size..]);
             } else {
                 return Err!(ProgramError::InvalidAccountData)
             };
