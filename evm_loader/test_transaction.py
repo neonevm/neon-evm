@@ -307,7 +307,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
 

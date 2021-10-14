@@ -54,7 +54,7 @@ class DeployTest(unittest.TestCase):
         cls.loader = EvmLoader(operator_wallet, evm_loader_id)
         cls.operator_acc = operator_wallet.get_acc()
 
-        user_wallet = OperatorAccount()
+        user_wallet = RandomAccount()
         cls.user_acc = user_wallet.get_acc()
 
         # Create ethereum account for user account
