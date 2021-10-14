@@ -612,8 +612,8 @@ fn process_instruction<'a>(
             let mut contract_data = contract.try_borrow_mut_data()?;
             if let AccountData::Account(mut data) = AccountData::unpack(&contract_data)? {
                 if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
-                    debug_print!("Cannot resize account data. Account is blocked {:?}", contract.key);
-                    Ok(())
+                    debug_print!("Cannot resize account data. Account is blocked {:?}", *contract.key);
+                    return Ok(())
                 }
                 data.code_account = *code_account_new.key;
                 AccountData::pack(&AccountData::Account(data), &mut contract_data)?;
@@ -640,7 +640,7 @@ fn process_instruction<'a>(
                     return Err!(ProgramError::InvalidAccountData;
                             "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *contract.key)
                 }
-
+                debug_print!("move code and storage from {:?} to {:?}", *code_account.key, *code_account_new.key);
                 AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
                 let header_size = AccountData::Contract(data).size();
                 code_account_new_data[header_size..].copy_from_slice(&code_account_data[header_size..]);
