@@ -15,6 +15,7 @@ done
 
 solana airdrop 5000
 solana account $ACCOUNT
+solana airdrop 5000 $ACCOUNT2
 solana account $ACCOUNT2
 
 echo "Run tests for EVM Loader"
