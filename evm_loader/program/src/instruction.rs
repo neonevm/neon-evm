@@ -300,7 +300,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
-            16 => EvmInstruction::ResizeStorageAccount,
+            17 => EvmInstruction::ResizeStorageAccount,
             _ => return Err(InvalidInstructionData),
         })
     }
