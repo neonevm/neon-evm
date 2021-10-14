@@ -150,6 +150,13 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
 
+    /// Get solana blocking seed
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
+    pub fn get_blocking_seed(&self) -> u8 { AccountData::get_account(&self.account_data).unwrap().blocking_token_nonce }
+
     /// Get ethereum account basic info
     /// # Panics
     ///

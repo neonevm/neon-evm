@@ -313,11 +313,13 @@ pub fn transfer_token(
         ether.as_bytes(),
         &[nonce]
     ];
+    let blocking_seed = source_solidity_account.get_blocking_seed();
     let blocking_token_seeds: &[&[u8]] = &[
         &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
         &source_solidity_account.get_solana_address().to_bytes(),
         &spl_token::id().to_bytes(),
         &crate::neon::token_mint::id().to_bytes(),
+        &[blocking_seed],
     ];
 
     invoke_signed(
