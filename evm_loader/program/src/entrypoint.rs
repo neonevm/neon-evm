@@ -595,6 +595,33 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
+        EvmInstruction::DeleteAccount { seed } => {
+            let deleted_acc_info = next_account_info(account_info_iter)?;
+            let creator_acc_info = next_account_info(account_info_iter)?;
+            let evm_loader = next_account_info(account_info_iter)?;
+
+            let address = Pubkey::create_with_seed(
+                creator_acc_info.key, 
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?, 
+                evm_loader.key)?;
+
+            if *deleted_acc_info.key != address {
+                return Err!(ProgramError::InvalidAccountData; "*deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
+            }
+
+            let mut data = deleted_acc_info.data.borrow_mut();
+            let account_data = AccountData::unpack(&data)?;
+            match account_data {
+                AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) => {
+                    return Err!(ProgramError::InvalidAccountData);
+                },
+                AccountData::Contract(acc) if acc.code_size != 0 => {
+                    return Err!(ProgramError::InvalidAccountData);
+                },
+                AccountData::Contract(_) | AccountData::Empty => { },
+            };
+            Ok(())
+        },
 
         EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
