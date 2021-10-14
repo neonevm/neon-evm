@@ -41,6 +41,7 @@ use crate::{
         create_associated_token_account,
         get_token_account_owner,
         make_blocking_token_address,
+        create_blocking_token_account,
     },
     neon::token_mint,
     system::create_pda_account
@@ -140,7 +141,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "expected_address<{:?}> != *account_info.key<{:?}>", expected_address, *account_info.key);
             };
             if expected_nonce != nonce {
-                return Err!(ProgramError::InvalidArgument; "expected_nonce<{:?}> != nonce<{:?}>", expected_nonce, nonce);
+                return Err!(ProgramError::InvalidSeeds; "expected_nonce<{:?}> != nonce<{:?}>", expected_nonce, nonce);
             };
 
             let nonce_bytes = &[nonce];
@@ -152,7 +153,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "expected_blocking_address<{:?}> != *blocking_token_account_info.key<{:?}>", expected_blocking_address, *blocking_token_account_info.key);
             };
             if expected_blocking_nonce != blocking_nonce {
-                return Err!(ProgramError::InvalidArgument; "expected_blocking_nonce<{:?}> != blocking_nonce<{:?}>", expected_blocking_nonce, blocking_nonce);
+                return Err!(ProgramError::InvalidSeeds; "expected_blocking_nonce<{:?}> != blocking_nonce<{:?}>", expected_blocking_nonce, blocking_nonce);
             };
 
             let code_account_key = {
@@ -187,9 +188,18 @@ fn process_instruction<'a>(
             )?;
             debug_print!("create_associated_token_account done");
 
-            invoke(
-                &create_associated_token_account(funding_info.key, account_info.key, blocking_token_account_info.key, &token_mint::id()),
-                accounts,
+            let system_program_info = next_account_info(account_info_iter)?;
+            let spl_token_mint_info = next_account_info(account_info_iter)?;
+            let spl_token_program_info = next_account_info(account_info_iter)?;
+            let rent_sysvar_info = next_account_info(account_info_iter)?;
+            create_blocking_token_account(
+                funding_info,
+                account_info,
+                blocking_token_account_info,
+                system_program_info,
+                spl_token_mint_info,
+                spl_token_program_info,
+                rent_sysvar_info,
             )?;
             debug_print!("create_blocking_token_account done");
 

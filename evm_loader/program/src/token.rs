@@ -14,6 +14,10 @@ use solana_program::{
     program_error::ProgramError,
     program_pack::Pack,
     program::invoke_signed,
+    entrypoint::ProgramResult,
+    sysvar::{rent::Rent,Sysvar},
+    program::invoke,
+    system_instruction,
 };
 use std::vec;
 use std::convert::TryFrom;
@@ -52,6 +56,93 @@ pub fn create_associated_token_account(
     }
 }
 
+/// Create an blocking token account for the given wallet address and token mint
+///
+/// # Errors
+///
+pub fn create_blocking_token_account<'a>(
+    funding_info: &'a AccountInfo<'a>,
+    wallet_info: &'a AccountInfo<'a>,
+    token_account_info: &'a AccountInfo<'a>,
+    system_program_info: &'a AccountInfo<'a>,
+    spl_token_mint_info: &'a AccountInfo<'a>,
+    spl_token_program_info: &'a AccountInfo<'a>,
+    rent_sysvar_info: &'a AccountInfo<'a>,
+) -> ProgramResult {
+
+    let token_account_seeds: &[&[_]] = &[
+        &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
+        &wallet_info.key.to_bytes(),
+        &spl_token_program_info.key.to_bytes(),
+        &spl_token_mint_info.key.to_bytes(),
+    ];
+
+    // Fund the associated token account with the minimum balance to be rent exempt
+    let rent = Rent::get()?;
+    let required_lamports = rent
+        .minimum_balance(spl_token::state::Account::LEN)
+        .max(1)
+        .saturating_sub(token_account_info.lamports());
+
+    if required_lamports > 0 {
+        debug_print!(
+            "Transfer {} lamports to the blocking token account",
+            required_lamports
+        );
+
+        invoke(
+            &system_instruction::transfer(funding_info.key,
+                                          token_account_info.key,
+                                          required_lamports),
+            &[
+                funding_info.clone(),
+                token_account_info.clone(),
+                system_program_info.clone(),
+            ],
+        )?;
+    }
+
+    debug_print!("Allocate space for the blocking token account");
+    invoke_signed(
+        &system_instruction::allocate(
+            token_account_info.key,
+            spl_token::state::Account::LEN as u64,
+        ),
+        &[
+            token_account_info.clone(),
+            system_program_info.clone(),
+        ],
+        &[token_account_seeds],
+    )?;
+
+    debug_print!("Assign the blocking token account to the SPL Token program");
+    invoke_signed(
+        &system_instruction::assign(token_account_info.key,
+                                    spl_token_program_info.key),
+        &[
+            token_account_info.clone(),
+            system_program_info.clone(),
+        ],
+        &[token_account_seeds],
+    )?;
+
+    debug_print!("Initialize the blocking token account");
+    invoke(
+        &spl_token::instruction::initialize_account(
+            spl_token_program_info.key,
+            token_account_info.key,
+            spl_token_mint_info.key,
+            wallet_info.key,
+        )?,
+        &[
+            token_account_info.clone(),
+            spl_token_mint_info.clone(),
+            wallet_info.clone(),
+            rent_sysvar_info.clone(),
+            spl_token_program_info.clone(),
+        ],
+    )
+}
 
 /// Extract a token amount from the `AccountInfo`
 /// 
@@ -152,10 +243,10 @@ pub fn make_blocking_token_address(
         &[
             &BLOCKING_TOKEN_ACCOUNT_SEED_VERSION.to_le_bytes(),
             &wallet_address.to_bytes(),
-            &spl_associated_token_account::id().to_bytes(),
+            &spl_token::id().to_bytes(),
             &spl_token_mint_address.to_bytes(),
         ],
-        &spl_associated_token_account::id(),
+        &spl_token::id(),
     )
 }
 
