@@ -35,7 +35,9 @@ impl<'a> StorageAccount<'a> {
                     operator: *operator.key,
                     accounts_len: accounts.len(),
                     executor_data_size: 0,
-                    evm_data_size: 0
+                    evm_data_size: 0,
+                    gas_used_and_paid: 0,
+                    number_of_payments: 0,
                 }
             );
             Ok(Self { info, data })
@@ -121,9 +123,21 @@ impl<'a> StorageAccount<'a> {
         Ok((storage.caller, storage.nonce))
     }
 
-    pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {
+    pub fn get_gas_params(&self) -> Result<(u64, u64, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
-        Ok((storage.gas_limit, storage.gas_price))
+        Ok((storage.gas_limit, storage.gas_price, storage.gas_used_and_paid))
+    }
+
+    pub fn gas_has_been_paid(&mut self, gas: u64) -> Result<(u64, u64), ProgramError> {
+        let storage = AccountData::get_mut_storage(&mut self.data)?;
+        storage.gas_used_and_paid += gas;
+        storage.number_of_payments += 1;
+        Ok((storage.gas_used_and_paid, storage.number_of_payments))
+    }
+
+    pub fn get_number_of_payments(&self) -> Result<u64, ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok(storage.number_of_payments)
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {
