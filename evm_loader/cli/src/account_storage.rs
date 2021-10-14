@@ -276,9 +276,9 @@ impl<'a> EmulatorAccountStorage<'a> {
             match apply {
                 Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
 
-                    let mut code_begin = 0;
-                    let mut code_size = 0;
-                    let mut valids_size = 0;
+                    let code_begin;
+                    let code_size;
+                    let valids_size;
 
                     let mut storage_iter = storage.into_iter().peekable();
                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));

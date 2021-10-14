@@ -257,7 +257,7 @@ impl<'a> Hamt<'a> {
     pub fn last_used(&self) -> u32{
         self.last_used
     }
-}
+    }
 
 #[cfg(test)]
 mod test {
