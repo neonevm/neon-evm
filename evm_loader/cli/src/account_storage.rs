@@ -328,18 +328,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                     let hamt_begin = code_begin + code_size + valids_size;
 
-                                    if reset_storage || exist_items {
-                                        *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
-                                    }
-                                    else {
-                                        if Hamt::is_init(&code_account.data).unwrap(){
-                                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
-                                        }
-                                        else{
-                                            *acc.code_size.borrow_mut() = Some(hamt_begin );
-                                        }
-                                    }
-
+                                    *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
                                     *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
                                     *acc.writable.borrow_mut() = true;
                                 }
@@ -363,21 +352,15 @@ impl<'a> EmulatorAccountStorage<'a> {
                             code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
                             code_size = code.len();
                             valids_size = valids.len();
+
+                            let hamt_begin = code_begin + code_size + valids_size;
+                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                         }
                         else {
                             if reset_storage || exist_items {
                                 eprintln!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
                                 exit(1);
                             }
-                        }
-
-                        let hamt_begin = code_begin + code_size + valids_size;
-
-                        if reset_storage || exist_items {
-                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
-                        }
-                        else{
-                            *acc.code_size.borrow_mut() = Some(hamt_begin);
                         }
 
                         *acc.writable.borrow_mut() = true;
