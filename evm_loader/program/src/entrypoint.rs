@@ -43,9 +43,17 @@ use crate::{
 };
 use crate::solana_program::program_pack::Pack;
 
+type CompletionResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
+type IntermediateResults = u64;
+type CallResult = Result<Option<CompletionResults>, ProgramError>;
 
-type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
-type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
+/// Iteration execution result.
+pub enum IterationResult {
+    /// Execution of an ethereum transaction should be continued
+    ToBeContinued(IntermediateResults),
+    /// Execution of an ethereum transaction completed.
+    Completed(CompletionResults),
+}
 
 const HEAP_LENGTH: usize = 256*1024;
 
@@ -499,7 +507,7 @@ fn process_instruction<'a>(
             let executor_state = executor.into_state();
             let used_gas = executor_state.substate().metadata().gasometer().used_gas();
 
-            let (gas_limit, gas_price) = storage.get_gas_params()?;
+            let (gas_limit, gas_price, _) = storage.get_gas_params()?;
             if used_gas > gas_limit {
                 return Err!(ProgramError::InvalidArgument);
             }
@@ -763,44 +771,76 @@ fn do_continue_top_level<'a>(
         return Err(err)
     }
 
+    let (gas_limit, gas_price, gas_used_and_paid) = storage.get_gas_params()?;
+    if gas_used_and_paid > gas_limit {
+        return Err!(ProgramError::InvalidArgument;
+            "gas_used_and_paid > gas_limit; gas_used_and_paid={:?}; gas_limit={:?}",
+            gas_used_and_paid, gas_limit);
+    }
+    let gas_price_wei = U256::from(gas_price);
+    // enough_funds_to_pay_for_gas?
+    // if !enough_funds_to_pay_for_gas() {
+    //     return Err!(ProgramError::InsufficientFunds);
+    // }
+
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    let call_return = do_continue(&mut storage, step_count, &mut account_storage)?;
+    let iteration_result = do_continue(&mut storage, step_count, &mut account_storage);
 
-    if let Some(call_results) = call_return {
-        payment::transfer_from_deposit_to_operator(
-            storage_info,
-            operator_sol_info,
-            system_info)?;
-        if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-            debug_print!("operator token ownership");
-            debug_print!("operator token owner {}", operator_eth_info.owner);
-            debug_print!("operator key {}", operator_sol_info.key);
-            return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
+    match iteration_result {
+        IterationResult::ToBeContinued(used_gas) => {
+            let number_of_payments = storage.get_number_of_payments()?;
+            debug_print!("used_gas={:?} by an iteration N = {:?}", used_gas, number_of_payments+1);
+            if used_gas > gas_limit {
+                return Err!(ProgramError::InvalidArgument);
+            }
+            let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+            let fee = U256::from(gas_to_be_paid)
+                .checked_mul(gas_price_wei)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+            token::transfer_token(
+                accounts,
+                user_eth_info,
+                operator_eth_info,
+                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                &fee)?;
+            storage.gas_has_been_paid(gas_to_be_paid)?;
+        },
+        IterationResult::Completed(completion_results) => {
+            payment::transfer_from_deposit_to_operator(
+                storage_info,
+                operator_sol_info,
+                system_info)?;
+            if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
+                debug_print!("operator token ownership");
+                debug_print!("operator token owner {}", operator_eth_info.owner);
+                debug_print!("operator key {}", operator_sol_info.key);
+                return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
+            }
+            let used_gas = completion_results.1;
+            if used_gas > gas_limit {
+                return Err!(ProgramError::InvalidArgument);
+            }
+            let fee = U256::from(used_gas)
+                .checked_mul(gas_price_wei).ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+            token::transfer_token(
+                accounts,
+                user_eth_info,
+                operator_eth_info,
+                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                &fee)?;
+
+            applies_and_invokes(
+                program_id,
+                &mut account_storage,
+                accounts,
+                Some(operator_sol_info),
+                completion_results)?;
+
+            storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
         }
-        let (gas_limit, gas_price) = storage.get_gas_params()?;
-        let used_gas = call_results.1;
-        if used_gas > gas_limit {
-            return Err!(ProgramError::InvalidArgument);
-        }
-        let gas_price_wei = U256::from(gas_price);
-        let fee = U256::from(used_gas)
-            .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-        token::transfer_token(
-            accounts,
-            user_eth_info,
-            operator_eth_info,
-            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            &fee)?;
-
-        applies_and_invokes(
-            program_id,
-            &mut account_storage,
-            accounts,
-            Some(operator_sol_info),
-            call_results)?;
-
-        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
     }
 
     Ok(())
@@ -873,7 +913,7 @@ fn do_continue<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &mut ProgramAccountStorage<'a>,
-) -> CallResult
+) -> IterationResult
 {
     debug_print!("do_continue");
 
@@ -885,7 +925,9 @@ fn do_continue<'a>(
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
-                return Ok(None);
+                let executor_state = executor.into_state();
+                let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+                return IterationResult::ToBeContinued(used_gas);
             }
             Err((result, reason)) => (result, reason)
         };
@@ -903,7 +945,7 @@ fn do_continue<'a>(
         }
     };
 
-    Ok(Some(call_results))
+    IterationResult::Completed(call_results)
 }
 
 fn applies_and_invokes<'a>(
@@ -911,7 +953,7 @@ fn applies_and_invokes<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     operator: Option<&AccountInfo<'a>>,
-    call_results: SuccessExitResults
+    call_results: CompletionResults
 ) -> ProgramResult {
     let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
     if let Some(applies_logs_transfers) = applies_logs_transfers {
