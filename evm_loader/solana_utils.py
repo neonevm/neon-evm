@@ -52,6 +52,8 @@ EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/re
 client = Client(solana_url)
 path_to_solana = 'solana'
 
+ACCOUNT_SEED_VERSION=b'\1'
+
 class SplToken:
     def __init__(self, url):
         self.url = url
@@ -309,7 +311,7 @@ class EvmLoader:
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
-        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
+        seed = b58encode(ACCOUNT_SEED_VERSION+bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
