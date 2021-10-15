@@ -34,7 +34,7 @@ class EventTest(unittest.TestCase):
             print("Create caller account...") 
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, cls.caller_token)
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,

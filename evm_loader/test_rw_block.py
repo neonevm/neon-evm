@@ -30,7 +30,7 @@ class EventTest(unittest.TestCase):
             tx = client.request_airdrop(wallet1.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
 
-        # cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(wallet1.get_acc().public_key(), ETH_TOKEN_MINT_ID))
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(wallet1.get_acc().public_key(), ETH_TOKEN_MINT_ID))
         # cls.token.mint(ETH_TOKEN_MINT_ID, get_associated_token_address(PublicKey(wallet1.get_acc().public_key()), ETH_TOKEN_MINT_ID), 10000)
 
 
@@ -43,7 +43,7 @@ class EventTest(unittest.TestCase):
             print("Create.caller1 account...")
             _ = cls.loader.createEtherAccount(cls.caller1_ether)
             print("Done\n")
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 10, get_associated_token_address(PublicKey(cls.caller1), ETH_TOKEN_MINT_ID))
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller1), ETH_TOKEN_MINT_ID))
 
         print('Account1:', cls.acc1.public_key(), bytes(cls.acc1.public_key()).hex())
         print("Caller1:", cls.caller1_ether.hex(), cls.caller1_nonce, "->", cls.caller1,
@@ -78,7 +78,7 @@ class EventTest(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller2_ether)
             print("Done\n")
 
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 10, get_associated_token_address(PublicKey(cls.caller2), ETH_TOKEN_MINT_ID))
+        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller2), ETH_TOKEN_MINT_ID))
 
         print('Account2:', cls.acc2.public_key(), bytes(cls.acc2.public_key()).hex())
         print("Caller2:", cls.caller2_ether.hex(), cls.caller2_nonce, "->", cls.caller2,
