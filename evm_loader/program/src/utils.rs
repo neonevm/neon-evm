@@ -28,3 +28,15 @@ pub fn u256_to_h256(value: U256) -> H256 {
     value.to_big_endian(&mut v);
     H256::from_slice(&v)
 }
+
+/// Check whether array is zero initialized
+#[must_use]
+pub fn is_zero_initialized(data: &[u8]) -> bool {
+    for d in data {
+        if *d != 0_u8 {
+            return false;
+        }
+    }
+
+    true
+}

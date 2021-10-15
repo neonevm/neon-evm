@@ -40,7 +40,8 @@ use crate::{
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
     operator::authorized_operator_check,
-    system::create_pda_account
+    system::create_pda_account,
+    utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
 
@@ -133,6 +134,10 @@ fn process_instruction<'a>(
             authorized_operator_check(funding_info)?;
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
+
+            if !funding_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "!funding_info.is_signer");
+            }
             
             let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
             let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
@@ -149,6 +154,18 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
+                    let code_address_seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], ether.as_bytes() ].concat();
+                    let code_address_seed = bs58::encode(code_address_seed).into_string();
+                    debug_print!("Code account seed: {}", code_address_seed);
+                    let expected_code_address = Pubkey::create_with_seed(funding_info.key, &code_address_seed, program_id)?;
+                    if *program_code.key != expected_code_address {
+                        return Err!(ProgramError::InvalidArgument; "Unexpected code account. Actual<{:?}> != Expected<{:?}>", program_code.key, expected_code_address);
+                    }
+
+                    if !is_zero_initialized(&program_code.try_borrow_data()?) {
+                        return Err!(ProgramError::InvalidArgument; "Code account is not empty");
+                    }
+
                     if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
                         return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}", program_code.lamports(), program_code.data_len());
                     }
