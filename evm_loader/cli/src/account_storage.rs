@@ -285,7 +285,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                     let hamt_size = |code_data : &Vec<u8>, hamt_begin : usize| -> usize {
                         let mut empty_data: Vec<u8> = Vec::new();
-                        empty_data.resize(10485760, 0);
+                        empty_data.resize(10_485_760, 0);
                         empty_data[0..code_data.len()].copy_from_slice(code_data);
 
                         let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
@@ -300,52 +300,50 @@ impl<'a> EmulatorAccountStorage<'a> {
                     if let Some(acc) = accounts.get_mut(&address) {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
-                        match account_data {
-                            AccountData::Account(acc_desc) => {
-                                if let Some(ref mut code_account) = acc.code_account{
+                        if let AccountData::Account(acc_desc) = account_data {
+                            if let Some(ref mut code_account) = acc.code_account{
 
-                                    let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
-                                    let contract = AccountData::get_contract(&account_data_contract).unwrap();
+                                let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
+                                let contract = AccountData::get_contract(&account_data_contract).unwrap();
 
-                                    if let Some((code, valids)) = code_and_valids.clone() {
-                                        if contract.code_size != 0 {
-                                            eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                            exit(1)
-                                        }
-                                        code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
-                                        code_size = code.len();
-                                        valids_size = valids.len();
+                                if let Some((code, valids)) = code_and_valids.clone() {
+                                    if contract.code_size != 0 {
+                                        eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        exit(1)
                                     }
-                                    else{
-                                        if contract.code_size == 0 {
-                                            eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                            exit(1)
-                                        }
-                                        code_begin = account_data_contract.size();
-                                        code_size = contract.code_size as usize;
-                                        valids_size = (code_size / 8) + 1;
-                                    }
-
-                                    let hamt_begin = code_begin + code_size + valids_size;
-
-                                    *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
-                                    *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
-                                    *acc.writable.borrow_mut() = true;
+                                    code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
+                                    code_size = code.len();
+                                    valids_size = valids.len();
                                 }
                                 else{
-                                    if reset_storage || exist_items {
-                                        eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
-                                        exit(1);
+                                    if contract.code_size == 0 {
+                                        eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        exit(1)
                                     }
-                                    *acc.writable.borrow_mut() = true;
+                                    code_begin = account_data_contract.size();
+                                    code_size = contract.code_size as usize;
+                                    valids_size = (code_size / 8) + 1;
                                 }
-                            },
-                            _ => {
-                                eprintln!("Changes of incorrect account were found {}", &address.to_string());
-                                exit(1);
-                            },
-                        };
 
+                                let hamt_begin = code_begin + code_size + valids_size;
+
+                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
+                                *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
+                                *acc.writable.borrow_mut() = true;
+                            }
+                            else{
+                                if reset_storage || exist_items {
+                                    eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
+                                    exit(1);
+                                }
+                                *acc.writable.borrow_mut() = true;
+                            }
+
+                        }
+                        else{
+                            eprintln!("Changes of incorrect account were found {}", &address.to_string());
+                            exit(1);
+                        }
                     }
                     else if let Some(acc) = new_accounts.get_mut(&address) {
                         if let Some((code, valids)) = code_and_valids.clone() {
@@ -356,12 +354,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                             let hamt_begin = code_begin + code_size + valids_size;
                             *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                         }
-                        else {
-                            if reset_storage || exist_items {
+                        else  if reset_storage || exist_items {
                                 eprintln!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
                                 exit(1);
                             }
-                        }
 
                         *acc.writable.borrow_mut() = true;
                     }
