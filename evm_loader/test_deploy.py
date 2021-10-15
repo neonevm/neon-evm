@@ -136,7 +136,7 @@ class DeployTest(unittest.TestCase):
             print("confirmed:", rcpt)
 
         base = self.operator_acc.public_key()
-        seed = b58encode(contract_eth).decode('utf8')
+        seed = b58encode(ACCOUNT_SEED_VERSION+contract_eth).decode('utf8')
 
         return holder, base, seed, contract_eth, contract_sol, contract_nonce, code_sol, 1+32+4+len(msg)+2048
 
