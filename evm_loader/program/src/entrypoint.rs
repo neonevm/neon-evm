@@ -598,52 +598,54 @@ fn process_instruction<'a>(
 
         EvmInstruction::ResizeStorageAccount => {
             debug_print!("Execute ResizeStorageAccount");
-            let contract = next_account_info(account_info_iter)?;
+            let account_info = next_account_info(account_info_iter)?;
             let code_account = next_account_info(account_info_iter)?;
             let code_account_new = next_account_info(account_info_iter)?;
+
+            let mut info_data = account_info.try_borrow_mut_data()?;
+            if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
+                if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
+                    debug_print!("Cannot resize account data. Account is blocked {:?}", *account_info.key);
+                    return Ok(())
+                }
+                data.code_account = *code_account_new.key;
+                AccountData::pack(&AccountData::Account(data), &mut info_data)?;
+            } else {
+                return Err!(ProgramError::InvalidAccountData)
+            }
+
+            if code_account_new.owner == program_id {
+                let rent = Rent::get()?;
+                if !rent.is_exempt(code_account_new.lamports(), code_account_new.data_len()) {
+                    return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}",
+                        code_account_new.lamports(), code_account_new.data_len());
+                }
+            }
+            else {
+                return Err!(ProgramError::InvalidArgument; "code_account_new.owner<{:?}> != program_id<{:?}>", code_account_new.owner, program_id);
+            }
+
+            let mut code_account_new_data = code_account_new.try_borrow_mut_data()?;
+            match AccountData::unpack(&code_account_new_data) {
+                Ok(AccountData::Empty) => {},
+                _ =>  return Err!(ProgramError::InvalidAccountData)
+            }
 
             if code_account.owner != program_id {
                 return Err!(ProgramError::InvalidArgument; "code_account.owner<{:?}> != program_id<{:?}>", code_account.owner, program_id);
             }
-            if code_account_new.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "code_account_new.owner<{:?}> != program_id<{:?}>", code_account_new.owner, program_id);
-            }
-
-            let mut contract_data = contract.try_borrow_mut_data()?;
-            if let AccountData::Account(mut data) = AccountData::unpack(&contract_data)? {
-                if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
-                    debug_print!("Cannot resize account data. Account is blocked {:?}", *contract.key);
-                    return Ok(())
-                }
-                data.code_account = *code_account_new.key;
-                AccountData::pack(&AccountData::Account(data), &mut contract_data)?;
-            } else {
-                return Err!(ProgramError::InvalidAccountData)
-            }
-
-            let mut code_account_new_data = code_account_new.try_borrow_mut_data()?;
-            if let AccountData::Contract(data_new) = AccountData::unpack(&code_account_new_data)? {
-                if data_new.code_size != 0 {
-                    return Err!(ProgramError::InvalidAccountData; "code_account_new.code_size != 0, {:?} ", code_account_new.key);
-                }
-                if data_new.owner != *contract.key {
-                    return Err!(ProgramError::InvalidAccountData;
-                        "code_account_new.data.owner!=contract.key,  code_account_new.data.owner={:?}, contract.key={:?}", data_new.owner, *contract.key)
-                }
-            } else {
-                return Err!(ProgramError::InvalidAccountData)
-            };
 
             let mut code_account_data = code_account.try_borrow_mut_data()?;
             if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
-                if data.owner != *contract.key {
+                if data.owner != *account_info.key {
                     return Err!(ProgramError::InvalidAccountData;
-                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *contract.key)
+                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
                 }
                 debug_print!("move code and storage from {:?} to {:?}", *code_account.key, *code_account_new.key);
                 AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
-                let header_size = AccountData::Contract(data).size();
-                code_account_new_data[header_size..].copy_from_slice(&code_account_data[header_size..]);
+                let begin = AccountData::Contract(data).size();
+                let end = code_account_data.len();
+                code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
 
                 AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
 
