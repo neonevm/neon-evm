@@ -789,7 +789,7 @@ fn do_continue_top_level<'a>(
     match iteration_result {
         IterationResult::ToBeContinued(used_gas) => {
             let number_of_payments = storage.get_number_of_payments()?;
-            debug_print!("used_gas={:?} by an iteration N = {:?}", used_gas, number_of_payments+1);
+            msg!("used_gas={:?} by an iteration N = {:?}", used_gas, number_of_payments+1);
             if used_gas > gas_limit {
                 return Err!(ProgramError::InvalidArgument);
             }
