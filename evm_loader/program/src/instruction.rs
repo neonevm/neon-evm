@@ -293,7 +293,7 @@ impl<'a> EvmInstruction<'a> {
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
             16 => {
-                let (seed, rest) = rest.split_at(16);
+                let (seed, rest) = rest.split_at(32);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
