@@ -789,7 +789,8 @@ fn do_continue_top_level<'a>(
     match iteration_result {
         IterationResult::ToBeContinued(used_gas) => {
             let number_of_payments = storage.get_number_of_payments()?;
-            msg!("used_gas={:?} by an iteration N = {:?}", used_gas, number_of_payments+1);
+            msg!("gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+                gas_used_and_paid, used_gas, number_of_payments+1);
             if used_gas > gas_limit {
                 return Err!(ProgramError::InvalidArgument);
             }
@@ -819,8 +820,11 @@ fn do_continue_top_level<'a>(
                 return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
             }
             let used_gas = completion_results.1;
+            msg!("used_gas={:?}", used_gas);
             if used_gas > gas_limit {
-                return Err!(ProgramError::InvalidArgument);
+                return Err!(ProgramError::InvalidArgument;
+                    "used_gas > gas_limit; used_gas ={:?}; gas_limit={:?}",
+                    used_gas, gas_limit);
             }
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(|| E!(ProgramError::InvalidArgument))?;

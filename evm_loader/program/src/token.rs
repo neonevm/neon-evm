@@ -12,6 +12,7 @@ use solana_program::{
     program_error::ProgramError,
     program_pack::Pack,
     program::invoke_signed,
+    msg,
 };
 use std::vec;
 use std::convert::TryFrom;
@@ -169,7 +170,7 @@ pub fn transfer_token(
         return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
     }
 
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    msg!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
