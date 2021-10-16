@@ -119,7 +119,7 @@ fn process_instruction<'a>(
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed");
+    debug_print!("Instruction parsed: {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
