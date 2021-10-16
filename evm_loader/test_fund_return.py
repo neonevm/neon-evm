@@ -8,11 +8,6 @@ class FundReturnTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_fund_return.py setUpClass")
-
-        wallet = WalletAccount(wallet_path())
-        cls.loader = EvmLoader(wallet, EVM_LOADER)
-        cls.acc = wallet.get_acc()
-
         cls.alice_acc = cls.create_account(cls, "alice")
         cls.bob_acc = cls.create_account(cls, "bob")
 
@@ -46,12 +41,12 @@ class FundReturnTest(unittest.TestCase):
     def call_refund_tx(self, del_key, acc, seed, signer):
         trx = Transaction()
         trx.add(TransactionInstruction(
-            program_id=self.loader.loader_id,
+            program_id=EVM_LOADER,
             data=bytearray.fromhex("10") + bytes(seed, 'utf8'),
             keys=[
                 AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=(signer==acc), is_writable=True),
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=EVM_LOADER, is_signer=False, is_writable=False),
             ]))
         return send_transaction(client, trx, signer)
 
@@ -102,8 +97,17 @@ class FundReturnTest(unittest.TestCase):
 
 
     def test_success_refund(self):
-        result = self.call_refund_tx(self.refundable_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
-        print(result)
+        pre_storage = getBalance(self.refundable_acc)
+        pre_acc = getBalance(self.alice_acc)
+
+        self.call_refund_tx(self.refundable_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
+
+        post_acc = getBalance(self.alice_acc)
+
+        print(pre_storage + pre_acc)
+        print(post_acc)
+
+        self.assertAlmostEqual(pre_storage + pre_acc, post_acc)
 
 
 if __name__ == '__main__':
