@@ -98,11 +98,11 @@ class FundReturnTest(unittest.TestCase):
 
     def test_success_refund(self):
         pre_storage = getBalance(self.refundable_acc)
-        pre_acc = getBalance(self.alice_acc)
+        pre_acc = getBalance(self.alice_acc.public_key())
 
         self.call_refund_tx(self.refundable_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
 
-        post_acc = getBalance(self.alice_acc)
+        post_acc = getBalance(self.alice_acc.public_key())
 
         print(pre_storage + pre_acc)
         print(post_acc)
