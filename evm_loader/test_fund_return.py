@@ -107,7 +107,7 @@ class FundReturnTest(unittest.TestCase):
         print(pre_storage + pre_acc)
         print(post_acc)
 
-        self.assertAlmostEqual(pre_storage + pre_acc, post_acc)
+        self.assertAlmostEqual(pre_storage + pre_acc, post_acc + 5000)
 
 
 if __name__ == '__main__':
