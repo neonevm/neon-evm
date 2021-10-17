@@ -541,8 +541,8 @@ fn fill_holder_account(
 
     // Write code to holder account
     debug!("Write code");
-    let seed = holder_seed.as_bytes();
-    let seed: &[u8; 32] = seed.try_into().expect("seed with incorrect length");
+    let mut seed: [u8; 32] = [0; 32];
+    seed.clone_from_slice(holder_seed.as_bytes());
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
@@ -922,7 +922,9 @@ fn command_deploy(
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
+                                                                              &(0x0b_u8, collateral_pool_index, 0_u64),
+                                                                              accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
     }
@@ -948,7 +950,9 @@ fn command_deploy(
                             AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             ];
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
+        let continue_instruction = Instruction::new_with_bincode(config.evm_loader,
+                                                                 &(0x0a_u8, 400_u64),
+                                                                 continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 

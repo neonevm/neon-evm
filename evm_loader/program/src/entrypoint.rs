@@ -615,7 +615,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
             }
 
-            let seed = core::str::from_utf8(seed);
+            let seed = core::str::from_utf8(&seed);
             if seed.is_err() {
                 return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
             }

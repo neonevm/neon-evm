@@ -181,7 +181,7 @@ pub enum EvmInstruction<'a> {
     ///   1. \[SIGNER\] Signer for Ether account
     WriteHolder {
         /// Seed with which the account was created
-        seed: &'a [u8],
+        seed: [u8; 32],
         /// Offset at which to write the given bytes
         offset: u32,
         /// Data to write
@@ -295,13 +295,15 @@ impl<'a> EvmInstruction<'a> {
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
             16 => {
-                let (seed, rest) = rest.split_at(32);
+                let (seed_slice, rest) = rest.split_at(32);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
                 let (bytes, _) = rest.split_at(length);
+                let mut seed: [u8; 32] = [0; 32];
+                seed.clone_from_slice(seed_slice);
                 EvmInstruction::WriteHolder {seed, offset, bytes}
             },
             _ => return Err(InvalidInstructionData),
