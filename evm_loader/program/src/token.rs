@@ -149,11 +149,18 @@ pub fn transfer_token<'a>(
     token_mint_info: &'a AccountInfo<'a>,
     source_token_account: &'a AccountInfo<'a>,
     target_token_account: &'a AccountInfo<'a>,
-    source_account: &'a AccountInfo<'a>,
+    source_account: &AccountInfo,
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
+    // debug_print!("token_program_info={:?}", token_program_info);
+    // debug_print!("token_mint_info={:?}", token_mint_info);
+    // debug_print!("source_token_account={:?}", source_token_account);
+    // debug_print!("target_token_account={:?}", target_token_account);
+    // debug_print!("source_account={:?}", source_account);
+    // debug_print!("source_account={:?}", source_solidity_account);
+    debug_print!("value={:?}", value);
     if get_token_account_owner(source_token_account)? != *source_account.key {
         debug_print!("source ownership");
         debug_print!("source owner {}", get_token_account_owner(source_token_account)?);

@@ -464,6 +464,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[5..];
 
@@ -472,9 +475,11 @@ fn process_instruction<'a>(
                 else {err}
             })?;
 
-            do_continue_top_level(storage, step_count, program_id,
+            do_continue_top_level(
+                storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
                 operator_sol_info, operator_eth_info, user_eth_info,
+                token_mint_info, token_program_info,
                 system_info)?;
 
             Ok(())
@@ -488,6 +493,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -539,8 +547,8 @@ fn process_instruction<'a>(
             let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
             token::transfer_token(
-                system_info,
-                system_info,
+                token_program_info,
+                token_mint_info,
                 user_eth_info,
                 operator_eth_info,
                 caller_info,
@@ -587,9 +595,11 @@ fn process_instruction<'a>(
                              system_info)?;
                 },
                 Ok(storage) => {
-                    do_continue_top_level(storage, step_count, program_id,
+                    do_continue_top_level(
+                        storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
                         operator_sol_info, operator_eth_info, user_eth_info,
+                        token_mint_info, token_program_info,
                         system_info)?;
                 },
                 Err(err) => return Err(err),
@@ -626,10 +636,12 @@ fn process_instruction<'a>(
                              system_info)?;
                 },
                 Ok(storage) => {
-                    do_continue_top_level(storage, step_count, program_id,
-                                          accounts, trx_accounts, storage_info,
-                                          operator_sol_info, operator_eth_info, user_eth_info,
-                                          system_info)?;
+                    do_continue_top_level(
+                        storage, step_count, program_id,
+                        accounts, trx_accounts, storage_info,
+                        operator_sol_info, operator_eth_info, user_eth_info,
+                        token_mint_info, token_program_info,
+                        system_info)?;
                 },
                 Err(err) => return Err(err),
             }
@@ -824,6 +836,8 @@ fn do_continue_top_level<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
+    token_mint_info: &'a AccountInfo<'a>,
+    token_program_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
@@ -867,8 +881,8 @@ fn do_continue_top_level<'a>(
                 .checked_mul(gas_price_wei)
                 .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
             token::transfer_token(
-                system_info,
-                system_info,
+                token_program_info,
+                token_mint_info,
                 user_eth_info,
                 operator_eth_info,
                 account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
@@ -897,8 +911,8 @@ fn do_continue_top_level<'a>(
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(|| E!(ProgramError::InvalidArgument))?;
             token::transfer_token(
-                system_info,
-                system_info,
+                token_program_info,
+                token_mint_info,
                 user_eth_info,
                 operator_eth_info,
                 account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
@@ -922,7 +936,7 @@ fn do_continue_top_level<'a>(
 fn do_partial_call<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
-    account_storage: &ProgramAccountStorage<'a>,
+    account_storage: &ProgramAccountStorage,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
