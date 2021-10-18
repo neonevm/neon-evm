@@ -622,33 +622,6 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
-        EvmInstruction::WriteHolder {seed, offset, bytes} => {
-            let holder_info = next_account_info(account_info_iter)?;
-            if holder_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
-            }
-
-            let operator_info = next_account_info(account_info_iter)?;
-            if !operator_info.is_signer {
-                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
-            }
-
-            let seed = core::str::from_utf8(&seed);
-            if seed.is_err() {
-                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
-            }
-
-            let must_holder = Pubkey::create_with_seed(operator_info.key, seed.unwrap(), program_id);
-            if must_holder.is_err() {
-                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed.unwrap());
-            }
-
-            if *holder_info.key != must_holder.unwrap() {
-                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
-            }
-
-            do_write(holder_info, offset, bytes)
-        },
         EvmInstruction::DeleteAccount { seed } => {
             let deleted_acc_info = next_account_info(account_info_iter)?;
             let creator_acc_info = next_account_info(account_info_iter)?;
@@ -677,6 +650,33 @@ fn process_instruction<'a>(
             **deleted_acc_info.lamports.borrow_mut() = 0;
 
             Ok(())
+        },
+        EvmInstruction::WriteHolder {seed, offset, bytes} => {
+            let holder_info = next_account_info(account_info_iter)?;
+            if holder_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
+            }
+
+            let operator_info = next_account_info(account_info_iter)?;
+            if !operator_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
+            }
+
+            let seed = core::str::from_utf8(&seed);
+            if seed.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
+            }
+
+            let must_holder = Pubkey::create_with_seed(operator_info.key, seed.unwrap(), program_id);
+            if must_holder.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed.unwrap());
+            }
+
+            if *holder_info.key != must_holder.unwrap() {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
+            }
+
+            do_write(holder_info, offset, bytes)
         },
 
         EvmInstruction::Write |

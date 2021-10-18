@@ -283,9 +283,7 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterative {collateral_pool_index, step_count}
             },
-            12 => {
-                EvmInstruction::Cancel
-            },
+            12 => EvmInstruction::Cancel,
             13 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
@@ -303,9 +301,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
-            16 => {
-                EvmInstruction::DeleteAccount { seed: rest }
-            },
+            16 => EvmInstruction::DeleteAccount { seed: rest },
             17 => {
                 let (seed_slice, rest) = rest.split_at(32);
                 let (offset, rest) = rest.split_at(4);
