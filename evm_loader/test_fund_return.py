@@ -46,7 +46,6 @@ class FundReturnTest(unittest.TestCase):
             keys=[
                 AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=(signer==acc), is_writable=True),
-                AccountMeta(pubkey=EVM_LOADER, is_signer=False, is_writable=False),
             ]))
         return send_transaction(client, trx, signer)
 
@@ -107,7 +106,7 @@ class FundReturnTest(unittest.TestCase):
         print(pre_storage + pre_acc)
         print(post_acc)
 
-        self.assertAlmostEqual(pre_storage + pre_acc, post_acc + 5000)
+        self.assertEqual(pre_storage + pre_acc, post_acc + 5000)
 
 
 if __name__ == '__main__':

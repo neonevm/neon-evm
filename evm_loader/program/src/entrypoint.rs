@@ -598,7 +598,6 @@ fn process_instruction<'a>(
         EvmInstruction::DeleteAccount { seed } => {
             let deleted_acc_info = next_account_info(account_info_iter)?;
             let creator_acc_info = next_account_info(account_info_iter)?;
-            let evm_loader = next_account_info(account_info_iter)?;
 
             if !creator_acc_info.is_signer {
                 return Err!(ProgramError::InvalidAccountData; "Creator acc must be signer. Acc {:?}", *creator_acc_info.key);
@@ -607,7 +606,7 @@ fn process_instruction<'a>(
             let address = Pubkey::create_with_seed(
                 creator_acc_info.key, 
                 std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?, 
-                evm_loader.key)?;
+                program_id)?;
 
             if *deleted_acc_info.key != address {
                 return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
