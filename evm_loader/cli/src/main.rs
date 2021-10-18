@@ -153,7 +153,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
         let gas_limit = 50_000_000;
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), &storage);
+        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
+        let executor_state = ExecutorState::new(executor_substate, &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
 
