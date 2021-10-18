@@ -182,6 +182,15 @@ pub enum EvmInstruction<'a> {
     ///   7. '[]' Rent sysvar
     ERC20CreateTokenAccount,
 
+    /// Delete Ethereum account
+    /// # Account references
+    ///   0. [WRITE] Deleted account
+    ///   1. [WRITE] Deleted account creator
+    DeleteAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
+    
     /// copying the content of the one code_account to the new code_account
     /// # Account references
     ///   0. [WRITE] contract account
@@ -191,7 +200,9 @@ pub enum EvmInstruction<'a> {
     ResizeStorageAccount {
         /// seed used to create account
         seed:  &'a [u8],
-    },
+    },    
+    
+
 }
 
 
@@ -308,7 +319,11 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
+            16 => {
+                EvmInstruction::DeleteAccount { seed: rest }
+            },
             17 => EvmInstruction::ResizeStorageAccount { seed: rest },
+
             _ => return Err(InvalidInstructionData),
         })
     }

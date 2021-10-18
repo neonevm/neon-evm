@@ -14,6 +14,7 @@ use crate::{
 use evm_loader::{
     instruction::EvmInstruction,
     account_data::{
+        ACCOUNT_SEED_VERSION,
         AccountData,
         Account,
         Contract
@@ -152,7 +153,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
         let gas_limit = 50_000_000;
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), &storage);
+        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
+        let executor_state = ExecutorState::new(executor_substate, &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
 
@@ -663,7 +665,8 @@ fn get_ethereum_contract_account_credentials(
     let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::neon::token_mint::id());
 
     let (program_code, program_seed) = {
-        let seed = bs58::encode(&program_ether.to_fixed_bytes()).into_string();
+        let seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], program_ether.as_bytes() ].concat();
+        let seed = bs58::encode(seed).into_string();
         debug!("Code account seed {} and len {}", &seed, &seed.len());
         let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
         (address, seed)

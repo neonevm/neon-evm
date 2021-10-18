@@ -64,7 +64,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn balance(&self, address: H160) -> U256 {
-        self.state.basic(address).balance
+        self.state.balance(address)
     }
 
     fn code_size(&self, address: H160) -> U256 {
@@ -220,7 +220,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
                     keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
                 },
                 evm::CreateScheme::Legacy { caller } => {
-                    let nonce = self.state.basic(caller).nonce;
+                    let nonce = self.state.nonce(caller);
                     let mut stream = rlp::RlpStream::new_list(2);
                     stream.append(&caller);
                     stream.append(&nonce);
@@ -240,7 +240,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }
 
-        if self.state.basic(address).nonce  > U256::zero() {
+        if self.state.nonce(address)  > U256::zero() {
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }
 

@@ -274,7 +274,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         for apply in values {
             match apply {
-                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
+                Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
 
                     let code_begin;
                     let code_size;
@@ -364,7 +364,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                     else {
                         eprintln!("Account not found {}", &address.to_string());
                     }
-                    eprintln!("Modify: {} {} {} {}", &address.to_string(), &basic.nonce.as_u64(), &basic.balance, &reset_storage.to_string());
+                    eprintln!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
                 },
                 Apply::Delete {address: addr} => {
                     eprintln!("Delete: {}", addr.to_string());

@@ -39,7 +39,9 @@ use crate::{
     token,
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
-    system::create_pda_account
+    operator::authorized_operator_check,
+    system::create_pda_account,
+    utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
 
@@ -114,11 +116,10 @@ fn process_instruction<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction_data: &[u8],
 ) -> ProgramResult {
-
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed");
+    debug_print!("Instruction parsed {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -128,8 +129,14 @@ fn process_instruction<'a>(
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(funding_info)?;
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
+
+            if !funding_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "!funding_info.is_signer");
+            }
             
             let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
             let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
@@ -146,6 +153,18 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
+                    let code_address_seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], ether.as_bytes() ].concat();
+                    let code_address_seed = bs58::encode(code_address_seed).into_string();
+                    debug_print!("Code account seed: {}", code_address_seed);
+                    let expected_code_address = Pubkey::create_with_seed(funding_info.key, &code_address_seed, program_id)?;
+                    if *program_code.key != expected_code_address {
+                        return Err!(ProgramError::InvalidArgument; "Unexpected code account. Actual<{:?}> != Expected<{:?}>", program_code.key, expected_code_address);
+                    }
+
+                    if !is_zero_initialized(&program_code.try_borrow_data()?) {
+                        return Err!(ProgramError::InvalidArgument; "Code account is not empty");
+                    }
+
                     if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
                         return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}", program_code.lamports(), program_code.data_len());
                     }
@@ -196,6 +215,8 @@ fn process_instruction<'a>(
             let system_program = next_account_info(account_info_iter)?;
             let token_program = next_account_info(account_info_iter)?;
             let rent = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(payer)?;
 
             if !payer.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
@@ -318,6 +339,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
@@ -342,6 +365,8 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -412,6 +437,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -436,6 +463,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
@@ -459,6 +488,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -536,6 +567,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -571,6 +604,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+            
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -593,6 +628,35 @@ fn process_instruction<'a>(
                 },
                 Err(err) => return Err(err),
             }
+            Ok(())
+        },
+        EvmInstruction::DeleteAccount { seed } => {
+            let deleted_acc_info = next_account_info(account_info_iter)?;
+            let creator_acc_info = next_account_info(account_info_iter)?;
+
+            if !creator_acc_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData; "Creator acc must be signer. Acc {:?}", *creator_acc_info.key);
+            }
+
+            let address = Pubkey::create_with_seed(
+                creator_acc_info.key, 
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?, 
+                program_id)?;
+
+            if *deleted_acc_info.key != address {
+                return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
+            }
+
+            let data = deleted_acc_info.data.borrow_mut();
+            let account_data = AccountData::unpack(&data)?;
+            match account_data {
+                AccountData::Empty => { },
+                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete empty accounts.") },
+            };
+
+            **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
+            **deleted_acc_info.lamports.borrow_mut() = 0;
+
             Ok(())
         },
 
@@ -735,7 +799,8 @@ fn do_call(
     debug_print!(" contract: {}", account_storage.contract());
 
     let call_results = {
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+        let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -894,7 +959,8 @@ fn do_partial_call<'a>(
 {
     debug_print!("do_partial_call");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -930,7 +996,8 @@ fn do_partial_create<'a>(
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");

@@ -18,7 +18,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("\ntest_transaction.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -89,7 +89,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     def get_keccak_instruction_and_trx_data(self, data_start, secret_key, caller, caller_ether, trx_cnt=None):
         if trx_cnt is None:
-            trx_cnt = getTransactionCount(client, self.caller)
+            trx_cnt = getTransactionCount(client, caller)
         tx = self.get_tx(trx_cnt)
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, secret_key)
         keccak_instruction_data = make_keccak_instruction_data(1, len(msg), data_start)

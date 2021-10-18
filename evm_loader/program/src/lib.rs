@@ -26,6 +26,7 @@ pub mod executor;
 pub mod executor_state;
 pub mod utils;
 pub mod neon;
+pub mod operator;
 pub mod payment;
 pub mod token;
 pub mod system;
