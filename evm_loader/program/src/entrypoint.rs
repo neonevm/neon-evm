@@ -596,11 +596,12 @@ fn process_instruction<'a>(
             Ok(())
         },
 
-        EvmInstruction::ResizeStorageAccount => {
+        EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
             let account_info = next_account_info(account_info_iter)?;
             let code_account = next_account_info(account_info_iter)?;
             let code_account_new = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
 
             let mut info_data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
@@ -626,6 +627,7 @@ fn process_instruction<'a>(
             }
 
             let mut code_account_new_data = code_account_new.try_borrow_mut_data()?;
+
             match AccountData::unpack(&code_account_new_data) {
                 Ok(AccountData::Empty) => {},
                 _ =>  return Err!(ProgramError::InvalidAccountData)
@@ -635,7 +637,21 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "code_account.owner<{:?}> != program_id<{:?}>", code_account.owner, program_id);
             }
 
+            let expected_address = Pubkey::create_with_seed(
+                operator_sol_info.key,
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
+                program_id)?;
+
+            if *code_account_new.key != expected_address {
+                return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
+                    *code_account_new.key, *operator_sol_info.key, expected_address);
+            }
+
             let mut code_account_data = code_account.try_borrow_mut_data()?;
+            if code_account_data.len() >= code_account_new_data.len(){
+                return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
+                        *account_info.key, code_account_data.len(), code_account_new_data.len());
+            }
             if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
                 if data.owner != *account_info.key {
                     return Err!(ProgramError::InvalidAccountData;

@@ -183,7 +183,15 @@ pub enum EvmInstruction<'a> {
     ERC20CreateTokenAccount,
 
     /// copying the content of the one code_account to the new code_account
-    ResizeStorageAccount
+    /// # Account references
+    ///   0. [WRITE] contract account
+    ///   1. [WRITE] current code account
+    ///   2. [WRITE] new code account
+    ///   3. [READ] operator account
+    ResizeStorageAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
 }
 
 
@@ -300,7 +308,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
-            17 => EvmInstruction::ResizeStorageAccount,
+            17 => EvmInstruction::ResizeStorageAccount { seed: rest },
             _ => return Err(InvalidInstructionData),
         })
     }
