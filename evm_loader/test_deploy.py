@@ -36,7 +36,7 @@ def create_account_layout(lamports, space, ether, nonce):
     ))
 
 def write_holder_layout(seed, offset, data):
-    return (bytes.fromhex('10') +
+    return (bytes.fromhex('11') +
             bytes.fromhex(seed) +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
@@ -48,7 +48,7 @@ class DeployTest(unittest.TestCase):
         print("\ntest_deploy.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        operator_wallet = WalletAccount(wallet_path())
+        operator_wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(operator_wallet, evm_loader_id)
         cls.operator_acc = operator_wallet.get_acc()
 

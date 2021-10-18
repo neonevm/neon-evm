@@ -25,7 +25,7 @@ def get_recent_account_balance(code_account_address):
 
 
 def write_holder_layout(seed, offset, data):
-    return (bytes.fromhex('10') +
+    return (bytes.fromhex('11') +
             bytes.fromhex(seed) +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
@@ -63,7 +63,7 @@ class EventTest(unittest.TestCase):
         print("\ntest_nested_call.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 

@@ -187,6 +187,15 @@ pub enum EvmInstruction<'a> {
         /// Data to write
         bytes: &'a [u8],
     },
+
+    /// Create Ethereum account (create program_address account and write data)
+    /// # Account references
+    ///   0. [WRITE] Deleted account
+    ///   1. [WRITE] Deleted account creator
+    DeleteAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
 }
 
 impl<'a> EvmInstruction<'a> {
@@ -295,6 +304,9 @@ impl<'a> EvmInstruction<'a> {
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
             16 => {
+                EvmInstruction::DeleteAccount { seed: rest }
+            },
+            17 => {
                 let (seed_slice, rest) = rest.split_at(32);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
