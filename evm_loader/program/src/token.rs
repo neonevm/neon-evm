@@ -149,7 +149,7 @@ pub fn transfer_token<'a>(
     token_mint_info: &'a AccountInfo<'a>,
     source_token_account: &'a AccountInfo<'a>,
     target_token_account: &'a AccountInfo<'a>,
-    source_account: &AccountInfo,
+    source_owner_account: &'a AccountInfo<'a>,
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
@@ -161,10 +161,10 @@ pub fn transfer_token<'a>(
     // debug_print!("source_account={:?}", source_account);
     // debug_print!("source_account={:?}", source_solidity_account);
     debug_print!("value={:?}", value);
-    if get_token_account_owner(source_token_account)? != *source_account.key {
+    if get_token_account_owner(source_token_account)? != *source_owner_account.key {
         debug_print!("source ownership");
         debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
+        debug_print!("source key {}", source_owner_account.key);
         return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
     }
 
@@ -185,7 +185,7 @@ pub fn transfer_token<'a>(
         source_token_account.key,
         token_mint_info.key,
         target_token_account.key,
-        source_account.key,
+        source_owner_account.key,
         &[],
         value,
         token_mint::decimals(),
@@ -195,7 +195,7 @@ pub fn transfer_token<'a>(
         source_token_account.clone(),
         target_token_account.clone(),
         token_mint_info.clone(),
-        source_account.clone(),
+        source_owner_account.clone(),
     ];
 
     let (ether, nonce) = source_solidity_account.get_seeds();

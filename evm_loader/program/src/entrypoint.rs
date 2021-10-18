@@ -330,7 +330,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -342,12 +344,13 @@ fn process_instruction<'a>(
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            do_begin(collateral_pool_index, step_count, from_addr, trx,
-                program_id, trx_accounts, storage_info,
-                operator_sol_info, collateral_pool_sol_info,
-                operator_eth_info, user_eth_info,
-                token_mint_info, token_program_info,
-                system_info)?;
+            do_begin(
+                collateral_pool_index, step_count, from_addr, trx,
+                program_id, trx_accounts, storage_info, collateral_pool_sol_info,
+                operator_sol_info, operator_eth_info,
+                user_sol_info, user_eth_info,
+                token_mint_info, token_program_info, system_info,
+            )?;
 
             Ok(())
         },
@@ -360,7 +363,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -406,7 +411,7 @@ fn process_instruction<'a>(
                     token_mint_info,
                     user_eth_info,
                     operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+                    user_sol_info,
                     account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                     &fee)?;
 
@@ -435,7 +440,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -447,12 +454,13 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                 .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            do_begin(collateral_pool_index, step_count, caller, trx,
-                     program_id, trx_accounts, storage_info,
-                     operator_sol_info, collateral_pool_sol_info,
-                     operator_eth_info, user_eth_info,
-                     token_mint_info, token_program_info,
-                     system_info)?;
+            do_begin(
+                collateral_pool_index, step_count, caller, trx,
+                program_id, trx_accounts, storage_info, collateral_pool_sol_info,
+                operator_sol_info, operator_eth_info,
+                user_sol_info, user_eth_info,
+                token_mint_info, token_program_info, system_info,
+            )?;
 
             Ok(())
         },
@@ -464,7 +472,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -478,7 +488,7 @@ fn process_instruction<'a>(
             do_continue_top_level(
                 storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
-                operator_sol_info, operator_eth_info, user_eth_info,
+                operator_sol_info, operator_eth_info, user_sol_info, user_eth_info,
                 token_mint_info, token_program_info,
                 system_info)?;
 
@@ -493,7 +503,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -544,14 +556,12 @@ fn process_instruction<'a>(
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
-            let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
-
             token::transfer_token(
                 token_program_info,
                 token_mint_info,
                 user_eth_info,
                 operator_eth_info,
-                caller_info,
+                user_sol_info,
                 account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
                 &fee)?;
 
@@ -573,7 +583,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -587,18 +599,19 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(collateral_pool_index, step_count, caller, trx,
-                             program_id, trx_accounts, storage_info,
-                             operator_sol_info, collateral_pool_sol_info,
-                             operator_eth_info, user_eth_info,
-                             token_mint_info, token_program_info,
-                             system_info)?;
+                    do_begin(
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, storage_info, collateral_pool_sol_info,
+                        operator_sol_info, operator_eth_info,
+                        user_sol_info, user_eth_info,
+                        token_mint_info, token_program_info, system_info,
+                    )?;
                 },
                 Ok(storage) => {
                     do_continue_top_level(
                         storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
-                        operator_sol_info, operator_eth_info, user_eth_info,
+                        operator_sol_info, operator_eth_info, user_sol_info, user_eth_info,
                         token_mint_info, token_program_info,
                         system_info)?;
                 },
@@ -615,7 +628,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
-            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let _skip_3 = next_account_infos(account_info_iter, 3)?;
+            let user_sol_info = next_account_info(account_info_iter)?;
+            let _skip_2 = next_account_infos(account_info_iter, 2)?;
             let token_mint_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
@@ -628,18 +643,19 @@ fn process_instruction<'a>(
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(collateral_pool_index, step_count, caller, trx,
-                             program_id, trx_accounts, storage_info,
-                             operator_sol_info, collateral_pool_sol_info,
-                             operator_eth_info, user_eth_info,
-                             token_mint_info, token_program_info,
-                             system_info)?;
+                    do_begin(
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, storage_info, collateral_pool_sol_info,
+                        operator_sol_info, operator_eth_info,
+                        user_sol_info, user_eth_info,
+                        token_mint_info, token_program_info, system_info,
+                    )?;
                 },
                 Ok(storage) => {
                     do_continue_top_level(
                         storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
-                        operator_sol_info, operator_eth_info, user_eth_info,
+                        operator_sol_info, operator_eth_info, user_sol_info, user_eth_info,
                         token_mint_info, token_program_info,
                         system_info)?;
                 },
@@ -750,9 +766,10 @@ fn do_begin<'a>(
     program_id: &Pubkey,
     trx_accounts: &'a [AccountInfo<'a>],
     storage_info: &'a AccountInfo<'a>,
-    operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
+    operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
+    user_sol_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
     token_mint_info: &'a AccountInfo<'a>,
     token_program_info: &'a AccountInfo<'a>,
@@ -810,7 +827,7 @@ fn do_begin<'a>(
                 token_mint_info,
                 user_eth_info,
                 operator_eth_info,
-                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                user_sol_info,
                 account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
                 &fee)?;
             storage.gas_has_been_paid(gas_to_be_paid)?;
@@ -835,6 +852,7 @@ fn do_continue_top_level<'a>(
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
+    user_sol_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
     token_mint_info: &'a AccountInfo<'a>,
     token_program_info: &'a AccountInfo<'a>,
@@ -885,7 +903,7 @@ fn do_continue_top_level<'a>(
                 token_mint_info,
                 user_eth_info,
                 operator_eth_info,
-                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                user_sol_info,
                 account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
                 &fee)?;
             storage.gas_has_been_paid(gas_to_be_paid)?;
@@ -915,7 +933,7 @@ fn do_continue_top_level<'a>(
                 token_mint_info,
                 user_eth_info,
                 operator_eth_info,
-                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                user_sol_info,
                 account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
                 &fee)?;
 

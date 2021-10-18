@@ -310,6 +310,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
+        print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
             .add(keccak_instruction) \
