@@ -195,8 +195,7 @@ pub fn transfer_token<'a>(
         source_token_account.clone(),
         target_token_account.clone(),
         token_mint_info.clone(),
-        source_token_account.clone(),
-        token_program_info.clone(),
+        source_account.clone(),
     ];
 
     let (ether, nonce) = source_solidity_account.get_seeds();
