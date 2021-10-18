@@ -15,7 +15,7 @@ use evm::{
     H160, U256,
 };
 use solana_program::{
-    account_info::{next_account_info, AccountInfo},
+    account_info::{next_account_info, next_account_infos, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
     program_error::{ProgramError}, pubkey::Pubkey,
     program::{invoke},
@@ -46,6 +46,9 @@ use crate::solana_program::program_pack::Pack;
 type CompletionResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
 type IntermediateResults = u64;
 type CallResult = Result<Option<CompletionResults>, ProgramError>;
+
+/// First iteration execution result.
+type FirstIterationResult = Result<IntermediateResults, ProgramError>;
 
 /// Iteration execution result.
 pub enum IterationResult {
@@ -324,12 +327,17 @@ fn process_instruction<'a>(
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[7..];
 
             let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
@@ -337,6 +345,8 @@ fn process_instruction<'a>(
             do_begin(collateral_pool_index, step_count, from_addr, trx,
                 program_id, trx_accounts, storage_info,
                 operator_sol_info, collateral_pool_sol_info,
+                operator_eth_info, user_eth_info,
+                token_mint_info, token_program_info,
                 system_info)?;
 
             Ok(())
@@ -350,6 +360,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -389,7 +402,8 @@ fn process_instruction<'a>(
                 let fee = U256::from(used_gas)
                     .checked_mul(trx.gas_price).ok_or_else(||E!(ProgramError::InvalidArgument))?;
                 token::transfer_token(
-                    accounts,
+                    token_program_info,
+                    token_mint_info,
                     user_eth_info,
                     operator_eth_info,
                     account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
@@ -418,9 +432,14 @@ fn process_instruction<'a>(
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[7..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
@@ -431,6 +450,8 @@ fn process_instruction<'a>(
             do_begin(collateral_pool_index, step_count, caller, trx,
                      program_id, trx_accounts, storage_info,
                      operator_sol_info, collateral_pool_sol_info,
+                     operator_eth_info, user_eth_info,
+                     token_mint_info, token_program_info,
                      system_info)?;
 
             Ok(())
@@ -518,7 +539,8 @@ fn process_instruction<'a>(
             let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
 
             token::transfer_token(
-                accounts,
+                system_info,
+                system_info,
                 user_eth_info,
                 operator_eth_info,
                 caller_info,
@@ -543,6 +565,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[7..];
 
@@ -557,6 +582,8 @@ fn process_instruction<'a>(
                     do_begin(collateral_pool_index, step_count, caller, trx,
                              program_id, trx_accounts, storage_info,
                              operator_sol_info, collateral_pool_sol_info,
+                             operator_eth_info, user_eth_info,
+                             token_mint_info, token_program_info,
                              system_info)?;
                 },
                 Ok(storage) => {
@@ -578,6 +605,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+            let _skip_6 = next_account_infos(account_info_iter, 6)?;
+            let token_mint_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let trx_accounts = &accounts[7..];
 
@@ -591,6 +621,8 @@ fn process_instruction<'a>(
                     do_begin(collateral_pool_index, step_count, caller, trx,
                              program_id, trx_accounts, storage_info,
                              operator_sol_info, collateral_pool_sol_info,
+                             operator_eth_info, user_eth_info,
+                             token_mint_info, token_program_info,
                              system_info)?;
                 },
                 Ok(storage) => {
@@ -708,6 +740,10 @@ fn do_begin<'a>(
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
+    operator_eth_info: &'a AccountInfo<'a>,
+    user_eth_info: &'a AccountInfo<'a>,
+    token_mint_info: &'a AccountInfo<'a>,
+    token_program_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
@@ -735,7 +771,38 @@ fn do_begin<'a>(
         system_info)?;
 
     if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        // let result = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        let used_gas = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        let (gas_limit, gas_price, gas_used_and_paid) = storage.get_gas_params()?;
+        if gas_used_and_paid > gas_limit {
+            return Err!(ProgramError::InvalidArgument;
+            "gas_used_and_paid > gas_limit; gas_used_and_paid={:?}; gas_limit={:?}",
+            gas_used_and_paid, gas_limit);
+        }
+        let gas_price_wei = U256::from(gas_price);
+
+        {
+            let number_of_payments = storage.get_number_of_payments()?;
+            msg!("First iteration gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+            gas_used_and_paid, used_gas, number_of_payments+1);
+            if used_gas > gas_limit {
+                return Err!(ProgramError::InvalidArgument);
+            }
+            let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+            let fee = U256::from(gas_to_be_paid)
+                .checked_mul(gas_price_wei)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+            token::transfer_token(
+                token_program_info,
+                token_mint_info,
+                user_eth_info,
+                operator_eth_info,
+                account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+                &fee)?;
+            storage.gas_has_been_paid(gas_to_be_paid)?;
+        }
     }
     else {
         do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
@@ -789,7 +856,7 @@ fn do_continue_top_level<'a>(
     match iteration_result {
         IterationResult::ToBeContinued(used_gas) => {
             let number_of_payments = storage.get_number_of_payments()?;
-            msg!("gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+            msg!("ToBeContinued gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
                 gas_used_and_paid, used_gas, number_of_payments+1);
             if used_gas > gas_limit {
                 return Err!(ProgramError::InvalidArgument);
@@ -800,7 +867,8 @@ fn do_continue_top_level<'a>(
                 .checked_mul(gas_price_wei)
                 .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
             token::transfer_token(
-                accounts,
+                system_info,
+                system_info,
                 user_eth_info,
                 operator_eth_info,
                 account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
@@ -829,7 +897,8 @@ fn do_continue_top_level<'a>(
             let fee = U256::from(used_gas)
                 .checked_mul(gas_price_wei).ok_or_else(|| E!(ProgramError::InvalidArgument))?;
             token::transfer_token(
-                accounts,
+                system_info,
+                system_info,
                 user_eth_info,
                 operator_eth_info,
                 account_storage.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
@@ -857,7 +926,7 @@ fn do_partial_call<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> ProgramResult
+) -> FirstIterationResult
 {
     debug_print!("do_partial_call");
 
@@ -882,8 +951,11 @@ fn do_partial_call<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
-    debug_print!("partial call complete");
-    Ok(())
+    let executor_state = executor.into_state();
+    let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+    debug_print!("first iteration complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+
+    Ok(used_gas)
 }
 
 fn do_partial_create<'a>(

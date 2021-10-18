@@ -144,11 +144,12 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 ///
 /// Could return: 
 /// `ProgramError::InvalidInstructionData`
-pub fn transfer_token(
-    accounts: &[AccountInfo],
-    source_token_account: &AccountInfo,
-    target_token_account: &AccountInfo,
-    source_account: &AccountInfo,
+pub fn transfer_token<'a>(
+    token_program_info: &'a AccountInfo<'a>,
+    token_mint_info: &'a AccountInfo<'a>,
+    source_token_account: &'a AccountInfo<'a>,
+    target_token_account: &'a AccountInfo<'a>,
+    source_account: &'a AccountInfo<'a>,
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
@@ -173,9 +174,9 @@ pub fn transfer_token(
     msg!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
-        &spl_token::id(),
+        token_program_info.key,
         source_token_account.key,
-        &token_mint::id(),
+        token_mint_info.key,
         target_token_account.key,
         source_account.key,
         &[],
@@ -183,9 +184,17 @@ pub fn transfer_token(
         token_mint::decimals(),
     )?;
 
+    let accounts = &[
+        source_token_account.clone(),
+        target_token_account.clone(),
+        token_mint_info.clone(),
+        source_token_account.clone(),
+        token_program_info.clone(),
+    ];
+
     let (ether, nonce) = source_solidity_account.get_seeds();
-    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
+    let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[program_seeds])?;
 
     Ok(())
 }
