@@ -180,7 +180,16 @@ pub enum EvmInstruction<'a> {
     ///   5. `[]` System program
     ///   6. `[]` SPL Token program
     ///   7. '[]' Rent sysvar
-    ERC20CreateTokenAccount
+    ERC20CreateTokenAccount,
+
+    /// Create Ethereum account (create program_address account and write data)
+    /// # Account references
+    ///   0. [WRITE] Deleted account
+    ///   1. [WRITE] Deleted account creator
+    DeleteAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
 }
 
 
@@ -297,6 +306,9 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
+            16 => {
+                EvmInstruction::DeleteAccount { seed: rest }
+            },
             _ => return Err(InvalidInstructionData),
         })
     }
