@@ -452,12 +452,16 @@ class EventTest(unittest.TestCase):
                 bytes.fromhex("%062x" % 0x0 + "41") +
                 sig.to_bytes()
                 )
+        contract_nonce_pre = getTransactionCount(http_client, self.reId_caller)
         # result = self.call_signed(input=data, contract=self.reId_caller)
         result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 6) # TODO: why not 3?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+
+        contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
+        self.assertEqual(contract_nonce_pre, contract_nonce_post)
 
         #  emit Recovered(address);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-4]['data'])
@@ -527,9 +531,14 @@ class EventTest(unittest.TestCase):
         self.assertGreater(get_recent_account_balance(self.reId_create_receiver), 0)
         print('Ok: code owner account has been created')
 
+        contract_nonce_pre = getTransactionCount(http_client, self.reId_create_caller)
+
         print('Call creator() with holder account:')
         result = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
         print('result:', result)
+
+        contract_nonce_post = getTransactionCount(http_client, self.reId_create_caller)
+        self.assertEqual(contract_nonce_pre + 1, contract_nonce_post)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
