@@ -186,7 +186,6 @@ pub enum EvmInstruction<'a> {
     /// # Account references
     ///   0. [WRITE] Deleted account
     ///   1. [WRITE] Deleted account creator
-    ///   2. [] evm_loader account
     DeleteAccount {
         /// seed used to create account
         seed:  &'a [u8],
