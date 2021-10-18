@@ -21,7 +21,7 @@ class EventTest(unittest.TestCase):
         print("\ntest_event.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet1 = WalletAccount(wallet_path())
+        wallet1 = OperatorAccount(operator1_keypair_path())
 
         cls.loader = EvmLoader(wallet1, evm_loader_id)
         cls.acc1 = wallet1.get_acc()
@@ -61,7 +61,7 @@ class EventTest(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
         # other wallet
-        wallet2 = RandomAccount()
+        wallet2 = OperatorAccount(operator2_keypair_path())
         cls.acc2 = wallet2.get_acc()
 
         if getBalance(wallet2.get_acc().public_key()) == 0:

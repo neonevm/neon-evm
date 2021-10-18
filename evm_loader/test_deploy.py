@@ -50,7 +50,7 @@ class DeployTest(unittest.TestCase):
         print("\ntest_deploy.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        operator_wallet = WalletAccount(wallet_path())
+        operator_wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(operator_wallet, evm_loader_id)
         cls.operator_acc = operator_wallet.get_acc()
 
