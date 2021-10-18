@@ -115,11 +115,10 @@ fn process_instruction<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction_data: &[u8],
 ) -> ProgramResult {
-
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed");
+    debug_print!("Instruction parsed {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -675,7 +674,8 @@ fn do_call(
     debug_print!(" contract: {}", account_storage.contract());
 
     let call_results = {
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+        let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -834,7 +834,8 @@ fn do_partial_call<'a>(
 {
     debug_print!("do_partial_call");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -870,7 +871,8 @@ fn do_partial_create<'a>(
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
