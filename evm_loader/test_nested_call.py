@@ -411,6 +411,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
+        # Nonce unchanged when contract calls other contract
         self.assertEqual(contract_nonce_pre, contract_nonce_post)
 
         #  emit Foo(msg.sender, msg.value, _message);
@@ -467,6 +468,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
+        # Nonce unchanged when call contract
         self.assertEqual(contract_nonce_pre, contract_nonce_post)
 
         #  emit Recovered(address);
@@ -544,6 +546,7 @@ class EventTest(unittest.TestCase):
         print('result:', result)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_create_caller)
+        # Nonce increased on create other contract from contract
         self.assertEqual(contract_nonce_pre + 1, contract_nonce_post)
 
         self.assertEqual(result['meta']['err'], None)
