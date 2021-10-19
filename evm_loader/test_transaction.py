@@ -162,7 +162,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         file_name = 'src/entrypoint.rs'
         self.assertTrue(file_name in log)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
         trx = Transaction() \
@@ -172,7 +172,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -195,7 +195,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -224,7 +224,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print('err:', str(err))
             self.assertTrue(False)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -245,7 +245,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -304,7 +304,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('the solana transaction is too large')
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
