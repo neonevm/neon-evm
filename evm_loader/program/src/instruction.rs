@@ -174,6 +174,26 @@ pub enum EvmInstruction<'a> {
     ///   7. '[]' Rent sysvar
     ERC20CreateTokenAccount,
 
+    /// Delete Ethereum account
+    /// # Account references
+    ///   0. [WRITE] Deleted account
+    ///   1. [WRITE] Deleted account creator
+    DeleteAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
+    
+    /// copying the content of the one code_account to the new code_account
+    /// # Account references
+    ///   0. [WRITE] contract account
+    ///   1. [WRITE] current code account
+    ///   2. [WRITE] new code account
+    ///   3. [READ] operator account
+    ResizeStorageAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
+
     /// Write program data into a holder account
     ///
     /// # Account references
@@ -186,15 +206,6 @@ pub enum EvmInstruction<'a> {
         offset: u32,
         /// Data to write
         bytes: &'a [u8],
-    },
-
-    /// Create Ethereum account (create program_address account and write data)
-    /// # Account references
-    ///   0. [WRITE] Deleted account
-    ///   1. [WRITE] Deleted account creator
-    DeleteAccount {
-        /// seed used to create account
-        seed:  &'a [u8],
     },
 }
 
@@ -302,7 +313,8 @@ impl<'a> EvmInstruction<'a> {
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
             16 => EvmInstruction::DeleteAccount { seed: rest },
-            17 => {
+            17 => EvmInstruction::ResizeStorageAccount { seed: rest },
+            18 => {
                 let (seed_slice, rest) = rest.split_at(32);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
@@ -314,6 +326,7 @@ impl<'a> EvmInstruction<'a> {
                 seed.clone_from_slice(seed_slice);
                 EvmInstruction::WriteHolder {seed, offset, bytes}
             },
+
             _ => return Err(InvalidInstructionData),
         })
     }

@@ -551,7 +551,7 @@ fn fill_holder_account(
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
             /* &EvmInstruction::WriteHolder {seed, offset, bytes: chunk}, */
-            &(0x11_u8, seed, offset, chunk),
+            &(0x12_u8, seed, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
