@@ -37,7 +37,7 @@ def create_account_layout(lamports, space, ether, nonce):
 
 def write_holder_layout(seed, offset, data):
     return (bytes.fromhex('12') +
-            bytes.fromhex(seed) +
+            bytes(seed, 'utf8') +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -73,7 +73,7 @@ class DeployTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def create_holder_account_with_deploying_transaction(self, seed=str(randrange(10000))):
+    def create_holder_account_with_deploying_transaction(self, seed='00000000000000000000000000000000'):
         # Create transaction holder account (if not exists)
         holder = PublicKey(sha256(bytes(self.operator_acc.public_key())+bytes(seed, 'utf8')+bytes(PublicKey(evm_loader_id))).digest())
         print("Holder", holder)
@@ -117,7 +117,7 @@ class DeployTest(unittest.TestCase):
         receipts = []
         rest = msg
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:900], rest[900:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(seed, offset, part),
