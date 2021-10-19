@@ -178,7 +178,6 @@ cfg_if! {
 /// Chain ID
 #[must_use]
 pub fn chain_id() -> U256 {
-    // CHAIN_ID
     U256::from(CHAIN_ID)
  }
 
