@@ -182,7 +182,7 @@ pub enum EvmInstruction<'a> {
     ///   7. '[]' Rent sysvar
     ERC20CreateTokenAccount,
 
-    /// Create Ethereum account (create program_address account and write data)
+    /// Delete Ethereum account
     /// # Account references
     ///   0. [WRITE] Deleted account
     ///   1. [WRITE] Deleted account creator
@@ -190,6 +190,19 @@ pub enum EvmInstruction<'a> {
         /// seed used to create account
         seed:  &'a [u8],
     },
+    
+    /// copying the content of the one code_account to the new code_account
+    /// # Account references
+    ///   0. [WRITE] contract account
+    ///   1. [WRITE] current code account
+    ///   2. [WRITE] new code account
+    ///   3. [READ] operator account
+    ResizeStorageAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },    
+    
+
 }
 
 
@@ -309,6 +322,8 @@ impl<'a> EvmInstruction<'a> {
             16 => {
                 EvmInstruction::DeleteAccount { seed: rest }
             },
+            17 => EvmInstruction::ResizeStorageAccount { seed: rest },
+
             _ => return Err(InvalidInstructionData),
         })
     }
