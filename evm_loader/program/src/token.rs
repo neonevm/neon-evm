@@ -1,10 +1,10 @@
 //! `EVMLoader` token functions
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solidity_account::SolidityAccount
-    neon::token_mint;
-    storage_account::StorageAccount;
-    account_storage::ProgramAccountStorage;
+    solidity_account::SolidityAccount,
+    neon::token_mint,
+    storage_account::StorageAccount,
+    account_storage::ProgramAccountStorage,
 };
 use evm::{U256};
 use solana_program::{
