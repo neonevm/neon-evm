@@ -329,10 +329,12 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                 *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
-                                *acc.writable.borrow_mut() = true;
+                                if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != nonce {
+                                    *acc.writable.borrow_mut() = true;
+                                }
                             }
                             else{
-                                if reset_storage || exist_items {
+                                if reset_storage || exist_items || code_and_valids.is_some() {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(1);
                                 }
