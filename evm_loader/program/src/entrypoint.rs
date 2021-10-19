@@ -461,7 +461,6 @@ fn process_instruction<'a>(
             let operator_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
-            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -475,7 +474,7 @@ fn process_instruction<'a>(
             do_continue_top_level(storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
                 operator_sol_info, operator_eth_info, user_eth_info,
-                system_info)?;
+            )?;
 
             Ok(())
         },
@@ -487,7 +486,6 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
-            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -551,7 +549,7 @@ fn process_instruction<'a>(
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
-                system_info)?;
+            )?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
 
@@ -588,7 +586,7 @@ fn process_instruction<'a>(
                     do_continue_top_level(storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
                         operator_sol_info, operator_eth_info, user_eth_info,
-                        system_info)?;
+                    )?;
                 },
                 Err(err) => return Err(err),
             }
@@ -624,7 +622,7 @@ fn process_instruction<'a>(
                     do_continue_top_level(storage, step_count, program_id,
                                           accounts, trx_accounts, storage_info,
                                           operator_sol_info, operator_eth_info, user_eth_info,
-                                          system_info)?;
+                    )?;
                 },
                 Err(err) => return Err(err),
             }
@@ -891,7 +889,6 @@ fn do_continue_top_level<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -912,7 +909,7 @@ fn do_continue_top_level<'a>(
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info,
-            system_info)?;
+        )?;
         if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
             debug_print!("operator token ownership");
             debug_print!("operator token owner {}", operator_eth_info.owner);
