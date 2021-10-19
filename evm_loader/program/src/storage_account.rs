@@ -123,21 +123,30 @@ impl<'a> StorageAccount<'a> {
         Ok((storage.caller, storage.nonce))
     }
 
-    pub fn get_gas_params(&self) -> Result<(u64, u64, u64), ProgramError> {
+    pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
-        Ok((storage.gas_limit, storage.gas_price, storage.gas_used_and_paid))
+        Ok((storage.gas_limit, storage.gas_price))
     }
 
-    pub fn gas_has_been_paid(&mut self, gas: u64) -> Result<(u64, u64), ProgramError> {
-        let storage = AccountData::get_mut_storage(&mut self.data)?;
-        storage.gas_used_and_paid += gas;
-        storage.number_of_payments += 1;
+    pub fn set_gas_has_been_paid(&mut self, gas: u64) -> Result<(), ProgramError> {
+        let mut account_data = self.info.try_borrow_mut_data()?;
+
+        if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
+            data.gas_used_and_paid += gas;
+            data.number_of_payments += 1;
+
+            let data = AccountData::Storage(data);
+            AccountData::pack(&data, &mut account_data)?;
+
+            Ok(())
+        } else {
+            Err!(ProgramError::InvalidAccountData)
+        }
+    }
+
+    pub fn get_payments_info(&self) -> Result<(u64, u64), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.gas_used_and_paid, storage.number_of_payments))
-    }
-
-    pub fn get_number_of_payments(&self) -> Result<u64, ProgramError> {
-        let storage = AccountData::get_storage(&self.data)?;
-        Ok(storage.number_of_payments)
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {

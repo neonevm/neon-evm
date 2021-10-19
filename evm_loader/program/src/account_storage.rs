@@ -340,8 +340,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
 
             transfer_token(
-                &accounts[0],
-                &accounts[1],
+                accounts,
                 source_token_account,
                 target_token_account,
                 source_account,

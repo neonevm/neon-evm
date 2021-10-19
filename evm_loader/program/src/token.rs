@@ -2,6 +2,9 @@
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solidity_account::SolidityAccount
+    neon::token_mint;
+    storage_account::StorageAccount;
+    account_storage::ProgramAccountStorage;
 };
 use evm::{U256};
 use solana_program::{
@@ -16,9 +19,6 @@ use solana_program::{
 };
 use std::vec;
 use std::convert::TryFrom;
-
-use crate::neon::token_mint;
-
 
 #[must_use]
 /// Number of base 10 digits to the right of the decimal place of ETH value
@@ -144,20 +144,23 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 ///
 /// Could return: 
 /// `ProgramError::InvalidInstructionData`
-pub fn transfer_token<'a>(
-    token_program_info: &'a AccountInfo<'a>,
-    token_mint_info: &'a AccountInfo<'a>,
-    source_token_account: &'a AccountInfo<'a>,
-    target_token_account: &'a AccountInfo<'a>,
-    source_owner_account: &'a AccountInfo<'a>,
+pub fn transfer_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
-    if get_token_account_owner(source_token_account)? != *source_owner_account.key {
+    if get_token_account_owner(source_token_account)? != *source_account.key {
         return Err!(ProgramError::InvalidInstructionData;
-            "Invalid account owner source_token_account={:?}, source_owner_account={:?}",
-            source_token_account, source_owner_account)
+            "Invalid account owner;\
+             source_token_account = {:?},\
+              source_account = {:?}",
+            source_token_account,
+            source_account
+        );
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
@@ -167,32 +170,107 @@ pub fn transfer_token<'a>(
 
     let source_token_balance = get_token_account_balance(source_token_account)?;
     if source_token_balance < value {
-        return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
+        return Err!(ProgramError::InvalidInstructionData;
+            "Insufficient funds on token account {:?} {:?}",
+            source_token_account,
+            source_token_balance
+        )
     }
 
-    msg!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    msg!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
-        token_program_info.key,
+        &spl_token::id(),
         source_token_account.key,
-        token_mint_info.key,
+        &token_mint::id(),
         target_token_account.key,
-        source_owner_account.key,
+        source_account.key,
         &[],
         value,
         token_mint::decimals(),
     )?;
 
-    let accounts = &[
-        source_token_account.clone(),
-        target_token_account.clone(),
-        token_mint_info.clone(),
-        source_owner_account.clone(),
-    ];
-
     let (ether, nonce) = source_solidity_account.get_seeds();
     let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
     invoke_signed(&instruction, accounts, &[program_seeds])?;
+
+    Ok(())
+}
+
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+#[allow(clippy::too_many_arguments)]
+pub fn user_pays_operator<'a>(
+    gas_limit: u64,
+    gas_price: u64,
+    used_gas: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+    storage_opt: Option<&mut StorageAccount>,
+) -> Result<(), ProgramError> {
+    if let Some(storage) = storage_opt {
+        let (gas_used_and_paid, number_of_payments) =
+            storage.get_payments_info()?;
+
+        let gas_price_wei = U256::from(gas_price);
+        msg!("user_pays_operator gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+            gas_used_and_paid, used_gas, number_of_payments+1);
+
+        if used_gas > gas_limit {
+            return Err!(ProgramError::InvalidArgument;
+                "used_gas > gas_limit; gas_to_be_paid={:?}; gas_limit={:?}",
+                used_gas, gas_limit);
+        }
+
+        let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
+            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+        let fee = U256::from(gas_to_be_paid)
+            .checked_mul(gas_price_wei)
+            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+        transfer_token(
+            accounts,
+            user_token_account,
+            operator_token_account,
+            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+            account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+            &fee)?;
+
+        let gas_has_been_paid = gas_to_be_paid;
+        msg!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
+        storage.set_gas_has_been_paid(gas_has_been_paid)?;
+    }
+    else {
+        let (gas_used_and_paid, _number_of_payments) = (0, 0);
+
+        let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
+            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+        let gas_price_wei = U256::from(gas_price);
+
+        let fee = U256::from(gas_to_be_paid)
+            .checked_mul(gas_price_wei)
+            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+        transfer_token(
+            accounts,
+            user_token_account,
+            operator_token_account,
+            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+            account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+            &fee)?;
+
+        let gas_has_been_paid = gas_to_be_paid;
+        msg!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
+    }
 
     Ok(())
 }
