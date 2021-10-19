@@ -399,6 +399,9 @@ class EventTest(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_01_callFoo(self):
         print('\ntest_01_callFoo')
+
+        contract_nonce_pre = getTransactionCount(http_client, self.reId_caller)
+
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
         result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
@@ -406,6 +409,9 @@ class EventTest(unittest.TestCase):
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+
+        contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
+        self.assertEqual(contract_nonce_pre, contract_nonce_post)
 
         #  emit Foo(msg.sender, msg.value, _message);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
