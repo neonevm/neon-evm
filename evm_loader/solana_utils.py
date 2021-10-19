@@ -52,6 +52,8 @@ EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/re
 client = Client(solana_url)
 path_to_solana = 'solana'
 
+ACCOUNT_SEED_VERSION=b'\1'
+
 class SplToken:
     def __init__(self, url):
         self.url = url
@@ -241,12 +243,32 @@ class RandomAccount:
     def get_acc(self):
         return self.acc
 
-
 class WalletAccount(RandomAccount):
     def __init__(self, path):
         self.path = path
         self.retrieve_keys()
         print('Wallet public key:', self.acc.public_key())
+
+class OperatorAccount:
+    def __init__(self, path=None):
+        if path == None:
+            self.path = operator1_keypair_path()
+        else:
+            self.path = path
+        self.retrieve_keys()
+        print('Public key:', self.acc.public_key())
+        print('Private key:', self.acc.secret_key())
+
+    def retrieve_keys(self):
+        with open(self.path) as f:
+            d = json.load(f)
+            self.acc = Account(d[0:32])
+
+    def get_path(self):
+        return self.path
+
+    def get_acc(self):
+        return self.acc
 
 
 class EvmLoader:
@@ -309,7 +331,7 @@ class EvmLoader:
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
-        seed = b58encode(bytes.fromhex(ether)).decode('utf8')
+        seed = b58encode(ACCOUNT_SEED_VERSION+bytes.fromhex(ether)).decode('utf8')
         acc = accountWithSeed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(ether, 255, acc))
         return (acc, 255)
@@ -468,6 +490,16 @@ def wallet_path():
             return line[len(substr):].strip()
     raise Exception("cannot get keypair path")
 
+def operator1_keypair_path():
+    res = solana_cli().call("config get")
+    substr = "Keypair Path: "
+    for line in res.splitlines():
+        if line.startswith(substr):
+            return line[len(substr):].strip()
+    raise Exception("cannot get keypair path")
+
+def operator2_keypair_path():
+    return "/root/.config/solana/id2.json"
 
 def send_transaction(client, trx, acc):
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))

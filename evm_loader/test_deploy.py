@@ -50,7 +50,7 @@ class DeployTest(unittest.TestCase):
         print("\ntest_deploy.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        operator_wallet = WalletAccount(wallet_path())
+        operator_wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(operator_wallet, evm_loader_id)
         cls.operator_acc = operator_wallet.get_acc()
 
@@ -136,7 +136,7 @@ class DeployTest(unittest.TestCase):
             print("confirmed:", rcpt)
 
         base = self.operator_acc.public_key()
-        seed = b58encode(contract_eth).decode('utf8')
+        seed = b58encode(ACCOUNT_SEED_VERSION+contract_eth).decode('utf8')
 
         return holder, base, seed, contract_eth, contract_sol, contract_nonce, code_sol, 1+32+4+len(msg)+2048
 

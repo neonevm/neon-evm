@@ -210,15 +210,13 @@ impl<'a> SolidityAccount<'a> {
         #[allow(unused_variables)]
         solidity_address: H160,
         nonce: U256,
-        #[allow(unused_variables)]
-        balance: U256,
         code_and_valids: &Option<(Vec<u8>, Vec<u8>)>,
         storage_items: I,
         reset_storage: bool,
     ) -> Result<(), ProgramError>
     where I: IntoIterator<Item = (U256, U256)> 
     {
-        debug_print!("Update: {}, {}, {}, {:?}, {}", solidity_address, nonce, balance, if code_and_valids.is_some() {"Exist"} else {"Empty"}, reset_storage);
+        debug_print!("Update: {}", solidity_address);
         let mut data = (*account_info.data).borrow_mut();
         // **account_info.lamports.borrow_mut() = lamports;
 

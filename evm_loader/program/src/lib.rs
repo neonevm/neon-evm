@@ -11,7 +11,8 @@ mod debug;
 #[macro_use]
 mod error;
 pub mod entrypoint;
-mod hamt;
+/// hamt impl
+pub mod hamt;
 pub mod solana_backend;
 pub mod account_data;
 pub mod account_storage;
@@ -25,6 +26,7 @@ pub mod executor;
 pub mod executor_state;
 pub mod utils;
 pub mod neon;
+pub mod operator;
 pub mod payment;
 pub mod token;
 pub mod system;

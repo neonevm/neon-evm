@@ -56,7 +56,7 @@ class init_wallet():
         print("\ntest_performance.py init")
 
         cls.token = SplToken(solana_url)
-        wallet = RandomAccount()
+        wallet = OperatorAccount()
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])

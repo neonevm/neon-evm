@@ -21,7 +21,7 @@ class EventTest(unittest.TestCase):
         print("\ntest_event.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 

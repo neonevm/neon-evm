@@ -17,6 +17,9 @@ pub enum EvmLoaderError {
     /// Exclusive access to the account is not available
     #[error("Exclusive access to the account is not available")]
     ExclusiveAccessUnvailable,
+    /// Operator is not authorized
+    #[error("Operator is not authorized")]
+    UnauthorizedOperator,
 }
 
 impl From<EvmLoaderError> for ProgramError {

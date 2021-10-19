@@ -16,7 +16,7 @@ class SolanaCliTests(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest.py setUpClass")
 
-        cls.acc = WalletAccount(wallet_path())
+        cls.acc = OperatorAccount(operator1_keypair_path())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10 * 10 ** 9)
             confirm_transaction(client, tx['result'])
