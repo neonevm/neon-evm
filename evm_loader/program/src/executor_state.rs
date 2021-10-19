@@ -239,7 +239,6 @@ impl ExecutorSubstate {
                 let account = self.accounts.remove(&address).unwrap_or_else(
                     || ExecutorAccount {
                         nonce: backend.basic(&address).nonce,
-                        // basic: backend.basic(&address),
                         code: None,
                         valids: None,
                         reset: false,
@@ -248,8 +247,7 @@ impl ExecutorSubstate {
 
                 Apply::Modify {
                     address,
-                    // nonce: account.nonce,
-                    basic: backend.basic(&address),
+                    nonce: account.nonce,
                     code_and_valids: account.code.zip(account.valids),
                     storage,
                     reset_storage: account.reset,
