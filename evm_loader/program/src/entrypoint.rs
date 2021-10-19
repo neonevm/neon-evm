@@ -906,6 +906,7 @@ fn do_continue_top_level<'a>(
                 user_sol_info,
                 account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
                 &fee)?;
+            msg!("ToBeContinued gas_to_be_paid ={:?}", gas_to_be_paid);
             storage.gas_has_been_paid(gas_to_be_paid)?;
         },
         IterationResult::Completed(completion_results) => {

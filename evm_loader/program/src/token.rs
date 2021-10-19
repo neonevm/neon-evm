@@ -154,18 +154,10 @@ pub fn transfer_token<'a>(
     value: &U256,
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
-    // debug_print!("token_program_info={:?}", token_program_info);
-    // debug_print!("token_mint_info={:?}", token_mint_info);
-    // debug_print!("source_token_account={:?}", source_token_account);
-    // debug_print!("target_token_account={:?}", target_token_account);
-    // debug_print!("source_account={:?}", source_account);
-    // debug_print!("source_account={:?}", source_solidity_account);
-    debug_print!("value={:?}", value);
     if get_token_account_owner(source_token_account)? != *source_owner_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_owner_account.key);
-        return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
+        return Err!(ProgramError::InvalidInstructionData;
+            "Invalid account owner source_token_account={:?}, source_owner_account={:?}",
+            source_token_account, source_owner_account)
     }
 
     let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
