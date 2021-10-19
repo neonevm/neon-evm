@@ -4,19 +4,7 @@
 
 use solana_program::account_info::AccountInfo;
 use crate::error::EvmLoaderError;
-
-macros::pubkey_array!(
-    AUTHORIZED_OPERATOR_LIST,
-    [
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz1",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz2",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz3",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRz4",
-        "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-        "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-        "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
-    ]
-);
+use crate::config::AUTHORIZED_OPERATOR_LIST;
 
 /// Authorized operator check
 pub fn authorized_operator_check(account_info: &AccountInfo) -> Result<(),EvmLoaderError> {

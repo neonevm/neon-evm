@@ -261,14 +261,16 @@ impl<'a> ProgramAccountStorage<'a> {
     {
         for apply in values {
             match apply {
-                Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
+                // Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
+                Apply::Modify {address, basic, code_and_valids, storage, reset_storage} => {
                     if is_precompile_address(&address) {
                         continue;
                     }
                     if let Some(pos) = self.find_account(&address) {
                         let account = &mut self.accounts[pos];
                         let AccountMeta{ account: account_info, token: _, code: _ } = &self.account_metas[pos];
-                        account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
+                        // account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
+                        account.update(account_info, address, basic.nonce, &code_and_valids, storage, reset_storage)?;
                     } else {
                         if let Sender::Solana(addr) = self.sender {
                             if addr == address {

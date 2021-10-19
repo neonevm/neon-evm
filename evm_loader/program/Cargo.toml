@@ -12,6 +12,9 @@ edition = "2018"
 exclude = ["js/**"]
 
 [features]
+mainnet = []
+testnet = []
+devnet = []
 no-logs = []
 no-entrypoint = []
 test-bpf = []
@@ -45,6 +48,7 @@ evm = { version = "0.18.0", path = "../rust-evm", default_features = false, feat
 evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 const_format = { version = "0.2.21" }
 macros = { version = "0.1", path = "../macro" }
+cfg-if = { version = "0.1" }
 
 [dev-dependencies]
 rand = { version = "0.7.0"}

@@ -12,7 +12,7 @@ use evm::backend::{Apply, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256};
-use crate::{token, neon};
+use crate::{token, config};
 use crate::solana_backend::AccountStorage;
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
@@ -239,6 +239,7 @@ impl ExecutorSubstate {
                 let account = self.accounts.remove(&address).unwrap_or_else(
                     || ExecutorAccount {
                         nonce: backend.basic(&address).nonce,
+                        // basic: backend.basic(&address),
                         code: None,
                         valids: None,
                         reset: false,
@@ -247,7 +248,8 @@ impl ExecutorSubstate {
 
                 Apply::Modify {
                     address,
-                    nonce: account.nonce,
+                    // nonce: account.nonce,
+                    basic: backend.basic(&address),
                     code_and_valids: account.code.zip(account.valids),
                     storage,
                     reset_storage: account.reset,
@@ -552,7 +554,7 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
-        let min_decimals = u32::from(token::eth_decimals() - neon::token_mint::decimals());
+        let min_decimals = u32::from(token::eth_decimals() - config::token_mint::decimals());
         let min_value = U256::from(10_u64.pow(min_decimals));
         let transfer_value_without_min_value = transfer.value - transfer.value % min_value;
 
@@ -772,7 +774,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        crate::solana_backend::chain_id()
+        crate::config::chain_id()
     }
 
     #[must_use]

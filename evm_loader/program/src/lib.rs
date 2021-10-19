@@ -10,6 +10,8 @@
 mod debug;
 #[macro_use]
 mod error;
+pub mod macrorules;
+pub mod config;
 pub mod entrypoint;
 mod hamt;
 pub mod solana_backend;
@@ -24,7 +26,7 @@ pub mod executor;
 /// Todo: document
 pub mod executor_state;
 pub mod utils;
-pub mod neon;
+pub mod neon_elf;
 pub mod operator;
 pub mod payment;
 pub mod token;
