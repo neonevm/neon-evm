@@ -1,4 +1,4 @@
-//! EVM_LOADER MACRO RULES
+//! `EVM_LOADER` MACRO RULES
 #![allow(clippy::use_self,clippy::nursery)]
 
 macro_rules! str_as_bytes_len {
