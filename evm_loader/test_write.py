@@ -97,10 +97,10 @@ class Test_Write(unittest.TestCase):
         self.assertGreater(id, 0)
 
     # @unittest.skip("a.i.")
-    def test_instruction_write_fails_wrong_nonce(self):
+    def test_instruction_write_fails_wrong_seed(self):
         print()
         try:
-            wrong_seed = '00000000000000000000000000000000' # 32 digits = 16 bytes
+            wrong_seed = '00000000000000000000000000000000' # 32 digits
             self.write_to_account(self.signer, self.signer, wrong_seed, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
