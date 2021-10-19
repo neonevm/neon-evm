@@ -13,7 +13,8 @@ mod error;
 pub mod macrorules;
 pub mod config;
 pub mod entrypoint;
-mod hamt;
+/// hamt impl
+pub mod hamt;
 pub mod solana_backend;
 pub mod account_data;
 pub mod account_storage;
