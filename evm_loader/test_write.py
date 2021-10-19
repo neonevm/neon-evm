@@ -20,7 +20,7 @@ client = Client(solana_url)
 
 def write_holder_layout(seed, offset, data):
     return (bytes.fromhex('12') +
-            bytes.fromhex(seed) +
+            str.encode(seed) +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -70,6 +70,7 @@ class Test_Write(unittest.TestCase):
         proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
         signer_public_key_bytes = bytes(self.signer.public_key())
         self.seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+        print('Seed:', self.seed)
         self.account_address = accountWithSeed(self.signer.public_key(), self.seed, PublicKey(evm_loader_id))
         if getBalance(self.account_address) == 0:
             print('Creating account...')
