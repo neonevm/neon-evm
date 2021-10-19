@@ -39,7 +39,9 @@ use crate::{
     token,
     token::{create_associated_token_account, get_token_account_owner},
     neon::token_mint,
-    system::create_pda_account
+    operator::authorized_operator_check,
+    system::create_pda_account,
+    utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
 
@@ -114,11 +116,10 @@ fn process_instruction<'a>(
     accounts: &'a [AccountInfo<'a>],
     instruction_data: &[u8],
 ) -> ProgramResult {
-
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed");
+    debug_print!("Instruction parsed {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -128,8 +129,14 @@ fn process_instruction<'a>(
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(funding_info)?;
             
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
+
+            if !funding_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "!funding_info.is_signer");
+            }
             
             let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
             let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
@@ -146,6 +153,18 @@ fn process_instruction<'a>(
             let code_account_key = {
                 let program_code = next_account_info(account_info_iter)?;
                 if program_code.owner == program_id {
+                    let code_address_seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], ether.as_bytes() ].concat();
+                    let code_address_seed = bs58::encode(code_address_seed).into_string();
+                    debug_print!("Code account seed: {}", code_address_seed);
+                    let expected_code_address = Pubkey::create_with_seed(funding_info.key, &code_address_seed, program_id)?;
+                    if *program_code.key != expected_code_address {
+                        return Err!(ProgramError::InvalidArgument; "Unexpected code account. Actual<{:?}> != Expected<{:?}>", program_code.key, expected_code_address);
+                    }
+
+                    if !is_zero_initialized(&program_code.try_borrow_data()?) {
+                        return Err!(ProgramError::InvalidArgument; "Code account is not empty");
+                    }
+
                     if !rent.is_exempt(program_code.lamports(), program_code.data_len()) {
                         return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}", program_code.lamports(), program_code.data_len());
                     }
@@ -196,6 +215,8 @@ fn process_instruction<'a>(
             let system_program = next_account_info(account_info_iter)?;
             let token_program = next_account_info(account_info_iter)?;
             let rent = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(payer)?;
 
             if !payer.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
@@ -318,6 +339,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
@@ -342,6 +365,8 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -412,6 +437,8 @@ fn process_instruction<'a>(
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -436,6 +463,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[5..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
@@ -459,6 +488,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
+
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
@@ -536,6 +567,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -571,6 +604,8 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
+            authorized_operator_check(operator_sol_info)?;
+            
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -595,8 +630,114 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
+        EvmInstruction::DeleteAccount { seed } => {
+            let deleted_acc_info = next_account_info(account_info_iter)?;
+            let creator_acc_info = next_account_info(account_info_iter)?;
+
+            if !creator_acc_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData; "Creator acc must be signer. Acc {:?}", *creator_acc_info.key);
+            }
+
+            let address = Pubkey::create_with_seed(
+                creator_acc_info.key, 
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?, 
+                program_id)?;
+
+            if *deleted_acc_info.key != address {
+                return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
+            }
+
+            let data = deleted_acc_info.data.borrow_mut();
+            let account_data = AccountData::unpack(&data)?;
+            match account_data {
+                AccountData::Empty => { },
+                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete empty accounts.") },
+            };
+
+            **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
+            **deleted_acc_info.lamports.borrow_mut() = 0;
+
+            Ok(())
+        },
+
+        EvmInstruction::ResizeStorageAccount {seed} => {
+            debug_print!("Execute ResizeStorageAccount");
+            let account_info = next_account_info(account_info_iter)?;
+            let code_account = next_account_info(account_info_iter)?;
+            let code_account_new = next_account_info(account_info_iter)?;
+            let operator_sol_info = next_account_info(account_info_iter)?;
+
+            let mut info_data = account_info.try_borrow_mut_data()?;
+            if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
+                if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
+                    debug_print!("Cannot resize account data. Account is blocked {:?}", *account_info.key);
+                    return Ok(())
+                }
+                data.code_account = *code_account_new.key;
+                AccountData::pack(&AccountData::Account(data), &mut info_data)?;
+            } else {
+                return Err!(ProgramError::InvalidAccountData)
+            }
+
+            if code_account_new.owner == program_id {
+                let rent = Rent::get()?;
+                if !rent.is_exempt(code_account_new.lamports(), code_account_new.data_len()) {
+                    return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}",
+                        code_account_new.lamports(), code_account_new.data_len());
+                }
+            }
+            else {
+                return Err!(ProgramError::InvalidArgument; "code_account_new.owner<{:?}> != program_id<{:?}>", code_account_new.owner, program_id);
+            }
+
+            let mut code_account_new_data = code_account_new.try_borrow_mut_data()?;
+
+            match AccountData::unpack(&code_account_new_data) {
+                Ok(AccountData::Empty) => {},
+                _ =>  return Err!(ProgramError::InvalidAccountData)
+            }
+
+            if code_account.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "code_account.owner<{:?}> != program_id<{:?}>", code_account.owner, program_id);
+            }
+
+            let expected_address = Pubkey::create_with_seed(
+                operator_sol_info.key,
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
+                program_id)?;
+
+            if *code_account_new.key != expected_address {
+                return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
+                    *code_account_new.key, *operator_sol_info.key, expected_address);
+            }
+
+            let mut code_account_data = code_account.try_borrow_mut_data()?;
+            if code_account_data.len() >= code_account_new_data.len(){
+                return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
+                        *account_info.key, code_account_data.len(), code_account_new_data.len());
+            }
+            if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
+                if data.owner != *account_info.key {
+                    return Err!(ProgramError::InvalidAccountData;
+                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
+                }
+                debug_print!("move code and storage from {:?} to {:?}", *code_account.key, *code_account_new.key);
+                AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
+                let begin = AccountData::Contract(data).size();
+                let end = code_account_data.len();
+                code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
+
+                AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
+
+            } else {
+                return Err!(ProgramError::InvalidAccountData)
+            };
+
+            Ok(())
+        },
 
         EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
@@ -658,7 +799,8 @@ fn do_call(
     debug_print!(" contract: {}", account_storage.contract());
 
     let call_results = {
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+        let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
 
         debug_print!("Executor initialized");
@@ -817,7 +959,8 @@ fn do_partial_call<'a>(
 {
     debug_print!("do_partial_call");
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
@@ -853,7 +996,8 @@ fn do_partial_create<'a>(
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
-    let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), account_storage);
+    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
