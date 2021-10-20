@@ -101,6 +101,7 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_seed(self):
         print()
         try:
+            print('Expecting error "invalid program argument"')
             wrong_seed = '00000000000000000000000000000000' # 32 digits
             self.write_to_account(self.signer, self.signer, wrong_seed, test_data)
         except SendTransactionError as err:
@@ -114,6 +115,7 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_signer(self):
         print()
         try:
+            print('Expecting error "invalid program argument"')
             self.write_to_account(self.attacker, self.attacker, self.seed, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
