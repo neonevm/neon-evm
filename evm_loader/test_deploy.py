@@ -220,7 +220,6 @@ class DeployTest(unittest.TestCase):
         print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
         return neon_evm_instr_10_continue
 
-
     def create_storage_account(self, seed=str(randrange(1000000000))):
         storage = PublicKey(sha256(bytes(self.operator_acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
         print("Storage", storage)
