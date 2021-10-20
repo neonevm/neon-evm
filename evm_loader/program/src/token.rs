@@ -2,9 +2,9 @@
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
     solidity_account::SolidityAccount,
-    neon::token_mint,
     storage_account::StorageAccount,
     account_storage::ProgramAccountStorage,
+    config::token_mint
 };
 use evm::{U256};
 use solana_program::{
@@ -19,8 +19,6 @@ use solana_program::{
 };
 use std::vec;
 use std::convert::TryFrom;
-
-use crate::config::token_mint;
 
 /// Native token info
 pub mod eth {

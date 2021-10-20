@@ -39,7 +39,6 @@ use crate::{
     payment,
     token,
     token::{create_associated_token_account},
-    neon::token_mint,
     operator::authorized_operator_check,
     system::create_pda_account,
     utils::is_zero_initialized
@@ -486,7 +485,7 @@ fn process_instruction<'a>(
 
             do_continue_top_level(
                 step_count, program_id, accounts, trx_accounts_index,
-                storage_info, operator_sol_info, operator_eth_info, user_eth_info, system_info,
+                storage_info, operator_sol_info, operator_eth_info, user_eth_info,
                 storage,
             )?;
 
@@ -575,7 +574,7 @@ fn process_instruction<'a>(
                 Ok(storage) => {
                     do_continue_top_level(
                         step_count, program_id, accounts, trx_accounts_index,
-                        storage_info, operator_sol_info, operator_eth_info, user_eth_info, system_info,
+                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
                         storage,
                     )?;
                 },
@@ -614,7 +613,7 @@ fn process_instruction<'a>(
                 Ok(storage) => {
                     do_continue_top_level(
                         step_count, program_id, accounts, trx_accounts_index,
-                        storage_info, operator_sol_info, operator_eth_info, user_eth_info, system_info,
+                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
                         storage,
                     )?;
                 },
@@ -894,7 +893,6 @@ fn do_continue_top_level<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>,
     mut storage: StorageAccount,
 ) -> ProgramResult
 {
@@ -939,8 +937,7 @@ fn do_continue_top_level<'a>(
 
             payment::transfer_from_deposit_to_operator(
                 storage_info,
-                operator_sol_info,
-                system_info)?;
+                operator_sol_info)?;
 
             applies_and_invokes(
                 program_id,
