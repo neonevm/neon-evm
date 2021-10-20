@@ -19,7 +19,7 @@ use evm_loader::{
         Account,
         Contract
     },
-    neon::collateral_pool_base,
+    config::{ token_mint, collateral_pool_base },
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -270,7 +270,7 @@ fn command_create_ether_account (
     space: u64
 ) -> CommandResult {
     let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::neon::token_mint::id());
+    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint::id());
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let instruction = Instruction::new_with_bincode(
@@ -281,7 +281,7 @@ fn command_create_ether_account (
                 AccountMeta::new(solana_address, false),
                 AccountMeta::new(token_address, false),
                 AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
+                AccountMeta::new_readonly(token_mint::id(), false),
                 AccountMeta::new_readonly(spl_token::id(), false),
                 AccountMeta::new_readonly(spl_associated_token_account::id(), false),
                 AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -633,7 +633,7 @@ fn get_ether_account_nonce(
     };
     trx_count = account.trx_count;
     let caller_ether = account.ether;
-    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::neon::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
     debug!("Caller trx_count: {} ", trx_count);
@@ -667,7 +667,7 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
 
-    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::neon::token_mint::id());
+    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &token_mint::id());
 
     let (program_code, program_seed) = {
         let seed: &[u8] = &[ &[ACCOUNT_SEED_VERSION], program_ether.as_bytes() ].concat();
@@ -726,7 +726,7 @@ fn create_ethereum_contract_accounts_in_solana(
                 AccountMeta::new(*program_token, false),
                 AccountMeta::new(*program_code, false),
                 AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
+                AccountMeta::new_readonly(token_mint::id(), false),
                 AccountMeta::new_readonly(spl_token::id(), false),
                 AccountMeta::new_readonly(spl_associated_token_account::id(), false),
                 AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -846,7 +846,7 @@ fn command_deploy(
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
-    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &evm_loader::neon::token_mint::id());
+    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), &token_mint::id());
 
     // Create ethereum caller private key from sign of array by signer
     // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
@@ -916,7 +916,7 @@ fn command_deploy(
                         AccountMeta::new(caller_token, false),
 
                         AccountMeta::new_readonly(config.evm_loader, false),
-                        AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
+                        AccountMeta::new_readonly(token_mint::id(), false),
                         AccountMeta::new_readonly(spl_token::id(), false),
                         ];
 
@@ -948,7 +948,7 @@ fn command_deploy(
                             AccountMeta::new(caller_token, false),
 
                             AccountMeta::new_readonly(config.evm_loader, false),
-                            AccountMeta::new_readonly(evm_loader::neon::token_mint::id(), false),
+                            AccountMeta::new_readonly(token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             ];
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader,
