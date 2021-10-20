@@ -15,7 +15,6 @@ use solana_program::{
     program_error::ProgramError,
     program_pack::Pack,
     program::invoke_signed,
-    msg,
 };
 use std::vec;
 use std::convert::TryFrom;
@@ -177,7 +176,7 @@ pub fn transfer_token(
         )
     }
 
-    msg!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
@@ -204,6 +203,38 @@ pub fn transfer_token(
 ///
 /// Could return:
 /// `ProgramError::InvalidArgument`
+fn user_pays_operator_impl<'a>(
+    gas_price: u64,
+    gas_to_be_paid: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+) -> Result<(), ProgramError> {
+
+    let gas_price_wei = U256::from(gas_price);
+
+    let fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+    transfer_token(
+        accounts,
+        user_token_account,
+        operator_token_account,
+        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+        &fee)?;
+
+    Ok(())
+}
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
 #[allow(clippy::too_many_arguments)]
 pub fn user_pays_operator<'a>(
     gas_limit: u64,
@@ -215,62 +246,43 @@ pub fn user_pays_operator<'a>(
     account_storage: &ProgramAccountStorage,
     storage_opt: Option<&mut StorageAccount>,
 ) -> Result<(), ProgramError> {
+    if used_gas > gas_limit {
+        return Err!(ProgramError::InvalidArgument;
+                "used_gas > gas_limit; gas_to_be_paid={:?}; gas_limit={:?}",
+                used_gas, gas_limit);
+    }
+
     if let Some(storage) = storage_opt {
         let (gas_used_and_paid, number_of_payments) =
             storage.get_payments_info()?;
 
-        let gas_price_wei = U256::from(gas_price);
-        msg!("user_pays_operator gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+        debug_print!("user_pays_operator gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
             gas_used_and_paid, used_gas, number_of_payments+1);
 
-        if used_gas > gas_limit {
-            return Err!(ProgramError::InvalidArgument;
-                "used_gas > gas_limit; gas_to_be_paid={:?}; gas_limit={:?}",
-                used_gas, gas_limit);
-        }
-
         let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
             .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
-        let fee = U256::from(gas_to_be_paid)
-            .checked_mul(gas_price_wei)
-            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-
-        transfer_token(
-            accounts,
+        user_pays_operator_impl(
+            gas_price,
+            gas_to_be_paid,
             user_token_account,
             operator_token_account,
-            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
-            &fee)?;
+            accounts,
+            account_storage,
+        )?;
 
         let gas_has_been_paid = gas_to_be_paid;
-        msg!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
-        storage.set_gas_has_been_paid(gas_has_been_paid)?;
+        debug_print!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
+        storage.set_gas_has_been_paid(gas_has_been_paid)
     }
     else {
-        let (gas_used_and_paid, _number_of_payments) = (0, 0);
-
-        let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
-            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-
-        let gas_price_wei = U256::from(gas_price);
-
-        let fee = U256::from(gas_to_be_paid)
-            .checked_mul(gas_price_wei)
-            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-
-        transfer_token(
-            accounts,
+        user_pays_operator_impl(
+            gas_price,
+            used_gas,
             user_token_account,
             operator_token_account,
-            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
-            &fee)?;
-
-        let gas_has_been_paid = gas_to_be_paid;
-        msg!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
+            accounts,
+            account_storage,
+        )
     }
-
-    Ok(())
 }
