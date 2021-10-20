@@ -260,6 +260,11 @@ pub fn user_pays_operator<'a>(
         msg!("gas_used_and_paid = {:?}; used_gas={:?} by an iteration N = {:?}",
             gas_used_and_paid, used_gas, number_of_payments+1);
 
+        if used_gas < gas_used_and_paid {
+            msg!("user does not pay for this iteration");
+            return Ok(());
+        }
+
         let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
             .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
