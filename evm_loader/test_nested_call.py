@@ -500,7 +500,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_03_create2_opcode_by_0x0e_without_accounts(self):
         print('\ntest_03_create2_opcode_by_0x0e_without_accounts')
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -567,7 +567,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
@@ -612,7 +612,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_05_nested_revert(self):
         print('\ntest_05_nested_revert')
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
