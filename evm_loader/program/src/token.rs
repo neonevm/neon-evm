@@ -248,7 +248,7 @@ pub fn user_pays_operator<'a>(
 ) -> Result<(), ProgramError> {
     if used_gas > gas_limit {
         return Err!(ProgramError::InvalidArgument;
-                "used_gas > gas_limit; gas_to_be_paid={:?}; gas_limit={:?}",
+                "used_gas > gas_limit; gas_to_be_paid = {:?}; gas_limit = {:?}",
                 used_gas, gas_limit);
     }
 
@@ -256,7 +256,7 @@ pub fn user_pays_operator<'a>(
         let (gas_used_and_paid, number_of_payments) =
             storage.get_payments_info()?;
 
-        debug_print!("user_pays_operator gas_used_and_paid ={:?}; used_gas={:?} by an iteration N = {:?}",
+        debug_print!("user_pays_operator gas_used_and_paid = {:?}; used_gas={:?} by an iteration N = {:?}",
             gas_used_and_paid, used_gas, number_of_payments+1);
 
         let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
@@ -272,7 +272,7 @@ pub fn user_pays_operator<'a>(
         )?;
 
         let gas_has_been_paid = gas_to_be_paid;
-        debug_print!("user_pays_operator gas_has_been_paid ={:?}", gas_has_been_paid);
+        debug_print!("user_pays_operator gas_has_been_paid = {:?}", gas_has_been_paid);
         storage.set_gas_has_been_paid(gas_has_been_paid)
     }
     else {
