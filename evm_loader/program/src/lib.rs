@@ -27,7 +27,6 @@ pub mod executor;
 /// Todo: document
 pub mod executor_state;
 pub mod utils;
-pub mod neon_elf;
 pub mod operator;
 pub mod payment;
 pub mod token;

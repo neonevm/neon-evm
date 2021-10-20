@@ -3,8 +3,7 @@ use crate::{
     account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
-    token,
-    config::token_mint
+    token
 };
 use evm::backend::Basic;
 use evm::{H160, H256, U256};
@@ -36,11 +35,8 @@ impl<'a> SolidityAccount<'a> {
     /// ```
     #[must_use]
     pub fn new(solana_address: &'a Pubkey, balance: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
-        let min_decimals = u32::from(token::eth_decimals() - token_mint::decimals());
-        let min_value = U256::from(10_u64.pow(min_decimals));
-
         let balance = U256::from(balance);
-        let balance = balance * min_value;
+        let balance = balance * token::eth::min_transfer_value();
 
         debug_print!("  SolidityAccount::new solana_address={} balance={}", solana_address, balance);
         Self{account_data, solana_address, code_data, balance}

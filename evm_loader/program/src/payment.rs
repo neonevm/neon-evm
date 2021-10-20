@@ -53,9 +53,9 @@ fn check_collateral_account(
 pub fn transfer_from_operator_to_collateral_pool<'a>(
     program_id: &Pubkey,
     collateral_pool_index: u32,
-    operator_sol_info: &'a AccountInfo<'a>,
-    collateral_pool_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+    operator_sol_info: &AccountInfo<'a>,
+    collateral_pool_sol_info: &AccountInfo<'a>,
+    system_info: &AccountInfo<'a>
 ) -> ProgramResult {
     check_collateral_account(
         program_id,
@@ -65,9 +65,7 @@ pub fn transfer_from_operator_to_collateral_pool<'a>(
     debug_print!("operator_sol_info {:?}", operator_sol_info);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
 
-    transfer(operator_sol_info, collateral_pool_sol_info, system_info, PAYMENT_TO_COLLATERAL_POOL)?;
-
-    Ok(())
+    transfer_system_owned(operator_sol_info, collateral_pool_sol_info, system_info, PAYMENT_TO_COLLATERAL_POOL)
 }
 
 /// Makes payments for the Ethereum transaction execution.
@@ -77,9 +75,9 @@ pub fn transfer_from_operator_to_collateral_pool<'a>(
 /// or
 /// `ProgramError::InsufficientFunds` if deposit account have not enough funds for year rent
 pub fn transfer_from_operator_to_deposit<'a>(
-    operator_sol_info: &'a AccountInfo<'a>,
-    deposit_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+    operator_sol_info: &AccountInfo<'a>,
+    deposit_sol_info: &AccountInfo<'a>,
+    system_info: &AccountInfo<'a>
 ) -> ProgramResult {
     debug_print!("operator_to_deposit");
     debug_print!("operator_sol_info {:?}", operator_sol_info);
@@ -95,30 +93,25 @@ pub fn transfer_from_operator_to_deposit<'a>(
 
         let funds_to_rent_exempt = rent_exempt_balance - deposit_sol_info.lamports();
         debug_print!("add funds to rents exempt");
-        transfer(operator_sol_info, deposit_sol_info, system_info, funds_to_rent_exempt)?;
+        transfer_system_owned(operator_sol_info, deposit_sol_info, system_info, funds_to_rent_exempt)?;
     }
 
-    transfer(operator_sol_info, deposit_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
-
-    Ok(())
+    transfer_system_owned(operator_sol_info, deposit_sol_info, system_info, PAYMENT_TO_DEPOSIT)
 }
 
 /// Makes payments for the Ethereum transaction execution.
 /// # Errors
 ///
 /// Will return error only if `transfer` fail
-pub fn transfer_from_deposit_to_operator<'a>(
-    deposit_sol_info: &'a AccountInfo<'a>,
-    operator_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+pub fn transfer_from_deposit_to_operator(
+    deposit_sol_info: &AccountInfo,
+    operator_sol_info: &AccountInfo,
 ) -> ProgramResult {
     debug_print!("deposit_to_operator");
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
     debug_print!("operator_sol_info {:?}", operator_sol_info);
 
-    transfer(deposit_sol_info, operator_sol_info, system_info, PAYMENT_TO_DEPOSIT)?;
-
-    Ok(())
+    transfer_program_owned(deposit_sol_info, operator_sol_info, PAYMENT_TO_DEPOSIT)
 }
 
 
@@ -126,10 +119,9 @@ pub fn transfer_from_deposit_to_operator<'a>(
 /// # Errors
 ///
 /// Will return error only if `transfer` fail
-pub fn burn_operators_deposit<'a>(
-    deposit_sol_info: &'a AccountInfo<'a>,
-    incinerator_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+pub fn burn_operators_deposit(
+    deposit_sol_info: &AccountInfo,
+    incinerator_info: &AccountInfo,
 ) -> ProgramResult {
     if !incinerator::check_id(incinerator_info.key) {
         return Err!(ProgramError::InvalidAccountData; "Must be incinerator key")
@@ -139,34 +131,41 @@ pub fn burn_operators_deposit<'a>(
     debug_print!("deposit_sol_info {:?}", deposit_sol_info);
     debug_print!("incinerator {:?}", incinerator_info);
 
-    transfer(deposit_sol_info, incinerator_info, system_info, PAYMENT_TO_DEPOSIT)?;
-
-    Ok(())
+    transfer_program_owned(deposit_sol_info, incinerator_info, PAYMENT_TO_DEPOSIT)
 }
 
 
-fn transfer<'a>(
-    from_account_info: &'a AccountInfo<'a>,
-    to_account_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>,
+fn transfer_system_owned<'a>(
+    from_account_info: &AccountInfo<'a>,
+    to_account_info: &AccountInfo<'a>,
+    system_info: &AccountInfo<'a>,
     amount: u64
 ) -> ProgramResult {
-    if from_account_info.owner == system_info.key {
-        let transfer = system_instruction::transfer(from_account_info.key,
-                                                    to_account_info.key,
-                                                    amount);
-        let accounts = [from_account_info.clone(),
-            to_account_info.clone(),
-            system_info.clone()];
-        invoke(&transfer, &accounts)?;
-    } else {
-        if from_account_info.lamports() < PAYMENT_TO_DEPOSIT {
-            return Err!(ProgramError::InsufficientFunds)
-        }
+    let transfer = system_instruction::transfer(
+        from_account_info.key,
+        to_account_info.key,
+        amount
+    );
+    let accounts = [
+        from_account_info.clone(),
+        to_account_info.clone(),
+        system_info.clone()
+    ];
 
-        **from_account_info.lamports.borrow_mut() -= PAYMENT_TO_DEPOSIT;
-        **to_account_info.lamports.borrow_mut() += PAYMENT_TO_DEPOSIT;
+    invoke(&transfer, &accounts)
+}
+
+fn transfer_program_owned(
+    from_account_info: &AccountInfo,
+    to_account_info: &AccountInfo,
+    amount: u64
+) -> ProgramResult {
+    if from_account_info.lamports() < amount {
+        return Err!(ProgramError::InsufficientFunds)
     }
+
+    **from_account_info.lamports.borrow_mut() -= amount;
+    **to_account_info.lamports.borrow_mut() += amount;
 
     Ok(())
 }
