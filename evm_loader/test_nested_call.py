@@ -567,7 +567,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
