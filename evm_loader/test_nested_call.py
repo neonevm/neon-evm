@@ -26,7 +26,7 @@ def get_recent_account_balance(code_account_address):
 
 def write_holder_layout(seed, offset, data):
     return (bytes.fromhex('12') +
-            bytes.fromhex(seed) +
+            str.encode(seed) +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -316,7 +316,7 @@ class EventTest(unittest.TestCase):
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:900], rest[900:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(holder_seed, offset, part),
