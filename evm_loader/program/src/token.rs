@@ -253,11 +253,11 @@ pub fn user_pays_operator<'a>(
     }
 
     if let Some(storage) = storage_opt {
-        let (gas_used_and_paid, number_of_payments) =
+        let (gas_used_and_paid, _number_of_payments) =
             storage.get_payments_info()?;
 
         debug_print!("user_pays_operator gas_used_and_paid = {:?}; used_gas={:?} by an iteration N = {:?}",
-            gas_used_and_paid, used_gas, number_of_payments+1);
+            gas_used_and_paid, used_gas, _number_of_payments+1);
 
         let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
             .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
