@@ -18,10 +18,27 @@ use std::convert::TryFrom;
 
 use crate::neon::token_mint;
 
+/// Native token info
+pub mod eth {
+    use super::U256;
 
-#[must_use]
-/// Number of base 10 digits to the right of the decimal place of ETH value
-pub const fn eth_decimals() -> u8 { 18 }
+    #[must_use]
+    /// Number of base 10 digits to the right of the decimal place of ETH value
+    pub const fn decimals() -> u8 { 18 }
+
+    #[must_use]
+    /// Minimum number of native tokens that can be transferred by `NeonEVM`
+    pub fn min_transfer_value() -> U256 {
+        let min_decimals: u32 = u32::from(decimals() - super::token_mint::decimals());
+        10_u64.pow(min_decimals).into()
+    }
+
+    #[must_use]
+    /// Cut down the remainder that can't be transferred
+    pub fn round(value: U256) -> U256 {
+        value - (value % min_transfer_value())
+    }
+}
 
 /// Create an associated token account for the given wallet address and token mint
 #[must_use]
@@ -159,9 +176,7 @@ pub fn transfer_token(
         return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
+    let value = value / eth::min_transfer_value();
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
 
     let source_token_balance = get_token_account_balance(source_token_account)?;
