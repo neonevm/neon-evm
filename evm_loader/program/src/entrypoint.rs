@@ -507,20 +507,18 @@ fn process_instruction<'a>(
             }
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
-            match caller_info_data {
-                AccountData::Account(ref mut acc) => {
-                    let (caller, nonce) = storage.caller_and_nonce()?;
-                    if acc.ether != caller {
-                        return Err!(ProgramError::InvalidAccountData; "acc.ether<{:?}> != caller<{:?}>", acc.ether, caller);
-                    }
-                    if acc.trx_count != nonce {
-                        return Err!(ProgramError::InvalidAccountData; "acc.trx_count<{:?}> != nonce<{:?}>", acc.trx_count, nonce);
-                    }
-                    acc.trx_count += 1;
-                },
-                _ => return Err!(ProgramError::InvalidAccountData),
-            };
+
+            let caller_account_info = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+            let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
+            let mut caller_account = caller_account_data.get_mut_account()?;
+
+            let (caller, _nonce) = storage.caller_and_nonce()?;
+            if caller_account.ether != caller {
+                return Err!(ProgramError::InvalidAccountData; "acc.ether<{:?}> != caller<{:?}>", caller_account.ether, caller);
+            }
+            caller_account.trx_count += 1;
+
+            caller_account_data.pack(&mut caller_account_info.try_borrow_mut_data()?)?;
 
             let executor = Machine::restore(&storage, &account_storage);
             debug_print!("Executor restored");
