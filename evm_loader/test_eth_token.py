@@ -56,60 +56,33 @@ class EthTokenTest(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
-        return TransactionInstruction(
-            program_id=self.loader.loader_id,
-            data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-            keys=[
-                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-
-                # System instructions account:
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Collateral pool address:
-                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # System program account:
-                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-
-                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
+        neon_evm_instr_09_partial_call = create_neon_evm_instr_09_partial_call(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
+            step_count,
+            evm_instruction
+        )
+        print('neon_evm_instr_09_partial_call:', neon_evm_instr_09_partial_call)
+        return neon_evm_instr_09_partial_call
 
     def sol_instr_10_continue(self, storage_account, step_count):
-        return TransactionInstruction(
-            program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-            keys=[
-                AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-
-                # Operator address:
-                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address (stub for now):
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # System program account:
-                AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
-
-                AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-
-                AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
+        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            step_count
+        )
+        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
+        return neon_evm_instr_10_continue
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
