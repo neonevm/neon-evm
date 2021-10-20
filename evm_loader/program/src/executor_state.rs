@@ -12,7 +12,6 @@ use evm::backend::{Apply, Log};
 use evm::{ExitError, Transfer, Valids, H160, H256, U256};
 use serde::{Serialize, Deserialize};
 use crate::utils::{keccak256_h256};
-use crate::{token, neon};
 use crate::solana_backend::AccountStorage;
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
@@ -552,18 +551,14 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
-        let min_decimals = u32::from(token::eth_decimals() - neon::token_mint::decimals());
-        let min_value = U256::from(10_u64.pow(min_decimals));
-        let transfer_value_without_min_value = transfer.value - transfer.value % min_value;
-
         let new_source_balance = {
             let balance = self.balance(&transfer.source, backend);
-            balance.checked_sub(transfer_value_without_min_value).ok_or(ExitError::OutOfFund)?
+            balance.checked_sub(transfer.value).ok_or(ExitError::OutOfFund)?
         };
 
         let new_target_balance = {
             let balance = self.balance(&transfer.target, backend);
-            balance.checked_add(transfer_value_without_min_value).ok_or(ExitError::InvalidRange)?
+            balance.checked_add(transfer.value).ok_or(ExitError::InvalidRange)?
         };
 
         let mut balances = self.balances.borrow_mut();
@@ -772,7 +767,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        crate::solana_backend::chain_id()
+        crate::config::chain_id()
     }
 
     #[must_use]

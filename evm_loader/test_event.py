@@ -467,5 +467,25 @@ class EventTest(unittest.TestCase):
         result = self.call_cancel(storage)
 
 
+    def test_nonceIncreaseAfterCancel(self):
+        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+
+        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        instruction = from_addr + sign + msg
+
+        storage = self.create_storage_account(sign[:8].hex())
+
+        nonce_before = getTransactionCount(client, self.caller)
+
+        self.call_begin(storage, 10, msg, instruction)
+        self.call_continue(storage, 10)
+        self.call_cancel(storage)
+
+        nonce_after = getTransactionCount(client, self.caller)
+        self.assertEqual(nonce_before + 1, nonce_after)
+
+
+
 if __name__ == '__main__':
     unittest.main()
