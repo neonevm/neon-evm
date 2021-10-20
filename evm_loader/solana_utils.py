@@ -556,7 +556,8 @@ def create_neon_evm_instr_09_partial_call(evm_loader_program_id,
                                           collateral_pool_index_buf,
                                           collateral_pool_address,
                                           step_count,
-                                          evm_instruction):
+                                          evm_instruction,
+                                          writable_code=True):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("09") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
@@ -578,7 +579,7 @@ def create_neon_evm_instr_09_partial_call(evm_loader_program_id,
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
@@ -595,7 +596,8 @@ def create_neon_evm_instr_10_continue(evm_loader_program_id,
                                       storage_sol_acc,
                                       contract_sol_acc,
                                       code_sol_acc,
-                                      step_count):
+                                      step_count,
+                                      writable_code=True):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
@@ -613,7 +615,7 @@ def create_neon_evm_instr_10_continue(evm_loader_program_id,
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
