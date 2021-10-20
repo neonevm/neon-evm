@@ -12,8 +12,7 @@ use solana_program::{
 };
 use serde::{ Serialize, de::DeserializeOwned };
 use std::convert::TryInto;
-
-const OPERATOR_PRIORITY_SLOTS: u64 = 16;
+use crate::config::OPERATOR_PRIORITY_SLOTS;
 
 pub struct StorageAccount<'a> {
     info: &'a AccountInfo<'a>,

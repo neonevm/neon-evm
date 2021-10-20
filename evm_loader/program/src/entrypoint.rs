@@ -26,6 +26,7 @@ use solana_program::{
 
 use crate::{
     //    bump_allocator::BumpAllocator,
+    config::{ chain_id, token_mint },
     account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{AccountStorage},
@@ -473,7 +474,6 @@ fn process_instruction<'a>(
             let operator_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
-            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -500,7 +500,6 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let _user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
-            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -522,27 +521,23 @@ fn process_instruction<'a>(
             }
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-            let mut caller_info_data = AccountData::unpack(&account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?.data.borrow())?;
-            match caller_info_data {
-                AccountData::Account(ref mut acc) => {
-                    let (caller, nonce) = storage.caller_and_nonce()?;
-                    if acc.ether != caller {
-                        return Err!(ProgramError::InvalidAccountData;
-                            "acc.ether<{:?}> != caller<{:?}>", acc.ether, caller);
-                    }
-                    if acc.trx_count != nonce {
-                        return Err!(ProgramError::InvalidAccountData;
-                            "acc.trx_count<{:?}> != nonce<{:?}>", acc.trx_count, nonce);
-                    }
-                    acc.trx_count += 1;
-                },
-                _ => return Err!(ProgramError::InvalidAccountData),
-            };
+
+            let caller_account_info = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+            let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
+            let mut caller_account = caller_account_data.get_mut_account()?;
+
+            let (caller, _nonce) = storage.caller_and_nonce()?;
+            if caller_account.ether != caller {
+                return Err!(ProgramError::InvalidAccountData; "acc.ether<{:?}> != caller<{:?}>", caller_account.ether, caller);
+            }
+            caller_account.trx_count += 1;
+
+            caller_account_data.pack(&mut caller_account_info.try_borrow_mut_data()?)?;
 
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
-                system_info)?;
+            )?;
 
             storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
 
@@ -1192,8 +1187,8 @@ fn check_ethereum_transaction(
     }
 
 
-    if crate::solana_backend::chain_id() != transaction.chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::solana_backend::chain_id());
+    if chain_id() != transaction.chain_id {
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, chain_id());
     }
 
 

@@ -112,8 +112,11 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let contract_id = {
             let program_info = next_account_info(account_info_iter)?;
+            if program_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "Invalid owner! program_info.owner={:?}, program_id={:?}", program_info.owner, program_id);
+            }
+
             let program_token = next_account_info(account_info_iter)?;
-            
             check_token_account(program_token, program_info)?;
 
             let account_data = AccountData::unpack(&program_info.data.borrow())?;

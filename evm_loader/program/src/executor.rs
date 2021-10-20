@@ -16,6 +16,7 @@ use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::call_precompile;
 use crate::solana_backend::AccountStorage;
+use crate::token;
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -187,6 +188,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
+        let value = token::eth::round(value);
         if self.balance(caller) < value {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
@@ -270,6 +272,15 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
                 return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
             }
         }
+
+        let transfer = transfer.map(|t| {
+            evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
+        });
+        let context = evm::Context {
+            address: context.address,
+            caller: context.caller,
+            apparent_value: token::eth::round(context.apparent_value)
+        };
 
         // These parameters should be true for call from another contract
         let take_l64 = true;
@@ -405,12 +416,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
 
+        let transfer_value = token::eth::round(transfer_value);
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
         self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
-        let context = evm::Context{address: code_address, caller, apparent_value: transfer_value};
+        let context = evm::Context{ address: code_address, caller, apparent_value: transfer_value };
 
         let runtime = evm::Runtime::new(code, valids, input, context);
 
