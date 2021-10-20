@@ -42,7 +42,7 @@ class FundReturnTest(unittest.TestCase):
         trx = Transaction()
         trx.add(TransactionInstruction(
             program_id=EVM_LOADER,
-            data=bytearray.fromhex("12") + bytes(seed, 'utf8'),
+            data=bytearray.fromhex("10") + bytes(seed, 'utf8'),
             keys=[
                 AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=(signer==acc), is_writable=True),
