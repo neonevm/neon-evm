@@ -331,24 +331,29 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
         print("Caller_2:", self.caller_ether_2.hex(), self.caller_nonce_2, "->", self.caller_2,
               "({})".format(bytes(PublicKey(self.caller_2)).hex()))
-        print("Caller_2 NEON-token balance:", self.token.balance(self.caller_token_2))
+        neon_balance_on_start = self.token.balance(self.caller_token_2)
+        print("Caller_2 NEON-token balance:", neon_balance_on_start)
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
         response = send_transaction(client, trx, self.acc)
         print('response_1:', response)
-        print("Caller_2 NEON-token balance on response_1:", self.token.balance(self.caller_token_2))
+        neon_balance_on_response_1 = self.token.balance(self.caller_token_2)
+        print("Caller_2 NEON-token balance on response_1:", neon_balance_on_response_1)
         response = send_transaction(client, trx, self.acc)
         print('response_2:', response)
-        print("Caller_2 NEON-token balance on response_2:", self.token.balance(self.caller_token_2))
+        neon_balance_on_response_2 = self.token.balance(self.caller_token_2)
+        print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
-        print("Caller_2 NEON-token balance on response_3:", self.token.balance(self.caller_token_2))
+        neon_balance_on_response_3 = self.token.balance(self.caller_token_2)
+        print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
+        EXPECTED_USED_GAS = 24301
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), EXPECTED_USED_GAS)  # used_gas
         print('the ether transaction was completed after creating solana-eth-account by three 0x0d transactions')
 
         try:
@@ -363,9 +368,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print('type(err):', type(err))
             print('err:', str(err))
             self.assertTrue(False)
-        print("Caller_2 NEON-token balance on sending 5-th transaction:", self.token.balance(self.caller_token_2))
+        neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
+        print("Caller_2 NEON-token balance on sending 5-th transaction:", neon_balance_on_5_th_transaction)
 
-    # def test_fail_on_no_signature(self):
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, 1968)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 3097)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, EXPECTED_USED_GAS)
+        self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
+
+
+# def test_fail_on_no_signature(self):
     #     tx_1 = {
     #         'to': self.eth_contract,
     #         'value': 0,
