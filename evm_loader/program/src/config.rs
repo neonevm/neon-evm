@@ -1,4 +1,6 @@
 //! CONFIG MODULE
+#![allow(clippy::use_self,clippy::nursery)]
+
 use const_format::formatcp;
 use cfg_if::cfg_if;
 
