@@ -109,10 +109,14 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
-                # Operator address:
+                # Operator's SOL account:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -157,6 +161,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -197,9 +205,9 @@ class EventTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Operator ETH address:
+                # Operator's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address:
+                # User's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
@@ -248,9 +256,9 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator ETH address:
+                # Operator's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address:
+                # User's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
@@ -492,7 +500,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_03_create2_opcode_by_0x0e_without_accounts(self):
         print('\ntest_03_create2_opcode_by_0x0e_without_accounts')
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -604,7 +612,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_05_nested_revert(self):
         print('\ntest_05_nested_revert')
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
