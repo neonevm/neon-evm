@@ -441,25 +441,28 @@ def getBalance(account):
 
 
 ACCOUNT_INFO_LAYOUT = cStruct(
-    "type" / Int8ul,
-    "eth_acc" / Bytes(20),
+    "tag" / Int8ul,
+    "ether" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
-    "code_acc" / Bytes(32),
-    "is_blocked" / Int8ul,
-    "blocked_by" / Bytes(32),
-    "eth_token" / Bytes(32),
+    "code_account" / Bytes(32),
+    "ro_blocked_cnt" / Int8ul,
+    "is_rw_blocked_acc" / Int8ul,
+    "rw_blocked_acc" / Bytes(32),
+    "eth_token_account" / Bytes(32),
 )
 
 
+
 class AccountInfo(NamedTuple):
-    eth_acc: eth_keys.PublicKey
+    ether: eth_keys.PublicKey
     trx_count: int
+    code_account: PublicKey
 
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.eth_acc, cont.trx_count)
+        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 
 def getAccountData(client, account, expected_length):

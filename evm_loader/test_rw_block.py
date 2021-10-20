@@ -15,6 +15,29 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
+
+def emulate(caller, contract, data, value):
+    cmd = "{} {} {} {}".format(caller, contract, data, value)
+    output = neon_cli().emulate(evm_loader_id, cmd)
+    result = json.loads(output)
+    if result["exit_status"] != "succeed":
+        raise Exception("evm emulator error ", result)
+    return result
+
+def create_account_with_seed(client, funding, base, seed, storage_size):
+    account = accountWithSeed(base.public_key(), seed, PublicKey(evm_loader_id))
+
+    if client.get_balance(account, commitment=Confirmed)['result']['value'] == 0:
+        minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
+        print("Minimum balance required for account {}".format(minimum_balance))
+
+        trx = Transaction()
+        trx.add(createAccountWithSeed(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
+        send_transaction(client, trx, funding)
+
+    return account
+
+
 class EventTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -51,7 +74,7 @@ class EventTest(unittest.TestCase):
 
 
         (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(
-            CONTRACTS_DIR+"ReturnsEvents.binary", cls.caller1, cls.caller1_ether)
+            CONTRACTS_DIR+"rw_lock.binary", cls.caller1, cls.caller1_ether)
         print ('contract', cls.reId)
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
@@ -68,7 +91,7 @@ class EventTest(unittest.TestCase):
             tx = client.request_airdrop(wallet2.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
 
-        cls.wallet2_token = cls.token.create_token_account(ETH_TOKEN_MINT_ID, owner=wallet2.get_path())
+        # cls.wallet2_token = cls.token.create_token_account(ETH_TOKEN_MINT_ID, owner=wallet2.get_path())
 
         cls.caller2_ether = eth_keys.PrivateKey(cls.acc2.secret_key()).public_key.to_canonical_address()
         (cls.caller2, cls.caller2_nonce) = cls.loader.ether2program(cls.caller2_ether)
@@ -85,7 +108,7 @@ class EventTest(unittest.TestCase):
               "({})".format(bytes(PublicKey(cls.caller2)).hex()))
 
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, writable_code, acc, caller):
+    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, writable_code, acc, caller, add_meta=[]):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
@@ -106,13 +129,16 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=writable_code),
                 AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-
+                ]
+                    + add_meta +
+                [
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
+                ]
+        )
 
-    def sol_instr_10_continue(self, storage_account, step_count, writable_code, acc, caller):
+    def sol_instr_10_continue(self, storage_account, step_count, writable_code, acc, caller, add_meta=[]):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
@@ -133,11 +159,14 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=writable_code),
                 AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-
+                ]
+                    + add_meta +
+                [
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ])
+                ]
+        )
 
     def neon_emv_instr_cancel_0C(self, acc, caller, storage):
         meta = [
@@ -175,17 +204,17 @@ class EventTest(unittest.TestCase):
         )
 
 
-    def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller):
+    def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller, add_meta=[]):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction, writable_code, acc, caller))
+        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
-    def call_continue(self, storage, steps, writable_code, acc, caller):
+    def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, steps, writable_code, acc, caller))
+        trx.add(self.sol_instr_10_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def get_call_parameters(self, input, acc, caller, caller_ether):
@@ -217,6 +246,8 @@ class EventTest(unittest.TestCase):
             assert (data[0] == 6)
 
 
+    # the contract is locked by the read-only lock
+    # two transactions of the one contract are executed by two callers
     def test_caseReadOlnyBlocking(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
@@ -272,9 +303,148 @@ class EventTest(unittest.TestCase):
         except SendTransactionError as err:
             print("Ok")
 
+            # removing the rw-lock
+            trx = Transaction().add(self.neon_emv_instr_cancel_0C(self.acc1, self.caller1, storage1))
+            response = send_transaction(client, trx, self.acc1)
+            return
+
         # removing the rw-lock
         trx = Transaction().add(self.neon_emv_instr_cancel_0C(self.acc1, self.caller1, storage1))
         response = send_transaction(client, trx, self.acc1)
+        raise("error, account was not block")
+
+
+    def check_writable(self, res, contract, writable_expected):
+        for info in res["accounts"]:
+            address = bytes.fromhex(info["address"][2:])
+            if address == contract:
+                self.assertEqual(info["writable"], writable_expected)
+                return
+        raise("contract_eth not found in  the emulator output, ", self.reId_eth)
+
+
+    def test_writable_flag_from_emulator(self):
+        # 1. "writable" must be False. Storage is not changed
+        func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+        res = emulate(self.caller1_ether.hex(), self.reId_eth.hex(), input.hex(), "" )
+        self.check_writable(res, self.reId_eth, False)
+        print(res)
+
+        # 2. "writable" must be True. Storage is changed
+        func_name = abi.function_signature_to_4byte_selector('update_storage(uint256)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1))
+        res = emulate(self.caller1_ether.hex(), self.reId_eth.hex(), input.hex(), "" )
+        self.check_writable(res, self.reId_eth, True)
+        print(res)
+
+        # 3. "writable" must be True. Contract nonce is changed
+        func_name = abi.function_signature_to_4byte_selector('deploy_contract()')
+        res = emulate(self.caller1_ether.hex(), self.reId_eth.hex(), func_name.hex(), "" )
+        new_contract_eth = bytes.fromhex(res["result"][-40:])
+        self.check_writable(res, self.reId_eth, True)
+        print(res)
+
+        # apply last tansaction (the method deploys the contract)
+        meta=None
+        for info in res["accounts"]:
+            address = bytes.fromhex(info["address"][2:])
+            if address == new_contract_eth:
+                seed = b58encode(ACCOUNT_SEED_VERSION + new_contract_eth).decode('utf8')
+                new_contract_code = accountWithSeed(self.acc1.public_key(), seed, PublicKey(evm_loader_id))
+                create_account_with_seed(client, self.acc1, self.acc1, seed, info["code_size"])
+
+                (trx, _) = self.loader.createEtherAccountTrx(new_contract_eth, new_contract_code)
+                send_transaction(client, trx, self.acc1)
+
+                meta = [
+                    AccountMeta(pubkey=PublicKey(info["account"]), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=get_associated_token_address(PublicKey(info["account"]), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(new_contract_code), is_signer=False, is_writable=True),
+                       ]
+
+        self.assertNotEqual(meta, None)
+
+        (from_addr, sign,  msg) = self.get_call_parameters(func_name, self.acc1, self.caller1, self.caller1_ether)
+        instruction = from_addr + sign + msg
+        storage = self.create_storage_account(sign[:8].hex(), self.acc1)
+
+        result = self.call_begin(storage, 10, msg, instruction, False, self.acc1, self.caller1, meta)
+        result = self.call_continue(storage, 1000, True, self.acc1, self.caller1, meta)
+        self.check_continue_result(result["result"])
+
+
+        # 4. "writable" must be False. Contract calls the method of other contract. Contract nonce is not changed
+        func_name = abi.function_signature_to_4byte_selector('call_hello_world()')
+        res = emulate(self.caller1_ether.hex(), new_contract_eth.hex(), func_name.hex(), "" )
+        print(res)
+        self.check_writable(res, new_contract_eth, False)
+
+
+    #  resizing is blocked  by locking of the account in other transaction.
+    def test_resizing_with_account_lock(self):
+
+        func_name = abi.function_signature_to_4byte_selector('update_storage(uint256)')
+        input1 = (func_name + bytes.fromhex("%064x" % 0x1)) # update storage without account resizing
+        input2 = (func_name + bytes.fromhex("%064x" % 0x20)) # update storage with account resizing
+
+        (from_addr1, sign1,  msg1) = self.get_call_parameters(input1, self.acc1, self.caller1, self.caller1_ether)
+        instruction1 = from_addr1 + sign1 + msg1
+        storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
+
+        # start first transaction
+        self.call_begin(storage1, 10, msg1, instruction1, True, self.acc1, self.caller1)
+
+        #emulate second transaction
+        res = emulate(self.caller2_ether.hex(), self.reId_eth.hex(), input2.hex(), "" )
+        print(res)
+        resize_instr = None
+        for info in res["accounts"]:
+            address = bytes.fromhex(info["address"][2:])
+            if address == self.reId_eth:
+                self.assertEqual(info["writable"], True)
+                self.assertEqual(info["code_size"] > info["code_size_current"], True)
+
+                code_size = info["code_size"] + 2048
+                seed_bin = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
+                seed = seed_bin.decode('utf8')
+                code_account_new = accountWithSeed(self.acc2.public_key(), seed, PublicKey(evm_loader_id))
+
+                print("creating new code_account with increased size %s", code_account_new)
+                create_account_with_seed(client, self.acc2, self.acc2, seed, code_size);
+
+                resize_instr = TransactionInstruction(
+                    keys=[
+                        AccountMeta(pubkey=PublicKey(info["account"]), is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=info["contract"], is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=self.acc2.public_key(), is_signer=True, is_writable=False)
+                    ],
+                    program_id=evm_loader_id,
+                    data=bytearray.fromhex("11") + bytes(seed_bin)  # 17- ResizeStorageAccount
+                )
+                break
+
+        self.assertIsNotNone(resize_instr)
+        # send resizing transaction
+        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        # get info about resizing account
+        info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
+        info_data = AccountInfo.frombytes(info)
+
+        # resizing must not be completed due to locking contract account.
+        self.assertEqual(info_data.code_account, PublicKey(self.re_code))
+
+        # finish first transaction for unlocking accounts
+        self.call_continue(storage1, 1000, True, self.acc1, self.caller1)
+
+        # try next attempt to resize storage account and check it
+        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
+        info_data = AccountInfo.frombytes(info)
+
+        # resizing must be completed => code_account must be updated
+        self.assertNotEqual(info_data.code_account, self.re_code)
 
 
 if __name__ == '__main__':
