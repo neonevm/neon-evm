@@ -26,6 +26,7 @@ use solana_program::{
 
 use crate::{
     //    bump_allocator::BumpAllocator,
+    config::{ chain_id, token_mint },
     account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{AccountStorage},
@@ -38,7 +39,6 @@ use crate::{
     payment,
     token,
     token::{create_associated_token_account, get_token_account_owner},
-    neon::token_mint,
     operator::authorized_operator_check,
     system::create_pda_account,
     utils::is_zero_initialized
@@ -1169,8 +1169,8 @@ fn check_ethereum_transaction(
     }
 
 
-    if crate::solana_backend::chain_id() != transaction.chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::solana_backend::chain_id());
+    if chain_id() != transaction.chain_id {
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, chain_id());
     }
 
 

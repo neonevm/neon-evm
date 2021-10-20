@@ -16,7 +16,7 @@ use solana_program::{
 use std::vec;
 use std::convert::TryFrom;
 
-use crate::neon::token_mint;
+use crate::config::token_mint;
 
 /// Native token info
 pub mod eth {
