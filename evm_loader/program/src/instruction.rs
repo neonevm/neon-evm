@@ -200,8 +200,8 @@ pub enum EvmInstruction<'a> {
     ///   0. \[WRITE\] Account to write to
     ///   1. \[SIGNER\] Signer for Ether account
     WriteHolder {
-        /// Seed with which the account was created
-        seed: [u8; 32],
+        /// Magical number
+        nonce: u64,
         /// Offset at which to write the given bytes
         offset: u32,
         /// Data to write
@@ -314,16 +314,15 @@ impl<'a> EvmInstruction<'a> {
             16 => EvmInstruction::DeleteAccount { seed: rest },
             17 => EvmInstruction::ResizeStorageAccount { seed: rest },
             18 => {
-                let (seed_slice, rest) = rest.split_at(32);
+                let (nonce, rest) = rest.split_at(8);
                 let (offset, rest) = rest.split_at(4);
                 let (length, rest) = rest.split_at(8);
+                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
                 let (bytes, _) = rest.split_at(length);
-                let mut seed: [u8; 32] = [0; 32];
-                seed.clone_from_slice(seed_slice);
-                EvmInstruction::WriteHolder {seed, offset, bytes}
+                EvmInstruction::WriteHolder {nonce, offset, bytes}
             },
 
             _ => return Err(InvalidInstructionData),

@@ -22,6 +22,7 @@ use solana_program::{
     program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
+    keccak::Hasher,
     msg,
 };
 
@@ -722,7 +723,7 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::WriteHolder {seed, offset, bytes} => {
+        EvmInstruction::WriteHolder {nonce, offset, bytes} => {
             let holder_info = next_account_info(account_info_iter)?;
             if holder_info.owner != program_id {
                 return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
@@ -733,14 +734,23 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
             }
 
-            let seed = core::str::from_utf8(&seed);
-            if seed.is_err() {
-                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
-            }
+            // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+            // signer_public_key_bytes = bytes(self.signer.public_key())
+            // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+            let bytes_count = std::mem::size_of_val(&nonce);
+            let bits_count = bytes_count * 8;
+            let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
+            let significant_bytes_count = (nonce_bit_length + 7) / 8;
+            let mut hasher = Hasher::default();
+            hasher.hash(b"holder");
+            hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
+            hasher.hash(&operator_info.key.to_bytes());
+            let output = hasher.result();
+            let seed = &hex::encode(output)[..32];
 
-            let must_holder = Pubkey::create_with_seed(operator_info.key, seed.unwrap(), program_id);
+            let must_holder = Pubkey::create_with_seed(operator_info.key, seed, program_id);
             if must_holder.is_err() {
-                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed.unwrap());
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
             }
 
             if *holder_info.key != must_holder.unwrap() {

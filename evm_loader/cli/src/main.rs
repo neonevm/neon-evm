@@ -31,6 +31,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer, Signature},
     signers::Signers,
+    keccak::Hasher,
     transaction::Transaction,
     system_program,
     sysvar,
@@ -534,7 +535,7 @@ fn make_deploy_ethereum_transaction(
 fn fill_holder_account(
     config: &Config,
     holder: &Pubkey,
-    holder_seed: &str,
+    holder_nonce: u64,
     msg: &[u8],
 ) -> Result<(), Error> {
     let creator = &config.signer;
@@ -542,16 +543,14 @@ fn fill_holder_account(
 
     // Write code to holder account
     debug!("Write code");
-    let mut seed: [u8; 32] = [0; 32];
-    seed.clone_from_slice(holder_seed.as_bytes());
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
 
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            /* &EvmInstruction::WriteHolder {seed, offset, bytes: chunk}, */
-            &(0x12_u8, seed, offset, chunk),
+            /* &EvmInstruction::WriteHolder {nonce, offset, bytes: chunk}, */
+            &(0x12_u8, holder_nonce, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
@@ -839,6 +838,25 @@ fn send_transaction(
     Ok(tx_sig)
 }
 
+fn generate_random_holder_seed(key: &Pubkey) -> String {
+    use rand::Rng as _;
+    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+    // signer_public_key_bytes = bytes(self.signer.public_key())
+    // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+    let mut rng = rand::thread_rng();
+    let nonce: u64 = rng.gen();
+    let bytes_count = std::mem::size_of_val(&nonce);
+    let bits_count = bytes_count * 8;
+    let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
+    let significant_bytes_count = (nonce_bit_length + 7) / 8;
+    let mut hasher = Hasher::default();
+    hasher.hash(b"holder");
+    hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
+    hasher.hash(&key.to_bytes());
+    let output = hasher.result();
+    hex::encode(output)[..32].into()
+}
+
 #[allow(clippy::too_many_lines)]
 fn command_deploy(
     config: &Config,
@@ -892,10 +910,10 @@ fn command_deploy(
     let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
-    let holder_seed = "00000000000000000000000000000000"; // 32 digits
-    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), holder_seed, 128*1024_u64)?;
+    let holder_seed = generate_random_holder_seed(&creator.pubkey());
+    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &holder_seed, 128*1024_u64)?;
 
-    fill_holder_account(config, &holder, holder_seed, &msg)?;
+    fill_holder_account(config, &holder, 0, &msg)?;
 
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
