@@ -318,7 +318,9 @@ fn check_enough_funds_impl<'a>(
 ) -> Result<(bool, u64, u64, u64, u64), ProgramError> {
 
     let user_balance_64 = get_token_account_balance(user_token_account)?;
-    let user_balance : U256 = U256::from(user_balance_64);
+    let user_balance : U256 = U256::from(user_balance_64)
+        .checked_mul(eth::min_transfer_value())
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
     let gas_price_wei = U256::from(gas_price);
     let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
         .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
