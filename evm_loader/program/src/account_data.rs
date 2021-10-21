@@ -287,23 +287,32 @@ impl AccountData {
 
 impl Account {
     /// Account struct serialized size
-    pub const SIZE: usize = 20+1+8+32+1+1+32+32;
+    pub const SIZE: usize = 20+1+8+32+1+32+32+1;
 
     /// Deserialize `Account` struct from input data
     #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Account::SIZE];
-        let (ether, nonce, trx_count, code_account, ro_blocked_cnt, is_rw_blocked, rw_blocked_by, eth) = array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
+        let (
+            ether,
+            nonce,
+            trx_count,
+            code_account,
+            is_rw_blocked,
+            rw_blocked_by,
+            eth,
+            ro_blocked_cnt
+        ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
 
         Self {
             ether: H160::from_slice(&*ether),
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
             code_account: Pubkey::new_from_array(*code_account),
-            ro_blocked_cnt: ro_blocked_cnt[0],
             rw_blocked_acc: if is_rw_blocked[0] > 0 { Some(Pubkey::new_from_array(*rw_blocked_by)) } else { None },
-            eth_token_account: Pubkey::new_from_array(*eth)
+            eth_token_account: Pubkey::new_from_array(*eth),
+            ro_blocked_cnt: ro_blocked_cnt[0]
         }
     }
 
@@ -311,13 +320,21 @@ impl Account {
     pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
-        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, ro_blocked_cnt_dst, is_rw_blocked_dst, rw_blocked_by_dst, eth_dst) =
-                mut_array_refs![data, 20, 1, 8, 32, 1, 1, 32, 32];
+        let (
+            ether_dst,
+            nonce_dst,
+            trx_count_dst,
+            code_account_dst,
+            is_rw_blocked_dst,
+            rw_blocked_by_dst,
+            eth_dst,
+            ro_blocked_cnt_dst
+        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
+
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
         *trx_count_dst = acc.trx_count.to_le_bytes();
         code_account_dst.copy_from_slice(acc.code_account.as_ref());
-        ro_blocked_cnt_dst[0] = acc.ro_blocked_cnt;
         if let Some(blocked_acc) = acc.rw_blocked_acc{
             is_rw_blocked_dst[0] = 1;
             rw_blocked_by_dst.copy_from_slice(blocked_acc.as_ref());
@@ -326,6 +343,7 @@ impl Account {
             is_rw_blocked_dst[0] = 0;
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
+        ro_blocked_cnt_dst[0] = acc.ro_blocked_cnt;
 
         Self::SIZE
     }
