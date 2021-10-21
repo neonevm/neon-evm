@@ -119,8 +119,9 @@ pub fn transfer_from_deposit_to_operator(
     transfer_program_owned(deposit_sol_info, operator_sol_info, PAYMENT_TO_DEPOSIT)
 }
 
-/// transfer for ResizeStorageAccount instruction
-/// transfer SOL from old_code_account to operator
+/// transfer for `ResizeStorageAccount` instruction
+/// transfers SOL from `old_code_account` to operator
+/// # Errors
 ///
 /// Will return error only if `transfer` fail
 pub fn transfer_from_code_account_to_operator(

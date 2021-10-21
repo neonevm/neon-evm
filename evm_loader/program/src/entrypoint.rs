@@ -669,7 +669,7 @@ fn process_instruction<'a>(
                     debug_print!("Cannot resize account data. Account is blocked {:?}", *account_info.key);
                     return Ok(())
                 }
-                data.code_account = *code_account_info_new.key;
+                data.code_account = *code_account_new_info.key;
                 AccountData::pack(&AccountData::Account(data), &mut info_data)?;
             } else {
                 return Err!(ProgramError::InvalidAccountData)
@@ -724,7 +724,7 @@ fn process_instruction<'a>(
                 code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
 
                 AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
-                payment::transfer_from_code_account_to_operator(code_account_new_info, operator_sol_info, code_account_info.lamports());
+                payment::transfer_from_code_account_to_operator(code_account_new_info, operator_sol_info, code_account_info.lamports())?;
             } else {
                 return Err!(ProgramError::InvalidAccountData)
             };
