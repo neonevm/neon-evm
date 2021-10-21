@@ -222,7 +222,6 @@ impl<'a> EvmInstruction<'a> {
         use ProgramError::InvalidInstructionData;
 
         let (&tag, rest) = input.split_first().ok_or(InvalidInstructionData)?;
-        debug_print!("==== tag {}", tag);
 
         Ok(match tag {
             2 => {
