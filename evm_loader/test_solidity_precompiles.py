@@ -13,7 +13,7 @@ from solana_utils import *
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
-holder_seed = '00000000000000000000000000000000'
+proxy_id = 0
 
 class PrecompilesTests(unittest.TestCase):
     @classmethod
@@ -250,15 +250,14 @@ class PrecompilesTests(unittest.TestCase):
     def write_transaction_to_holder_account(self, holder, signature, message):
         message = signature + len(message).to_bytes(8, byteorder="little") + message
 
-        proxy_id = 1000
         offset = 0
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:900], rest[900:])
+            (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=(bytes.fromhex('12') + str.encode(holder_seed) + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
+                data=(bytes.fromhex('12') + proxy_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
@@ -277,6 +276,8 @@ class PrecompilesTests(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
+        proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+        holder_seed = keccak_256(b'holder'+proxy_id_bytes+bytes(self.acc.public_key())).hexdigest()[:32]
         holder = self.create_account_with_seed(holder_seed)
         storage = self.create_account_with_seed(sign[:8].hex())
 

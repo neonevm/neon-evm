@@ -18,22 +18,22 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
+proxy_id = 0;
 
 
 def get_recent_account_balance(code_account_address):
     return http_client.get_balance(code_account_address, commitment='recent')['result']['value']
 
 
-def write_holder_layout(seed, offset, data):
+def write_holder_layout(nonce, offset, data):
     return (bytes.fromhex('12') +
-            str.encode(seed) +
+            nonce.to_bytes(8, byteorder='little') +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
 
 
 def create_holder_account(operator_acc):
-    proxy_id = 1000;
     proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
     signer_public_key_bytes = bytes(operator_acc.public_key())
     seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
@@ -43,7 +43,7 @@ def create_holder_account(operator_acc):
         trx = Transaction()
         trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
         send_transaction(client, trx, operator_acc)
-    return account_address, seed
+    return account_address
 
 
 def create_storage_account(operator_acc, seed):
@@ -116,7 +116,7 @@ class EventTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        cls.holder, cls.holder_seed = create_holder_account(cls.acc)
+        cls.holder = create_holder_account(cls.acc)
         cls.storage = create_storage_account(cls.acc, '123435456776')
 
     def sol_instr_keccak(self, keccak_instruction):
@@ -309,17 +309,17 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def write_transaction_to_holder_account(self, holder, holder_seed, signature, message):
+    def write_transaction_to_holder_account(self, holder, signature, message):
         message = signature + len(message).to_bytes(8, byteorder="little") + message
 
         offset = 0
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:900], rest[900:])
+            (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=write_holder_layout(holder_seed, offset, part),
+                data=write_holder_layout(proxy_id, offset, part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
@@ -360,7 +360,7 @@ class EventTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
-        self.write_transaction_to_holder_account(self.holder, self.holder_seed, sign, msg)
+        self.write_transaction_to_holder_account(self.holder, sign, msg)
 
         trx = Transaction()
         trx.add(self.sol_instr_11_partial_call_from_account(self.holder, self.storage, 0, contract, code))
@@ -384,7 +384,7 @@ class EventTest(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
-        self.write_transaction_to_holder_account(self.holder, self.holder_seed, sign, msg)
+        self.write_transaction_to_holder_account(self.holder, sign, msg)
 
         trx = Transaction()
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))

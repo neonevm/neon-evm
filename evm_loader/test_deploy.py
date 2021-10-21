@@ -17,6 +17,8 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 contract_name = "helloWorld.binary"
 # "ERC20Wrapper.binary"
 
+proxy_id = 0
+
 from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 
@@ -35,9 +37,9 @@ def create_account_layout(lamports, space, ether, nonce):
         nonce=nonce
     ))
 
-def write_holder_layout(seed, offset, data):
+def write_holder_layout(nonce, offset, data):
     return (bytes.fromhex('12') +
-            bytes(seed, 'utf8') +
+            nonce.to_bytes(8, byteorder='little') +
             offset.to_bytes(4, byteorder='little') +
             len(data).to_bytes(8, byteorder='little') +
             data)
@@ -73,7 +75,9 @@ class DeployTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def create_holder_account_with_deploying_transaction(self, seed='00000000000000000000000000000000'):
+    def create_holder_account_with_deploying_transaction(self):
+        proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+        seed = keccak_256(b'holder'+proxy_id_bytes+bytes(self.operator_acc.public_key())).hexdigest()[:32]
         # Create transaction holder account (if not exists)
         holder = PublicKey(sha256(bytes(self.operator_acc.public_key())+bytes(seed, 'utf8')+bytes(PublicKey(evm_loader_id))).digest())
         print("Holder", holder)
@@ -117,10 +121,10 @@ class DeployTest(unittest.TestCase):
         receipts = []
         rest = msg
         while len(rest):
-            (part, rest) = (rest[:900], rest[900:])
+            (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=write_holder_layout(seed, offset, part),
+                data=write_holder_layout(proxy_id, offset, part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.operator_acc.public_key(), is_signer=True, is_writable=False),
