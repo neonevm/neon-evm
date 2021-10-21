@@ -57,7 +57,7 @@ RUN pip3 install -r /tmp/test_requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
-COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader.so /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/faucet /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/sender /opt/

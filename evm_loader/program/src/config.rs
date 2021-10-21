@@ -48,14 +48,23 @@ cfg_if! {
 
     } else if #[cfg(feature = "testnet")] {
 
-        const CHAIN_ID: u64 = 245022940;
+        //const CHAIN_ID: u64 = 245022940;
+        const CHAIN_ID: u64 = 111;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "EJUKLLjBMhFnkonfn7wcThnHyDewmhVmG9sEuVP9cvF8",
+                "6ndMCacBc69VXqgNbcW3BLk2am9oeUDZa6SgBjHozDPd",
+                "GEsnEWcKapTk7cgRoixBvCDc7yYuhmoMjpJ2v7mvmsBZ",
+                "G5397iLxoKKYgMkFfkYBhJYEtErD7ygz8APmH59H8FM6",
+                "rDeo4nZPE2aWpBkqFXBH8ygh1cD63nEKZPiDrpmQad6",
+                "8hipwtwcmRH3iypYModkYFNXYGUEbxvpfqRhxPxx5Amx",
+                "4fvtx2gJYJVd4o6CQt8Bdnc7dg5p2cgnb8oNUs7BGdd5",
+                "9EMY6Xx18hN39CnzM6D5y9vuPa3YJ5ttbWRPJp3SX1Qk",
+                "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
+                "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
+                "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
             ]
         );
 
@@ -84,14 +93,24 @@ cfg_if! {
         
     } else if #[cfg(feature = "devnet")] {
 
-        const CHAIN_ID: u64 = 245022926;
+        //const CHAIN_ID: u64 = 245022926;
+        const CHAIN_ID: u64 = 110;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "Fg4uzL4QDfL6x56YFUcJBJSK3PqV4yXoFmXzZQkxn2DK",
+                "8Uh8Rp1FWBiaDejyrZZhRY448oeG7GwKUyPDufP2Xxu7",
+                "6ndMCacBc69VXqgNbcW3BLk2am9oeUDZa6SgBjHozDPd",
+                "GEsnEWcKapTk7cgRoixBvCDc7yYuhmoMjpJ2v7mvmsBZ",
+                "G5397iLxoKKYgMkFfkYBhJYEtErD7ygz8APmH59H8FM6",
+                "rDeo4nZPE2aWpBkqFXBH8ygh1cD63nEKZPiDrpmQad6",
+                "8hipwtwcmRH3iypYModkYFNXYGUEbxvpfqRhxPxx5Amx",
+                "4fvtx2gJYJVd4o6CQt8Bdnc7dg5p2cgnb8oNUs7BGdd5",
+                "9EMY6Xx18hN39CnzM6D5y9vuPa3YJ5ttbWRPJp3SX1Qk",
+                "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
+                "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
+                "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
             ]
         );
 
