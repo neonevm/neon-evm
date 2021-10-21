@@ -443,9 +443,14 @@ class EventTest(unittest.TestCase):
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 
+        # before resizing the old code account must have some balance
+        self.assertNotEqual(getBalance(self.re_code, 0))
+
         # resizing must be completed => code_account must be updated
         self.assertNotEqual(info_data.code_account, self.re_code)
 
+        # afrer resizing the old code account must have 0 SOL
+        self.assertEqual(getBalance(self.re_code, 0))
 
 if __name__ == '__main__':
     unittest.main()
