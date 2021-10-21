@@ -283,7 +283,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print('err:', str(err))
             self.assertTrue(False)
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_06_failure_tx_send_iteratively_transaction_too_large(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -304,7 +304,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('the solana transaction is too large')
 
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
@@ -317,15 +317,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(neon_emv_instr_0d_2)
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
-              'and make sure of the error')
-        with self.assertRaisesRegex(Exception, "Error processing Instruction 1: invalid program argument"):
+              'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
+        with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
             send_transaction(client, trx, self.acc)
 
         if getBalance(self.caller_2) == 0:
             print("Send a transaction to create an account - wait for the confirmation and make sure of successful "
                   "completion")
             _ = self.loader.createEtherAccount(self.caller_ether_2)
-            self.token.transfer(ETH_TOKEN_MINT_ID, 10, self.caller_token_2)
+            print('Transfer tokens to the user token account')
+            self.token.transfer(ETH_TOKEN_MINT_ID, 1, self.caller_token_2)
             print("Done\n")
 
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
@@ -372,7 +373,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Caller_2 NEON-token balance on sending 5-th transaction:", neon_balance_on_5_th_transaction)
 
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, 1968)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 3097)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 1968)
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, EXPECTED_USED_GAS)
         self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
 
