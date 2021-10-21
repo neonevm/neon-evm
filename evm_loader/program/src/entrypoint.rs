@@ -199,9 +199,9 @@ fn process_instruction<'a>(
                 nonce,
                 trx_count: 0_u64,
                 code_account: code_account_key,
-                ro_blocked_cnt: 0_u8,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
+                ro_blocked_cnt: 0_u8,
             }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())
