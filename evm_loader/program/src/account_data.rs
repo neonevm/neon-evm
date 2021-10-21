@@ -22,12 +22,12 @@ pub struct Account {
     pub trx_count: u64,
     /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
-    /// 0-not blocked, 1-blocked on read, 2-blocked on write
-    pub ro_blocked_cnt: u8,
-    /// Ethereum address
+    /// Public key of storage account, associated with the transaction that locked this account for writing
     pub rw_blocked_acc: Option<Pubkey>,
     /// ETH token account
-    pub eth_token_account: Pubkey
+    pub eth_token_account: Pubkey,
+    /// counter of the read-only locks
+    pub ro_blocked_cnt: u8
 }
 
 /// Ethereum contract data account
