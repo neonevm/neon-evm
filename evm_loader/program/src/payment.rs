@@ -11,13 +11,8 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-use crate::neon::collateral_pool_base;
+use crate::config::{ PAYMENT_TO_COLLATERAL_POOL, PAYMENT_TO_DEPOSIT, collateral_pool_base };
 
-
-/// `PAYMENT_TO_COLLATERAL_POOL`
-pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
-/// `PAYMENT_TO_DEPOSIT`
-pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 
 /// Checks collateral accounts for the Ethereum transaction execution.
 /// # Errors

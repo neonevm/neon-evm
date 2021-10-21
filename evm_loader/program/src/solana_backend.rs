@@ -8,12 +8,6 @@ use solana_program::pubkey::Pubkey;
 use crate::token::{get_token_account_data, get_token_mint_data};
 use crate::account_data::{AccountData, ACCOUNT_SEED_VERSION};
 
-/// Chain ID
-#[must_use]
-pub fn chain_id() -> U256 {
-    U256::from(111)
-}
-
 /// Account storage
 /// Trait to access account info
 #[allow(clippy::redundant_closure_for_method_calls)]
