@@ -297,7 +297,7 @@ pub fn user_pays_operator<'a>(
 
         let gas_has_been_paid = gas_to_be_paid;
         debug_print!("user_pays_operator gas_has_been_paid = {:?}", gas_has_been_paid);
-        storage.set_gas_has_been_paid(gas_has_been_paid)
+        storage.add_gas_has_been_paid(gas_has_been_paid)
     }
     else {
         user_pays_operator_impl(

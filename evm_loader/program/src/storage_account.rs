@@ -127,7 +127,7 @@ impl<'a> StorageAccount<'a> {
         Ok((storage.gas_limit, storage.gas_price))
     }
 
-    pub fn set_gas_has_been_paid(&mut self, gas: u64) -> Result<(), ProgramError> {
+    pub fn add_gas_has_been_paid(&mut self, gas: u64) -> Result<(), ProgramError> {
         let mut account_data = self.info.try_borrow_mut_data()?;
 
         if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
