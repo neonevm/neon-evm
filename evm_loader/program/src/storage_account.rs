@@ -84,7 +84,7 @@ impl<'a> StorageAccount<'a> {
         Ok(())
     }
 
-    pub fn unblock_accounts_and_destroy(self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn unblock_accounts_and_destroy(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;

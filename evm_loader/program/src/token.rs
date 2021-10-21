@@ -256,32 +256,33 @@ fn user_pays_operator_impl<'a>(
 pub fn user_pays_operator<'a>(
     gas_limit: u64,
     gas_price: u64,
-    used_gas: u64,
+    gas_to_be_paid: u64,
     user_token_account: &'a AccountInfo<'a>,
     operator_token_account: &'a AccountInfo<'a>,
     accounts: &'a [AccountInfo<'a>],
     account_storage: &ProgramAccountStorage,
     storage_opt: Option<&mut StorageAccount>,
 ) -> Result<(), ProgramError> {
-    if used_gas > gas_limit {
+
+    if gas_to_be_paid > gas_limit {
         return Err!(ProgramError::InvalidArgument;
-                "used_gas > gas_limit; gas_to_be_paid = {:?}; gas_limit = {:?}",
-                used_gas, gas_limit);
+                "gas_to_be_paid > gas_limit; gas_to_be_paid = {:?}; gas_limit = {:?}",
+                gas_to_be_paid, gas_limit);
     }
 
     if let Some(storage) = storage_opt {
         let (gas_used_and_paid, number_of_payments) =
             storage.get_payments_info()?;
 
-        msg!("gas_used_and_paid = {:?}; used_gas={:?} by an iteration N = {:?}",
-            gas_used_and_paid, used_gas, number_of_payments+1);
+        msg!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
+            gas_used_and_paid, gas_to_be_paid, number_of_payments+1);
 
-        if used_gas < gas_used_and_paid {
+        if gas_to_be_paid < gas_used_and_paid {
             msg!("user does not pay for this iteration");
             return Ok(());
         }
 
-        let gas_to_be_paid = used_gas.checked_sub(gas_used_and_paid)
+        let gas_to_be_paid = gas_to_be_paid.checked_sub(gas_used_and_paid)
             .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
         user_pays_operator_impl(
@@ -300,11 +301,65 @@ pub fn user_pays_operator<'a>(
     else {
         user_pays_operator_impl(
             gas_price,
-            used_gas,
+            gas_to_be_paid,
             user_token_account,
             operator_token_account,
             accounts,
             account_storage,
         )
     }
+}
+
+fn check_enough_funds_impl<'a>(
+    gas_limit: u64,
+    gas_price: u64,
+    gas_used_and_paid: u64,
+    user_token_account: &'a AccountInfo<'a>
+) -> Result<(bool, u64, u64, u64, u64), ProgramError> {
+
+    let user_balance_64 = get_token_account_balance(user_token_account)?;
+    let user_balance : U256 = U256::from(user_balance_64);
+    let gas_price_wei = U256::from(gas_price);
+    let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let expected_fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    Ok((expected_fee < user_balance, gas_limit, gas_price, gas_used_and_paid, user_balance_64))
+}
+
+/// Check that neon-evm user has enough funds to pay for gas
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+pub fn check_enough_funds<'a>(
+    gas_limit: u64,
+    gas_price: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    storage_opt: Option<&mut StorageAccount>,
+) -> Result<(), ProgramError> {
+
+    let gas_used_and_paid = if let Some(storage) = storage_opt {
+        storage.get_payments_info()?.1
+    }
+    else { 0 };
+
+    let enough_funds = check_enough_funds_impl(
+        gas_limit,
+        gas_price,
+        gas_used_and_paid,
+        user_token_account)?;
+
+    if ! enough_funds.0 {
+        return Err!(ProgramError::InsufficientFunds;
+            "there is no enough funds to start executing the transaction; gas_limit = {:?}; gas_price = {:?}; gas_used_and_paid = {:?}; user_balance = {:?};",
+            enough_funds.1,
+            enough_funds.2,
+            enough_funds.3,
+            enough_funds.4
+        )
+    }
+    Ok(())
 }

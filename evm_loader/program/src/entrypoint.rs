@@ -395,6 +395,12 @@ fn process_instruction<'a>(
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
+            token::check_enough_funds(
+                trx_gas_limit,
+                trx_gas_price,
+                user_eth_info,
+                None)?;
+
             StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, true)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
@@ -847,6 +853,12 @@ fn do_begin<'a>(
     let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
 
+    token::check_enough_funds(
+        trx_gas_limit,
+        trx_gas_price,
+        user_eth_info,
+        None)?;
+
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
@@ -864,9 +876,9 @@ fn do_begin<'a>(
         system_info)?;
 
     if trx.to.is_some() {
-        let used_gas = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        let half_of_total_used_gas = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
         token::user_pays_operator(
-            trx_gas_limit, trx_gas_price, used_gas,
+            trx_gas_limit, trx_gas_price, half_of_total_used_gas,
             user_eth_info,
             operator_eth_info,
             accounts,
@@ -881,6 +893,34 @@ fn do_begin<'a>(
     storage.block_accounts(program_id, trx_accounts)?;
 
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn complete_transaction<'a>(
+    program_id: &Pubkey,
+    account_storage: &mut ProgramAccountStorage<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    trx_accounts_index: usize,
+    deposit_sol_info: &'a AccountInfo<'a>,
+    operator_sol_info: &'a AccountInfo<'a>,
+    completion_results: CompletionResults,
+    storage: &StorageAccount,
+) -> ProgramResult
+{
+    let trx_accounts = &accounts[trx_accounts_index..];
+
+    payment::transfer_from_deposit_to_operator(
+        deposit_sol_info,
+        operator_sol_info)?;
+
+    applies_and_invokes(
+        program_id,
+        account_storage,
+        accounts,
+        Some(operator_sol_info),
+        completion_results)?;
+
+    storage.unblock_accounts_and_destroy(program_id, trx_accounts)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -910,19 +950,37 @@ fn do_continue_top_level<'a>(
     }
 
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    let iteration_result = do_continue(&mut storage, step_count, &mut account_storage);
     let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
 
-    match iteration_result {
-        IterationResult::ToBeContinued(used_gas) => {
+    token::check_enough_funds(
+        trx_gas_limit,
+        trx_gas_price,
+        user_eth_info,
+        Some(&mut storage))
+        .or_else(|err|
+            {
+                complete_transaction(
+                    program_id,
+                    &mut account_storage,
+                    accounts,
+                    trx_accounts_index,
+                    storage_info,
+                    operator_sol_info,
+                    (ExitReason::Error(ExitError::OutOfFund), u64::default(), vec![0; 0], None),
+                    &storage)?;
+                Err(err)
+            })?;
+
+    match do_continue(&mut storage, step_count, &mut account_storage) {
+        IterationResult::ToBeContinued(half_of_total_used_gas) => {
             token::user_pays_operator(
-                trx_gas_limit, trx_gas_price, used_gas,
+                trx_gas_limit, trx_gas_price, half_of_total_used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
                 &account_storage,
                 Some(&mut storage),
-            )?;
+            )
         },
         IterationResult::Completed(completion_results) => {
             let used_gas = completion_results.1;
@@ -935,22 +993,18 @@ fn do_continue_top_level<'a>(
                 Some(&mut storage),
             )?;
 
-            payment::transfer_from_deposit_to_operator(
-                storage_info,
-                operator_sol_info)?;
-
-            applies_and_invokes(
+            complete_transaction(
                 program_id,
                 &mut account_storage,
                 accounts,
-                Some(operator_sol_info),
-                completion_results)?;
-
-            storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
+                trx_accounts_index,
+                storage_info,
+                operator_sol_info,
+                completion_results,
+                &storage,
+            )
         }
     }
-
-    Ok(())
 }
 
 fn do_partial_call<'a>(
@@ -987,10 +1041,10 @@ fn do_partial_call<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let used_gas = executor_state.substate().metadata().gasometer().used_gas();
-    debug_print!("first iteration complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas();
+    debug_print!("first iteration complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
 
-    Ok(used_gas)
+    Ok(half_of_total_used_gas)
 }
 
 fn do_partial_create<'a>(
@@ -1038,8 +1092,8 @@ fn do_continue<'a>(
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 let executor_state = executor.into_state();
-                let used_gas = executor_state.substate().metadata().gasometer().used_gas();
-                return IterationResult::ToBeContinued(used_gas);
+                let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
+                return IterationResult::ToBeContinued(half_of_total_used_gas);
             }
             Err((result, reason)) => (result, reason)
         };
