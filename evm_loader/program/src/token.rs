@@ -281,10 +281,10 @@ pub fn user_pays_operator<'a>(
         {
             msg!("user does not pay for this iteration");
             0
-        } else { gas_to_be_paid };
-
-        let gas_to_be_paid = gas_to_be_paid.checked_sub(gas_used_and_paid)
-            .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+        } else {
+            gas_to_be_paid.checked_sub(gas_used_and_paid)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument))?
+        };
 
         user_pays_operator_impl(
             gas_price,
