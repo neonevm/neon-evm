@@ -1041,7 +1041,7 @@ fn do_partial_call<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas();
+    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
     debug_print!("first iteration complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
 
     Ok(half_of_total_used_gas)
