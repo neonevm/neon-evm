@@ -311,26 +311,6 @@ pub fn user_pays_operator<'a>(
     }
 }
 
-fn check_enough_funds_impl<'a>(
-    gas_limit: u64,
-    gas_price: u64,
-    gas_used_and_paid: u64,
-    user_token_account: &'a AccountInfo<'a>
-) -> Result<(bool, u64, u64, u64, u64), ProgramError> {
-
-    let user_balance_64 = get_token_account_balance(user_token_account)?;
-    let user_balance : U256 = U256::from(user_balance_64)
-        .checked_mul(eth::min_transfer_value())
-        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-    let gas_price_wei = U256::from(gas_price);
-    let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
-        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-    let expected_fee = U256::from(gas_to_be_paid)
-        .checked_mul(gas_price_wei)
-        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
-    Ok((expected_fee < user_balance, gas_limit, gas_price, gas_used_and_paid, user_balance_64))
-}
-
 /// Check that neon-evm user has enough funds to pay for gas
 ///
 /// # Errors
@@ -349,19 +329,24 @@ pub fn check_enough_funds<'a>(
     }
     else { 0 };
 
-    let enough_funds = check_enough_funds_impl(
-        gas_limit,
-        gas_price,
-        gas_used_and_paid,
-        user_token_account)?;
+    let user_balance_64 = get_token_account_balance(user_token_account)?;
+    let user_balance : U256 = U256::from(user_balance_64)
+        .checked_mul(eth::min_transfer_value())
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let gas_price_wei = U256::from(gas_price);
+    let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let expected_fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
-    if ! enough_funds.0 {
+    if expected_fee > user_balance {
         return Err!(ProgramError::InsufficientFunds;
             "there is no enough funds to start executing the transaction; gas_limit = {:?}; gas_price = {:?}; gas_used_and_paid = {:?}; user_balance = {:?};",
-            enough_funds.1,
-            enough_funds.2,
-            enough_funds.3,
-            enough_funds.4
+            gas_limit,
+            gas_price,
+            gas_used_and_paid,
+            user_balance_64
         )
     }
     Ok(())
