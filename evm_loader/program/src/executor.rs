@@ -367,14 +367,15 @@ type RuntimeInfo = (evm::Runtime, CreateReason);
 
 pub struct Machine<'a, B: AccountStorage> {
     executor: Executor<'a, B>,
-    runtime: Vec<RuntimeInfo>
+    runtime: Vec<RuntimeInfo>,
+    steps_executed: u64,
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
     pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
-        Self{ executor, runtime: Vec::new() }
+        Self{ executor, runtime: Vec::new(), steps_executed: 0 }
     }
 
     pub fn save_into(&self, storage: &mut StorageAccount) {
@@ -388,7 +389,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state };
-        Self{ executor, runtime }
+        Self{ executor, runtime, steps_executed: 0 }
     }
 
     pub fn call_begin(&mut self,
@@ -628,6 +629,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         while steps < n {
             let (steps_executed, apply) = self.run(n - steps);
             steps += steps_executed;
+            self.steps_executed += steps_executed;
 
             match apply {
                 RuntimeApply::Continue => {},
@@ -638,6 +640,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
 
         Ok(())
+    }
+
+    #[must_use]
+    pub fn get_steps_executed(&self) -> u64 {
+        self.steps_executed
     }
 
     #[must_use]
