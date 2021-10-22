@@ -79,12 +79,12 @@ class Test_Write(unittest.TestCase):
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
-    def write_to_account(self, operator, signer, data):
+    def write_to_account(self, operator, signer, nonce, data):
         tx = Transaction()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
                  AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,
-                                      data=write_holder_layout(proxy_id, 0, data),
+                                      data=write_holder_layout(nonce, 0, data),
                                       keys=metas))
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
         return client.send_transaction(tx, signer, opts=opts)['id']
@@ -92,7 +92,7 @@ class Test_Write(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
-        id = self.write_to_account(self.signer, self.signer, test_data)
+        id = self.write_to_account(self.signer, self.signer, proxy_id, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
@@ -101,8 +101,8 @@ class Test_Write(unittest.TestCase):
         print()
         try:
             print('Expecting error "invalid program argument"')
-            wrong_seed = '00000000000000000000000000000000' # 32 digits
-            self.write_to_account(self.signer, self.signer, wrong_seed, test_data)
+            wrong_proxy_id = 1000
+            self.write_to_account(self.signer, self.signer, wrong_proxy_id, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
@@ -115,7 +115,7 @@ class Test_Write(unittest.TestCase):
         print()
         try:
             print('Expecting error "invalid program argument"')
-            self.write_to_account(self.attacker, self.attacker, test_data)
+            self.write_to_account(self.attacker, self.attacker, proxy_id, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
@@ -128,7 +128,7 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_operator(self):
         print()
         try:
-            self.write_to_account(self.attacker, self.signer, test_data)
+            self.write_to_account(self.attacker, self.signer, proxy_id, test_data)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
