@@ -38,7 +38,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
     return account
 
 
-class EventTest(unittest.TestCase):
+class RW_Locking_Test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_event.py setUpClass")
@@ -92,6 +92,8 @@ class EventTest(unittest.TestCase):
             confirm_transaction(client, tx["result"])
 
         # cls.wallet2_token = cls.token.create_token_account(ETH_TOKEN_MINT_ID, owner=wallet2.get_path())
+        # cls.token.mint(ETH_TOKEN_MINT_ID, get_associated_token_address(PublicKey(wallet2.get_acc().public_key()), ETH_TOKEN_MINT_ID), 10000)
+
 
         cls.caller2_ether = eth_keys.PrivateKey(cls.acc2.secret_key()).public_key.to_canonical_address()
         (cls.caller2, cls.caller2_nonce) = cls.loader.ether2program(cls.caller2_ether)
@@ -246,10 +248,10 @@ class EventTest(unittest.TestCase):
             assert (data[0] == 6)
 
 
-    # the contract is locked by the read-only lock
+    # the contract account is locked by the read-only lock
     # two transactions of the one contract are executed by two callers
-    def test_caseReadOlnyBlocking(self):
-        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
+    def test_1_caseReadOlnyBlocking(self):
+        func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1,  msg1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
@@ -279,13 +281,16 @@ class EventTest(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
+            self.assertEqual(int().from_bytes(data[2:10], 'little'), 21663) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
 
-    def test_caseWriteBlocking(self):
-        func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
-        input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
+    # The first transaaction set lock on write to  contract account
+    # The second transaction try to set lock on write and  => the error occurs.
+    # Then lock removed by Cancel operation
+    def test_2_caseWriteBlocking(self):
+        func_name = abi.function_signature_to_4byte_selector('update_storage(uint8)')
+        input = (func_name + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1,  msg1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
         (from_addr2, sign2,  msg2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
@@ -323,8 +328,10 @@ class EventTest(unittest.TestCase):
         raise("contract_eth not found in  the emulator output, ", self.reId_eth)
 
 
-    def test_writable_flag_from_emulator(self):
+    def test_3_writable_flag_from_emulator(self):
         # 1. "writable" must be False. Storage is not changed
+        print("reId_code", self.re_code)
+
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
         res = emulate(self.caller1_ether.hex(), self.reId_eth.hex(), input.hex(), "" )
@@ -362,6 +369,7 @@ class EventTest(unittest.TestCase):
                     AccountMeta(pubkey=get_associated_token_address(PublicKey(info["account"]), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=PublicKey(new_contract_code), is_signer=False, is_writable=True),
                        ]
+                print("new_contract_code", new_contract_code)
 
         self.assertNotEqual(meta, None)
 
@@ -381,8 +389,9 @@ class EventTest(unittest.TestCase):
         self.check_writable(res, new_contract_eth, False)
 
 
+    #  the test must be run last, because it changes contract code account
     #  resizing is blocked  by locking of the account in other transaction.
-    def test_resizing_with_account_lock(self):
+    def test_4_resizing_with_account_lock(self):
 
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint256)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1)) # update storage without account resizing
@@ -399,6 +408,7 @@ class EventTest(unittest.TestCase):
         res = emulate(self.caller2_ether.hex(), self.reId_eth.hex(), input2.hex(), "" )
         print(res)
         resize_instr = None
+        code_account_new = None
         for info in res["accounts"]:
             address = bytes.fromhex(info["address"][2:])
             if address == self.reId_eth:
@@ -438,19 +448,20 @@ class EventTest(unittest.TestCase):
         # finish first transaction for unlocking accounts
         self.call_continue(storage1, 1000, True, self.acc1, self.caller1)
 
+        # before resizing the old code account must have some balance
+        self.assertNotEqual(getBalance(self.re_code), 0)
+
         # try next attempt to resize storage account and check it
         send_transaction(client, Transaction().add(resize_instr), self.acc2)
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 
-        # before resizing the old code account must have some balance
-        self.assertNotEqual(getBalance(self.re_code, 0))
-
         # resizing must be completed => code_account must be updated
         self.assertNotEqual(info_data.code_account, self.re_code)
 
         # afrer resizing the old code account must have 0 SOL
-        self.assertEqual(getBalance(self.re_code, 0))
+        self.assertEqual(getBalance(self.re_code), 0)
 
 if __name__ == '__main__':
     unittest.main()
+

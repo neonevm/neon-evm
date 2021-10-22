@@ -686,8 +686,16 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidArgument; "code_account_new_info.owner<{:?}> != program_id<{:?}>", code_account_new_info.owner, program_id);
             }
 
-            let mut code_account_new_data = code_account_new_info.try_borrow_mut_data()?;
+            let expected_address = Pubkey::create_with_seed(
+                operator_sol_info.key,
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
+                program_id)?;
+            if *code_account_new_info.key != expected_address {
+                return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
+                    *code_account_new_info.key, *operator_sol_info.key, expected_address);
+            }
 
+            let mut code_account_new_data = code_account_new_info.try_borrow_mut_data()?;
             match AccountData::unpack(&code_account_new_data) {
                 Ok(AccountData::Empty) => {},
                 _ =>  return Err!(ProgramError::InvalidAccountData)
@@ -696,38 +704,29 @@ fn process_instruction<'a>(
             if code_account_info.owner != program_id {
                 return Err!(ProgramError::InvalidArgument; "code_account_info.owner<{:?}> != program_id<{:?}>", code_account_info.owner, program_id);
             }
-
-            let expected_address = Pubkey::create_with_seed(
-                operator_sol_info.key,
-                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
-                program_id)?;
-
-            if *code_account_new_info.key != expected_address {
-                return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
-                    *code_account_new_info.key, *operator_sol_info.key, expected_address);
-            }
-
-            let mut code_account_data = code_account_info.try_borrow_mut_data()?;
-            if code_account_data.len() >= code_account_new_data.len(){
-                return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
+            {
+                let mut code_account_data = code_account_info.try_borrow_mut_data()?;
+                if code_account_data.len() >= code_account_new_data.len(){
+                    return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
                         *account_info.key, code_account_data.len(), code_account_new_data.len());
-            }
-            if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
-                if data.owner != *account_info.key {
-                    return Err!(ProgramError::InvalidAccountData;
-                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
                 }
-                debug_print!("move code and storage from {:?} to {:?}", *code_account_info.key, *code_account_new_info.key);
-                AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
-                let begin = AccountData::Contract(data).size();
-                let end = code_account_data.len();
-                code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
+                if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
+                    if data.owner != *account_info.key {
+                        return Err!(ProgramError::InvalidAccountData;
+                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
+                    }
+                    debug_print!("move code and storage from {:?} to {:?}", *code_account_info.key, *code_account_new_info.key);
+                    AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
+                    let begin = AccountData::Contract(data).size();
+                    let end = code_account_data.len();
+                    code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
 
-                AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
-                payment::transfer_from_code_account_to_operator(code_account_new_info, operator_sol_info, code_account_info.lamports())?;
-            } else {
-                return Err!(ProgramError::InvalidAccountData)
-            };
+                    AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
+                } else {
+                    return Err!(ProgramError::InvalidAccountData)
+                };
+            }
+            payment::transfer_from_code_account_to_operator(code_account_info, operator_sol_info, code_account_info.lamports())?;
 
             Ok(())
         },
