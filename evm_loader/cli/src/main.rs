@@ -838,7 +838,8 @@ fn send_transaction(
     Ok(tx_sig)
 }
 
-fn generate_random_holder_seed(key: &Pubkey) -> String {
+/// Returns random nonce (proxy_id) and the corresponding seed.
+fn generate_random_holder_seed(key: &Pubkey) -> (u64, String) {
     use rand::Rng as _;
     // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
     // signer_public_key_bytes = bytes(self.signer.public_key())
@@ -854,7 +855,7 @@ fn generate_random_holder_seed(key: &Pubkey) -> String {
     hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
     hasher.hash(&key.to_bytes());
     let output = hasher.result();
-    hex::encode(output)[..32].into()
+    (nonce, hex::encode(output)[..32].into())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -910,10 +911,10 @@ fn command_deploy(
     let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
-    let holder_seed = generate_random_holder_seed(&creator.pubkey());
+    let (holder_nonce, holder_seed) = generate_random_holder_seed(&creator.pubkey());
     let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &holder_seed, 128*1024_u64)?;
 
-    fill_holder_account(config, &holder, 0, &msg)?;
+    fill_holder_account(config, &holder, holder_nonce, &msg)?;
 
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
