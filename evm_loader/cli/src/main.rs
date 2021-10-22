@@ -838,7 +838,7 @@ fn send_transaction(
     Ok(tx_sig)
 }
 
-/// Returns random nonce (proxy_id) and the corresponding seed.
+/// Returns random nonce and the corresponding seed.
 fn generate_random_holder_seed(key: &Pubkey) -> (u64, String) {
     use rand::Rng as _;
     // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
