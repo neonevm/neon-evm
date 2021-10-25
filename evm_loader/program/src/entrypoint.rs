@@ -1069,6 +1069,7 @@ fn do_partial_create<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
+    let executor_state = executor.into_state();
     let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
     debug_print!("first iteration of deployment complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
 
