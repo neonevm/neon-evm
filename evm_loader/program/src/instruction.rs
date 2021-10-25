@@ -105,11 +105,15 @@ pub enum EvmInstruction<'a> {
         data: &'a [u8],
     },
 
+    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    #[deprecated(note = "Instruction not supported")]
+    PartialCallFromRawEthereumTX,
+
     /// Partial call Ethereum-contract action from raw transaction data
     /// ### Account references
     ///   0. \[WRITE\] storage account
     ///   1. ... Account references same as in Call
-    PartialCallFromRawEthereumTX {
+    PartialCallFromRawEthereumTXv02 {
         /// Seed index for a collateral pool account
         collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
@@ -281,15 +285,7 @@ impl<'a> EvmInstruction<'a> {
                 }
                 EvmInstruction::OnEvent {address, topics, data: rest}
             },
-            9 => {
-                let (collateral_pool_index, rest) = rest.split_at(4);
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (step_count, rest) = rest.split_at(8);
-                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (from_addr, rest) = rest.split_at(20);
-                let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
-            },
+            9 => EvmInstruction::PartialCallFromRawEthereumTX,
             10 => {
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
@@ -326,6 +322,15 @@ impl<'a> EvmInstruction<'a> {
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
+            },
+            19 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (from_addr, rest) = rest.split_at(20);
+                let (sign, unsigned_msg) = rest.split_at(65);
+                EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
             },
 
             _ => return Err(InvalidInstructionData),

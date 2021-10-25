@@ -561,7 +561,7 @@ def create_neon_evm_instr_09_partial_call(evm_loader_program_id,
                                           writable_code=True):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
-        data=bytearray.fromhex("09") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+        data=bytearray.fromhex("13") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
         keys=[
             AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
             # System instructions account:

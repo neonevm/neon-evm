@@ -729,7 +729,8 @@ fn process_instruction<'a>(
 
         EvmInstruction::Finalise |
         EvmInstruction::CreateAccountWithSeed |
-        EvmInstruction::ExecuteTrxFromAccountDataIterative
+        EvmInstruction::ExecuteTrxFromAccountDataIterative |
+        EvmInstruction::PartialCallFromRawEthereumTX
         => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
