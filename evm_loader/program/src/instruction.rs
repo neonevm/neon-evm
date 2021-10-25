@@ -128,9 +128,12 @@ pub enum EvmInstruction<'a> {
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
+    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    #[deprecated(note = "Instruction not supported")]
+    ExecuteTrxFromAccountDataIterative,
 
     /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    ExecuteTrxFromAccountDataIterative {
+    ExecuteTrxFromAccountDataIterativeV02 {
         /// Seed index for a collateral pool account
         collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
@@ -292,13 +295,7 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::Continue {step_count}
             },
-            11 => {
-                let (collateral_pool_index, rest) = rest.split_at(4);
-                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (step_count, _rest) = rest.split_at(8);
-                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::ExecuteTrxFromAccountDataIterative {collateral_pool_index, step_count}
-            },
+            11 => EvmInstruction::ExecuteTrxFromAccountDataIterative,
             12 => {
                 EvmInstruction::Cancel
             },
@@ -323,6 +320,13 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::DeleteAccount { seed: rest }
             },
             17 => EvmInstruction::ResizeStorageAccount { seed: rest },
+            18 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
+            },
 
             _ => return Err(InvalidInstructionData),
         })

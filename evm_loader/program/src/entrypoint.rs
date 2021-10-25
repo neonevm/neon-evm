@@ -341,7 +341,7 @@ fn process_instruction<'a>(
 
         //     Ok(())
         // },
-        EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
+        EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
@@ -733,7 +733,10 @@ fn process_instruction<'a>(
             Ok(())
         },
 
-        EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+        EvmInstruction::Finalise |
+        EvmInstruction::CreateAccountWithSeed |
+        EvmInstruction::ExecuteTrxFromAccountDataIterative
+        => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());

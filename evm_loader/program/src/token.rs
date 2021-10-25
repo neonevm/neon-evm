@@ -325,7 +325,7 @@ pub fn check_enough_funds<'a>(
 ) -> Result<(), ProgramError> {
 
     let gas_used_and_paid = if let Some(storage) = storage_opt {
-        storage.get_payments_info()?.1
+        storage.get_payments_info()?.0
     }
     else { 0 };
 
