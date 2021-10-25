@@ -344,7 +344,7 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
-            let storage_info = next_account_info(account_info_iter)?;
+            let _storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
@@ -435,7 +435,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
-            let storage_info = next_account_info(account_info_iter)?;
+            let _storage_info = next_account_info(account_info_iter)?;
 
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -470,15 +470,13 @@ fn process_instruction<'a>(
 
             authorized_operator_check(operator_sol_info)?;
 
-            let trx_accounts_index = 5;
-
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
 
             do_continue_top_level(
-                step_count, program_id, accounts, trx_accounts_index, storage,
+                step_count, program_id, accounts, 5, storage,
             )?;
 
             Ok(())
@@ -562,7 +560,7 @@ fn process_instruction<'a>(
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts, trx_accounts_index, storage,
+                        step_count, program_id, accounts, 7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -596,7 +594,7 @@ fn process_instruction<'a>(
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts, trx_accounts_index, storage,
+                        step_count, program_id, accounts, 7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
