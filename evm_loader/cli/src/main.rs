@@ -918,7 +918,7 @@ fn command_deploy(
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x12_u8, collateral_pool_index, 0_u64), accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
     }
