@@ -100,9 +100,10 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_seed(self):
         print()
         try:
-            print('Expecting error "invalid program argument"')
+            print('!!!! Expecting error "invalid program argument"')
             wrong_proxy_id = 1000
             self.write_to_account(self.signer, self.signer, wrong_proxy_id, test_data)
+            self.assertTrue(False)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
@@ -111,24 +112,12 @@ class Test_Write(unittest.TestCase):
             raise
 
     # @unittest.skip("a.i.")
-    def test_instruction_write_fails_wrong_signer(self):
-        print()
-        try:
-            print('Expecting error "invalid program argument"')
-            self.write_to_account(self.attacker, self.attacker, proxy_id, test_data)
-        except SendTransactionError as err:
-            self.check_err_is_invalid_program_argument(str(err))
-        except Exception as err:
-            print('type(err):', type(err))
-            print('err:', str(err))
-            raise
-
-    @unittest.skip("a.i.")
-    # TODO: debug this test
     def test_instruction_write_fails_wrong_operator(self):
         print()
         try:
-            self.write_to_account(self.attacker, self.signer, proxy_id, test_data)
+            print('!!!! Expecting error "invalid program argument"')
+            self.write_to_account(self.attacker, self.attacker, proxy_id, test_data)
+            self.assertTrue(False)
         except SendTransactionError as err:
             self.check_err_is_invalid_program_argument(str(err))
         except Exception as err:
