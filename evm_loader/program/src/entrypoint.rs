@@ -436,7 +436,7 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
             let storage_info = next_account_info(account_info_iter)?;
 
@@ -873,20 +873,21 @@ fn do_begin<'a>(
         storage_info,
         system_info)?;
 
-    if trx.to.is_some() {
-        let half_of_total_used_gas = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
-        token::user_pays_operator(
-            trx_gas_price, half_of_total_used_gas,
-            user_eth_info,
-            operator_eth_info,
-            accounts,
-            &account_storage,
-            Some(&mut storage),
-        )?;
+    let half_of_total_used_gas = if trx.to.is_some() {
+        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
-    }
+        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+    };
+
+    token::user_pays_operator(
+        trx_gas_price, half_of_total_used_gas,
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        &account_storage,
+        Some(&mut storage),
+    )?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -1052,7 +1053,7 @@ fn do_partial_create<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> ProgramResult
+) -> FirstIterationResult
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
@@ -1068,8 +1069,10 @@ fn do_partial_create<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
-    debug_print!("partial create complete");
-    Ok(())
+    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
+    debug_print!("first iteration of deployment complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
+
+    Ok(half_of_total_used_gas)
 }
 
 #[allow(clippy::unnecessary_wraps)]
