@@ -104,7 +104,7 @@ class EventTest(unittest.TestCase):
     def sol_instr_18_partial_call_from_account(self, holder_account, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("13") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            data=bytearray.fromhex("12") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
