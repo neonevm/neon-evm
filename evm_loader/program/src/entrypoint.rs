@@ -797,7 +797,7 @@ fn do_call(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
@@ -1029,7 +1029,7 @@ fn do_partial_call<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
+    let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
     debug_print!("first iteration complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
 
     Ok(half_of_total_used_gas)
@@ -1059,7 +1059,7 @@ fn do_partial_create<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
+    let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
     debug_print!("first iteration of deployment complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
 
     Ok(half_of_total_used_gas)
@@ -1083,7 +1083,7 @@ fn do_continue<'a>(
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 let executor_state = executor.into_state();
-                let half_of_total_used_gas = executor_state.substate().metadata().gasometer().total_used_gas()/2;
+                let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
                 return IterationResult::ToBeContinued(half_of_total_used_gas);
             }
             Err((result, reason)) => (result, reason)
@@ -1092,7 +1092,7 @@ fn do_continue<'a>(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
