@@ -265,20 +265,13 @@ pub fn user_pays_operator<'a>(
 ) -> Result<(), ProgramError> {
 
     if let Some(storage) = storage_opt {
-        let (gas_used_and_paid, number_of_payments) =
+        let (gas_used_and_paid, _number_of_payments) =
             storage.get_payments_info()?;
 
-        msg!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
-            gas_used_and_paid, gas_to_be_paid, number_of_payments+1);
+        debug_print!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
+            gas_used_and_paid, gas_to_be_paid, _number_of_payments+1);
 
-        let gas_to_be_paid = if gas_to_be_paid < gas_used_and_paid
-        {
-            msg!("user does not pay for this iteration");
-            0
-        } else {
-            gas_to_be_paid.checked_sub(gas_used_and_paid)
-                .ok_or_else(|| E!(ProgramError::InvalidArgument))?
-        };
+        let gas_to_be_paid = gas_to_be_paid.saturating_sub(gas_used_and_paid);
 
         user_pays_operator_impl(
             gas_price,
