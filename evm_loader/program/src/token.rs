@@ -264,12 +264,6 @@ pub fn user_pays_operator<'a>(
     storage_opt: Option<&mut StorageAccount>,
 ) -> Result<(), ProgramError> {
 
-    if gas_to_be_paid > gas_limit {
-        return Err!(ProgramError::InvalidArgument;
-                "gas_to_be_paid > gas_limit; gas_to_be_paid = {:?}; gas_limit = {:?}",
-                gas_to_be_paid, gas_limit);
-    }
-
     if let Some(storage) = storage_opt {
         let (gas_used_and_paid, number_of_payments) =
             storage.get_payments_info()?;
