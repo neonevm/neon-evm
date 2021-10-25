@@ -465,8 +465,8 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -474,9 +474,10 @@ fn process_instruction<'a>(
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
-
             do_continue_top_level(
-                step_count, program_id, accounts, 5, storage,
+                step_count, program_id, accounts,
+                storage_info, operator_sol_info, operator_eth_info, user_eth_info,
+                5, storage,
             )?;
 
             Ok(())
@@ -538,8 +539,8 @@ fn process_instruction<'a>(
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let _system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
@@ -560,7 +561,9 @@ fn process_instruction<'a>(
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts, 7, storage,
+                        step_count, program_id, accounts,
+                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
+                        7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -573,8 +576,8 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let _system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
@@ -594,7 +597,9 @@ fn process_instruction<'a>(
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts, 7, storage,
+                        step_count, program_id, accounts,
+                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
+                        7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -911,16 +916,14 @@ fn do_continue_top_level<'a>(
     step_count: u64,
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
+    storage_info: &'a AccountInfo<'a>,
+    operator_sol_info: &'a AccountInfo<'a>,
+    operator_eth_info: &'a AccountInfo<'a>,
+    user_eth_info: &'a AccountInfo<'a>,
     trx_accounts_index: usize,
     mut storage: StorageAccount,
 ) -> ProgramResult
 {
-    let account_info_iter = &mut accounts.iter();
-    let storage_info = next_account_info(account_info_iter)?;
-    let operator_sol_info = next_account_info(account_info_iter)?;
-    let operator_eth_info = next_account_info(account_info_iter)?;
-    let user_eth_info = next_account_info(account_info_iter)?;
-
     if !operator_sol_info.is_signer {
         return Err!(ProgramError::InvalidAccountData);
     }
