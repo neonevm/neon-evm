@@ -253,7 +253,6 @@ fn user_pays_operator_impl<'a>(
 /// `ProgramError::InvalidArgument`
 #[allow(clippy::too_many_arguments)]
 pub fn user_pays_operator<'a>(
-    gas_limit: u64,
     gas_price: u64,
     gas_to_be_paid: u64,
     user_token_account: &'a AccountInfo<'a>,

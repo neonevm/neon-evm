@@ -413,8 +413,7 @@ fn process_instruction<'a>(
 
             if let Some(call_results) = call_return {
                 let used_gas = call_results.1;
-                token::user_pays_operator(
-                    trx_gas_limit, trx_gas_price, used_gas,
+                token::user_pays_operator(trx_gas_price, used_gas,
                     user_eth_info,
                     operator_eth_info,
                     accounts,
@@ -876,7 +875,7 @@ fn do_begin<'a>(
     if trx.to.is_some() {
         let half_of_total_used_gas = do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
         token::user_pays_operator(
-            trx_gas_limit, trx_gas_price, half_of_total_used_gas,
+            trx_gas_price, half_of_total_used_gas,
             user_eth_info,
             operator_eth_info,
             accounts,
@@ -972,7 +971,7 @@ fn do_continue_top_level<'a>(
     match do_continue(&mut storage, step_count, &mut account_storage) {
         IterationResult::ToBeContinued(half_of_total_used_gas) => {
             token::user_pays_operator(
-                trx_gas_limit, trx_gas_price, half_of_total_used_gas,
+                trx_gas_price, half_of_total_used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
@@ -983,7 +982,7 @@ fn do_continue_top_level<'a>(
         IterationResult::Completed(completion_results) => {
             let used_gas = completion_results.1;
             token::user_pays_operator(
-                trx_gas_limit, trx_gas_price, used_gas,
+                trx_gas_price, used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
