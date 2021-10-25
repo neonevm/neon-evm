@@ -344,7 +344,7 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
-            let _storage_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
@@ -361,7 +361,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                step_count, program_id, accounts,
+                step_count, program_id, accounts, storage_info,
                 collateral_pool_index,
                 trx, caller,
             )?;
@@ -435,7 +435,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
-            let _storage_info = next_account_info(account_info_iter)?;
+            let storage_info = next_account_info(account_info_iter)?;
 
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -453,7 +453,7 @@ fn process_instruction<'a>(
                 .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                step_count, program_id, accounts,
+                step_count, program_id, accounts, storage_info,
                 collateral_pool_index,
                 trx, caller,
             )?;
@@ -554,7 +554,7 @@ fn process_instruction<'a>(
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        step_count, program_id, accounts,
+                        step_count, program_id, accounts, storage_info,
                         collateral_pool_index,
                         trx, caller,
                     )?;
@@ -590,7 +590,7 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        step_count, program_id, accounts,
+                        step_count, program_id, accounts, storage_info,
                         collateral_pool_index,
                         trx, caller,
                     )?;
@@ -815,6 +815,7 @@ fn do_begin<'a>(
     step_count: u64,
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
+    storage_info: &'a AccountInfo<'a>,
     collateral_pool_index: u32,
     trx: UnsignedTransaction,
     caller: H160,
@@ -822,8 +823,8 @@ fn do_begin<'a>(
 {
     let account_info_iter = &mut accounts.iter();
 
-    let _holder = next_account_info(account_info_iter)?;
-    let storage_info = next_account_info(account_info_iter)?;
+    let _ = next_account_info(account_info_iter)?;
+    let __ = next_account_info(account_info_iter)?;
 
     let operator_sol_info = next_account_info(account_info_iter)?;
     let collateral_pool_sol_info = next_account_info(account_info_iter)?;

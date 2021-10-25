@@ -41,7 +41,7 @@ impl<'a> StorageAccount<'a> {
             );
             Ok(Self { info, data })
         } else {
-            Err!(ProgramError::InvalidAccountData; "storage account is not empty. account_data.len()={:?}", &account_data.len())
+            Err!(ProgramError::InvalidAccountData; "storage account is not empty. key={:?}", info.key)
         }
     }
 
@@ -113,6 +113,8 @@ impl<'a> StorageAccount<'a> {
 
         let mut account_data = self.info.try_borrow_mut_data()?;
         AccountData::pack(&AccountData::Empty, &mut account_data)?;
+
+        debug_print!("Destroying {:?}", self.info.key);
 
         Ok(())
     }
