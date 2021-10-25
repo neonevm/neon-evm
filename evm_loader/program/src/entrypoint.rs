@@ -395,11 +395,6 @@ fn process_instruction<'a>(
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
-            token::check_enough_funds(
-                trx_gas_limit,
-                trx_gas_price,
-                user_eth_info,
-                None)?;
 
             StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, true)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
