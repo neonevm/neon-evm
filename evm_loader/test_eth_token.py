@@ -55,8 +55,8 @@ class EthTokenTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
-        neon_evm_instr_09_partial_call = create_neon_evm_instr_09_partial_call(
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
+        neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
@@ -68,8 +68,8 @@ class EthTokenTest(unittest.TestCase):
             step_count,
             evm_instruction
         )
-        print('neon_evm_instr_09_partial_call:', neon_evm_instr_09_partial_call)
-        return neon_evm_instr_09_partial_call
+        print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
+        return neon_evm_instr_19_partial_call
 
     def sol_instr_10_continue(self, storage_account, step_count):
         neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
@@ -92,7 +92,7 @@ class EthTokenTest(unittest.TestCase):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
+        trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps):

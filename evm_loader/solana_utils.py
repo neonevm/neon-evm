@@ -548,7 +548,7 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
         ])
 
 
-def create_neon_evm_instr_09_partial_call(evm_loader_program_id,
+def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
                                           caller_sol_acc,
                                           operator_sol_acc,
                                           storage_sol_acc,

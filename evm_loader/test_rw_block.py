@@ -85,8 +85,8 @@ class EventTest(unittest.TestCase):
               "({})".format(bytes(PublicKey(cls.caller2)).hex()))
 
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, writable_code, acc, caller):
-        neon_evm_instr_09_partial_call = create_neon_evm_instr_09_partial_call(
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction, writable_code, acc, caller):
+        neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
             self.loader.loader_id,
             caller,
             acc.public_key(),
@@ -99,8 +99,8 @@ class EventTest(unittest.TestCase):
             evm_instruction,
             writable_code,
         )
-        print('neon_evm_instr_09_partial_call:', neon_evm_instr_09_partial_call)
-        return neon_evm_instr_09_partial_call
+        print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
+        return neon_evm_instr_19_partial_call
 
     def sol_instr_10_continue(self, storage_account, step_count, writable_code, acc, caller):
         neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
@@ -132,7 +132,7 @@ class EventTest(unittest.TestCase):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction, writable_code, acc, caller))
+        trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller):

@@ -148,7 +148,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
             data=bytearray.fromhex("13") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
@@ -326,7 +326,7 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(self.storage, 0, instruction, contract, code))
+        trx.add(self.sol_instr_19_partial_call(self.storage, 0, instruction, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while True:
