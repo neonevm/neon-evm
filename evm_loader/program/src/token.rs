@@ -267,7 +267,7 @@ pub fn user_pays_operator<'a>(
             storage.get_payments_info()?;
 
         debug_print!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
-            gas_used_and_paid, gas_to_be_paid, _number_of_payments+1);
+            gas_used_and_paid, gas_to_be_paid, /*_number_of_payments+*/1);
 
         let gas_to_be_paid = gas_to_be_paid.saturating_sub(gas_used_and_paid);
 
