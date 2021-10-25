@@ -14,8 +14,7 @@ use solana_program::{
     system_program, sysvar,
     program_error::ProgramError,
     program_pack::Pack,
-    program::invoke_signed,
-    msg,
+    program::invoke_signed
 };
 use std::vec;
 use std::convert::TryFrom;
