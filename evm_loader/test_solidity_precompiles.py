@@ -164,8 +164,8 @@ class PrecompilesTests(unittest.TestCase):
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
 
-    def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count):
-        neon_evm_instr_11_begin = create_neon_evm_instr_11_begin(
+    def sol_instr_18_partial_call_from_account(self, holder_account, storage_account, step_count):
+        neon_evm_instr_11_begin = create_neon_evm_instr_18_begin(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
@@ -238,7 +238,7 @@ class PrecompilesTests(unittest.TestCase):
         self.write_transaction_to_holder_account(holder, sign, msg)
 
         trx = Transaction()
-        trx.add(self.sol_instr_11_partial_call_from_account(holder, storage, 0))
+        trx.add(self.sol_instr_18_partial_call_from_account(holder, storage, 0))
         send_transaction(client, trx, self.acc)
 
         while (True):

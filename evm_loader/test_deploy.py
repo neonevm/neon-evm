@@ -175,8 +175,8 @@ class DeployTest(unittest.TestCase):
                                                                  code_sol, code_size)
         return holder, contract_eth, contract_sol, code_sol
 
-    def sol_instr_11_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
-        neon_evm_instr_11_begin = create_neon_evm_instr_11_begin(
+    def sol_instr_18_partial_call(self, storage_account, step_count, holder, contract_sol, code_sol):
+        neon_evm_instr_11_begin = create_neon_evm_instr_18_begin(
             self.loader.loader_id,
             self.caller,
             self.operator_acc.public_key(),
@@ -240,7 +240,7 @@ class DeployTest(unittest.TestCase):
 
         print("Begin")
         trx = Transaction()
-        trx.add(self.sol_instr_11_partial_call(storage, 50, holder, contract_sol, code_sol))
+        trx.add(self.sol_instr_18_partial_call(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
         result = send_transaction(client, trx, self.operator_acc)["result"]
 
