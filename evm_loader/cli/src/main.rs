@@ -756,6 +756,7 @@ fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
 fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
     let mut return_value : Option<Vec<u8>> = None;
     if let EncodedTransaction::Json(transaction) = result.transaction.transaction {
+        debug!("transaction {:?}", transaction);
         if let UiMessage::Raw(message) = transaction.message {
             let evm_loader_index = message.account_keys.iter().position(|x| *x == config.evm_loader.to_string());
             if let Some(meta) = result.transaction.meta {
@@ -919,7 +920,7 @@ fn command_deploy(
     holder_plus_accounts.insert(0,AccountMeta::new(holder, false));
     // Send trx_from_account_data_instruction
     {
-        debug!("trx_from_account_data_instruction");
+        debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_plus_accounts);
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x12_u8, collateral_pool_index, 0_u64), holder_plus_accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
@@ -927,8 +928,8 @@ fn command_deploy(
 
     // Continue while no result
     loop {
-        debug!("continue");
         let continue_accounts = accounts.clone();
+        debug!("continue continue_accounts: {:?}", continue_accounts);
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, collateral_pool_index, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
