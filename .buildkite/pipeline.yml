@@ -15,7 +15,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "313-Payment_for_spent_gas_at_the_end_of_each_iteration" # TODO: revert to "${PROXY_BRANCH:-develop}"
+       branch: "Transfer_to_treasures_on_each_iteration" # TODO: revert to "${PROXY_BRANCH:-develop}"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
