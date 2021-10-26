@@ -165,14 +165,13 @@ class EventTest(unittest.TestCase):
 
         return storage
 
-
     def check_continue_result(self, result):
         if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-            assert (data[0] == 6)
+            self.assertEqual(data[0], 6)
 
-
-    def test_caseReadOlnyBlocking(self):
+    # @unittest.skip("a.i.")
+    def test_01_caseReadOlnyBlocking(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
@@ -196,9 +195,10 @@ class EventTest(unittest.TestCase):
         self.check_continue_result(result2["result"])
 
         for result in ([result1["result"], result2["result"]]):
+            print('result:', result)
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
-            self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+            self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
             self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
@@ -206,8 +206,8 @@ class EventTest(unittest.TestCase):
             self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
-
-    def test_caseWriteBlocking(self):
+    # @unittest.skip("a.i.")
+    def test_02_caseWriteBlocking(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
