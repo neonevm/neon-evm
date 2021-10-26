@@ -129,6 +129,8 @@ pub enum EvmInstruction<'a> {
     /// Partial call Ethereum-contract action from raw transaction data
     /// ### Account references same as in PartialCallFromRawEthereumTX
     Continue {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
@@ -287,9 +289,11 @@ impl<'a> EvmInstruction<'a> {
             },
             9 => EvmInstruction::PartialCallFromRawEthereumTX,
             10 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::Continue {step_count}
+                EvmInstruction::Continue {collateral_pool_index, step_count}
             },
             11 => EvmInstruction::ExecuteTrxFromAccountDataIterative,
             12 => {

@@ -448,13 +448,15 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::Continue { step_count } => {
+        EvmInstruction::Continue { collateral_pool_index, step_count } => {
             debug_print!("Continue");
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -464,6 +466,7 @@ fn process_instruction<'a>(
             })?;
             do_continue_top_level(
                 step_count, program_id, accounts,
+                collateral_pool_index, collateral_pool_sol_info, system_info,
                 storage_info, operator_sol_info, operator_eth_info, user_eth_info,
                 5, storage,
             )?;
@@ -526,10 +529,10 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
-            let _system_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -550,6 +553,7 @@ fn process_instruction<'a>(
                 Ok(storage) => {
                     do_continue_top_level(
                         step_count, program_id, accounts,
+                        collateral_pool_index, collateral_pool_sol_info, system_info,
                         storage_info, operator_sol_info, operator_eth_info, user_eth_info,
                         7, storage,
                     )?;
@@ -563,10 +567,10 @@ fn process_instruction<'a>(
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
-            let _system_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -586,7 +590,8 @@ fn process_instruction<'a>(
                 Ok(storage) => {
                     do_continue_top_level(
                         step_count, program_id, accounts,
-                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
+                        collateral_pool_index, collateral_pool_sol_info, system_info,
+                        storage_info,  operator_sol_info, operator_eth_info, user_eth_info,
                         7, storage,
                     )?;
                 },
@@ -907,6 +912,9 @@ fn do_continue_top_level<'a>(
     step_count: u64,
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
+    collateral_pool_index: u32,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
@@ -950,6 +958,18 @@ fn do_continue_top_level<'a>(
                     &storage)?;
                 Err(err)
             })?;
+
+    payment::transfer_from_operator_to_collateral_pool(
+        program_id,
+        collateral_pool_index,
+        operator_sol_info,
+        collateral_pool_sol_info,
+        system_info)?;
+
+    payment::transfer_from_operator_to_deposit(
+        operator_sol_info,
+        storage_info,
+        system_info)?;
 
     match do_continue(&mut storage, step_count, &mut account_storage)? {
         (None, used_gas) => {
