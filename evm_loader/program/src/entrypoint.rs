@@ -468,7 +468,7 @@ fn process_instruction<'a>(
                 step_count, program_id, accounts,
                 collateral_pool_index, collateral_pool_sol_info, system_info,
                 storage_info, operator_sol_info, operator_eth_info, user_eth_info,
-                5, storage,
+                6, storage,
             )?;
 
             Ok(())
