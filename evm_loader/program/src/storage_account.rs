@@ -132,17 +132,12 @@ impl<'a> StorageAccount<'a> {
     pub fn add_gas_has_been_paid(&mut self, gas: u64) -> Result<(), ProgramError> {
         let mut account_data = self.info.try_borrow_mut_data()?;
 
-        if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
-            data.gas_used_and_paid += gas;
-            data.number_of_payments += 1;
+        let mut storage = AccountData::get_mut_storage(&mut self.data)?;
+        storage.gas_used_and_paid += gas;
+        storage.number_of_payments += 1;
+        AccountData::pack(&self.data, &mut account_data)?;
 
-            let data = AccountData::Storage(data);
-            AccountData::pack(&data, &mut account_data)?;
-
-            Ok(())
-        } else {
-            Err!(ProgramError::InvalidAccountData)
-        }
+        Ok(())
     }
 
     pub fn get_payments_info(&self) -> Result<(u64, u64), ProgramError> {
