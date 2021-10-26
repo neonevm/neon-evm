@@ -930,6 +930,7 @@ fn command_deploy(
                             AccountMeta::new(storage, false),
     
                             AccountMeta::new(creator.pubkey(), true),
+                            AccountMeta::new(collateral_pool_acc, false),
                             AccountMeta::new(operator_token, false),
                             AccountMeta::new(caller_token, false),
                             AccountMeta::new(system_program::id(), false),
@@ -944,7 +945,7 @@ fn command_deploy(
                             AccountMeta::new_readonly(token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             ];
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
+        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, collateral_pool_index, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 

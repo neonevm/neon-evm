@@ -88,6 +88,8 @@ class EventTest(unittest.TestCase):
             storage_account,
             self.reId,
             self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
             step_count
         )
         print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)

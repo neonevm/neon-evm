@@ -597,16 +597,20 @@ def create_neon_evm_instr_10_continue(evm_loader_program_id,
                                       storage_sol_acc,
                                       contract_sol_acc,
                                       code_sol_acc,
+                                      collateral_pool_index_buf,
+                                      collateral_pool_address,
                                       step_count,
                                       writable_code=True):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+        data=bytearray.fromhex("0A") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
         keys=[
             # Operator's storage account:
             AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
             # Operator's SOL account:
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
             # Operator's NEON token account:
             AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             # User's NEON token account:
