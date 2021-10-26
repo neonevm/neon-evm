@@ -45,19 +45,19 @@ use crate::{
 };
 use crate::solana_program::program_pack::Pack;
 
-type CompletionResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
-type IntermediateResults = u64;
-type CallResult = Result<Option<CompletionResults>, ProgramError>;
+type UsedGas = u64;
+type EvmResults = (ExitReason, UsedGas, Vec<u8>, Option<ApplyState>);
+type CallResult = Result<EvmResults, ProgramError>;
 
 /// First iteration execution result.
-type FirstIterationResult = Result<IntermediateResults, ProgramError>;
+type FirstIterationResult = Result<UsedGas, ProgramError>;
 
 /// Iteration execution result.
 pub enum IterationResult {
     /// Execution of an ethereum transaction should be continued
-    ToBeContinued(IntermediateResults),
+    ToBeContinued(UsedGas),
     /// Execution of an ethereum transaction completed.
-    Completed(CompletionResults),
+    Completed(EvmResults),
 }
 
 const HEAP_LENGTH: usize = 256*1024;
@@ -406,25 +406,24 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let call_return = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            let call_results = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
-            if let Some(call_results) = call_return {
-                let used_gas = call_results.1;
-                token::user_pays_operator(trx_gas_price, used_gas,
-                    user_eth_info,
-                    operator_eth_info,
-                    accounts,
-                    &account_storage,
-                    None,
-                )?;
+            let used_gas = call_results.1;
+            token::user_pays_operator(trx_gas_price, used_gas,
+                user_eth_info,
+                operator_eth_info,
+                accounts,
+                &account_storage,
+                None,
+            )?;
 
-                applies_and_invokes(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    Some(operator_sol_info),
-                    call_results)?;
-            }
+            applies_and_invokes(
+                program_id,
+                &mut account_storage,
+                accounts,
+                Some(operator_sol_info),
+                call_results)?;
+
             Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
@@ -807,7 +806,7 @@ fn do_call(
         }
     };
 
-    Ok(Some(call_results))
+    Ok(call_results)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -892,7 +891,7 @@ fn complete_transaction<'a>(
     trx_accounts_index: usize,
     deposit_sol_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
-    completion_results: CompletionResults,
+    completion_results: EvmResults,
     storage: &StorageAccount,
 ) -> ProgramResult
 {
@@ -1111,7 +1110,7 @@ fn applies_and_invokes<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     operator: Option<&AccountInfo<'a>>,
-    call_results: CompletionResults
+    call_results: EvmResults
 ) -> ProgramResult {
     let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
     if let Some(applies_logs_transfers) = applies_logs_transfers {
