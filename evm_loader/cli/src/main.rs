@@ -895,7 +895,7 @@ fn command_deploy(
 
     let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config);
 
-    let accounts = vec![AccountMeta::new(holder, false),
+    let accounts = vec![
                         AccountMeta::new(storage, false),
 
                         AccountMeta::new(creator.pubkey(), true),
@@ -915,10 +915,12 @@ fn command_deploy(
                         AccountMeta::new_readonly(spl_token::id(), false),
                         ];
 
+    let mut holder_plus_accounts = accounts.clone();
+    holder_plus_accounts.insert(0,AccountMeta::new(holder, false));
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x12_u8, collateral_pool_index, 0_u64), accounts);
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x12_u8, collateral_pool_index, 0_u64), holder_plus_accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
     }
@@ -926,25 +928,7 @@ fn command_deploy(
     // Continue while no result
     loop {
         debug!("continue");
-        let continue_accounts = vec![
-                            AccountMeta::new(storage, false),
-    
-                            AccountMeta::new(creator.pubkey(), true),
-                            AccountMeta::new(collateral_pool_acc, false),
-                            AccountMeta::new(operator_token, false),
-                            AccountMeta::new(caller_token, false),
-                            AccountMeta::new(system_program::id(), false),
-
-                            AccountMeta::new(program_id, false),
-                            AccountMeta::new(program_token, false),
-                            AccountMeta::new(program_code, false),
-                            AccountMeta::new(caller_sol, false),
-                            AccountMeta::new(caller_token, false),
-
-                            AccountMeta::new_readonly(config.evm_loader, false),
-                            AccountMeta::new_readonly(token_mint::id(), false),
-                            AccountMeta::new_readonly(spl_token::id(), false),
-                            ];
+        let continue_accounts = accounts.clone();
         let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, collateral_pool_index, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
