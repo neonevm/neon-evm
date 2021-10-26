@@ -48,10 +48,6 @@ use crate::solana_program::program_pack::Pack;
 type UsedGas = u64;
 type EvmResults = (ExitReason, UsedGas, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<EvmResults, ProgramError>;
-
-/// First iteration execution result.
-type FirstIterationResult = Result<UsedGas, ProgramError>;
-
 /// Iteration execution result.
 pub enum IterationResult {
     /// Execution of an ethereum transaction should be continued
@@ -59,6 +55,7 @@ pub enum IterationResult {
     /// Execution of an ethereum transaction completed.
     Completed(EvmResults),
 }
+type PartialCallResult = Result<UsedGas, ProgramError>;
 
 const HEAP_LENGTH: usize = 256*1024;
 
@@ -1002,7 +999,7 @@ fn do_partial_call<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> FirstIterationResult
+) -> PartialCallResult
 {
     debug_print!("do_partial_call");
 
@@ -1042,7 +1039,7 @@ fn do_partial_create<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> FirstIterationResult
+) -> PartialCallResult
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
