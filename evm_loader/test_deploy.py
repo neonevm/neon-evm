@@ -257,7 +257,7 @@ class DeployTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     # Check if storage balace were filled to rent exempt
-                    self.assertEqual(
+                    self.assertGreaterEqual(
                         getBalance(storage), 
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
@@ -276,7 +276,7 @@ class DeployTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     # Check if storage balace were filled to rent exempt
-                    self.assertEqual(
+                    self.assertGreaterEqual(
                         getBalance(storage),
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
