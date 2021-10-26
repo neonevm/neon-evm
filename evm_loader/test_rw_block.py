@@ -139,7 +139,7 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def neon_emv_instr_cancel_0C(self, acc, caller, storage):
+    def neon_emv_instr_cancel_15(self, acc, caller, storage):
         meta = [
             AccountMeta(pubkey=storage, is_signer=False, is_writable=True),
             # Operator address:
@@ -170,7 +170,7 @@ class EventTest(unittest.TestCase):
 
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0C"),
+            data=bytearray.fromhex("15") + getTransactionCount(client, caller).to_bytes(8, 'little'),
             keys=meta
         )
 
@@ -273,7 +273,7 @@ class EventTest(unittest.TestCase):
             print("Ok")
 
         # removing the rw-lock
-        trx = Transaction().add(self.neon_emv_instr_cancel_0C(self.acc1, self.caller1, storage1))
+        trx = Transaction().add(self.neon_emv_instr_cancel_15(self.acc1, self.caller1, storage1))
         response = send_transaction(client, trx, self.acc1)
 
 

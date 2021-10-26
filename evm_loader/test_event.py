@@ -134,10 +134,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_12_cancel(self, storage_account):
+    def sol_instr_21_cancel(self, storage_account):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0C"),
+            data=bytearray.fromhex("15") + getTransactionCount(client, self.caller).to_bytes(8, 'little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
@@ -182,7 +182,7 @@ class EventTest(unittest.TestCase):
     def call_cancel(self, storage):
         print("Cancel")
         trx = Transaction()
-        trx.add(self.sol_instr_12_cancel(storage))
+        trx.add(self.sol_instr_21_cancel(storage))
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input):

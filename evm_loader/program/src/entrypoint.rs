@@ -478,8 +478,8 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::Cancel => {
-            debug_print!("Cancel");
+        EvmInstruction::CancelWithNonce { nonce } => {
+            debug_print!("CancelWithNonce");
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
@@ -512,7 +512,10 @@ fn process_instruction<'a>(
             let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
             let mut caller_account = caller_account_data.get_mut_account()?;
 
-            let (caller, _nonce) = storage.caller_and_nonce()?;
+            let (caller, trx_nonce) = storage.caller_and_nonce()?;
+            if trx_nonce != nonce {
+                return Err!(ProgramError::InvalidInstructionData; "trx_nonce<{:?}> != nonce<{:?}>", trx_nonce, nonce);
+            }
             if caller_account.ether != caller {
                 return Err!(ProgramError::InvalidAccountData; "acc.ether<{:?}> != caller<{:?}>", caller_account.ether, caller);
             }
@@ -732,7 +735,7 @@ fn process_instruction<'a>(
             Ok(())
         },
 
-        EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+        EvmInstruction::Cancel | EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
 
     };
 
