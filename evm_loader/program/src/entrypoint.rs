@@ -46,16 +46,8 @@ use crate::{
 use crate::solana_program::program_pack::Pack;
 
 type UsedGas = u64;
-type EvmResults = (ExitReason, UsedGas, Vec<u8>, Option<ApplyState>);
-type CallResult = Result<EvmResults, ProgramError>;
-/// Iteration execution result.
-pub enum IterationResult {
-    /// Execution of an ethereum transaction should be continued
-    ToBeContinued(UsedGas),
-    /// Execution of an ethereum transaction completed.
-    Completed(EvmResults),
-}
-type PartialCallResult = Result<UsedGas, ProgramError>;
+type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
+type CallResult = Result<(Option<EvmResults>,UsedGas), ProgramError>;
 
 const HEAP_LENGTH: usize = 256*1024;
 
@@ -403,9 +395,8 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let call_results = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            let (evm_results, used_gas) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
-            let used_gas = call_results.1;
             token::user_pays_operator(trx_gas_price, used_gas,
                 user_eth_info,
                 operator_eth_info,
@@ -419,7 +410,8 @@ fn process_instruction<'a>(
                 &mut account_storage,
                 accounts,
                 Some(operator_sol_info),
-                call_results)?;
+                evm_results.unwrap(),
+                used_gas)?;
 
             Ok(())
         },
@@ -773,7 +765,7 @@ fn do_call(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let call_results = {
+    let (evm_results,used_gas) = {
         let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
@@ -797,13 +789,13 @@ fn do_call(
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some(apply))
+            ((exit_reason, result, Some(apply)), used_gas)
         } else {
-            (exit_reason, used_gas, result, None)
+            ((exit_reason, result, None), used_gas)
         }
     };
 
-    Ok(call_results)
+    Ok((Some(evm_results),used_gas))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -859,7 +851,7 @@ fn do_begin<'a>(
         storage_info,
         system_info)?;
 
-    let half_of_total_used_gas = if trx.to.is_some() {
+    let (_,used_gas) = if trx.to.is_some() {
         do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
@@ -867,7 +859,7 @@ fn do_begin<'a>(
     };
 
     token::user_pays_operator(
-        trx_gas_price, half_of_total_used_gas,
+        trx_gas_price, used_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
@@ -888,7 +880,8 @@ fn complete_transaction<'a>(
     trx_accounts_index: usize,
     deposit_sol_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
-    completion_results: EvmResults,
+    evm_results: EvmResults,
+    used_gas: UsedGas,
     storage: &StorageAccount,
 ) -> ProgramResult
 {
@@ -903,7 +896,8 @@ fn complete_transaction<'a>(
         account_storage,
         accounts,
         Some(operator_sol_info),
-        completion_results)?;
+        evm_results,
+        used_gas)?;
 
     storage.unblock_accounts_and_destroy(program_id, trx_accounts)
 }
@@ -951,15 +945,16 @@ fn do_continue_top_level<'a>(
                     trx_accounts_index,
                     storage_info,
                     operator_sol_info,
-                    (ExitReason::Error(ExitError::OutOfFund), u64::default(), vec![0; 0], None),
+                    (ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None),
+                    UsedGas::default(),
                     &storage)?;
                 Err(err)
             })?;
 
-    match do_continue(&mut storage, step_count, &mut account_storage) {
-        IterationResult::ToBeContinued(half_of_total_used_gas) => {
+    match do_continue(&mut storage, step_count, &mut account_storage)? {
+        (None, used_gas) => {
             token::user_pays_operator(
-                trx_gas_price, half_of_total_used_gas,
+                trx_gas_price, used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
@@ -967,8 +962,7 @@ fn do_continue_top_level<'a>(
                 Some(&mut storage),
             )
         },
-        IterationResult::Completed(completion_results) => {
-            let used_gas = completion_results.1;
+        (Some(evm_results), used_gas) => {
             token::user_pays_operator(
                 trx_gas_price, used_gas,
                 user_eth_info,
@@ -985,7 +979,8 @@ fn do_continue_top_level<'a>(
                 trx_accounts_index,
                 storage_info,
                 operator_sol_info,
-                completion_results,
+                evm_results,
+                used_gas,
                 &storage,
             )
         }
@@ -999,7 +994,7 @@ fn do_partial_call<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> PartialCallResult
+) -> CallResult
 {
     debug_print!("do_partial_call");
 
@@ -1026,10 +1021,10 @@ fn do_partial_call<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
-    debug_print!("first iteration complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
+    let used_gas = executor_state.gasometer().total_used_gas()/2;
+    debug_print!("first iteration complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
 
-    Ok(half_of_total_used_gas)
+    Ok((None,used_gas))
 }
 
 fn do_partial_create<'a>(
@@ -1039,7 +1034,7 @@ fn do_partial_create<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> PartialCallResult
+) -> CallResult
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
@@ -1056,10 +1051,10 @@ fn do_partial_create<'a>(
     executor.save_into(storage);
 
     let executor_state = executor.into_state();
-    let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
-    debug_print!("first iteration of deployment complete; steps executed={:?}; half_of_total_used_gas={:?}", step_count, half_of_total_used_gas);
+    let used_gas = executor_state.gasometer().total_used_gas()/2;
+    debug_print!("first iteration of deployment complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
 
-    Ok(half_of_total_used_gas)
+    Ok((None,used_gas))
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -1067,11 +1062,11 @@ fn do_continue<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &mut ProgramAccountStorage<'a>,
-) -> IterationResult
+) -> CallResult
 {
     debug_print!("do_continue");
 
-    let call_results = {
+    let (evm_results, used_gas) = {
         let mut executor = Machine::restore(storage, account_storage);
         debug_print!("Executor restored");
 
@@ -1080,8 +1075,8 @@ fn do_continue<'a>(
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
                 let executor_state = executor.into_state();
-                let half_of_total_used_gas = executor_state.gasometer().total_used_gas()/2;
-                return IterationResult::ToBeContinued(half_of_total_used_gas);
+                let used_gas = executor_state.gasometer().total_used_gas()/2;
+                return Ok((None, used_gas));
             }
             Err((result, reason)) => (result, reason)
         };
@@ -1093,13 +1088,13 @@ fn do_continue<'a>(
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some(apply))
+            ((exit_reason, result, Some(apply)), used_gas)
         } else {
-            (exit_reason, used_gas, result, None)
+            ((exit_reason, result, None), used_gas)
         }
     };
 
-    IterationResult::Completed(call_results)
+    Ok((Some(evm_results),used_gas))
 }
 
 fn applies_and_invokes<'a>(
@@ -1107,9 +1102,10 @@ fn applies_and_invokes<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     operator: Option<&AccountInfo<'a>>,
-    call_results: EvmResults
+    evm_results: EvmResults,
+    used_gas: UsedGas
 ) -> ProgramResult {
-    let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
+    let (exit_reason, result, applies_logs_transfers) = evm_results;
     if let Some(applies_logs_transfers) = applies_logs_transfers {
         let (
             applies,
