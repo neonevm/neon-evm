@@ -42,7 +42,7 @@ if [ ${#EVM_LOADER} -eq 0 ]; then
   echo  "EVM_LOADER is not deployed"
   exit 1
 fi
-solana program dump "$EVM_LOADER" ./evm_loader.dump
+solana program dump "$EVM_LOADER" /opt/evm_loader.dump
 /opt/neon-cli --evm_loader="$EVM_LOADER" neon-elf-params /opt/evm_loader.dump
 for neon_param in $(/opt/neon-cli --evm_loader "$EVM_LOADER" neon-elf-params /opt/evm_loader.so | xargs); do
   echo "$neon_param"
