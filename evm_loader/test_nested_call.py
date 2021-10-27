@@ -18,7 +18,7 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
-proxy_id = 0;
+holder_id = 0;
 
 
 def get_recent_account_balance(code_account_address):
@@ -34,9 +34,9 @@ def write_holder_layout(nonce, offset, data):
 
 
 def create_holder_account(operator_acc):
-    proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+    holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
     signer_public_key_bytes = bytes(operator_acc.public_key())
-    seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+    seed = keccak_256(b'holder' + holder_id_bytes + signer_public_key_bytes).hexdigest()[:32]
     account_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(evm_loader_id))
     if get_recent_account_balance(account_address) == 0:
         minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
@@ -319,7 +319,7 @@ class EventTest(unittest.TestCase):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=write_holder_layout(proxy_id, offset, part),
+                data=write_holder_layout(holder_id, offset, part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
