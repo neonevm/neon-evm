@@ -397,12 +397,13 @@ fn process_instruction<'a>(
 
             let (evm_results, used_gas) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
-            token::user_pays_operator(trx_gas_price, used_gas,
+            token::user_pays_operator(
+                trx_gas_price,
+                used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
-                &account_storage,
-                None,
+                &account_storage
             )?;
 
             applies_and_invokes(
@@ -858,13 +859,13 @@ fn do_begin<'a>(
         do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     };
 
-    token::user_pays_operator(
+    token::user_pays_operator_for_iteration(
         trx_gas_price, used_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
         &account_storage,
-        Some(&mut storage),
+        &mut storage,
     )?;
 
     storage.block_accounts(program_id, trx_accounts)?;
@@ -953,13 +954,13 @@ fn do_continue_top_level<'a>(
 
     let (results, used_gas) = do_continue(&mut storage, step_count, &mut account_storage)?;
 
-    token::user_pays_operator(
+    token::user_pays_operator_for_iteration(
         trx_gas_price, used_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
         &account_storage,
-        Some(&mut storage),
+        &mut storage,
     )?;
 
     if let Some(evm_results) = results {
