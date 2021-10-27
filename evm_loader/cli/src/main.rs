@@ -930,7 +930,7 @@ fn command_deploy(
     loop {
         let continue_accounts = accounts.clone();
         debug!("continue continue_accounts: {:?}", continue_accounts);
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, collateral_pool_index, 400_u64), continue_accounts);
+        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x14_u8, collateral_pool_index, 400_u64), continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 
