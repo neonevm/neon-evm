@@ -71,8 +71,8 @@ class EthTokenTest(unittest.TestCase):
         print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
         return neon_evm_instr_19_partial_call
 
-    def sol_instr_10_continue(self, storage_account, step_count):
-        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+    def sol_instr_20_continue(self, storage_account, step_count):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
@@ -83,8 +83,8 @@ class EthTokenTest(unittest.TestCase):
             self.collateral_pool_address,
             step_count
         )
-        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
-        return neon_evm_instr_10_continue
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -100,7 +100,7 @@ class EthTokenTest(unittest.TestCase):
     def call_continue(self, storage, steps):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, steps))
+        trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):

@@ -180,8 +180,8 @@ class PrecompilesTests(unittest.TestCase):
         print('neon_evm_instr_11_begin:', neon_evm_instr_11_begin)
         return neon_evm_instr_11_begin
 
-    def sol_instr_10_continue(self, storage_account, step_count):
-        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+    def sol_instr_20_continue(self, storage_account, step_count):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
@@ -192,8 +192,8 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_address,
             step_count
         )
-        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
-        return neon_evm_instr_10_continue
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def create_account_with_seed(self, seed):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
@@ -246,7 +246,7 @@ class PrecompilesTests(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 400))
+            trx.add(self.sol_instr_20_continue(storage, 400))
             result = send_transaction(client, trx, self.acc)
 
             self.get_measurements(result)

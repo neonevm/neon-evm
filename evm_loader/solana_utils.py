@@ -591,7 +591,7 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
         ])
 
 
-def create_neon_evm_instr_10_continue(evm_loader_program_id,
+def create_neon_evm_instr_20_continue(evm_loader_program_id,
                                       caller_sol_acc,
                                       operator_sol_acc,
                                       storage_sol_acc,
@@ -603,7 +603,7 @@ def create_neon_evm_instr_10_continue(evm_loader_program_id,
                                       writable_code=True):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0A") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+        data=bytearray.fromhex("14") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
         keys=[
             # Operator's storage account:
             AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),

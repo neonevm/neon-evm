@@ -207,8 +207,8 @@ class DeployTest(unittest.TestCase):
         print('neon_evm_instr_14_combined_continue:', neon_evm_instr_14_combined_continue)
         return neon_evm_instr_14_combined_continue
 
-    def sol_instr_10_continue(self, storage_account, step_count, contract_sol, code_sol):
-        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+    def sol_instr_20_continue(self, storage_account, step_count, contract_sol, code_sol):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
             self.operator_acc.public_key(),
@@ -219,8 +219,8 @@ class DeployTest(unittest.TestCase):
             self.collateral_pool_address,
             step_count
         )
-        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
-        return neon_evm_instr_10_continue
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def create_storage_account(self, seed=str(randrange(1000000000))):
         storage = PublicKey(sha256(bytes(self.operator_acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
@@ -249,7 +249,7 @@ class DeployTest(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 50, contract_sol, code_sol))
+            trx.add(self.sol_instr_20_continue(storage, 50, contract_sol, code_sol))
             print(trx.instructions[-1].keys)
             result = send_transaction(client, trx, self.operator_acc)["result"]
 

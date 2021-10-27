@@ -196,10 +196,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, contract, code):
+    def sol_instr_20_continue(self, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0A") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            data=bytearray.fromhex("14") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
@@ -333,7 +333,7 @@ class EventTest(unittest.TestCase):
 
         while True:
             print("Continue")
-            trx = Transaction().add(self.sol_instr_10_continue(self.storage, 400, contract, code))
+            trx = Transaction().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']:
@@ -357,7 +357,7 @@ class EventTest(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(self.storage, 200, contract, code))
+            trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):
