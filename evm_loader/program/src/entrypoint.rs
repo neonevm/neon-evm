@@ -735,8 +735,7 @@ fn process_instruction<'a>(
             }
 
             // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
-            // signer_public_key_bytes = bytes(self.signer.public_key())
-            // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+            // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
             let bytes_count = std::mem::size_of_val(&holder_id);
             let bits_count = bytes_count * 8;
             let holder_id_bit_length = bits_count - holder_id.leading_zeros() as usize;
@@ -744,16 +743,15 @@ fn process_instruction<'a>(
             let mut hasher = Hasher::default();
             hasher.hash(b"holder");
             hasher.hash(&holder_id.to_be_bytes()[bytes_count-significant_bytes_count..]);
-            hasher.hash(&operator_info.key.to_bytes());
             let output = hasher.result();
             let seed = &hex::encode(output)[..32];
 
-            let expected_holder = Pubkey::create_with_seed(operator_info.key, seed, program_id);
-            if expected_holder.is_err() {
+            let expected_holder_key = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if expected_holder_key.is_err() {
                 return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
             }
 
-            if *holder_info.key != expected_holder.unwrap() {
+            if *holder_info.key != expected_holder_key.unwrap() {
                 return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
             }
 
