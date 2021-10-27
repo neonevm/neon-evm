@@ -206,7 +206,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         DEPOSIT_CONST_FEE = 1000
         print('     DEPOSIT_CONST_FEE:', DEPOSIT_CONST_FEE)
         TREASURE_CONST_FEE = 1000
-        print('     DEPOSIT_CONST_FEE:', TREASURE_CONST_FEE)
+        print('     TREASURE_CONST_FEE:', TREASURE_CONST_FEE)
         operator_balance_change = int(operator_post_balance) - int(operator_pre_balance)
         print('     operator_balance_change:', operator_balance_change)
         deposit_balance_change = int(deposit_post_balance) - int(deposit_pre_balance)
