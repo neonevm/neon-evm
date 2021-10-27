@@ -663,6 +663,10 @@ fn process_instruction<'a>(
             let code_account_new_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
 
+            if !operator_sol_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData);
+            }
+
             let mut info_data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
                 if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
