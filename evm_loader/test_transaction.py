@@ -11,6 +11,9 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
 INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
 
+NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 0))
+NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 0))
+
 
 class Step(IntEnum):
     Begin = 0
@@ -203,10 +206,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('     collateral_pool_post_balance:', collateral_pool_post_balance)
         fee = response['result']['meta']['fee']
         print('     fee:', fee)
-        DEPOSIT_CONST_FEE = 1000
-        print('     DEPOSIT_CONST_FEE:', DEPOSIT_CONST_FEE)
-        TREASURE_CONST_FEE = 1000
-        print('     TREASURE_CONST_FEE:', TREASURE_CONST_FEE)
+        print('     NEON_PAYMENT_TO_DEPOSIT:', NEON_PAYMENT_TO_DEPOSIT)
+        print('     NEON_PAYMENT_TO_TREASURE:', NEON_PAYMENT_TO_TREASURE)
         operator_balance_change = int(operator_post_balance) - int(operator_pre_balance)
         print('     operator_balance_change:', operator_balance_change)
         deposit_balance_change = int(deposit_post_balance) - int(deposit_pre_balance)
@@ -214,17 +215,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         collateral_pool_balance_change = int(collateral_pool_post_balance) - int(collateral_pool_pre_balance)
         print('     collateral_pool_balance_change:', collateral_pool_balance_change)
         if step is Step.Begin:
-            self.assertEqual(operator_balance_change, 0 - fee - DEPOSIT_CONST_FEE - TREASURE_CONST_FEE)
-            self.assertEqual(deposit_balance_change, DEPOSIT_CONST_FEE)
-            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
+            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_DEPOSIT - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, NEON_PAYMENT_TO_DEPOSIT)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
         if step is Step.Iteration:
-            self.assertEqual(operator_balance_change, 0 - fee - TREASURE_CONST_FEE)
+            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_TREASURE)
             self.assertEqual(deposit_balance_change, 0)
-            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
         if step is Step.Complete:
-            self.assertLessEqual(operator_balance_change, 0 - fee + DEPOSIT_CONST_FEE - TREASURE_CONST_FEE)
-            self.assertEqual(deposit_balance_change, 0 - DEPOSIT_CONST_FEE)
-            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
+            self.assertLessEqual(operator_balance_change, 0 - fee + NEON_PAYMENT_TO_DEPOSIT - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, 0 - NEON_PAYMENT_TO_DEPOSIT)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
 
     # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
