@@ -2,7 +2,7 @@ import unittest
 
 import solana
 from base58 import b58decode
-
+from enum import IntEnum
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -10,6 +10,12 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
 INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
+
+
+class Step(IntEnum):
+    Begin = 0
+    Iteration = 1
+    Complete = 2
 
 
 class EvmLoaderTestsNewAccount(unittest.TestCase):
@@ -162,53 +168,63 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         file_name = 'src/entrypoint.rs'
         self.assertTrue(file_name in log)
 
-    def check_transfer_from_operator_to_collateral_pool(self, response, operator_sol_acc, collateral_pool_sol_acc, on_complete=False):
-        print('check_transfer_from_operator_to_collateral_pool:')
-        print('     response:', response)
-        print('     operator_sol_acc:', operator_sol_acc)
-        print('     collateral_pool_sol_acc:', collateral_pool_sol_acc)
-        self.assertTrue(True)
-
-    def check_transfer_from_operator_to_deposit(self, response, operator_sol_acc, deposit_sol_acc, on_complete=False):
+    def check_transfers_between_operator_deposit_and_collateral_pool(
+            self, response, operator_sol_acc, deposit_sol_acc, collateral_pool_sol_acc, step=Step.Iteration):
         print('check_transfer_from_operator_to_deposit:')
         print('     response:', response)
         print('     operator_sol_acc:', operator_sol_acc)
         print('     deposit_sol_acc:', deposit_sol_acc)
+        print('     collateral_pool_sol_acc:', collateral_pool_sol_acc)
         response = json.loads(str(response).replace('\'', '\"').replace('None', 'null'))
-        print('response:', response)
+        print('     response:', response)
         account_keys = response['result']['transaction']['message']['accountKeys']
-        print('account_keys:', account_keys)
+        print('     account_keys:', account_keys)
         operator_sol_acc_index = account_keys.index(str(operator_sol_acc))
-        print('operator_sol_acc_index:', operator_sol_acc_index)
+        print('     operator_sol_acc_index:', operator_sol_acc_index)
         deposit_sol_acc_index = account_keys.index(str(deposit_sol_acc))
-        print('deposit_sol_acc_index:', deposit_sol_acc_index)
+        print('     deposit_sol_acc_index:', deposit_sol_acc_index)
+        collateral_pool_sol_acc_index = account_keys.index(str(collateral_pool_sol_acc))
+        print('     collateral_pool_sol_acc_index:', collateral_pool_sol_acc_index)
         pre_balances = response['result']['meta']['preBalances']
-        print('pre_balances:', pre_balances)
+        print('     pre_balances:', pre_balances)
         post_balances = response['result']['meta']['postBalances']
-        print('post_balances:', post_balances)
+        print('     post_balances:', post_balances)
         operator_pre_balance = pre_balances[operator_sol_acc_index]
-        print('operator_pre_balance:', operator_pre_balance)
+        print('     operator_pre_balance:', operator_pre_balance)
         operator_post_balance = post_balances[operator_sol_acc_index]
-        print('operator_post_balance:', operator_post_balance)
+        print('     operator_post_balance:', operator_post_balance)
         deposit_pre_balance = pre_balances[deposit_sol_acc_index]
-        print('deposit_pre_balance:', deposit_pre_balance)
+        print('     deposit_pre_balance:', deposit_pre_balance)
         deposit_post_balance = post_balances[deposit_sol_acc_index]
-        print('deposit_post_balance:', deposit_post_balance)
+        print('     deposit_post_balance:', deposit_post_balance)
+        collateral_pool_pre_balance = pre_balances[collateral_pool_sol_acc_index]
+        print('     collateral_pool_pre_balance:', collateral_pool_pre_balance)
+        collateral_pool_post_balance = post_balances[collateral_pool_sol_acc_index]
+        print('     collateral_pool_post_balance:', collateral_pool_post_balance)
         fee = response['result']['meta']['fee']
-        print('fee:', fee)
+        print('     fee:', fee)
         DEPOSIT_CONST_FEE = 1000
-        print('DEPOSIT_CONST_FEE:', DEPOSIT_CONST_FEE)
+        print('     DEPOSIT_CONST_FEE:', DEPOSIT_CONST_FEE)
+        TREASURE_CONST_FEE = 1000
+        print('     DEPOSIT_CONST_FEE:', TREASURE_CONST_FEE)
         operator_balance_change = int(operator_post_balance) - int(operator_pre_balance)
-        print('operator_balance_change:', operator_balance_change)
+        print('     operator_balance_change:', operator_balance_change)
         deposit_balance_change = int(deposit_post_balance) - int(deposit_pre_balance)
-        print('deposit_balance_change:', deposit_balance_change)
-        if on_complete:
-            self.assertLessEqual(operator_balance_change, 0 - fee)
-            self.assertGreaterEqual(deposit_balance_change, 0)
-        else:  # on iteration
-            self.assertLessEqual(operator_balance_change, 0 - DEPOSIT_CONST_FEE - fee)
-            self.assertGreaterEqual(deposit_balance_change, DEPOSIT_CONST_FEE)
-        self.assertTrue(True)
+        print('     deposit_balance_change:', deposit_balance_change)
+        collateral_pool_balance_change = int(collateral_pool_post_balance) - int(collateral_pool_pre_balance)
+        print('     collateral_pool_balance_change:', collateral_pool_balance_change)
+        if step is Step.Begin:
+            self.assertEqual(operator_balance_change, 0 - fee - DEPOSIT_CONST_FEE - TREASURE_CONST_FEE)
+            self.assertEqual(deposit_balance_change, DEPOSIT_CONST_FEE)
+            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
+        if step is Step.Iteration:
+            self.assertEqual(operator_balance_change, 0 - fee - TREASURE_CONST_FEE)
+            self.assertEqual(deposit_balance_change, 0)
+            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
+        if step is Step.Complete:
+            self.assertLessEqual(operator_balance_change, 0 - fee + DEPOSIT_CONST_FEE - TREASURE_CONST_FEE)
+            self.assertEqual(deposit_balance_change, 0 - DEPOSIT_CONST_FEE)
+            self.assertEqual(collateral_pool_balance_change, TREASURE_CONST_FEE)
 
     # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
@@ -431,14 +447,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         collateral_pool_sol_acc = self.collateral_pool_address
         deposit_sol_acc = storage
 
-        self.check_transfer_from_operator_to_collateral_pool(response_1, operator_sol_acc, collateral_pool_sol_acc)
-        self.check_transfer_from_operator_to_deposit(response_1, operator_sol_acc, deposit_sol_acc)
-
-        self.check_transfer_from_operator_to_collateral_pool(response_2, operator_sol_acc, collateral_pool_sol_acc)
-        self.check_transfer_from_operator_to_deposit(response_2, operator_sol_acc, deposit_sol_acc)
-
-        self.check_transfer_from_operator_to_collateral_pool(response_3, operator_sol_acc, collateral_pool_sol_acc, True)
-        self.check_transfer_from_operator_to_deposit(response_3, operator_sol_acc, deposit_sol_acc, True)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Begin)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Iteration)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_3, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Complete)
 
 
 # def test_fail_on_no_signature(self):
