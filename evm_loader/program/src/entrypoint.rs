@@ -748,12 +748,12 @@ fn process_instruction<'a>(
             let output = hasher.result();
             let seed = &hex::encode(output)[..32];
 
-            let must_holder = Pubkey::create_with_seed(operator_info.key, seed, program_id);
-            if must_holder.is_err() {
+            let expected_holder = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if expected_holder.is_err() {
                 return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
             }
 
-            if *holder_info.key != must_holder.unwrap() {
+            if *holder_info.key != expected_holder.unwrap() {
                 return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
             }
 
