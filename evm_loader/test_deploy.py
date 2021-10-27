@@ -77,7 +77,7 @@ class DeployTest(unittest.TestCase):
 
     def create_holder_account_with_deploying_transaction(self):
         holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
-        seed = keccak_256(b'holder'+holder_id_bytes+bytes(self.operator_acc.public_key())).hexdigest()[:32]
+        seed = keccak_256(b'holder'+holder_id_bytes).hexdigest()[:32]
         # Create transaction holder account (if not exists)
         holder = PublicKey(sha256(bytes(self.operator_acc.public_key())+bytes(seed, 'utf8')+bytes(PublicKey(evm_loader_id))).digest())
         print("Holder", holder)

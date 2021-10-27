@@ -69,7 +69,7 @@ class Test_Write(unittest.TestCase):
 
     def create_account(self):
         holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
-        seed = keccak_256(b'holder' + holder_id_bytes + bytes(self.signer.public_key())).hexdigest()[:32]
+        seed = keccak_256(b'holder' + holder_id_bytes).hexdigest()[:32]
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
         if getBalance(self.account_address) == 0:
             print('Creating account...')

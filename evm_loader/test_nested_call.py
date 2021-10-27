@@ -35,8 +35,7 @@ def write_holder_layout(nonce, offset, data):
 
 def create_holder_account(operator_acc):
     holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
-    signer_public_key_bytes = bytes(operator_acc.public_key())
-    seed = keccak_256(b'holder' + holder_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+    seed = keccak_256(b'holder' + holder_id_bytes).hexdigest()[:32]
     account_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(evm_loader_id))
     if get_recent_account_balance(account_address) == 0:
         minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]

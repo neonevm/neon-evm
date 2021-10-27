@@ -277,7 +277,7 @@ class PrecompilesTests(unittest.TestCase):
         assert (from_addr == self.caller_ether)
 
         holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
-        holder_seed = keccak_256(b'holder'+holder_id_bytes+bytes(self.acc.public_key())).hexdigest()[:32]
+        holder_seed = keccak_256(b'holder'+holder_id_bytes).hexdigest()[:32]
         holder = self.create_account_with_seed(holder_seed)
         storage = self.create_account_with_seed(sign[:8].hex())
 
