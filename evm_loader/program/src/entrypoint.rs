@@ -967,11 +967,6 @@ fn do_continue_top_level<'a>(
         collateral_pool_sol_info,
         system_info)?;
 
-    payment::transfer_from_operator_to_deposit(
-        operator_sol_info,
-        storage_info,
-        system_info)?;
-
     let (results, used_gas) = do_continue(&mut storage, step_count, &mut account_storage)?;
 
     token::user_pays_operator_for_iteration(
