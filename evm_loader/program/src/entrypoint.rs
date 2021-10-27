@@ -723,7 +723,7 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::WriteHolder {nonce, offset, bytes} => {
+        EvmInstruction::WriteHolder { holder_id, offset, bytes} => {
             let holder_info = next_account_info(account_info_iter)?;
             if holder_info.owner != program_id {
                 return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
@@ -737,13 +737,13 @@ fn process_instruction<'a>(
             // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
             // signer_public_key_bytes = bytes(self.signer.public_key())
             // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
-            let bytes_count = std::mem::size_of_val(&nonce);
+            let bytes_count = std::mem::size_of_val(&holder_id);
             let bits_count = bytes_count * 8;
-            let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
-            let significant_bytes_count = (nonce_bit_length + 7) / 8;
+            let holder_id_bit_length = bits_count - holder_id.leading_zeros() as usize;
+            let significant_bytes_count = (holder_id_bit_length + 7) / 8;
             let mut hasher = Hasher::default();
             hasher.hash(b"holder");
-            hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
+            hasher.hash(&holder_id.to_be_bytes()[bytes_count-significant_bytes_count..]);
             hasher.hash(&operator_info.key.to_bytes());
             let output = hasher.result();
             let seed = &hex::encode(output)[..32];
