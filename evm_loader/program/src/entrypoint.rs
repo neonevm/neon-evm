@@ -951,40 +951,31 @@ fn do_continue_top_level<'a>(
                 Err(err)
             })?;
 
-    match do_continue(&mut storage, step_count, &mut account_storage)? {
-        (None, used_gas) => {
-            token::user_pays_operator(
-                trx_gas_price, used_gas,
-                user_eth_info,
-                operator_eth_info,
-                accounts,
-                &account_storage,
-                Some(&mut storage),
-            )
-        },
-        (Some(evm_results), used_gas) => {
-            token::user_pays_operator(
-                trx_gas_price, used_gas,
-                user_eth_info,
-                operator_eth_info,
-                accounts,
-                &account_storage,
-                Some(&mut storage),
-            )?;
+    let (results, used_gas) = do_continue(&mut storage, step_count, &mut account_storage)?;
 
-            complete_transaction(
-                program_id,
-                &mut account_storage,
-                accounts,
-                trx_accounts_index,
-                storage_info,
-                operator_sol_info,
-                evm_results,
-                used_gas,
-                &storage,
-            )
-        }
+    token::user_pays_operator(
+        trx_gas_price, used_gas,
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        &account_storage,
+        Some(&mut storage),
+    )?;
+
+    if let Some(evm_results) = results {
+        complete_transaction(
+            program_id,
+            &mut account_storage,
+            accounts,
+            trx_accounts_index,
+            storage_info,
+            operator_sol_info,
+            evm_results,
+            used_gas,
+            &storage,
+        )?;
     }
+    Ok(())
 }
 
 fn do_partial_call<'a>(
