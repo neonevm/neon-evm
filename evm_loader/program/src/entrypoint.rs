@@ -449,7 +449,7 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::Continue { collateral_pool_index, step_count } => {
+        EvmInstruction::ContinueV02 { collateral_pool_index, step_count } => {
             debug_print!("Continue");
             let storage_info = next_account_info(account_info_iter)?;
 
@@ -709,7 +709,8 @@ fn process_instruction<'a>(
         EvmInstruction::Finalise |
         EvmInstruction::CreateAccountWithSeed |
         EvmInstruction::ExecuteTrxFromAccountDataIterative |
-        EvmInstruction::PartialCallFromRawEthereumTX
+        EvmInstruction::PartialCallFromRawEthereumTX |
+        EvmInstruction::Continue
         => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
