@@ -535,7 +535,7 @@ fn make_deploy_ethereum_transaction(
 fn fill_holder_account(
     config: &Config,
     holder: &Pubkey,
-    holder_nonce: u64,
+    holder_id: u64,
     msg: &[u8],
 ) -> Result<(), Error> {
     let creator = &config.signer;
@@ -550,7 +550,7 @@ fn fill_holder_account(
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
             /* &EvmInstruction::WriteHolder {nonce, offset, bytes: chunk}, */
-            &(0x12_u8, holder_nonce, offset, chunk),
+            &(0x12_u8, holder_id, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
@@ -839,23 +839,21 @@ fn send_transaction(
 }
 
 /// Returns random nonce and the corresponding seed.
-fn generate_random_holder_seed(key: &Pubkey) -> (u64, String) {
+fn generate_random_holder_seed() -> (u64, String) {
     use rand::Rng as _;
     // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
-    // signer_public_key_bytes = bytes(self.signer.public_key())
-    // seed = keccak_256(b'holder' + proxy_id_bytes + signer_public_key_bytes).hexdigest()[:32]
+    // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
     let mut rng = rand::thread_rng();
-    let nonce: u64 = rng.gen();
-    let bytes_count = std::mem::size_of_val(&nonce);
+    let id: u64 = rng.gen();
+    let bytes_count = std::mem::size_of_val(&id);
     let bits_count = bytes_count * 8;
-    let nonce_bit_length = bits_count - nonce.leading_zeros() as usize;
-    let significant_bytes_count = (nonce_bit_length + 7) / 8;
+    let holder_id_bit_length = bits_count - id.leading_zeros() as usize;
+    let significant_bytes_count = (holder_id_bit_length + 7) / 8;
     let mut hasher = Hasher::default();
     hasher.hash(b"holder");
-    hasher.hash(&nonce.to_be_bytes()[bytes_count-significant_bytes_count..]);
-    hasher.hash(&key.to_bytes());
+    hasher.hash(&id.to_be_bytes()[bytes_count-significant_bytes_count..]);
     let output = hasher.result();
-    (nonce, hex::encode(output)[..32].into())
+    (id, hex::encode(output)[..32].into())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -911,10 +909,10 @@ fn command_deploy(
     let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
-    let (holder_nonce, holder_seed) = generate_random_holder_seed(&creator.pubkey());
+    let (holder_id, holder_seed) = generate_random_holder_seed();
     let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &holder_seed, 128*1024_u64)?;
 
-    fill_holder_account(config, &holder, holder_nonce, &msg)?;
+    fill_holder_account(config, &holder, holder_id, &msg)?;
 
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
