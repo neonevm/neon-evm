@@ -731,7 +731,7 @@ fn process_instruction<'a>(
 
             let operator_info = next_account_info(account_info_iter)?;
             if !operator_info.is_signer {
-                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
+                return Err!(ProgramError::MissingRequiredSignature; "operator is not signer <{:?}>", operator_info.key);
             }
 
             // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
