@@ -13,6 +13,7 @@ from solana_utils import *
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+holder_id = 0
 
 class PrecompilesTests(unittest.TestCase):
     @classmethod
@@ -256,7 +257,7 @@ class PrecompilesTests(unittest.TestCase):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=(bytes.fromhex("00000000") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
+                data=(bytes.fromhex('12') + holder_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
@@ -275,7 +276,9 @@ class PrecompilesTests(unittest.TestCase):
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
 
-        holder = self.create_account_with_seed("1236")
+        holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
+        holder_seed = keccak_256(b'holder'+holder_id_bytes).hexdigest()[:32]
+        holder = self.create_account_with_seed(holder_seed)
         storage = self.create_account_with_seed(sign[:8].hex())
 
         self.write_transaction_to_holder_account(holder, sign, msg)

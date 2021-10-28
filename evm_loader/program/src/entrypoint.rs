@@ -14,6 +14,7 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
+
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
@@ -21,6 +22,7 @@ use solana_program::{
     program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
+    keccak::Hasher,
     msg,
 };
 
@@ -44,7 +46,6 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-
 
 type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
@@ -119,7 +120,7 @@ fn process_instruction<'a>(
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed {:?}", instruction);
+    debug_print!("Instruction parsed: {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -283,14 +284,6 @@ fn process_instruction<'a>(
                 wallet.key
             )?;
             invoke(&instruction, accounts)
-        },
-        EvmInstruction::Write {offset, bytes} => {
-            let account_info = next_account_info(account_info_iter)?;
-            if account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "account_info.owner<{:?}> != program_id<{:?}>", account_info.owner, program_id);
-            }
-
-            do_write(account_info, offset, bytes)
         },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
@@ -655,7 +648,6 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-
         EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
             let account_info = next_account_info(account_info_iter)?;
@@ -731,9 +723,44 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::WriteHolder { holder_id, offset, bytes} => {
+            let holder_info = next_account_info(account_info_iter)?;
+            if holder_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
+            }
 
-        EvmInstruction::Finalise | EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+            let operator_info = next_account_info(account_info_iter)?;
+            if !operator_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
+            }
 
+            // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+            // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
+            let bytes_count = std::mem::size_of_val(&holder_id);
+            let bits_count = bytes_count * 8;
+            let holder_id_bit_length = bits_count - holder_id.leading_zeros() as usize;
+            let significant_bytes_count = (holder_id_bit_length + 7) / 8;
+            let mut hasher = Hasher::default();
+            hasher.hash(b"holder");
+            hasher.hash(&holder_id.to_be_bytes()[bytes_count-significant_bytes_count..]);
+            let output = hasher.result();
+            let seed = &hex::encode(output)[..32];
+
+            let expected_holder_key = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if expected_holder_key.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
+            }
+
+            if *holder_info.key != expected_holder_key.unwrap() {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
+            }
+
+            do_write(holder_info, offset, bytes)
+        },
+
+        EvmInstruction::Write |
+        EvmInstruction::Finalise |
+        EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());

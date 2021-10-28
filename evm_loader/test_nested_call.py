@@ -1,13 +1,13 @@
 import unittest
 from random import randrange
-
 from base58 import b58decode
+from sha3 import keccak_256
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, Trx
 from spl.token.instructions import get_associated_token_address
+from eth_keys import keys
 from eth_utils import abi
 from web3.auto import w3
-from eth_keys import keys
 from web3 import Web3
 
 
@@ -18,13 +18,34 @@ CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 # evm_loader_id = "7NXfEKTMhPdkviCjWipXxUtkEMDRzPJMQnz39aRMCwb1"
+holder_id = 0;
 
 
 def get_recent_account_balance(code_account_address):
     return http_client.get_balance(code_account_address, commitment='recent')['result']['value']
 
 
-def create_storage_account(operator_acc, seed=str(randrange(1000000000))):
+def write_holder_layout(nonce, offset, data):
+    return (bytes.fromhex('12') +
+            nonce.to_bytes(8, byteorder='little') +
+            offset.to_bytes(4, byteorder='little') +
+            len(data).to_bytes(8, byteorder='little') +
+            data)
+
+
+def create_holder_account(operator_acc):
+    holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
+    seed = keccak_256(b'holder' + holder_id_bytes).hexdigest()[:32]
+    account_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(evm_loader_id))
+    if get_recent_account_balance(account_address) == 0:
+        minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
+        trx = Transaction()
+        trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
+        send_transaction(client, trx, operator_acc)
+    return account_address
+
+
+def create_storage_account(operator_acc, seed):
     storage = PublicKey(sha256(bytes(operator_acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
     print("Storage", storage)
     minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
@@ -94,7 +115,7 @@ class EventTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        cls.holder = create_storage_account(cls.acc, '1236')
+        cls.holder = create_holder_account(cls.acc)
         cls.storage = create_storage_account(cls.acc, '123435456776')
 
     def sol_instr_keccak(self, keccak_instruction):
@@ -297,7 +318,7 @@ class EventTest(unittest.TestCase):
             (part, rest) = (rest[:1000], rest[1000:])
             trx = Transaction()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=(bytes.fromhex("00000000") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
+                data=write_holder_layout(holder_id, offset, part),
                 keys=[
                     AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
