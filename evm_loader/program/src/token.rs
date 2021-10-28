@@ -172,11 +172,8 @@ pub fn transfer_token(
     debug_print!("transfer_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         return Err!(ProgramError::InvalidInstructionData;
-            "Invalid account owner;\
-             source_token_account = {:?},\
-              source_account = {:?}",
-            source_token_account,
-            source_account
+            "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
+            source_token_account, source_account
         );
     }
 
@@ -187,9 +184,8 @@ pub fn transfer_token(
     if source_token_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
             "Insufficient funds on token account {:?} {:?}",
-            source_token_account,
-            source_token_balance
-        )
+            source_token_account, source_token_balance
+        );
     }
 
     debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
