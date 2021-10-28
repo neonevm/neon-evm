@@ -885,34 +885,6 @@ fn do_begin<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn complete_transaction<'a>(
-    program_id: &Pubkey,
-    account_storage: &mut ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
-    trx_accounts: &'a [AccountInfo<'a>],
-    deposit_sol_info: &'a AccountInfo<'a>,
-    operator_sol_info: &'a AccountInfo<'a>,
-    evm_results: EvmResults,
-    used_gas: UsedGas,
-    storage: &StorageAccount,
-) -> ProgramResult
-{
-    payment::transfer_from_deposit_to_operator(
-        deposit_sol_info,
-        operator_sol_info)?;
-
-    applies_and_invokes(
-        program_id,
-        account_storage,
-        accounts,
-        Some(operator_sol_info),
-        evm_results,
-        used_gas)?;
-
-    storage.unblock_accounts_and_destroy(program_id, trx_accounts)
-}
-
-#[allow(clippy::too_many_arguments)]
 fn do_continue_top_level<'a>(
     mut storage: StorageAccount,
     step_count: u64,
@@ -939,27 +911,18 @@ fn do_continue_top_level<'a>(
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
 
-    token::check_enough_funds(
-        trx_gas_limit,
-        trx_gas_price,
-        user_eth_info,
-        Some(&mut storage))
-        .or_else(|err|
-            {
-                complete_transaction(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    trx_accounts,
-                    storage_info,
-                    operator_sol_info,
-                    (ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None),
-                    UsedGas::default(),
-                    &storage)?;
-                Err(err)
-            })?;
-
-    let (results, used_gas) = do_continue(&mut storage, step_count, &mut account_storage)?;
+    let (results, used_gas) = {
+        if let Err(_) = token::check_enough_funds(
+            trx_gas_limit,
+            trx_gas_price,
+            user_eth_info,
+            Some(&mut storage)) {
+            let used_gas = storage.get_payments_info()?.0;
+            (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
+        } else {
+            do_continue(&mut storage, step_count, &mut account_storage)?
+        }
+    };
 
     token::user_pays_operator_for_iteration(
         trx_gas_price, used_gas,
@@ -971,17 +934,19 @@ fn do_continue_top_level<'a>(
     )?;
 
     if let Some(evm_results) = results {
-        complete_transaction(
+        payment::transfer_from_deposit_to_operator(
+            storage_info,
+            operator_sol_info)?;
+
+        applies_and_invokes(
             program_id,
             &mut account_storage,
             accounts,
-            trx_accounts,
-            storage_info,
-            operator_sol_info,
+            Some(operator_sol_info),
             evm_results,
-            used_gas,
-            &storage,
-        )?;
+            used_gas)?;
+
+        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
     }
     Ok(())
 }
