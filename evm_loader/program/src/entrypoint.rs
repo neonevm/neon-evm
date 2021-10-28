@@ -14,6 +14,7 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
+
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
@@ -21,6 +22,7 @@ use solana_program::{
     program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
+    keccak::Hasher,
     msg,
 };
 
@@ -119,7 +121,7 @@ fn process_instruction<'a>(
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed {:?}", instruction);
+    debug_print!("Instruction parsed: {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -284,14 +286,6 @@ fn process_instruction<'a>(
             )?;
             invoke(&instruction, accounts)
         },
-        EvmInstruction::Write {offset, bytes} => {
-            let account_info = next_account_info(account_info_iter)?;
-            if account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "account_info.owner<{:?}> != program_id<{:?}>", account_info.owner, program_id);
-            }
-
-            do_write(account_info, offset, bytes)
-        },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
         // Does not fit in current vision.
@@ -336,12 +330,14 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
-            let _system_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[7..];
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
@@ -350,9 +346,11 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                step_count, program_id, accounts, storage_info,
-                collateral_pool_index,
-                trx, caller,
+                collateral_pool_index, step_count, caller, trx,
+                program_id, trx_accounts, accounts, storage_info,
+                operator_sol_info, collateral_pool_sol_info,
+                operator_eth_info, user_eth_info,
+                system_info,
             )?;
 
             Ok(())
@@ -428,12 +426,14 @@ fn process_instruction<'a>(
 
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let _collateral_pool_sol_info = next_account_info(account_info_iter)?;
-            let _operator_eth_info = next_account_info(account_info_iter)?;
-            let _user_eth_info = next_account_info(account_info_iter)?;
-            let _system_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[7..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
@@ -442,9 +442,11 @@ fn process_instruction<'a>(
                 .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                step_count, program_id, accounts, storage_info,
-                collateral_pool_index,
-                trx, caller,
+                collateral_pool_index, step_count, caller, trx,
+                program_id, trx_accounts, accounts, storage_info,
+                operator_sol_info, collateral_pool_sol_info,
+                operator_eth_info, user_eth_info,
+                system_info,
             )?;
 
             Ok(())
@@ -461,15 +463,17 @@ fn process_instruction<'a>(
 
             authorized_operator_check(operator_sol_info)?;
 
+            let trx_accounts = &accounts[5..];
+
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
             do_continue_top_level(
-                step_count, program_id, accounts,
+                storage, step_count, program_id,
+                accounts, trx_accounts, storage_info,
+                operator_sol_info, operator_eth_info, user_eth_info,
                 collateral_pool_index, collateral_pool_sol_info, system_info,
-                storage_info, operator_sol_info, operator_eth_info, user_eth_info,
-                6, storage,
             )?;
 
             Ok(())
@@ -537,6 +541,8 @@ fn process_instruction<'a>(
 
             authorized_operator_check(operator_sol_info)?;
 
+            let trx_accounts = &accounts[7..];
+
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
                     check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -546,17 +552,19 @@ fn process_instruction<'a>(
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        step_count, program_id, accounts, storage_info,
-                        collateral_pool_index,
-                        trx, caller,
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, accounts, storage_info,
+                        operator_sol_info, collateral_pool_sol_info,
+                        operator_eth_info, user_eth_info,
+                        system_info,
                     )?;
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts,
+                        storage, step_count, program_id,
+                        accounts, trx_accounts, storage_info,
+                        operator_sol_info, operator_eth_info, user_eth_info,
                         collateral_pool_index, collateral_pool_sol_info, system_info,
-                        storage_info, operator_sol_info, operator_eth_info, user_eth_info,
-                        7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -575,6 +583,8 @@ fn process_instruction<'a>(
 
             authorized_operator_check(operator_sol_info)?;
 
+            let trx_accounts = &accounts[7..];
+
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
                     let holder_data = holder_info.data.borrow();
@@ -583,17 +593,19 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        step_count, program_id, accounts, storage_info,
-                        collateral_pool_index,
-                        trx, caller,
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, accounts, storage_info,
+                        operator_sol_info, collateral_pool_sol_info,
+                        operator_eth_info, user_eth_info,
+                        system_info,
                     )?;
                 },
                 Ok(storage) => {
                     do_continue_top_level(
-                        step_count, program_id, accounts,
+                        storage, step_count, program_id,
+                        accounts, trx_accounts, storage_info,
+                        operator_sol_info, operator_eth_info, user_eth_info,
                         collateral_pool_index, collateral_pool_sol_info, system_info,
-                        storage_info,  operator_sol_info, operator_eth_info, user_eth_info,
-                        7, storage,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -629,7 +641,6 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-
         EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
             let account_info = next_account_info(account_info_iter)?;
@@ -705,7 +716,42 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::WriteHolder { holder_id, offset, bytes} => {
+            let holder_info = next_account_info(account_info_iter)?;
+            if holder_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
+            }
 
+            let operator_info = next_account_info(account_info_iter)?;
+            if !operator_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
+            }
+
+            // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+            // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
+            let bytes_count = std::mem::size_of_val(&holder_id);
+            let bits_count = bytes_count * 8;
+            let holder_id_bit_length = bits_count - holder_id.leading_zeros() as usize;
+            let significant_bytes_count = (holder_id_bit_length + 7) / 8;
+            let mut hasher = Hasher::default();
+            hasher.hash(b"holder");
+            hasher.hash(&holder_id.to_be_bytes()[bytes_count-significant_bytes_count..]);
+            let output = hasher.result();
+            let seed = &hex::encode(output)[..32];
+
+            let expected_holder_key = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if expected_holder_key.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
+            }
+
+            if *holder_info.key != expected_holder_key.unwrap() {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
+            }
+
+            do_write(holder_info, offset, bytes)
+        },
+
+        EvmInstruction::Write |
         EvmInstruction::Finalise |
         EvmInstruction::CreateAccountWithSeed |
         EvmInstruction::ExecuteTrxFromAccountDataIterative |
@@ -807,31 +853,24 @@ fn do_call(
 
 #[allow(clippy::too_many_arguments)]
 fn do_begin<'a>(
+    collateral_pool_index: u32,
     step_count: u64,
+    caller: H160,
+    trx: UnsignedTransaction,
     program_id: &Pubkey,
+    trx_accounts: &'a [AccountInfo<'a>],
     accounts: &'a [AccountInfo<'a>],
     storage_info: &'a AccountInfo<'a>,
-    collateral_pool_index: u32,
-    trx: UnsignedTransaction,
-    caller: H160,
+    operator_sol_info: &'a AccountInfo<'a>,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    operator_eth_info: &'a AccountInfo<'a>,
+    user_eth_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
 ) -> ProgramResult
 {
-    let account_info_iter = &mut accounts.iter();
-
-    let _ = next_account_info(account_info_iter)?;
-    let __ = next_account_info(account_info_iter)?;
-
-    let operator_sol_info = next_account_info(account_info_iter)?;
-    let collateral_pool_sol_info = next_account_info(account_info_iter)?;
-    let operator_eth_info = next_account_info(account_info_iter)?;
-    let user_eth_info = next_account_info(account_info_iter)?;
-    let system_info = next_account_info(account_info_iter)?;
-
     if !operator_sol_info.is_signer {
         return Err!(ProgramError::InvalidAccountData);
     }
-
-    let trx_accounts = &accounts[7..];
 
     let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
@@ -880,56 +919,24 @@ fn do_begin<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn complete_transaction<'a>(
-    program_id: &Pubkey,
-    account_storage: &mut ProgramAccountStorage<'a>,
-    accounts: &'a [AccountInfo<'a>],
-    trx_accounts_index: usize,
-    deposit_sol_info: &'a AccountInfo<'a>,
-    operator_sol_info: &'a AccountInfo<'a>,
-    evm_results: EvmResults,
-    used_gas: UsedGas,
-    storage: &StorageAccount,
-) -> ProgramResult
-{
-    let trx_accounts = &accounts[trx_accounts_index..];
-
-    payment::transfer_from_deposit_to_operator(
-        deposit_sol_info,
-        operator_sol_info)?;
-
-    applies_and_invokes(
-        program_id,
-        account_storage,
-        accounts,
-        Some(operator_sol_info),
-        evm_results,
-        used_gas)?;
-
-    storage.unblock_accounts_and_destroy(program_id, trx_accounts)
-}
-
-#[allow(clippy::too_many_arguments)]
 fn do_continue_top_level<'a>(
+    mut storage: StorageAccount,
     step_count: u64,
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
-    collateral_pool_index: u32,
-    collateral_pool_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>,
+    trx_accounts: &'a [AccountInfo<'a>],
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
-    trx_accounts_index: usize,
-    mut storage: StorageAccount,
+    collateral_pool_index: u32,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
         return Err!(ProgramError::InvalidAccountData);
     }
-
-    let trx_accounts = &accounts[trx_accounts_index..];
 
     let custom_error: ProgramError = EvmLoaderError::ExclusiveAccessUnvailable.into();
     if let Err(err) = storage.check_accounts(program_id, trx_accounts, true){
@@ -941,26 +948,6 @@ fn do_continue_top_level<'a>(
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
 
-    token::check_enough_funds(
-        trx_gas_limit,
-        trx_gas_price,
-        user_eth_info,
-        Some(&mut storage))
-        .or_else(|err|
-            {
-                complete_transaction(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    trx_accounts_index,
-                    storage_info,
-                    operator_sol_info,
-                    (ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None),
-                    UsedGas::default(),
-                    &storage)?;
-                Err(err)
-            })?;
-
     payment::transfer_from_operator_to_collateral_pool(
         program_id,
         collateral_pool_index,
@@ -968,7 +955,18 @@ fn do_continue_top_level<'a>(
         collateral_pool_sol_info,
         system_info)?;
 
-    let (results, used_gas) = do_continue(&mut storage, step_count, &mut account_storage)?;
+    let (results, used_gas) = {
+        if let Err(_) = token::check_enough_funds(
+            trx_gas_limit,
+            trx_gas_price,
+            user_eth_info,
+            Some(&mut storage)) {
+            let used_gas = storage.get_payments_info()?.0;
+            (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
+        } else {
+            do_continue(&mut storage, step_count, &mut account_storage)?
+        }
+    };
 
     token::user_pays_operator_for_iteration(
         trx_gas_price, used_gas,
@@ -980,18 +978,21 @@ fn do_continue_top_level<'a>(
     )?;
 
     if let Some(evm_results) = results {
-        complete_transaction(
+        payment::transfer_from_deposit_to_operator(
+            storage_info,
+            operator_sol_info)?;
+
+        applies_and_invokes(
             program_id,
             &mut account_storage,
             accounts,
-            trx_accounts_index,
-            storage_info,
-            operator_sol_info,
+            Some(operator_sol_info),
             evm_results,
-            used_gas,
-            &storage,
-        )?;
+            used_gas)?;
+
+        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
     }
+
     Ok(())
 }
 
