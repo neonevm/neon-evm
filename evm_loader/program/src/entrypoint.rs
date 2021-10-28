@@ -14,6 +14,7 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
+
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
@@ -21,6 +22,7 @@ use solana_program::{
     program::{invoke},
     rent::Rent,
     sysvar::Sysvar,
+    keccak::Hasher,
     msg,
 };
 
@@ -119,7 +121,7 @@ fn process_instruction<'a>(
     let account_info_iter = &mut accounts.iter();
 
     let instruction = EvmInstruction::unpack(instruction_data)?;
-    debug_print!("Instruction parsed {:?}", instruction);
+    debug_print!("Instruction parsed: {:?}", instruction);
 
     #[allow(clippy::match_same_arms)]
     let result = match instruction {
@@ -131,13 +133,13 @@ fn process_instruction<'a>(
             let token_account_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(funding_info)?;
-
+            
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             if !funding_info.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!funding_info.is_signer");
             }
-
+            
             let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
             let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
             if expected_address != *account_info.key {
@@ -284,14 +286,6 @@ fn process_instruction<'a>(
             )?;
             invoke(&instruction, accounts)
         },
-        EvmInstruction::Write {offset, bytes} => {
-            let account_info = next_account_info(account_info_iter)?;
-            if account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "account_info.owner<{:?}> != program_id<{:?}>", account_info.owner, program_id);
-            }
-
-            do_write(account_info, offset, bytes)
-        },
         // TODO: EvmInstruction::Call
         // https://github.com/neonlabsorg/neon-evm/issues/188
         // Does not fit in current vision.
@@ -341,9 +335,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[7..];
-
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[7..];
 
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
@@ -437,9 +431,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[7..];
-
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[7..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
@@ -465,9 +459,9 @@ fn process_instruction<'a>(
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[5..];
-
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[5..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
@@ -542,9 +536,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[7..];
-
             authorized_operator_check(operator_sol_info)?;
+
+            let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
@@ -583,9 +577,9 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            let trx_accounts = &accounts[7..];
-
             authorized_operator_check(operator_sol_info)?;
+            
+            let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
@@ -642,7 +636,6 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-
         EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
             let account_info = next_account_info(account_info_iter)?;
@@ -718,7 +711,42 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::WriteHolder { holder_id, offset, bytes} => {
+            let holder_info = next_account_info(account_info_iter)?;
+            if holder_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "holder_account_info.owner<{:?}> != program_id<{:?}>", holder_info.owner, program_id);
+            }
 
+            let operator_info = next_account_info(account_info_iter)?;
+            if !operator_info.is_signer {
+                return Err!(ProgramError::InvalidArgument; "operator is not signer <{:?}>", operator_info.key);
+            }
+
+            // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+            // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
+            let bytes_count = std::mem::size_of_val(&holder_id);
+            let bits_count = bytes_count * 8;
+            let holder_id_bit_length = bits_count - holder_id.leading_zeros() as usize;
+            let significant_bytes_count = (holder_id_bit_length + 7) / 8;
+            let mut hasher = Hasher::default();
+            hasher.hash(b"holder");
+            hasher.hash(&holder_id.to_be_bytes()[bytes_count-significant_bytes_count..]);
+            let output = hasher.result();
+            let seed = &hex::encode(output)[..32];
+
+            let expected_holder_key = Pubkey::create_with_seed(operator_info.key, seed, program_id);
+            if expected_holder_key.is_err() {
+                return Err!(ProgramError::InvalidArgument; "invalid seed <{:?}>", seed);
+            }
+
+            if *holder_info.key != expected_holder_key.unwrap() {
+                return Err!(ProgramError::InvalidArgument; "wrong holder account <{:?}>", holder_info.key);
+            }
+
+            do_write(holder_info, offset, bytes)
+        },
+
+        EvmInstruction::Write |
         EvmInstruction::Finalise |
         EvmInstruction::CreateAccountWithSeed |
         EvmInstruction::ExecuteTrxFromAccountDataIterative |
@@ -948,6 +976,7 @@ fn do_continue_top_level<'a>(
 
         storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
     }
+
     Ok(())
 }
 
