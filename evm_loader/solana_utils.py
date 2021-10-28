@@ -453,14 +453,16 @@ ACCOUNT_INFO_LAYOUT = cStruct(
 )
 
 
+
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
     trx_count: int
+    code_account: PublicKey
 
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count)
+        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 
 def getAccountData(client, account, expected_length):
@@ -558,7 +560,8 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
                                           collateral_pool_address,
                                           step_count,
                                           evm_instruction,
-                                          writable_code=True):
+                                          writable_code=True,
+                                          add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("13") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
@@ -585,6 +588,9 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
             AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -600,7 +606,8 @@ def create_neon_evm_instr_20_continue(evm_loader_program_id,
                                       collateral_pool_index_buf,
                                       collateral_pool_address,
                                       step_count,
-                                      writable_code=True):
+                                      writable_code=True,
+                                      add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("14") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
@@ -625,6 +632,9 @@ def create_neon_evm_instr_20_continue(evm_loader_program_id,
             AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
