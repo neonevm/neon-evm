@@ -453,14 +453,16 @@ ACCOUNT_INFO_LAYOUT = cStruct(
 )
 
 
+
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
     trx_count: int
+    code_account: PublicKey
 
     @staticmethod
     def frombytes(data):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count)
+        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 
 def getAccountData(client, account, expected_length):
