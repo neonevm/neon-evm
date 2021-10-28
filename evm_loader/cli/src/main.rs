@@ -27,11 +27,11 @@ use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
     instruction::{AccountMeta, Instruction},
-    loader_instruction::LoaderInstruction,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer, Signature},
     signers::Signers,
+    keccak::Hasher,
     transaction::Transaction,
     system_program,
     sysvar,
@@ -187,8 +187,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        let used_gas = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
+        let refunded_gas = executor_state.gasometer().refunded_gas();
         let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
@@ -534,7 +534,8 @@ fn make_deploy_ethereum_transaction(
 
 fn fill_holder_account(
     config: &Config,
-    holder: &Pubkey, 
+    holder: &Pubkey,
+    holder_id: u64,
     msg: &[u8],
 ) -> Result<(), Error> {
     let creator = &config.signer;
@@ -545,12 +546,15 @@ fn fill_holder_account(
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
+
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &LoaderInstruction::Write {offset, bytes: chunk.to_vec()},
+            /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
+            &(0x12_u8, holder_id, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
         );
+
         let message = Message::new(&[instruction], Some(&creator.pubkey()));
         write_messages.push(message);
     }
@@ -834,6 +838,25 @@ fn send_transaction(
     Ok(tx_sig)
 }
 
+/// Returns random nonce and the corresponding seed.
+fn generate_random_holder_seed() -> (u64, String) {
+    use rand::Rng as _;
+    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+    // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    let bytes_count = std::mem::size_of_val(&id);
+    let bits_count = bytes_count * 8;
+    let holder_id_bit_length = bits_count - id.leading_zeros() as usize;
+    let significant_bytes_count = (holder_id_bit_length + 7) / 8;
+    let mut hasher = Hasher::default();
+    hasher.hash(b"holder");
+    hasher.hash(&id.to_be_bytes()[bytes_count-significant_bytes_count..]);
+    let output = hasher.result();
+    (id, hex::encode(output)[..32].into())
+}
+
+#[allow(clippy::too_many_lines)]
 fn command_deploy(
     config: &Config,
     program_location: &str
@@ -886,9 +909,10 @@ fn command_deploy(
     let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
 
     // Create holder account (if not exists)
-    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), "1236", 128*1024_u64)?;
+    let (holder_id, holder_seed) = generate_random_holder_seed();
+    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &holder_seed, 128*1024_u64)?;
 
-    fill_holder_account(config, &holder, &msg)?;
+    fill_holder_account(config, &holder, holder_id, &msg)?;
 
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
@@ -900,6 +924,8 @@ fn command_deploy(
 
                         AccountMeta::new(creator.pubkey(), true),
                         AccountMeta::new(collateral_pool_acc, false),
+                        AccountMeta::new(operator_token, false),
+                        AccountMeta::new(caller_token, false),
                         AccountMeta::new(system_program::id(), false),
 
                         AccountMeta::new(program_id, false),
@@ -916,7 +942,9 @@ fn command_deploy(
     // Send trx_from_account_data_instruction
     {
         debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, collateral_pool_index, 0_u64), accounts);
+        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
+                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
+                                                                              accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
     }
@@ -942,7 +970,9 @@ fn command_deploy(
                             AccountMeta::new_readonly(token_mint::id(), false),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             ];
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
+        let continue_instruction = Instruction::new_with_bincode(config.evm_loader,
+                                                                 &(0x0a_u8, 400_u64),
+                                                                 continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
         // Check if Continue returned some result 

@@ -59,7 +59,11 @@ pub struct Storage {
     /// Stored executor data size
     pub executor_data_size: usize,
     /// Stored evm data size
-    pub evm_data_size: usize
+    pub evm_data_size: usize,
+    /// Ethereum transaction gas used and paid
+    pub gas_used_and_paid: u64,
+    /// Number of payments
+    pub number_of_payments: u64,
 }
 
 /// Ethereum ERC20 allowance data account
@@ -392,14 +396,25 @@ impl Contract {
 
 impl Storage {
     /// Storage struct serialized size
-    const SIZE: usize = 20+8+8+8+8+32+8+8+8;
+    const SIZE: usize = 20+8+8+8+8+32+8+8+8+8+8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         
         Self {
             caller: H160::from(*caller),
@@ -411,6 +426,8 @@ impl Storage {
             accounts_len: usize::from_le_bytes(*accounts_len),
             executor_data_size: usize::from_le_bytes(*executor_data_size),
             evm_data_size: usize::from_le_bytes(*evm_data_size),
+            gas_used_and_paid: u64::from_le_bytes(*gas_used_and_paid),
+            number_of_payments: u64::from_le_bytes(*number_of_payments),
         }
     }
 
@@ -418,7 +435,18 @@ impl Storage {
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         *caller = self.caller.to_fixed_bytes();
         *nonce = self.nonce.to_le_bytes();
         *gas_limit = self.gas_limit.to_le_bytes();
@@ -428,6 +456,8 @@ impl Storage {
         *accounts_len = self.accounts_len.to_le_bytes();
         *executor_data_size = self.executor_data_size.to_le_bytes();
         *evm_data_size = self.evm_data_size.to_le_bytes();
+        *gas_used_and_paid = self.gas_used_and_paid.to_le_bytes();
+        *number_of_payments = self.number_of_payments.to_le_bytes();
 
         Self::SIZE
     }
