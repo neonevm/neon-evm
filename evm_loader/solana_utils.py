@@ -687,7 +687,7 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
                                     nonce):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0C") + nonce.to_bytes(8, 'little'),
+        data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
         keys=[
             AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
 
