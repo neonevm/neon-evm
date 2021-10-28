@@ -34,12 +34,14 @@ impl<'a> StorageAccount<'a> {
                     operator: *operator.key,
                     accounts_len: accounts.len(),
                     executor_data_size: 0,
-                    evm_data_size: 0
+                    evm_data_size: 0,
+                    gas_used_and_paid: 0,
+                    number_of_payments: 0,
                 }
             );
             Ok(Self { info, data })
         } else {
-            Err!(ProgramError::InvalidAccountData; "storage account is not empty. account_data.len()={:?}", &account_data.len())
+            Err!(ProgramError::InvalidAccountData; "storage account is not empty. key={:?}", info.key)
         }
     }
 
@@ -82,7 +84,7 @@ impl<'a> StorageAccount<'a> {
         Ok(())
     }
 
-    pub fn unblock_accounts_and_destroy(self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn unblock_accounts_and_destroy(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
@@ -112,6 +114,8 @@ impl<'a> StorageAccount<'a> {
         let mut account_data = self.info.try_borrow_mut_data()?;
         AccountData::pack(&AccountData::Empty, &mut account_data)?;
 
+        debug_print!("Destroying {:?}", self.info.key);
+
         Ok(())
     }
 
@@ -123,6 +127,22 @@ impl<'a> StorageAccount<'a> {
     pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.gas_limit, storage.gas_price))
+    }
+
+    pub fn add_gas_has_been_paid(&mut self, gas: u64) -> Result<(), ProgramError> {
+        let mut account_data = self.info.try_borrow_mut_data()?;
+
+        let mut storage = AccountData::get_mut_storage(&mut self.data)?;
+        storage.gas_used_and_paid += gas;
+        storage.number_of_payments += 1;
+        AccountData::pack(&self.data, &mut account_data)?;
+
+        Ok(())
+    }
+
+    pub fn get_payments_info(&self) -> Result<(u64, u64), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok((storage.gas_used_and_paid, storage.number_of_payments))
     }
 
     pub fn accounts(&self) -> Result<Vec<Pubkey>, ProgramError> {

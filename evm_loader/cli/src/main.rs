@@ -187,8 +187,8 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
+        let used_gas = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
+        let refunded_gas = executor_state.gasometer().refunded_gas();
         let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
@@ -924,6 +924,8 @@ fn command_deploy(
 
                         AccountMeta::new(creator.pubkey(), true),
                         AccountMeta::new(collateral_pool_acc, false),
+                        AccountMeta::new(operator_token, false),
+                        AccountMeta::new(caller_token, false),
                         AccountMeta::new(system_program::id(), false),
 
                         AccountMeta::new(program_id, false),
@@ -941,7 +943,7 @@ fn command_deploy(
     {
         debug!("trx_from_account_data_instruction");
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                              &(0x0b_u8, collateral_pool_index, 0_u64),
+                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
                                                                               accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;

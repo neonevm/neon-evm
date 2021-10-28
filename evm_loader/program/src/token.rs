@@ -1,7 +1,10 @@
 //! `EVMLoader` token functions
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solidity_account::SolidityAccount
+    solidity_account::SolidityAccount,
+    storage_account::StorageAccount,
+    account_storage::ProgramAccountStorage,
+    config::token_mint
 };
 use evm::{U256};
 use solana_program::{
@@ -11,12 +14,10 @@ use solana_program::{
     system_program, sysvar,
     program_error::ProgramError,
     program_pack::Pack,
-    program::invoke_signed,
+    program::invoke_signed
 };
 use std::vec;
 use std::convert::TryFrom;
-
-use crate::config::token_mint;
 
 /// Native token info
 pub mod eth {
@@ -170,10 +171,10 @@ pub fn transfer_token(
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
-        return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
+        return Err!(ProgramError::InvalidInstructionData;
+            "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
+            source_token_account, source_account
+        );
     }
 
     let value = value / eth::min_transfer_value();
@@ -181,10 +182,13 @@ pub fn transfer_token(
 
     let source_token_balance = get_token_account_balance(source_token_account)?;
     if source_token_balance < value {
-        return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
+        return Err!(ProgramError::InvalidInstructionData;
+            "Insufficient funds on token account {:?} {:?}",
+            source_token_account, source_token_balance
+        );
     }
 
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
@@ -198,8 +202,120 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
+    let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[program_seeds])?;
 
+    Ok(())
+}
+
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+pub fn user_pays_operator<'a>(
+    gas_price: u64,
+    gas_to_be_paid: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+) -> Result<(), ProgramError> {
+
+    let gas_price_wei = U256::from(gas_price);
+
+    let fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+    transfer_token(
+        accounts,
+        user_token_account,
+        operator_token_account,
+        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+        &fee)?;
+
+    Ok(())
+}
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+#[allow(clippy::too_many_arguments)]
+pub fn user_pays_operator_for_iteration<'a>(
+    gas_price: u64,
+    gas_to_be_paid: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+    storage: &mut StorageAccount,
+) -> Result<(), ProgramError> {
+
+    let (gas_used_and_paid, _number_of_payments) = storage.get_payments_info()?;
+
+    debug_print!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
+        gas_used_and_paid, gas_to_be_paid, /*_number_of_payments+*/1);
+
+    let gas_to_be_paid = gas_to_be_paid.saturating_sub(gas_used_and_paid);
+
+    user_pays_operator(
+        gas_price,
+        gas_to_be_paid,
+        user_token_account,
+        operator_token_account,
+        accounts,
+        account_storage,
+    )?;
+
+    let gas_has_been_paid = gas_to_be_paid;
+    debug_print!("user_pays_operator gas_has_been_paid = {:?}", gas_has_been_paid);
+    storage.add_gas_has_been_paid(gas_has_been_paid)
+}
+
+/// Check that neon-evm user has enough funds to pay for gas
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+pub fn check_enough_funds<'a>(
+    gas_limit: u64,
+    gas_price: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    storage_opt: Option<&mut StorageAccount>,
+) -> Result<(), ProgramError> {
+
+    let gas_used_and_paid = if let Some(storage) = storage_opt {
+        storage.get_payments_info()?.0
+    }
+    else { 0 };
+
+    let user_balance_64 = get_token_account_balance(user_token_account)?;
+    let user_balance : U256 = U256::from(user_balance_64)
+        .checked_mul(eth::min_transfer_value())
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let gas_price_wei = U256::from(gas_price);
+    let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let expected_fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+    if expected_fee > user_balance {
+        return Err!(ProgramError::InsufficientFunds;
+            "there is no enough funds to start executing the transaction; gas_limit = {:?}; gas_price = {:?}; gas_used_and_paid = {:?}; user_balance = {:?};",
+            gas_limit,
+            gas_price,
+            gas_used_and_paid,
+            user_balance_64
+        )
+    }
     Ok(())
 }
