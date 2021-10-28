@@ -34,6 +34,10 @@ TOKEN_ACCOUNT=$(spl-token --config test_token_config.yml create-account $ETH_TOK
 spl-token --config test_token_config.yml mint $ETH_TOKEN_MINT 5000 -- $TOKEN_ACCOUNT
 spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT
 
+TOKEN_ACCOUNT2=$(spl-token --config test_token_config.yml create-account $ETH_TOKEN_MINT --owner $ACCOUNT2 | grep -Po 'Creating account \K[^\n]*')
+spl-token --config test_token_config.yml mint $ETH_TOKEN_MINT 5000 -- $TOKEN_ACCOUNT2
+spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT2
+
 # Parse deployed contract address from output of solana-cli:
 # Example output: `Program Id: 853qJy1Z8hfgHe194fVrYUbVDfx88ny7phSCHc481Fc6`
 # EVM_LOADER will be empty if the match fails.
