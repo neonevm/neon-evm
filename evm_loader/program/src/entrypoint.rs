@@ -463,7 +463,7 @@ fn process_instruction<'a>(
 
             authorized_operator_check(operator_sol_info)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[6..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
