@@ -549,7 +549,7 @@ fn fill_holder_account(
 
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            /* &EvmInstruction::WriteHolder {nonce, offset, bytes: chunk}, */
+            /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
             &(0x12_u8, holder_id, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
