@@ -143,7 +143,7 @@ class RW_Locking_Test(unittest.TestCase):
         print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
         return neon_evm_instr_10_continue
 
-    def neon_emv_instr_cancel_21(self, acc, caller, storage):
+    def neon_emv_instr_cancel_21(self, acc, caller, storage, nonce):
         neon_evm_instr_21_cancel = create_neon_evm_instr_21_cancel(
             self.loader.loader_id,
             caller,
@@ -151,7 +151,7 @@ class RW_Locking_Test(unittest.TestCase):
             storage,
             self.reId,
             self.re_code,
-            getTransactionCount(client, caller)
+            nonce
         )
         print('neon_evm_instr_21_cancel:', neon_evm_instr_21_cancel)
         return neon_evm_instr_21_cancel
@@ -170,11 +170,12 @@ class RW_Locking_Test(unittest.TestCase):
         return send_transaction(client, trx, acc)
 
     def get_call_parameters(self, input, acc, caller, caller_ether):
+        nonce = getTransactionCount(client, caller)
         tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, caller), 'data': input, 'chainId': 111}
+            'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)
-        return (from_addr, sign, msg)
+        return (from_addr, sign, msg, nonce)
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
@@ -204,8 +205,8 @@ class RW_Locking_Test(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr1, sign1,  msg1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2,  msg2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
+        (from_addr1, sign1, msg1, _) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
+        (from_addr2, sign2, msg2, _) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
@@ -242,8 +243,8 @@ class RW_Locking_Test(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr1, sign1,  msg1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2,  msg2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
+        (from_addr1, sign1, msg1, nonce1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
+        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
@@ -259,12 +260,12 @@ class RW_Locking_Test(unittest.TestCase):
             print("Ok")
 
             # removing the rw-lock
-            trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1))
+            trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
             response = send_transaction(client, trx, self.acc1)
             return
 
         # removing the rw-lock
-        trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1))
+        trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
         response = send_transaction(client, trx, self.acc1)
         raise("error, account was not block")
 
@@ -323,7 +324,7 @@ class RW_Locking_Test(unittest.TestCase):
 
         self.assertNotEqual(meta, None)
 
-        (from_addr, sign,  msg) = self.get_call_parameters(func_name, self.acc1, self.caller1, self.caller1_ether)
+        (from_addr, sign, msg, _) = self.get_call_parameters(func_name, self.acc1, self.caller1, self.caller1_ether)
         instruction = from_addr + sign + msg
         storage = self.create_storage_account(sign[:8].hex(), self.acc1)
 
@@ -347,7 +348,7 @@ class RW_Locking_Test(unittest.TestCase):
         input1 = (func_name + bytes.fromhex("%064x" % 0x1)) # update storage without account resizing
         input2 = (func_name + bytes.fromhex("%064x" % 0x20)) # update storage with account resizing
 
-        (from_addr1, sign1,  msg1) = self.get_call_parameters(input1, self.acc1, self.caller1, self.caller1_ether)
+        (from_addr1, sign1,  msg1, _) = self.get_call_parameters(input1, self.acc1, self.caller1, self.caller1_ether)
         instruction1 = from_addr1 + sign1 + msg1
         storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
 
