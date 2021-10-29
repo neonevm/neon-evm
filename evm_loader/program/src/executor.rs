@@ -267,11 +267,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
-        if let Some(depth) = self.state.metadata().depth() {
-            if depth + 1 > CONFIG.call_stack_limit {
-                return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
-            }
-        }
 
         let transfer = transfer.map(|t| {
             evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
@@ -281,6 +276,17 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             caller: context.caller,
             apparent_value: token::eth::round(context.apparent_value)
         };
+
+        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
+        if let Some(Capture::Exit(exit_value)) = precompile_result {
+            return Capture::Exit(exit_value);
+        }
+
+        if let Some(depth) = self.state.metadata().depth() {
+            if depth + 1 > CONFIG.call_stack_limit {
+                return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
+            }
+        }
 
         // These parameters should be true for call from another contract
         let take_l64 = true;
@@ -311,18 +317,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         if let Some(transfer) = transfer.as_ref() {
             if take_stipend && transfer.value != U256::zero() {
                 gas_limit = gas_limit.saturating_add(CONFIG.call_stipend);
-            }
-        }
-
-        let hook_res = call_precompile(code_address, &input, &context, &mut self.state);
-        if hook_res.is_some() {
-            match hook_res.as_ref().unwrap() {
-                Capture::Exit((reason, return_data)) => {
-                    return Capture::Exit((*reason, return_data.clone()))
-                },
-                Capture::Trap(_interrupt) => {
-                    unreachable!("not implemented");
-                },
             }
         }
 
