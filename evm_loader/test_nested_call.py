@@ -73,7 +73,7 @@ class EventTest(unittest.TestCase):
         if getBalance(cls.caller) < 20:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 20, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -122,18 +122,22 @@ class EventTest(unittest.TestCase):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def sol_instr_11_partial_call_from_account(self, holder_account, storage_account, step_count, contract, code):
+    def sol_instr_22_partial_call_from_account(self, holder_account, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0B") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
+            data=bytearray.fromhex("16") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=holder_account, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
-                # Operator address:
+                # Operator's SOL account:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -165,10 +169,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("09") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+            data=bytearray.fromhex("13") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
@@ -178,6 +182,10 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # Operator's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                # User's NEON token account:
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
@@ -218,9 +226,9 @@ class EventTest(unittest.TestCase):
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
-                # Operator ETH address:
+                # Operator's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address:
+                # User's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
@@ -269,9 +277,9 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
                 # Collateral pool address:
                 AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-                # Operator ETH address:
+                # Operator's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                # User ETH address:
+                # User's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # System program account:
                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
@@ -339,7 +347,7 @@ class EventTest(unittest.TestCase):
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_09_partial_call(self.storage, 0, instruction, contract, code))
+        trx.add(self.sol_instr_19_partial_call(self.storage, 0, instruction, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while True:
@@ -362,7 +370,7 @@ class EventTest(unittest.TestCase):
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
         trx = Transaction()
-        trx.add(self.sol_instr_11_partial_call_from_account(self.holder, self.storage, 0, contract, code))
+        trx.add(self.sol_instr_22_partial_call_from_account(self.holder, self.storage, 0, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while (True):

@@ -1080,4 +1080,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     ) -> ApplyState {
         self.substate.deconstruct(self.backend)
     }
+
+    #[must_use]
+    pub fn gasometer(&self) -> &Gasometer {
+        self.substate.metadata().gasometer()
+    }
 }

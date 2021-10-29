@@ -40,15 +40,16 @@ use crate::{
     instruction::{EvmInstruction, on_event, on_return},
     payment,
     token,
-    token::{create_associated_token_account, get_token_account_owner},
+    token::{create_associated_token_account},
     operator::authorized_operator_check,
     system::create_pda_account,
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
 
-type SuccessExitResults = (ExitReason, u64, Vec<u8>, Option<ApplyState>);
-type CallResult = Result<Option<SuccessExitResults>, ProgramError>;
+type UsedGas = u64;
+type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
+type CallResult = Result<(Option<EvmResults>,UsedGas), ProgramError>;
 
 const HEAP_LENGTH: usize = 256*1024;
 
@@ -323,29 +324,34 @@ fn process_instruction<'a>(
 
         //     Ok(())
         // },
-        EvmInstruction::ExecuteTrxFromAccountDataIterative{collateral_pool_index, step_count} => {
+        EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count} => {
             debug_print!("Execute iterative transaction from account data");
             let holder_info = next_account_info(account_info_iter)?;
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
+            let trx_accounts = &accounts[7..];
+
             let holder_data = holder_info.data.borrow();
             let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
 
-            let trx_accounts = &accounts[5..];
-
-            let from_addr = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+            let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            do_begin(collateral_pool_index, step_count, from_addr, trx,
-                program_id, trx_accounts, storage_info,
+            do_begin(
+                collateral_pool_index, step_count, caller, trx,
+                program_id, trx_accounts, accounts, storage_info,
                 operator_sol_info, collateral_pool_sol_info,
-                system_info)?;
+                operator_eth_info, user_eth_info,
+                system_info,
+            )?;
 
             Ok(())
         },
@@ -369,10 +375,11 @@ fn process_instruction<'a>(
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
             let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
-            // let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+            let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
             // }
+
             StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, true)?;
             let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
@@ -386,33 +393,25 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let call_return = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            let (evm_results, used_gas) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
-            if let Some(call_results) = call_return {
-                if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-                    debug_print!("operator ownership");
-                    debug_print!("operator token owner {}", operator_eth_info.owner);
-                    debug_print!("operator key {}", operator_sol_info.key);
-                    return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
-                }
-                let used_gas = call_results.1;
-                let fee = U256::from(used_gas)
-                    .checked_mul(trx.gas_price).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-                token::transfer_token(
-                    accounts,
-                    user_eth_info,
-                    operator_eth_info,
-                    account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                    account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                    &fee)?;
+            token::user_pays_operator(
+                trx_gas_price,
+                used_gas,
+                user_eth_info,
+                operator_eth_info,
+                accounts,
+                &account_storage
+            )?;
 
-                applies_and_invokes(
-                    program_id,
-                    &mut account_storage,
-                    accounts,
-                    Some(operator_sol_info),
-                    call_results)?;
-            }
+            applies_and_invokes(
+                program_id,
+                &mut account_storage,
+                accounts,
+                Some(operator_sol_info),
+                evm_results.unwrap(),
+                used_gas)?;
+
             Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
@@ -421,18 +420,20 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
             let storage_info = next_account_info(account_info_iter)?;
 
             let sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
+            let operator_eth_info = next_account_info(account_info_iter)?;
+            let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[7..];
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
@@ -440,10 +441,13 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                 .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-            do_begin(collateral_pool_index, step_count, caller, trx,
-                     program_id, trx_accounts, storage_info,
-                     operator_sol_info, collateral_pool_sol_info,
-                     system_info)?;
+            do_begin(
+                collateral_pool_index, step_count, caller, trx,
+                program_id, trx_accounts, accounts, storage_info,
+                operator_sol_info, collateral_pool_sol_info,
+                operator_eth_info, user_eth_info,
+                system_info,
+            )?;
 
             Ok(())
         },
@@ -463,8 +467,8 @@ fn process_instruction<'a>(
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
                 else {err}
             })?;
-
-            do_continue_top_level(storage, step_count, program_id,
+            do_continue_top_level(
+                storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
                 operator_sol_info, operator_eth_info, user_eth_info,
             )?;
@@ -476,8 +480,8 @@ fn process_instruction<'a>(
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
-            let operator_eth_info = next_account_info(account_info_iter)?;
-            let user_eth_info = next_account_info(account_info_iter)?;
+            let _operator_eth_info = next_account_info(account_info_iter)?;
+            let _user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
@@ -513,30 +517,6 @@ fn process_instruction<'a>(
 
             caller_account_data.pack(&mut caller_account_info.try_borrow_mut_data()?)?;
 
-            let executor = Machine::restore(&storage, &account_storage);
-            debug_print!("Executor restored");
-
-            let executor_state = executor.into_state();
-            let used_gas = executor_state.substate().metadata().gasometer().used_gas();
-
-            let (gas_limit, gas_price) = storage.get_gas_params()?;
-            if used_gas > gas_limit {
-                return Err!(ProgramError::InvalidArgument);
-            }
-            let gas_price_wei = U256::from(gas_price);
-            let fee = U256::from(used_gas)
-                .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-
-            let caller_info= account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
-
-            token::transfer_token(
-                accounts,
-                user_eth_info,
-                operator_eth_info,
-                caller_info,
-                account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-                &fee)?;
-
             payment::burn_operators_deposit(
                 storage_info,
                 incinerator_info,
@@ -568,13 +548,17 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(collateral_pool_index, step_count, caller, trx,
-                             program_id, trx_accounts, storage_info,
-                             operator_sol_info, collateral_pool_sol_info,
-                             system_info)?;
+                    do_begin(
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, accounts, storage_info,
+                        operator_sol_info, collateral_pool_sol_info,
+                        operator_eth_info, user_eth_info,
+                        system_info,
+                    )?;
                 },
                 Ok(storage) => {
-                    do_continue_top_level(storage, step_count, program_id,
+                    do_continue_top_level(
+                        storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
                         operator_sol_info, operator_eth_info, user_eth_info,
                     )?;
@@ -604,15 +588,19 @@ fn process_instruction<'a>(
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(collateral_pool_index, step_count, caller, trx,
-                             program_id, trx_accounts, storage_info,
-                             operator_sol_info, collateral_pool_sol_info,
-                             system_info)?;
+                    do_begin(
+                        collateral_pool_index, step_count, caller, trx,
+                        program_id, trx_accounts, accounts, storage_info,
+                        operator_sol_info, collateral_pool_sol_info,
+                        operator_eth_info, user_eth_info,
+                        system_info,
+                    )?;
                 },
                 Ok(storage) => {
-                    do_continue_top_level(storage, step_count, program_id,
-                                          accounts, trx_accounts, storage_info,
-                                          operator_sol_info, operator_eth_info, user_eth_info,
+                    do_continue_top_level(
+                        storage, step_count, program_id,
+                        accounts, trx_accounts, storage_info,
+                        operator_sol_info, operator_eth_info, user_eth_info,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -628,8 +616,8 @@ fn process_instruction<'a>(
             }
 
             let address = Pubkey::create_with_seed(
-                creator_acc_info.key, 
-                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?, 
+                creator_acc_info.key,
+                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
                 program_id)?;
 
             if *deleted_acc_info.key != address {
@@ -651,9 +639,13 @@ fn process_instruction<'a>(
         EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
             let account_info = next_account_info(account_info_iter)?;
-            let code_account = next_account_info(account_info_iter)?;
-            let code_account_new = next_account_info(account_info_iter)?;
+            let code_account_info = next_account_info(account_info_iter)?;
+            let code_account_new_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
+
+            if !operator_sol_info.is_signer {
+                return Err!(ProgramError::InvalidAccountData);
+            }
 
             let mut info_data = account_info.try_borrow_mut_data()?;
             if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
@@ -661,65 +653,64 @@ fn process_instruction<'a>(
                     debug_print!("Cannot resize account data. Account is blocked {:?}", *account_info.key);
                     return Ok(())
                 }
-                data.code_account = *code_account_new.key;
+                data.code_account = *code_account_new_info.key;
                 AccountData::pack(&AccountData::Account(data), &mut info_data)?;
             } else {
                 return Err!(ProgramError::InvalidAccountData)
             }
 
-            if code_account_new.owner == program_id {
+            if code_account_new_info.owner == program_id {
                 let rent = Rent::get()?;
-                if !rent.is_exempt(code_account_new.lamports(), code_account_new.data_len()) {
-                    return Err!(ProgramError::InvalidArgument; "Code account is not rent exempt. lamports={:?}, data_len={:?}",
-                        code_account_new.lamports(), code_account_new.data_len());
+                if !rent.is_exempt(code_account_new_info.lamports(), code_account_new_info.data_len()) {
+                    return Err!(ProgramError::InvalidArgument; "New code account is not rent exempt. lamports={:?}, data_len={:?}",
+                        code_account_new_info.lamports(), code_account_new_info.data_len());
                 }
             }
             else {
-                return Err!(ProgramError::InvalidArgument; "code_account_new.owner<{:?}> != program_id<{:?}>", code_account_new.owner, program_id);
-            }
-
-            let mut code_account_new_data = code_account_new.try_borrow_mut_data()?;
-
-            match AccountData::unpack(&code_account_new_data) {
-                Ok(AccountData::Empty) => {},
-                _ =>  return Err!(ProgramError::InvalidAccountData)
-            }
-
-            if code_account.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "code_account.owner<{:?}> != program_id<{:?}>", code_account.owner, program_id);
+                return Err!(ProgramError::InvalidArgument; "code_account_new_info.owner<{:?}> != program_id<{:?}>", code_account_new_info.owner, program_id);
             }
 
             let expected_address = Pubkey::create_with_seed(
                 operator_sol_info.key,
                 std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
                 program_id)?;
-
-            if *code_account_new.key != expected_address {
+            if *code_account_new_info.key != expected_address {
                 return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
-                    *code_account_new.key, *operator_sol_info.key, expected_address);
+                    *code_account_new_info.key, *operator_sol_info.key, expected_address);
             }
 
-            let mut code_account_data = code_account.try_borrow_mut_data()?;
-            if code_account_data.len() >= code_account_new_data.len(){
-                return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
+            let mut code_account_new_data = code_account_new_info.try_borrow_mut_data()?;
+            match AccountData::unpack(&code_account_new_data) {
+                Ok(AccountData::Empty) => {},
+                _ =>  return Err!(ProgramError::InvalidAccountData)
+            }
+
+            if code_account_info.owner != program_id {
+                return Err!(ProgramError::InvalidArgument; "code_account_info.owner<{:?}> != program_id<{:?}>", code_account_info.owner, program_id);
+            }
+            {
+                let mut code_account_data = code_account_info.try_borrow_mut_data()?;
+                if code_account_data.len() >= code_account_new_data.len(){
+                    return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
                         *account_info.key, code_account_data.len(), code_account_new_data.len());
-            }
-            if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
-                if data.owner != *account_info.key {
-                    return Err!(ProgramError::InvalidAccountData;
-                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
                 }
-                debug_print!("move code and storage from {:?} to {:?}", *code_account.key, *code_account_new.key);
-                AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
-                let begin = AccountData::Contract(data).size();
-                let end = code_account_data.len();
-                code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
+                if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
+                    if data.owner != *account_info.key {
+                        return Err!(ProgramError::InvalidAccountData;
+                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
+                    }
+                    debug_print!("move code and storage from {:?} to {:?}", *code_account_info.key, *code_account_new_info.key);
+                    AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
+                    let begin = AccountData::Contract(data).size();
+                    let end = code_account_data.len();
+                    code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
 
-                AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
-
-            } else {
-                return Err!(ProgramError::InvalidAccountData)
-            };
+                    AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
+                } else {
+                    return Err!(ProgramError::InvalidAccountData)
+                };
+            }
+            payment::transfer_from_code_account_to_operator(code_account_info, operator_sol_info, code_account_info.lamports())?;
 
             Ok(())
         },
@@ -760,7 +751,10 @@ fn process_instruction<'a>(
 
         EvmInstruction::Write |
         EvmInstruction::Finalise |
-        EvmInstruction::CreateAccountWithSeed => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+        EvmInstruction::CreateAccountWithSeed |
+        EvmInstruction::ExecuteTrxFromAccountDataIterative |
+        EvmInstruction::PartialCallFromRawEthereumTX
+        => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
@@ -821,7 +815,7 @@ fn do_call(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let call_results = {
+    let (evm_results,used_gas) = {
         let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
@@ -841,17 +835,17 @@ fn do_call(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some(apply))
+            ((exit_reason, result, Some(apply)), used_gas)
         } else {
-            (exit_reason, used_gas, result, None)
+            ((exit_reason, result, None), used_gas)
         }
     };
 
-    Ok(Some(call_results))
+    Ok((Some(evm_results),used_gas))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -862,10 +856,13 @@ fn do_begin<'a>(
     trx: UnsignedTransaction,
     program_id: &Pubkey,
     trx_accounts: &'a [AccountInfo<'a>],
+    accounts: &'a [AccountInfo<'a>],
     storage_info: &'a AccountInfo<'a>,
     operator_sol_info: &'a AccountInfo<'a>,
     collateral_pool_sol_info: &'a AccountInfo<'a>,
-    system_info: &'a AccountInfo<'a>
+    operator_eth_info: &'a AccountInfo<'a>,
+    user_eth_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -874,6 +871,12 @@ fn do_begin<'a>(
 
     let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
+
+    token::check_enough_funds(
+        trx_gas_limit,
+        trx_gas_price,
+        user_eth_info,
+        None)?;
 
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
@@ -891,12 +894,21 @@ fn do_begin<'a>(
         storage_info,
         system_info)?;
 
-    if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+    let (_,used_gas) = if trx.to.is_some() {
+        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
-    }
+        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+    };
+
+    token::user_pays_operator_for_iteration(
+        trx_gas_price, used_gas,
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        &account_storage,
+        &mut storage,
+    )?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -928,41 +940,42 @@ fn do_continue_top_level<'a>(
     }
 
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
-    let call_return = do_continue(&mut storage, step_count, &mut account_storage)?;
+    let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
 
-    if let Some(call_results) = call_return {
+    let (results, used_gas) = {
+        if let Err(_) = token::check_enough_funds(
+            trx_gas_limit,
+            trx_gas_price,
+            user_eth_info,
+            Some(&mut storage)) {
+            let used_gas = storage.get_payments_info()?.0;
+            (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
+        } else {
+            do_continue(&mut storage, step_count, &mut account_storage)?
+        }
+    };
+
+    token::user_pays_operator_for_iteration(
+        trx_gas_price, used_gas,
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        &account_storage,
+        &mut storage,
+    )?;
+
+    if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
-            operator_sol_info,
-        )?;
-        if get_token_account_owner(operator_eth_info)? != *operator_sol_info.key {
-            debug_print!("operator token ownership");
-            debug_print!("operator token owner {}", operator_eth_info.owner);
-            debug_print!("operator key {}", operator_sol_info.key);
-            return Err!(ProgramError::InvalidInstructionData; "Wrong operator token ownership")
-        }
-        let (gas_limit, gas_price) = storage.get_gas_params()?;
-        let used_gas = call_results.1;
-        if used_gas > gas_limit {
-            return Err!(ProgramError::InvalidArgument);
-        }
-        let gas_price_wei = U256::from(gas_price);
-        let fee = U256::from(used_gas)
-            .checked_mul(gas_price_wei).ok_or_else(||E!(ProgramError::InvalidArgument))?;
-        token::transfer_token(
-            accounts,
-            user_eth_info,
-            operator_eth_info,
-            account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-            &fee)?;
+            operator_sol_info)?;
 
         applies_and_invokes(
             program_id,
             &mut account_storage,
             accounts,
             Some(operator_sol_info),
-            call_results)?;
+            evm_results,
+            used_gas)?;
 
         storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
     }
@@ -973,11 +986,11 @@ fn do_continue_top_level<'a>(
 fn do_partial_call<'a>(
     storage: &mut StorageAccount,
     step_count: u64,
-    account_storage: &ProgramAccountStorage<'a>,
+    account_storage: &ProgramAccountStorage,
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> ProgramResult
+) -> CallResult
 {
     debug_print!("do_partial_call");
 
@@ -1003,8 +1016,11 @@ fn do_partial_call<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
-    debug_print!("partial call complete");
-    Ok(())
+    let executor_state = executor.into_state();
+    let used_gas = executor_state.gasometer().total_used_gas()/2;
+    debug_print!("first iteration complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+
+    Ok((None,used_gas))
 }
 
 fn do_partial_create<'a>(
@@ -1014,7 +1030,7 @@ fn do_partial_create<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> ProgramResult
+) -> CallResult
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
@@ -1030,8 +1046,11 @@ fn do_partial_create<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
-    debug_print!("partial create complete");
-    Ok(())
+    let executor_state = executor.into_state();
+    let used_gas = executor_state.gasometer().total_used_gas()/2;
+    debug_print!("first iteration of deployment complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+
+    Ok((None,used_gas))
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -1043,7 +1062,7 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let call_results = {
+    let (evm_results, used_gas) = {
         let mut executor = Machine::restore(storage, account_storage);
         debug_print!("Executor restored");
 
@@ -1051,7 +1070,9 @@ fn do_continue<'a>(
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
-                return Ok(None);
+                let executor_state = executor.into_state();
+                let used_gas = executor_state.gasometer().total_used_gas()/2;
+                return Ok((None, used_gas));
             }
             Err((result, reason)) => (result, reason)
         };
@@ -1059,17 +1080,17 @@ fn do_continue<'a>(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas();
+        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, used_gas, result, Some(apply))
+            ((exit_reason, result, Some(apply)), used_gas)
         } else {
-            (exit_reason, used_gas, result, None)
+            ((exit_reason, result, None), used_gas)
         }
     };
 
-    Ok(Some(call_results))
+    Ok((Some(evm_results),used_gas))
 }
 
 fn applies_and_invokes<'a>(
@@ -1077,9 +1098,10 @@ fn applies_and_invokes<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     operator: Option<&AccountInfo<'a>>,
-    call_results: SuccessExitResults
+    evm_results: EvmResults,
+    used_gas: UsedGas
 ) -> ProgramResult {
-    let (exit_reason, used_gas, result, applies_logs_transfers) = call_results;
+    let (exit_reason, result, applies_logs_transfers) = evm_results;
     if let Some(applies_logs_transfers) = applies_logs_transfers {
         let (
             applies,
