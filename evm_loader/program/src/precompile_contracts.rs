@@ -20,6 +20,35 @@ const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
 
+
+const GAS_COST_ECRECOVER: u64 = 3000;
+const GAS_COST_SHA256_BASE: u64 = 60;
+const GAS_COST_SHA256_PER_WORD: u64 = 12;
+const GAS_COST_RIPEMD160_BASE: u64 = 600;
+const GAS_COST_RIPEMD160_PER_WORD: u64 = 120;
+const GAS_COST_IDENTITY_BASE: u64 = 15;
+const GAS_COST_IDENTITY_PER_WORD: u64 = 3;
+const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
+
+// const GAS_COST_BN256_ADD_BYZANTIUM: u64 = 500;
+// const GAS_COST_BN256_ADD_ISTANBUL: u64 = 150;
+// const GAS_COST_BN256_SCALARMUL_BYZANTIUM : u64 = 40000;
+// const GAS_COST_BN256_SCALARMUL_ISTANBUL: u64 = 6000;
+// const GAS_COST_BN256_PAIRING_BASE_BYZANTIUM: u64 = 100000;
+// const GAS_COST_BN256_PAIRING_BASE_ISTANBUL: u64 = 45000;
+// const GAS_COST_BN256_PAIRING_PER_POINT_BYZANTIUM: u64 = 80000;
+// const GAS_COST_BN256_PAIRING_PER_POINT_ISTANBUL: u64 = 34000;
+
+// const GAS_COST_BLS12381_G1ADD: u64 = 600;
+// const GAS_COST_BLS12381_G1MUL: u64 = 12000;
+// const GAS_COST_BLS12381_G2ADD: u64 = 4500;
+// const GAS_COST_BLS12381_G2MUL: u64 = 55000;
+// const GAS_COST_BLS12381_PAIRING_BASE: u64 = 115000;
+// const GAS_COST_BLS12381_PAIRING_PER_PAIR: u64 = 23000;
+// const GAS_COST_BLS12381_MAPG1: u64 = 5500;
+// const GAS_COST_BLS12381_MAPG2: u64 = 110000;
+
+
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
@@ -49,31 +78,31 @@ pub fn call_precompile<'a, B: AccountStorage>(
         return Some(erc20_wrapper(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
-        return Some(ecrecover(input));
+        return Some(ecrecover(input, state));
     }
     if address == SYSTEM_ACCOUNT_SHA_256 {
-        return Some(sha256(input));
+        return Some(sha256(input, state));
     }
     if address == SYSTEM_ACCOUNT_RIPEMD160 {
-        return Some(ripemd160(input));
+        return Some(ripemd160(input, state));
     }
     if address == SYSTEM_ACCOUNT_DATACOPY {
-        return Some(datacopy(input));
+        return Some(datacopy(input, state));
     }
     if address == SYSTEM_ACCOUNT_BIGMODEXP {
-        return Some(big_mod_exp(input));
+        return Some(big_mod_exp(input, state));
     }
     if address == SYSTEM_ACCOUNT_BN256_ADD {
-        return Some(bn256_add(input));
+        return Some(bn256_add(input, state));
     }
     if address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL {
-        return Some(bn256_scalar_mul(input));
+        return Some(bn256_scalar_mul(input, state));
     }
     if address == SYSTEM_ACCOUNT_BN256_PAIRING {
-        return Some(bn256_pairing(input));
+        return Some(bn256_pairing(input, state));
     }
     if address == SYSTEM_ACCOUNT_BLAKE2F {
-        return Some(blake2_f(input));
+        return Some(blake2_f(input, state));
     }
 
     None
@@ -253,9 +282,17 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
 /// Call inner `ecrecover`
 #[must_use]
-pub fn ecrecover(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn ecrecover<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("ecrecover");
     debug_print!("input: {}", &hex::encode(&input));
+
+    let gasometer = state.gasometer_mut();
+    if let Err(error) = gasometer.record_cost(GAS_COST_ECRECOVER) {
+        return Capture::Exit((ExitReason::Error(error), Vec::new()));
+    }
 
     if input.len() != 128 {
         return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]));
@@ -286,9 +323,19 @@ pub fn ecrecover(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
 
 /// Call inner `sha256`
 #[must_use]
-pub fn sha256(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn sha256<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use solana_program::hash::hash as sha256_digest;
     debug_print!("sha256");
+
+    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
+    let gas_cost = GAS_COST_SHA256_BASE + (number_of_words * GAS_COST_SHA256_PER_WORD);
+    let gasometer = state.gasometer_mut();
+    if let Err(error) = gasometer.record_cost(gas_cost) {
+        return Capture::Exit((ExitReason::Error(error), Vec::new()));
+    }
 
     let hash = sha256_digest(input);
 
@@ -302,9 +349,19 @@ pub fn sha256(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
 
 /// Call inner `ripemd160`
 #[must_use]
-pub fn ripemd160(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn ripemd160<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use ripemd160::{Digest, Ripemd160};
     debug_print!("ripemd160");
+
+    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
+    let gas_cost = GAS_COST_RIPEMD160_BASE + (number_of_words * GAS_COST_RIPEMD160_PER_WORD);
+    let gasometer = state.gasometer_mut();
+    if let Err(error) = gasometer.record_cost(gas_cost) {
+        return Capture::Exit((ExitReason::Error(error), Vec::new()));
+    }
 
     let mut hasher = Ripemd160::new();
     // process input message
@@ -324,9 +381,19 @@ pub fn ripemd160(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
 
 /// Call inner datacopy
 #[must_use]
-pub fn datacopy(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn datacopy<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("datacopy");
     debug_print!("input: {}", &hex::encode(&input));
+
+    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
+    let gas_cost = GAS_COST_IDENTITY_BASE + (number_of_words * GAS_COST_IDENTITY_PER_WORD);
+    let gasometer = state.gasometer_mut();
+    if let Err(error) = gasometer.record_cost(gas_cost) {
+        return Capture::Exit((ExitReason::Error(error), Vec::new()));
+    }
 
     Capture::Exit((
         ExitReason::Succeed(evm::ExitSucceed::Returned),
@@ -336,7 +403,10 @@ pub fn datacopy(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
 
 /// Call inner `big_mod_exp`
 #[must_use]
-pub fn big_mod_exp(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn big_mod_exp<'a, B: AccountStorage>(
+    _input: &[u8],
+    _state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -442,7 +512,10 @@ fn get_g1(
 /// Call inner `bn256Add`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_add(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_add<'a, B: AccountStorage>(
+    _input: &[u8],
+    _state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -500,7 +573,10 @@ pub fn bn256_add(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
 /// Call inner `bn256ScalarMul`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_scalar_mul(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_scalar_mul<'a, B: AccountStorage>(
+    _input: &[u8],
+    _state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
 
@@ -559,7 +635,10 @@ pub fn bn256_scalar_mul(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infalli
 /// Call inner `bn256Pairing`
 #[must_use]
 #[allow(unused)]
-pub fn bn256_pairing(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn bn256_pairing<'a, B: AccountStorage>(
+    _input: &[u8],
+    _state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     // Should be implemented via Solana syscall
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![0; 0]))
     /*
@@ -658,7 +737,10 @@ pub fn bn256_pairing(_input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible
 /// Call inner `blake2F`
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn blake2_f(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+pub fn blake2_f<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     const BLAKE2_F_ARG_LEN: usize = 213;
     debug_print!("blake2F");
 
@@ -732,6 +814,13 @@ pub fn blake2_f(input: &[u8]) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     let (rounds_buf, input) = input.split_at(4);
     rounds_arr.copy_from_slice(rounds_buf);
     let rounds: u32 = u32::from_be_bytes(rounds_arr);
+
+    let gas_cost = GAS_COST_BLAKE2F_PER_ROUND * u64::from(rounds);
+    let gasometer = state.gasometer_mut();
+    if let Err(error) = gasometer.record_cost(gas_cost) {
+        return Capture::Exit((ExitReason::Error(error), Vec::new()));
+    }
+
 
     // we use from_le_bytes below to effectively swap byte order to LE if architecture is BE
 
