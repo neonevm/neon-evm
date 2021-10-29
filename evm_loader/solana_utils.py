@@ -682,15 +682,16 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
         ])
 
 
-def create_neon_evm_instr_12_cancel(evm_loader_program_id,
+def create_neon_evm_instr_21_cancel(evm_loader_program_id,
                                     caller_sol_acc,
                                     operator_sol_acc,
                                     storage_sol_acc,
                                     contract_sol_acc,
-                                    code_sol_acc):
+                                    code_sol_acc,
+                                    nonce):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
-        data=bytearray.fromhex("0C"),
+        data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
         keys=[
             AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
 

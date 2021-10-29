@@ -95,17 +95,18 @@ class EventTest(unittest.TestCase):
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
 
-    def sol_instr_12_cancel(self, storage_account):
-        neon_evm_instr_12_cancel = create_neon_evm_instr_12_cancel(
+    def sol_instr_21_cancel(self, storage_account, nonce):
+        neon_evm_instr_21_cancel = create_neon_evm_instr_21_cancel(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
             storage_account,
             self.reId,
             self.re_code,
+            nonce
         )
-        print('neon_evm_instr_12_cancel:', neon_evm_instr_12_cancel)
-        return neon_evm_instr_12_cancel
+        print('neon_evm_instr_21_cancel:', neon_evm_instr_21_cancel)
+        return neon_evm_instr_21_cancel
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
@@ -120,25 +121,26 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
-    def call_cancel(self, storage):
+    def call_cancel(self, storage, nonce):
         print("Cancel")
         trx = Transaction()
-        trx.add(self.sol_instr_12_cancel(storage))
+        trx.add(self.sol_instr_21_cancel(storage, nonce))
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input):
+        nonce = getTransactionCount(client, self.caller)
         tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
+            'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
-        return (from_addr, sign, msg)
+        return (from_addr, sign, msg, nonce)
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
     def call_signed(self, input):
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
 
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
@@ -157,7 +159,7 @@ class EventTest(unittest.TestCase):
         return storage
 
     def call_partial_signed(self, input):
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
@@ -334,14 +336,14 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
 
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
-        result = self.call_cancel(storage)
+        result = self.call_cancel(storage, nonce)
 
         err = "custom program error: 0x1"
         with self.assertRaisesRegex(Exception,err):
@@ -353,7 +355,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
@@ -363,7 +365,7 @@ class EventTest(unittest.TestCase):
 
         result = self.call_begin(storage, 10, msg, instruction)
         result = self.call_continue(storage, 10)
-        result = self.call_cancel(storage)
+        result = self.call_cancel(storage, nonce)
 
         caller_balance_after_cancel = self.token.balance(self.caller_token)
         operator_balance_after_cancel = self.token.balance(get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID))
@@ -377,7 +379,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[-8:].hex())
@@ -390,14 +392,14 @@ class EventTest(unittest.TestCase):
             result = self.call_partial_signed(input)
             print(result)
 
-        result = self.call_cancel(storage)
+        result = self.call_cancel(storage, nonce)
 
     # @unittest.skip("a.i.")
     def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[-8:].hex())
@@ -410,14 +412,14 @@ class EventTest(unittest.TestCase):
             result = self.call_signed(input)
             print(result)
 
-        result = self.call_cancel(storage)
+        result = self.call_cancel(storage, nonce)
 
 
     def test_nonceIncreaseAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr, sign,  msg) = self.get_call_parameters(input)
+        (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
@@ -426,7 +428,7 @@ class EventTest(unittest.TestCase):
 
         self.call_begin(storage, 10, msg, instruction)
         self.call_continue(storage, 10)
-        self.call_cancel(storage)
+        self.call_cancel(storage, nonce)
 
         nonce_after = getTransactionCount(client, self.caller)
         self.assertEqual(nonce_before + 1, nonce_after)

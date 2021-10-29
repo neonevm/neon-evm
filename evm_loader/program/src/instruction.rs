@@ -142,8 +142,8 @@ pub enum EvmInstruction<'a> {
         step_count: u64,
     },
 
-    /// Partial call Ethereum-contract action from raw transaction data
-    /// ### Account references same as in PartialCallFromRawEthereumTX
+    /// Cancel iterative transaction execution
+    #[deprecated(note = "Instruction not supported")]
     Cancel,
 
     /// Partial call Ethereum-contract action from raw transaction data
@@ -205,6 +205,12 @@ pub enum EvmInstruction<'a> {
     ResizeStorageAccount {
         /// seed used to create account
         seed:  &'a [u8],
+    },
+
+    /// Cancel iterative transaction execution providing caller nonce
+    CancelWithNonce {
+        /// Nonce of caller in canceled transaction
+        nonce: u64,
     },
 
     /// Write program data into a holder account
@@ -288,9 +294,7 @@ impl<'a> EvmInstruction<'a> {
             9 => EvmInstruction::PartialCallFromRawEthereumTX,
             10 => EvmInstruction::Continue,
             11 => EvmInstruction::ExecuteTrxFromAccountDataIterative,
-            12 => {
-                EvmInstruction::Cancel
-            },
+            12 => EvmInstruction::Cancel,
             13 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
@@ -336,6 +340,11 @@ impl<'a> EvmInstruction<'a> {
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ContinueV02 {collateral_pool_index, step_count}
+            },
+            21 => {
+                let (nonce, _rest) = rest.split_at(8);
+                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::CancelWithNonce {nonce}
             },
             22 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
