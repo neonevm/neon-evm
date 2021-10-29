@@ -217,15 +217,17 @@ class EventTest(unittest.TestCase):
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ])
 
-    def sol_instr_10_continue(self, storage_account, step_count, contract, code):
+    def sol_instr_20_continue(self, storage_account, step_count, contract, code):
         return TransactionInstruction(
             program_id=self.loader.loader_id,
-            data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
+            data=bytearray.fromhex("14") + self.collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
             keys=[
                 AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
 
                 # Operator address:
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
                 # Operator's NEON token account:
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 # User's NEON token account:
@@ -352,7 +354,7 @@ class EventTest(unittest.TestCase):
 
         while True:
             print("Continue")
-            trx = Transaction().add(self.sol_instr_10_continue(self.storage, 400, contract, code))
+            trx = Transaction().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']:
@@ -376,7 +378,7 @@ class EventTest(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(self.storage, 200, contract, code))
+            trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):

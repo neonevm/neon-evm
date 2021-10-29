@@ -80,18 +80,20 @@ class EventTest(unittest.TestCase):
         print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
         return neon_evm_instr_19_partial_call
 
-    def sol_instr_10_continue(self, storage_account, step_count):
-        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+    def sol_instr_20_continue(self, storage_account, step_count):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
             self.acc.public_key(),
             storage_account,
             self.reId,
             self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
             step_count
         )
-        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
-        return neon_evm_instr_10_continue
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def sol_instr_21_cancel(self, storage_account, nonce):
         neon_evm_instr_21_cancel = create_neon_evm_instr_21_cancel(
@@ -116,7 +118,7 @@ class EventTest(unittest.TestCase):
     def call_continue(self, storage, steps):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, steps))
+        trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
     def call_cancel(self, storage, nonce):

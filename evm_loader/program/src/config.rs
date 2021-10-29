@@ -158,7 +158,7 @@ cfg_if! {
 }
 
 /// `PAYMENT_TO_COLLATERAL_POOL`
-pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
+pub const PAYMENT_TO_TREASURE: u64 = 1000;
 /// `PAYMENT_TO_DEPOSIT`
 pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 /// `OPERATOR_PRIORITY_SLOTS`
@@ -169,6 +169,8 @@ neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
 neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
 neon_elf_param!( NEON_ACCOUNT_MAX_SIZE      , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
 neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECIMALS));
+neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
+neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 
 /// Chain ID
