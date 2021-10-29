@@ -48,10 +48,7 @@ if [ ${#EVM_LOADER} -eq 0 ]; then
 fi
 solana program dump "$EVM_LOADER" /opt/evm_loader.dump
 /opt/neon-cli --evm_loader="$EVM_LOADER" neon-elf-params /opt/evm_loader.dump
-for neon_param in $(/opt/neon-cli --evm_loader "$EVM_LOADER" neon-elf-params /opt/evm_loader.so | xargs); do
-  echo "$neon_param"
-  export "${neon_param}"
-done
+export $(/opt/neon-cli --evm_loader "$EVM_LOADER" neon-elf-params /opt/evm_loader.dump)
 
 sleep 25   # Wait while evm_loader deploy finalized
 

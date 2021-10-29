@@ -939,14 +939,14 @@ fn command_deploy(
                         AccountMeta::new_readonly(spl_token::id(), false),
                         ];
 
-    let mut holder_plus_accounts = accounts.clone();
-    holder_plus_accounts.insert(0,AccountMeta::new(holder, false));
+    let mut holder_with_accounts = vec![AccountMeta::new(holder, false)];
+    holder_with_accounts.extend(accounts.clone());
     // Send trx_from_account_data_instruction
     {
-        debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_plus_accounts);
+        debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_with_accounts);
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
                                                                               &(0x16_u8, collateral_pool_index, 0_u64),
-                                                                              holder_plus_accounts);
+                                                                              holder_with_accounts);
         instrstruction.push(trx_from_account_data_instruction);
         send_transaction(config, &instrstruction)?;
     }
