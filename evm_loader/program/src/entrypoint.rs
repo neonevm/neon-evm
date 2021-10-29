@@ -133,13 +133,13 @@ fn process_instruction<'a>(
             let token_account_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(funding_info)?;
-            
+
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             if !funding_info.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!funding_info.is_signer");
             }
-            
+
             let mut program_seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], ether.as_bytes()];
             let (expected_address, expected_nonce) = Pubkey::find_program_address(&program_seeds, program_id);
             if expected_address != *account_info.key {
@@ -451,17 +451,19 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::Continue { step_count } => {
+        EvmInstruction::ContinueV02 { collateral_pool_index, step_count } => {
             debug_print!("Continue");
             let storage_info = next_account_info(account_info_iter)?;
 
             let operator_sol_info = next_account_info(account_info_iter)?;
+            let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
             let user_eth_info = next_account_info(account_info_iter)?;
+            let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
-            let trx_accounts = &accounts[5..];
+            let trx_accounts = &accounts[6..];
 
             let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
                 if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
@@ -471,6 +473,7 @@ fn process_instruction<'a>(
                 storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
                 operator_sol_info, operator_eth_info, user_eth_info,
+                collateral_pool_index, collateral_pool_sol_info, system_info,
             )?;
 
             Ok(())
@@ -564,6 +567,7 @@ fn process_instruction<'a>(
                         storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
                         operator_sol_info, operator_eth_info, user_eth_info,
+                        collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -581,7 +585,7 @@ fn process_instruction<'a>(
             let system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
-            
+
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
@@ -604,6 +608,7 @@ fn process_instruction<'a>(
                         storage, step_count, program_id,
                         accounts, trx_accounts, storage_info,
                         operator_sol_info, operator_eth_info, user_eth_info,
+                        collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
                 },
                 Err(err) => return Err(err),
@@ -757,7 +762,8 @@ fn process_instruction<'a>(
         EvmInstruction::Finalise |
         EvmInstruction::CreateAccountWithSeed |
         EvmInstruction::ExecuteTrxFromAccountDataIterative |
-        EvmInstruction::PartialCallFromRawEthereumTX
+        EvmInstruction::PartialCallFromRawEthereumTX |
+        EvmInstruction::Continue
         => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
     };
 
@@ -930,6 +936,9 @@ fn do_continue_top_level<'a>(
     operator_sol_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
+    collateral_pool_index: u32,
+    collateral_pool_sol_info: &'a AccountInfo<'a>,
+    system_info: &'a AccountInfo<'a>,
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -945,6 +954,13 @@ fn do_continue_top_level<'a>(
 
     let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
+
+    payment::transfer_from_operator_to_collateral_pool(
+        program_id,
+        collateral_pool_index,
+        operator_sol_info,
+        collateral_pool_sol_info,
+        system_info)?;
 
     let (results, used_gas) = {
         if let Err(_) = token::check_enough_funds(

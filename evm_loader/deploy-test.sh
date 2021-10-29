@@ -46,6 +46,9 @@ if [ ${#EVM_LOADER} -eq 0 ]; then
   echo  "EVM_LOADER is not deployed"
   exit 1
 fi
+solana program dump "$EVM_LOADER" /opt/evm_loader.dump
+/opt/neon-cli --evm_loader="$EVM_LOADER" neon-elf-params /opt/evm_loader.dump
+export $(/opt/neon-cli --evm_loader "$EVM_LOADER" neon-elf-params /opt/evm_loader.dump)
 
 sleep 25   # Wait while evm_loader deploy finalized
 

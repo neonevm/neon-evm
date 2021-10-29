@@ -209,18 +209,20 @@ class DeployTest(unittest.TestCase):
         print('neon_evm_instr_14_combined_continue:', neon_evm_instr_14_combined_continue)
         return neon_evm_instr_14_combined_continue
 
-    def sol_instr_10_continue(self, storage_account, step_count, contract_sol, code_sol):
-        neon_evm_instr_10_continue = create_neon_evm_instr_10_continue(
+    def sol_instr_20_continue(self, storage_account, step_count, contract_sol, code_sol):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
             self.operator_acc.public_key(),
             storage_account,
             contract_sol,
             code_sol,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
             step_count
         )
-        print('neon_evm_instr_10_continue:', neon_evm_instr_10_continue)
-        return neon_evm_instr_10_continue
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def create_storage_account(self, seed=str(randrange(1000000000))):
         storage = PublicKey(sha256(bytes(self.operator_acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
@@ -249,7 +251,7 @@ class DeployTest(unittest.TestCase):
         while (True):
             print("Continue")
             trx = Transaction()
-            trx.add(self.sol_instr_10_continue(storage, 50, contract_sol, code_sol))
+            trx.add(self.sol_instr_20_continue(storage, 50, contract_sol, code_sol))
             print(trx.instructions[-1].keys)
             result = send_transaction(client, trx, self.operator_acc)["result"]
 
@@ -257,7 +259,7 @@ class DeployTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     # Check if storage balace were filled to rent exempt
-                    self.assertEqual(
+                    self.assertGreaterEqual(
                         getBalance(storage),
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
@@ -276,7 +278,7 @@ class DeployTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
                 if (data[0] == 6):
                     # Check if storage balace were filled to rent exempt
-                    self.assertEqual(
+                    self.assertGreaterEqual(
                         getBalance(storage),
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result

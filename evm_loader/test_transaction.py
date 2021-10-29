@@ -2,7 +2,7 @@ import unittest
 
 import solana
 from base58 import b58decode
-
+from enum import IntEnum
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -10,6 +10,15 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
 INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
+
+NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 0))
+NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 0))
+
+
+class Step(IntEnum):
+    Begin = 0
+    Iteration = 1
+    Complete = 2
 
 
 class EvmLoaderTestsNewAccount(unittest.TestCase):
@@ -161,6 +170,62 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertGreater(len(log), len(INVALID_NONCE))
         file_name = 'src/entrypoint.rs'
         self.assertTrue(file_name in log)
+
+    def check_transfers_between_operator_deposit_and_collateral_pool(
+            self, response, operator_sol_acc, deposit_sol_acc, collateral_pool_sol_acc, step=Step.Iteration):
+        print('check_transfer_from_operator_to_deposit:')
+        print('     response:', response)
+        print('     operator_sol_acc:', operator_sol_acc)
+        print('     deposit_sol_acc:', deposit_sol_acc)
+        print('     collateral_pool_sol_acc:', collateral_pool_sol_acc)
+        response = json.loads(str(response).replace('\'', '\"').replace('None', 'null'))
+        print('     response:', response)
+        account_keys = response['result']['transaction']['message']['accountKeys']
+        print('     account_keys:', account_keys)
+        operator_sol_acc_index = account_keys.index(str(operator_sol_acc))
+        print('     operator_sol_acc_index:', operator_sol_acc_index)
+        deposit_sol_acc_index = account_keys.index(str(deposit_sol_acc))
+        print('     deposit_sol_acc_index:', deposit_sol_acc_index)
+        collateral_pool_sol_acc_index = account_keys.index(str(collateral_pool_sol_acc))
+        print('     collateral_pool_sol_acc_index:', collateral_pool_sol_acc_index)
+        pre_balances = response['result']['meta']['preBalances']
+        print('     pre_balances:', pre_balances)
+        post_balances = response['result']['meta']['postBalances']
+        print('     post_balances:', post_balances)
+        operator_pre_balance = pre_balances[operator_sol_acc_index]
+        print('     operator_pre_balance:', operator_pre_balance)
+        operator_post_balance = post_balances[operator_sol_acc_index]
+        print('     operator_post_balance:', operator_post_balance)
+        deposit_pre_balance = pre_balances[deposit_sol_acc_index]
+        print('     deposit_pre_balance:', deposit_pre_balance)
+        deposit_post_balance = post_balances[deposit_sol_acc_index]
+        print('     deposit_post_balance:', deposit_post_balance)
+        collateral_pool_pre_balance = pre_balances[collateral_pool_sol_acc_index]
+        print('     collateral_pool_pre_balance:', collateral_pool_pre_balance)
+        collateral_pool_post_balance = post_balances[collateral_pool_sol_acc_index]
+        print('     collateral_pool_post_balance:', collateral_pool_post_balance)
+        fee = response['result']['meta']['fee']
+        print('     fee:', fee)
+        print('     NEON_PAYMENT_TO_DEPOSIT:', NEON_PAYMENT_TO_DEPOSIT)
+        print('     NEON_PAYMENT_TO_TREASURE:', NEON_PAYMENT_TO_TREASURE)
+        operator_balance_change = int(operator_post_balance) - int(operator_pre_balance)
+        print('     operator_balance_change:', operator_balance_change)
+        deposit_balance_change = int(deposit_post_balance) - int(deposit_pre_balance)
+        print('     deposit_balance_change:', deposit_balance_change)
+        collateral_pool_balance_change = int(collateral_pool_post_balance) - int(collateral_pool_pre_balance)
+        print('     collateral_pool_balance_change:', collateral_pool_balance_change)
+        if step is Step.Begin:
+            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_DEPOSIT - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, NEON_PAYMENT_TO_DEPOSIT)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
+        if step is Step.Iteration:
+            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, 0)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
+        if step is Step.Complete:
+            self.assertLessEqual(operator_balance_change, 0 - fee + NEON_PAYMENT_TO_DEPOSIT - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, 0 - NEON_PAYMENT_TO_DEPOSIT)
+            self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
 
     # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
@@ -337,20 +402,20 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
-        response = send_transaction(client, trx, self.acc)
-        print('response_1:', response)
+        response_1 = send_transaction(client, trx, self.acc)
+        print('response_1:', response_1)
         neon_balance_on_response_1 = self.token.balance(self.caller_token_2)
         print("Caller_2 NEON-token balance on response_1:", neon_balance_on_response_1)
-        response = send_transaction(client, trx, self.acc)
-        print('response_2:', response)
+        response_2 = send_transaction(client, trx, self.acc)
+        print('response_2:', response_2)
         neon_balance_on_response_2 = self.token.balance(self.caller_token_2)
         print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
-        response = send_transaction(client, trx, self.acc)
-        print('response_3:', response)
+        response_3 = send_transaction(client, trx, self.acc)
+        print('response_3:', response_3)
         neon_balance_on_response_3 = self.token.balance(self.caller_token_2)
         print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
-        self.assertEqual(response['result']['meta']['err'], None)
-        data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
+        self.assertEqual(response_3['result']['meta']['err'], None)
+        data = b58decode(response_3['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         EXPECTED_USED_GAS = 24301
@@ -370,12 +435,28 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print('err:', str(err))
             self.assertTrue(False)
         neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
-        print("Caller_2 NEON-token balance on sending 5-th transaction:", neon_balance_on_5_th_transaction)
+        print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, 984)
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 1548)
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, EXPECTED_USED_GAS)
         self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
+
+        print('Check Transfer to treasures on each iteration #345.')
+        print('See https://github.com/neonlabsorg/neon-evm/issues/345:')
+        operator_sol_acc = self.acc.public_key()
+        collateral_pool_sol_acc = self.collateral_pool_address
+        deposit_sol_acc = storage
+
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Begin)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Iteration)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_3, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Complete)
 
 
 # def test_fail_on_no_signature(self):
