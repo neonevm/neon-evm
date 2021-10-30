@@ -908,7 +908,7 @@ fn do_begin<'a>(
         do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+        do_partial_create(&mut storage, 0, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     };
 
     token::user_pays_operator_for_iteration(
