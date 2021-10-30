@@ -11,7 +11,7 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-use crate::config::{ PAYMENT_TO_COLLATERAL_POOL, PAYMENT_TO_DEPOSIT, collateral_pool_base };
+use crate::config::{PAYMENT_TO_TREASURE, PAYMENT_TO_DEPOSIT, collateral_pool_base };
 
 
 /// Checks collateral accounts for the Ethereum transaction execution.
@@ -65,7 +65,7 @@ pub fn transfer_from_operator_to_collateral_pool<'a>(
     debug_print!("operator_sol_info {:?}", operator_sol_info);
     debug_print!("collateral_pool_sol_info {:?}", collateral_pool_sol_info);
 
-    transfer_system_owned(operator_sol_info, collateral_pool_sol_info, system_info, PAYMENT_TO_COLLATERAL_POOL)
+    transfer_system_owned(operator_sol_info, collateral_pool_sol_info, system_info, PAYMENT_TO_TREASURE)
 }
 
 /// Makes payments for the Ethereum transaction execution.
@@ -112,6 +112,23 @@ pub fn transfer_from_deposit_to_operator(
     debug_print!("operator_sol_info {:?}", operator_sol_info);
 
     transfer_program_owned(deposit_sol_info, operator_sol_info, PAYMENT_TO_DEPOSIT)
+}
+
+/// transfer for `ResizeStorageAccount` instruction
+/// transfers SOL from `old_code_account` to operator
+/// # Errors
+///
+/// Will return error only if `transfer` fail
+pub fn transfer_from_code_account_to_operator(
+    code_account_sol_info :&AccountInfo,
+    operator_sol_info: &AccountInfo,
+    amount: u64
+) -> ProgramResult {
+    debug_print!("code_account_to_operator");
+    debug_print!("code_account_sol_info {:?}", code_account_sol_info);
+    debug_print!("operator_sol_info {:?}", operator_sol_info);
+
+    transfer_program_owned(code_account_sol_info, operator_sol_info, amount)
 }
 
 

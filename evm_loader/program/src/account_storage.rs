@@ -331,7 +331,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply_transfers(&mut self, accounts: &[AccountInfo], transfers: Vec<evm::Transfer>) -> Result<(), ProgramError> {
+    pub fn apply_transfers(&mut self, accounts: &'a [AccountInfo<'a>], transfers: Vec<evm::Transfer>) -> Result<(), ProgramError> {
         debug_print!("apply_transfers {:?}", transfers);
 
         for transfer in transfers {
