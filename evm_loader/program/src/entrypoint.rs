@@ -905,7 +905,7 @@ fn do_begin<'a>(
         system_info)?;
 
     let (_,used_gas) = if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+        do_partial_call(&mut storage, 0, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
         do_partial_create(&mut storage, 0, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
