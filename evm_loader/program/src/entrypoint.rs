@@ -346,7 +346,7 @@ fn process_instruction<'a>(
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                collateral_pool_index, step_count, caller, trx,
+                collateral_pool_index, caller, trx,
                 program_id, trx_accounts, accounts, storage_info,
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
@@ -442,7 +442,7 @@ fn process_instruction<'a>(
                 .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
             do_begin(
-                collateral_pool_index, step_count, caller, trx,
+                collateral_pool_index, caller, trx,
                 program_id, trx_accounts, accounts, storage_info,
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
@@ -555,7 +555,7 @@ fn process_instruction<'a>(
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        collateral_pool_index, step_count, caller, trx,
+                        collateral_pool_index, caller, trx,
                         program_id, trx_accounts, accounts, storage_info,
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,
@@ -596,7 +596,7 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        collateral_pool_index, step_count, caller, trx,
+                        collateral_pool_index, caller, trx,
                         program_id, trx_accounts, accounts, storage_info,
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,
@@ -861,7 +861,6 @@ fn do_call(
 #[allow(clippy::too_many_arguments)]
 fn do_begin<'a>(
     collateral_pool_index: u32,
-    step_count: u64,
     caller: H160,
     trx: UnsignedTransaction,
     program_id: &Pubkey,
