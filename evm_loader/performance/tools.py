@@ -77,7 +77,7 @@ class init_wallet():
         cls.regular_acc = regular_wallet.get_acc()
         # cls.wallet_token = cls.token.create_token_account(ETH_TOKEN_MINT_ID, owner=wallet.get_path())
         cls.wallet_token = get_associated_token_address(PublicKey(wallet.get_acc().public_key()), ETH_TOKEN_MINT_ID)
-        cls.token.mint(ETH_TOKEN_MINT_ID, cls.wallet_token, 10000)
+        # cls.token.mint(ETH_TOKEN_MINT_ID, cls.wallet_token, 10000)
 
 
         assert (getBalance(wallet.get_acc().public_key()) > 0)
@@ -393,34 +393,5 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_no
     assert (from_addr == caller_eth)
     return (from_addr, sign, msg)
 
-
-
-COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
-DEFAULT_UNITS=500*1000
-DEFAULT_HEAP_FRAME=256*1024
-
-class ComputeBudget():
-    @staticmethod
-    def requestUnits(units):
-        return TransactionInstruction(
-            program_id=COMPUTE_BUDGET_ID,
-            keys=[],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little")
-        )
-
-    @staticmethod
-    def requestHeapFrame(heapFrame):
-        return TransactionInstruction(
-            program_id=COMPUTE_BUDGET_ID,
-            keys=[],
-            data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
-        )
-
-
-def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
-    trx = Transaction(**args)
-    if units: trx.add(ComputeBudget.requestUnits(units))
-    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
-    return trx
 
 

@@ -41,8 +41,8 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
-
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
+COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -53,6 +53,10 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 ACCOUNT_SEED_VERSION=b'\1'
+
+DEFAULT_UNITS=500*1000
+DEFAULT_HEAP_FRAME=256*1024
+
 
 class SplToken:
     def __init__(self, url):
@@ -303,7 +307,7 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         base = self.acc.get_acc().public_key()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
@@ -758,4 +762,31 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
+
+
+
+class ComputeBudget():
+    @staticmethod
+    def requestUnits(units):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("00") + units.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def requestHeapFrame(heapFrame):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
+        )
+
+
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
+    trx = Transaction(**args)
+    if units: trx.add(ComputeBudget.requestUnits(units))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    return trx
+
 
