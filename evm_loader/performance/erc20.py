@@ -494,8 +494,11 @@ def verify_trx(args):
 
 
 def create_senders(args):
+    instance = init_wallet()
+
     total = 0
     receipt_list = []
+    accounts = []
 
     senders = open(senders_file + args.postfix, mode='w')
     senders = open(senders_file + args.postfix, mode='a')
@@ -504,17 +507,28 @@ def create_senders(args):
         print("create sender", total)
         total = total + 1
         acc = Account()
-        tx = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-        receipt_list.append((tx['result'], acc.secret_key(), acc.public_key()))
+        airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
+        tx_token = Transaction()
+
+        tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
+        token_res = client.send_transaction(tx_token, instance.acc,
+                                      opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+
+        receipt_list.append((airdrop_res['result'], token_res['result'], acc))
 
         if total % 500 == 0 or total == args.count - 1:
-            for (receipt, pr_key, pub_key) in receipt_list:
-                confirm_transaction(client, receipt)
-                if getBalance(pub_key) == 0:
-                    print("request_airdrop error", str(pub_key))
+            for (airdrop_receipt, token_receipt, acc) in receipt_list:
+                confirm_transaction(client, airdrop_receipt)
+                confirm_transaction(client, token_receipt)
+                if getBalance(acc.public_key()) == 0:
+                    print("request_airdrop error", str(acc.public_key()))
                     exit(0)
-                line = pr_key.hex() + bytes(pub_key).hex()
-                senders.write(line + "\n")
+                keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
+                senders.write(keypair + "\n")
+                accounts.append((acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID)))
             receipt_list = []
+
+    for (acc,token) in accounts:
+        print(acc, token)
 
     print("\ntotal: ", total)
