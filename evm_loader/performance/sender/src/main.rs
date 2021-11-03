@@ -261,11 +261,9 @@ fn get_collateral_pool_account_and_index(evm_loader_key : &Pubkey) -> (Pubkey, u
 fn make_instruction_budget_units() -> Instruction{
     let DEFAULT_UNITS:u32 =500*1000;
 
-    // let mut units : Vec<u8> = vec![0, 5];
-    // units[1..4].copy_from_slice(&DEFAULT_UNITS.to_le_bytes()[0..3]);
-
     let mut units = DEFAULT_UNITS.to_le_bytes().to_vec();
-    units.resize(5, 0);
+    units.resize(4, 0);
+    units.insert(0,0);
     let instruction_unit = Instruction::new_with_bytes(
         Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
         &units,
@@ -277,14 +275,9 @@ fn make_instruction_budget_units() -> Instruction{
 fn make_instruction_budget_heap() -> Instruction{
     let DEFAULT_HEAP_FRAME: u32=256*1024;
 
-
-    // let mut heap : Vec<u8> = vec![0, 5];
-    // heap[1..4].copy_from_slice(&DEFAULT_HEAP_FRAME.to_le_bytes()[0..3]);
-    // heap[0] = 1;
-
     let mut heap = DEFAULT_HEAP_FRAME.to_le_bytes().to_vec();
+    heap.resize(4, 0);
     heap.insert(0, 1);
-    heap.resize(5, 0);
 
     let instruction_heap = Instruction::new_with_bytes(
         Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
