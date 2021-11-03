@@ -388,6 +388,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         # TODO Fix this part of test
         # Fails and locks storage and accounts 
+        # Need to be canceled explicitly
         # print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
         #       'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
         # with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
