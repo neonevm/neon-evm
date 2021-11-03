@@ -48,8 +48,7 @@ cfg_if! {
 
     } else if #[cfg(feature = "testnet")] {
 
-        //const CHAIN_ID: u64 = 245022940;
-        const CHAIN_ID: u64 = 111;
+        const CHAIN_ID: u64 = 245022940;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -93,8 +92,7 @@ cfg_if! {
         
     } else if #[cfg(feature = "devnet")] {
 
-        //const CHAIN_ID: u64 = 245022926;
-        const CHAIN_ID: u64 = 110;
+        const CHAIN_ID: u64 = 245022926;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
