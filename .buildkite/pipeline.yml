@@ -15,11 +15,11 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "${PROXY_BRANCH:-develop}"
+       branch: "ci-try-solana-1.8.2"  # TODO: revert back to "${PROXY_BRANCH:-develop}"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
-          SOLANA_REVISION: "v1.7.9-resources"
+          SOLANA_REVISION: "v1.8.2-testnet"
 
   - wait
 
