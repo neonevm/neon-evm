@@ -67,7 +67,7 @@ use std::borrow::{Borrow, BorrowMut};
 
 use evm_loader::{
     instruction::EvmInstruction,
-    solana_backend::SolanaBackend,
+    // solana_backend::SolanaBackend,
     account_data::{AccountData, Account, Contract},
 };
 use evm::{H160, H256, U256};
@@ -246,7 +246,7 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
-fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey) -> Instruction {
+fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey, operator_sol : &Pubkey) -> Instruction {
     let mut data_05_hex = String::from("05");
     data_05_hex.push_str(trx.from_addr.as_str());
     data_05_hex.push_str(trx.sign.as_str());
@@ -257,18 +257,21 @@ fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey) -> Instruction {
     let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
     let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
     let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
-    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::token::token_mint::id());
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::token::token_mint::id());
+    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::config::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::config::token_mint::id());
 
     let mut acc_meta = vec![
+
+        AccountMeta::new_readonly(sysinstruct, false),
+        AccountMeta::new(*operator_sol, true),
+
         AccountMeta::new(contract, false),
         AccountMeta::new(contract_token, false),
         // AccountMeta::new(contract_code, false),
         AccountMeta::new(caller, false),
         AccountMeta::new(caller_token, false),
-        AccountMeta::new_readonly(sysinstruct, false),
         AccountMeta::new_readonly(*evm_loader, false),
-        AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
+        AccountMeta::new_readonly(evm_loader::config::token_mint::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvarclock, false),
     ];
@@ -325,8 +328,8 @@ fn create_trx(
                 AccountMeta::new_readonly(keccakprog, false),
             ]
         );
-
-        let instruction_05 = make_instruction_05(&trx, evm_loader);
+        let signer: Box<dyn Signer> = Box::from(keypair);
+        let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey());
 
         let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
         let mut tx = Transaction::new_unsigned(message);
@@ -337,7 +340,6 @@ fn create_trx(
             _ => panic!("get_recent_blockhash() error")
         }
 
-        let signer: Box<dyn Signer> = Box::from(keypair);
         tx.try_sign(&[&*signer] , blockhash)?;
         transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
     }
