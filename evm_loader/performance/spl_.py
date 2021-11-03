@@ -12,7 +12,7 @@ def mint_spl(accounts, instance):
         data = spl.token._layouts.INSTRUCTIONS_LAYOUT.build(
             dict(instruction_type=InstructionType.MINT_TO2, args=dict(amount=100*10**9, decimals=9)))
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(
             TransactionInstruction(
                 program_id=TOKEN_PROGRAM_ID,
