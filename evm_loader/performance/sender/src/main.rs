@@ -246,8 +246,23 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
-fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey, operator_sol : &Pubkey) -> Instruction {
+fn get_collateral_pool_account_and_index(evm_loader_key : &Pubkey) -> (Pubkey, u32) {
+    let collateral_pool_index = 2;
+
+    let seed = format!("{}{}", evm_loader::config::collateral_pool_base::PREFIX, collateral_pool_index);
+    let collateral_pool_account = Pubkey::create_with_seed(
+        &evm_loader::config::collateral_pool_base::id(),
+        &seed,
+        evm_loader_key).unwrap();
+
+    (collateral_pool_account, collateral_pool_index)
+}
+
+fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey) -> Instruction {
+    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(evm_loader_key);
+
     let mut data_05_hex = String::from("05");
+    data_05_hex.push_str(hex::encode(collateral_pool_index.to_le_bytes()).as_str());
     data_05_hex.push_str(trx.from_addr.as_str());
     data_05_hex.push_str(trx.sign.as_str());
     data_05_hex.push_str(trx.msg.as_str());
@@ -257,20 +272,28 @@ fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey, operator_sol : &Pubke
     let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
     let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
     let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
+    let system = Pubkey::from_str("11111111111111111111111111111111").unwrap();
     let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::config::token_mint::id());
     let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::config::token_mint::id());
+    let operator_token = spl_associated_token_account::get_associated_token_address(&operator_sol, &evm_loader::config::token_mint::id());
+
 
     let mut acc_meta = vec![
 
         AccountMeta::new_readonly(sysinstruct, false),
         AccountMeta::new(*operator_sol, true),
+        AccountMeta::new(collateral_pool_acc, false),
+        AccountMeta::new(operator_token, false),
+        AccountMeta::new(caller_token, false),
+        AccountMeta::new(system, false),
 
         AccountMeta::new(contract, false),
         AccountMeta::new(contract_token, false),
         // AccountMeta::new(contract_code, false),
         AccountMeta::new(caller, false),
         AccountMeta::new(caller_token, false),
-        AccountMeta::new_readonly(*evm_loader, false),
+
+        AccountMeta::new_readonly(*evm_loader_key, false),
         AccountMeta::new_readonly(evm_loader::config::token_mint::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvarclock, false),
@@ -278,11 +301,11 @@ fn make_instruction_05(trx : &trx_t, evm_loader : &Pubkey, operator_sol : &Pubke
 
     if (trx.erc20_code != ""){
         let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
-        acc_meta.insert(2, AccountMeta::new(contract_code, false));
+        acc_meta.insert(8, AccountMeta::new(contract_code, false));
     }
 
     let instruction_05 = Instruction::new_with_bytes(
-        *evm_loader,
+        *evm_loader_key,
         &data_05,
         acc_meta);
 
@@ -328,10 +351,11 @@ fn create_trx(
                 AccountMeta::new_readonly(keccakprog, false),
             ]
         );
+        let keypair_pubkey = keypair.pubkey();
         let signer: Box<dyn Signer> = Box::from(keypair);
         let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey());
 
-        let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair.pubkey()));
+        let message = Message::new(&[instruction_keccak, instruction_05], Some(&keypair_pubkey));
         let mut tx = Transaction::new_unsigned(message);
 
         let blockhash : solana_program::hash::Hash;
