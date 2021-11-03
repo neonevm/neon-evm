@@ -508,18 +508,19 @@ def create_senders(args):
         total = total + 1
         acc = Account()
         airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-        tx_token = TransactionWithComputeBudget()
+        # tx_token = Transaction()
 
-        tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
-        token_res = client.send_transaction(tx_token, instance.acc,
-                                      opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-
+        # tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
+        # token_res = client.send_transaction(tx_token, instance.acc,
+        #                               opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+        #
+        token_res = airdrop_res
         receipt_list.append((airdrop_res['result'], token_res['result'], acc))
 
         if total % 500 == 0 or total == args.count - 1:
             for (airdrop_receipt, token_receipt, acc) in receipt_list:
                 confirm_transaction(client, airdrop_receipt)
-                confirm_transaction(client, token_receipt)
+                # confirm_transaction(client, token_receipt)
                 if getBalance(acc.public_key()) == 0:
                     print("request_airdrop error", str(acc.public_key()))
                     exit(0)
