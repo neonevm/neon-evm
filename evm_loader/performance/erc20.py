@@ -508,7 +508,7 @@ def create_senders(args):
         total = total + 1
         acc = Account()
         airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-        tx_token = Transaction()
+        tx_token = TransactionWithComputeBudget()
 
         tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
         token_res = client.send_transaction(tx_token, instance.acc,
