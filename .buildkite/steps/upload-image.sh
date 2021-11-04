@@ -7,6 +7,6 @@ docker images
 
 docker login -u=${DHUBU} -p=${DHUBP}
 
-docker push cybercoredev/evm_loader:${REVISION}
+docker push neonlabsorg/evm_loader:${REVISION}
 
 

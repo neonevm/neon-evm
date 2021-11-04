@@ -3,7 +3,7 @@
 
 [package]
 name = "evm-loader"
-version = "2.0.8"
+version = "0.3.0-rc1"
 description = "Ethereum VM loader"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana-program-library"
@@ -12,6 +12,9 @@ edition = "2018"
 exclude = ["js/**"]
 
 [features]
+mainnet = []
+testnet = []
+devnet = []
 no-logs = []
 no-entrypoint = []
 test-bpf = []
@@ -43,6 +46,9 @@ rlp = "0.5"
 bincode = "1.3.3"
 evm = { version = "0.18.0", path = "../rust-evm", default_features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
+const_format = { version = "0.2.21" }
+macros = { version = "0.1", path = "../macro" }
+cfg-if = { version = "0.1" }
 
 [dev-dependencies]
 rand = { version = "0.7.0"}

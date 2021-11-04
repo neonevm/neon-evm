@@ -3,7 +3,7 @@ from solana.transaction import Transaction
 from solana_utils import *
 import sys
 
-wallet = WalletAccount(sys.argv[1]).get_acc()
+wallet = OperatorAccount(sys.argv[1]).get_acc()
 collateral_pool_base = wallet.public_key()
 print(collateral_pool_base)
 for collateral_pool_index in range(0, 10):

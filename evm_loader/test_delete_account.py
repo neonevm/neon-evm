@@ -17,7 +17,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("\ntest_delete_account.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -29,7 +29,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 2000, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -43,23 +43,22 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     def deploy_contract(self):
         print("deploy contract: ")
-        program_and_code = self.loader.deployChecked(
+        (sol_address, eth_address, code_sol_address) = self.loader.deployChecked(
                 CONTRACTS_DIR+'SelfDestructContract.binary',
                 self.caller,
                 self.caller_ether
             )
-        owner_contract = program_and_code[0]
-        contract_code = program_and_code[2]
-        print("contract id: ", owner_contract, solana2ether(owner_contract).hex())
-        print("code id: ", contract_code)
-        return (owner_contract, contract_code)
 
-    def make_transactions(self, owner_contract, contract_code, nonce, position):
+        print("contract id: ", sol_address, eth_address)
+        print("code id: ", code_sol_address)
+        return (sol_address, eth_address, code_sol_address)
+
+    def make_transactions(self, contract_eth, owner_contract, contract_code, nonce, position):
         if nonce is None:
             nonce = getTransactionCount(client, self.caller)
 
         tx = {
-            'to': solana2ether(owner_contract),
+            'to': contract_eth,
             'value': 0,
             'gas': 9999999,
             'gasPrice': 1_000_000_000,
@@ -113,12 +112,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     def test_fail_on_tx_after_delete(self):
         # Check that contact accounts marked invalid on deletion and couldn't be used in same block
-        (owner_contract, contract_code) = self.deploy_contract()
+        (owner_contract, eth_contract, contract_code) = self.deploy_contract()
 
         init_nonce = getTransactionCount(client, self.caller)
-        (keccak_tx_1, call_tx_1) = self.make_transactions(owner_contract, contract_code, init_nonce, 1)
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 1)
         init_nonce += 1
-        (keccak_tx_2, call_tx_2) = self.make_transactions(owner_contract, contract_code, init_nonce, 3)
+        (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 3)
 
         trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
@@ -129,7 +128,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
 
     def test_success_deletion(self):
-        (owner_contract, contract_code) = self.deploy_contract()
+        (owner_contract, eth_contract, contract_code) = self.deploy_contract()
         self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
         operator_token_balance = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
@@ -139,7 +138,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         contract_balance_pre = getBalance(owner_contract)
         code_balance_pre = getBalance(contract_code)
 
-        (keccak_tx_1, call_tx_1) = self.make_transactions(owner_contract, contract_code, None, 1)
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, 1)
         trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 )
 
         send_transaction(client, trx, self.acc)

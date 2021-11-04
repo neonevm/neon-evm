@@ -1,6 +1,6 @@
 //! Structures stored in account data
 use arrayref::{array_ref, array_refs, array_mut_ref, mut_array_refs};
-use evm::H160;
+use evm::{H160, U256};
 use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -9,7 +9,7 @@ use solana_program::{
 /// Ethereum account version
 pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
 /// Ethereum account allocated data size
-pub const ACCOUNT_MAX_SIZE: u64 = 256;
+pub const ACCOUNT_MAX_SIZE: usize = 256;
 
 /// Ethereum account data
 #[derive(Debug,Clone)]
@@ -22,10 +22,12 @@ pub struct Account {
     pub trx_count: u64,
     /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
-    /// Ethereum address
-    pub blocked: Option<Pubkey>,
+    /// Public key of storage account, associated with the transaction that locked this account for writing
+    pub rw_blocked_acc: Option<Pubkey>,
     /// ETH token account
-    pub eth_token_account: Pubkey
+    pub eth_token_account: Pubkey,
+    /// counter of the read-only locks
+    pub ro_blocked_cnt: u8
 }
 
 /// Ethereum contract data account
@@ -57,7 +59,26 @@ pub struct Storage {
     /// Stored executor data size
     pub executor_data_size: usize,
     /// Stored evm data size
-    pub evm_data_size: usize
+    pub evm_data_size: usize,
+    /// Ethereum transaction gas used and paid
+    pub gas_used_and_paid: u64,
+    /// Number of payments
+    pub number_of_payments: u64,
+}
+
+/// Ethereum ERC20 allowance data account
+#[derive(Debug,Clone)]
+pub struct ERC20Allowance {
+    /// Token owner
+    pub owner: H160,
+    /// Token spender
+    pub spender: H160,
+    /// Token contract
+    pub contract: H160,
+    /// Token mint
+    pub mint: Pubkey,
+    /// Amount
+    pub value: U256
 }
 
 /// Structured data stored in account data
@@ -69,6 +90,8 @@ pub enum AccountData {
     Contract(Contract),
     /// Storage data
     Storage(Storage),
+    /// ERC20 allowance data
+    ERC20Allowance(ERC20Allowance),
     /// Empty account data
     Empty
 }
@@ -78,6 +101,7 @@ impl AccountData {
     const ACCOUNT_TAG: u8 = 1;
     const CONTRACT_TAG: u8 = 2;
     const STORAGE_TAG: u8 = 3;
+    const ERC20_ALLOWANCE_TAG: u8 = 4;
 
     /// Unpack `AccountData` from Solana's account data
     /// ```
@@ -100,6 +124,7 @@ impl AccountData {
             Self::ACCOUNT_TAG => Self::Account( Account::unpack(rest) ),
             Self::CONTRACT_TAG => Self::Contract( Contract::unpack(rest) ),
             Self::STORAGE_TAG => Self::Storage( Storage::unpack(rest) ),
+            Self::ERC20_ALLOWANCE_TAG => Self::ERC20Allowance( ERC20Allowance::unpack(rest) ),
 
             _ => return Err!(ProgramError::InvalidAccountData; "tag={:?}", tag),
         })
@@ -146,6 +171,12 @@ impl AccountData {
                 dst[0] = Self::STORAGE_TAG;
                 Storage::pack(acc, &mut dst[1..])
             },
+            Self::ERC20Allowance(acc) => {
+                if dst[0] != Self::ERC20_ALLOWANCE_TAG && dst[0] != Self::EMPTY_TAG { return Err!(ProgramError::InvalidAccountData; "dst[0]={:?}", dst[0]); }
+                if dst.len() < self.size() { return Err!(ProgramError::AccountDataTooSmall; "dst.len()={:?} < self.size()={:?}", dst.len(), self.size()); }
+                dst[0] = Self::ERC20_ALLOWANCE_TAG;
+                ERC20Allowance::pack(acc, &mut dst[1..])
+            },
         })
     }
 
@@ -156,6 +187,7 @@ impl AccountData {
             Self::Account(_acc) => Account::size() + 1,
             Self::Contract(_acc) => Contract::size() + 1,
             Self::Storage(_acc) => Storage::size() + 1,
+            Self::ERC20Allowance(_acc) => ERC20Allowance::size() + 1,
             Self::Empty => 1,
         }
     }
@@ -165,10 +197,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Account` struct
-    pub const fn get_account(&self) -> Result<&Account, ProgramError>  {
+    pub fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
             Self::Account(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -189,10 +221,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Contract` struct
-    pub const fn get_contract(&self) -> Result<&Contract, ProgramError>  {
+    pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
             Self::Contract(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -213,10 +245,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub const fn get_storage(&self) -> Result<&Storage, ProgramError>  {
+    pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
             Self::Storage(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -231,26 +263,72 @@ impl AccountData {
             _ => Err!(ProgramError::InvalidAccountData),
         }
     }
+
+    /// Get `ERC20Allowance` struct  reference from `AccountData` if it is stored in
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
+    pub fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
+        match self {
+            Self::ERC20Allowance(ref acc) => Ok(acc),
+            _ => Err!(ProgramError::InvalidAccountData),
+        }
+    }
+
+    /// Get mutable `ERC20Allowance` struct  reference from `AccountData` if it is stored in
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
+    pub fn get_mut_erc20_allowance(&mut self) -> Result<&mut ERC20Allowance, ProgramError>  {
+        match self {
+            Self::ERC20Allowance(ref mut acc) => Ok(acc),
+            _ => Err!(ProgramError::InvalidAccountData),
+        }
+    }
+
+    /// Check if the account is empty
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if account is not empty
+    pub fn check_empty(&self) -> Result<(), ProgramError> {
+        match self {
+            Self::Empty => Ok(()),
+            _ => Err!(ProgramError::InvalidAccountData),
+        }
+    }
 }
 
 impl Account {
     /// Account struct serialized size
-    pub const SIZE: usize = 20+1+8+32+1+32+32;
+    pub const SIZE: usize = 20+1+8+32+1+32+32+1;
 
     /// Deserialize `Account` struct from input data
     #[must_use]
     pub fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Account::SIZE];
-        let (ether, nonce, trx_count, code_account, is_blocked, blocked_by, eth) = array_refs![data, 20, 1, 8, 32, 1, 32, 32];
+        let (
+            ether,
+            nonce,
+            trx_count,
+            code_account,
+            is_rw_blocked,
+            rw_blocked_by,
+            eth,
+            ro_blocked_cnt
+        ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
 
         Self {
             ether: H160::from_slice(&*ether),
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
             code_account: Pubkey::new_from_array(*code_account),
-            blocked: if is_blocked[0] > 0 { Some(Pubkey::new_from_array(*blocked_by)) } else { None },
-            eth_token_account: Pubkey::new_from_array(*eth)
+            rw_blocked_acc: if is_rw_blocked[0] > 0 { Some(Pubkey::new_from_array(*rw_blocked_by)) } else { None },
+            eth_token_account: Pubkey::new_from_array(*eth),
+            ro_blocked_cnt: ro_blocked_cnt[0]
         }
     }
 
@@ -258,19 +336,30 @@ impl Account {
     pub fn pack(acc: &Self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Account::SIZE];
-        let (ether_dst, nonce_dst, trx_count_dst, code_account_dst, is_blocked_dst, blocked_by_dst, eth_dst) = 
-                mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32];
+        let (
+            ether_dst,
+            nonce_dst,
+            trx_count_dst,
+            code_account_dst,
+            is_rw_blocked_dst,
+            rw_blocked_by_dst,
+            eth_dst,
+            ro_blocked_cnt_dst
+        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
+
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
         *trx_count_dst = acc.trx_count.to_le_bytes();
         code_account_dst.copy_from_slice(acc.code_account.as_ref());
-        if let Some(blocked) = acc.blocked {
-            is_blocked_dst[0] = 1;
-            blocked_by_dst.copy_from_slice(blocked.as_ref());
-        } else {
-            is_blocked_dst[0] = 0;
+        if let Some(blocked_acc) = acc.rw_blocked_acc{
+            is_rw_blocked_dst[0] = 1;
+            rw_blocked_by_dst.copy_from_slice(blocked_acc.as_ref());
+        }
+        else{
+            is_rw_blocked_dst[0] = 0;
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
+        ro_blocked_cnt_dst[0] = acc.ro_blocked_cnt;
 
         Self::SIZE
     }
@@ -319,14 +408,25 @@ impl Contract {
 
 impl Storage {
     /// Storage struct serialized size
-    const SIZE: usize = 20+8+8+8+8+32+8+8+8;
+    const SIZE: usize = 20+8+8+8+8+32+8+8+8+8+8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         
         Self {
             caller: H160::from(*caller),
@@ -338,6 +438,8 @@ impl Storage {
             accounts_len: usize::from_le_bytes(*accounts_len),
             executor_data_size: usize::from_le_bytes(*executor_data_size),
             evm_data_size: usize::from_le_bytes(*evm_data_size),
+            gas_used_and_paid: u64::from_le_bytes(*gas_used_and_paid),
+            number_of_payments: u64::from_le_bytes(*number_of_payments),
         }
     }
 
@@ -345,7 +447,18 @@ impl Storage {
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         *caller = self.caller.to_fixed_bytes();
         *nonce = self.nonce.to_le_bytes();
         *gas_limit = self.gas_limit.to_le_bytes();
@@ -355,6 +468,50 @@ impl Storage {
         *accounts_len = self.accounts_len.to_le_bytes();
         *executor_data_size = self.executor_data_size.to_le_bytes();
         *evm_data_size = self.evm_data_size.to_le_bytes();
+        *gas_used_and_paid = self.gas_used_and_paid.to_le_bytes();
+        *number_of_payments = self.number_of_payments.to_le_bytes();
+
+        Self::SIZE
+    }
+
+    /// Get `Storage` struct size
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
+    }
+}
+
+impl ERC20Allowance {
+    /// Allowance struct serialized size
+    const SIZE: usize = 20+20+20+32+32;
+
+    /// Deserialize `ERC20Allowance` struct from input data
+    #[must_use]
+    pub fn unpack(src: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
+        let data = array_ref![src, 0, ERC20Allowance::SIZE];
+        let (owner, spender, contract, mint, value) = array_refs![data, 20, 20, 20, 32, 32];
+
+        Self {
+            owner: H160::from(*owner),
+            spender: H160::from(*spender),
+            contract: H160::from(*contract),
+            mint: Pubkey::new_from_array(*mint),
+            value: U256::from_little_endian(value)
+        }
+    }
+
+    /// Serialize `ERC20Allowance` struct into given destination
+    pub fn pack(&self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
+        let data = array_mut_ref![dst, 0, ERC20Allowance::SIZE];
+        let (owner, spender, contract, mint, value) = mut_array_refs![data, 20, 20, 20, 32, 32];
+
+        *owner = self.owner.to_fixed_bytes();
+        *spender = self.spender.to_fixed_bytes();
+        *contract = self.contract.to_fixed_bytes();
+        mint.copy_from_slice(self.mint.as_ref());
+        self.value.to_little_endian(value);
 
         Self::SIZE
     }

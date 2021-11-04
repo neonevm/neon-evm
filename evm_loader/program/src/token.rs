@@ -1,7 +1,10 @@
 //! `EVMLoader` token functions
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solidity_account::SolidityAccount
+    solidity_account::SolidityAccount,
+    storage_account::StorageAccount,
+    account_storage::ProgramAccountStorage,
+    config::token_mint
 };
 use evm::{U256};
 use solana_program::{
@@ -11,23 +14,32 @@ use solana_program::{
     system_program, sysvar,
     program_error::ProgramError,
     program_pack::Pack,
-    program::invoke_signed,
+    program::invoke_signed
 };
 use std::vec;
 use std::convert::TryFrom;
 
-/// Token Mint ID
-pub mod token_mint {
-    solana_program::declare_id!("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+/// Native token info
+pub mod eth {
+    use super::U256;
 
-    /// Number of base 10 digits to the right of the decimal place
     #[must_use]
-    pub const fn decimals() -> u8 { 9 }
-}
+    /// Number of base 10 digits to the right of the decimal place of ETH value
+    pub const fn decimals() -> u8 { 18 }
 
-#[must_use]
-/// Number of base 10 digits to the right of the decimal place of ETH value
-pub const fn eth_decimals() -> u8 { 18 }
+    #[must_use]
+    /// Minimum number of native tokens that can be transferred by `NeonEVM`
+    pub fn min_transfer_value() -> U256 {
+        let min_decimals: u32 = u32::from(decimals() - super::token_mint::decimals());
+        10_u64.pow(min_decimals).into()
+    }
+
+    #[must_use]
+    /// Cut down the remainder that can't be transferred
+    pub fn round(value: U256) -> U256 {
+        value - (value % min_transfer_value())
+    }
+}
 
 /// Create an associated token account for the given wallet address and token mint
 #[must_use]
@@ -60,6 +72,10 @@ pub fn create_associated_token_account(
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
+    if account.data_len() == 0 {
+        return Ok(0_u64);
+    }
+
     if *account.owner != spl_token::id() {
         return Err!(ProgramError::IncorrectProgramId; "*account.owner<{:?}> != spl_token::id()<{:?}>", *account.owner,  spl_token::id());
     }
@@ -83,6 +99,34 @@ pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramE
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
 
     Ok(data.owner)
+}
+
+/// Extract a token mint data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_mint_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Mint, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Mint::unpack(data)
+}
+
+/// Extract a token account data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_account_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Account, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Account::unpack(data)
 }
 
 
@@ -127,23 +171,24 @@ pub fn transfer_token(
 ) -> Result<(), ProgramError> {
     debug_print!("transfer_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
-        debug_print!("source ownership");
-        debug_print!("source owner {}", get_token_account_owner(source_token_account)?);
-        debug_print!("source key {}", source_account.key);
-        return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
+        return Err!(ProgramError::InvalidInstructionData;
+            "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
+            source_token_account, source_account
+        );
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
+    let value = value / eth::min_transfer_value();
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
 
     let source_token_balance = get_token_account_balance(source_token_account)?;
     if source_token_balance < value {
-        return Err!(ProgramError::InvalidInstructionData; "Insufficient funds on token account {} {}", source_token_account.key, source_token_balance)
+        return Err!(ProgramError::InvalidInstructionData;
+            "Insufficient funds on token account {:?} {:?}",
+            source_token_account, source_token_balance
+        );
     }
 
-    debug_print!("Transfer ETH tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
     let instruction = spl_token::instruction::transfer_checked(
         &spl_token::id(),
@@ -157,8 +202,120 @@ pub fn transfer_token(
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
-    let program_seeds = [&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-    invoke_signed(&instruction, accounts, &[&program_seeds[..]])?;
+    let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[program_seeds])?;
 
+    Ok(())
+}
+
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+pub fn user_pays_operator<'a>(
+    gas_price: u64,
+    gas_to_be_paid: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+) -> Result<(), ProgramError> {
+
+    let gas_price_wei = U256::from(gas_price);
+
+    let fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+    transfer_token(
+        accounts,
+        user_token_account,
+        operator_token_account,
+        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
+        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+        &fee)?;
+
+    Ok(())
+}
+
+/// A neon-evm user pays an operator
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+#[allow(clippy::too_many_arguments)]
+pub fn user_pays_operator_for_iteration<'a>(
+    gas_price: u64,
+    gas_to_be_paid: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    operator_token_account: &'a AccountInfo<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    account_storage: &ProgramAccountStorage,
+    storage: &mut StorageAccount,
+) -> Result<(), ProgramError> {
+
+    let (gas_used_and_paid, _number_of_payments) = storage.get_payments_info()?;
+
+    debug_print!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
+        gas_used_and_paid, gas_to_be_paid, /*_number_of_payments+*/1);
+
+    let gas_to_be_paid = gas_to_be_paid.saturating_sub(gas_used_and_paid);
+
+    user_pays_operator(
+        gas_price,
+        gas_to_be_paid,
+        user_token_account,
+        operator_token_account,
+        accounts,
+        account_storage,
+    )?;
+
+    let gas_has_been_paid = gas_to_be_paid;
+    debug_print!("user_pays_operator gas_has_been_paid = {:?}", gas_has_been_paid);
+    storage.add_gas_has_been_paid(gas_has_been_paid)
+}
+
+/// Check that neon-evm user has enough funds to pay for gas
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidArgument`
+pub fn check_enough_funds<'a>(
+    gas_limit: u64,
+    gas_price: u64,
+    user_token_account: &'a AccountInfo<'a>,
+    storage_opt: Option<&mut StorageAccount>,
+) -> Result<(), ProgramError> {
+
+    let gas_used_and_paid = if let Some(storage) = storage_opt {
+        storage.get_payments_info()?.0
+    }
+    else { 0 };
+
+    let user_balance_64 = get_token_account_balance(user_token_account)?;
+    let user_balance : U256 = U256::from(user_balance_64)
+        .checked_mul(eth::min_transfer_value())
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let gas_price_wei = U256::from(gas_price);
+    let gas_to_be_paid = gas_limit.checked_sub(gas_used_and_paid)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+    let expected_fee = U256::from(gas_to_be_paid)
+        .checked_mul(gas_price_wei)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
+
+    if expected_fee > user_balance {
+        return Err!(ProgramError::InsufficientFunds;
+            "there is no enough funds to start executing the transaction; gas_limit = {:?}; gas_price = {:?}; gas_used_and_paid = {:?}; user_balance = {:?};",
+            gas_limit,
+            gas_price,
+            gas_used_and_paid,
+            user_balance_64
+        )
+    }
     Ok(())
 }

@@ -13,32 +13,13 @@ fn serialize_h160<S>(value: &H160, s: S) -> Result<S::Ok, S::Error> where S: Ser
 /// `EvmInstruction` serialized in instruction data
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction<'a> {
-    /// Write program data into an account
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] Account to write to
-    ///   1. \[SIGNER\] Signer for Ether account
-    Write {
-        /// Offset at which to write the given bytes
-        offset: u32,
-        /// Data to write
-        bytes: &'a [u8],
-    },
+    /// Deprecated: Write to an account
+    #[deprecated(note = "Instruction not supported")]
+    Write,
 
-    /// Finalize an account loaded with program data for execution
-    ///
-    /// The exact preparation steps is loader specific but on success the loader must set the executable
-    /// bit of the account.
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] The account to prepare for execution
-    ///   1. \[WRITE\] Contract code account (Code account)
-    ///   2. \[WRITE\] Caller (Ether account)
-    ///   3. \[SIGNER\] Signer for Ether account
-    ///   4. \[\] Clock sysvar
-    ///   5. \[\] Rent sysvar
-    ///   ... other Ether accounts
-    Finalize,
+    /// Deprecated: Finalize an account loaded with program data for execution
+    #[deprecated(note = "Instruction not supported")]
+    Finalise,
 
     ///
     /// Create Ethereum account (create program_address account and write data)
@@ -80,31 +61,9 @@ pub enum EvmInstruction<'a> {
     //     bytes: &'a [u8],
     // },
 
-    ///
-    /// Create ethereum account with seed
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. \[WRITE\] New account (create_with_seed(base, seed, owner)
-    ///   2. \[\] Base (program_address(ether, nonce))
-    CreateAccountWithSeed {
-        /// Base public key
-        base: Pubkey,
-
-        /// String of ASCII chars, no longer than `Pubkey::MAX_SEED_LEN`
-        seed: Vec<u8>,
-
-        /// Number of lamports to transfer to the new account
-        lamports: u64,
-
-        /// Number of bytes of memory to allocate
-        space: u64,
-
-        /// Owner program account address
-        owner: Pubkey,
-
-        /// Associated token address to create
-        token: Option<Pubkey>,
-    },
+    /// Deprecated: Create ethereum account with seed
+    #[deprecated(note = "Instruction not supported")]
+    CreateAccountWithSeed,
 
     /// Call Ethereum-contract action from raw transaction data
     /// #### Account references same as in Call
@@ -138,11 +97,15 @@ pub enum EvmInstruction<'a> {
         data: &'a [u8],
     },
 
+    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    #[deprecated(note = "Instruction not supported")]
+    PartialCallFromRawEthereumTX,
+
     /// Partial call Ethereum-contract action from raw transaction data
     /// ### Account references
     ///   0. \[WRITE\] storage account
     ///   1. ... Account references same as in Call
-    PartialCallFromRawEthereumTX {
+    PartialCallFromRawEthereumTXv02 {
         /// Seed index for a collateral pool account
         collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
@@ -155,26 +118,115 @@ pub enum EvmInstruction<'a> {
         unsigned_msg: &'a [u8],
     },
 
-    /// Partial call Ethereum-contract action from raw transaction data
+    /// Deprecated: Continue (version 01) Ethereum-contract action from raw transaction data
+    #[deprecated(note = "Instruction not supported")]
+    Continue,
+
+    /// Continue (version 02) Ethereum-contract action from raw transaction data
     /// ### Account references same as in PartialCallFromRawEthereumTX
-    Continue {
+    ContinueV02 {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
+    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    #[deprecated(note = "Instruction not supported")]
+    ExecuteTrxFromAccountDataIterative,
 
     /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    ExecuteTrxFromAccountDataIterative {
+    ExecuteTrxFromAccountDataIterativeV02 {
         /// Seed index for a collateral pool account
         collateral_pool_index: u32,
         /// Steps of ethereum contract to execute
         step_count: u64,
     },
 
-    /// Partial call Ethereum-contract action from raw transaction data
-    /// ### Account references same as in PartialCallFromRawEthereumTX
+    /// Cancel iterative transaction execution
+    #[deprecated(note = "Instruction not supported")]
     Cancel,
-}
 
+    /// Partial call Ethereum-contract action from raw transaction data
+    /// or Continue
+    /// ### Account references
+    ///   0. \[WRITE\] storage account
+    ///   1. ... Account references same as in Call
+    PartialCallOrContinueFromRawEthereumTX {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
+        /// Steps of ethereum contract to execute
+        step_count: u64,
+        /// Ethereum transaction sender address
+        from_addr: &'a [u8],
+        /// Ethereum transaction sign
+        sign: &'a [u8],
+        /// Unsigned ethereum transaction
+        unsigned_msg: &'a [u8],
+    },
+
+    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
+    /// or
+    /// Continue
+    ExecuteTrxFromAccountDataIterativeOrContinue {
+        /// Seed index for a collateral pool account
+        collateral_pool_index: u32,
+        /// Steps of ethereum contract to execute
+        step_count: u64,
+    },
+
+    /// Creates an ERC20 token account for the given Ethereum wallet address, contract address and token mint
+    ///
+    /// ### Account references
+    ///   0. `[writeable,signer]` Funding account (must be a system account)
+    ///   1. `[writeable]` ERC20 token account address to be created
+    ///   2. `[]` Wallet address for the new ERC20 token account
+    ///   3. '[]' Contract address
+    ///   4. `[]` The token mint for the new ERC20 token account
+    ///   5. `[]` System program
+    ///   6. `[]` SPL Token program
+    ///   7. '[]' Rent sysvar
+    ERC20CreateTokenAccount,
+
+    /// Delete Ethereum account
+    /// # Account references
+    ///   0. [WRITE] Deleted account
+    ///   1. [WRITE] Deleted account creator
+    DeleteAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
+    
+    /// copying the content of the one code_account to the new code_account
+    /// # Account references
+    ///   0. [WRITE] contract account
+    ///   1. [WRITE] current code account
+    ///   2. [WRITE] new code account
+    ///   3. [READ] operator account
+    ResizeStorageAccount {
+        /// seed used to create account
+        seed:  &'a [u8],
+    },
+
+    /// Cancel iterative transaction execution providing caller nonce
+    CancelWithNonce {
+        /// Nonce of caller in canceled transaction
+        nonce: u64,
+    },
+
+    /// Write program data into a holder account
+    ///
+    /// # Account references
+    ///   0. \[WRITE\] Account to write to
+    ///   1. \[SIGNER\] Signer for Ether account
+    WriteHolder {
+        /// Magical number
+        holder_id: u64,
+        /// Offset at which to write the given bytes
+        offset: u32,
+        /// Data to write
+        bytes: &'a [u8],
+    },
+}
 
 impl<'a> EvmInstruction<'a> {
     /// Unpack `EvmInstruction`
@@ -189,21 +241,8 @@ impl<'a> EvmInstruction<'a> {
         use ProgramError::InvalidInstructionData;
 
         let (&tag, rest) = input.split_first().ok_or(InvalidInstructionData)?;
+
         Ok(match tag {
-            0 => {
-                let (_, rest) = rest.split_at(3);
-                let (offset, rest) = rest.split_at(4);
-                let (length, rest) = rest.split_at(8);
-                let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
-                let (bytes, _) = rest.split_at(length);
-                EvmInstruction::Write {offset, bytes}
-            },
-            1 => {
-                let (_, _rest) = rest.split_at(3);
-                EvmInstruction::Finalize
-            },
             2 => {
                 let (_, rest) = rest.split_at(3);
                 let (lamports, rest) = rest.split_at(8);
@@ -226,34 +265,6 @@ impl<'a> EvmInstruction<'a> {
             //     let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
             //     EvmInstruction::Call {collateral_pool_index, bytes: rest}
             // },
-            4 => {
-                let (_, rest) = rest.split_at(3);
-                let (base, rest) = rest.split_at(32);
-                let (seed_len, rest) = rest.split_at(8);
-                let seed_len = seed_len.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let (seed, rest) = rest.split_at(seed_len as usize);
-
-                let base = Pubkey::new(base);
-                let (lamports, rest) = rest.split_at(8);
-                let (space, rest) = rest.split_at(8);
-
-                let (owner, rest) = rest.split_at(32);
-                let owner = Pubkey::new(owner);
-
-                let token = if rest.len() >= 32 {
-                    let (token, _rest) = rest.split_at(32);
-                    let token = Pubkey::new(token);
-                    Some(token)
-                } else {
-                    None
-                };
-
-                let seed = seed.into();
-                let lamports = lamports.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                let space = space.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-
-                EvmInstruction::CreateAccountWithSeed {base, seed, lamports, space, owner, token}
-            },
             5 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
@@ -280,30 +291,69 @@ impl<'a> EvmInstruction<'a> {
                 }
                 EvmInstruction::OnEvent {address, topics, data: rest}
             },
-            9 => {
+            9 => EvmInstruction::PartialCallFromRawEthereumTX,
+            10 => EvmInstruction::Continue,
+            11 => EvmInstruction::ExecuteTrxFromAccountDataIterative,
+            12 => EvmInstruction::Cancel,
+            13 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (from_addr, rest) = rest.split_at(20);
                 let (sign, unsigned_msg) = rest.split_at(65);
-                EvmInstruction::PartialCallFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
+                EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
             },
-            10 => {
-                let (step_count, _rest) = rest.split_at(8);
-                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::Continue {step_count}
-            },
-            11 => {
+            14 => {
                 let (collateral_pool_index, rest) = rest.split_at(4);
                 let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
                 let (step_count, _rest) = rest.split_at(8);
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
-                EvmInstruction::ExecuteTrxFromAccountDataIterative {collateral_pool_index, step_count}
+                EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
-            12 => {
-                EvmInstruction::Cancel
+            15 => EvmInstruction::ERC20CreateTokenAccount,
+            16 => EvmInstruction::DeleteAccount { seed: rest },
+            17 => EvmInstruction::ResizeStorageAccount { seed: rest },
+            18 => {
+                let (holder_id, rest) = rest.split_at(8);
+                let (offset, rest) = rest.split_at(4);
+                let (length, rest) = rest.split_at(8);
+                let holder_id = holder_id.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let offset = offset.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let length = length.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let length = usize::try_from(length).map_err(|_| InvalidInstructionData)?;
+                let (bytes, _) = rest.split_at(length);
+                EvmInstruction::WriteHolder { holder_id, offset, bytes}
             },
+            19 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (from_addr, rest) = rest.split_at(20);
+                let (sign, unsigned_msg) = rest.split_at(65);
+                EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign, unsigned_msg}
+            },
+            20 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ContinueV02 {collateral_pool_index, step_count}
+            },
+            21 => {
+                let (nonce, _rest) = rest.split_at(8);
+                let nonce = nonce.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::CancelWithNonce {nonce}
+            },
+            22 => {
+                let (collateral_pool_index, rest) = rest.split_at(4);
+                let collateral_pool_index = collateral_pool_index.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                let (step_count, _rest) = rest.split_at(8);
+                let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
+            },
+
             _ => return Err(InvalidInstructionData),
         })
     }
