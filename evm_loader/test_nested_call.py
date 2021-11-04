@@ -549,15 +549,11 @@ class EventTest(unittest.TestCase):
         # self.create_code_owner_account_if_zero_balance(self.reId_create_receiver, self.reId_create_receiver_eth, self.reId_create_receiver_code_account)
 
         func_name = abi.function_signature_to_4byte_selector('creator()')
-        # TODO Fix this part of test
-        # Fails and locks storage and accounts 
-        # Need to be canceled explicitly
-        # print("Expecting Exception: Program failed to complete")
-        # with self.assertRaisesRegex(Exception, 'Program failed to complete'):
-        #     response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
-        #     print('response:', response)
-        # enable when https://github.com/neonlabsorg/neon-evm/pull/359 merged
-        # neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, storage))
+        print("Expecting Exception: Program failed to complete")
+        with self.assertRaisesRegex(Exception, 'Program failed to complete'):
+            response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
+            print('response:', response)
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, storage))
 
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
         self.assertEqual(get_recent_account_balance(self.reId_create_receiver_code_account), 0)
