@@ -347,7 +347,7 @@ class EventTest(unittest.TestCase):
         instruction = from_addr + sign + msg
 
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(len(trx.instructions)+1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self.storage, 0, instruction, contract, code))
         send_transaction(http_client, trx, self.acc)
 
@@ -371,12 +371,14 @@ class EventTest(unittest.TestCase):
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
         trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
         trx.add(self.sol_instr_22_partial_call_from_account(self.holder, self.storage, 0, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Continue")
             trx = TransactionWithComputeBudget()
+            self.index = len(trx.instructions)
             trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
@@ -395,12 +397,12 @@ class EventTest(unittest.TestCase):
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
         trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))
 
         while (True):
             print("Combined Continue")
             result = send_transaction(http_client, trx, self.acc)["result"]
-
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
                 if (data[0] == 6):
@@ -409,6 +411,7 @@ class EventTest(unittest.TestCase):
     def create_code_account_if_zero_balance(self, seed, code_account_address):
         if get_recent_account_balance(code_account_address) == 0:
             trx = TransactionWithComputeBudget()
+            self.index = len(trx.instructions)
             trx.add(
                 createAccountWithSeed(self.acc.public_key(),
                                       self.acc.public_key(),
@@ -421,6 +424,7 @@ class EventTest(unittest.TestCase):
     def create_code_owner_account_if_zero_balance(self, code_owner_account_address, code_owner_account_eth_address, code_account_address):
         if get_recent_account_balance(code_owner_account_address) == 0:
             trx = TransactionWithComputeBudget()
+            self.index = len(trx.instructions)
             trx.add(
                 self.loader.createEtherAccountTrx(code_owner_account_eth_address, code_account_address)[0]
             )
@@ -434,11 +438,11 @@ class EventTest(unittest.TestCase):
 
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
-        result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
         # Nonce unchanged when contract calls other contract
@@ -495,7 +499,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 6) # TODO: why not 3?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
         # Nonce unchanged when call contract
@@ -582,7 +586,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
@@ -627,7 +631,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
@@ -657,12 +661,12 @@ class EventTest(unittest.TestCase):
         print('\ntest_05_nested_revert')
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
-        result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)  # TODO: why not 1?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
 
         #  emit Result(success, data);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
