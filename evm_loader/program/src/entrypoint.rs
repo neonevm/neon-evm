@@ -486,6 +486,7 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let _user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
+            // let _system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -555,7 +556,7 @@ fn process_instruction<'a>(
                         .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        collateral_pool_index, step_count, caller, trx,
+                        collateral_pool_index, 0, caller, trx,
                         program_id, trx_accounts, accounts, storage_info,
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,
@@ -596,7 +597,7 @@ fn process_instruction<'a>(
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
                     do_begin(
-                        collateral_pool_index, step_count, caller, trx,
+                        collateral_pool_index, 0, caller, trx,
                         program_id, trx_accounts, accounts, storage_info,
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,

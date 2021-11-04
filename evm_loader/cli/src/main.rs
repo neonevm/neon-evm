@@ -26,6 +26,7 @@ use evm::{H160, H256, U256, ExitReason,};
 use solana_sdk::{
     clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    incinerator,
     instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::Pubkey,
@@ -148,7 +149,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         }
     };
 
-    let (exit_reason, result, applies_logs, used_gas) = {
+    let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
         // u64::MAX is too large, remix gives this error:
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
@@ -185,7 +186,9 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
             }
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
+        debug!("{} steps executed", executor.get_steps_executed());
 
+        let steps_executed = executor.get_steps_executed();
         let executor_state = executor.into_state();
         let used_gas = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
         let refunded_gas = executor_state.gasometer().refunded_gas();
@@ -194,9 +197,9 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), needed_gas)
+            (exit_reason, result, Some(apply), needed_gas, steps_executed)
         } else {
-            (exit_reason, result, None, needed_gas)
+            (exit_reason, result, None, needed_gas, steps_executed)
         }
     };
 
@@ -249,6 +252,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "result": &hex::encode(&result),
         "exit_status": status,
         "used_gas": used_gas,
+        "steps_executed": steps_executed,
     }).to_string();
 
     println!("{}", js);
@@ -1093,6 +1097,88 @@ fn command_get_ether_account_data (
     }
 }
 
+fn command_cancel_trx(
+    config: &Config,
+    storage_account: &Pubkey,
+) -> CommandResult {
+    let storage = config.rpc_client.get_account_with_commitment(storage_account, CommitmentConfig::processed()).unwrap().value;
+
+    if let Some(acc) = storage {
+        let keys:Vec<Pubkey> = {
+            if acc.owner != config.evm_loader {
+                return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
+            }
+            let data = AccountData::unpack(&acc.data)?;
+            let data_end = data.size();
+            let storage = if let AccountData::Storage(storage) = data {storage}
+                    else {return Err("Not storage account".to_string().into());};
+    
+            println!("{:?}", storage);
+            let accounts_begin = data_end;
+            let accounts_end = accounts_begin + storage.accounts_len * 32;
+            if acc.data.len() < accounts_end {
+                return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
+            };
+
+            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect()
+        };
+
+        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &keys[3])?;
+
+        let operator = &config.signer.pubkey();
+        let operator_token = spl_associated_token_account::get_associated_token_address(operator, &token_mint::id());
+
+        let mut accounts_meta : Vec<AccountMeta> = vec![
+            AccountMeta::new(*storage_account, false),              // Storage account
+            AccountMeta::new(*operator, true),                      // Operator
+            AccountMeta::new(operator_token, false),                // Operator token
+            AccountMeta::new(caller_token, false),                  // Caller token
+            AccountMeta::new(incinerator::id(), false),             // Incinerator
+            AccountMeta::new_readonly(system_program::id(), false), // System
+        ];
+
+        let system_accounts : Vec<Pubkey> = vec![
+            config.evm_loader,
+            token_mint::id(),
+            spl_token::id(),
+            spl_associated_token_account::id(),
+            sysvar::rent::id(),
+            incinerator::id(),
+            system_program::id(),
+            sysvar::instructions::id(),
+        ];
+
+        for key in keys {
+            let writable = if system_accounts.contains(&key) {false} else {
+                let acc = config.rpc_client.get_account_with_commitment(&key, CommitmentConfig::processed()).unwrap().value;
+                if let Some(acc) = acc {
+                    if acc.owner == config.evm_loader {
+                        matches!(AccountData::unpack(&acc.data)?, AccountData::Account(_))
+                    } else {
+                        false
+                    }
+                } else {false}
+            };
+
+            if writable {
+                accounts_meta.push(AccountMeta::new(key, false));
+            } else {
+                accounts_meta.push(AccountMeta::new_readonly(key, false));
+            }
+        }
+        for meta in &accounts_meta {
+            println!("\t{:?}", meta);
+        }
+        
+        let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
+        send_transaction(config, &[instruction])?;
+
+    } else {
+        return Err(format!("Account not found {}", &storage_account.to_string()).into());
+    }
+    Ok(())
+}
+
 fn command_neon_elf(
     _config: &Config,
     program_location: &str,
@@ -1375,6 +1461,19 @@ fn main() {
                 )
         )
         .subcommand(
+            SubCommand::with_name("cancel-trx")
+                .about("Cancel NEON transaction")
+                .arg(
+                    Arg::with_name("storage_account")
+                        .index(1)
+                        .value_name("STORAGE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("storage account for transaction"),
+                )
+            )
+        .subcommand(
             SubCommand::with_name("neon-elf-params")
                 .about("Get NEON values stored in elf")
                 .arg(
@@ -1491,6 +1590,11 @@ fn main() {
                 command_get_ether_account_data(&config, &ether);
 
                 Ok(())
+            }
+            ("cancel-trx", Some(arg_matches)) => {
+                let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
+                
+                command_cancel_trx(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
