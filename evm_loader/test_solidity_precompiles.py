@@ -2,6 +2,8 @@ import unittest
 from eth_utils import abi
 from base58 import b58decode
 import re
+
+from evm_loader.eth_tx_utils import make_instruction_data_from_tx, make_keccak_instruction_data
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
