@@ -1,3 +1,5 @@
+import json
+
 from tools import *
 from spl_ import mint_spl
 from uniswap import mint_and_approve_swap
@@ -500,35 +502,68 @@ def create_senders(args):
     receipt_list = []
     accounts = []
 
-    senders = open(senders_file + args.postfix, mode='w')
-    senders = open(senders_file + args.postfix, mode='a')
+    with open(senders_file + args.postfix, mode='w') as f:
+
+        while total < args.count:
+            print("create sender", total)
+            acc = Account()
+            airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
+            tx_token = Transaction()
+
+            tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
+            token_res = client.send_transaction(tx_token, instance.acc,
+                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+
+            receipt_list.append((airdrop_res['result'], token_res['result'], acc))
+
+            if total % 500 == 0 or total == args.count - 1:
+                for (airdrop_receipt, token_receipt, acc) in receipt_list:
+                    confirm_transaction(client, airdrop_receipt)
+                    confirm_transaction(client, token_receipt)
+                    if getBalance(acc.public_key()) == 0:
+                        print("request_airdrop error", str(acc.public_key()))
+                        exit(0)
+                    keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
+                    f.write(keypair + "\n")
+                    accounts.append((acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID)))
+                receipt_list = []
+            total = total + 1
+
+        for (acc,token) in accounts:
+            print(acc, token)
+
+    print("\ntotal: ", total)
+
+
+
+def create_collateral_pool(args):
+
+    total = 0
+    receipt_list = []
+    to_file= []
 
     while total < args.count:
-        print("create sender", total)
-        total = total + 1
-        acc = Account()
-        airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-        tx_token = Transaction()
+        print("create collateral pool", total)
+        seed = "collateral_seed_" + str(total+10)
+        acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
 
-        tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
-        token_res = client.send_transaction(tx_token, instance.acc,
-                                      opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-
-        receipt_list.append((airdrop_res['result'], token_res['result'], acc))
+        if getBalance(acc) == 0:
+            print("Creating...")
+            res = client.request_airdrop(acc, 1 * 10 ** 9, commitment=Confirmed)
+            receipt_list.append((res['result'], acc, total))
+        else:
+            to_file.append((acc, total))
 
         if total % 500 == 0 or total == args.count - 1:
-            for (airdrop_receipt, token_receipt, acc) in receipt_list:
-                confirm_transaction(client, airdrop_receipt)
-                confirm_transaction(client, token_receipt)
-                if getBalance(acc.public_key()) == 0:
-                    print("request_airdrop error", str(acc.public_key()))
-                    exit(0)
-                keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
-                senders.write(keypair + "\n")
-                accounts.append((acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID)))
+            for (receipt, acc, index) in receipt_list:
+                confirm_transaction(client, receipt)
+                to_file.append((acc, index))
             receipt_list = []
+        total = total + 1
 
-    for (acc,token) in accounts:
-        print(acc, token)
+    with open(collateral_file + args.postfix, mode="w") as f:
+        for (acc, index) in to_file:
+            print(acc ,index)
+            f.write("{} {} \n".format(acc, index))
 
     print("\ntotal: ", total)

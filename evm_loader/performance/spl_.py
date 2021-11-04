@@ -100,42 +100,42 @@ def create_transactions_spl(args):
 
     with open(accounts_file+args.postfix, mode='r') as f:
         accounts = json.loads(f.read())
-    transactions = open(transactions_file+args.postfix, mode='w')
-    transactions = open(transactions_file+args.postfix, mode='a')
 
-    total = 0
-    if len(accounts) == 0:
-        print ("accounts not found" )
-        exit(1)
+    with open(transactions_file + args.postfix, mode='w') as f:
 
-    if len(accounts) == 1:
-        print ("accounts count too small" )
-        exit(1)
+        total = 0
+        if len(accounts) == 0:
+            print ("accounts not found" )
+            exit(1)
 
-    ia = iter(accounts)
+        if len(accounts) == 1:
+            print ("accounts count too small" )
+            exit(1)
 
-    while total < args.count:
-        (payer_eth, payer_prkey, payer_sol) = get_acc(accounts, ia)
-        (receiver_eth, _, receiver_sol) = get_acc(accounts, ia)
+        ia = iter(accounts)
 
-        total = total + 1
-        (from_addr, sign,  msg) = get_trx(
-            bytes().fromhex(receiver_eth),
-            payer_sol,
-            bytes().fromhex(payer_eth),
-            "",
-            bytes.fromhex(payer_prkey),
-            transfer_sum*10**9
-        )
-        trx = {}
-        trx['from_addr'] = from_addr.hex()
-        trx['sign'] = sign.hex()
-        trx['msg']  = msg.hex()
-        trx['erc20_sol'] = receiver_sol
-        trx['erc20_eth'] = receiver_eth
-        trx['erc20_code'] = ""
-        trx['payer_sol'] = payer_sol
-        trx['payer_eth'] = payer_eth
-        trx['receiver_eth'] = receiver_eth
+        while total < args.count:
+            (payer_eth, payer_prkey, payer_sol) = get_acc(accounts, ia)
+            (receiver_eth, _, receiver_sol) = get_acc(accounts, ia)
 
-        transactions.write(json.dumps(trx)+"\n")
+            total = total + 1
+            (from_addr, sign,  msg) = get_trx(
+                bytes().fromhex(receiver_eth),
+                payer_sol,
+                bytes().fromhex(payer_eth),
+                "",
+                bytes.fromhex(payer_prkey),
+                transfer_sum*10**9
+            )
+            trx = {}
+            trx['from_addr'] = from_addr.hex()
+            trx['sign'] = sign.hex()
+            trx['msg']  = msg.hex()
+            trx['erc20_sol'] = receiver_sol
+            trx['erc20_eth'] = receiver_eth
+            trx['erc20_code'] = ""
+            trx['payer_sol'] = payer_sol
+            trx['payer_eth'] = payer_eth
+            trx['receiver_eth'] = receiver_eth
+
+            f.write(json.dumps(trx)+"\n")

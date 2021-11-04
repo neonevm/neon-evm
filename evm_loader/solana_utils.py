@@ -134,7 +134,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
 
 
 def accountWithSeed(base, seed, program):
-    print(type(base), type(seed), type(program))
+    # print(type(base), type(seed), type(program))
     return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
 
 def createAccountWithSeed(funding, base, seed, lamports, space, program):
