@@ -261,12 +261,9 @@ fn get_collateral_pool_account_and_index(evm_loader_key : &Pubkey) -> (Pubkey, u
 fn make_instruction_budget_units() -> Instruction{
     let DEFAULT_UNITS:u32 =500*1000;
 
-    let mut units = DEFAULT_UNITS.to_le_bytes().to_vec();
-    units.resize(4, 0);
-    units.insert(0,0);
-    let instruction_unit = Instruction::new_with_bytes(
+    let instruction_unit = Instruction::new_with_bincode(
         Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
-        &units,
+        &(0x00_u8, DEFAULT_UNITS),
         vec![]);
 
     instruction_unit
@@ -275,13 +272,9 @@ fn make_instruction_budget_units() -> Instruction{
 fn make_instruction_budget_heap() -> Instruction{
     let DEFAULT_HEAP_FRAME: u32=256*1024;
 
-    let mut heap = DEFAULT_HEAP_FRAME.to_le_bytes().to_vec();
-    heap.resize(4, 0);
-    heap.insert(0, 1);
-
-    let instruction_heap = Instruction::new_with_bytes(
+    let instruction_heap = Instruction::new_with_bincode(
         Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
-        &heap,
+        &(0x01_u8, DEFAULT_HEAP_FRAME),
         vec![]);
 
     instruction_heap
@@ -372,7 +365,7 @@ fn create_trx(
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
 
-        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 5);
+        let data_keccak = make_keccak_instruction_data(3, msg.len() as u16, 5);
         let instruction_keccak = Instruction::new_with_bytes(
             keccakprog,
             &data_keccak,
