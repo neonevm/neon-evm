@@ -92,6 +92,11 @@ struct sender_t{
     pr_key: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct collateral_t{
+    account : String,
+    index: u32
+}
 
 fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
     let mut data = Vec::new();
@@ -128,7 +133,7 @@ fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-fn parse_program_args() -> (Pubkey, String, String, String, String, String, u64) {
+fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, u64) {
     let key = "EVM_LOADER";
     let env_evm_loader  = match env::var_os(key) {
         Some(val) => val.into_string().unwrap(),
@@ -189,6 +194,14 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String, u64)
                 .default_value("verify.json"),
         )
         .arg(
+            Arg::with_name("collateral_file")
+                .value_name("COLLATERAL_FILEPATH")
+                .takes_value(true)
+                .required(true)
+                .help("/path/to/collateral.json")
+                .default_value("collateral.json"),
+        )
+        .arg(
             Arg::with_name("client")
                 .long("client")
                 .value_name("CLIENT")
@@ -229,9 +242,10 @@ fn parse_program_args() -> (Pubkey, String, String, String, String, String, u64)
     let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
+    let collateral_filename = app_matches.value_of("collateral_file").unwrap().to_string();
     let delay :u64 = app_matches.value_of("delay").unwrap().to_string().parse().unwrap();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, client, delay);
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, collateral_filename, client, delay);
 }
 
 fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
@@ -246,16 +260,16 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
-fn get_collateral_pool_account_and_index(evm_loader_key : &Pubkey) -> (Pubkey, u32) {
-    let collateral_pool_index = 2;
+fn read_collateral(filename: &String) -> Result<Vec<collateral_t>, Error> {
+    let mut file = File::open(filename)?;
+    let reader = BufReader::new(file);
+    let mut pool = Vec::new();
 
-    let seed = format!("{}{}", evm_loader::config::collateral_pool_base::PREFIX, collateral_pool_index);
-    let collateral_pool_account = Pubkey::create_with_seed(
-        &evm_loader::config::collateral_pool_base::id(),
-        &seed,
-        evm_loader_key).unwrap();
-
-    (collateral_pool_account, collateral_pool_index)
+    for line in reader.lines() {
+        let data: collateral_t = serde_json::from_str(line?.as_str())?;
+        pool.push(data);
+    }
+    return Ok(pool);
 }
 
 fn make_instruction_budget_units() -> Instruction{
@@ -280,11 +294,10 @@ fn make_instruction_budget_heap() -> Instruction{
     instruction_heap
 }
 
-fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey) -> Instruction {
-    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(evm_loader_key);
+fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey, collateral: &collateral_t) -> Instruction {
 
     let mut data_05_hex = String::from("05");
-    data_05_hex.push_str(hex::encode(collateral_pool_index.to_le_bytes()).as_str());
+    data_05_hex.push_str(hex::encode(collateral.index.to_le_bytes()).as_str());
     data_05_hex.push_str(trx.from_addr.as_str());
     data_05_hex.push_str(trx.sign.as_str());
     data_05_hex.push_str(trx.msg.as_str());
@@ -298,7 +311,7 @@ fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &P
     let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::config::token_mint::id());
     let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::config::token_mint::id());
     let operator_token = spl_associated_token_account::get_associated_token_address(&operator_sol, &evm_loader::config::token_mint::id());
-
+    let collateral_pool_acc = Pubkey::from_str(collateral.account.as_str()).unwrap();
 
     let mut acc_meta = vec![
 
@@ -338,29 +351,45 @@ fn create_trx(
     evm_loader: &Pubkey,
     trx_filename: &String,
     senders_filename :&String,
+    collateral_filename: &String,
     rpc_client: &Arc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
 
     let mut keys = read_senders(&senders_filename).unwrap();
+    let mut collaterals = read_collateral(&collateral_filename).unwrap();
 
     println!("creating transactions  ..");
     let mut transaction = Vec::new();
-    let mut it = keys.iter();
+    let mut it_keys = keys.iter();
+    let mut it_collaterals = collaterals.iter();
 
-    let mut file = File::open(trx_filename)?;
-    let reader= BufReader::new(file);
+    let mut trx_file = File::open(trx_filename)?;
+    let trx_reader= BufReader::new(trx_file);
 
-    for line in reader.lines(){
+    let mut collateral_file = File::open(collateral_filename)?;
+    let collateral_reader= BufReader::new(collateral_file);
+
+    for line in trx_reader.lines(){
 
         let mut keypair_bin : &Vec<u8>;
-        match (it.next()){
+        match (it_keys.next()){
             Some(val) => keypair_bin = val,
             None => {
-                it = keys.iter();
-                keypair_bin = it.next().unwrap()
+                it_keys = keys.iter();
+                keypair_bin = it_keys.next().unwrap()
             }
         }
+
+        let mut collateral_data : &collateral_t;
+        match (it_collaterals.next()){
+            Some(val) => collateral_data = val,
+            None => {
+                it_collaterals = collaterals.iter();
+                collateral_data = it_collaterals.next().unwrap()
+            }
+        }
+
         let keypair =Keypair::from_bytes(keypair_bin).unwrap();
         let trx : trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
@@ -375,7 +404,7 @@ fn create_trx(
         );
         let keypair_pubkey = keypair.pubkey();
         let signer: Box<dyn Signer> = Box::from(keypair);
-        let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey());
+        let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey(), collateral_data);
         let instruction_budget_units = make_instruction_budget_units();
         let instruction_budget_heap = make_instruction_budget_heap();
 
@@ -423,6 +452,7 @@ fn main() -> CommandResult{
         trx_filename,
         senders_filename,
         verify_filename,
+        collateral_filename,
         client,
         delay
     )
@@ -431,7 +461,7 @@ fn main() -> CommandResult{
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
 
-    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &rpc_client).unwrap();
+    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &rpc_client).unwrap();
 
     println!("sending transactions ..");
     let mut count = 0;

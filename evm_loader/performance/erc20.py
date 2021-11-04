@@ -564,6 +564,9 @@ def create_collateral_pool(args):
     with open(collateral_file + args.postfix, mode="w") as f:
         for (acc, index) in to_file:
             print(acc ,index)
-            f.write("{} {} \n".format(acc, index))
+            pool = {}
+            pool['account'] = str(acc)
+            pool['index'] = index
+            f.write(json.dumps(pool) + "\n")
 
     print("\ntotal: ", total)
