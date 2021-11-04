@@ -109,12 +109,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # Check that contact accounts marked invalid on deletion and couldn't be used in same block
         (owner_contract, eth_contract, contract_code) = self.deploy_contract()
 
+        trx = TransactionWithComputeBudget()
         init_nonce = getTransactionCount(client, self.caller)
-        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 1)
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, len(trx.instructions)+1)
         init_nonce += 1
-        (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 3)
+        (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, len(trx.instructions)+3)
 
-        trx = TransactionWithComputeBudget().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
+        trx.add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
         err = "invalid account data for instruction"
         with self.assertRaisesRegex(Exception,err):
@@ -133,8 +134,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         contract_balance_pre = getBalance(owner_contract)
         code_balance_pre = getBalance(contract_code)
 
-        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, 1)
-        trx = TransactionWithComputeBudget().add( keccak_tx_1 ).add( call_tx_1 )
+        trx = TransactionWithComputeBudget()
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, len(trx.instructions)+1)
+        trx.add(keccak_tx_1).add(call_tx_1)
 
         send_transaction(client, trx, self.acc)
 
