@@ -537,19 +537,26 @@ def create_senders(args):
 
 
 def create_collateral_pool(args):
+    instance = init_wallet()
 
     total = 0
     receipt_list = []
     to_file= []
 
+    minimum_balance = client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
     while total < args.count:
         print("create collateral pool", total)
-        seed = "collateral_seed_" + str(total+10)
+        seed = "collateral_seed_" + str(total)
         acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
-
         if getBalance(acc) == 0:
             print("Creating...")
-            res = client.request_airdrop(acc, 1 * 10 ** 9, commitment=Confirmed)
+            trx = Transaction()
+            trx.add(
+                createAccountWithSeed(instance.acc.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance,
+                                      0, PublicKey(evm_loader_id)))
+            res = client.send_transaction(trx, instance.acc,
+                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+
             receipt_list.append((res['result'], acc, total))
         else:
             to_file.append((acc, total))

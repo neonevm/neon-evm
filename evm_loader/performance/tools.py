@@ -20,7 +20,6 @@ from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ign
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 trx_cnt = os.environ.get("CNT", 10)
-collateral_pool_base = os.environ.get("COLLATERAL_POOL_BASE", "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT")
 
 chain_id = 111
 transfer_sum = 1

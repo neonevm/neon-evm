@@ -51,8 +51,7 @@ type UsedGas = u64;
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>,UsedGas), ProgramError>;
 
-// const HEAP_LENGTH: usize = 256*1024;
-const HEAP_LENGTH: usize = 32*1024;
+const HEAP_LENGTH: usize = 256*1024;
 
 /// Developers can implement their own heap by defining their own
 /// `#[global_allocator]`.  The following implements a dummy for test purposes
