@@ -41,7 +41,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
-
+COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
@@ -53,6 +53,35 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 ACCOUNT_SEED_VERSION=b'\1'
+
+
+class ComputeBudget:
+    @staticmethod
+    def requestUnits(units):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("00")+units.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def requestHeapFrame(heapFrame):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01")+heapFrame.to_bytes(4, "little")
+        )
+
+DEFAULT_UNITS=500*1000
+DEFAULT_HEAP_FRAME=256*1024
+
+
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
+    trx = Transaction(**args)
+    if units: trx.add(ComputeBudget.requestUnits(units))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    return trx
+
 
 class SplToken:
     def __init__(self, url):
@@ -243,11 +272,13 @@ class RandomAccount:
     def get_acc(self):
         return self.acc
 
+
 class WalletAccount(RandomAccount):
     def __init__(self, path):
         self.path = path
         self.retrieve_keys()
         print('Wallet public key:', self.acc.public_key())
+
 
 class OperatorAccount:
     def __init__(self, path=None):
@@ -303,7 +334,7 @@ class EvmLoader:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         base = self.acc.get_acc().public_key()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
@@ -379,7 +410,7 @@ class EvmLoader:
             space=0,
             ether=bytes.fromhex(ether),
             nonce=nonce))
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if code_acc is None:
             trx.add(TransactionInstruction(
                 program_id=self.loader_id,

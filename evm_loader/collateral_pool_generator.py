@@ -14,7 +14,7 @@ for collateral_pool_index in range(0, 10):
     if getBalance(collateral_pool_address) == 0:
         print("Creating...")
         minimum_balance = client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance, 0, PublicKey(EVM_LOADER)))
         result = send_transaction(client, trx, wallet)
         print(result)
