@@ -386,7 +386,9 @@ class RW_Locking_Test(unittest.TestCase):
 
         self.assertIsNotNone(resize_instr)
         # send resizing transaction
-        send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc2)
+        with self.assertRaisesRegex(Exception, "invalid instruction data"):
+            send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc2)
+
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
