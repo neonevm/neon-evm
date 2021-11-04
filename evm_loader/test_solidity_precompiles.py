@@ -1,9 +1,9 @@
 import unittest
 from eth_utils import abi
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from base58 import b58decode
 import re
 
-from evm_loader.eth_tx_utils import make_instruction_data_from_tx, make_keccak_instruction_data
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -55,13 +55,15 @@ class PrecompilesTests(unittest.TestCase):
     def send_transaction(self, data):
         if len(data) > 512:
             result = self.call_with_holder_account(data)
+            print('result:', result)
             return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
         else:
             trx = self.make_transactions(data)
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
-            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
+            print('result:', result)
+        return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
     def extract_measurements_from_receipt(self, receipt):
         log_messages = receipt['result']['meta']['logMessages']
@@ -87,6 +89,7 @@ class PrecompilesTests(unittest.TestCase):
 
         for instr in instructions:
             if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+            if instr['program'] in ('ComputeBudget111111111111111111111111111111',): continue
             if messages[0]['program'] != instr['program']:
                 raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
             instr['logs'] = messages.pop(0)['logs']
@@ -130,11 +133,12 @@ class PrecompilesTests(unittest.TestCase):
             'chainId': 111
         }
 
+        trx = TransactionWithComputeBudget()
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
+        keccak_instruction = make_keccak_instruction_data(len(trx.instructions)+1, len(msg), 5)
         
-        solana_trx = TransactionWithComputeBudget().add(
+        solana_trx = trx.add(
                 self.sol_instr_keccak(keccak_instruction) 
             ).add( 
                 self.sol_instr_call(trx_data) 
@@ -209,7 +213,7 @@ class PrecompilesTests(unittest.TestCase):
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:950], rest[950:])
             trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=(bytes.fromhex('12') + holder_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
