@@ -108,7 +108,8 @@ class EventTest(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 
@@ -140,7 +141,8 @@ class EventTest(unittest.TestCase):
         (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
 
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg), 5)))
         trx.add(self.sol_instr_05(from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
@@ -181,7 +183,7 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -198,7 +200,7 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -215,7 +217,7 @@ class EventTest(unittest.TestCase):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
                 self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
@@ -239,7 +241,7 @@ class EventTest(unittest.TestCase):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
                 # self.assertEqual(data[:1], b'\x07')
@@ -275,9 +277,10 @@ class EventTest(unittest.TestCase):
         assert (from_addr2 == self.caller_ether)
 
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1), 5)))
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg1), 5)))
         trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2), 5)))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+3, len(msg2), 5)))
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
@@ -285,8 +288,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
 
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
-        self.assertEqual(result['meta']['innerInstructions'][1]['index'], 3)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][1]['index'], self.index + 3)  # second instruction
 
         # log sol_instr_05(from_addr1 + sign1 + msg1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
