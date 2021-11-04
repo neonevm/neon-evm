@@ -215,8 +215,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         collateral_pool_balance_change = int(collateral_pool_post_balance) - int(collateral_pool_pre_balance)
         print('     collateral_pool_balance_change:', collateral_pool_balance_change)
         if step is Step.Begin:
-            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_TREASURE)
-            # self.assertEqual(deposit_balance_change, NEON_PAYMENT_TO_DEPOSIT)
+            self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_DEPOSIT - NEON_PAYMENT_TO_TREASURE)
+            self.assertEqual(deposit_balance_change, NEON_PAYMENT_TO_DEPOSIT)
             self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
         if step is Step.Iteration:
             self.assertEqual(operator_balance_change, 0 - fee - NEON_PAYMENT_TO_TREASURE)
@@ -315,9 +315,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
 
-    @unittest.skip("works only in 5 instructions but cant be serialized")
+    # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
-        step_count = 100
+        step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
@@ -386,13 +386,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(keccak_instruction) \
             .add(neon_emv_instr_0d_2)
 
-        # TODO Fix this part of test
-        # Fails and locks storage and accounts 
-        # Need to be canceled explicitly
-        # print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
-        #       'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
-        # with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
-        #     send_transaction(client, trx, self.acc)
+        print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
+              'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
+        with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
+            send_transaction(client, trx, self.acc)
 
         if getBalance(self.caller_2) == 0:
             print("Send a transaction to create an account - wait for the confirmation and make sure of successful "
@@ -458,9 +455,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         collateral_pool_sol_acc = self.collateral_pool_address
         deposit_sol_acc = storage
 
-        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_0, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Begin)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Iteration)
         self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Iteration)
