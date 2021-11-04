@@ -428,7 +428,9 @@ class EventTest(unittest.TestCase):
 
         self.call_begin(storage, 10, msg, instruction)
         self.call_continue(storage, 10)
-        self.call_cancel(storage, nonce)
+        # self.call_cancel(storage, nonce)
+        # check cancel from neon-cli
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, storage))
 
         nonce_after = getTransactionCount(client, self.caller)
         self.assertEqual(nonce_before + 1, nonce_after)

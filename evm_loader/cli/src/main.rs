@@ -1056,40 +1056,59 @@ fn command_cancel_trx(
     config: &Config,
     storage_account: &Pubkey,
 ) -> CommandResult {
-    let storage = config.rpc_client.get_account_with_commitment(&storage_account, CommitmentConfig::processed()).unwrap().value;
+    let storage = config.rpc_client.get_account_with_commitment(storage_account, CommitmentConfig::processed()).unwrap().value;
 
     if let Some(acc) = storage {
-        if acc.owner != config.evm_loader {
-            return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
-        }
-        let data = AccountData::unpack(&acc.data)?;
-        let data_end = data.size();
-        let storage = if let AccountData::Storage(storage) = data {storage}
-                else {return Err(format!("Not storage account").into());};
+        let keys:Vec<Pubkey> = {
+            if acc.owner != config.evm_loader {
+                return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
+            }
+            let data = AccountData::unpack(&acc.data)?;
+            let data_end = data.size();
+            let storage = if let AccountData::Storage(storage) = data {storage}
+                    else {return Err("Not storage account".to_string().into());};
+    
+            println!("{:?}", storage);
+            let accounts_begin = data_end;
+            let accounts_end = accounts_begin + storage.accounts_len * 32;
+            if acc.data.len() < accounts_end {
+                return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
+            };
 
-        println!("{:?}", storage);
-        let accounts_begin = data_end;
-        let accounts_end = accounts_begin + storage.accounts_len * 32;
-        if acc.data.len() < accounts_end {
-            return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
+            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect()
         };
-        let keys:Vec<Pubkey> = acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect();
 
-        let mut accounts_meta : Vec<AccountMeta> = vec!();
-        accounts_meta.push(AccountMeta::new(*storage_account, false));               // Storage account
-        accounts_meta.push(AccountMeta::new(config.signer.pubkey(), true));          // Operator
-        accounts_meta.push(AccountMeta::new(incinerator::id(), false));              // Incinerator
-        accounts_meta.push(AccountMeta::new_readonly(system_program::id(), false));  // System
+        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &keys[3])?;
 
-        let mut system_accounts : Vec<Pubkey> = vec!();
-        system_accounts.push(Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap());
+        let operator = &config.signer.pubkey();
+        let operator_token = spl_associated_token_account::get_associated_token_address(operator, &token_mint::id());
+
+        let mut accounts_meta : Vec<AccountMeta> = vec![
+            AccountMeta::new(*storage_account, false),              // Storage account
+            AccountMeta::new(*operator, true),                      // Operator
+            AccountMeta::new(operator_token, false),                // Operator token
+            AccountMeta::new(caller_token, false),                  // Caller token
+            AccountMeta::new(incinerator::id(), false),             // Incinerator
+            AccountMeta::new_readonly(system_program::id(), false), // System
+        ];
+
+        let system_accounts : Vec<Pubkey> = vec![
+            config.evm_loader,
+            token_mint::id(),
+            spl_token::id(),
+            spl_associated_token_account::id(),
+            sysvar::rent::id(),
+            incinerator::id(),
+            system_program::id(),
+            sysvar::instructions::id(),
+        ];
+
         for key in keys {
             let writable = if system_accounts.contains(&key) {false} else {
                 let acc = config.rpc_client.get_account_with_commitment(&key, CommitmentConfig::processed()).unwrap().value;
                 if let Some(acc) = acc {
                     if acc.owner == config.evm_loader {
-                        if let AccountData::Account(_) = AccountData::unpack(&acc.data)? {true}
-                        else {false}
+                        matches!(AccountData::unpack(&acc.data)?, AccountData::Account(_))
                     } else {
                         false
                     }
@@ -1106,7 +1125,7 @@ fn command_cancel_trx(
             println!("\t{:?}", meta);
         }
         
-        let instruction = Instruction::new_with_bincode(config.evm_loader, &(12_u8), accounts_meta);
+        let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
         send_transaction(config, &[instruction])?;
 
     } else {
@@ -1528,7 +1547,7 @@ fn main() {
                 Ok(())
             }
             ("cancel-trx", Some(arg_matches)) => {
-                let storage_account = pubkey_of(&arg_matches, "storage_account").unwrap();
+                let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
                 
                 command_cancel_trx(&config, &storage_account)
             }
