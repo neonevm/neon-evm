@@ -3,11 +3,9 @@ import json
 import os
 import subprocess
 import time
-from enum import Enum
 from hashlib import sha256
 from typing import NamedTuple
 
-import base58
 import rlp
 from base58 import b58encode
 from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
@@ -16,16 +14,13 @@ from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 from solana.account import Account
 from solana.publickey import PublicKey
-from solana.rpc import types
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
-import base58
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
