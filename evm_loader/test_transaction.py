@@ -238,7 +238,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response:', response)
 
     # @unittest.skip("a.i.")
-    def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
+    def test_02_success_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -254,6 +254,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_2:', response)
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
+        response = send_transaction(client, trx, self.acc)
+        print('response_4:', response)
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
@@ -261,7 +263,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
 
     # @unittest.skip("a.i.")
-    def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
+    def test_03_failure_tx_send_iteratively_in_5_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -277,6 +279,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_2:', response)
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
+        response = send_transaction(client, trx, self.acc)
+        print('response_4:', response)
         try:
             send_transaction(client, trx, self.acc)
         except solana.rpc.api.SendTransactionError as err:
@@ -290,7 +294,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.assertTrue(False)
 
     # @unittest.skip("a.i.")
-    def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
+    def test_04_success_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -298,6 +302,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         trx = Transaction() \
             .add(keccak_instruction) \
+            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
@@ -312,7 +317,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
-        step_count = 100
+        step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
@@ -402,6 +407,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
+        response_0 = send_transaction(client, trx, self.acc)
+        print('response_0:', response_0)
         response_1 = send_transaction(client, trx, self.acc)
         print('response_1:', response_1)
         neon_balance_on_response_1 = self.token.balance(self.caller_token_2)
@@ -448,9 +455,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         collateral_pool_sol_acc = self.collateral_pool_address
         deposit_sol_acc = storage
 
-        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_0, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Begin)
+        self.check_transfers_between_operator_deposit_and_collateral_pool(response_1, operator_sol_acc,
+                                                                          deposit_sol_acc, collateral_pool_sol_acc,
+                                                                          step=Step.Iteration)
         self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Iteration)
