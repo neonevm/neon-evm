@@ -1115,7 +1115,7 @@ fn command_cancel_trx(
                     } else {
                         false
                     }
-                } else {return Err(format!("Missed account {}", key).into());}
+                } else {false}
             };
 
             if writable {
