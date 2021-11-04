@@ -547,15 +547,26 @@ fn fill_holder_account(
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
 
-        let instruction = Instruction::new_with_bincode(
+        let instructions = vec![
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(
             config.evm_loader,
             /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
             &(0x12_u8, holder_id, offset, chunk),
             vec![AccountMeta::new(*holder, false),
                  AccountMeta::new(creator.pubkey(), true)]
-        );
+        )];
 
-        let message = Message::new(&[instruction], Some(&creator.pubkey()));
+        let message = Message::new(&instructions, Some(&creator.pubkey()));
         write_messages.push(message);
     }
     debug!("Send write message");
@@ -680,6 +691,11 @@ fn get_ethereum_contract_account_credentials(
     (program_id, program_ether, program_nonce, program_token, program_code, program_seed)
 }
 
+/// COMPUTE BUDGET ID
+pub mod compute_budget {
+    solana_program::declare_id!("ComputeBudget111111111111111111111111111111");
+}
+
 #[allow(clippy::too_many_arguments)]
 fn create_ethereum_contract_accounts_in_solana(
     config: &Config,
@@ -707,6 +723,16 @@ fn create_ethereum_contract_accounts_in_solana(
     }
 
     let instructions = vec![
+        Instruction::new_with_bincode(
+            compute_budget::id(),
+            &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
+            vec![]
+        ),
+        Instruction::new_with_bincode(
+            compute_budget::id(),
+            &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
+            vec![]
+        ),
         system_instruction::create_account_with_seed(
             &creator.pubkey(), 
             program_code, 
@@ -765,7 +791,7 @@ fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransactio
             if let Some(meta) = result.transaction.meta {
                 if let Some(inner_instructions) = meta.inner_instructions {
                     for instruction in inner_instructions {
-                        if instruction.index == 0 {
+                        if instruction.index == 2 {
                             if let Some(UiInstruction::Compiled(compiled_instruction)) = instruction.instructions.iter().last() {
                                 if compiled_instruction.program_id_index as usize == evm_loader_index.unwrap() {
                                     let decoded = bs58::decode(compiled_instruction.data.clone()).into_vec().unwrap();
@@ -894,7 +920,7 @@ fn command_deploy(
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
-    let mut instrstruction = create_ethereum_contract_accounts_in_solana(
+    let mut instructions = create_ethereum_contract_accounts_in_solana(
         config,
         &program_id,
         &program_ether,
@@ -941,24 +967,39 @@ fn command_deploy(
 
     let mut holder_with_accounts = vec![AccountMeta::new(holder, false)];
     holder_with_accounts.extend(accounts.clone());
-    // Send trx_from_account_data_instruction
     {
-        debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_with_accounts);
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
-                                                                              holder_with_accounts);
-        instrstruction.push(trx_from_account_data_instruction);
-        send_transaction(config, &instrstruction)?;
+        instructions.push(
+            Instruction::new_with_bincode(
+                config.evm_loader,
+                &(0x16_u8, collateral_pool_index, 0_u64),
+                holder_with_accounts
+            )
+        );
+        debug!("Send trx_from_account_data_instruction: {:?}", instructions);
+        send_transaction(config, &instructions)?;
     }
 
     // Continue while no result
     loop {
         let continue_accounts = accounts.clone();
-        debug!("continue continue_accounts: {:?}", continue_accounts);
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                 &(0x14_u8, collateral_pool_index, 400_u64),
-                                                                 continue_accounts);
-        let signature = send_transaction(config, &[continue_instruction])?;
+        let continue_instructions = vec![
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(config.evm_loader,
+                &(0x14_u8, collateral_pool_index, 400_u64),
+                continue_accounts)
+            ];
+
+        debug!("Send continue: {:?}", continue_instructions);
+        let signature = send_transaction(config, &continue_instructions)?;
 
         // Check if Continue returned some result 
         let result = config.rpc_client.get_transaction_with_config(
@@ -968,6 +1009,7 @@ fn command_deploy(
                 encoding: Some(UiTransactionEncoding::Json),
             },
         )?;
+        debug!("Send continue result: {:?}", result);
 
         let return_value = parse_transaction_reciept(config, result);
 
