@@ -963,11 +963,12 @@ fn do_continue_top_level<'a>(
         system_info)?;
 
     let (results, used_gas) = {
-        if let Err(_) = token::check_enough_funds(
+        if token::check_enough_funds(
             trx_gas_limit,
             trx_gas_price,
             user_eth_info,
-            Some(&mut storage)) {
+            Some(&mut storage))
+            .is_err() {
             let used_gas = storage.get_payments_info()?.0;
             (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
         } else {
@@ -1003,7 +1004,7 @@ fn do_continue_top_level<'a>(
     Ok(())
 }
 
-fn do_partial_call<'a>(
+fn do_partial_call(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &ProgramAccountStorage,
