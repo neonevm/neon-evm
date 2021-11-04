@@ -1,15 +1,4 @@
-from solana.rpc.api import Client
-from solana.account import Account
-from solana.publickey import PublicKey
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.sysvar import *
-from solana.rpc.types import TxOpts
 import unittest
-import time
-import os
-import json
-from hashlib import sha256
-from spl.token.client import Token
 from solana_utils import *
 from spl.token.instructions import get_associated_token_address
 
@@ -60,7 +49,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def test_call_by_some_caller(self):
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=self.loader.loader_id,
             data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
             keys=[
@@ -94,7 +83,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             confirm_transaction(client, tx['result'])
             balance = client.get_balance(acc.public_key())['result']['value']
             print("Done\n")
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=self.loader.loader_id,
             data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
             keys=[

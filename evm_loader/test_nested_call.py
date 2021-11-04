@@ -1,5 +1,4 @@
 import unittest
-from random import randrange
 from base58 import b58decode
 from sha3 import keccak_256
 from solana_utils import *
@@ -39,7 +38,7 @@ def create_holder_account(operator_acc):
     account_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(evm_loader_id))
     if get_recent_account_balance(account_address) == 0:
         minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
         send_transaction(client, trx, operator_acc)
     return account_address
@@ -50,7 +49,7 @@ def create_storage_account(operator_acc, seed):
     print("Storage", storage)
     minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
     if get_recent_account_balance(storage) == 0:
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
         send_transaction(client, trx, operator_acc)
     return storage
@@ -326,7 +325,7 @@ class EventTest(unittest.TestCase):
         rest = message
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(holder_id, offset, part),
                 keys=[
@@ -347,14 +346,14 @@ class EventTest(unittest.TestCase):
         assert (from_addr == self.caller_ether)
         instruction = from_addr + sign + msg
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self.storage, 0, instruction, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while True:
             print("Continue")
-            trx = Transaction().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
+            trx = TransactionWithComputeBudget().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']:
@@ -371,13 +370,13 @@ class EventTest(unittest.TestCase):
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_22_partial_call_from_account(self.holder, self.storage, 0, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
@@ -395,7 +394,7 @@ class EventTest(unittest.TestCase):
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))
 
         while (True):
@@ -409,7 +408,7 @@ class EventTest(unittest.TestCase):
 
     def create_code_account_if_zero_balance(self, seed, code_account_address):
         if get_recent_account_balance(code_account_address) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(
                 createAccountWithSeed(self.acc.public_key(),
                                       self.acc.public_key(),
@@ -421,7 +420,7 @@ class EventTest(unittest.TestCase):
 
     def create_code_owner_account_if_zero_balance(self, code_owner_account_address, code_owner_account_eth_address, code_account_address):
         if get_recent_account_balance(code_owner_account_address) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(
                 self.loader.createEtherAccountTrx(code_owner_account_eth_address, code_account_address)[0]
             )

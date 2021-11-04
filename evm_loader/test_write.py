@@ -6,7 +6,6 @@
 
 import unittest
 from sha3 import keccak_256
-from solana.publickey import PublicKey
 from solana.account import Account as solana_Account
 from solana.rpc.api import SendTransactionError
 from solana_utils import *
@@ -73,14 +72,14 @@ class Test_Write(unittest.TestCase):
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
         if getBalance(self.account_address) == 0:
             print('Creating account...')
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.signer.public_key(), self.signer.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             client.send_transaction(trx, self.signer, opts=TxOpts(skip_confirmation=False, preflight_commitment='confirmed'))
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
     def write_to_account(self, operator, signer, nonce, data):
-        tx = Transaction()
+        tx = TransactionWithComputeBudget()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
                  AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,

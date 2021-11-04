@@ -1,13 +1,7 @@
-from solana.publickey import PublicKey
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from spl.token.instructions import get_associated_token_address
-from spl.token.constants import TOKEN_PROGRAM_ID, ACCOUNT_LEN
 import unittest
 from eth_utils import abi
 from base58 import b58decode
 import re
-
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, JsonEncoder
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -138,7 +132,7 @@ class PrecompilesTests(unittest.TestCase):
         trx_data = self.caller_ether + sign + msg
         keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
         
-        solana_trx = Transaction().add(
+        solana_trx = TransactionWithComputeBudget().add(
                 self.sol_instr_keccak(keccak_instruction) 
             ).add( 
                 self.sol_instr_call(trx_data) 
@@ -200,7 +194,7 @@ class PrecompilesTests(unittest.TestCase):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="confirmed"))
 
@@ -214,7 +208,7 @@ class PrecompilesTests(unittest.TestCase):
         rest = message
         while len(rest):
             (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=(bytes.fromhex('12') + holder_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
                 keys=[
@@ -242,13 +236,13 @@ class PrecompilesTests(unittest.TestCase):
 
         self.write_transaction_to_holder_account(holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_22_partial_call_from_account(holder, storage, 0))
         send_transaction(client, trx, self.acc)
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.sol_instr_20_continue(storage, 400))
             result = send_transaction(client, trx, self.acc)
 

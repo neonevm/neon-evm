@@ -1,9 +1,6 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
@@ -92,14 +89,14 @@ class EthTokenTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
@@ -116,7 +113,7 @@ class EthTokenTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 

@@ -2,7 +2,6 @@ from time import sleep
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from web3.auto import w3
-from eth_keys import keys as eth_keys
 from web3 import Web3
 import argparse
 from eth_utils import abi
@@ -163,7 +162,7 @@ def check_transfer_event(result, erc20_eth, acc_from, acc_to, sum, return_code):
     return True
 
 def get_filehash(factory, factory_code, factory_eth, acc):
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
     trx.add(
         TransactionInstruction(
             program_id=evm_loader_id,
@@ -280,7 +279,7 @@ def deploy_contracts(args):
         print("erc20_eth:", erc20_ether.hex())
         print("erc20_code:", erc20_code)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(
             createAccountWithSeed(
                 instance.acc.public_key(),
@@ -342,7 +341,7 @@ def mint_send(erc20_sol, erc20_eth_hex, erc20_code, payer_eth, payer_sol, acc, s
     trx_data = func_name + \
                bytes().fromhex("%024x" % 0 + payer_eth) + \
                bytes().fromhex("%064x" % sum)
-    trx = Transaction()
+    trx = TransactionWithComputeBudget()
     trx.add(
         TransactionInstruction(
             program_id=evm_loader_id,
@@ -458,7 +457,7 @@ def create_accounts(args):
     for i in range(args.count):
         pr_key = w3.eth.account.from_key(os.urandom(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         (transaction, acc_sol) = instance.loader.createEtherAccountTrx(acc_eth)
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
@@ -613,7 +612,7 @@ def send_transactions(args):
         collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
         trx.add(sol_instr_05((collateral_pool_index_buf + from_addr + sign + msg), rec['erc20_sol'], rec['erc20_code'], rec['payer_sol']), sender_signer.public_key(), collateral_pool_address)
         trx.recent_blockhash = recent_blockhash

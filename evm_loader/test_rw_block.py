@@ -1,10 +1,7 @@
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
-from solana.rpc.api  import SendTransactionError
+from solana.rpc.api import SendTransactionError
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
@@ -31,7 +28,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
         minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
         print("Minimum balance required for account {}".format(minimum_balance))
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
         send_transaction(client, trx, funding)
 
@@ -160,14 +157,14 @@ class RW_Locking_Test(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller, add_meta=[]):
         print("Begin")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
@@ -188,7 +185,7 @@ class RW_Locking_Test(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, acc)
 
@@ -262,12 +259,12 @@ class RW_Locking_Test(unittest.TestCase):
             print("Ok")
 
             # removing the rw-lock
-            trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
+            trx = TransactionWithComputeBudget().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
             response = send_transaction(client, trx, self.acc1)
             return
 
         # removing the rw-lock
-        trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
+        trx = TransactionWithComputeBudget().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
         response = send_transaction(client, trx, self.acc1)
         raise("error, account was not block")
 
@@ -389,7 +386,7 @@ class RW_Locking_Test(unittest.TestCase):
 
         self.assertIsNotNone(resize_instr)
         # send resizing transaction
-        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc2)
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
@@ -404,7 +401,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertNotEqual(getBalance(self.re_code), 0)
 
         # try next attempt to resize storage account and check it
-        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc2)
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 

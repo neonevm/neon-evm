@@ -1,10 +1,5 @@
-from solana.publickey import PublicKey
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import unittest
 from eth_utils import abi
-from spl.token.instructions import get_associated_token_address
-
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
@@ -119,7 +114,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         init_nonce += 1
         (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 3)
 
-        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
+        trx = TransactionWithComputeBudget().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
         err = "invalid account data for instruction"
         with self.assertRaisesRegex(Exception,err):
@@ -139,7 +134,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         code_balance_pre = getBalance(contract_code)
 
         (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, 1)
-        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 )
+        trx = TransactionWithComputeBudget().add( keccak_tx_1 ).add( call_tx_1 )
 
         send_transaction(client, trx, self.acc)
 
