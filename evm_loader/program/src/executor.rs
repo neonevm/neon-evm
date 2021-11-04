@@ -4,16 +4,19 @@ use std::convert::Infallible;
 use std::mem;
 
 use evm::{
-    backend::Backend, Capture, ExitError, ExitFatal, ExitReason,
+    Capture, ExitError, ExitFatal, ExitReason,
     gasometer, H160, H256, Handler, Resolve, Valids, U256,
 };
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
-use crate::executor_state::{ExecutorState, StackState};
+use crate::executor_state::ExecutorState;
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
+use crate::precompile_contracts::call_precompile;
+use crate::solana_backend::AccountStorage;
+use crate::token;
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -47,11 +50,11 @@ enum RuntimeApply{
     Exit(ExitReason),
 }
 
-struct Executor<B: Backend> {
-    state: ExecutorState<B>,
+struct Executor<'a, B: AccountStorage> {
+    state: ExecutorState<'a, B>,
 }
 
-impl<B: Backend> Handler for Executor<B> {
+impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     type CreateInterrupt = crate::executor::CreateInterrupt;
     type CreateFeedback = Infallible;
     type CallInterrupt = crate::executor::CallInterrupt;
@@ -62,7 +65,7 @@ impl<B: Backend> Handler for Executor<B> {
     }
 
     fn balance(&self, address: H160) -> U256 {
-        self.state.basic(address).balance
+        self.state.balance(address)
     }
 
     fn code_size(&self, address: H160) -> U256 {
@@ -185,6 +188,7 @@ impl<B: Backend> Handler for Executor<B> {
             }
         }
 
+        let value = token::eth::round(value);
         if self.balance(caller) < value {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
@@ -218,7 +222,7 @@ impl<B: Backend> Handler for Executor<B> {
                     keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
                 },
                 evm::CreateScheme::Legacy { caller } => {
-                    let nonce = self.state.basic(caller).nonce;
+                    let nonce = self.state.nonce(caller);
                     let mut stream = rlp::RlpStream::new_list(2);
                     stream.append(&caller);
                     stream.append(&nonce);
@@ -229,7 +233,6 @@ impl<B: Backend> Handler for Executor<B> {
                 },
             };
 
-        self.state.create(&scheme, &address);
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
 
@@ -239,7 +242,7 @@ impl<B: Backend> Handler for Executor<B> {
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }
 
-        if self.state.basic(address).nonce  > U256::zero() {
+        if self.state.nonce(address)  > U256::zero() {
             return Capture::Exit((ExitError::CreateCollision.into(), None, Vec::new()))
         }
 
@@ -260,7 +263,7 @@ impl<B: Backend> Handler for Executor<B> {
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
         target_gas: Option<u64>,
-        is_static: bool,
+        _is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
@@ -269,6 +272,15 @@ impl<B: Backend> Handler for Executor<B> {
                 return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
             }
         }
+
+        let transfer = transfer.map(|t| {
+            evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
+        });
+        let context = evm::Context {
+            address: context.address,
+            caller: context.caller,
+            apparent_value: token::eth::round(context.apparent_value)
+        };
 
         // These parameters should be true for call from another contract
         let take_l64 = true;
@@ -302,7 +314,7 @@ impl<B: Backend> Handler for Executor<B> {
             }
         }
 
-        let hook_res = self.state.call_inner(code_address, transfer, input.clone(), Some(gas_limit), is_static, take_l64, take_stipend);
+        let hook_res = call_precompile(code_address, &input, &context, &mut self.state);
         if hook_res.is_some() {
             match hook_res.as_ref().unwrap() {
                 Capture::Exit((reason, return_data)) => {
@@ -353,14 +365,14 @@ pub enum CreateReason {
 
 type RuntimeInfo = (evm::Runtime, CreateReason);
 
-pub struct Machine<B: Backend> {
-    executor: Executor<B>,
+pub struct Machine<'a, B: AccountStorage> {
+    executor: Executor<'a, B>,
     runtime: Vec<RuntimeInfo>
 }
 
-impl<B: Backend> Machine<B> {
-
-    pub fn new(state: ExecutorState<B>) -> Self {
+impl<'a, B: AccountStorage> Machine<'a, B> {
+    #[must_use]
+    pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
         Self{ executor, runtime: Vec::new() }
     }
@@ -369,7 +381,8 @@ impl<B: Backend> Machine<B> {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
-    pub fn restore(storage: &StorageAccount, backend: B) -> Self {
+    #[must_use]
+    pub fn restore(storage: &StorageAccount, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
 
         let state = ExecutorState::new(substate, backend);
@@ -403,12 +416,13 @@ impl<B: Backend> Machine<B> {
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
 
+        let transfer_value = token::eth::round(transfer_value);
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
         self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
-        let context = evm::Context{address: code_address, caller, apparent_value: transfer_value};
+        let context = evm::Context{ address: code_address, caller, apparent_value: transfer_value };
 
         let runtime = evm::Runtime::new(code, valids, input, context);
 
@@ -582,17 +596,17 @@ impl<B: Backend> Machine<B> {
     }
 
     fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+        let (exited_runtime, create_reason) = match self.runtime.pop() {
+            Some((runtime, reason)) => (runtime, reason),
+            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
+        };
+
         match reason {
             ExitReason::Succeed(_) => Ok(()),
             ExitReason::Revert(_) => self.executor.state.exit_revert(),
             ExitReason::Error(_) | ExitReason::Fatal(_) => self.executor.state.exit_discard(),
             ExitReason::StepLimitReached => unreachable!()
-        }.map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-
-        let (exited_runtime, create_reason) = match self.runtime.pop() {
-            Some((runtime, reason)) => (runtime, reason),
-            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
-        };
+        }.map_err(|e| (exited_runtime.machine().return_value(), ExitReason::from(e)))?;
 
         match create_reason {
             CreateReason::Call => self.apply_exit_call(&exited_runtime, reason),
@@ -626,7 +640,8 @@ impl<B: Backend> Machine<B> {
         Ok(())
     }
 
-    pub fn into_state(self) -> ExecutorState<B> {
+    #[must_use]
+    pub fn into_state(self) -> ExecutorState<'a, B> {
         self.executor.state
     }
 }

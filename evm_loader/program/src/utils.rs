@@ -1,7 +1,6 @@
 //! `EVMLoader` helper functions
 
-use evm::{H160, H256, U256};
-use solana_program::pubkey::Pubkey;
+use evm::{H256, U256};
 use solana_program::keccak::{hash, hashv};
 
 /// Get Keccak256 hash as `H256`
@@ -30,8 +29,14 @@ pub fn u256_to_h256(value: U256) -> H256 {
     H256::from_slice(&v)
 }
 
-/// Get ethereum address from solana `Pubkey`
+/// Check whether array is zero initialized
 #[must_use]
-pub fn solidity_address(key: &Pubkey) -> H160 {
-    H256::from_slice(key.as_ref()).into()
+pub fn is_zero_initialized(data: &[u8]) -> bool {
+    for d in data {
+        if *d != 0_u8 {
+            return false;
+        }
+    }
+
+    true
 }

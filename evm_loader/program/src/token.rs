@@ -16,18 +16,29 @@ use solana_program::{
 use std::vec;
 use std::convert::TryFrom;
 
-/// Token Mint ID
-pub mod token_mint {
-    solana_program::declare_id!("HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+use crate::config::token_mint;
 
-    /// Number of base 10 digits to the right of the decimal place
+/// Native token info
+pub mod eth {
+    use super::U256;
+
     #[must_use]
-    pub const fn decimals() -> u8 { 9 }
-}
+    /// Number of base 10 digits to the right of the decimal place of ETH value
+    pub const fn decimals() -> u8 { 18 }
 
-#[must_use]
-/// Number of base 10 digits to the right of the decimal place of ETH value
-pub const fn eth_decimals() -> u8 { 18 }
+    #[must_use]
+    /// Minimum number of native tokens that can be transferred by `NeonEVM`
+    pub fn min_transfer_value() -> U256 {
+        let min_decimals: u32 = u32::from(decimals() - super::token_mint::decimals());
+        10_u64.pow(min_decimals).into()
+    }
+
+    #[must_use]
+    /// Cut down the remainder that can't be transferred
+    pub fn round(value: U256) -> U256 {
+        value - (value % min_transfer_value())
+    }
+}
 
 /// Create an associated token account for the given wallet address and token mint
 #[must_use]
@@ -60,6 +71,10 @@ pub fn create_associated_token_account(
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
+    if account.data_len() == 0 {
+        return Ok(0_u64);
+    }
+
     if *account.owner != spl_token::id() {
         return Err!(ProgramError::IncorrectProgramId; "*account.owner<{:?}> != spl_token::id()<{:?}>", *account.owner,  spl_token::id());
     }
@@ -83,6 +98,34 @@ pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramE
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
 
     Ok(data.owner)
+}
+
+/// Extract a token mint data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_mint_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Mint, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Mint::unpack(data)
+}
+
+/// Extract a token account data from the account data
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token mint account
+pub fn get_token_account_data(data: &[u8], owner: &Pubkey) -> Result<spl_token::state::Account, ProgramError> {
+    if *owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*owner<{:?}> != spl_token::id()<{:?}>", *owner,  spl_token::id());
+    }
+
+    spl_token::state::Account::unpack(data)
 }
 
 
@@ -133,9 +176,7 @@ pub fn transfer_token(
         return Err!(ProgramError::InvalidInstructionData; "Invalid account owner")
     }
 
-    let min_decimals = u32::from(eth_decimals() - token_mint::decimals());
-    let min_value = U256::from(10_u64.pow(min_decimals));
-    let value = value / min_value;
+    let value = value / eth::min_transfer_value();
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
 
     let source_token_balance = get_token_account_balance(source_token_account)?;

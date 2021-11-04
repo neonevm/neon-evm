@@ -20,7 +20,7 @@ class PrecompilesTests(unittest.TestCase):
         print("\ntest_solidity_precompiles.py setUpClass")
 
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -40,14 +40,12 @@ class PrecompilesTests(unittest.TestCase):
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
         print("deploy contract: ")
-        program_and_code = cls.loader.deployChecked(
+        (cls.owner_contract, cls.eth_contract, cls.contract_code) = cls.loader.deployChecked(
                 CONTRACTS_DIR+'SolidityPrecompilesTest.binary',
                 cls.caller,
                 cls.caller_ether
             )
-        cls.owner_contract = program_and_code[0]
-        cls.contract_code = program_and_code[2]
-        print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
+        print("contract id: ", cls.owner_contract, cls.eth_contract)
         print("code id: ", cls.contract_code)
 
         collateral_pool_index = 2
@@ -126,7 +124,7 @@ class PrecompilesTests(unittest.TestCase):
 
     def make_transactions(self, call_data):
         eth_tx = {
-            'to': solana2ether(self.owner_contract),
+            'to': self.eth_contract,
             'value': 0,
             'gas': 9999999,
             'gasPrice': 1_000_000_000,
@@ -271,7 +269,7 @@ class PrecompilesTests(unittest.TestCase):
 
 
     def call_with_holder_account(self, input):
-        tx = {'to': solana2ether(self.owner_contract), 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.eth_contract, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())

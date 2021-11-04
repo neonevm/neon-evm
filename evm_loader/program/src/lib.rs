@@ -1,6 +1,7 @@
 #![deny(missing_docs)]
 //#![forbid(unsafe_code)]
 #![deny(warnings)]
+#![allow(deprecated)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -9,8 +10,11 @@
 mod debug;
 #[macro_use]
 mod error;
+pub mod macrorules;
+pub mod config;
 pub mod entrypoint;
-mod hamt;
+/// hamt impl
+pub mod hamt;
 pub mod solana_backend;
 pub mod account_data;
 pub mod account_storage;
@@ -23,8 +27,11 @@ pub mod executor;
 /// Todo: document
 pub mod executor_state;
 pub mod utils;
+pub mod operator;
 pub mod payment;
 pub mod token;
+pub mod system;
+pub mod precompile_contracts;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version

@@ -22,6 +22,7 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
+#[allow(unused)]
 pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
     const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
@@ -49,22 +50,28 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
     instruction_data
 }
 
+#[allow(unused)]
 pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
 {
-    let message_len = u16::try_from(message_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
+    if !solana_program::sysvar::instructions::check_id(sysvar_info.key) {
+        return Err!(ProgramError::InvalidAccountData; "Invalid sysvar instruction account {}", sysvar_info.key);
+    }
 
-    let current_instruction = load_current_index(&sysvar_info.try_borrow_data()?);
+    let message_len = u16::try_from(message_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
+    
+    let sysvar_data = sysvar_info.try_borrow_data()?;
+    let current_instruction = load_current_index(&sysvar_data);
     let current_instruction = u8::try_from(current_instruction).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
     let index = current_instruction - 1;
 
-    if let Ok(instr) = load_instruction_at(index.into(), &sysvar_info.try_borrow_data()?) {
+    if let Ok(instr) = load_instruction_at(index.into(), &sysvar_data) {
         if secp256k1_program::check_id(&instr.program_id) {
             let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
             if reference_instruction != instr.data {
                 return Err!(ProgramError::InvalidInstructionData; "wrong keccak instruction data, instruction={}, reference={}", &hex::encode(&instr.data), &hex::encode(&reference_instruction));
             }
         } else {
-            return Err!(ProgramError::IncorrectProgramId; "index={:?}, sysvar_info={:?}, instr.program_id={:?}", index, sysvar_info, instr.program_id);
+            return Err!(ProgramError::IncorrectProgramId; "Incorrect Program Id: index={:?}, sysvar_info={:?}, instr.program_id={:?}", index, sysvar_info, instr.program_id);
         }
     }
     else {
@@ -117,6 +124,7 @@ impl rlp::Decodable for UnsignedTransaction {
     }
 }
 
+#[allow(unused)]
 pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, Secp256k1RecoverError> {
     let digest = keccak256_digest(unsigned_trx);
 

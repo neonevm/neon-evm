@@ -56,7 +56,7 @@ class init_wallet():
         print("\ntest_performance.py init")
 
         cls.token = SplToken(solana_url)
-        wallet = RandomAccount()
+        wallet = OperatorAccount()
         if getBalance(wallet.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
             confirm_transaction(client, tx["result"])
@@ -253,7 +253,7 @@ def deploy_contracts(args):
 
     res = solana_cli().call("config set --keypair " + instance.keypath + " -C config.yml"+args.postfix)
 
-    res = instance.loader.deploy(factory_path, caller=instance.caller, config="config.yml"+args.postfix)
+    res = instance.loader.deploy(factory_path, config="config.yml"+args.postfix)
     (factory, factory_eth, factory_code) = (res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId'])
 
     print("factory", factory)
