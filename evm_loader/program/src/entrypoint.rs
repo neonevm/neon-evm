@@ -486,6 +486,7 @@ fn process_instruction<'a>(
             let _operator_eth_info = next_account_info(account_info_iter)?;
             let _user_eth_info = next_account_info(account_info_iter)?;
             let incinerator_info = next_account_info(account_info_iter)?;
+            // let _system_info = next_account_info(account_info_iter)?;
 
             authorized_operator_check(operator_sol_info)?;
 
@@ -646,6 +647,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::ResizeStorageAccount {seed} => {
             debug_print!("Execute ResizeStorageAccount");
+
             let account_info = next_account_info(account_info_iter)?;
             let code_account_info = next_account_info(account_info_iter)?;
             let code_account_new_info = next_account_info(account_info_iter)?;
@@ -655,69 +657,55 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let mut info_data = account_info.try_borrow_mut_data()?;
-            if let AccountData::Account(mut data) = AccountData::unpack(&info_data)? {
-                if data.rw_blocked_acc.is_some() || data.ro_blocked_cnt >0 {
-                    debug_print!("Cannot resize account data. Account is blocked {:?}", *account_info.key);
-                    return Ok(())
-                }
-                data.code_account = *code_account_new_info.key;
-                AccountData::pack(&AccountData::Account(data), &mut info_data)?;
-            } else {
-                return Err!(ProgramError::InvalidAccountData)
+
+            let mut account_data = AccountData::unpack(&account_info.try_borrow_data()?)?;
+            let account = account_data.get_mut_account()?;
+            if account.rw_blocked_acc.is_some() || account.ro_blocked_cnt > 0 {
+                return Err!(ProgramError::InvalidInstructionData; "Cannot resize account data. Account is blocked {:?}", *account_info.key);
             }
 
-            if code_account_new_info.owner == program_id {
-                let rent = Rent::get()?;
-                if !rent.is_exempt(code_account_new_info.lamports(), code_account_new_info.data_len()) {
-                    return Err!(ProgramError::InvalidArgument; "New code account is not rent exempt. lamports={:?}, data_len={:?}",
-                        code_account_new_info.lamports(), code_account_new_info.data_len());
-                }
+
+            if account.code_account != *code_account_info.key {
+                return Err!(ProgramError::InvalidArgument; "account.code_account<{:?}> != *code_account_info.key<{:?}>", account.code_account, code_account_info.key);
             }
-            else {
-                return Err!(ProgramError::InvalidArgument; "code_account_new_info.owner<{:?}> != program_id<{:?}>", code_account_new_info.owner, program_id);
+            if (account.code_account == Pubkey::new_from_array([0; 32])) && (account.trx_count != 0) {
+                return Err!(ProgramError::InvalidArgument; "Cannot change user account to contract account");
             }
 
-            let expected_address = Pubkey::create_with_seed(
-                operator_sol_info.key,
-                std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?,
-                program_id)?;
+
+            let seed = std::str::from_utf8(seed).map_err(|e| E!(ProgramError::InvalidInstructionData; "Seed decode error={:?}", e))?;
+            let expected_address = Pubkey::create_with_seed(operator_sol_info.key, seed, program_id)?;
             if *code_account_new_info.key != expected_address {
-                return Err!(ProgramError::InvalidArgument; "new code_account must be created by operator, new code_account {:?}, operator {:?}, expected address {:?}",
-                    *code_account_new_info.key, *operator_sol_info.key, expected_address);
+                return Err!(ProgramError::InvalidArgument; "New code_account must be created by transaction signer");
             }
 
+            AccountData::unpack(&code_account_new_info.try_borrow_data()?)?.check_empty()?;
+
+            let rent = Rent::get()?;
+            if !rent.is_exempt(code_account_new_info.lamports(), code_account_new_info.data_len()) {
+                return Err!(ProgramError::InvalidArgument; "New code account is not rent exempt.");
+            }
+
+
+            account.code_account = *code_account_new_info.key;
+            account_data.pack(&mut account_info.try_borrow_mut_data()?)?;
+
+
+            if *code_account_info.key == Pubkey::new_from_array([0; 32]) {
+                let contract_data = AccountData::Contract( Contract {owner: *account_info.key, code_size: 0_u32} );
+                contract_data.pack(&mut code_account_new_info.try_borrow_mut_data()?)?;
+
+                return Ok(());
+            }
+
+
+            debug_print!("move code and storage from {:?} to {:?}", *code_account_info.key, *code_account_new_info.key);
+            let mut code_account_data = code_account_info.try_borrow_mut_data()?;
             let mut code_account_new_data = code_account_new_info.try_borrow_mut_data()?;
-            match AccountData::unpack(&code_account_new_data) {
-                Ok(AccountData::Empty) => {},
-                _ =>  return Err!(ProgramError::InvalidAccountData)
-            }
 
-            if code_account_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "code_account_info.owner<{:?}> != program_id<{:?}>", code_account_info.owner, program_id);
-            }
-            {
-                let mut code_account_data = code_account_info.try_borrow_mut_data()?;
-                if code_account_data.len() >= code_account_new_data.len(){
-                    return Err!(ProgramError::InvalidArgument; "current account size >= new account size, account={:?}, size={:?}, new_size={:?}",
-                        *account_info.key, code_account_data.len(), code_account_new_data.len());
-                }
-                if let AccountData::Contract(data) = AccountData::unpack(&code_account_data)? {
-                    if data.owner != *account_info.key {
-                        return Err!(ProgramError::InvalidAccountData;
-                            "code_account.data.owner!=contract.key,  code_account.data.owner={:?}, contract.key={:?}", data.owner, *account_info.key)
-                    }
-                    debug_print!("move code and storage from {:?} to {:?}", *code_account_info.key, *code_account_new_info.key);
-                    AccountData::pack(&AccountData::Contract(data.clone()), &mut code_account_new_data)?;
-                    let begin = AccountData::Contract(data).size();
-                    let end = code_account_data.len();
-                    code_account_new_data[begin..end].copy_from_slice(&code_account_data[begin..]);
+            code_account_new_data[..code_account_data.len()].copy_from_slice(&code_account_data);
+            AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
 
-                    AccountData::pack(&AccountData::Empty, &mut code_account_data)?;
-                } else {
-                    return Err!(ProgramError::InvalidAccountData)
-                };
-            }
             payment::transfer_from_code_account_to_operator(code_account_info, operator_sol_info, code_account_info.lamports())?;
 
             Ok(())
