@@ -158,13 +158,15 @@ class RW_Locking_Test(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller, add_meta=[]):
         print("Begin")
         trx = TransactionWithComputeBudget()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
         trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
@@ -227,7 +229,7 @@ class RW_Locking_Test(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -327,7 +329,8 @@ class RW_Locking_Test(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex(), self.acc1)
 
         result = self.call_begin(storage, 10, msg, instruction, False, self.acc1, self.caller1, meta)
-        result = self.call_continue(storage, 1000, True, self.acc1, self.caller1, meta)
+        result = self.call_continue(storage, 450, True, self.acc1, self.caller1, meta)
+        result = self.call_continue(storage, 550, True, self.acc1, self.caller1, meta)
         self.check_continue_result(result["result"])
 
 
