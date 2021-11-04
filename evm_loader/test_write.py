@@ -125,7 +125,7 @@ class Test_Write(unittest.TestCase):
             raise
 
     def check_err_is_invalid_program_argument(self, message):
-        self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
+        self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 2: invalid program argument')
         print('!!!! This error is expected')
 
     @classmethod
