@@ -11,6 +11,7 @@ parser.add_argument('--step', metavar="step of the test", type=str,
                           ' For swap operations: deploy_erc20, deploy_swap, create_senders, create_acc, add_liquidity, create_trx.')
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
 parser.add_argument('--type', metavar="transfer type", type=str,  help='erc20, spl, swap', default='erc20')
+parser.add_argument('--collateral_key', metavar="keypair of the collateral_pool_base", type=str,  help='/home/solana/collateral-pool-keypair.json', default='../collateral-pool-keypair.json')
 
 args = parser.parse_args()
 
