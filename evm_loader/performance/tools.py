@@ -21,7 +21,7 @@ from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ign
 evm_loader_id = os.environ.get("EVM_LOADER")
 trx_cnt = os.environ.get("CNT", 10)
 
-# chain_id = 111 
+# chain_id = 111
 chain_id = 245022940
 transfer_sum = 1
 
@@ -388,7 +388,8 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_no
     else:
         trx_count[caller] = getTransactionCount(client, caller)
 
-    tx = {'to': contract_eth, 'value': value, 'gas': 9999999999, 'gasPrice': 10**9,
+    # tx = {'to': contract_eth, 'value': value, 'gas': 9999999999, 'gasPrice': 10**9,
+    tx = {'to': contract_eth, 'value': value, 'gas': 9999999999, 'gasPrice': 0,
         'nonce': trx_count[caller], 'data': input, 'chainId': chain_id}
     (from_addr, sign, msg) = make_instruction_data_from_tx(tx, pr_key)
 
