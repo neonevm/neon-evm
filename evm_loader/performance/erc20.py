@@ -508,10 +508,7 @@ def create_senders(args):
         while total < args.count:
             print("create sender", total)
             acc = Account()
-            param = TransferParams()
-            param.from_pubkey = instance.acc.public_key()
-            param.to_pubkey = acc.public_key()
-            param.lamports = 1000000
+            param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=1000000)
             tx_transfer = Transaction()
             tx_transfer.add(transfer(param))
             transfer_res = client.send_transaction(tx_transfer, instance.acc,
