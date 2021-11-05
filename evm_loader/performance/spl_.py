@@ -1,13 +1,6 @@
 from tools import  *
 
-def mint_spl(accounts, key, instance):
-    if key == '':
-        print("args.key is empty")
-        exit(1)
-
-    print(key)
-    wallet = OperatorAccount(key).get_acc()
-
+def mint_spl(accounts, instance):
 
     receipt_list = []
     total = 0

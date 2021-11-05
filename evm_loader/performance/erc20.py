@@ -277,7 +277,7 @@ def create_accounts(args):
         if args.type == "spl":
             # spl_token.mint()
             (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_spl(
-                ether_accounts,  args.key, instance)
+                ether_accounts, instance)
         elif args.type == "erc20":  # erc20
             # erc20.mint()
             (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_erc20(
