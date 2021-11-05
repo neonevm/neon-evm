@@ -1,6 +1,6 @@
 from tools import  *
 
-def mint_spl(accounts, key):
+def mint_spl(accounts, key, instance):
     if key == '':
         print("args.key is empty")
         exit(1)
@@ -17,19 +17,15 @@ def mint_spl(accounts, key):
         dest = get_associated_token_address(PublicKey(acc_sol), ETH_TOKEN_MINT_ID)
         print("mint: ", dest)
 
-        data = spl.token._layouts.INSTRUCTIONS_LAYOUT.build(
-            dict(instruction_type=InstructionType.MINT_TO2, args=dict(amount=100*10**9, decimals=9)))
-
+        param = spl_token.TransferParams(
+            program_id = TOKEN_PROGRAM_ID,
+            source = instance.wallet_token,
+            dest = dest,
+            owner = wallet.public_key(),
+            amount=1
+        )
         trx = Transaction()
-        trx.add(
-            TransactionInstruction(
-                program_id=TOKEN_PROGRAM_ID,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=dest, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=wallet.public_key(), is_signer=True, is_writable=False),
-                ]))
+        trx.add(spl_token.transfer(param))
 
         res = client.send_transaction(trx, wallet,
                                       opts=TxOpts(skip_confirmation=True, skip_preflight=True,
