@@ -3,7 +3,7 @@ from tools import  *
 def mint_spl(accounts, key):
     if key == '':
         print("args.key is empty")
-        return
+        exit(1)
 
     wallet = OperatorAccount(key).get_acc()
 
