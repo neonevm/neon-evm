@@ -277,7 +277,7 @@ def create_accounts(args):
         if args.type == "spl":
             # spl_token.mint()
             (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_spl(
-                ether_accounts, instance)
+                ether_accounts, instance, arg.key)
         elif args.type == "erc20":  # erc20
             # erc20.mint()
             (account_minted, total, event_error, receipt_error, nonce_error, unknown_error, too_small_error) = mint_erc20(
@@ -542,7 +542,10 @@ def create_senders(args):
 
 
 def create_collateral_pool(args):
-    wallet = OperatorAccount(args.collateral_key).get_acc()
+    if args.key == '':
+        print ("args.key is empty")
+        return
+    wallet = OperatorAccount(args.key).get_acc()
 
     total = 0
     receipt_list = []

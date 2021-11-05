@@ -1,6 +1,13 @@
 from tools import  *
 
-def mint_spl(accounts, instance):
+def mint_spl(accounts, instance, key):
+    if key == '':
+        print("args.key is empty")
+        return
+
+    wallet = OperatorAccount(key).get_acc()
+
+
     receipt_list = []
     total = 0
     receipt_error = 0
@@ -20,10 +27,10 @@ def mint_spl(accounts, instance):
                 keys=[
                     AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=dest, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=instance.regular_acc.public_key(), is_signer=True, is_writable=False),
+                    AccountMeta(pubkey=wallet.public_key(), is_signer=True, is_writable=False),
                 ]))
 
-        res = client.send_transaction(trx, instance.regular_acc,
+        res = client.send_transaction(trx, wallet,
                                       opts=TxOpts(skip_confirmation=True, skip_preflight=True,
                                                   preflight_commitment="confirmed"))
         receipt_list.append((acc_eth_hex, res["result"]))
