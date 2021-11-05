@@ -232,7 +232,7 @@ def create_accounts(args):
 
         pr_key = w3.eth.account.from_key(os.urandom(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         (transaction, acc_sol) = instance.loader.createEtherAccountTrx(acc_eth)
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
