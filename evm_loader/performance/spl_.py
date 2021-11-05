@@ -26,7 +26,7 @@ def mint_spl(accounts, instance):
         receipt_list.append((acc_eth_hex, res["result"]))
 
         total = total + 1
-        if total % 100 == 0 or total == len(accounts):
+        if total % 50 == 0 or total == len(accounts):
             for (acc_eth_hex, receipt) in receipt_list:
                 confirm_transaction(client, receipt)
                 res = client.get_confirmed_transaction(receipt)
