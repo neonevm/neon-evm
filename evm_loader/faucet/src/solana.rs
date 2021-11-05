@@ -19,6 +19,7 @@ use solana_sdk::{system_program, sysvar};
 use solana_sdk::compute_budget;
 
 use crate::{config, ethereum};
+use evm_loader::config::{COMPUTE_BUDGET_UNITS, COMPUTE_BUDGET_HEAP_FRAME};
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
@@ -73,16 +74,8 @@ pub async fn transfer_token(
                 info!("Ether {:?}", ether_account.unwrap());
             } else {
                 info!("No ether account; will be created");
-                instructions.push(Instruction::new_with_bincode(
-                    compute_budget::id(),
-                    &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
-                    vec![]
-                ));
-                instructions.push(Instruction::new_with_bincode(
-                    compute_budget::id(),
-                    &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
-                    vec![]
-                ));
+                instructions.push(compute_budget::request_units(COMPUTE_BUDGET_UNITS));
+                instructions.push(compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
                 instructions.push(create_ether_account_instruction(
                     signer_account,
                     evm_loader_id,

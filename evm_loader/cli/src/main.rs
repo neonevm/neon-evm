@@ -103,6 +103,10 @@ use evm_loader::{
     },
     executor::Machine,
     solana_backend::AccountStorage,
+    config::{
+        COMPUTE_BUDGET_UNITS,
+        COMPUTE_BUDGET_HEAP_FRAME
+    },
 };
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -553,16 +557,8 @@ fn fill_holder_account(
         let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
 
         let instructions = vec![
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
-                vec![]
-            ),
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
-                vec![]
-            ),
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
             Instruction::new_with_bincode(
             config.evm_loader,
             /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
@@ -723,16 +719,8 @@ fn create_ethereum_contract_accounts_in_solana(
     }
 
     let instructions = vec![
-        Instruction::new_with_bincode(
-            compute_budget::id(),
-            &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
-            vec![]
-        ),
-        Instruction::new_with_bincode(
-            compute_budget::id(),
-            &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
-            vec![]
-        ),
+        compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+        compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
         system_instruction::create_account_with_seed(
             &creator.pubkey(), 
             program_code, 
@@ -983,16 +971,8 @@ fn command_deploy(
     loop {
         let continue_accounts = accounts.clone();
         let continue_instructions = vec![
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
-                vec![]
-            ),
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
-                vec![]
-            ),
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
             Instruction::new_with_bincode(config.evm_loader,
                 &(0x14_u8, collateral_pool_index, 400_u64),
                 continue_accounts)
@@ -1167,16 +1147,8 @@ fn command_cancel_trx(
         }
         
         let instructions = vec![
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
-                vec![]
-            ),
-            Instruction::new_with_bincode(
-                compute_budget::id(),
-                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
-                vec![]
-            ),
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
             Instruction::new_with_bincode(
                 config.evm_loader,
                 &(21_u8, trx_count),
