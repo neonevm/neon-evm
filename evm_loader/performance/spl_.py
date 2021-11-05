@@ -21,7 +21,7 @@ def mint_spl(accounts, instance):
         trx.add(spl_token.transfer(param))
 
         res = client.send_transaction(trx, instance.acc,
-                                      opts=TxOpts(skip_confirmation=True, skip_preflight=False,
+                                      opts=TxOpts(skip_confirmation=True, skip_preflight=True,
                                                   preflight_commitment="confirmed"))
         receipt_list.append((acc_eth_hex, res["result"]))
 

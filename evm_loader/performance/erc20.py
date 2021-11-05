@@ -237,7 +237,7 @@ def create_accounts(args):
         (transaction, acc_sol) = instance.loader.createEtherAccountTrx(acc_eth)
         trx.add(transaction)
         res = client.send_transaction(trx, instance.acc,
-                                      opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+                                      opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
         receipt_list.append((acc_eth.hex(), acc_sol, res['result']))
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
@@ -559,7 +559,7 @@ def create_collateral_pool(args):
                 createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance,
                                       0, PublicKey(evm_loader_id)))
             res = client.send_transaction(trx, wallet,
-                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+                                          opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
             receipt_list.append((res['result'], acc, total))
         else:
             to_file.append((acc, total))
