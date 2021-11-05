@@ -20,6 +20,7 @@ use evm_loader::{
         Contract
     },
     config::{ token_mint, collateral_pool_base },
+    compute_budget,
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -693,11 +694,6 @@ fn get_ethereum_contract_account_credentials(
     debug!("Create code account: {}", &program_code.to_string());
 
     (program_id, program_ether, program_nonce, program_token, program_code, program_seed)
-}
-
-/// COMPUTE BUDGET ID
-pub mod compute_budget {
-    solana_program::declare_id!("ComputeBudget111111111111111111111111111111");
 }
 
 #[allow(clippy::too_many_arguments)]

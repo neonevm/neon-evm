@@ -33,6 +33,12 @@ pub mod token;
 pub mod system;
 pub mod precompile_contracts;
 
+/// COMPUTE BUDGET ID
+pub mod compute_budget {
+    solana_program::declare_id!("ComputeBudget111111111111111111111111111111");
+}
+
+
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
 pub use solana_program;
