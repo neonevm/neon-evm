@@ -1170,8 +1170,24 @@ fn command_cancel_trx(
             println!("\t{:?}", meta);
         }
         
-        let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
-        send_transaction(config, &[instruction])?;
+        let instructions = vec![
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(0_u8.to_be_bytes(), 500_000_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(
+                compute_budget::id(),
+                &(1_u8.to_be_bytes(), 262_144_u32.to_le_bytes()),
+                vec![]
+            ),
+            Instruction::new_with_bincode(
+                config.evm_loader,
+                &(21_u8, trx_count),
+                accounts_meta
+            )
+        ];
+        send_transaction(config, &instructions)?;
 
     } else {
         return Err(format!("Account not found {}", &storage_account.to_string()).into());

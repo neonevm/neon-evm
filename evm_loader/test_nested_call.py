@@ -324,7 +324,7 @@ class EventTest(unittest.TestCase):
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
+            (part, rest) = (rest[:950], rest[950:])
             trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(holder_id, offset, part),
@@ -372,6 +372,7 @@ class EventTest(unittest.TestCase):
 
         trx = TransactionWithComputeBudget()
         self.index = len(trx.instructions)
+        # trx.add(self.sol_instr_keccak(make_keccak_instruction_data(len(trx.instructions)+1, len(msg), 13)))
         trx.add(self.sol_instr_22_partial_call_from_account(self.holder, self.storage, 0, contract, code))
         send_transaction(http_client, trx, self.acc)
 
@@ -379,7 +380,7 @@ class EventTest(unittest.TestCase):
             print("Continue")
             trx = TransactionWithComputeBudget()
             self.index = len(trx.instructions)
-            trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
+            trx.add(self.sol_instr_20_continue(self.storage, 100, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):
@@ -558,61 +559,7 @@ class EventTest(unittest.TestCase):
             print('response:', response)
         neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
-        print('Check zero balance of code account:', self.reId_create_receiver_code_account)
-        self.assertEqual(get_recent_account_balance(self.reId_create_receiver_code_account), 0)
-        print('Ok: balance of code account is zero')
-        print('Create code account:', self.reId_create_receiver_code_account)
-        self.create_code_account_if_zero_balance(self.reId_create_receiver_seed, self.reId_create_receiver_code_account)
-        self.assertGreater(get_recent_account_balance(self.reId_create_receiver_code_account), 0)
-        print('Ok: code account has been created')
-
-        print('Check zero balance of code owner account:', self.reId_create_receiver)
-        self.assertEqual(get_recent_account_balance(self.reId_create_receiver), 0)
-        print('Ok: balance of code owner account is zero')
-        print('Create code owner account:', self.reId_create_receiver)
-        self.create_code_owner_account_if_zero_balance(self.reId_create_receiver, self.reId_create_receiver_eth, self.reId_create_receiver_code_account)
-        self.assertGreater(get_recent_account_balance(self.reId_create_receiver), 0)
-        print('Ok: code owner account has been created')
-
-        contract_nonce_pre = getTransactionCount(http_client, self.reId_create_caller)
-
-        print('Call creator() with holder account:')
-        result = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
-        print('result:', result)
-
-        contract_nonce_post = getTransactionCount(http_client, self.reId_create_caller)
-        # Nonce increased on create other contract from contract
-        self.assertEqual(contract_nonce_pre + 1, contract_nonce_post)
-
-        self.assertEqual(result['meta']['err'], None)
-        self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
-
-        # emit Foo(caller, amount, message)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
-        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
-        self.assertEqual(data[1:21], self.reId_create_receiver_eth)
-        count_topics = int().from_bytes(data[21:29], 'little')
-        self.assertEqual(count_topics, 1)
-        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Foo(address,uint256,string)'))
-        self.assertEqual(data[61:93], bytes.fromhex("%024x" %0x0 + self.reId_create_caller_eth.hex()))
-        self.assertEqual(data[93:125], bytes.fromhex("%064x" %0x0))
-        self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "60"))
-        self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "08"))
-        s = "call foo".encode("utf-8")
-        self.assertEqual(data[189:221], bytes.fromhex('{:0<64}'.format(s.hex())))
-
-        # emit Result_foo(result)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
-        self.assertEqual(data[:1], b'\x07') # 7 means OnEvent
-        self.assertEqual(data[1:21], self.reId_create_caller_eth)
-        count_topics = int().from_bytes(data[21:29], 'little')
-        self.assertEqual(count_topics, 1)
-        self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
-        self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
-
-    @unittest.skip("a.i.")
+    # @unittest.skip("a.i.")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
