@@ -135,7 +135,7 @@ cfg_if! {
         pub mod token_mint {
             use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
 
-            declare_param_id!(NEON_TOKEN_MINT, "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g");
+            declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
             /// Ethereum account version
             pub const DECIMALS: u8 = 9;
 
@@ -148,7 +148,7 @@ cfg_if! {
         pub mod collateral_pool_base {
             use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
 
-            declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
+            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";

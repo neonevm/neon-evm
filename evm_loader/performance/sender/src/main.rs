@@ -308,9 +308,10 @@ fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &P
     let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
     let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
     let system = Pubkey::from_str("11111111111111111111111111111111").unwrap();
-    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &evm_loader::config::token_mint::id());
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &evm_loader::config::token_mint::id());
-    let operator_token = spl_associated_token_account::get_associated_token_address(&operator_sol, &evm_loader::config::token_mint::id());
+    let token_id = Pubkey::from_str("89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g").unwrap();
+    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &token_id);
+    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &token_id);
+    let operator_token = spl_associated_token_account::get_associated_token_address(&operator_sol, &token_id);
     let collateral_pool_acc = Pubkey::from_str(collateral.account.as_str()).unwrap();
 
     let mut acc_meta = vec![
@@ -329,7 +330,7 @@ fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &P
         AccountMeta::new(caller_token, false),
 
         AccountMeta::new_readonly(*evm_loader_key, false),
-        AccountMeta::new_readonly(evm_loader::config::token_mint::id(), false),
+        AccountMeta::new_readonly(token_id, false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvarclock, false),
     ];
