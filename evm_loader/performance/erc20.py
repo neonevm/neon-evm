@@ -3,6 +3,7 @@ import json
 from tools import *
 from spl_ import mint_spl
 from uniswap import mint_and_approve_swap
+from solana.system_program import TransferParams, transfer
 
 erc20_factory_path = "contracts/Factory.binary"
 
@@ -507,21 +508,28 @@ def create_senders(args):
         while total < args.count:
             print("create sender", total)
             acc = Account()
-            airdrop_res = client.request_airdrop(acc.public_key(), 1000 * 10 ** 9, commitment=Confirmed)
-            tx_token = Transaction()
+            param = TransferParams()
+            param.from_pubkey = instance.acc.public_key()
+            param.to_pubkey = acc.public_key()
+            param.lamports = 1000000
+            tx_transfer = Transaction()
+            tx_transfer.add(transfer(param))
+            transfer_res = client.send_transaction(tx_transfer, instance.acc,
+                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
+            tx_token = Transaction()
             tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
             token_res = client.send_transaction(tx_token, instance.acc,
                                           opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
 
-            receipt_list.append((airdrop_res['result'], token_res['result'], acc))
+            receipt_list.append((transfer_res['result'], token_res['result'], acc))
 
             if total % 500 == 0 or total == args.count - 1:
-                for (airdrop_receipt, token_receipt, acc) in receipt_list:
-                    confirm_transaction(client, airdrop_receipt)
+                for (transfer_receipt, token_receipt, acc) in receipt_list:
+                    confirm_transaction(client, transfer_receipt)
                     confirm_transaction(client, token_receipt)
                     if getBalance(acc.public_key()) == 0:
-                        print("request_airdrop error", str(acc.public_key()))
+                        print("error", str(acc.public_key()))
                         exit(0)
                     keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
                     f.write(keypair + "\n")
