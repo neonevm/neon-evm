@@ -1,6 +1,6 @@
 from tools import  *
 
-def mint_spl(accounts, instance, key):
+def mint_spl(accounts, key):
     if key == '':
         print("args.key is empty")
         return
