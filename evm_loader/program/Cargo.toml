@@ -22,7 +22,7 @@ custom-heap = []
 default = ["custom-heap"]
 
 [dependencies]
-solana-program = { version = "1.7.9", default_features = false }
+solana-program = { version = "1.8.2", default_features = false }
 spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
 #num-bigint = "0.4"
@@ -52,8 +52,8 @@ cfg-if = { version = "0.1" }
 
 [dev-dependencies]
 rand = { version = "0.7.0"}
-solana-program-test = "1.7.9"
-solana-sdk = "1.7.9"
+solana-program-test = "1.8.2"
+solana-sdk = "1.8.2"
 
 [lib]
 crate-type = ["cdylib", "lib"]

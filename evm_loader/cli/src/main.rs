@@ -20,7 +20,6 @@ use evm_loader::{
         Contract
     },
     config::{ token_mint, collateral_pool_base },
-    compute_budget,
 };
 
 use evm::{H160, H256, U256, ExitReason,};
@@ -38,6 +37,7 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
+    compute_budget,
 };
 use serde_json::json;
 use std::{

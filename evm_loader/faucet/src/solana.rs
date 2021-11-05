@@ -16,12 +16,9 @@ use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::{system_program, sysvar};
+use solana_sdk::compute_budget;
 
 use crate::{config, ethereum};
-
-use evm_loader::{
-    compute_budget
-};
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
