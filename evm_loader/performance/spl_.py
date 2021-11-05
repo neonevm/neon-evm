@@ -1,11 +1,11 @@
 from tools import  *
 
 def mint_spl(accounts, key):
-    instance = init_wallet()
     if key == '':
         print("args.key is empty")
         exit(1)
 
+    print(key)
     wallet = OperatorAccount(key).get_acc()
 
 
@@ -28,15 +28,16 @@ def mint_spl(accounts, key):
                 keys=[
                     AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=dest, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=instance.acc.public_key(), is_signer=True, is_writable=False),
+                    AccountMeta(pubkey=wallet.public_key(), is_signer=True, is_writable=False),
                 ]))
 
-        res = client.send_transaction(trx, instance.acc,
+        res = client.send_transaction(trx, wallet,
                                       opts=TxOpts(skip_confirmation=True, skip_preflight=True,
                                                   preflight_commitment="confirmed"))
         receipt_list.append((acc_eth_hex, res["result"]))
 
-        if total % 100 == 0 or total == len(accounts) - 1:
+        total = total + 1
+        if total % 100 == 0 or total == len(accounts):
             for (acc_eth_hex, receipt) in receipt_list:
                 confirm_transaction(client, receipt)
                 res = client.get_confirmed_transaction(receipt)
@@ -46,7 +47,6 @@ def mint_spl(accounts, key):
                 else:
                     account_minted.append(acc_eth_hex)
             receipt_list = []
-        total = total + 1
 
 
     event_error = 0
