@@ -515,7 +515,7 @@ def create_senders(args):
             res = client.send_transaction(tx, instance.acc,
                                           opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
 
-            receipt_list.append(res['result'], acc)
+            receipt_list.append((res['result'], acc))
 
             if total % 50 == 0 or total == args.count - 1:
                 for (receipt, acc) in receipt_list:
