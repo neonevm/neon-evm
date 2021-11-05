@@ -21,7 +21,8 @@ from spl.token._layouts import INSTRUCTIONS_LAYOUT, InstructionType  # type: ign
 evm_loader_id = os.environ.get("EVM_LOADER")
 trx_cnt = os.environ.get("CNT", 10)
 
-chain_id = 111
+# chain_id = 111 
+chain_id = 245022940
 transfer_sum = 1
 
 sysinstruct = "Sysvar1nstructions1111111111111111111111111"
