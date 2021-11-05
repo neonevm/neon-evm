@@ -21,8 +21,8 @@ def mint_spl(accounts, key, instance):
             program_id = TOKEN_PROGRAM_ID,
             source = instance.wallet_token,
             dest = dest,
-            owner = wallet.public_key(),
-            amount=1
+            owner = instance.acc.public_key(),
+            amount=10**9
         )
         trx = Transaction()
         trx.add(spl_token.transfer(param))
