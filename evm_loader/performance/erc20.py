@@ -509,22 +509,17 @@ def create_senders(args):
             print("create sender", total)
             acc = Account()
             param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=1000000)
-            tx_transfer = Transaction()
-            tx_transfer.add(transfer(param))
-            transfer_res = client.send_transaction(tx_transfer, instance.acc,
-                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
+            tx = Transaction()
+            tx.add(transfer(param))
+            tx.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
+            res = client.send_transaction(tx, instance.acc,
+                                          opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
 
-            tx_token = Transaction()
-            tx_token.add(create_associated_token_account(instance.acc.public_key(), acc.public_key(), ETH_TOKEN_MINT_ID))
-            token_res = client.send_transaction(tx_token, instance.acc,
-                                          opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))
-
-            receipt_list.append((transfer_res['result'], token_res['result'], acc))
+            receipt_list.append(res['result'], acc)
 
             if total % 50 == 0 or total == args.count - 1:
-                for (transfer_receipt, token_receipt, acc) in receipt_list:
-                    confirm_transaction(client, transfer_receipt)
-                    confirm_transaction(client, token_receipt)
+                for (receipt, acc) in receipt_list:
+                    confirm_transaction(client, receipt)
                     if getBalance(acc.public_key()) == 0:
                         print("error", str(acc.public_key()))
                         exit(0)
