@@ -75,9 +75,6 @@ pub fn call_precompile<'a, B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
 ) -> Option<PrecompileResult> {
-    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input, context, state));
-    }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
     }
@@ -145,6 +142,7 @@ pub fn query_account<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
+    debug_print!("query_account({})", hex::encode(&input));
     let result = vec![0_u8; 32];
     Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
 }
