@@ -52,8 +52,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
-           *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
-        || *address == SYSTEM_ACCOUNT_ECRECOVER
+           *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_DATACOPY
@@ -62,6 +61,8 @@ pub fn is_precompile_address(address: &H160) -> bool {
         || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
         || *address == SYSTEM_ACCOUNT_BN256_PAIRING
         || *address == SYSTEM_ACCOUNT_BLAKE2F
+        || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+        || *address == SYSTEM_ACCOUNT_QUERY
 }
 
 type PrecompileResult = Capture<(ExitReason, Vec<u8>), Infallible>;
@@ -104,6 +105,12 @@ pub fn call_precompile<'a, B: AccountStorage>(
     if address == SYSTEM_ACCOUNT_BLAKE2F {
         return Some(blake2_f(input, state));
     }
+    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
+        return Some(erc20_wrapper(input, context, state));
+    }
+    if address == SYSTEM_ACCOUNT_QUERY {
+        return Some(query_account(input, context, state));
+    }
 
     None
 }
@@ -128,6 +135,19 @@ const ERC20_METHOD_TRANSFER_FROM_ID: &[u8; 4]  = &[0x23, 0xb8, 0x72, 0xdd];
 const ERC20_METHOD_APPROVE_ID: &[u8; 4]        = &[0x09, 0x5e, 0xa7, 0xb3];
 const ERC20_METHOD_ALLOWANCE_ID: &[u8; 4]      = &[0xdd, 0x62, 0xed, 0x3e];
 const ERC20_METHOD_APPROVE_SOLANA_ID: &[u8; 4] = &[0x93, 0xe2, 0x93, 0x46];
+
+/// Call inner `query_account`
+#[must_use]
+pub fn query_account<'a, B: AccountStorage>(
+    _input: &[u8],
+    _context: &evm::Context,
+    _state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    let result = vec![0_u8; 32];
+    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+}
 
 /// Call inner `erc20_wrapper`
 #[must_use]
