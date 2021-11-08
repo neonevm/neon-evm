@@ -94,37 +94,42 @@ def verify_trx_spl(args):
 
 def create_transactions_spl(args):
 
-    with open(accounts_file+args.postfix, mode='r') as accounts:
-        with open(transactions_file + args.postfix, mode='w') as f:
 
-            total = 0
-            ia = iter(accounts)
+    accounts = []
+    with open(accounts_file+args.postfix, mode='r') as f:
+        for line in f:
+            accounts.append(line)
 
-            while total < args.count:
-                (payer_eth, payer_prkey, payer_sol) = get_acc(accounts, ia)
-                (receiver_eth, _, receiver_sol) = get_acc(accounts, ia)
+    with open(transactions_file + args.postfix, mode='w') as f:
 
-                total = total + 1
-                (from_addr, sign,  msg) = get_trx(
-                    bytes().fromhex(receiver_eth),
-                    payer_sol,
-                    bytes().fromhex(payer_eth),
-                    "",
-                    bytes.fromhex(payer_prkey),
-                    transfer_sum*10**9
-                )
-                trx = {}
-                trx['from_addr'] = from_addr.hex()
-                trx['sign'] = sign.hex()
-                trx['msg']  = msg.hex()
-                trx['erc20_sol'] = receiver_sol
-                trx['erc20_eth'] = receiver_eth
-                trx['erc20_code'] = ""
-                trx['payer_sol'] = payer_sol
-                trx['payer_eth'] = payer_eth
-                trx['receiver_eth'] = receiver_eth
+        total = 0
+        ia = iter(accounts)
 
-                f.write(json.dumps(trx)+"\n")
+        while total < args.count:
+            (payer_eth, payer_prkey, payer_sol) = get_acc(accounts, ia)
+            (receiver_eth, _, receiver_sol) = get_acc(accounts, ia)
+
+            total = total + 1
+            (from_addr, sign,  msg) = get_trx(
+                bytes().fromhex(receiver_eth),
+                payer_sol,
+                bytes().fromhex(payer_eth),
+                "",
+                bytes.fromhex(payer_prkey),
+                transfer_sum*10**9
+            )
+            trx = {}
+            trx['from_addr'] = from_addr.hex()
+            trx['sign'] = sign.hex()
+            trx['msg']  = msg.hex()
+            trx['erc20_sol'] = receiver_sol
+            trx['erc20_eth'] = receiver_eth
+            trx['erc20_code'] = ""
+            trx['payer_sol'] = payer_sol
+            trx['payer_eth'] = payer_eth
+            trx['receiver_eth'] = receiver_eth
+
+            f.write(json.dumps(trx)+"\n")
 
 
 def create_account_spl(args):
