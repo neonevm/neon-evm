@@ -371,6 +371,12 @@ fn create_trx(
     let mut collateral_file = File::open(collateral_filename)?;
     let collateral_reader= BufReader::new(collateral_file);
 
+    let blockhash : solana_program::hash::Hash;
+    match (rpc_client.get_recent_blockhash()){
+        Ok((hash,_)) => blockhash = hash,
+        _ => panic!("get_recent_blockhash() error")
+    }
+
     for line in trx_reader.lines(){
 
         let mut keypair_bin : &Vec<u8>;
@@ -416,12 +422,6 @@ fn create_trx(
             Some(&keypair_pubkey)
         );
         let mut tx = Transaction::new_unsigned(message);
-
-        let blockhash : solana_program::hash::Hash;
-        match (rpc_client.get_recent_blockhash()){
-            Ok((hash,_)) => blockhash = hash,
-            _ => panic!("get_recent_blockhash() error")
-        }
 
         tx.try_sign(&[&*signer] , blockhash)?;
         transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
