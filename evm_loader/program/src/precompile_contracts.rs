@@ -9,6 +9,8 @@ use evm::{Capture, ExitReason, H160, U256};
 use solana_program::secp256k1_recover::secp256k1_recover;
 use std::convert::{TryInto};
 
+const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -18,8 +20,6 @@ const SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
 const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
-const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 
 const GAS_COST_ECRECOVER: u64 = 3000;
 const GAS_COST_SHA256_BASE: u64 = 60;
@@ -52,7 +52,9 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
-           *address == SYSTEM_ACCOUNT_ECRECOVER
+           *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+        || *address == SYSTEM_ACCOUNT_QUERY
+        || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
         || *address == SYSTEM_ACCOUNT_DATACOPY
@@ -61,8 +63,6 @@ pub fn is_precompile_address(address: &H160) -> bool {
         || *address == SYSTEM_ACCOUNT_BN256_SCALAR_MUL
         || *address == SYSTEM_ACCOUNT_BN256_PAIRING
         || *address == SYSTEM_ACCOUNT_BLAKE2F
-        || *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
-        || *address == SYSTEM_ACCOUNT_QUERY
 }
 
 type PrecompileResult = Capture<(ExitReason, Vec<u8>), Infallible>;
@@ -75,6 +75,12 @@ pub fn call_precompile<'a, B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
 ) -> Option<PrecompileResult> {
+    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
+        return Some(erc20_wrapper(input, context, state));
+    }
+    if address == SYSTEM_ACCOUNT_QUERY {
+        return Some(query_account(input, context, state));
+    }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
     }
@@ -102,12 +108,6 @@ pub fn call_precompile<'a, B: AccountStorage>(
     if address == SYSTEM_ACCOUNT_BLAKE2F {
         return Some(blake2_f(input, state));
     }
-    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input, context, state));
-    }
-    if address == SYSTEM_ACCOUNT_QUERY {
-        return Some(query_account(input, context, state));
-    }
 
     None
 }
@@ -132,20 +132,6 @@ const ERC20_METHOD_TRANSFER_FROM_ID: &[u8; 4]  = &[0x23, 0xb8, 0x72, 0xdd];
 const ERC20_METHOD_APPROVE_ID: &[u8; 4]        = &[0x09, 0x5e, 0xa7, 0xb3];
 const ERC20_METHOD_ALLOWANCE_ID: &[u8; 4]      = &[0xdd, 0x62, 0xed, 0x3e];
 const ERC20_METHOD_APPROVE_SOLANA_ID: &[u8; 4] = &[0x93, 0xe2, 0x93, 0x46];
-
-/// Call inner `query_account`
-#[must_use]
-pub fn query_account<'a, B: AccountStorage>(
-    _input: &[u8],
-    _context: &evm::Context,
-    _state: &mut ExecutorState<'a, B>
-)
-    -> Capture<(ExitReason, Vec<u8>), Infallible>
-{
-    debug_print!("query_account({})", hex::encode(&input));
-    let result = vec![0_u8; 32];
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
-}
 
 /// Call inner `erc20_wrapper`
 #[must_use]
@@ -297,6 +283,19 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     }
 }
 
+/// Call inner `query_account`
+#[must_use]
+pub fn query_account<'a, B: AccountStorage>(
+    input: &[u8],
+    _context: &evm::Context,
+    _state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    debug_print!("query_account({})", hex::encode(&input));
+    let result = vec![1_u8; 32];
+    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+}
 
 /// Call inner `ecrecover`
 #[must_use]
