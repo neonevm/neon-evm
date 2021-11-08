@@ -398,3 +398,20 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_no
 
 
 
+def confirm_transaction_(http_client, tx_sig, confirmations=0):
+    """Confirm a transaction."""
+    TIMEOUT = 5  # 30 seconds pylint: disable=invalid-name
+    elapsed_time = 0
+    while elapsed_time < TIMEOUT:
+        # print('confirm_transaction for %s', tx_sig)
+        resp = http_client.get_signature_statuses([tx_sig])
+        # print('confirm_transaction: %s', resp)
+        if resp["result"]:
+            status = resp['result']['value'][0]
+            if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
+                           and status['confirmations'] >= confirmations):
+                return
+        sleep_time = 0.1
+        time.sleep(sleep_time)
+        elapsed_time += sleep_time
+    raise RuntimeError("could not confirm transaction: ", tx_sig)

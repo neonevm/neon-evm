@@ -500,13 +500,10 @@ def create_senders(args):
     instance = init_wallet()
 
     total = 0
+    confirmed = 0
     receipt_list = []
-    accounts = []
-
-    with open(senders_file + args.postfix, mode='w') as f:
-
+    with open(senders_file + args.postfix, mode='a') as f:
         while total < args.count:
-            print("create sender", total)
             acc = Account()
             param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=1000000)
             tx = Transaction()
@@ -517,22 +514,22 @@ def create_senders(args):
 
             receipt_list.append((res['result'], acc))
 
-            if total % 50 == 0 or total == args.count - 1:
-                for (receipt, acc) in receipt_list:
-                    confirm_transaction(client, receipt)
-                    if getBalance(acc.public_key()) == 0:
-                        print("error", str(acc.public_key()))
-                        exit(0)
-                    keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
-                    f.write(keypair + "\n")
-                    accounts.append((acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID)))
-                receipt_list = []
             total = total + 1
+            if total % 50 == 0 or total == args.count:
+                for (receipt, acc) in receipt_list:
+                    try:
+                        confirm_transaction_(client, receipt)
+                        confirmed = confirmed + 1
+                        print(f"sender {confirmed} ", end='')
+                        keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
+                        f.write(keypair + "\n")
+                        print(acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID))
+                    except:
+                        print(f"transaction is lost {receipt}")
+                receipt_list = []
 
-        for (acc,token) in accounts:
-            print(acc, token)
-
-    print("\ntotal: ", total)
+    print("\nconfirmed: ", confirmed)
+    print("total: ", total)
 
 
 
@@ -544,39 +541,44 @@ def create_collateral_pool(args):
 
     total = 0
     receipt_list = []
-    to_file= []
     minimum_balance = client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
 
-    while total < args.count:
-        print("create collateral pool", total)
-        seed = "collateral_seed_" + str(total)
-        acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
+    with open(collateral_file + args.postfix, mode="a") as f:
+        while total < args.count:
+            to_file = []
+            print("create collateral pool", total)
+            seed = "collateral_seed_" + str(total)
+            acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
 
-        if getBalance(acc) == 0:
-            print("Creating...")
-            trx = Transaction()
-            trx.add(
-                createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance,
-                                      0, PublicKey(evm_loader_id)))
-            res = client.send_transaction(trx, wallet,
-                                          opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
-            receipt_list.append((res['result'], acc, total))
-        else:
-            to_file.append((acc, total))
+            if getBalance(acc) == 0:
+                print("Creating...")
+                trx = Transaction()
+                trx.add(
+                    createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance,
+                                          0, PublicKey(evm_loader_id)))
+                res = client.send_transaction(trx, wallet,
+                                              opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
+                receipt_list.append((res['result'], acc, total))
+            else:
+                to_file.append((acc, total))
 
-        if total % 50 == 0 or total == args.count - 1:
-            for (receipt, acc, index) in receipt_list:
-                confirm_transaction(client, receipt)
-                to_file.append((acc, index))
-            receipt_list = []
-        total = total + 1
+            total = total + 1
+            if total % 50 == 0 or total == args.count:
+                for (receipt, acc, index) in receipt_list:
+                    try:
+                        confirm_transaction_(client, receipt)
+                        to_file.append((acc, index))
+                    except:
+                        print(f"transaction is lost {receipt}")
 
-    with open(collateral_file + args.postfix, mode="w") as f:
-        for (acc, index) in to_file:
-            print(acc ,index)
-            pool = {}
-            pool['account'] = str(acc)
-            pool['index'] = index
-            f.write(json.dumps(pool) + "\n")
+                receipt_list = []
+
+
+            for (acc, index) in to_file:
+                print(acc, index)
+                pool = {}
+                pool['account'] = str(acc)
+                pool['index'] = index
+                f.write(json.dumps(pool) + "\n")
 
     print("\ntotal: ", total)

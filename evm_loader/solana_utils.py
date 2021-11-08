@@ -261,7 +261,7 @@ class OperatorAccount:
             self.path = path
         self.retrieve_keys()
         print('Public key:', self.acc.public_key())
-        print('Private key:', self.acc.secret_key())
+        print('Private key:', self.acc.secret_key().hex())
 
     def retrieve_keys(self):
         with open(self.path) as f:
