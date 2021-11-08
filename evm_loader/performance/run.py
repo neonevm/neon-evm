@@ -18,7 +18,10 @@ args = parser.parse_args()
 if args.step == "deploy_erc20":
     deploy_erc20(args)
 elif args.step == "create_acc":
-    create_accounts(args)
+    if args.type == "spl":
+        create_account_spl(args)
+    else:
+        create_accounts(args)
 elif args.step == "create_trx":
     if args.type == "spl":
         create_transactions_spl(args)

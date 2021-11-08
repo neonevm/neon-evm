@@ -232,7 +232,7 @@ def create_accounts(args):
 
     while confirmed < args_count:
     # for i in range(args_count):
-        print("create ethereum acc ", i)
+    #     print("create ethereum acc ", i)
 
         pr_key = w3.eth.account.from_key(os.urandom(32))
         acc_eth = bytes().fromhex(pr_key.address[2:])
@@ -245,7 +245,7 @@ def create_accounts(args):
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
         total = total + 1
-        if total % 50 == 0 or total == args_count:
+        if total % 50 == 0 :
             for (acc_eth_hex, acc_sol, receipt) in receipt_list:
                 try:
                     confirm_transaction_(client, receipt)
@@ -559,7 +559,7 @@ def create_collateral_pool(args):
             acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
 
             if getBalance(acc) == 0:
-                print("Creating...")
+                print("Creating...", total)
                 trx = Transaction()
                 trx.add(
                     createAccountWithSeed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance,

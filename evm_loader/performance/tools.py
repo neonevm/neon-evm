@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 from time import sleep
 
@@ -375,11 +376,13 @@ def found_revert(res):
 
 def get_acc(accounts, ia):
     try:
-        (payer_eth, payer_prkey, payer_sol) = next(ia)
+        line = next(ia)
     except StopIteration as err:
         ia = iter(accounts)
-        (payer_eth, payer_prkey, payer_sol) = next(ia)
-    return (payer_eth, payer_prkey, payer_sol)
+        line = next(ia)
+
+    info = json.loads(line)
+    return (info["address"], info["pr_key"], info["account"])
 
 
 def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_nonce_counter=True):
