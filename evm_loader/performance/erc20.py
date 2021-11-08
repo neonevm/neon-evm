@@ -224,11 +224,14 @@ def create_accounts(args):
     receipt_list = []
     pr_key_list = {}
 
+    total = 0
+    confirmed = 0
     args_count = args.count
     if args.type == "spl":
         args_count = args_count * 2  # one transaction needs two accounts
 
-    for i in range(args_count):
+    while confirmed < args_count:
+    # for i in range(args_count):
         print("create ethereum acc ", i)
 
         pr_key = w3.eth.account.from_key(os.urandom(32))
@@ -241,15 +244,21 @@ def create_accounts(args):
         receipt_list.append((acc_eth.hex(), acc_sol, res['result']))
         pr_key_list[acc_eth.hex()] = (acc_sol, pr_key.privateKey.hex()[2:])
 
-        if i % 50 == 0 or i == args_count - 1:
+        total = total + 1
+        if total % 50 == 0 or total == args_count:
             for (acc_eth_hex, acc_sol, receipt) in receipt_list:
-                confirm_transaction(client, receipt)
-                res = client.get_confirmed_transaction(receipt)
-                if res['result'] == None:
-                    print("createEtherAccount, get_confirmed_transaction() error")
-                else:
-                    print(acc_eth_hex, acc_sol)
-                    ether_accounts.append((acc_eth_hex, acc_sol))
+                try:
+                    confirm_transaction_(client, receipt)
+                    res = client.get_confirmed_transaction(receipt)
+                    if res['result'] == None:
+                        print("createEtherAccount, get_confirmed_transaction() error")
+                    else:
+                        print(acc_eth_hex, acc_sol)
+                        ether_accounts.append((acc_eth_hex, acc_sol))
+                        confirmed = confirmed + 1;
+                except:
+                    print(f"transaction is lost {receipt}")
+
             receipt_list = []
 
 
@@ -503,7 +512,7 @@ def create_senders(args):
     confirmed = 0
     receipt_list = []
     with open(senders_file + args.postfix, mode='a') as f:
-        while confirmed  <= args.count:
+        while confirmed < args.count:
             acc = Account()
             param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=1000000)
             tx = Transaction()
@@ -515,17 +524,14 @@ def create_senders(args):
             receipt_list.append((res['result'], acc))
 
             total = total + 1
-            if total % 50 == 0 or total == args.count:
+            if total % 50 == 0:
                 for (receipt, acc) in receipt_list:
                     try:
                         confirm_transaction_(client, receipt)
                         confirmed = confirmed + 1
-                        print(f"sender {confirmed} ", end='')
                         keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
                         f.write(keypair + "\n")
-                        print(acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID))
-                        if confirmed  == args.count:
-                            break
+                        print(f"confirmed {confirmed} ", acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID))
                     except:
                         print(f"transaction is lost {receipt}")
                 receipt_list = []
@@ -542,13 +548,13 @@ def create_collateral_pool(args):
     wallet = OperatorAccount(args.key).get_acc()
 
     total = 0
+    confirmed = 0
     receipt_list = []
     minimum_balance = client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
 
     with open(collateral_file + args.postfix, mode="a") as f:
-        while total < args.count:
+        while True:
             to_file = []
-            print("create collateral pool", total)
             seed = "collateral_seed_" + str(total)
             acc =  accountWithSeed(PublicKey(collateral_pool_base), seed, PublicKey(evm_loader_id))
 
@@ -563,18 +569,19 @@ def create_collateral_pool(args):
                 receipt_list.append((res['result'], acc, total))
             else:
                 to_file.append((acc, total))
+                confirmed = confirmed + 1
 
             total = total + 1
-            if total % 50 == 0 or total == args.count:
+            if total % 50 == 0:
                 for (receipt, acc, index) in receipt_list:
                     try:
                         confirm_transaction_(client, receipt)
+                        confirmed = confirmed + 1
                         to_file.append((acc, index))
                     except:
                         print(f"transaction is lost {receipt}")
 
                 receipt_list = []
-
 
             for (acc, index) in to_file:
                 print(acc, index)
@@ -583,4 +590,8 @@ def create_collateral_pool(args):
                 pool['index'] = index
                 f.write(json.dumps(pool) + "\n")
 
-    print("\ntotal: ", total)
+            if confirmed >= args.count:
+                break
+
+    print("\nconfirmed: ", confirmed)
+    print("total: ", total)
