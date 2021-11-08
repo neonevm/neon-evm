@@ -176,11 +176,10 @@ def create_account_spl(args):
                             line['pr_key'] = pr_key
                             line['account'] = acc_sol
                             f.write(json.dumps(line) + "\n")
-
                             confirmed = confirmed + 1;
                     except:
                         print(f"transaction is lost {receipt}")
-
+                        break # cancel all bucket
                 receipt_list = []
 
     print("\nconfirmed:", confirmed)
