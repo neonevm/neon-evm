@@ -400,7 +400,7 @@ def get_trx(contract_eth, caller, caller_eth, input, pr_key, value, use_local_no
 
 def confirm_transaction_(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
-    TIMEOUT = 5  # 30 seconds pylint: disable=invalid-name
+    TIMEOUT = 30  # 30 seconds pylint: disable=invalid-name
     elapsed_time = 0
     while elapsed_time < TIMEOUT:
         # print('confirm_transaction for %s', tx_sig)

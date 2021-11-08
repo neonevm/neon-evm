@@ -503,7 +503,7 @@ def create_senders(args):
     confirmed = 0
     receipt_list = []
     with open(senders_file + args.postfix, mode='a') as f:
-        while total < args.count:
+        while confirmed  <= args.count:
             acc = Account()
             param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=1000000)
             tx = Transaction()
@@ -524,6 +524,8 @@ def create_senders(args):
                         keypair = acc.secret_key().hex() + bytes(acc.public_key()).hex()
                         f.write(keypair + "\n")
                         print(acc.public_key(), get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID))
+                        if confirmed  == args.count:
+                            break
                     except:
                         print(f"transaction is lost {receipt}")
                 receipt_list = []
