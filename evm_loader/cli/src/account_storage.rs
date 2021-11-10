@@ -243,11 +243,12 @@ impl<'a> EmulatorAccountStorage<'a> {
         if accounts.get(address).is_none() {
             let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
             if let Some((acc, balance, code_account)) = Self::get_account_from_solana(self.config, address) {
+                eprintln!("Solana account found {:?}", address);
                 accounts.insert(*address, SolanaAccount::new(acc, solana_address, balance, code_account));
                 true
             }
             else {
-                eprintln!("Account not found {}", &address.to_string());
+                eprintln!("Solana account not found {:?}", address);
                 new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
                 false
             }
@@ -396,7 +397,9 @@ impl<'a> EmulatorAccountStorage<'a> {
     pub fn apply_spl_transfers(&self, transfers: Vec<SplTransfer>) {
         let mut token_accounts = self.token_accounts.borrow_mut();
         for transfer in transfers {
+            eprintln!("creating the source acc {:?}", transfer.source);
             self.create_acc_if_not_exists(&transfer.source);
+            eprintln!("creating the target acc {:?}", transfer.target);
             self.create_acc_if_not_exists(&transfer.target);
 
             let (contract_solana_address, _) = make_solana_program_address(&transfer.contract, &self.config.evm_loader);
@@ -432,6 +435,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut token_accounts = self.token_accounts.borrow_mut();
 
         for approve in approves {
+            eprintln!("creating the owner acc {:?}", approve.owner);
             self.create_acc_if_not_exists(&approve.owner);
 
             let (contract_solana_address, _) = make_solana_program_address(&approve.contract, &self.config.evm_loader);
@@ -466,6 +470,25 @@ impl<'a> EmulatorAccountStorage<'a> {
 
             solana_accounts.insert(address, AccountMeta::new(address, false));
         }
+    }
+
+    pub fn apply_transfers(&self, transfers: Vec<evm::Transfer>) {
+        eprintln!("apply_transfers {:?}", transfers);
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+
+        for transfer in transfers {
+            let (source_solana_address, _solana_nonce) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
+            solana_accounts.insert(source_solana_address, AccountMeta::new(source_solana_address, false));
+            eprintln!("apply_transfer source={:?}", source_solana_address);
+            self.create_acc_if_not_exists(&transfer.source);
+
+            let (target_solana_address, _solana_nonce) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
+            solana_accounts.insert(target_solana_address, AccountMeta::new(target_solana_address, false));
+            eprintln!("apply_transfer target={:?}", target_solana_address);
+            self.create_acc_if_not_exists(&transfer.target);
+        }
+
+        eprintln!("apply_transfers done");
     }
 
     pub fn get_used_accounts(&self) -> Vec<AccountJSON>
@@ -529,6 +552,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     where F: FnOnce(&SolidityAccount) -> U,
           D: FnOnce() -> U
     {
+        eprintln!("creating the acc {:?}", address);
         self.create_acc_if_not_exists(address);
         let accounts = self.accounts.borrow();
         match accounts.get(address) {

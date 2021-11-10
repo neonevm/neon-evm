@@ -211,12 +211,13 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
+            let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
     
             storage.apply(applies);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
+            storage.apply_transfers(transfers);
 
             debug!("Applies done");
             "succeed".to_string()
