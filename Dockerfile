@@ -64,7 +64,12 @@ COPY --from=evm-loader-builder /opt/evm_loader/target/release/sender /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
-COPY evm_loader/*.py evm_loader/deploy-test.sh evm_loader/test_token_keypair evm_loader/test_token_owner evm_loader/test_token_config.yml /opt/
+COPY evm_loader/*.py \
+    wait-for-solana.sh \
+    create-test-accounts.sh \
+    deploy-evm.sh \
+    deploy-test.sh \
+    evm_loader/neon_token_keypair /opt/
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
