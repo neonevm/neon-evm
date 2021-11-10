@@ -12,7 +12,7 @@ solana config set -u "$SOLANA_URL"
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
 export $(neon-cli --evm_loader="$EVM_LOADER" neon-elf-params ./evm_loader.so)
 
-export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair)
+export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair.json)
 if [ "$ETH_TOKEN_MINT" != "$NEON_TOKEN_MINT" ]; then
   echo "Token address in evm_loader.so is $NEON_TOKEN_MINT"
   echo "Token address in neon_token_keypair is  $ETH_TOKEN_MINT"
@@ -22,7 +22,7 @@ fi
 
 if ! solana account "$ETH_TOKEN_MINT" >/dev/null 2>&1; then
   echo "Creating NEON token $ETH_TOKEN_MINT..."
-  if ! spl-token create-token --owner evm_loader-keypair.json -- neon_token_keypair; then
+  if ! spl-token create-token --owner evm_loader-keypair.json -- neon_token_keypair.json; then
     echo "ETH token mint is not created"
     exit 1
   fi

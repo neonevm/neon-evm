@@ -69,7 +69,7 @@ COPY evm_loader/*.py \
     create-test-accounts.sh \
     deploy-evm.sh \
     deploy-test.sh \
-    evm_loader/neon_token_keypair /opt/
+    evm_loader/neon_token_keypair.json /opt/
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/

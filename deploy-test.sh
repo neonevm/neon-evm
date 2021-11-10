@@ -11,7 +11,7 @@ fi
 echo "Deploy test..."
 ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
 ACCOUNT2=$(solana address --keypair /root/.config/solana/id2.json)
-export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair)
+export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair.json)
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
 export $(/opt/neon-cli --evm_loader "$EVM_LOADER" neon-elf-params evm_loader.so)
 
