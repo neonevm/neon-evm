@@ -365,8 +365,7 @@ fn process_instruction<'a>(
             let user_eth_info = next_account_info(account_info_iter)?;
             let system_info = next_account_info(account_info_iter)?;
 
-            // TODO: NEED TO UNCOMMENT.  THIS ONLY FOR PERFORMANCE TEST
-            // authorized_operator_check(operator_sol_info)?;
+            authorized_operator_check(operator_sol_info)?;
 
             let trx_accounts = &accounts[6..];
 
