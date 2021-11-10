@@ -553,6 +553,7 @@ class EventTest(unittest.TestCase):
         with self.assertRaisesRegex(Exception, 'Program failed to complete'):
             response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
             print('response:', response)
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
         self.assertEqual(get_recent_account_balance(self.reId_create_receiver_code_account), 0)
