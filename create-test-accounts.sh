@@ -35,11 +35,11 @@ for i in {1..$NUM_ACCOUNTS}; do
     echo "airdropping..."
     solana airdrop 5000 "$ACCOUNT"
     # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
-    BALANCE=$(solana balance -k "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
+    BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
     while [ "$BALANCE" -lt 10 ]; do
       solana airdrop 1 "$ACCOUNT"
       sleep 1
-      BALANCE=$(solana balance -k "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
+      BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
     done
   fi
 done
