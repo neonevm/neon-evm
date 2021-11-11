@@ -292,8 +292,19 @@ pub fn query_account<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    debug_print!("query_account({})", hex::encode(&input));
-    let result = vec![1_u8; 32];
+    use solana_program::pubkey::Pubkey;
+
+    let (method_id, account_address) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let account_address = Pubkey::new(account_address);
+    debug_print!("query_account method id {:?}", method_id);
+    debug_print!("query_account account address {}", account_address);
+
+    let mut result = vec![0_u8; 32 * 3];
+    result[31] = 2;
+    result[63] = 3;
+    result[95] = 4;
+
     Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
 }
 
