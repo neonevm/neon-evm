@@ -1,9 +1,9 @@
 #!/bin/bash
 set -xeuo pipefail
 
-if ! (wait-for-solana.sh "$SOLANA_URL" 20 \
-      && create-test-accounts.sh "$SOLANA_URL" 2 \
-      && deploy-evm.sh "$SOLANA_URL"); then
+if ! (wait-for-solana.sh 20 \
+      && create-test-accounts.sh 2 \
+      && deploy-evm.sh); then
   echo "Failed to start evm_loader tests"
   exit 1
 fi

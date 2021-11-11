@@ -1,12 +1,10 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "solana_url is expected. Usage:"
-  echo "     deploy-evm.sh <solana_url>"
+if [ -z "$SOLANA_URL" ]; then
+  echo "SOLANA_URL is not set"
   exit 1
 fi
 
-SOLANA_URL="$1"
 solana config set -u "$SOLANA_URL"
 
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)

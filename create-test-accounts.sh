@@ -1,21 +1,19 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "solana_url is required. Usage:"
-  echo "     create-test-accounts.sh <solana_url> <num_accounts>"
+if [ -z "$SOLANA_URL" ]; then
+  echo "SOLANA_URL is not set"
   exit 1
 fi
 
-SOLANA_URL="$1"
 solana config set -u "$SOLANA_URL"
 
-if [ -z "$2" ]; then
+if [ -z "$1" ]; then
   echo "number of account is required. Usage:"
   echo "     create-test-accounts.sh <solana_url> <num_accounts>"
   exit 2
 fi
 
-NUM_ACCOUNTS=$2
+NUM_ACCOUNTS=$1
 
 for i in {1..$NUM_ACCOUNTS}; do
   echo "Creating test account-$i"
