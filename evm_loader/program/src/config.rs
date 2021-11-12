@@ -17,9 +17,8 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
             ]
         );
 
@@ -53,6 +52,8 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
                 "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
                 "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
                 "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
@@ -89,6 +90,8 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
                 "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
                 "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
                 "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
