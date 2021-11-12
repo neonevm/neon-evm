@@ -8,8 +8,8 @@ fi
 solana config set -u "$SOLANA_URL"
 
 if [ -z "$1" ]; then
-  echo "number of account is required. Usage:"
-  echo "     create-test-accounts.sh <solana_url> <num_accounts>"
+  echo "Error: number of accounts is required. Usage:"
+  echo "     create-test-accounts.sh <num_accounts>"
   exit 2
 fi
 
