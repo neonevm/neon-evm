@@ -283,6 +283,15 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     }
 }
 
+// QueryAccount method ids:
+//-------------------------------------------------------------------
+// metadata(uint256) returns (bytes memory)             => e3684e39
+// data(uint256,uint256,uint256) returns (bytes memory) => d5374c25
+//-------------------------------------------------------------------
+
+const QUERY_ACCOUNT_METHOD_METADATA_ID: &[u8; 4] = &[227, 104, 78, 57];
+const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[213, 55, 76, 37];
+
 /// Call inner `query_account`
 #[must_use]
 pub fn query_account<'a, B: AccountStorage>(
@@ -294,18 +303,36 @@ pub fn query_account<'a, B: AccountStorage>(
 {
     use solana_program::pubkey::Pubkey;
 
-    let (method_id, account_address) = input.split_at(4);
+    let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::new(account_address);
-    debug_print!("query_account method id {:?}", method_id);
-    debug_print!("query_account account address {}", account_address);
 
-    let mut result = vec![0_u8; 32 * 3];
-    result[31] = 2;
-    result[63] = 3;
-    result[95] = 4;
-
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+    match method_id {
+        QUERY_ACCOUNT_METHOD_METADATA_ID => {
+            debug_print!("query_account get metadata {}", account_address);
+            let mut result = vec![0_u8; 32 * 3];
+            result[31] = 2;
+            result[63] = 3;
+            result[95] = 4;
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+        },
+        QUERY_ACCOUNT_METHOD_DATA_ID => {
+            let (offset, length) = rest.split_at(32);
+            let offset = U256::from_big_endian_fast(offset);
+            let length = U256::from_big_endian_fast(length);
+            debug_print!("query_account get data {} {} {}", account_address, offset, length);
+            let mut result = vec![0_u8; 32 * 3];
+            result[31] = 2;
+            result[63] = 3;
+            result[95] = 4;
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+        },
+        _ => {
+            debug_print!("query_account UNKNOWN {:?}", method_id);
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
 }
 
 /// Call inner `ecrecover`
