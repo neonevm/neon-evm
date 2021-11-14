@@ -1054,6 +1054,25 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
+    #[must_use]
+    pub fn query_solana_account_metadata(&self, address: Pubkey) -> Option<(Pubkey, usize)> {
+        let a = self.exists(H160::default());
+        if a {
+            Some((address, 0))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_data(&self, address: Pubkey, _offset: usize, _length: usize) -> Option<(Pubkey, Vec<u8>)> {
+        let a = self.exists(H160::default());
+        if a {
+            Some((address, vec![]))
+        } else {
+            None
+        }
+    }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
         Self { backend, substate }

@@ -79,7 +79,7 @@ pub fn call_precompile<'a, B: AccountStorage>(
         return Some(erc20_wrapper(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_QUERY {
-        return Some(query_account(input, context, state));
+        return Some(query_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -196,7 +196,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
 
-            let status = state.erc20_transfer(token_mint, context,address, value);
+            let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
                 let revert_message = b"ERC20 transfer failed".to_vec();
                 return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
@@ -284,20 +284,19 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 }
 
 // QueryAccount method ids:
-//-------------------------------------------------------------------
-// metadata(uint256) returns (bytes memory)             => e3684e39
-// data(uint256,uint256,uint256) returns (bytes memory) => d5374c25
-//-------------------------------------------------------------------
+//------------------------------------------
+// metadata(uint256)             => e3684e39
+// data(uint256,uint256,uint256) => d5374c25
+//------------------------------------------
 
-const QUERY_ACCOUNT_METHOD_METADATA_ID: &[u8; 4] = &[227, 104, 78, 57];
-const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[213, 55, 76, 37];
+const QUERY_ACCOUNT_METHOD_METADATA_ID: &[u8; 4] = &[0xe3, 0x68, 0x4e, 0x39];
+const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0xd5, 0x37, 0x4c, 0x25];
 
 /// Call inner `query_account`
 #[must_use]
 pub fn query_account<'a, B: AccountStorage>(
     input: &[u8],
-    _context: &evm::Context,
-    _state: &mut ExecutorState<'a, B>
+    state: &mut ExecutorState<'a, B>
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
@@ -311,22 +310,26 @@ pub fn query_account<'a, B: AccountStorage>(
     match method_id {
         QUERY_ACCOUNT_METHOD_METADATA_ID => {
             debug_print!("query_account get metadata {}", account_address);
-            let mut result = vec![0_u8; 32 * 3];
-            result[31] = 2;
-            result[63] = 3;
-            result[95] = 4;
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+            let r = state.query_solana_account_metadata(account_address);
+            if let Some(metadata) = r {
+                debug_print!("query_account metadata: {:?}", metadata);
+                let result = vec![0_u8; 1 + 32 + 8];
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
+            }
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
             let (offset, length) = rest.split_at(32);
             let offset = U256::from_big_endian_fast(offset);
             let length = U256::from_big_endian_fast(length);
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
-            let mut result = vec![0_u8; 32 * 3];
-            result[31] = 2;
-            result[63] = 3;
-            result[95] = 4;
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result))
+            let r = state.query_solana_account_data(account_address, offset.as_usize(), length.as_usize());
+            if let Some(data) = r {
+                debug_print!("query_account data: {:?}", data);
+                let result = vec![0_u8; 1 + 32 + length.as_usize()];
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
+            }
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
         },
         _ => {
             debug_print!("query_account UNKNOWN {:?}", method_id);
