@@ -329,7 +329,9 @@ pub fn query_account<'a, B: AccountStorage>(
             let r = state.query_solana_account_data(account_address, offset, length);
             if let Some(data) = r {
                 debug_print!("query_account data: {:?}", data);
-                let result = vec![0_u8; 1 + 32 + length];
+                let mut result = vec![0_u8; 1 + length];
+                // Initial byte == 0 means success
+                result[1..].copy_from_slice(&data); // data
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
             }
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
