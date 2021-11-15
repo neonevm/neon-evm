@@ -351,6 +351,7 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
+                signature
             )?;
 
             Ok(())
@@ -420,7 +421,7 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
             let storage_info = next_account_info(account_info_iter)?;
 
@@ -447,6 +448,7 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
+                sign
             )?;
 
             Ok(())
@@ -533,7 +535,7 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative or continue");
             let storage_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
@@ -561,6 +563,7 @@ fn process_instruction<'a>(
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,
                         system_info,
+                        sign
                     )?;
                 },
                 Ok(storage) => {
@@ -602,6 +605,7 @@ fn process_instruction<'a>(
                         operator_sol_info, collateral_pool_sol_info,
                         operator_eth_info, user_eth_info,
                         system_info,
+                        signature
                     )?;
                 },
                 Ok(storage) => {
@@ -784,7 +788,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
     let account_data = AccountData::unpack(&data)?;
     match account_data {
-        AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) => {
+        AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) | AccountData::FinalizedStorage(_) => {
             return Err!(ProgramError::InvalidAccountData);
         },
         AccountData::Contract(acc) if acc.code_size != 0 => {
@@ -861,6 +865,7 @@ fn do_begin<'a>(
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>,
+    trx_sign: &[u8]
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -876,7 +881,7 @@ fn do_begin<'a>(
         user_eth_info,
         None)?;
 
-    let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+    let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price, trx_sign)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     check_ethereum_transaction(&account_storage, &caller, &trx)?;

@@ -64,6 +64,17 @@ pub struct Storage {
     pub gas_used_and_paid: u64,
     /// Number of payments
     pub number_of_payments: u64,
+    /// ethereum transaction signature
+    pub sign: [u8; 65]
+}
+
+/// Storage account data for the finalized transaction state
+#[derive(Debug,Clone)]
+pub struct FinalizedStorage{
+    /// caller of the ethereum transaction
+    pub sender: H160,
+    /// ethereum transaction signature
+    pub sign: [u8; 65],
 }
 
 /// Ethereum ERC20 allowance data account
@@ -93,7 +104,9 @@ pub enum AccountData {
     /// ERC20 allowance data
     ERC20Allowance(ERC20Allowance),
     /// Empty account data
-    Empty
+    Empty,
+    /// Storage data of the finalized account
+    FinalizedStorage(FinalizedStorage)
 }
 
 impl AccountData {
@@ -102,6 +115,7 @@ impl AccountData {
     const CONTRACT_TAG: u8 = 2;
     const STORAGE_TAG: u8 = 3;
     const ERC20_ALLOWANCE_TAG: u8 = 4;
+    const FINALIZED_STORAGE_TAG: u8 = 5;
 
     /// Unpack `AccountData` from Solana's account data
     /// ```
@@ -125,6 +139,7 @@ impl AccountData {
             Self::CONTRACT_TAG => Self::Contract( Contract::unpack(rest) ),
             Self::STORAGE_TAG => Self::Storage( Storage::unpack(rest) ),
             Self::ERC20_ALLOWANCE_TAG => Self::ERC20Allowance( ERC20Allowance::unpack(rest) ),
+            Self::FINALIZED_STORAGE_TAG => Self::FinalizedStorage( FinalizedStorage::unpack(rest) ),
 
             _ => return Err!(ProgramError::InvalidAccountData; "tag={:?}", tag),
         })
@@ -177,6 +192,12 @@ impl AccountData {
                 dst[0] = Self::ERC20_ALLOWANCE_TAG;
                 ERC20Allowance::pack(acc, &mut dst[1..])
             },
+            Self::FinalizedStorage(acc) => {
+                if dst[0] != Self::FINALIZED_STORAGE_TAG && dst[0] != Self::EMPTY_TAG { return Err!(ProgramError::InvalidAccountData; "dst[0]={:?}", dst[0]); }
+                if dst.len() < self.size() { return Err!(ProgramError::AccountDataTooSmall; "dst.len()={:?} < self.size()={:?}", dst.len(), self.size()); }
+                dst[0] = Self::FINALIZED_STORAGE_TAG;
+                FinalizedStorage::pack(acc, &mut dst[1..])
+            },
         })
     }
 
@@ -189,6 +210,7 @@ impl AccountData {
             Self::Storage(_acc) => Storage::size() + 1,
             Self::ERC20Allowance(_acc) => ERC20Allowance::size() + 1,
             Self::Empty => 1,
+            Self::FinalizedStorage(_acc) => FinalizedStorage::size() + 1,
         }
     }
 
@@ -408,7 +430,7 @@ impl Contract {
 
 impl Storage {
     /// Storage struct serialized size
-    const SIZE: usize = 20+8+8+8+8+32+8+8+8+8+8;
+    const SIZE: usize = 20+8+8+8+8+32+8+8+8+8+8+65;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
@@ -426,7 +448,8 @@ impl Storage {
             evm_data_size,
             gas_used_and_paid,
             number_of_payments,
-        ) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
+            sign
+        ) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8, 65];
         
         Self {
             caller: H160::from(*caller),
@@ -440,6 +463,7 @@ impl Storage {
             evm_data_size: usize::from_le_bytes(*evm_data_size),
             gas_used_and_paid: u64::from_le_bytes(*gas_used_and_paid),
             number_of_payments: u64::from_le_bytes(*number_of_payments),
+            sign: *sign,
         }
     }
 
@@ -458,7 +482,8 @@ impl Storage {
             evm_data_size,
             gas_used_and_paid,
             number_of_payments,
-        ) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
+            sign,
+        ) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8, 65];
         *caller = self.caller.to_fixed_bytes();
         *nonce = self.nonce.to_le_bytes();
         *gas_limit = self.gas_limit.to_le_bytes();
@@ -470,7 +495,7 @@ impl Storage {
         *evm_data_size = self.evm_data_size.to_le_bytes();
         *gas_used_and_paid = self.gas_used_and_paid.to_le_bytes();
         *number_of_payments = self.number_of_payments.to_le_bytes();
-
+        sign.copy_from_slice(self.sign.as_ref());
         Self::SIZE
     }
 
@@ -512,6 +537,43 @@ impl ERC20Allowance {
         *contract = self.contract.to_fixed_bytes();
         mint.copy_from_slice(self.mint.as_ref());
         self.value.to_little_endian(value);
+
+        Self::SIZE
+    }
+
+    /// Get `Storage` struct size
+    #[must_use]
+    pub const fn size() -> usize {
+        Self::SIZE
+    }
+}
+
+
+impl FinalizedStorage {
+    /// Allowance struct serialized size
+    const SIZE: usize = 20+65;
+
+    /// Deserialize `FinalizedStorage` struct from input data
+    #[must_use]
+    pub fn unpack(src: &[u8]) -> Self {
+        #[allow(clippy::use_self)]
+        let data = array_ref![src, 0, FinalizedStorage::SIZE];
+        let (sender, sign) = array_refs![data, 20, 65];
+
+        Self {
+            sender: H160::from(*sender),
+            sign: *sign,
+        }
+    }
+
+    /// Serialize `FinalizedStorage` struct into given destination
+    pub fn pack(&self, dst: &mut [u8]) -> usize {
+        #[allow(clippy::use_self)]
+        let data = array_mut_ref![dst, 0, FinalizedStorage::SIZE];
+        let (sender, sign) = mut_array_refs![data, 20, 65];
+
+        *sender = self.sender.to_fixed_bytes();
+        sign.copy_from_slice(self.sign.as_ref());
 
         Self::SIZE
     }

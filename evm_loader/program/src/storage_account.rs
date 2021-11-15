@@ -20,10 +20,12 @@ pub struct StorageAccount<'a> {
 }
 
 impl<'a> StorageAccount<'a> {
-    pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64) -> Result<Self, ProgramError> {
+    pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64, sign: &[u8]) -> Result<Self, ProgramError> {
         let account_data = info.try_borrow_data()?;
 
         if let AccountData::Empty = AccountData::unpack(&account_data)? {
+            let mut sign_:[u8; 65] =[0; 65];
+            sign_.copy_from_slice(sign);
             let data = AccountData::Storage(
                 Storage { 
                     caller,
@@ -37,8 +39,10 @@ impl<'a> StorageAccount<'a> {
                     evm_data_size: 0,
                     gas_used_and_paid: 0,
                     number_of_payments: 0,
+                    sign: sign_
                 }
             );
+
             Ok(Self { info, data })
         } else {
             Err!(ProgramError::InvalidAccountData; "storage account is not empty. key={:?}", info.key)
