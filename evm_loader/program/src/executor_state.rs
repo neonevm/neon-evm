@@ -1056,12 +1056,14 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn query_solana_account_metadata(&self, address: Pubkey) -> Option<(Pubkey, usize)> {
-        let a = self.exists(H160::default());
-        if a {
-            Some((address, 0))
-        } else {
-            None
-        }
+        let default = (Pubkey::default(), usize::default());
+        let r = self.backend.apply_to_solana_account(
+            &address,
+            || default,
+            |data, owner| (*owner, data.len())
+        );
+        debug_print!("==== {:?}", r);
+        None
     }
 
     #[must_use]

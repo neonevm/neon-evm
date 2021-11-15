@@ -320,13 +320,13 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
             let (offset, length) = rest.split_at(32);
-            let offset = U256::from_big_endian_fast(offset);
-            let length = U256::from_big_endian_fast(length);
+            let offset = U256::from_big_endian_fast(offset).as_usize();
+            let length = U256::from_big_endian_fast(length).as_usize();
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
-            let r = state.query_solana_account_data(account_address, offset.as_usize(), length.as_usize());
+            let r = state.query_solana_account_data(account_address, offset, length);
             if let Some(data) = r {
                 debug_print!("query_account data: {:?}", data);
-                let result = vec![0_u8; 1 + 32 + length.as_usize()];
+                let result = vec![0_u8; 1 + 32 + length];
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
             }
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
