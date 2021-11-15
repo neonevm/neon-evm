@@ -65,10 +65,10 @@ COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
-    wait-for-solana.sh \
-    create-test-accounts.sh \
-    deploy-evm.sh \
-    deploy-test.sh \
+    evm_loader/wait-for-solana.sh \
+    evm_loader/create-test-accounts.sh \
+    evm_loader/deploy-evm.sh \
+    evm_loader/deploy-test.sh \
     evm_loader/neon_token_keypair.json /opt/
 
 # Next 2 strings are for backward compatibility with proxy-model.py
