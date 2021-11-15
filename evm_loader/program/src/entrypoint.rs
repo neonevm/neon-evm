@@ -593,20 +593,25 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
-                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
-                    let holder_data = holder_info.data.borrow();
-                    let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
-                    let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
-                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+                Err(err) => {
+                    if err == EvmLoaderError::StorageAccountUninitialized.into(){
+                        let holder_data = holder_info.data.borrow();
+                        let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
+                        let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+                        let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(
-                        collateral_pool_index, 0, caller, trx,
-                        program_id, trx_accounts, accounts, storage_info,
-                        operator_sol_info, collateral_pool_sol_info,
-                        operator_eth_info, user_eth_info,
-                        system_info,
-                        signature
-                    )?;
+                        do_begin(
+                            collateral_pool_index, 0, caller, trx,
+                            program_id, trx_accounts, accounts, storage_info,
+                            operator_sol_info, collateral_pool_sol_info,
+                            operator_eth_info, user_eth_info,
+                            system_info,
+                            signature
+                        )?;
+                    }
+                    else{
+                        return Err(err)
+                    }
                 },
                 Ok(storage) => {
                     do_continue_top_level(
@@ -616,7 +621,6 @@ fn process_instruction<'a>(
                         collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
                 },
-                Err(err) => return Err(err),
             }
             Ok(())
         },

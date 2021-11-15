@@ -20,6 +20,8 @@ pub enum EvmLoaderError {
     /// Operator is not authorized
     #[error("Operator is not authorized")]
     UnauthorizedOperator,
+    #[error("Storage Account is finalized")]
+    StorageAccountFinalized,
 }
 
 impl From<EvmLoaderError> for ProgramError {

@@ -52,24 +52,34 @@ impl<'a> StorageAccount<'a> {
     pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo) -> Result<Self, ProgramError> {
         let mut account_data = info.try_borrow_mut_data()?;
 
-        if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
-            let clock = Clock::get()?;
-            if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
-                return Err!(ProgramError::InvalidAccountData);
+        match AccountData::unpack(&account_data)? {
+            AccountData::Storage(mut data) => {
+                let clock = Clock::get()?;
+                if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
+                    return Err!(ProgramError::InvalidAccountData);
+                }
+
+                if data.operator != *operator.key {
+                    data.operator = *operator.key;
+                    data.slot = clock.slot;
+                }
+
+                let data = AccountData::Storage(data);
+                AccountData::pack(&data, &mut account_data)?;
+
+                Ok(Self { info, data })
             }
-
-            if data.operator != *operator.key {
-                data.operator = *operator.key;
-                data.slot = clock.slot;
+            AccountData::Empty => {
+                Err!(EvmLoaderError::StorageAccountUninitialized.into())
             }
-
-            let data = AccountData::Storage(data);
-            AccountData::pack(&data, &mut account_data)?;
-
-            Ok(Self { info, data })
-        } else {
-            Err!(ProgramError::InvalidAccountData)
+            AccountData::FinalizedStorage(_) => {
+                Err!(EvmLoaderError::StorageAccountFinalized.into())
+            }
+            _ => {
+                Err!(ProgramError::InvalidAccountData)
+            }
         }
+
     }
 
     pub fn check_for_blocked_accounts(program_id: &Pubkey, accounts: &[AccountInfo], required_exclusive_access : bool) -> Result<(), ProgramError> {
