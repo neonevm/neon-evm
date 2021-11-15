@@ -1062,8 +1062,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             || default,
             |data, owner| (*owner, data.len())
         );
-        debug_print!("==== {:?}", r);
-        None
+        if r == default { None } else { Some(r) }
     }
 
     #[must_use]

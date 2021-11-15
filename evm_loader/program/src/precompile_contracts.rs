@@ -313,7 +313,10 @@ pub fn query_account<'a, B: AccountStorage>(
             let r = state.query_solana_account_metadata(account_address);
             if let Some(metadata) = r {
                 debug_print!("query_account metadata: {:?}", metadata);
-                let result = vec![0_u8; 1 + 32 + 8];
+                let mut result = vec![0_u8; 1 + 32 + 8];
+                // Initial byte == 0 means success
+                result[1..33].copy_from_slice(metadata.0.as_ref()); // owner
+                result[33..].copy_from_slice(&metadata.1.to_be_bytes()); // length of data
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
             }
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
