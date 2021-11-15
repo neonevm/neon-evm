@@ -1,5 +1,5 @@
 use crate::{
-    account_data::{ Storage, AccountData },
+    account_data::{ Storage, AccountData, FinalizedStorage},
     error::EvmLoaderError
 };
 use evm::{ H160 };
@@ -51,7 +51,7 @@ impl<'a> StorageAccount<'a> {
 
     pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo) -> Result<Self, ProgramError> {
         let mut account_data = info.try_borrow_mut_data()?;
-        
+
         if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
             let clock = Clock::get()?;
             if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
@@ -88,7 +88,7 @@ impl<'a> StorageAccount<'a> {
         Ok(())
     }
 
-    pub fn unblock_accounts_and_destroy(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn unblock_accounts_and_finalize(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
@@ -116,7 +116,8 @@ impl<'a> StorageAccount<'a> {
         }
 
         let mut account_data = self.info.try_borrow_mut_data()?;
-        AccountData::pack(&AccountData::Empty, &mut account_data)?;
+        let finalized_storage = FinalizedStorage{sender :self.caller_and_nonce()?.0, sign: self.get_sign()?};
+        AccountData::pack(&AccountData::FinalizedStorage(finalized_storage), &mut account_data)?;
 
         debug_print!("Destroying {:?}", self.info.key);
 
@@ -126,6 +127,11 @@ impl<'a> StorageAccount<'a> {
     pub fn caller_and_nonce(&self) -> Result<(H160, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.caller, storage.nonce))
+    }
+
+    pub fn get_sign(&self) -> Result<([u8; 65]), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok(storage.sign)
     }
 
     pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {

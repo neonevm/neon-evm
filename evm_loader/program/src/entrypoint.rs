@@ -531,7 +531,7 @@ fn process_instruction<'a>(
                 incinerator_info,
             )?;
 
-            storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
+            storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
 
             Ok(())
         },
@@ -620,7 +620,7 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
-        EvmInstruction::DeleteAccount { seed } => {
+        EvmInstruction::DeleteAccount { sign, seed } => {
             let deleted_acc_info = next_account_info(account_info_iter)?;
             let creator_acc_info = next_account_info(account_info_iter)?;
 
@@ -637,15 +637,27 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
             }
 
-            let data = deleted_acc_info.data.borrow_mut();
+            let mut data = deleted_acc_info.try_borrow_mut_data()?;
             let account_data = AccountData::unpack(&data)?;
-            match account_data {
-                AccountData::Empty => { },
-                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete empty accounts.") },
+            let storage = match account_data {
+                AccountData::FinalizedStorage(acc) => { acc },
+                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete finalized accounts.") },
             };
+
+            let creator_data = AccountData::unpack(&creator_acc_info.try_borrow_data()?)?;
+            let creator = creator_data.get_account()?;
+
+            if creator.ether != storage.sender {
+                return Err!(ProgramError::InvalidAccountData; "creator.ether != storage.sender. ether={:?}, creator.sender={:?} ", creator.ether, storage.sender);
+            }
+            if !storage.sign.iter().zip(sign.iter()).all(|(a, b)| a == b) {
+                return Err!(ProgramError::InvalidAccountData; "sign != storage.sign. sign={:?}, storage.sign={:?} ",  sign, storage.sign);
+            }
 
             **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
             **deleted_acc_info.lamports.borrow_mut() = 0;
+
+            AccountData::pack(&AccountData::Empty, &mut data)?;
 
             Ok(())
         },
@@ -990,7 +1002,7 @@ fn do_continue_top_level<'a>(
             evm_results,
             used_gas)?;
 
-        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
+        storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
 
     Ok(())
