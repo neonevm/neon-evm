@@ -69,17 +69,10 @@ impl<'a> StorageAccount<'a> {
 
                 Ok(Self { info, data })
             }
-            AccountData::Empty => {
-                Err!(EvmLoaderError::StorageAccountUninitialized.into())
-            }
-            AccountData::FinalizedStorage(_) => {
-                Err!(EvmLoaderError::StorageAccountFinalized.into())
-            }
-            _ => {
-                Err!(ProgramError::InvalidAccountData)
-            }
+            AccountData::Empty =>  Err!(EvmLoaderError::StorageAccountUninitialized.into()),
+            AccountData::FinalizedStorage(_) =>  Err!(EvmLoaderError::StorageAccountFinalized.into()),
+            _ =>  Err!(ProgramError::InvalidAccountData)
         }
-
     }
 
     pub fn check_for_blocked_accounts(program_id: &Pubkey, accounts: &[AccountInfo], required_exclusive_access : bool) -> Result<(), ProgramError> {

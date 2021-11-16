@@ -550,21 +550,26 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
-                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
-                    check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+                Err(err) => {
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() {
+                        check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
-                    let caller = H160::from_slice(from_addr);
-                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
-                        .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+                        let caller = H160::from_slice(from_addr);
+                        let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
+                            .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(
-                        collateral_pool_index, 0, caller, trx,
-                        program_id, trx_accounts, accounts, storage_info,
-                        operator_sol_info, collateral_pool_sol_info,
-                        operator_eth_info, user_eth_info,
-                        system_info,
-                        sign
-                    )?;
+                        do_begin(
+                            collateral_pool_index, 0, caller, trx,
+                            program_id, trx_accounts, accounts, storage_info,
+                            operator_sol_info, collateral_pool_sol_info,
+                            operator_eth_info, user_eth_info,
+                            system_info,
+                            sign
+                        )?;
+                    }
+                    else{
+                        return Err(err)
+                    }
                 },
                 Ok(storage) => {
                     do_continue_top_level(
@@ -573,8 +578,7 @@ fn process_instruction<'a>(
                         operator_sol_info, operator_eth_info, user_eth_info,
                         collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
-                },
-                Err(err) => return Err(err),
+                }
             }
             Ok(())
         },
