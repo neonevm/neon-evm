@@ -1068,12 +1068,12 @@ fn command_get_ether_storage_at(
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let mut code_data = code_account.as_ref().unwrap().data.clone();
             let contract_data = AccountData::unpack(&code_data).unwrap();
-            let (solana_address, _solana_nonce) = make_solana_program_address(&ether_address, &config.evm_loader);
+            let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
             let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
                                                         Some((contract_data, code_data)));
             let value = solidity_account.get_storage(index);
-            println!("{}", value.to_string());
+            print!("{}", format!("{:#x}", value));
         },
         None => {
             eprintln!("Account not found {}", &ether_address.to_string());
