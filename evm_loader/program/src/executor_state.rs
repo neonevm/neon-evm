@@ -1070,7 +1070,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let result = self.backend.apply_to_solana_account(
             &address,
             Vec::<u8>::default,
-            |data, _| data[offset..offset+length].to_owned()
+            |data, _| {
+                if offset >= data.len() || offset+length >= data.len() { Vec::<u8>::default() }
+                else { data[offset..offset+length].to_owned() }
+            }
         );
         if result.is_empty() { None } else { Some(result) }
     }
