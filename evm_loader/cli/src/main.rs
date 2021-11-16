@@ -1073,7 +1073,10 @@ fn command_get_ether_storage_at(
             let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
                                                         Some((contract_data, code_data)));
             let value = solidity_account.get_storage(index);
-            print!("{}", format!("{:#x}", value));
+
+            // output 256 bit hex string with 0x prefix (256 + 2)
+            // padded with zeros
+            print!("{:#x}", value);
         },
         None => {
             eprintln!("Account not found {}", &ether_address.to_string());
