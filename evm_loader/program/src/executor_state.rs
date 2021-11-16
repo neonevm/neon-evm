@@ -1071,7 +1071,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             &address,
             Vec::<u8>::default,
             |data, _| {
-                if offset >= data.len() || offset+length >= data.len() { Vec::<u8>::default() }
+                if offset >= data.len() || offset+length > data.len() { Vec::<u8>::default() }
                 else { data[offset..offset+length].to_owned() }
             }
         );
