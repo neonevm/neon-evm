@@ -59,7 +59,11 @@ pub struct Storage {
     /// Stored executor data size
     pub executor_data_size: usize,
     /// Stored evm data size
-    pub evm_data_size: usize
+    pub evm_data_size: usize,
+    /// Ethereum transaction gas used and paid
+    pub gas_used_and_paid: u64,
+    /// Number of payments
+    pub number_of_payments: u64,
 }
 
 /// Ethereum ERC20 allowance data account
@@ -193,10 +197,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Account` struct
-    pub const fn get_account(&self) -> Result<&Account, ProgramError>  {
+    pub fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
             Self::Account(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -217,10 +221,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Contract` struct
-    pub const fn get_contract(&self) -> Result<&Contract, ProgramError>  {
+    pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
             Self::Contract(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -241,10 +245,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub const fn get_storage(&self) -> Result<&Storage, ProgramError>  {
+    pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
             Self::Storage(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -265,10 +269,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub const fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
+    pub fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
         match self {
             Self::ERC20Allowance(ref acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 
@@ -280,7 +284,19 @@ impl AccountData {
     pub fn get_mut_erc20_allowance(&mut self) -> Result<&mut ERC20Allowance, ProgramError>  {
         match self {
             Self::ERC20Allowance(ref mut acc) => Ok(acc),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err!(ProgramError::InvalidAccountData),
+        }
+    }
+
+    /// Check if the account is empty
+    /// # Errors
+    ///
+    /// Will return:
+    /// `ProgramError::InvalidAccountData` if account is not empty
+    pub fn check_empty(&self) -> Result<(), ProgramError> {
+        match self {
+            Self::Empty => Ok(()),
+            _ => Err!(ProgramError::InvalidAccountData),
         }
     }
 }
@@ -392,14 +408,25 @@ impl Contract {
 
 impl Storage {
     /// Storage struct serialized size
-    const SIZE: usize = 20+8+8+8+8+32+8+8+8;
+    const SIZE: usize = 20+8+8+8+8+32+8+8+8+8+8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
     pub fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         
         Self {
             caller: H160::from(*caller),
@@ -411,6 +438,8 @@ impl Storage {
             accounts_len: usize::from_le_bytes(*accounts_len),
             executor_data_size: usize::from_le_bytes(*executor_data_size),
             evm_data_size: usize::from_le_bytes(*evm_data_size),
+            gas_used_and_paid: u64::from_le_bytes(*gas_used_and_paid),
+            number_of_payments: u64::from_le_bytes(*number_of_payments),
         }
     }
 
@@ -418,7 +447,18 @@ impl Storage {
     pub fn pack(&self, dst: &mut [u8]) -> usize {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Storage::SIZE];
-        let (caller, nonce, gas_limit, gas_price, slot, operator, accounts_len, executor_data_size, evm_data_size) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8];
+        let (caller,
+            nonce,
+            gas_limit,
+            gas_price,
+            slot,
+            operator,
+            accounts_len,
+            executor_data_size,
+            evm_data_size,
+            gas_used_and_paid,
+            number_of_payments,
+        ) = mut_array_refs![data, 20, 8, 8, 8, 8, 32, 8, 8, 8, 8, 8];
         *caller = self.caller.to_fixed_bytes();
         *nonce = self.nonce.to_le_bytes();
         *gas_limit = self.gas_limit.to_le_bytes();
@@ -428,6 +468,8 @@ impl Storage {
         *accounts_len = self.accounts_len.to_le_bytes();
         *executor_data_size = self.executor_data_size.to_le_bytes();
         *evm_data_size = self.evm_data_size.to_le_bytes();
+        *gas_used_and_paid = self.gas_used_and_paid.to_le_bytes();
+        *number_of_payments = self.number_of_payments.to_le_bytes();
 
         Self::SIZE
     }

@@ -262,7 +262,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     //     SolidityAccount::new(&account.key, data_rc, account.account.lamports).unwrap()
     // }
 
-
+    #[allow(clippy::too_many_lines)]
     pub fn apply<A, I>(&self, values: A)
             where
                 A: IntoIterator<Item=Apply<I>>,
@@ -336,8 +336,23 @@ impl<'a> EmulatorAccountStorage<'a> {
                                     *acc.writable.borrow_mut() = true;
                                 }
                             }
+                            else if let Some((code, valids)) = code_and_valids.clone() {
+                                if acc_desc.trx_count != 0 {
+                                    eprintln!("deploy to existing account: {}", &address.to_string());
+                                    exit(1);
+                                }
+
+                                code_begin = Contract::SIZE + 1;
+                                code_size = code.len();
+                                valids_size = valids.len();
+    
+                                let hamt_begin = code_begin + code_size + valids_size;
+                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
+                                *acc.code_size_current.borrow_mut() = Some(0);
+                                *acc.writable.borrow_mut() = true;
+                            }
                             else{
-                                if reset_storage || exist_items || code_and_valids.is_some() {
+                                if reset_storage || exist_items {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(1);
                                 }

@@ -267,11 +267,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
-        if let Some(depth) = self.state.metadata().depth() {
-            if depth + 1 > CONFIG.call_stack_limit {
-                return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
-            }
-        }
 
         let transfer = transfer.map(|t| {
             evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
@@ -281,6 +276,17 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             caller: context.caller,
             apparent_value: token::eth::round(context.apparent_value)
         };
+
+        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
+        if let Some(Capture::Exit(exit_value)) = precompile_result {
+            return Capture::Exit(exit_value);
+        }
+
+        if let Some(depth) = self.state.metadata().depth() {
+            if depth + 1 > CONFIG.call_stack_limit {
+                return Capture::Exit((ExitError::CallTooDeep.into(), Vec::new()));
+            }
+        }
 
         // These parameters should be true for call from another contract
         let take_l64 = true;
@@ -311,18 +317,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         if let Some(transfer) = transfer.as_ref() {
             if take_stipend && transfer.value != U256::zero() {
                 gas_limit = gas_limit.saturating_add(CONFIG.call_stipend);
-            }
-        }
-
-        let hook_res = call_precompile(code_address, &input, &context, &mut self.state);
-        if hook_res.is_some() {
-            match hook_res.as_ref().unwrap() {
-                Capture::Exit((reason, return_data)) => {
-                    return Capture::Exit((*reason, return_data.clone()))
-                },
-                Capture::Trap(_interrupt) => {
-                    unreachable!("not implemented");
-                },
             }
         }
 
@@ -367,14 +361,15 @@ type RuntimeInfo = (evm::Runtime, CreateReason);
 
 pub struct Machine<'a, B: AccountStorage> {
     executor: Executor<'a, B>,
-    runtime: Vec<RuntimeInfo>
+    runtime: Vec<RuntimeInfo>,
+    steps_executed: u64,
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
     pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
-        Self{ executor, runtime: Vec::new() }
+        Self{ executor, runtime: Vec::new(), steps_executed: 0 }
     }
 
     pub fn save_into(&self, storage: &mut StorageAccount) {
@@ -388,7 +383,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let state = ExecutorState::new(substate, backend);
 
         let executor = Executor { state };
-        Self{ executor, runtime }
+        Self{ executor, runtime, steps_executed: 0 }
     }
 
     pub fn call_begin(&mut self,
@@ -628,6 +623,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         while steps < n {
             let (steps_executed, apply) = self.run(n - steps);
             steps += steps_executed;
+            self.steps_executed += steps_executed;
 
             match apply {
                 RuntimeApply::Continue => {},
@@ -638,6 +634,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
 
         Ok(())
+    }
+
+    #[must_use]
+    pub fn get_steps_executed(&self) -> u64 {
+        self.steps_executed
     }
 
     #[must_use]

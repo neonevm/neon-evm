@@ -17,9 +17,8 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
             ]
         );
 
@@ -53,9 +52,19 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "EJUKLLjBMhFnkonfn7wcThnHyDewmhVmG9sEuVP9cvF8",
+                "6ndMCacBc69VXqgNbcW3BLk2am9oeUDZa6SgBjHozDPd",
+                "GEsnEWcKapTk7cgRoixBvCDc7yYuhmoMjpJ2v7mvmsBZ",
+                "G5397iLxoKKYgMkFfkYBhJYEtErD7ygz8APmH59H8FM6",
+                "rDeo4nZPE2aWpBkqFXBH8ygh1cD63nEKZPiDrpmQad6",
+                "8hipwtwcmRH3iypYModkYFNXYGUEbxvpfqRhxPxx5Amx",
+                "4fvtx2gJYJVd4o6CQt8Bdnc7dg5p2cgnb8oNUs7BGdd5",
+                "9EMY6Xx18hN39CnzM6D5y9vuPa3YJ5ttbWRPJp3SX1Qk",
+                "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
+                "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
+                "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
             ]
         );
 
@@ -89,9 +98,20 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
-                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
-                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
-                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "Fg4uzL4QDfL6x56YFUcJBJSK3PqV4yXoFmXzZQkxn2DK",
+                "8Uh8Rp1FWBiaDejyrZZhRY448oeG7GwKUyPDufP2Xxu7",
+                "6ndMCacBc69VXqgNbcW3BLk2am9oeUDZa6SgBjHozDPd",
+                "GEsnEWcKapTk7cgRoixBvCDc7yYuhmoMjpJ2v7mvmsBZ",
+                "G5397iLxoKKYgMkFfkYBhJYEtErD7ygz8APmH59H8FM6",
+                "rDeo4nZPE2aWpBkqFXBH8ygh1cD63nEKZPiDrpmQad6",
+                "8hipwtwcmRH3iypYModkYFNXYGUEbxvpfqRhxPxx5Amx",
+                "4fvtx2gJYJVd4o6CQt8Bdnc7dg5p2cgnb8oNUs7BGdd5",
+                "9EMY6Xx18hN39CnzM6D5y9vuPa3YJ5ttbWRPJp3SX1Qk",
+                "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
+                "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
+                "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
             ]
         );
 
@@ -158,7 +178,7 @@ cfg_if! {
 }
 
 /// `PAYMENT_TO_COLLATERAL_POOL`
-pub const PAYMENT_TO_COLLATERAL_POOL: u64 = 1000;
+pub const PAYMENT_TO_TREASURE: u64 = 1000;
 /// `PAYMENT_TO_DEPOSIT`
 pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
 /// `OPERATOR_PRIORITY_SLOTS`
@@ -169,6 +189,9 @@ neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
 neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
 neon_elf_param!( NEON_ACCOUNT_MAX_SIZE      , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
 neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECIMALS));
+neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
+neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
+neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 
 /// Chain ID
 #[must_use]
