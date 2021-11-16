@@ -21,32 +21,34 @@ pub struct StorageAccount<'a> {
 
 impl<'a> StorageAccount<'a> {
     pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64, sign: &[u8]) -> Result<Self, ProgramError> {
-        let account_data = info.try_borrow_data()?;
+       let mut account_data = info.try_borrow_mut_data()?;
 
-        if let AccountData::Empty = AccountData::unpack(&account_data)? {
-            let mut sign_:[u8; 65] =[0; 65];
-            sign_.copy_from_slice(sign);
-            let data = AccountData::Storage(
-                Storage { 
-                    caller,
-                    nonce,
-                    gas_limit,
-                    gas_price,
-                    slot: Clock::get()?.slot,
-                    operator: *operator.key,
-                    accounts_len: accounts.len(),
-                    executor_data_size: 0,
-                    evm_data_size: 0,
-                    gas_used_and_paid: 0,
-                    number_of_payments: 0,
-                    sign: sign_
-                }
-            );
+       match AccountData::unpack(&account_data)? {
+            AccountData::FinalizedStorage(_) => {AccountData::pack(&AccountData::Empty, &mut account_data)?;},
+            AccountData::Empty => {},
+            _ => return Err!(ProgramError::InvalidAccountData; "storage account is not empty and is not finalized key={:?}", info.key)
+        };
 
-            Ok(Self { info, data })
-        } else {
-            Err!(ProgramError::InvalidAccountData; "storage account is not empty. key={:?}", info.key)
-        }
+        let mut sign_:[u8; 65] =[0; 65];
+        sign_.copy_from_slice(sign);
+        let data = AccountData::Storage(
+            Storage {
+                caller,
+                nonce,
+                gas_limit,
+                gas_price,
+                slot: Clock::get()?.slot,
+                operator: *operator.key,
+                accounts_len: accounts.len(),
+                executor_data_size: 0,
+                evm_data_size: 0,
+                gas_used_and_paid: 0,
+                number_of_payments: 0,
+                sign: sign_
+            }
+        );
+
+        Ok(Self { info, data })
     }
 
     pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo) -> Result<Self, ProgramError> {
@@ -70,7 +72,21 @@ impl<'a> StorageAccount<'a> {
                 Ok(Self { info, data })
             }
             AccountData::Empty =>  Err!(EvmLoaderError::StorageAccountUninitialized.into()),
-            AccountData::FinalizedStorage(_) =>  Err!(EvmLoaderError::StorageAccountFinalized.into()),
+            AccountData::FinalizedStorage(_) => { Err!(EvmLoaderError::StorageAccountFinalized.into()) },
+            _ =>  Err!(ProgramError::InvalidAccountData)
+        }
+    }
+
+    pub fn is_new_transaction(info: &'a AccountInfo<'a>, sign : &[u8], caller: &H160)  -> Result<bool, ProgramError> {
+        let account_data = info.try_borrow_data()?;
+
+        match AccountData::unpack(&account_data)? {
+            AccountData::FinalizedStorage(storage) => {
+                if storage.sender != *caller || !storage.sign.eq(sign) {
+                    return Ok(true);
+                }
+                Ok(false)
+            }
             _ =>  Err!(ProgramError::InvalidAccountData)
         }
     }

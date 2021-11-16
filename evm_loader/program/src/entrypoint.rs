@@ -467,10 +467,7 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[6..];
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
-                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
-                else {err}
-            })?;
+            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
             do_continue_top_level(
                 storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
@@ -498,10 +495,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
-                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
-                else {err}
-            })?;
+            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
 
             let custom_error: ProgramError = EvmLoaderError::ExclusiveAccessUnvailable.into();
             if let Err(err) = storage.check_accounts(program_id, trx_accounts, false){
@@ -551,10 +545,16 @@ fn process_instruction<'a>(
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(err) => {
-                    if err == EvmLoaderError::StorageAccountUninitialized.into() {
+                    let caller = H160::from_slice(from_addr);
+
+                    let mut is_new_transaction : bool = false;
+                    if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        is_new_transaction = StorageAccount::is_new_transaction(storage_info, sign, &caller)?;
+                    }
+
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || is_new_transaction {
                         check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
-                        let caller = H160::from_slice(from_addr);
                         let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                             .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
@@ -598,12 +598,17 @@ fn process_instruction<'a>(
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(err) => {
-                    if err == EvmLoaderError::StorageAccountUninitialized.into(){
-                        let holder_data = holder_info.data.borrow();
-                        let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
-                        let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
-                        let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+                    let holder_data = holder_info.data.borrow();
+                    let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
+                    let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
+                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
+                    let mut is_new_transaction : bool = false;
+                    if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        is_new_transaction = StorageAccount::is_new_transaction(storage_info, signature, &caller)?;
+                    }
+
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || is_new_transaction {
                         do_begin(
                             collateral_pool_index, 0, caller, trx,
                             program_id, trx_accounts, accounts, storage_info,
@@ -628,7 +633,7 @@ fn process_instruction<'a>(
             }
             Ok(())
         },
-        EvmInstruction::DeleteAccount { sign, seed } => {
+        EvmInstruction::DeleteAccount { seed } => {
             let deleted_acc_info = next_account_info(account_info_iter)?;
             let creator_acc_info = next_account_info(account_info_iter)?;
 
@@ -647,20 +652,10 @@ fn process_instruction<'a>(
 
             let mut data = deleted_acc_info.try_borrow_mut_data()?;
             let account_data = AccountData::unpack(&data)?;
-            let storage = match account_data {
-                AccountData::FinalizedStorage(acc) => { acc },
+            match account_data {
+                AccountData::FinalizedStorage(_) | AccountData::Empty => {},
                 _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete finalized accounts.") },
             };
-
-            let creator_data = AccountData::unpack(&creator_acc_info.try_borrow_data()?)?;
-            let creator = creator_data.get_account()?;
-
-            if creator.ether != storage.sender {
-                return Err!(ProgramError::InvalidAccountData; "creator.ether != storage.sender. ether={:?}, creator.sender={:?} ", creator.ether, storage.sender);
-            }
-            if !storage.sign.iter().zip(sign.iter()).all(|(a, b)| a == b) {
-                return Err!(ProgramError::InvalidAccountData; "sign != storage.sign. sign={:?}, storage.sign={:?} ",  sign, storage.sign);
-            }
 
             **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
             **deleted_acc_info.lamports.borrow_mut() = 0;

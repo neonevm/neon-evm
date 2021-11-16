@@ -192,8 +192,6 @@ pub enum EvmInstruction<'a> {
     ///   0. [WRITE] Deleted account
     ///   1. [WRITE] Deleted account creator
     DeleteAccount {
-        /// ethereum transaction signature
-        sign:  &'a [u8],
         /// seed used to create account
         seed:  &'a [u8],
     },
@@ -314,10 +312,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue {collateral_pool_index, step_count}
             },
             15 => EvmInstruction::ERC20CreateTokenAccount,
-            16 => {
-                let (eth_sign, rest) = rest.split_at(65);
-                EvmInstruction::DeleteAccount { sign: eth_sign, seed: rest }
-            },
+            16 => EvmInstruction::DeleteAccount { seed: rest },
             17 => EvmInstruction::ResizeStorageAccount { seed: rest },
             18 => {
                 let (holder_id, rest) = rest.split_at(8);
