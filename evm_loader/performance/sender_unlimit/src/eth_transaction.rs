@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
 };
 
-use libsecp256k1::SecretKey;
+use libsecp256k1::{SecretKey, Signature};
 use libsecp256k1::PublicKey;
 use evm::{H160, H256, U256};
 
@@ -75,7 +75,7 @@ pub fn make_ethereum_transaction(
     caller: &Pubkey,
     to: H160,
     caller_private_bin: &[u8; 32]
-) -> Vec<u8> {
+) -> (Vec<u8>, Vec<u8>) {
 
     let caller_private = SecretKey::parse(&caller_private_bin).unwrap();
     let trx_count = get_ether_nonce(rpc_client, caller).unwrap();
@@ -94,19 +94,17 @@ pub fn make_ethereum_transaction(
         rlp::encode(&tx).to_vec()
     };
 
-    let (sig, rec) = {
+    let (r_s, v) = {
         use libsecp256k1::{Message, sign};
         let msg = Message::parse(&keccak256(rlp_data.as_slice()));
         sign(&msg, &caller_private)
     };
 
-    let mut msg : Vec<u8> = Vec::new();
-    msg.extend(sig.serialize().iter().copied());
-    msg.push(rec.serialize());
-    msg.extend((rlp_data.len() as u64).to_le_bytes().iter().copied());
-    msg.extend(rlp_data);
+    let mut signature : Vec<u8> = Vec::new();
+    signature.extend(r_s.serialize().iter().copied());
+    signature.push(v.serialize());
 
-    msg
+    (signature, rlp_data)
 }
 
 fn get_ether_nonce(

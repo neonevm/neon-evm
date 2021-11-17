@@ -46,7 +46,7 @@ pub struct collateral_t{
     index: u32
 }
 
-pub fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
+fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
     let mut data = Vec::new();
 
     let check_count : u8 = 1;
@@ -79,7 +79,7 @@ pub fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_s
 }
 
 
-pub fn make_instruction_budget_units() -> Instruction{
+fn make_instruction_budget_units() -> Instruction{
     let DEFAULT_UNITS:u32 =500*1000;
 
     let instruction_unit = Instruction::new_with_bincode(
@@ -90,7 +90,7 @@ pub fn make_instruction_budget_units() -> Instruction{
     instruction_unit
 }
 
-pub fn make_instruction_budget_heap() -> Instruction{
+fn make_instruction_budget_heap() -> Instruction{
     let DEFAULT_HEAP_FRAME: u32=256*1024;
 
     let instruction_heap = Instruction::new_with_bincode(
@@ -101,7 +101,7 @@ pub fn make_instruction_budget_heap() -> Instruction{
     instruction_heap
 }
 
-pub fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey, collateral: &collateral_t) -> Instruction {
+fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey, collateral: &collateral_t) -> Instruction {
 
     let mut data_05_hex = String::from("05");
     data_05_hex.push_str(hex::encode(collateral.index.to_le_bytes()).as_str());
@@ -153,4 +153,43 @@ pub fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol 
         acc_meta);
 
     instruction_05
+}
+
+pub fn create_sol_trx (
+    trx : &trx_t,
+    keypair: Keypair,
+    collateral_data: &collateral_t,
+    blockhash: solana_program::hash::Hash,
+    evm_loader: &Pubkey)
+    -> Transaction{
+
+    let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
+
+    let msg = hex::decode(&trx.msg).unwrap();
+
+    let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 5);
+    let instruction_keccak = Instruction::new_with_bytes(
+        keccakprog,
+        &data_keccak,
+        vec![
+            AccountMeta::new_readonly(keccakprog, false),
+        ]
+    );
+    let keypair_pubkey = keypair.pubkey();
+    let signer: Box<dyn Signer> = Box::from(keypair);
+    let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey(), collateral_data);
+    // let instruction_budget_units = make_instruction_budget_units();
+    // let instruction_budget_heap = make_instruction_budget_heap();
+
+
+    let message = Message::new(
+        // &[instruction_budget_units, instruction_budget_heap, instruction_keccak, instruction_05],
+        &[instruction_keccak, instruction_05],
+        Some(&keypair_pubkey)
+    );
+    let mut tx = Transaction::new_unsigned(message);
+
+    tx.try_sign(&[&*signer] , blockhash).unwrap();
+    tx
+
 }

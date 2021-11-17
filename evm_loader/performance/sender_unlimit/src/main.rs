@@ -89,7 +89,7 @@ struct sender_t{
 #[derive(Serialize, Deserialize)]
 pub struct account_t{
     address : String,
-    pupr_key: String,
+    pr_key: String,
     account: String
 }
 
@@ -143,7 +143,6 @@ fn create_trx(
     account_filename: &String,
     rpc_client: &Arc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
-    let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
 
     let mut keys = read_senders(&senders_filename).unwrap();
     let mut collaterals = read_collateral(&collateral_filename).unwrap();
@@ -167,6 +166,14 @@ fn create_trx(
 
     while(true) {
 
+        let mut collateral_data : &sol_transaction::collateral_t;
+        match (it_collaterals.next()){
+            Some(val) => collateral_data = val,
+            None => {
+                it_collaterals = collaterals.iter();
+                collateral_data = it_collaterals.next().unwrap()
+            }
+        }
 
         let mut from_data : &account_t;
         match (it_accounts.next()){
@@ -196,62 +203,28 @@ fn create_trx(
         }
         let keypair =Keypair::from_bytes(keypair_bin).unwrap();
 
+
         let private_key  = keypair.secret().to_bytes();
         let from = H160::from_str(&from_data.address).unwrap();
         let from_sol = Pubkey::from_str(from_data.account.as_str()).unwrap();
         let to = H160::from_str(&to_data.address).unwrap();
-        let eth_trx = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &private_key);
+        let (sig, msg) = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &private_key);
+
+        let trx = sol_transaction::trx_t{
+            sign : hex::encode(&sig),
+            from_addr : from_data.address.clone(),
+            erc20_code : "".to_string(),
+            erc20_eth : to_data.address.clone(),
+            erc20_sol : to_data.account.clone(),
+            msg : hex::encode(&msg),
+            payer_eth : from_data.address.clone(),
+            payer_sol : from_data.account.clone(),
+            receiver_eth : to_data.address.clone(),
+        };
+        let sol_trx = sol_transaction::create_sol_trx(&trx, keypair, &collateral_data, blockhash, evm_loader);
+        // transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
     }
 
-    for line in trx_reader.lines(){
-
-        let mut keypair_bin : &Vec<u8>;
-        match (it_keys.next()){
-            Some(val) => keypair_bin = val,
-            None => {
-                it_keys = keys.iter();
-                keypair_bin = it_keys.next().unwrap()
-            }
-        }
-
-        let mut collateral_data : &sol_transaction::collateral_t;
-        match (it_collaterals.next()){
-            Some(val) => collateral_data = val,
-            None => {
-                it_collaterals = collaterals.iter();
-                collateral_data = it_collaterals.next().unwrap()
-            }
-        }
-
-        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
-        let trx : sol_transaction::trx_t = serde_json::from_str(line?.as_str())?;
-        let msg = hex::decode(&trx.msg).unwrap();
-
-        let data_keccak = sol_transaction::make_keccak_instruction_data(1, msg.len() as u16, 5);
-        let instruction_keccak = Instruction::new_with_bytes(
-            keccakprog,
-            &data_keccak,
-            vec![
-                AccountMeta::new_readonly(keccakprog, false),
-            ]
-        );
-        let keypair_pubkey = keypair.pubkey();
-        let signer: Box<dyn Signer> = Box::from(keypair);
-        let instruction_05 = sol_transaction::make_instruction_05(&trx, evm_loader, &signer.pubkey(), collateral_data);
-        // let instruction_budget_units = make_instruction_budget_units();
-        // let instruction_budget_heap = make_instruction_budget_heap();
-
-
-        let message = Message::new(
-            // &[instruction_budget_units, instruction_budget_heap, instruction_keccak, instruction_05],
-            &[instruction_keccak, instruction_05],
-            Some(&keypair_pubkey)
-        );
-        let mut tx = Transaction::new_unsigned(message);
-
-        tx.try_sign(&[&*signer] , blockhash)?;
-        transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
-    }
 
     return Ok(transaction);
 }
