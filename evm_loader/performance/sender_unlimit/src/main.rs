@@ -165,7 +165,8 @@ fn create_trx(
     }
 
     let mut count = 0;
-    while(count < 1000) {
+    while(count < 100) {
+        println!("create transaction {}", count);
         count = count + 1;
         let mut collateral_data : &sol_transaction::collateral_t;
         match (it_collaterals.next()){
