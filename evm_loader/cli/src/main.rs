@@ -1484,7 +1484,7 @@ fn main() {
                 )
         )
         .subcommand(
-            SubCommand::with_name("get-ether-storage-at")
+            SubCommand::with_name("get-storage-at")
                 .about("Get Ethereum storage value at given index")
                 .arg(
                     Arg::with_name("contract_id")
@@ -1621,7 +1621,7 @@ fn main() {
 
                 Ok(())
             }
-            ("get-ether-storage-at", Some(arg_matches)) => {
+            ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
 
