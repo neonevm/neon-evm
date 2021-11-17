@@ -319,7 +319,8 @@ pub fn query_account<'a, B: AccountStorage>(
                 result[33..].copy_from_slice(&metadata.1.to_be_bytes()); // length of data
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
             }
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
+            let revert_message = b"QueryAccount metadata failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
             let (offset, length) = rest.split_at(32);
@@ -334,7 +335,8 @@ pub fn query_account<'a, B: AccountStorage>(
                 result[1..].copy_from_slice(&data); // data
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
             }
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
+            let revert_message = b"QueryAccount data failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         _ => {
             debug_print!("query_account UNKNOWN {:?}", method_id);
