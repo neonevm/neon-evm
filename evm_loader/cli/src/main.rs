@@ -1077,6 +1077,7 @@ fn command_get_ether_storage_at(
         },
         None => {
             eprintln!("Account not found {}", &ether_address.to_string());
+            print!("{:#x}", 0);
         }
     }
 }
