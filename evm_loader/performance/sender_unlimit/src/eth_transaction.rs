@@ -2,15 +2,36 @@ use rlp::RlpStream;
 use solana_program::{
     keccak::{hash,},
 };
-
+use solana_sdk::{
+    clock::Slot,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+    pubkey::Pubkey,
+};
+use std::{
+    rc::Rc,
+    sync::Arc,
+};
 
 use libsecp256k1::SecretKey;
 use libsecp256k1::PublicKey;
 use evm::{H160, H256, U256};
 
+use solana_client::{
+    rpc_client::RpcClient,
+    rpc_config::{RpcSendTransactionConfig, RpcTransactionConfig},
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    tpu_client::{TpuClient, TpuClientConfig},
+};
+
+use evm_loader::{
+    instruction::EvmInstruction,
+    // solana_backend::SolanaBackend,
+    account_data::{AccountData, Account, Contract},
+};
 
 const CHAIN_ID :u32 = 245022940;
 
+type Error = Box<dyn std::error::Error>;
 
 
 #[derive(Debug)]
@@ -84,4 +105,36 @@ fn make_ethereum_transaction(
     msg.extend(rlp_data);
 
     msg
+}
+
+fn get_ether_nonce(
+    rpc_client: &Arc<RpcClient>,
+    caller_sol: &Pubkey
+) -> Result<(u64), Error> {
+
+    let data : Vec<u8>;
+    match rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
+        Some(acc) =>   data = acc.data,
+        None => return Ok(u64::default())
+    }
+
+    let trx_count : u64;
+    println!("get_ether_account_nonce data = {:?}", data);
+    let account = match evm_loader::account_data::AccountData::unpack(&data) {
+        Ok(acc_data) =>
+            match acc_data {
+                AccountData::Account(acc) => acc,
+                _ => return Err("Caller has incorrect type".into())
+            },
+        Err(_) => return Err("Caller unpack error".into())
+    };
+    trx_count = account.trx_count;
+    // let caller_ether = account.ether;
+    // let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
+
+    // println!("Caller: ether {}, solana {}", caller_ether, caller_sol);
+    println!("Caller trx_count: {} ", trx_count);
+    // println!("caller_token = {}", caller_token);
+
+    Ok(trx_count)
 }
