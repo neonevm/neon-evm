@@ -70,13 +70,15 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
 }
 
 
-fn make_ethereum_transaction(
+pub fn make_ethereum_transaction(
+    rpc_client: &Arc<RpcClient>,
+    caller: &Pubkey,
     to: H160,
-    trx_count: u64,
-    value: u32,
-    program_data: &[u8],
-    caller_private: &SecretKey
+    caller_private_bin: &[u8; 32]
 ) -> Vec<u8> {
+
+    let caller_private = SecretKey::parse(&caller_private_bin).unwrap();
+    let trx_count = get_ether_nonce(rpc_client, caller).unwrap();
 
     let rlp_data = {
         let tx = UnsignedTransaction {
@@ -84,8 +86,8 @@ fn make_ethereum_transaction(
             nonce: trx_count,
             gas_limit: 9_999_999.into(),
             gas_price: 0.into(),
-            value: value.into(),
-            data: program_data.to_owned(),
+            value: 10_u64.pow(9).into(),
+            data: vec![],
             chain_id: CHAIN_ID.into(),
         };
 
@@ -95,7 +97,7 @@ fn make_ethereum_transaction(
     let (sig, rec) = {
         use libsecp256k1::{Message, sign};
         let msg = Message::parse(&keccak256(rlp_data.as_slice()));
-        sign(&msg, caller_private)
+        sign(&msg, &caller_private)
     };
 
     let mut msg : Vec<u8> = Vec::new();

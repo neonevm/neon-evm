@@ -86,6 +86,12 @@ struct sender_t{
     pr_key: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct account_t{
+    address : String,
+    pupr_key: String,
+    account: String
+}
 
 
 type Error = Box<dyn std::error::Error>;
@@ -116,34 +122,85 @@ fn read_collateral(filename: &String) -> Result<Vec<sol_transaction::collateral_
     return Ok(pool);
 }
 
+fn read_accounts(filename: &String) -> Result<Vec<account_t>, Error> {
+    let mut file = File::open(filename)?;
+    let reader = BufReader::new(file);
+    let mut pool = Vec::new();
+
+    for line in reader.lines() {
+        let data: account_t = serde_json::from_str(line?.as_str())?;
+        pool.push(data);
+    }
+    return Ok(pool);
+}
+
 
 fn create_trx(
     evm_loader: &Pubkey,
     trx_filename: &String,
     senders_filename :&String,
     collateral_filename: &String,
+    account_filename: &String,
     rpc_client: &Arc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
     let keccakprog = Pubkey::from_str("KeccakSecp256k11111111111111111111111111111").unwrap();
 
     let mut keys = read_senders(&senders_filename).unwrap();
     let mut collaterals = read_collateral(&collateral_filename).unwrap();
+    let mut accounts = read_accounts(&account_filename).unwrap();
 
     println!("creating transactions  ..");
     let mut transaction = Vec::new();
+
     let mut it_keys = keys.iter();
     let mut it_collaterals = collaterals.iter();
+    let mut it_accounts = accounts.iter();
 
     let mut trx_file = File::open(trx_filename)?;
     let trx_reader= BufReader::new(trx_file);
-
-    let mut collateral_file = File::open(collateral_filename)?;
-    let collateral_reader= BufReader::new(collateral_file);
 
     let blockhash : solana_program::hash::Hash;
     match (rpc_client.get_recent_blockhash()){
         Ok((hash,_)) => blockhash = hash,
         _ => panic!("get_recent_blockhash() error")
+    }
+
+    while(true) {
+
+
+        let mut from_data : &account_t;
+        match (it_accounts.next()){
+            Some(val) => from_data = val,
+            None => {
+                it_accounts = accounts.iter();
+                from_data = it_accounts.next().unwrap()
+            }
+        }
+
+        let mut to_data : &account_t;
+        match (it_accounts.next()){
+            Some(val) => to_data = val,
+            None => {
+                it_accounts = accounts.iter();
+                to_data = it_accounts.next().unwrap()
+            }
+        }
+
+        let mut keypair_bin : &Vec<u8>;
+        match (it_keys.next()){
+            Some(val) => keypair_bin = val,
+            None => {
+                it_keys = keys.iter();
+                keypair_bin = it_keys.next().unwrap()
+            }
+        }
+        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
+
+        let private_key  = keypair.secret().to_bytes();
+        let from = H160::from_str(&from_data.address).unwrap();
+        let from_sol = Pubkey::from_str(from_data.account.as_str()).unwrap();
+        let to = H160::from_str(&to_data.address).unwrap();
+        let eth_trx = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &private_key);
     }
 
     for line in trx_reader.lines(){
@@ -224,6 +281,7 @@ fn main() -> CommandResult{
         senders_filename,
         verify_filename,
         collateral_filename,
+        account_filename,
         client,
         delay
     )
@@ -232,7 +290,7 @@ fn main() -> CommandResult{
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
 
-    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &rpc_client).unwrap();
+    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
 
     println!("sending transactions ..");
     let mut count = 0;

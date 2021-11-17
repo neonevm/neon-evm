@@ -20,7 +20,7 @@ use solana_clap_utils::{
 };
 
 
-pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, u64) {
+pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, String, u64) {
     let key = "EVM_LOADER";
     let env_evm_loader  = match env::var_os(key) {
         Some(val) => val.into_string().unwrap(),
@@ -89,6 +89,14 @@ pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, 
                 .default_value("collateral.json"),
         )
         .arg(
+            Arg::with_name("account_file")
+                .value_name("ACCOUNT_FILEPATH")
+                .takes_value(true)
+                .required(true)
+                .help("/path/to/account.json")
+                .default_value("account.json"),
+        )
+        .arg(
             Arg::with_name("client")
                 .long("client")
                 .value_name("CLIENT")
@@ -130,7 +138,8 @@ pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, 
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
     let collateral_filename = app_matches.value_of("collateral_file").unwrap().to_string();
+    let account_filename = app_matches.value_of("account_file").unwrap().to_string();
     let delay :u64 = app_matches.value_of("delay").unwrap().to_string().parse().unwrap();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, collateral_filename, client, delay);
+    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, collateral_filename, account_filename, client, delay);
 }
