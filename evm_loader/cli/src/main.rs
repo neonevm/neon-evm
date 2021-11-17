@@ -1068,7 +1068,7 @@ fn command_get_storage_at(
             let account_data = AccountData::unpack(&acc.data)?;
             let mut code_data = match code_account.as_ref() {
                 Some(code) => code.data.clone(),
-                None => return Err(format!("Account {} is not code account", &ether_address.to_string()).into()),
+                None => return Err(format!("Account {:#x} is not code account", ether_address).into()),
             };
             let contract_data = AccountData::unpack(&code_data)?;
             let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
@@ -1080,7 +1080,7 @@ fn command_get_storage_at(
             Ok(())
         },
         None => {
-            Err(format!("Account not found {}", &ether_address.to_string()).into())
+            Err(format!("Account not found {:#x}", ether_address).into())
         }
     }
 }
