@@ -164,8 +164,9 @@ fn create_trx(
         _ => panic!("get_recent_blockhash() error")
     }
 
-    while(true) {
-
+    let mut count = 0;
+    while(count < 1000) {
+        count = count + 1;
         let mut collateral_data : &sol_transaction::collateral_t;
         match (it_collaterals.next()){
             Some(val) => collateral_data = val,
@@ -222,16 +223,15 @@ fn create_trx(
             receiver_eth : to_data.address.clone(),
         };
         let sol_trx = sol_transaction::create_sol_trx(&trx, keypair, &collateral_data, blockhash, evm_loader);
-        // transaction.push((tx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
+        transaction.push((sol_trx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
     }
 
 
     return Ok(transaction);
 }
 
-fn write_for_verify(verify_filename : &String, signatures: &Vec<(String, String, String, Signature)>)
+fn write_for_verify(mut verify: &File, signatures: &Vec<(String, String, String, Signature)>)
     -> Result<(), Error>{
-    let mut verify = File::create(verify_filename).unwrap();
 
     // Write a &str in the file (ignoring the result).
     for (erc20_eth, payer_eth, receiver_eth, sig) in signatures{
@@ -262,41 +262,45 @@ fn main() -> CommandResult{
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
-
-    let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
-
-    println!("sending transactions ..");
-    let mut count = 0;
-    let mut signatures = Vec::new();
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
     let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
-    let ten = time::Duration::from_micros(delay);
-    let start = SystemTime::now();
-    for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
-        if (client == "tcp"){
-            let sig = rpc_client.send_transaction_with_config(
-                &tx,
-                RpcSendTransactionConfig {
-                    skip_preflight : true,
-                    preflight_commitment: Some(CommitmentLevel::Confirmed),
-                    ..RpcSendTransactionConfig::default()
-                }
-            )?;
-            signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
-        }
-        else if (client == "udp") {
-            let res = tpu_client.send_transaction(&tx);
-            signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
-        }
-        count = count  + 1;
-        thread::sleep(ten);
-    }
-    let end = SystemTime::now();
-    let time = end.duration_since(start).expect("Clock may have gone backwards");
-    println!("time  {:?}", time);
-    println!("count {}", &count.to_string());
 
-    write_for_verify(&verify_filename, &signatures);
+    let mut verify = File::create(verify_filename).unwrap();
+
+    while (true){
+        let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
+
+        println!("sending transactions ..");
+        let mut count = 0;
+        let mut signatures = Vec::new();
+        let ten = time::Duration::from_micros(delay);
+        let start = SystemTime::now();
+        for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
+            if (client == "tcp"){
+                let sig = rpc_client.send_transaction_with_config(
+                    &tx,
+                    RpcSendTransactionConfig {
+                        skip_preflight : true,
+                        preflight_commitment: Some(CommitmentLevel::Confirmed),
+                        ..RpcSendTransactionConfig::default()
+                    }
+                )?;
+                signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
+            }
+            else if (client == "udp") {
+                let res = tpu_client.send_transaction(&tx);
+                signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
+            }
+            count = count  + 1;
+            thread::sleep(ten);
+        }
+        let end = SystemTime::now();
+        let time = end.duration_since(start).expect("Clock may have gone backwards");
+        println!("time  {:?}", time);
+        println!("count {}", &count.to_string());
+
+        write_for_verify(&verify, &signatures);
+    }
 
     Ok(())
 }
