@@ -1,3 +1,7 @@
+mod cmd_arg;
+mod eth_transaction;
+mod sol_transaction;
+
 use std::fs::File;
 use std::vec::Vec;
 use std::time::{Duration, SystemTime};
@@ -31,10 +35,6 @@ use solana_sdk::{
     system_instruction,
     sysvar::{clock},
     keccak::Hasher,
-};
-
-use solana_program::{
-    keccak::{hash,},
 };
 
 use clap::{
@@ -78,38 +78,7 @@ use evm_loader::{
 use evm::{H160, H256, U256};
 use solana_sdk::recent_blockhashes_account::update_account;
 
-use rlp::RlpStream;
 
-use libsecp256k1::SecretKey;
-use libsecp256k1::PublicKey;
-
-
-const chain_id :u32 = 245022940;
-
-#[derive(Debug)]
-pub struct UnsignedTransaction {
-    pub nonce: u64,
-    pub gas_price: U256,
-    pub gas_limit: U256,
-    pub to: Option<H160>,
-    pub value: U256,
-    pub data: Vec<u8>,
-    pub chain_id: U256,
-}
-
-
-#[derive(Serialize, Deserialize)]
-struct trx_t {
-    from_addr: String,
-    sign: String,
-    msg: String,
-    erc20_sol: String,
-    erc20_eth: String,
-    erc20_code: String,
-    payer_sol: String,
-    payer_eth: String,
-    receiver_eth: String,
-}
 
 #[derive(Serialize, Deserialize)]
 struct sender_t{
@@ -117,180 +86,11 @@ struct sender_t{
     pr_key: String,
 }
 
-#[derive(Serialize, Deserialize)]
-struct collateral_t{
-    account : String,
-    index: u32
-}
 
-impl rlp::Encodable for UnsignedTransaction {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas_limit);
-        match self.to.as_ref() {
-            None => s.append(&""),
-            Some(addr) => s.append(addr),
-        };
-        s.append(&self.value);
-        s.append(&self.data);
-        s.append(&self.chain_id);
-        s.append_empty_data();
-        s.append_empty_data();
-    }
-}
-
-
-fn make_keccak_instruction_data(instruction_index : u8, msg_len: u16, data_start : u16) ->Vec<u8> {
-    let mut data = Vec::new();
-
-    let check_count : u8 = 1;
-    let eth_address_size : u16 = 20;
-    let signature_size : u16 = 65;
-    let eth_address_offset: u16 = data_start;
-    let signature_offset : u16 = eth_address_offset + eth_address_size;
-    let message_data_offset : u16 = signature_offset + signature_size;
-
-    data.push(check_count);
-
-    data.push(signature_offset as u8);
-    data.push((signature_offset >> 8) as u8);
-
-    data.push(instruction_index);
-
-    data.push(eth_address_offset as u8);
-    data.push((eth_address_offset >> 8) as u8);
-
-    data.push(instruction_index);
-
-    data.push(message_data_offset as u8);
-    data.push((message_data_offset >> 8) as u8);
-
-    data.push(msg_len as u8);
-    data.push((msg_len >> 8) as u8);
-
-    data.push(instruction_index);
-    return data;
-}
 
 type Error = Box<dyn std::error::Error>;
 type CommandResult = Result<(), Error>;
 
-fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, u64) {
-    let key = "EVM_LOADER";
-    let env_evm_loader  = match env::var_os(key) {
-        Some(val) => val.into_string().unwrap(),
-        None => "".to_string()
-    };
-
-    let key = "SOLANA_URL";
-    let env_solana_url  = match env::var_os(key) {
-        Some(val) => val.into_string().unwrap(),
-        None => "http://localhost:8899".to_string()
-    };
-
-    let app_matches = App::new(crate_name!())
-        .about(crate_description!())
-        .version(crate_version!())
-        // .setting(AppSettings::SubcommandRequiredElseHelp)
-        .arg(
-            Arg::with_name("json_rpc_url")
-                .short("u")
-                .long("url")
-                .value_name("URL")
-                .takes_value(true)
-                .global(true)
-                .validator(is_url_or_moniker)
-                .default_value(&*env_solana_url)
-                .help("URL for Solana node"),
-        )
-        .arg(
-            Arg::with_name("evm_loader")
-                .long("evm_loader")
-                .value_name("EVM_LOADER")
-                .takes_value(true)
-                .global(true)
-                .validator(is_valid_pubkey)
-                .default_value(&*env_evm_loader)
-                .help("Pubkey for evm_loader contract")
-        ).arg(
-        Arg::with_name("transaction_file")
-            .value_name("TRANSACTION_FILEPATH")
-            .takes_value(true)
-            .required(true)
-            .help("/path/to/transaction.json")
-            .default_value("transaction.json"),
-    ).arg(
-        Arg::with_name("sender_file")
-            .value_name("SENDER_FILEPATH")
-            .takes_value(true)
-            .required(true)
-            .help("/path/to/sender.json")
-            .default_value("sender.json"),
-    )
-        .arg(
-            Arg::with_name("verify_file")
-                .value_name("VERIFY_FILEPATH")
-                .takes_value(true)
-                .required(true)
-                .help("/path/to/verify.json")
-                .default_value("verify.json"),
-        )
-        .arg(
-            Arg::with_name("collateral_file")
-                .value_name("COLLATERAL_FILEPATH")
-                .takes_value(true)
-                .required(true)
-                .help("/path/to/collateral.json")
-                .default_value("collateral.json"),
-        )
-        .arg(
-            Arg::with_name("client")
-                .long("client")
-                .value_name("CLIENT")
-                .takes_value(true)
-                .global(true)
-                .help("tcp, udp")
-                .possible_values(&["tcp", "udp"])
-                .default_value("udp"),
-        )
-        .arg(
-            Arg::with_name("delay")
-                .long("delay")
-                .value_name("DELAY")
-                .takes_value(true)
-                .global(true)
-                .help("delay in microseconds between sending trx")
-                .default_value("1000"),
-        )
-        .get_matches();
-
-    let evm_loader = pubkey_of(&app_matches, "evm_loader")
-        .unwrap_or_else(|| {
-            println!("Need to specify evm_loader");
-            exit(1);
-        });
-    println!("evm_loader:   {:?}", evm_loader);
-
-
-    let json_rpc_url = normalize_to_url_if_moniker(
-        app_matches
-            .value_of("json_rpc_url").unwrap()
-    );
-    println!("url:   {:?}", json_rpc_url);
-
-
-    let client = app_matches.value_of("client").unwrap().to_string();
-
-    let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
-    let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
-    let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
-    let collateral_filename = app_matches.value_of("collateral_file").unwrap().to_string();
-    let delay :u64 = app_matches.value_of("delay").unwrap().to_string().parse().unwrap();
-
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, collateral_filename, client, delay);
-}
 
 fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     let mut file = File::open(filename)?;
@@ -304,136 +104,18 @@ fn read_senders(filename: &String) -> Result<Vec<Vec<u8>>, Error>{
     return Ok(keys);
 }
 
-fn read_collateral(filename: &String) -> Result<Vec<collateral_t>, Error> {
+fn read_collateral(filename: &String) -> Result<Vec<sol_transaction::collateral_t>, Error> {
     let mut file = File::open(filename)?;
     let reader = BufReader::new(file);
     let mut pool = Vec::new();
 
     for line in reader.lines() {
-        let data: collateral_t = serde_json::from_str(line?.as_str())?;
+        let data: sol_transaction::collateral_t = serde_json::from_str(line?.as_str())?;
         pool.push(data);
     }
     return Ok(pool);
 }
 
-fn make_instruction_budget_units() -> Instruction{
-    let DEFAULT_UNITS:u32 =500*1000;
-
-    let instruction_unit = Instruction::new_with_bincode(
-        Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
-        &(0x00_u8, DEFAULT_UNITS),
-        vec![]);
-
-    instruction_unit
-}
-
-fn make_instruction_budget_heap() -> Instruction{
-    let DEFAULT_HEAP_FRAME: u32=256*1024;
-
-    let instruction_heap = Instruction::new_with_bincode(
-        Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
-        &(0x01_u8, DEFAULT_HEAP_FRAME),
-        vec![]);
-
-    instruction_heap
-}
-
-fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &Pubkey, collateral: &collateral_t) -> Instruction {
-
-    let mut data_05_hex = String::from("05");
-    data_05_hex.push_str(hex::encode(collateral.index.to_le_bytes()).as_str());
-    data_05_hex.push_str(trx.from_addr.as_str());
-    data_05_hex.push_str(trx.sign.as_str());
-    data_05_hex.push_str(trx.msg.as_str());
-    let data_05 : Vec<u8> = hex::decode(data_05_hex.as_str()).unwrap();
-
-    let contract = Pubkey::from_str(trx.erc20_sol.as_str()).unwrap();
-    let caller = Pubkey::from_str(trx.payer_sol.as_str()).unwrap();
-    let sysinstruct = Pubkey::from_str("Sysvar1nstructions1111111111111111111111111").unwrap();
-    let sysvarclock = Pubkey::from_str("SysvarC1ock11111111111111111111111111111111").unwrap();
-    let system = Pubkey::from_str("11111111111111111111111111111111").unwrap();
-    let token_id = Pubkey::from_str("89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g").unwrap();
-    let contract_token = spl_associated_token_account::get_associated_token_address(&contract, &token_id);
-    let caller_token = spl_associated_token_account::get_associated_token_address(&caller, &token_id);
-    let operator_token = spl_associated_token_account::get_associated_token_address(&operator_sol, &token_id);
-    let collateral_pool_acc = Pubkey::from_str(collateral.account.as_str()).unwrap();
-
-    let mut acc_meta = vec![
-
-        AccountMeta::new_readonly(sysinstruct, false),
-        AccountMeta::new(*operator_sol, true),
-        AccountMeta::new(collateral_pool_acc, false),
-        AccountMeta::new(operator_token, false),
-        AccountMeta::new(caller_token, false),
-        AccountMeta::new(system, false),
-
-        AccountMeta::new(contract, false),
-        AccountMeta::new(contract_token, false),
-        // AccountMeta::new(contract_code, false),
-        AccountMeta::new(caller, false),
-        AccountMeta::new(caller_token, false),
-
-        AccountMeta::new_readonly(*evm_loader_key, false),
-        AccountMeta::new_readonly(token_id, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-        AccountMeta::new_readonly(sysvarclock, false),
-    ];
-
-    if (trx.erc20_code != ""){
-        let contract_code = Pubkey::from_str(trx.erc20_code.as_str()).unwrap();
-        acc_meta.insert(8, AccountMeta::new(contract_code, false));
-    }
-
-    let instruction_05 = Instruction::new_with_bytes(
-        *evm_loader_key,
-        &data_05,
-        acc_meta);
-
-    instruction_05
-}
-
-#[must_use]
-pub fn keccak256(data: &[u8]) -> [u8; 32] {
-    hash(data).to_bytes()
-}
-
-
-fn make_ethereum_transaction(
-    to: H160,
-    trx_count: u64,
-    value: u32,
-    program_data: &[u8],
-    caller_private: &SecretKey
-) -> Vec<u8> {
-
-    let rlp_data = {
-        let tx = UnsignedTransaction {
-            to: Some(to),
-            nonce: trx_count,
-            gas_limit: 9_999_999.into(),
-            gas_price: 0.into(),
-            value: value.into(),
-            data: program_data.to_owned(),
-            chain_id: chain_id.into(), 
-        };
-
-        rlp::encode(&tx).to_vec()
-    };
-
-    let (sig, rec) = {
-        use libsecp256k1::{Message, sign};
-        let msg = Message::parse(&keccak256(rlp_data.as_slice()));
-        sign(&msg, caller_private)
-    };
-
-    let mut msg : Vec<u8> = Vec::new();
-    msg.extend(sig.serialize().iter().copied());
-    msg.push(rec.serialize());
-    msg.extend((rlp_data.len() as u64).to_le_bytes().iter().copied());
-    msg.extend(rlp_data);
-
-    msg
-}
 
 fn create_trx(
     evm_loader: &Pubkey,
@@ -475,7 +157,7 @@ fn create_trx(
             }
         }
 
-        let mut collateral_data : &collateral_t;
+        let mut collateral_data : &sol_transaction::collateral_t;
         match (it_collaterals.next()){
             Some(val) => collateral_data = val,
             None => {
@@ -485,10 +167,10 @@ fn create_trx(
         }
 
         let keypair =Keypair::from_bytes(keypair_bin).unwrap();
-        let trx : trx_t = serde_json::from_str(line?.as_str())?;
+        let trx : sol_transaction::trx_t = serde_json::from_str(line?.as_str())?;
         let msg = hex::decode(&trx.msg).unwrap();
 
-        let data_keccak = make_keccak_instruction_data(1, msg.len() as u16, 5);
+        let data_keccak = sol_transaction::make_keccak_instruction_data(1, msg.len() as u16, 5);
         let instruction_keccak = Instruction::new_with_bytes(
             keccakprog,
             &data_keccak,
@@ -498,7 +180,7 @@ fn create_trx(
         );
         let keypair_pubkey = keypair.pubkey();
         let signer: Box<dyn Signer> = Box::from(keypair);
-        let instruction_05 = make_instruction_05(&trx, evm_loader, &signer.pubkey(), collateral_data);
+        let instruction_05 = sol_transaction::make_instruction_05(&trx, evm_loader, &signer.pubkey(), collateral_data);
         // let instruction_budget_units = make_instruction_budget_units();
         // let instruction_budget_heap = make_instruction_budget_heap();
 
@@ -545,7 +227,7 @@ fn main() -> CommandResult{
         client,
         delay
     )
-        = parse_program_args();
+        = cmd_arg::parse_program_args();
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
