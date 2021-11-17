@@ -1058,26 +1058,29 @@ fn command_get_ether_account_data (
     }
 }
 
-fn command_get_ether_storage_at(
+fn command_get_storage_at(
     config: &Config,
     ether_address: &H160,
     index: &U256
-) {
+) -> CommandResult {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         Some((acc, balance, code_account)) => {
-            let account_data = AccountData::unpack(&acc.data).unwrap();
-            let mut code_data = code_account.as_ref().unwrap().data.clone();
-            let contract_data = AccountData::unpack(&code_data).unwrap();
+            let account_data = AccountData::unpack(&acc.data)?;
+            let mut code_data = match code_account.as_ref() {
+                Some(code) => code.data.clone(),
+                None => return Err(format!("Account {} is not code account", &ether_address.to_string()).into()),
+            };
+            let contract_data = AccountData::unpack(&code_data)?;
             let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
             let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
                                                         Some((contract_data, code_data)));
             let value = solidity_account.get_storage(index);
             print!("{:#x}", value);
+            Ok(())
         },
         None => {
-            eprintln!("Account not found {}", &ether_address.to_string());
-            print!("{:#x}", 0);
+            Err(format!("Account not found {}", &ether_address.to_string()).into())
         }
     }
 }
@@ -1626,9 +1629,7 @@ fn main() {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
 
-                command_get_ether_storage_at(&config, &contract_id, &index);
-
-                Ok(())
+                command_get_storage_at(&config, &contract_id, &index)
             }
             _ => unreachable!(),
         };
