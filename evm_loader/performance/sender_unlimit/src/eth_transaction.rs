@@ -35,14 +35,14 @@ type Error = Box<dyn std::error::Error>;
 
 
 #[derive(Debug)]
-pub struct UnsignedTransaction {
-    pub nonce: u64,
-    pub gas_price: U256,
-    pub gas_limit: U256,
-    pub to: Option<H160>,
-    pub value: U256,
-    pub data: Vec<u8>,
-    pub chain_id: U256,
+struct UnsignedTransaction {
+    nonce: u64,
+    gas_price: U256,
+    gas_limit: U256,
+    to: Option<H160>,
+    value: U256,
+    data: Vec<u8>,
+    chain_id: U256,
 }
 
 impl rlp::Encodable for UnsignedTransaction {
@@ -65,7 +65,7 @@ impl rlp::Encodable for UnsignedTransaction {
 
 
 #[must_use]
-pub fn keccak256(data: &[u8]) -> [u8; 32] {
+fn keccak256(data: &[u8]) -> [u8; 32] {
     hash(data).to_bytes()
 }
 
@@ -84,8 +84,8 @@ pub fn make_ethereum_transaction(
         let tx = UnsignedTransaction {
             to: Some(to),
             nonce: trx_count,
-            gas_limit: 9_999_999.into(),
-            gas_price: 0.into(),
+            gas_limit: 9_999_999_999_u64.into(),
+            gas_price: 10_u64.pow(9).into(),
             value: 10_u64.pow(9).into(),
             data: vec![],
             chain_id: CHAIN_ID.into(),

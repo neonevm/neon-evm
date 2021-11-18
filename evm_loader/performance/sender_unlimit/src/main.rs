@@ -154,9 +154,6 @@ fn create_trx(
     let mut it_collaterals = collaterals.iter();
     let mut it_accounts = accounts.iter();
 
-    // let mut trx_file = File::open(trx_filename)?;
-    // let trx_reader= BufReader::new(trx_file);
-
     let blockhash : solana_program::hash::Hash;
     match (rpc_client.get_recent_blockhash()){
         Ok((hash,_)) => blockhash = hash,
@@ -202,14 +199,14 @@ fn create_trx(
                 keypair_bin = it_keys.next().unwrap()
             }
         }
-        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
 
 
-        let private_key  = keypair.secret().to_bytes();
-        let from = H160::from_str(&from_data.address).unwrap();
+        let mut from_private_key : [u8; 32] = [0; 32];
+        from_private_key.copy_from_slice( hex::decode(&from_data.pr_key).unwrap().as_slice());
+
         let from_sol = Pubkey::from_str(from_data.account.as_str()).unwrap();
         let to = H160::from_str(&to_data.address).unwrap();
-        let (sig, msg) = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &private_key);
+        let (sig, msg) = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &from_private_key);
 
         let trx = sol_transaction::trx_t{
             sign : hex::encode(&sig),
@@ -222,10 +219,11 @@ fn create_trx(
             payer_sol : from_data.account.clone(),
             receiver_eth : to_data.address.clone(),
         };
+
+        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
         let sol_trx = sol_transaction::create_sol_trx(&trx, keypair, &collateral_data, blockhash, evm_loader);
         transaction.push((sol_trx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
     }
-
 
     return Ok(transaction);
 }
