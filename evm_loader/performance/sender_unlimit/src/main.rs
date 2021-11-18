@@ -77,7 +77,7 @@ use evm_loader::{
 };
 use evm::{H160, H256, U256};
 use solana_sdk::recent_blockhashes_account::update_account;
-
+use crate::sol_transaction::collateral_t;
 
 
 #[derive(Serialize, Deserialize)]
@@ -137,91 +137,38 @@ fn read_accounts(filename: &String) -> Result<Vec<account_t>, Error> {
 
 fn create_trx(
     evm_loader: &Pubkey,
-    senders_filename :&String,
-    collateral_filename: &String,
-    account_filename: &String,
+    collateral_data: &collateral_t,
+    from_data: &account_t,
+    to_data: &account_t,
+    keypair_bin : &Vec<u8>,
     rpc_client: &Arc<RpcClient>,
     blockhash: solana_program::hash::Hash
-)-> Result<Vec<(Transaction, String, String, String)>, Error>{
+)-> Result<(Transaction, String, String, String), Error>{
 
 
-    let mut keys = read_senders(&senders_filename).unwrap();
-    let mut collaterals = read_collateral(&collateral_filename).unwrap();
-    let mut accounts = read_accounts(&account_filename).unwrap();
+    let mut from_private_key : [u8; 32] = [0; 32];
+    from_private_key.copy_from_slice( hex::decode(&from_data.pr_key).unwrap().as_slice());
 
-    // println!("creating transactions  ..");
-    let mut transaction = Vec::new();
+    let from_sol = Pubkey::from_str(from_data.account.as_str()).unwrap();
+    let to = H160::from_str(&to_data.address).unwrap();
+    let (sig, msg) = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &from_private_key);
 
-    let mut it_keys = keys.iter();
-    let mut it_collaterals = collaterals.iter();
-    let mut it_accounts = accounts.iter();
+    let trx = sol_transaction::trx_t{
+        sign : hex::encode(&sig),
+        from_addr : from_data.address.clone(),
+        erc20_code : "".to_string(),
+        erc20_eth : to_data.address.clone(),
+        erc20_sol : to_data.account.clone(),
+        msg : hex::encode(&msg),
+        payer_eth : from_data.address.clone(),
+        payer_sol : from_data.account.clone(),
+        receiver_eth : to_data.address.clone(),
+    };
 
-    let mut count = 0;
-    while(count < 1) {
-        // println!("create transaction {}", count);
-        count = count + 1;
-        let mut collateral_data : &sol_transaction::collateral_t;
-        match (it_collaterals.next()){
-            Some(val) => collateral_data = val,
-            None => {
-                it_collaterals = collaterals.iter();
-                collateral_data = it_collaterals.next().unwrap()
-            }
-        }
+    let keypair =Keypair::from_bytes(keypair_bin).unwrap();
+    let sol_trx = sol_transaction::create_sol_trx(&trx, keypair, &collateral_data, blockhash, evm_loader);
 
-        let mut from_data : &account_t;
-        match (it_accounts.next()){
-            Some(val) => from_data = val,
-            None => {
-                it_accounts = accounts.iter();
-                from_data = it_accounts.next().unwrap()
-            }
-        }
-
-        let mut to_data : &account_t;
-        match (it_accounts.next()){
-            Some(val) => to_data = val,
-            None => {
-                it_accounts = accounts.iter();
-                to_data = it_accounts.next().unwrap()
-            }
-        }
-
-        let mut keypair_bin : &Vec<u8>;
-        match (it_keys.next()){
-            Some(val) => keypair_bin = val,
-            None => {
-                it_keys = keys.iter();
-                keypair_bin = it_keys.next().unwrap()
-            }
-        }
-
-
-        let mut from_private_key : [u8; 32] = [0; 32];
-        from_private_key.copy_from_slice( hex::decode(&from_data.pr_key).unwrap().as_slice());
-
-        let from_sol = Pubkey::from_str(from_data.account.as_str()).unwrap();
-        let to = H160::from_str(&to_data.address).unwrap();
-        let (sig, msg) = eth_transaction::make_ethereum_transaction(rpc_client, &from_sol, to, &from_private_key);
-
-        let trx = sol_transaction::trx_t{
-            sign : hex::encode(&sig),
-            from_addr : from_data.address.clone(),
-            erc20_code : "".to_string(),
-            erc20_eth : to_data.address.clone(),
-            erc20_sol : to_data.account.clone(),
-            msg : hex::encode(&msg),
-            payer_eth : from_data.address.clone(),
-            payer_sol : from_data.account.clone(),
-            receiver_eth : to_data.address.clone(),
-        };
-
-        let keypair =Keypair::from_bytes(keypair_bin).unwrap();
-        let sol_trx = sol_transaction::create_sol_trx(&trx, keypair, &collateral_data, blockhash, evm_loader);
-        transaction.push((sol_trx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
-    }
-
-    return Ok(transaction);
+    return Ok((sol_trx, trx.erc20_eth, trx.payer_eth, trx.receiver_eth));
 }
 
 fn write_for_verify(mut verify: &File, signatures: &Vec<(String, String, String, Signature)>)
@@ -261,16 +208,30 @@ fn main() -> CommandResult{
     )
         = cmd_arg::parse_program_args();
 
+    let ten = time::Duration::from_micros(delay);
+
     let rpc_client = Arc::new(RpcClient::new_with_commitment(json_rpc_url,
                                                             CommitmentConfig::confirmed()));
     let tpu_config : TpuClientConfig = TpuClientConfig::default();
     let tpu_client = TpuClient::new(rpc_client.clone(), "", tpu_config).unwrap();
 
-    let mut verify = File::create(verify_filename).unwrap();
 
     let mut blockhash  = get_blockhash(&rpc_client);
     let mut blockhash_time = SystemTime::now();
     let five_seconds = Duration::new(5, 0);
+
+    let mut keys = read_senders(&senders_filename).unwrap();
+    let mut collaterals = read_collateral(&collateral_filename).unwrap();
+    let mut accounts = read_accounts(&account_filename).unwrap();
+
+    // println!("creating transactions  ..");
+    // let mut transaction = Vec::new();
+
+    let mut it_keys = keys.iter();
+    let mut it_collaterals = collaterals.iter();
+    let mut it_accounts = accounts.iter();
+
+    let mut verify = File::create(verify_filename).unwrap();
 
     while (true){
         let start = SystemTime::now();
@@ -279,37 +240,78 @@ fn main() -> CommandResult{
             blockhash_time = start;
         }
 
-        let transaction = create_trx(&evm_loader, &senders_filename, &collateral_filename, &account_filename, &rpc_client, blockhash).unwrap();
+
+        let mut collateral_data : &sol_transaction::collateral_t;
+        match (it_collaterals.next()){
+            Some(val) => collateral_data = val,
+            None => {
+                it_collaterals = collaterals.iter();
+                collateral_data = it_collaterals.next().unwrap()
+            }
+        }
+
+        let mut from_data : &account_t;
+        match (it_accounts.next()){
+            Some(val) => from_data = val,
+            None => {
+                it_accounts = accounts.iter();
+                from_data = it_accounts.next().unwrap()
+            }
+        }
+
+        let mut to_data : &account_t;
+        match (it_accounts.next()){
+            Some(val) => to_data = val,
+            None => {
+                it_accounts = accounts.iter();
+                to_data = it_accounts.next().unwrap()
+            }
+        }
+
+        let mut keypair_bin : &Vec<u8>;
+        match (it_keys.next()){
+            Some(val) => keypair_bin = val,
+            None => {
+                it_keys = keys.iter();
+                keypair_bin = it_keys.next().unwrap()
+            }
+        }
+
+
+        let (tx, erc20_eth, payer_eth, receiver_eth) = create_trx(
+            &evm_loader,
+            collateral_data,
+            from_data,
+            to_data,
+            keypair_bin,
+            &rpc_client,
+            blockhash).unwrap();
 
         println!("sending transactions ..");
-        let mut count = 0;
         let mut signatures = Vec::new();
-        let ten = time::Duration::from_micros(delay);
 
 
-        for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
-            if (client == "tcp"){
-                let sig = rpc_client.send_transaction_with_config(
-                    &tx,
-                    RpcSendTransactionConfig {
-                        skip_preflight : true,
-                        preflight_commitment: Some(CommitmentLevel::Confirmed),
-                        ..RpcSendTransactionConfig::default()
-                    }
-                )?;
-                signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
-            }
-            else if (client == "udp") {
-                let res = tpu_client.send_transaction(&tx);
-                signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
-            }
-            count = count  + 1;
-            thread::sleep(ten);
+        if (client == "tcp"){
+            let sig = rpc_client.send_transaction_with_config(
+                &tx,
+                RpcSendTransactionConfig {
+                    skip_preflight : true,
+                    preflight_commitment: Some(CommitmentLevel::Confirmed),
+                    ..RpcSendTransactionConfig::default()
+                }
+            )?;
+            signatures.push((erc20_eth, payer_eth, receiver_eth, sig));
         }
+        else if (client == "udp") {
+            let res = tpu_client.send_transaction(&tx);
+            signatures.push((erc20_eth, payer_eth, receiver_eth, tx.signatures[0]));
+        }
+
+        thread::sleep(ten);
         let end = SystemTime::now();
         let time = end.duration_since(start).expect("Clock may have gone backwards");
+
         println!("time  {:?}", time);
-        // println!("count {}", &count.to_string());
 
         write_for_verify(&verify, &signatures);
     }
