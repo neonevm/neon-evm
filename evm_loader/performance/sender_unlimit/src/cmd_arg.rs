@@ -20,7 +20,7 @@ use solana_clap_utils::{
 };
 
 
-pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, String, u64) {
+pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, String, u64) {
     let key = "EVM_LOADER";
     let env_evm_loader  = match env::var_os(key) {
         Some(val) => val.into_string().unwrap(),
@@ -58,20 +58,13 @@ pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, 
                 .default_value(&*env_evm_loader)
                 .help("Pubkey for evm_loader contract")
         ).arg(
-        Arg::with_name("transaction_file")
-            .value_name("TRANSACTION_FILEPATH")
-            .takes_value(true)
-            .required(true)
-            .help("/path/to/transaction.json")
-            .default_value("transaction.json"),
-    ).arg(
         Arg::with_name("sender_file")
             .value_name("SENDER_FILEPATH")
             .takes_value(true)
             .required(true)
             .help("/path/to/sender.json")
             .default_value("sender.json"),
-    )
+        )
         .arg(
             Arg::with_name("verify_file")
                 .value_name("VERIFY_FILEPATH")
@@ -134,12 +127,11 @@ pub fn parse_program_args() -> (Pubkey, String, String, String, String, String, 
 
     let client = app_matches.value_of("client").unwrap().to_string();
 
-    let trx_filename = app_matches.value_of("transaction_file").unwrap().to_string();
     let senders_filename = app_matches.value_of("sender_file").unwrap().to_string();
     let verify_filename = app_matches.value_of("verify_file").unwrap().to_string();
     let collateral_filename = app_matches.value_of("collateral_file").unwrap().to_string();
     let account_filename = app_matches.value_of("account_file").unwrap().to_string();
     let delay :u64 = app_matches.value_of("delay").unwrap().to_string().parse().unwrap();
 
-    return (evm_loader, json_rpc_url, trx_filename, senders_filename, verify_filename, collateral_filename, account_filename, client, delay);
+    return (evm_loader, json_rpc_url, senders_filename, verify_filename, collateral_filename, account_filename, client, delay);
 }

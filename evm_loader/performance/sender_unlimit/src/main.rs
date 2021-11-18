@@ -137,7 +137,6 @@ fn read_accounts(filename: &String) -> Result<Vec<account_t>, Error> {
 
 fn create_trx(
     evm_loader: &Pubkey,
-    trx_filename: &String,
     senders_filename :&String,
     collateral_filename: &String,
     account_filename: &String,
@@ -155,8 +154,8 @@ fn create_trx(
     let mut it_collaterals = collaterals.iter();
     let mut it_accounts = accounts.iter();
 
-    let mut trx_file = File::open(trx_filename)?;
-    let trx_reader= BufReader::new(trx_file);
+    // let mut trx_file = File::open(trx_filename)?;
+    // let trx_reader= BufReader::new(trx_file);
 
     let blockhash : solana_program::hash::Hash;
     match (rpc_client.get_recent_blockhash()){
@@ -251,7 +250,6 @@ fn main() -> CommandResult{
 
     let (evm_loader,
         json_rpc_url,
-        trx_filename,
         senders_filename,
         verify_filename,
         collateral_filename,
@@ -269,7 +267,7 @@ fn main() -> CommandResult{
     let mut verify = File::create(verify_filename).unwrap();
 
     while (true){
-        let transaction = create_trx(&evm_loader, &trx_filename, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
+        let transaction = create_trx(&evm_loader, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
 
         println!("sending transactions ..");
         let mut count = 0;

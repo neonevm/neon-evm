@@ -133,7 +133,7 @@ fn get_ether_nonce(
     // let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
 
     // println!("Caller: ether {}, solana {}", caller_ether, caller_sol);
-    println!("Caller trx_count: {} ", trx_count);
+    // println!("Caller trx_count: {} ", trx_count);
     // println!("caller_token = {}", caller_token);
 
     Ok(trx_count)
