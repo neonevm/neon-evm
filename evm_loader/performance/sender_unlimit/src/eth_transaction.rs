@@ -119,7 +119,6 @@ fn get_ether_nonce(
     }
 
     let trx_count : u64;
-    // println!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
@@ -129,12 +128,5 @@ fn get_ether_nonce(
         Err(_) => return Err("Caller unpack error".into())
     };
     trx_count = account.trx_count;
-    // let caller_ether = account.ether;
-    // let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
-
-    // println!("Caller: ether {}, solana {}", caller_ether, caller_sol);
-    // println!("Caller trx_count: {} ", trx_count);
-    // println!("caller_token = {}", caller_token);
-
     Ok(trx_count)
 }

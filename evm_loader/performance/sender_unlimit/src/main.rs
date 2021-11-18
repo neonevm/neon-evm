@@ -140,29 +140,25 @@ fn create_trx(
     senders_filename :&String,
     collateral_filename: &String,
     account_filename: &String,
-    rpc_client: &Arc<RpcClient> )-> Result<Vec<(Transaction, String, String, String)>, Error>{
+    rpc_client: &Arc<RpcClient>,
+    blockhash: solana_program::hash::Hash
+)-> Result<Vec<(Transaction, String, String, String)>, Error>{
 
 
     let mut keys = read_senders(&senders_filename).unwrap();
     let mut collaterals = read_collateral(&collateral_filename).unwrap();
     let mut accounts = read_accounts(&account_filename).unwrap();
 
-    println!("creating transactions  ..");
+    // println!("creating transactions  ..");
     let mut transaction = Vec::new();
 
     let mut it_keys = keys.iter();
     let mut it_collaterals = collaterals.iter();
     let mut it_accounts = accounts.iter();
 
-    let blockhash : solana_program::hash::Hash;
-    match (rpc_client.get_recent_blockhash()){
-        Ok((hash,_)) => blockhash = hash,
-        _ => panic!("get_recent_blockhash() error")
-    }
-
     let mut count = 0;
-    while(count < 100) {
-        println!("create transaction {}", count);
+    while(count < 1) {
+        // println!("create transaction {}", count);
         count = count + 1;
         let mut collateral_data : &sol_transaction::collateral_t;
         match (it_collaterals.next()){
@@ -244,6 +240,14 @@ fn write_for_verify(mut verify: &File, signatures: &Vec<(String, String, String,
     return Ok(());
 }
 
+fn get_blockhash(rpc_client: &Arc<RpcClient>) -> solana_program::hash::Hash {
+    // println!("update blockhash");
+    match (rpc_client.get_recent_blockhash()){
+        Ok((hash,_)) => return  hash,
+        _ => panic!("get_recent_blockhash() error")
+    }
+}
+
 fn main() -> CommandResult{
 
     let (evm_loader,
@@ -264,14 +268,25 @@ fn main() -> CommandResult{
 
     let mut verify = File::create(verify_filename).unwrap();
 
+    let mut blockhash  = get_blockhash(&rpc_client);
+    let mut blockhash_time = SystemTime::now();
+    let five_seconds = Duration::new(5, 0);
+
     while (true){
-        let transaction = create_trx(&evm_loader, &senders_filename, &collateral_filename, &account_filename, &rpc_client).unwrap();
+        let start = SystemTime::now();
+        if start.duration_since(blockhash_time).expect("Clock may have gone backwards") > five_seconds{
+            blockhash = get_blockhash(&rpc_client);
+            blockhash_time = start;
+        }
+
+        let transaction = create_trx(&evm_loader, &senders_filename, &collateral_filename, &account_filename, &rpc_client, blockhash).unwrap();
 
         println!("sending transactions ..");
         let mut count = 0;
         let mut signatures = Vec::new();
         let ten = time::Duration::from_micros(delay);
-        let start = SystemTime::now();
+
+
         for (tx, erc20_eth, payer_eth, receiver_eth) in transaction{
             if (client == "tcp"){
                 let sig = rpc_client.send_transaction_with_config(
@@ -294,7 +309,7 @@ fn main() -> CommandResult{
         let end = SystemTime::now();
         let time = end.duration_since(start).expect("Clock may have gone backwards");
         println!("time  {:?}", time);
-        println!("count {}", &count.to_string());
+        // println!("count {}", &count.to_string());
 
         write_for_verify(&verify, &signatures);
     }
