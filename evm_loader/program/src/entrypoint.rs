@@ -744,6 +744,34 @@ fn process_instruction<'a>(
 
             do_write(holder_info, offset, bytes)
         },
+        EvmInstruction::UpdateValidsTable => {
+            let code_info = next_account_info(account_info_iter)?;
+            
+            let mut data = code_info.try_borrow_mut_data()?;
+            let account_data = AccountData::unpack(&data)?;
+            let contract = account_data.get_contract()?;
+
+            let code_size = contract.code_size as usize;
+            if code_size == 0 {
+                return Err!(ProgramError::InvalidAccountData; "empty code account");
+            }
+
+            let valids = {
+                let code = &data[account_data.size()..account_data.size() + code_size];
+                evm::Valids::compute(code)
+            };
+
+            let expected_valids_size = (code_size / 8) + 1;
+            if valids.len() != expected_valids_size {
+                return Err!(ProgramError::InvalidInstructionData; "valids.len()<{}> != expected_valids_size<{}>", valids.len(), expected_valids_size);
+            }
+
+            let valids_begin = account_data.size() + code_size;
+            let valids_end = account_data.size() + code_size + valids.len();
+            (&mut data[valids_begin..valids_end]).copy_from_slice(&valids);
+
+            Ok(())
+        }
 
         EvmInstruction::Write |
         EvmInstruction::Cancel |
