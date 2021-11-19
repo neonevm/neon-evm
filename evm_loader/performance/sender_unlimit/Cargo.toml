@@ -1,5 +1,5 @@
 [package]
-name = "sender_unlimit"
+name = "send_unlimit"
 version = "0.1.0"
 authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
 edition = "2018"

@@ -2748,7 +2748,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sender_unlimit"
+name = "send_unlimit"
 version = "0.1.0"
 dependencies = [
  "bincode",
