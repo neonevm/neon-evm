@@ -540,6 +540,50 @@ def create_senders(args):
     print("total: ", total)
 
 
+def transfer_to_senders(args):
+    instance = init_wallet()
+
+    total = 0
+    confirmed = 0
+    iteration = 0
+    receipt_list = []
+    with open(senders_file + args.postfix, mode='r') as f:
+        senders = f.readlines()
+        while (True):
+            iteration = iteration + 1
+            print("iteration: ", iteration)
+            lost = []
+            for keypair in senders:
+                acc = Account(bytes.fromhex(keypair[0:64]))
+
+                param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=args.lamports)
+                tx = Transaction()
+                tx.add(transfer(param))
+                res = client.send_transaction(tx, instance.acc,
+                                              opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
+
+                receipt_list.append((res['result'], acc))
+
+                total = total + 1
+                if total % 50 == 0 or keypair == senders[-1]:
+                    for (receipt, acc) in receipt_list:
+                        try:
+                            confirm_transaction_(client, receipt)
+                            confirmed = confirmed + 1
+                            print(f"confirmed {confirmed} ", acc.public_key())
+                        except:
+                            print(f"transaction is lost {receipt}, {acc.public_key()}")
+                            lost.append(acc.public_key)
+                    receipt_list = []
+
+            if lost == []:
+                break
+            else:
+                senders = lost
+
+    print("\nconfirmed: ", confirmed)
+    print("iterations: ", iteration)
+    print("total requests: ", total)
 
 def create_collateral_pool(args):
     if args.key == '':
