@@ -285,7 +285,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -330,7 +330,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 4: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -416,7 +416,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
                 print("Exception was expected, OK")
                 pass
             else:
