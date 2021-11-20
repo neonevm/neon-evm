@@ -547,10 +547,12 @@ fn process_instruction<'a>(
                 Err(err) => {
                     let caller = H160::from_slice(from_addr);
 
-                    let mut finalized_is_outdated : bool = false;
-                    if err == EvmLoaderError::StorageAccountFinalized.into(){
-                        finalized_is_outdated = StorageAccount::finalized_is_outdated(storage_info, sign, &caller)?;
+                    let finalized_is_outdated = if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        StorageAccount::finalized_is_outdated(storage_info, sign, &caller)?
                     }
+                    else{
+                        false
+                    };
 
                     if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
                         check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
@@ -603,10 +605,12 @@ fn process_instruction<'a>(
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    let mut finalized_is_outdated : bool = false;
-                    if err == EvmLoaderError::StorageAccountFinalized.into(){
-                        finalized_is_outdated = StorageAccount::finalized_is_outdated(storage_info, signature, &caller)?;
+                    let finalized_is_outdated = if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        StorageAccount::finalized_is_outdated(storage_info, signature, &caller)?
                     }
+                    else{
+                        false
+                    };
 
                     if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
                         do_begin(
@@ -973,11 +977,11 @@ fn do_continue_top_level<'a>(
         system_info)?;
 
     let (results, used_gas) = {
-        if let Err(_) = token::check_enough_funds(
+        if token::check_enough_funds(
             trx_gas_limit,
             trx_gas_price,
             user_eth_info,
-            Some(&mut storage)) {
+            Some(&mut storage)).is_err() {
             let used_gas = storage.get_payments_info()?.0;
             (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
         } else {
@@ -1013,7 +1017,7 @@ fn do_continue_top_level<'a>(
     Ok(())
 }
 
-fn do_partial_call<'a>(
+fn do_partial_call(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &ProgramAccountStorage,

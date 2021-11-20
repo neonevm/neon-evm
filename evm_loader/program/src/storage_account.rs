@@ -19,6 +19,7 @@ pub struct StorageAccount<'a> {
     data: AccountData
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<'a> StorageAccount<'a> {
     pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64, sign: &[u8]) -> Result<Self, ProgramError> {
        let mut account_data = info.try_borrow_mut_data()?;
