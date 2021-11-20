@@ -77,7 +77,7 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
-    pub fn is_new_transaction(info: &'a AccountInfo<'a>, sign : &[u8], caller: &H160)  -> Result<bool, ProgramError> {
+    pub fn finalized_is_outdated(info: &'a AccountInfo<'a>, sign : &[u8], caller: &H160)  -> Result<bool, ProgramError> {
         let account_data = info.try_borrow_data()?;
 
         match AccountData::unpack(&account_data)? {

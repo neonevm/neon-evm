@@ -193,7 +193,8 @@ impl AccountData {
                 ERC20Allowance::pack(acc, &mut dst[1..])
             },
             Self::FinalizedStorage(acc) => {
-                if dst[0] != Self::FINALIZED_STORAGE_TAG && dst[0] != Self::EMPTY_TAG { return Err!(ProgramError::InvalidAccountData; "dst[0]={:?}", dst[0]); }
+                // TODO: it is necessary to figure out: it is suggested that is only allowed change state STORAGE->FINALISED, (not EMPTY->FINALISED)
+                if dst[0] != Self::STORAGE_TAG { return Err!(ProgramError::InvalidAccountData; "dst[0]={:?}", dst[0]); }
                 if dst.len() < self.size() { return Err!(ProgramError::AccountDataTooSmall; "dst.len()={:?} < self.size()={:?}", dst.len(), self.size()); }
                 dst[0] = Self::FINALIZED_STORAGE_TAG;
                 FinalizedStorage::pack(acc, &mut dst[1..])

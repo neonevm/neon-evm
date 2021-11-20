@@ -547,12 +547,12 @@ fn process_instruction<'a>(
                 Err(err) => {
                     let caller = H160::from_slice(from_addr);
 
-                    let mut is_new_transaction : bool = false;
+                    let mut finalized_is_outdated : bool = false;
                     if err == EvmLoaderError::StorageAccountFinalized.into(){
-                        is_new_transaction = StorageAccount::is_new_transaction(storage_info, sign, &caller)?;
+                        finalized_is_outdated = StorageAccount::finalized_is_outdated(storage_info, sign, &caller)?;
                     }
 
-                    if err == EvmLoaderError::StorageAccountUninitialized.into() || is_new_transaction {
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
                         check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
 
                         let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
@@ -603,12 +603,12 @@ fn process_instruction<'a>(
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    let mut is_new_transaction : bool = false;
+                    let mut finalized_is_outdated : bool = false;
                     if err == EvmLoaderError::StorageAccountFinalized.into(){
-                        is_new_transaction = StorageAccount::is_new_transaction(storage_info, signature, &caller)?;
+                        finalized_is_outdated = StorageAccount::finalized_is_outdated(storage_info, signature, &caller)?;
                     }
 
-                    if err == EvmLoaderError::StorageAccountUninitialized.into() || is_new_transaction {
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
                         do_begin(
                             collateral_pool_index, 0, caller, trx,
                             program_id, trx_accounts, accounts, storage_info,
@@ -650,7 +650,8 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
             }
 
-            let mut data = deleted_acc_info.try_borrow_mut_data()?;
+            // let mut data = deleted_acc_info.try_borrow_mut_data()?;
+            let data = deleted_acc_info.data.borrow_mut();
             let account_data = AccountData::unpack(&data)?;
             match account_data {
                 AccountData::FinalizedStorage(_) | AccountData::Empty => {},
@@ -660,7 +661,8 @@ fn process_instruction<'a>(
             **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
             **deleted_acc_info.lamports.borrow_mut() = 0;
 
-            AccountData::pack(&AccountData::Empty, &mut data)?;
+            // TODO: it is necessary to figure out: it is suggested, that change state FINALISED->EMPTY is performed only once in the code
+            // AccountData::pack(&AccountData::Empty, &mut data)?;
 
             Ok(())
         },
