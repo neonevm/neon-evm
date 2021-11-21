@@ -1055,14 +1055,23 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_metadata(&self, address: Pubkey) -> Option<(Pubkey, usize)> {
-        let default = (Pubkey::default(), usize::default());
-        let r = self.backend.apply_to_solana_account(
+    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
+        let owner = self.backend.apply_to_solana_account(
             &address,
-            || default,
-            |data, owner| (*owner, data.len())
+            Pubkey::default,
+            |_data, owner| *owner
         );
-        if r == default { None } else { Some(r) }
+        if owner == Pubkey::default() { None } else { Some(owner) }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
+        let length = self.backend.apply_to_solana_account(
+            &address,
+            || usize::MAX,
+            |data, _owner| data.len()
+        );
+        if length == usize::MAX { None } else { Some(length) }
     }
 
     #[must_use]

@@ -6,6 +6,7 @@ use crate::utils::keccak256_digest;
 use arrayref::{array_ref, array_refs};
 use core::convert::Infallible;
 use evm::{Capture, ExitReason, H160, U256};
+use solana_program::pubkey::Pubkey;
 use solana_program::secp256k1_recover::secp256k1_recover;
 use std::convert::{TryInto};
 
@@ -143,8 +144,6 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    use solana_program::pubkey::Pubkey;
-
     debug_print!("erc20_wrapper({})", hex::encode(&input));
 
     let (token_mint, rest) = input.split_at(32);
@@ -285,12 +284,14 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
 // QueryAccount method ids:
 //------------------------------------------
-// metadata(uint256)             => e3684e39
-// data(uint256,uint256,uint256) => d5374c25
+// owner(uint256)              => 0xa123c33e
+// length(uint256)             => 0xaa8b99d2
+// data(uint256,uint64,uint64) => 0x43ca5161
 //------------------------------------------
 
-const QUERY_ACCOUNT_METHOD_METADATA_ID: &[u8; 4] = &[0xe3, 0x68, 0x4e, 0x39];
-const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0xd5, 0x37, 0x4c, 0x25];
+const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
+const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
+const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
 
 /// Call inner `query_account`
 #[must_use]
@@ -300,40 +301,44 @@ pub fn query_account<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    use solana_program::pubkey::Pubkey;
-
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
     let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::new(account_address);
 
     match method_id {
-        QUERY_ACCOUNT_METHOD_METADATA_ID => {
-            debug_print!("query_account get metadata {}", account_address);
-            let r = state.query_solana_account_metadata(account_address);
-            if let Some(metadata) = r {
-                debug_print!("query_account metadata: {:?}", metadata);
-                let mut result = vec![0_u8; 1 + 32 + 8];
-                // Initial byte == 0 means success
-                result[1..33].copy_from_slice(metadata.0.as_ref()); // owner
-                result[33..].copy_from_slice(&metadata.1.to_be_bytes()); // length of data
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
+        QUERY_ACCOUNT_METHOD_OWNER_ID => {
+            debug_print!("query_account get owner {}", account_address);
+            let r = state.query_solana_account_owner(account_address);
+            if let Some(owner) = r {
+                debug_print!("query_account owner result: {:?}", owner);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
             }
-            let revert_message = b"QueryAccount metadata failed".to_vec();
+            let revert_message = b"QueryAccount owner failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_LENGTH_ID => {
+            debug_print!("query_account get length {}", account_address);
+            let r = state.query_solana_account_length(account_address);
+            if let Some(length) = r {
+                debug_print!("query_account length result: {:?}", length);
+                let length = &length.to_be_bytes();
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), length.to_vec()));
+            }
+            let revert_message = b"QueryAccount length failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
-            let (offset, length) = rest.split_at(32);
+            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes.
+            let (offset, rest) = rest.split_at(32);
+            let (length, _) = rest.split_at(32);
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
             let r = state.query_solana_account_data(account_address, offset, length);
             if let Some(data) = r {
-                debug_print!("query_account data: {:?}", data);
-                let mut result = vec![0_u8; 1 + length];
-                // Initial byte == 0 means success
-                result[1..].copy_from_slice(&data); // data
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), result));
+                debug_print!("query_account data result: {:?}", data);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data));
             }
             let revert_message = b"QueryAccount data failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
