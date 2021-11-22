@@ -547,39 +547,44 @@ def transfer_to_senders(args):
     confirmed = 0
     iteration = 0
     receipt_list = []
+    senders = []
     with open(senders_file + args.postfix, mode='r') as f:
-        senders = f.readlines()
-        while (True):
-            iteration = iteration + 1
-            print("iteration: ", iteration)
-            lost = []
-            for keypair in senders:
-                acc = Account(bytes.fromhex(keypair[0:64]))
+        keypairs = f.readlines()
+        for keypair in keypairs:
+            senders.append(Account(bytes.fromhex(keypair[0:64])).public_key())
 
-                param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=acc.public_key(), lamports=args.lamports)
+    while (True):
+        iteration = iteration + 1
+        print("iteration: ", iteration)
+        lost = []
+        for receiver in senders:
+
+            sum = getBalance(receiver) - args.balance
+            if sum > 0:
+                param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=receiver, lamports=sum)
                 tx = Transaction()
                 tx.add(transfer(param))
                 res = client.send_transaction(tx, instance.acc,
                                               opts=TxOpts(skip_confirmation=True, skip_preflight=True, preflight_commitment="confirmed"))
 
-                receipt_list.append((res['result'], acc))
-
+                receipt_list.append((res['result'], receiver))
                 total = total + 1
-                if total % 50 == 0 or keypair == senders[-1]:
-                    for (receipt, acc) in receipt_list:
-                        try:
-                            confirm_transaction_(client, receipt)
-                            confirmed = confirmed + 1
-                            print(f"confirmed {confirmed} ", acc.public_key())
-                        except:
-                            print(f"transaction is lost {receipt}, {acc.public_key()}")
-                            lost.append(acc.public_key)
-                    receipt_list = []
 
-            if lost == []:
-                break
-            else:
-                senders = lost
+            if total % 50 == 0 or receiver == senders[-1]:
+                for (receipt, acc) in receipt_list:
+                    try:
+                        confirm_transaction_(client, receipt)
+                        confirmed = confirmed + 1
+                        print(f"confirmed {confirmed} ", acc)
+                    except:
+                        print(f"transaction is lost {receipt}, {acc}")
+                        lost.append(acc)
+                receipt_list = []
+
+        if lost == []:
+            break
+        else:
+            senders = lost
 
     print("\nconfirmed: ", confirmed)
     print("iterations: ", iteration)

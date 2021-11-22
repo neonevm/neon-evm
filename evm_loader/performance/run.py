@@ -13,7 +13,7 @@ parser.add_argument('--step', metavar="step of the test", type=str,
 parser.add_argument('--postfix', metavar="filename postfix", type=str,  help='0,1,2..', default='')
 parser.add_argument('--type', metavar="transfer type", type=str,  help='erc20, spl, swap', default='erc20')
 parser.add_argument('--key', metavar="keypair", type=str,  help='/home/solana/collateral-pool-keypair.json', default='')
-parser.add_argument('--lamports', metavar="lamports",  type=int,  help='only for transfer_to_senders')
+parser.add_argument('--balance', metavar="balance",  type=int,  help='only for transfer_to_senders')
 
 args = parser.parse_args()
 
