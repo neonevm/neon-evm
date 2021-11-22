@@ -572,7 +572,7 @@ def transfer_to_senders(args):
                 receipt_list.append((res['result'], receiver))
                 total = total + 1
             else:
-                print(receiver, "balance:", balance, "=> skipped")
+                print(receiver, "balance:", receiver_balance, "=> skipped")
 
             if total % 50 == 0 or receiver == senders[-1]:
                 for (receipt, acc) in receipt_list:
