@@ -1167,6 +1167,76 @@ fn command_cancel_trx(
     Ok(())
 }
 
+fn process_dump(
+    config: &Config,
+    account_pubkey: Option<Pubkey>,
+    output_location: &str,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = config.rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+                let mut f = File::create(output_location)?;
+                f.write_all(&account.data)?;
+                Ok(format!("Wrote program to {}", output_location))
+            } else if account.owner == bpf_loader_upgradeable::id() {
+                if let Ok(UpgradeableLoaderState::Program {
+                              programdata_address,
+                          }) = account.state()
+                {
+                    if let Some(programdata_account) = config.rpc_client
+                        .get_account_with_commitment(&programdata_address, config.commitment)?
+                        .value
+                    {
+                        if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
+                        programdata_account.state()
+                        {
+                            let offset =
+                                UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                            let program_data = &programdata_account.data[offset..];
+                            let mut f = File::create(output_location)?;
+                            f.write_all(program_data)?;
+                            Ok(format!("Wrote program to {}", output_location))
+                        } else {
+                            Err(
+                                format!("Invalid associated ProgramData account {} found for the program {}",
+                                        programdata_address, account_pubkey)
+                                    .into(),
+                            )
+                        }
+                    } else {
+                        Err(format!(
+                            "Failed to find associated ProgramData account {} for the program {}",
+                            programdata_address, account_pubkey
+                        )
+                            .into())
+                    }
+                } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+                    let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                    let program_data = &account.data[offset..];
+                    let mut f = File::create(output_location)?;
+                    f.write_all(program_data)?;
+                    Ok(format!("Wrote program to {}", output_location))
+                } else {
+                    Err(format!(
+                        "{} is not an upgradeble loader buffer or program account",
+                        account_pubkey
+                    )
+                        .into())
+                }
+            } else {
+                Err(format!("{} is not a BPF program", account_pubkey).into())
+            }
+        } else {
+            Err(format!("Unable to find the account {}", account_pubkey).into())
+        }
+    } else {
+        Err("No account specified".into())
+    }
+}
+
 fn command_neon_elf(
     _config: &Config,
     program_location: &str,
