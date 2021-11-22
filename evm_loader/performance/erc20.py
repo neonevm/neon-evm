@@ -559,10 +559,10 @@ def transfer_to_senders(args):
         lost = []
         for receiver in senders:
 
-            balance = int(getBalance(receiver))
-            sum = balance - args.balance
+            receiver_balance = int(getBalance(receiver))
+            sum = args.balance - receiver_balance
             if sum > 0:
-                print(receiver, "balance:", balance, "=> funded")
+                print(receiver, "balance:", receiver_balance, "=> funded on sum", sum)
                 param = TransferParams(from_pubkey= instance.acc.public_key(), to_pubkey=receiver, lamports=sum)
                 tx = Transaction()
                 tx.add(transfer(param))
