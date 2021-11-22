@@ -38,4 +38,4 @@ echo verify: $5
 echo collaterals: $6
 echo accounts :$7
 
-parallel --jobs 0 --keep-order --results log.send ./send_unlimit  --client $2 --delay$3 $4{} $5{} $6{} $7{}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.send ./send_unlimit --client $2 --delay $3 $4{} $5{} $6{} $7{}  :::  $(seq $1)
