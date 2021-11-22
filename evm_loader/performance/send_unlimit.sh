@@ -8,10 +8,11 @@
 # args:
 #   $1 - count of processes
 #   $2 - tcp | udp
-#   $3 - sender/sender.json
-#   $4 - verify/verify.json
-#   $5 - collateral/collateral.json
-#   $6 - account/account.json
+#   $3 - delay in microceconds
+#   $4 - sender/sender.json
+#   $5 - verify/verify.json
+#   $6 - collateral/collateral.json
+#   $7 - account/account.json
 #
 # example:
 # ./send_unlimit.sh 4 tcp 5000/sender/sender.json 5000/verify/verify.json 5000/collateral/collateral.json 5000/account/account.json
@@ -32,9 +33,9 @@ echo EVM_LOADER $EVM_LOADER
 echo SOLANA_URL $SOLANA_URL
 echo -e '\nCOUNT OF PROCESSES' $1
 
-echo senders: $3
-echo verify: $4
-echo collaterals: $5
-echo accounts :$6
+echo senders: $4
+echo verify: $5
+echo collaterals: $6
+echo accounts :$7
 
-parallel --jobs 0 --keep-order --results log.send ./send_unlimit  --client $2 $3{} $4{} $5{} $6{}  :::  $(seq $1)
+parallel --jobs 0 --keep-order --results log.send ./send_unlimit  --client $2 --delay$3 $4{} $5{} $6{} $7{}  :::  $(seq $1)
