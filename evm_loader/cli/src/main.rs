@@ -1198,7 +1198,7 @@ fn read_elf_parameters(
 
 fn command_neon_elf(
     config: &Config,
-    program_location: &Option<&str>,
+    program_location: Option<&str>,
 ) -> CommandResult {
     if let Some(program_location) = program_location {
         // Reading program data from file
@@ -1696,7 +1696,7 @@ fn main() {
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");
 
-                command_neon_elf(&config, &program_location)
+                command_neon_elf(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
