@@ -1,20 +1,25 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
+/// Todo: document
+
+use core::mem;
 use std::{
     boxed::Box,
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    str::FromStr,
     vec::Vec
 };
-use core::mem;
-use std::cell::RefCell;
-use evm::gasometer::Gasometer;
+
+use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::{ExitError, Transfer, Valids, H160, H256, U256};
-use serde::{Serialize, Deserialize};
-use crate::utils::{keccak256_h256};
-use crate::solana_backend::AccountStorage;
+use evm::gasometer::Gasometer;
+use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
-use std::str::FromStr;
+
+use crate::query;
+use crate::solana_backend::AccountStorage;
+use crate::utils::keccak256_h256;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -166,6 +171,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
+    query_account_cache: Option<query::AccountCache>,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -189,6 +195,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: None,
         }
     }
 
@@ -285,6 +292,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: None,
         };
         mem::swap(&mut entering, self);
 
@@ -710,6 +718,20 @@ impl ExecutorSubstate {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
         self.erc20_allowances.insert(key, approve.value);
     }
+
+    fn get_solana_account_cache(&self, address: Pubkey, offset: usize, length: usize) -> Option<&query::Cache> {
+        match self.query_account_cache.as_ref() {
+            None => None,
+            Some(cache) => cache.get(address, offset, length),
+        }
+    }
+
+    fn set_solana_account_cache(&mut self, address: Pubkey, offset: usize, length: usize, cache: query::Cache) {
+        if self.query_account_cache.is_none() {
+            self.query_account_cache = Some(query::AccountCache::new());
+        }
+        self.query_account_cache.as_mut().unwrap().set(address, offset, length, cache);
+    }
 }
 
 pub struct ExecutorState<'a, B: AccountStorage> {
@@ -1055,22 +1077,40 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        let owner = self.backend.apply_to_solana_account(
-            &address,
-            Pubkey::default,
-            |_data, owner| *owner
-        );
+    #[allow(clippy::option_if_let_else)]
+    pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
+        let cache = self.substate.get_solana_account_cache(address, 0, 0);
+        let owner = if let Some(cache) = cache { cache.owner } else {
+            let owner = self.backend.apply_to_solana_account(
+                &address,
+                Pubkey::default,
+                |_data, owner| *owner,
+            );
+            if owner != Pubkey::default() {
+                let cache = query::Cache{ owner, ..query::Cache::default() };
+                self.substate.set_solana_account_cache(address, 0, 0, cache);
+            }
+            owner
+        };
         if owner == Pubkey::default() { None } else { Some(owner) }
     }
 
     #[must_use]
-    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let length = self.backend.apply_to_solana_account(
-            &address,
-            || usize::MAX,
-            |data, _owner| data.len()
-        );
+    #[allow(clippy::option_if_let_else)]
+    pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
+        let cache = self.substate.get_solana_account_cache(address, 0, 0);
+        let length = if let Some(cache) = cache { cache.length } else {
+            let length = self.backend.apply_to_solana_account(
+                &address,
+                || usize::MAX,
+                |data, _owner| data.len(),
+            );
+            if length != usize::MAX {
+                let cache = query::Cache { owner: Pubkey::default(), length, ..query::Cache::default() };
+                self.substate.set_solana_account_cache(address, 0, 0, cache);
+            }
+            length
+        };
         if length == usize::MAX { None } else { Some(length) }
     }
 
