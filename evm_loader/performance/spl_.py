@@ -78,6 +78,7 @@ def verify_trx_spl(args):
                         found = True
                         break
                 if found:
+                    print("payer_eth nonce error", payer_eth)
                     nonce_error = nonce_error + 1
                 else:
                     unknown_error = unknown_error + 1
