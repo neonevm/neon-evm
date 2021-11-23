@@ -1193,6 +1193,45 @@ fn command_neon_elf(
     });
 }
 
+fn command_update_valids_table(
+    config: &Config,
+    ether_address: &H160,
+) -> CommandResult {
+    let account_data = if let Some((account, _, _)) = EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
+        AccountData::unpack(&account.data)?
+    } else {
+        return Err(format!("Account not found {:#x}", ether_address).into());
+    };
+
+    let code_account = account_data.get_account()?.code_account;
+    if code_account == Pubkey::new_from_array([0_u8; 32]) {
+        return Err(format!("Code account not found {:#x}", ether_address).into());
+    }
+
+    let instruction = Instruction::new_with_bincode(
+        config.evm_loader,
+        &(23),
+        vec![AccountMeta::new(code_account, false)]
+    );
+
+    let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
+    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+
+    check_account_for_fee(
+        &config.rpc_client,
+        &config.signer.pubkey(),
+        &fee_calculator,
+        &finalize_message)?;
+
+    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
+    finalize_tx.try_sign(&[&*config.signer], blockhash)?;
+    debug!("signed: {:x?}", finalize_tx);
+
+    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+
+    Ok(())
+}
+
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
@@ -1507,6 +1546,18 @@ fn main() {
                         .required(true),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("update-valids-table")
+                .about("Update Valids Table")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1630,6 +1681,11 @@ fn main() {
                 let index = u256_of(arg_matches, "index").unwrap();
 
                 command_get_storage_at(&config, &contract_id, &index)
+            }
+            ("update-valids-table", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+
+                command_update_valids_table(&config, &contract_id)
             }
             _ => unreachable!(),
         };
