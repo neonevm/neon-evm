@@ -309,8 +309,8 @@ pub fn query_account<'a, B: AccountStorage>(
     match method_id {
         QUERY_ACCOUNT_METHOD_OWNER_ID => {
             debug_print!("query_account get owner {}", account_address);
-            let r = state.query_solana_account_owner(account_address);
-            if let Some(owner) = r {
+            let owner = state.query_solana_account_owner(account_address);
+            if let Some(owner) = owner {
                 debug_print!("query_account owner result: {:?}", owner);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
             }
@@ -319,8 +319,8 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_LENGTH_ID => {
             debug_print!("query_account get length {}", account_address);
-            let r = state.query_solana_account_length(account_address);
-            if let Some(length) = r {
+            let length = state.query_solana_account_length(account_address);
+            if let Some(length) = length {
                 debug_print!("query_account length result: {:?}", length);
                 let length = &length.to_be_bytes();
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), length.to_vec()));
@@ -335,8 +335,8 @@ pub fn query_account<'a, B: AccountStorage>(
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
-            let r = state.query_solana_account_data(account_address, offset, length);
-            if let Some(data) = r {
+            let data = state.query_solana_account_data(account_address, offset, length);
+            if let Some(data) = data {
                 debug_print!("query_account data result: {:?}", data);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data));
             }

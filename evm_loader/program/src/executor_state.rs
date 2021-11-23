@@ -171,7 +171,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
-    query_account_cache: Option<query::AccountCache>,
+    query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -195,7 +195,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: None,
+            query_account_cache: query::AccountCache::new(),
         }
     }
 
@@ -292,7 +292,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: None,
+            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -719,18 +719,12 @@ impl ExecutorSubstate {
         self.erc20_allowances.insert(key, approve.value);
     }
 
-    fn get_solana_account_cache(&self, address: Pubkey, offset: usize, length: usize) -> Option<&query::Cache> {
-        match self.query_account_cache.as_ref() {
-            None => None,
-            Some(cache) => cache.get(address, offset, length),
-        }
+    const fn query_account_cache(&self) -> &query::AccountCache {
+        &self.query_account_cache
     }
 
-    fn set_solana_account_cache(&mut self, address: Pubkey, offset: usize, length: usize, cache: query::Cache) {
-        if self.query_account_cache.is_none() {
-            self.query_account_cache = Some(query::AccountCache::new());
-        }
-        self.query_account_cache.as_mut().unwrap().set(address, offset, length, cache);
+    fn query_account_cache_mut(&mut self) -> &mut query::AccountCache {
+        &mut self.query_account_cache
     }
 }
 
@@ -1079,16 +1073,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
-        let cache = self.substate.get_solana_account_cache(address, 0, 0);
-        let owner = if let Some(cache) = cache { cache.owner } else {
-            let owner = self.backend.apply_to_solana_account(
+        let md = self.substate.query_account_cache().get_metadata(address);
+        let owner = if let Some(md) = md { md.0 } else {
+            let (owner, length) = self.backend.apply_to_solana_account(
                 &address,
-                Pubkey::default,
-                |_data, owner| *owner,
+                || (Pubkey::default(), usize::MAX),
+                |data, owner| (*owner, data.len()),
             );
             if owner != Pubkey::default() {
-                let cache = query::Cache{ owner, ..query::Cache::default() };
-                self.substate.set_solana_account_cache(address, 0, 0, cache);
+                self.substate.query_account_cache_mut().set_metadata(address, owner, length);
             }
             owner
         };
@@ -1098,16 +1091,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
-        let cache = self.substate.get_solana_account_cache(address, 0, 0);
-        let length = if let Some(cache) = cache { cache.length } else {
-            let length = self.backend.apply_to_solana_account(
+        let md = self.substate.query_account_cache().get_metadata(address);
+        let length = if let Some(md) = md { md.1 } else {
+            let (owner, length) = self.backend.apply_to_solana_account(
                 &address,
-                || usize::MAX,
-                |data, _owner| data.len(),
+                || (Pubkey::default(), usize::MAX),
+                |data, owner| (*owner, data.len()),
             );
-            if length != usize::MAX {
-                let cache = query::Cache { owner: Pubkey::default(), length, ..query::Cache::default() };
-                self.substate.set_solana_account_cache(address, 0, 0, cache);
+            if owner != Pubkey::default() {
+                self.substate.query_account_cache_mut().set_metadata(address, owner, length);
             }
             length
         };
@@ -1115,16 +1107,24 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        let result = self.backend.apply_to_solana_account(
-            &address,
-            Vec::<u8>::default,
-            |data, _| {
-                if offset >= data.len() || offset+length > data.len() { Vec::<u8>::default() }
-                else { data[offset..offset+length].to_owned() }
+    #[allow(clippy::option_if_let_else)]
+    pub fn query_solana_account_data(&mut self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
+        let data = self.substate.query_account_cache().get_data(address, offset, length);
+        let data = if let Some(data) = data { data.clone() } else {
+            let data = self.backend.apply_to_solana_account(
+                &address,
+                Vec::default,
+                |data, _| {
+                    if offset >= data.len() || offset + length > data.len() { Vec::default() }
+                    else { data[offset..offset + length].to_owned() }
+                }
+            );
+            if !data.is_empty() {
+                self.substate.query_account_cache_mut().set_data(address, offset, length, &data);
             }
-        );
-        if result.is_empty() { None } else { Some(result) }
+            data
+        };
+        if data.is_empty() { None } else { Some(data) }
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
