@@ -1073,15 +1073,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
-        let md = self.substate.query_account_cache().get_metadata(address);
-        let owner = if let Some(md) = md { md.0 } else {
-            let (owner, length) = self.backend.apply_to_solana_account(
+        let owner = self.substate.query_account_cache().get_owner(address);
+        let owner = if let Some(owner) = owner { owner } else {
+            let (data, owner) = self.backend.apply_to_solana_account(
                 &address,
-                || (Pubkey::default(), usize::MAX),
-                |data, owner| (*owner, data.len()),
+                || (Vec::default(), Pubkey::default()),
+                |data, owner| (data.to_owned(), *owner),
             );
             if owner != Pubkey::default() {
-                self.substate.query_account_cache_mut().set_metadata(address, owner, length);
+                self.substate.query_account_cache_mut().insert(address, owner, data);
             }
             owner
         };
@@ -1091,40 +1091,48 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
-        let md = self.substate.query_account_cache().get_metadata(address);
-        let length = if let Some(md) = md { md.1 } else {
-            let (owner, length) = self.backend.apply_to_solana_account(
+        let length = self.substate.query_account_cache().get_length(address);
+        let length = if let Some(length) = length { length } else {
+            let (data, owner) = self.backend.apply_to_solana_account(
                 &address,
-                || (Pubkey::default(), usize::MAX),
-                |data, owner| (*owner, data.len()),
+                || (Vec::default(), Pubkey::default()),
+                |data, owner| (data.to_owned(), *owner),
             );
+            let length = data.len();
             if owner != Pubkey::default() {
-                self.substate.query_account_cache_mut().set_metadata(address, owner, length);
+                self.substate.query_account_cache_mut().insert(address, owner, data);
             }
             length
         };
-        if length == usize::MAX { None } else { Some(length) }
+        if length == 0 { None } else { Some(length) }
     }
 
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_data(&mut self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        let data = self.substate.query_account_cache().get_data(address, offset, length);
-        let data = if let Some(data) = data { data.clone() } else {
-            let data = self.backend.apply_to_solana_account(
-                &address,
-                Vec::default,
-                |data, _| {
-                    if offset >= data.len() || offset + length > data.len() { Vec::default() }
-                    else { data[offset..offset + length].to_owned() }
-                }
-            );
-            if !data.is_empty() {
-                self.substate.query_account_cache_mut().set_data(address, offset, length, &data);
+        let data = self.substate.query_account_cache().get_data(address);
+        if let Some(data) = data {
+            if offset >= data.len() || offset + length > data.len() {
+                None
+            } else {
+                Some(data[offset..offset + length].to_owned())
             }
-            data
-        };
-        if data.is_empty() { None } else { Some(data) }
+        } else {
+            let (data, owner) = self.backend.apply_to_solana_account(
+                &address,
+                || (Vec::default(), Pubkey::default()),
+                |data, owner| (data.to_owned(), *owner),
+            );
+            let result = if offset >= data.len() || offset + length > data.len() {
+                None
+            } else {
+                Some(data[offset..offset + length].to_owned())
+            };
+            if owner != Pubkey::default() {
+                self.substate.query_account_cache_mut().insert(address, owner, data);
+            }
+            result
+        }
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
