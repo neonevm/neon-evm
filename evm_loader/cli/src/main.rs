@@ -52,6 +52,8 @@ use std::{
     convert::{TryFrom, TryInto},
     fmt,
     fmt::{Debug, Display,},
+    cell::RefCell,
+    rc::Rc
 };
 
 use clap::{
@@ -102,6 +104,7 @@ use evm_loader::{
     },
     executor::Machine,
     solana_backend::AccountStorage,
+    solidity_account::SolidityAccount
 };
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -1055,6 +1058,33 @@ fn command_get_ether_account_data (
     }
 }
 
+fn command_get_storage_at(
+    config: &Config,
+    ether_address: &H160,
+    index: &U256
+) -> CommandResult {
+    match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
+        Some((acc, balance, code_account)) => {
+            let account_data = AccountData::unpack(&acc.data)?;
+            let mut code_data = match code_account.as_ref() {
+                Some(code) => code.data.clone(),
+                None => return Err(format!("Account {:#x} is not code account", ether_address).into()),
+            };
+            let contract_data = AccountData::unpack(&code_data)?;
+            let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
+            let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
+            let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
+                                                        Some((contract_data, code_data)));
+            let value = solidity_account.get_storage(index);
+            print!("{:#x}", value);
+            Ok(())
+        },
+        None => {
+            Err(format!("Account not found {:#x}", ether_address).into())
+        }
+    }
+}
+
 fn command_cancel_trx(
     config: &Config,
     storage_account: &Pubkey,
@@ -1163,6 +1193,45 @@ fn command_neon_elf(
     });
 }
 
+fn command_update_valids_table(
+    config: &Config,
+    ether_address: &H160,
+) -> CommandResult {
+    let account_data = if let Some((account, _, _)) = EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
+        AccountData::unpack(&account.data)?
+    } else {
+        return Err(format!("Account not found {:#x}", ether_address).into());
+    };
+
+    let code_account = account_data.get_account()?.code_account;
+    if code_account == Pubkey::new_from_array([0_u8; 32]) {
+        return Err(format!("Code account not found {:#x}", ether_address).into());
+    }
+
+    let instruction = Instruction::new_with_bincode(
+        config.evm_loader,
+        &(23),
+        vec![AccountMeta::new(code_account, false)]
+    );
+
+    let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
+    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+
+    check_account_for_fee(
+        &config.rpc_client,
+        &config.signer.pubkey(),
+        &fee_calculator,
+        &finalize_message)?;
+
+    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
+    finalize_tx.try_sign(&[&*config.signer], blockhash)?;
+    debug!("signed: {:x?}", finalize_tx);
+
+    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+
+    Ok(())
+}
+
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
@@ -1198,10 +1267,24 @@ fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     })
 }
 
+// Return U256 for an argument
+fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
+    matches.value_of(name).map(|value| {
+        U256::from_str(make_clean_hex(value)).unwrap()
+    })
+}
+
 // Return an error if string cannot be parsed as a H160 address
 fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
     H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+// Return an error if string cannot be parsed as a U256 integer
+fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+{
+    U256::from_str(make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -1443,6 +1526,38 @@ fn main() {
                         .help("/path/to/evm_loader.so"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("get-storage-at")
+                .about("Get Ethereum storage value at given index")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("index")
+                        .index(2)
+                        .value_name("index")
+                        .takes_value(true)
+                        .validator(is_valid_u256)
+                        .required(true),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("update-valids-table")
+                .about("Update Valids Table")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1560,6 +1675,17 @@ fn main() {
                 command_neon_elf(&config, &program_location);
 
                 Ok(())
+            }
+            ("get-storage-at", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+                let index = u256_of(arg_matches, "index").unwrap();
+
+                command_get_storage_at(&config, &contract_id, &index)
+            }
+            ("update-valids-table", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+
+                command_update_valids_table(&config, &contract_id)
             }
             _ => unreachable!(),
         };
