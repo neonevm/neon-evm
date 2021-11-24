@@ -1,6 +1,6 @@
 steps:
   - label: ":docker: build docker image"
-    command: 
+    command:
       - ".buildkite/steps/build-image.sh"
       - ".buildkite/steps/upload-image.sh"
 
