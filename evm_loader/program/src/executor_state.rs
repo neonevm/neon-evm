@@ -1110,24 +1110,23 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_data(&mut self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        let data = self.substate.query_account_cache().get_data(address);
-        if let Some(data) = data {
+        fn chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
             if offset >= data.len() || offset + length > data.len() {
                 None
             } else {
                 Some(data[offset..offset + length].to_owned())
             }
+        }
+        let data = self.substate.query_account_cache().get_data(address);
+        if let Some(data) = data {
+            chunk(data, offset, length)
         } else {
             let (data, owner) = self.backend.apply_to_solana_account(
                 &address,
                 || (Vec::default(), Pubkey::default()),
                 |data, owner| (data.to_owned(), *owner),
             );
-            let result = if offset >= data.len() || offset + length > data.len() {
-                None
-            } else {
-                Some(data[offset..offset + length].to_owned())
-            };
+            let result = chunk(&data, offset, length);
             if owner != Pubkey::default() {
                 self.substate.query_account_cache_mut().insert(address, owner, data);
             }
