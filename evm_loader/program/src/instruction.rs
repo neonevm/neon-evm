@@ -226,6 +226,12 @@ pub enum EvmInstruction<'a> {
         /// Data to write
         bytes: &'a [u8],
     },
+
+    /// Recompute Valids Table
+    /// 
+    /// # Account references
+    ///   0. \[WRITE\] Code account
+    UpdateValidsTable,
 }
 
 impl<'a> EvmInstruction<'a> {
@@ -353,6 +359,7 @@ impl<'a> EvmInstruction<'a> {
                 let step_count = step_count.try_into().ok().map(u64::from_le_bytes).ok_or(InvalidInstructionData)?;
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
             },
+            23 => EvmInstruction::UpdateValidsTable,
 
             _ => return Err(InvalidInstructionData),
         })
