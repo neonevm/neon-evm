@@ -345,7 +345,7 @@ class EventTest(unittest.TestCase):
         result = self.call_continue(storage, 10)
         result = self.call_cancel(storage, nonce)
 
-        err = "custom program error: 0x1"
+        err = "custom program error: 0x4"
         with self.assertRaisesRegex(Exception,err):
             result = self.call_continue(storage, 10)
             print(result)

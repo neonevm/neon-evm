@@ -1348,7 +1348,7 @@ dependencies = [
 
 [[package]]
 name = "evm-loader"
-version = "0.3.0-rc1"
+version = "0.4.0"
 dependencies = [
  "arrayref",
  "bincode",
@@ -2440,7 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "arrayref",
  "base64 0.13.0",

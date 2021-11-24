@@ -285,15 +285,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_4:', response)
         try:
             send_transaction(client, trx, self.acc)
-        except solana.rpc.api.SendTransactionError as err:
-            print('SendTransactionError:', str(err))
-            print('SendTransactionError result:', str(err.result))
-            self.check_err_is_invalid_nonce(err)
-            print('the ether transaction was completed by the previous three solana transactions')
         except Exception as err:
-            print('type(err):', type(err))
-            print('err:', str(err))
-            self.assertTrue(False)
+            if str(err).startswith(
+                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
+                print ("Exception was expected, OK")
+                pass
+            else:
+                raise
 
     # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
@@ -328,30 +326,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
-
         try:
             send_transaction(client, trx, self.acc)
-        except solana.rpc.api.SendTransactionError as err:
-            print('SendTransactionError:', str(err))
-            print('SendTransactionError result:', str(err.result))
-            response = json.loads(str(err.result).replace('\"', '').replace('\'', '\"').replace('None', 'null'))
-            print('response:', response)
-            print('code:', response['code'])
-            self.assertEqual(response['code'], -32002)
-            print('INCORRECT_PROGRAM_ID:', INCORRECT_PROGRAM_ID)
-            logs = response['data']['logs']
-            print('logs:', logs)
-            log = [s for s in logs if INCORRECT_PROGRAM_ID in s][0]
-            print(log)
-            self.assertGreater(len(log), len(INCORRECT_PROGRAM_ID))
-            file_name = 'src/transaction.rs'
-            self.assertTrue(file_name in log)
-            print(
-                'the ether transaction was completed by the previous three instructions in the same solana transaction')
         except Exception as err:
-            print('type(err):', type(err))
-            print('err:', str(err))
-            self.assertTrue(False)
+            if str(err).startswith(
+                    "Transaction simulation failed: Error processing Instruction 4: custom program error: 0x4"):
+                print ("Exception was expected, OK")
+                pass
+            else:
+                raise
 
     # @unittest.skip("a.i.")
     def test_06_failure_tx_send_iteratively_transaction_too_large(self):
@@ -429,17 +412,14 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('the ether transaction was completed after creating solana-eth-account by three 0x0d transactions')
 
         try:
-            print('Sending 5-th transaction...')
             send_transaction(client, trx, self.acc)
-        except solana.rpc.api.SendTransactionError as err:
-            print('SendTransactionError:', str(err))
-            print('SendTransactionError result:', str(err.result))
-            self.check_err_is_invalid_nonce(err)
-            print('the ether transaction was completed by the previous three solana transactions')
         except Exception as err:
-            print('type(err):', type(err))
-            print('err:', str(err))
-            self.assertTrue(False)
+            if str(err).startswith(
+                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
+                print("Exception was expected, OK")
+                pass
+            else:
+                raise
         neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 

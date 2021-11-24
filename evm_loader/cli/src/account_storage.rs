@@ -268,10 +268,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(U256, U256)>,
     {
-
-        let mut accounts = self.accounts.borrow_mut();
-        let mut new_accounts = self.new_accounts.borrow_mut();
-
         for apply in values {
             match apply {
                 Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
@@ -295,8 +291,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         }
                         storage.last_used() as usize
                     };
-
-
+                        
+                    let mut accounts = self.accounts.borrow_mut();
+                    let mut new_accounts = self.new_accounts.borrow_mut();
                     if let Some(acc) = accounts.get_mut(&address) {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
@@ -386,8 +383,20 @@ impl<'a> EmulatorAccountStorage<'a> {
                     }
                     eprintln!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
                 },
-                Apply::Delete {address: addr} => {
-                    eprintln!("Delete: {}", addr.to_string());
+                Apply::Delete {address} => {
+                    eprintln!("Delete: {}", address);
+
+                    self.create_acc_if_not_exists(&address);
+
+                    let mut accounts = self.accounts.borrow_mut();
+                    if let Some(account) = accounts.get_mut(&address) {
+                        account.writable = true;
+                    }
+
+                    let mut new_accounts = self.new_accounts.borrow_mut();
+                    if let Some(account) = new_accounts.get_mut(&address) {
+                        account.writable = true;
+                    }
                 },
             }
         };
