@@ -1205,58 +1205,49 @@ fn read_program_data_from_file(config: &Config,
 }
 
 fn read_program_data_from_account(config: &Config) -> CommandResult {
-    if let Some(account) = config.rpc_client
+    let account = config.rpc_client
         .get_account_with_commitment(&config.evm_loader, config.commitment)?
-        .value
-    {
-        if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
-            read_elf_parameters(config, &account.data)
-        } else if account.owner == bpf_loader_upgradeable::id() {
-            if let Ok(UpgradeableLoaderState::Program {
-                          programdata_address,
-                      }) = account.state()
-            {
-                if let Some(programdata_account) = config.rpc_client
-                    .get_account_with_commitment(&programdata_address, config.commitment)?
-                    .value
-                {
-                    if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
-                    programdata_account.state()
-                    {
-                        let offset =
-                            UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
-                        let program_data = &programdata_account.data[offset..];
-                        read_elf_parameters(config, program_data)
-                    } else {
-                        Err(
-                            format!("Invalid associated ProgramData account {} found for the program {}",
-                                    programdata_address, &config.evm_loader)
-                                .into(),
-                        )
-                    }
-                } else {
-                    Err(format!(
-                        "Failed to find associated ProgramData account {} for the program {}",
-                        programdata_address, &config.evm_loader
-                    )
-                        .into())
-                }
-            } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-                let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
-                let program_data = &account.data[offset..];
+        .value.ok_or(format!("Unable to find the account {}", &config.evm_loader))?;
+
+    if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+        read_elf_parameters(config, &account.data)
+    } else if account.owner == bpf_loader_upgradeable::id() {
+        if let Ok(UpgradeableLoaderState::Program {
+                      programdata_address,
+                  }) = account.state()
+        {
+            let programdata_account = config.rpc_client
+                .get_account_with_commitment(&programdata_address, config.commitment)?
+                .value.ok_or(format!(
+                "Failed to find associated ProgramData account {} for the program {}",
+                programdata_address, &config.evm_loader))?;
+
+            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
+                let offset =
+                    UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                let program_data = &programdata_account.data[offset..];
                 read_elf_parameters(config, program_data)
             } else {
-                Err(format!(
-                    "{} is not an upgradeble loader buffer or program account",
-                    &config.evm_loader
+                Err(
+                    format!("Invalid associated ProgramData account {} found for the program {}",
+                            programdata_address, &config.evm_loader)
+                        .into(),
                 )
-                    .into())
             }
+
+        } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+            let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+            let program_data = &account.data[offset..];
+            read_elf_parameters(config, program_data)
         } else {
-            Err(format!("{} is not a BPF program", &config.evm_loader).into())
+            Err(format!(
+                "{} is not an upgradeble loader buffer or program account",
+                &config.evm_loader
+            )
+                .into())
         }
     } else {
-        Err(format!("Unable to find the account {}", &config.evm_loader).into())
+        Err(format!("{} is not a BPF program", &config.evm_loader).into())
     }
 }
 
