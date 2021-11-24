@@ -35,7 +35,7 @@ impl AccountCache {
 
     /// Inserts owner and data of an account.
     pub fn insert(&mut self, address: Pubkey, owner: Pubkey, contents: Vec<u8>) {
-        *self.cache.entry(address).or_insert_with(Data::default) = Data{ owner, contents }
+        self.cache.insert(address, Data{ owner, contents });
     }
 }
 
