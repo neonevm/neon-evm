@@ -132,8 +132,6 @@ fn process_instruction<'a>(
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
 
-            authorized_operator_check(funding_info)?;
-
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             if !funding_info.is_signer {
@@ -217,8 +215,6 @@ fn process_instruction<'a>(
             let system_program = next_account_info(account_info_iter)?;
             let token_program = next_account_info(account_info_iter)?;
             let rent = next_account_info(account_info_iter)?;
-
-            authorized_operator_check(payer)?;
 
             if !payer.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
