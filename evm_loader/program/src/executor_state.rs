@@ -1080,9 +1080,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 || (Vec::default(), Pubkey::default()),
                 |data, owner| (data.to_owned(), *owner),
             );
-            if owner != Pubkey::default() {
-                self.substate.query_account_cache_mut().insert(address, owner, data);
-            }
+            self.substate.query_account_cache_mut().insert(address, owner, data);
             owner
         };
         if owner == Pubkey::default() { None } else { Some(owner) }
@@ -1099,9 +1097,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 |data, owner| (data.to_owned(), *owner),
             );
             let length = data.len();
-            if owner != Pubkey::default() {
-                self.substate.query_account_cache_mut().insert(address, owner, data);
-            }
+            self.substate.query_account_cache_mut().insert(address, owner, data);
             length
         };
         if length == 0 { None } else { Some(length) }
@@ -1127,9 +1123,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 |data, owner| (data.to_owned(), *owner),
             );
             let result = chunk(&data, offset, length);
-            if owner != Pubkey::default() {
-                self.substate.query_account_cache_mut().insert(address, owner, data);
-            }
+            self.substate.query_account_cache_mut().insert(address, owner, data);
             result
         }
     }
