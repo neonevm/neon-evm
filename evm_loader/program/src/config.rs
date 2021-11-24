@@ -19,6 +19,8 @@ cfg_if! {
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
                 "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "4Mh3ik4iS6MBxHy1VBN89vBiiPRDkebtnybDWnfTtpfC",
+                "CyepBgaNezMJgLjy6Zyz9ECUia33dwDi9aXtRsZEhWX1",
             ]
         );
 
@@ -112,6 +114,9 @@ cfg_if! {
                 "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
                 "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
                 "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
+                "2GDfarSJnNC6ii5tQVE9rBH81Ny35LxrSCZ7tFhktSqi",
+                "4Mh3ik4iS6MBxHy1VBN89vBiiPRDkebtnybDWnfTtpfC",
+                "CyepBgaNezMJgLjy6Zyz9ECUia33dwDi9aXtRsZEhWX1",
             ]
         );
 
