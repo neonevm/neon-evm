@@ -351,6 +351,7 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
+                signature
             )?;
 
             Ok(())
@@ -420,7 +421,7 @@ fn process_instruction<'a>(
         EvmInstruction::OnEvent {address: _, topics: _, data: _} => {
             Ok(())
         },
-        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallFromRawEthereumTXv02 {collateral_pool_index, step_count, from_addr, sign, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative");
             let storage_info = next_account_info(account_info_iter)?;
 
@@ -447,6 +448,7 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
+                sign
             )?;
 
             Ok(())
@@ -465,10 +467,7 @@ fn process_instruction<'a>(
 
             let trx_accounts = &accounts[6..];
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
-                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
-                else {err}
-            })?;
+            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
             do_continue_top_level(
                 storage, step_count, program_id,
                 accounts, trx_accounts, storage_info,
@@ -496,10 +495,7 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
-            let storage = StorageAccount::restore(storage_info, operator_sol_info).map_err(|err| {
-                if err == ProgramError::InvalidAccountData {EvmLoaderError::StorageAccountUninitialized.into()}
-                else {err}
-            })?;
+            let storage = StorageAccount::restore(storage_info, operator_sol_info)?;
 
             let custom_error: ProgramError = EvmLoaderError::ExclusiveAccessUnvailable.into();
             if let Err(err) = storage.check_accounts(program_id, trx_accounts, false){
@@ -529,11 +525,11 @@ fn process_instruction<'a>(
                 incinerator_info,
             )?;
 
-            storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
+            storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
 
             Ok(())
         },
-        EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign: _, unsigned_msg} => {
+        EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative or continue");
             let storage_info = next_account_info(account_info_iter)?;
             let sysvar_info = next_account_info(account_info_iter)?;
@@ -548,20 +544,34 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
-                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
-                    check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
-
+                Err(err) => {
                     let caller = H160::from_slice(from_addr);
-                    let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
-                        .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(
-                        collateral_pool_index, 0, caller, trx,
-                        program_id, trx_accounts, accounts, storage_info,
-                        operator_sol_info, collateral_pool_sol_info,
-                        operator_eth_info, user_eth_info,
-                        system_info,
-                    )?;
+                    let finalized_is_outdated = if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        StorageAccount::finalized_is_outdated(storage_info, sign, &caller)?
+                    }
+                    else{
+                        false
+                    };
+
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
+                        check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+
+                        let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
+                            .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+
+                        do_begin(
+                            collateral_pool_index, 0, caller, trx,
+                            program_id, trx_accounts, accounts, storage_info,
+                            operator_sol_info, collateral_pool_sol_info,
+                            operator_eth_info, user_eth_info,
+                            system_info,
+                            sign
+                        )?;
+                    }
+                    else{
+                        return Err(err)
+                    }
                 },
                 Ok(storage) => {
                     do_continue_top_level(
@@ -570,8 +580,7 @@ fn process_instruction<'a>(
                         operator_sol_info, operator_eth_info, user_eth_info,
                         collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
-                },
-                Err(err) => return Err(err),
+                }
             }
             Ok(())
         },
@@ -590,19 +599,32 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             match StorageAccount::restore(storage_info, operator_sol_info) {
-                Err(ProgramError::InvalidAccountData) => { // EXCLUDE Err!
+                Err(err) => {
                     let holder_data = holder_info.data.borrow();
                     let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
-                    do_begin(
-                        collateral_pool_index, 0, caller, trx,
-                        program_id, trx_accounts, accounts, storage_info,
-                        operator_sol_info, collateral_pool_sol_info,
-                        operator_eth_info, user_eth_info,
-                        system_info,
-                    )?;
+                    let finalized_is_outdated = if err == EvmLoaderError::StorageAccountFinalized.into(){
+                        StorageAccount::finalized_is_outdated(storage_info, signature, &caller)?
+                    }
+                    else{
+                        false
+                    };
+
+                    if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
+                        do_begin(
+                            collateral_pool_index, 0, caller, trx,
+                            program_id, trx_accounts, accounts, storage_info,
+                            operator_sol_info, collateral_pool_sol_info,
+                            operator_eth_info, user_eth_info,
+                            system_info,
+                            signature
+                        )?;
+                    }
+                    else{
+                        return Err(err)
+                    }
                 },
                 Ok(storage) => {
                     do_continue_top_level(
@@ -612,7 +634,6 @@ fn process_instruction<'a>(
                         collateral_pool_index, collateral_pool_sol_info, system_info,
                     )?;
                 },
-                Err(err) => return Err(err),
             }
             Ok(())
         },
@@ -636,8 +657,8 @@ fn process_instruction<'a>(
             let data = deleted_acc_info.data.borrow_mut();
             let account_data = AccountData::unpack(&data)?;
             match account_data {
-                AccountData::Empty => { },
-                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete empty accounts.") },
+                AccountData::FinalizedStorage(_) | AccountData::Empty => {},
+                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete finalized or empty accounts.") },
             };
 
             **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
@@ -812,7 +833,7 @@ fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramRes
 
     let account_data = AccountData::unpack(&data)?;
     match account_data {
-        AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) => {
+        AccountData::Account(_) | AccountData::Storage(_) | AccountData::ERC20Allowance(_) | AccountData::FinalizedStorage(_) => {
             return Err!(ProgramError::InvalidAccountData);
         },
         AccountData::Contract(acc) if acc.code_size != 0 => {
@@ -889,6 +910,7 @@ fn do_begin<'a>(
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>,
+    trx_sign: &[u8]
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -904,7 +926,7 @@ fn do_begin<'a>(
         user_eth_info,
         None)?;
 
-    let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price)?;
+    let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price, trx_sign)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
     let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
     check_ethereum_transaction(&account_storage, &caller, &trx)?;
@@ -979,11 +1001,11 @@ fn do_continue_top_level<'a>(
         system_info)?;
 
     let (results, used_gas) = {
-        if let Err(_) = token::check_enough_funds(
+        if token::check_enough_funds(
             trx_gas_limit,
             trx_gas_price,
             user_eth_info,
-            Some(&mut storage)) {
+            Some(&mut storage)).is_err() {
             let used_gas = storage.get_payments_info()?.0;
             (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
         } else {
@@ -1013,13 +1035,13 @@ fn do_continue_top_level<'a>(
             evm_results,
             used_gas)?;
 
-        storage.unblock_accounts_and_destroy(program_id, trx_accounts)?;
+        storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
 
     Ok(())
 }
 
-fn do_partial_call<'a>(
+fn do_partial_call(
     storage: &mut StorageAccount,
     step_count: u64,
     account_storage: &ProgramAccountStorage,

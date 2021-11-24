@@ -553,6 +553,52 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
+def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
+                                          caller_sol_acc,
+                                          operator_sol_acc,
+                                          storage_sol_acc,
+                                          contract_sol_acc,
+                                          code_sol_acc,
+                                          collateral_pool_index_buf,
+                                          collateral_pool_address,
+                                          step_count,
+                                          evm_instruction,
+                                          writable_code=True,
+                                          add_meta=[]):
+    return TransactionInstruction(
+        program_id=evm_loader_program_id,
+        data=bytearray.fromhex("0D") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little') + evm_instruction,
+        keys=[
+            AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
+            # System instructions account:
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+
+            # Operator's SOL account:
+            AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
+            # Collateral pool address:
+            AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
+            # Operator's NEON token account:
+            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # User's NEON token account:
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # System program account:
+            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+
+            AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
+            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+        ])
+
 
 def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
                                           caller_sol_acc,
