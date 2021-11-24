@@ -1174,7 +1174,7 @@ fn command_cancel_trx(
 fn read_elf_parameters(
     _config: &Config,
     program_data: &[u8],
-) -> CommandResult {
+) {
     //let program_data = &program_data[..];
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
     elf.dynsyms.iter().for_each(|sym| {
@@ -1194,14 +1194,14 @@ fn read_elf_parameters(
             }
         }
     });
-    Ok(())
 }
 
 fn read_program_data_from_file(config: &Config,
                                program_location: &str) -> CommandResult {
     let program_data = read_program_data(program_location)?;
     let program_data = &program_data[..];
-    read_elf_parameters(config, program_data)
+    read_elf_parameters(config, program_data);
+    Ok(())
 }
 
 fn read_program_data_from_account(config: &Config) -> CommandResult {
@@ -1210,7 +1210,8 @@ fn read_program_data_from_account(config: &Config) -> CommandResult {
         .value.ok_or(format!("Unable to find the account {}", &config.evm_loader))?;
 
     if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
-        read_elf_parameters(config, &account.data)
+        read_elf_parameters(config, &account.data);
+        Ok(())
     } else if account.owner == bpf_loader_upgradeable::id() {
         if let Ok(UpgradeableLoaderState::Program {
                       programdata_address,
@@ -1226,7 +1227,8 @@ fn read_program_data_from_account(config: &Config) -> CommandResult {
                 let offset =
                     UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
                 let program_data = &programdata_account.data[offset..];
-                read_elf_parameters(config, program_data)
+                read_elf_parameters(config, program_data);
+                Ok(())
             } else {
                 Err(
                     format!("Invalid associated ProgramData account {} found for the program {}",
@@ -1238,7 +1240,8 @@ fn read_program_data_from_account(config: &Config) -> CommandResult {
         } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
             let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
             let program_data = &account.data[offset..];
-            read_elf_parameters(config, program_data)
+            read_elf_parameters(config, program_data);
+            Ok(())
         } else {
             Err(format!(
                 "{} is not an upgradeble loader buffer or program account",
@@ -1255,11 +1258,10 @@ fn command_neon_elf(
     config: &Config,
     program_location: Option<&str>,
 ) -> CommandResult {
-    if let Some(program_location) = program_location {
-        read_program_data_from_file(config, program_location)
-    } else {
-        read_program_data_from_account(config)
-    }
+    program_location.map_or_else(
+        || read_program_data_from_account(config),
+        |program_location| read_program_data_from_file(config, program_location),
+    )
 }
 
 fn make_clean_hex(in_str: &str) -> &str {
