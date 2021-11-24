@@ -41,8 +41,7 @@ sysinstruct = "Sysvar1nstructions1111111111111111111111111"
 keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
-#collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
-collateral_pool_base = "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx"
+collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
 #COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
