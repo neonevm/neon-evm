@@ -100,7 +100,7 @@ impl AccountData {
     const EMPTY_TAG: u8 = 0;
     const ACCOUNT_TAG: u8 = 1;
     const CONTRACT_TAG: u8 = 2;
-    const STORAGE_TAG: u8 = 5;
+    const STORAGE_TAG: u8 = 3;
     const ERC20_ALLOWANCE_TAG: u8 = 4;
 
     /// Unpack `AccountData` from Solana's account data
