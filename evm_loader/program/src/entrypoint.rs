@@ -654,19 +654,15 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData; "Deleted account info doesn't equal to generated. *deleted_acc_info.key<{:?}> != address<{:?}>", *deleted_acc_info.key, address);
             }
 
-            // let mut data = deleted_acc_info.try_borrow_mut_data()?;
             let data = deleted_acc_info.data.borrow_mut();
             let account_data = AccountData::unpack(&data)?;
             match account_data {
                 AccountData::FinalizedStorage(_) | AccountData::Empty => {},
-                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete finalized accounts.") },
+                _ => { return Err!(ProgramError::InvalidAccountData; "Can only delete finalized or empty accounts.") },
             };
 
             **creator_acc_info.lamports.borrow_mut() = creator_acc_info.lamports().checked_add(deleted_acc_info.lamports()).unwrap();
             **deleted_acc_info.lamports.borrow_mut() = 0;
-
-            // TODO: it is necessary to figure out: it is suggested, that change state FINALISED->EMPTY is performed only once in the code
-            // AccountData::pack(&AccountData::Empty, &mut data)?;
 
             Ok(())
         },
