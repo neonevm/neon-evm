@@ -322,14 +322,14 @@ pub fn query_account<'a, B: AccountStorage>(
             let length = state.query_solana_account_length(account_address);
             if let Some(length) = length {
                 debug_print!("query_account length result: {:?}", length);
-                let length = &length.to_be_bytes();
+                let length = &length.to_be_bytes(); // pad to 32
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), length.to_vec()));
             }
             let revert_message = b"QueryAccount length failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
-            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes.
+            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes
             let (offset, rest) = rest.split_at(32);
             let (length, _) = rest.split_at(32);
             let offset = U256::from_big_endian_fast(offset).as_usize();

@@ -20,7 +20,6 @@ pub mod account_data;
 pub mod account_storage;
 pub mod solidity_account;
 mod storage_account;
-mod query;
 pub mod instruction;
 mod transaction;
 /// Todo: document

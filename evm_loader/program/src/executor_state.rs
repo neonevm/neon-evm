@@ -17,7 +17,6 @@ use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 
-use crate::query;
 use crate::solana_backend::AccountStorage;
 use crate::utils::keccak256_h256;
 
@@ -171,7 +170,6 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
-    pub query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -195,7 +193,6 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: query::AccountCache::new(),
         }
     }
 
@@ -292,7 +289,6 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -1063,61 +1059,39 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
-        let owner = self.substate.query_account_cache.get_owner(address);
-        let owner = if let Some(owner) = owner { owner } else {
-            let (data, owner) = self.backend.apply_to_solana_account(
-                &address,
-                || (Vec::default(), Pubkey::default()),
-                |data, owner| (data.to_owned(), *owner),
-            );
-            self.substate.query_account_cache.insert(address, owner, data);
-            owner
-        };
+        let owner = self.backend.apply_to_solana_account(
+            &address,
+            Pubkey::default,
+            |_, owner| *owner,
+        );
         if owner == Pubkey::default() { None } else { Some(owner) }
     }
 
     #[must_use]
-    #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
-        let length = self.substate.query_account_cache.get_length(address);
-        let length = if let Some(length) = length { length } else {
-            let (data, owner) = self.backend.apply_to_solana_account(
-                &address,
-                || (Vec::default(), Pubkey::default()),
-                |data, owner| (data.to_owned(), *owner),
-            );
-            let length = data.len();
-            self.substate.query_account_cache.insert(address, owner, data);
-            length
-        };
-        if length == 0 { None } else { Some(length) }
+        let length = self.backend.apply_to_solana_account(
+            &address,
+            usize::default,
+            |data, _| data.len(),
+        );
+        if length == usize::default() { None } else { Some(length) }
     }
 
     #[must_use]
-    #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_data(&mut self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        fn chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
             if offset >= data.len() || offset + length > data.len() {
                 None
             } else {
                 Some(data[offset..offset + length].to_owned())
             }
         }
-        let data = self.substate.query_account_cache.get_data(address);
-        if let Some(data) = data {
-            chunk(data, offset, length)
-        } else {
-            let (data, owner) = self.backend.apply_to_solana_account(
-                &address,
-                || (Vec::default(), Pubkey::default()),
-                |data, owner| (data.to_owned(), *owner),
-            );
-            let result = chunk(&data, offset, length);
-            self.substate.query_account_cache.insert(address, owner, data);
-            result
-        }
+        self.backend.apply_to_solana_account(
+            &address,
+            || None,
+            |data, _| clone_chunk(data, offset, length)
+        )
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
