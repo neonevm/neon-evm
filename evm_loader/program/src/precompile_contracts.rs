@@ -286,11 +286,17 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 //------------------------------------------
 // owner(uint256)              => 0xa123c33e
 // length(uint256)             => 0xaa8b99d2
+// lamports(uint256)           => 0x748f2d8a
+// executable(uint256)         => 0xc219a785
+// rent_epoch(uint256)         => 0xc4d369b5
 // data(uint256,uint64,uint64) => 0x43ca5161
 //------------------------------------------
 
 const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
 const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
+const QUERY_ACCOUNT_METHOD_LAMPORTS_ID: &[u8; 4] = &[0x74, 0x8f, 0x2d, 0x8a];
+const QUERY_ACCOUNT_METHOD_EXECUTABLE_ID: &[u8; 4] = &[0xc2, 0x19, 0xa7, 0x85];
+const QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID: &[u8; 4] = &[0xc4, 0xd3, 0x69, 0xb5];
 const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
 
 /// Call inner `query_account`
@@ -311,21 +317,35 @@ pub fn query_account<'a, B: AccountStorage>(
             debug_print!("query_account get owner {}", account_address);
             let owner = state.query_solana_account_owner(account_address);
             if let Some(owner) = owner {
-                debug_print!("query_account owner result: {:?}", owner);
+                debug_print!("query_account owner result: {}", owner);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
             }
-            let revert_message = b"QueryAccount owner failed".to_vec();
+            let revert_message = b"QueryAccount.owner failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LENGTH_ID => {
             debug_print!("query_account get length {}", account_address);
             let length = state.query_solana_account_length(account_address);
             if let Some(length) = length {
-                debug_print!("query_account length result: {:?}", length);
-                let length = &length.to_be_bytes(); // pad to 32
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), length.to_vec()));
+                debug_print!("query_account length result: {}", length);
+                let length: U256 = length.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                length.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
             }
-            let revert_message = b"QueryAccount length failed".to_vec();
+            let revert_message = b"QueryAccount.length failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
+            let revert_message = b"QueryAccount.lamports failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
+            let revert_message = b"QueryAccount.executable failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
+            let revert_message = b"QueryAccount.rent_epoch failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {

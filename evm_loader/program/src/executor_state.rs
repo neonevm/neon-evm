@@ -1059,7 +1059,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
+    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
         let owner = self.backend.apply_to_solana_account(
             &address,
             Pubkey::default,
@@ -1069,7 +1069,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
+    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
         let length = self.backend.apply_to_solana_account(
             &address,
             usize::default,
@@ -1079,7 +1079,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn query_solana_account_data(&mut self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
+    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
         fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
             if offset >= data.len() || offset + length > data.len() {
                 None
