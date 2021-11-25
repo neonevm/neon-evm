@@ -4736,11 +4736,8 @@ dependencies = [
  "evm",
  "evm-loader",
  "hex",
- "libsecp256k1",
- "rlp",
  "serde",
  "serde_json",
- "sha3 0.8.2",
  "solana-clap-utils",
  "solana-cli",
  "solana-cli-config",
@@ -4749,8 +4746,6 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
- "spl-associated-token-account",
- "spl-token",
 ]
 
 [[package]]

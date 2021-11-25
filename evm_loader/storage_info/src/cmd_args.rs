@@ -59,9 +59,9 @@ pub fn parse_program_args() -> (Pubkey, String, Pubkey) {
         )
         .arg(
             Arg::with_name("operator")
-                .long("operator")
                 .value_name("operator")
                 .takes_value(true)
+                .required(true)
                 .global(true)
                 .validator(is_valid_pubkey)
                 .help("Operator's pubkey")
