@@ -37,6 +37,9 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
+    account_utils::StateMut,
+    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
 };
 use serde_json::json;
 use std::{
@@ -120,6 +123,7 @@ pub struct Config {
     // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
     keypair: Option<Keypair>,
+    commitment: CommitmentConfig,
 }
 
 impl Debug for Config {
@@ -1167,12 +1171,10 @@ fn command_cancel_trx(
     Ok(())
 }
 
-fn command_neon_elf(
+fn read_elf_parameters(
     _config: &Config,
-    program_location: &str,
+    program_data: &[u8],
 ) {
-    let program_data = read_program_data(program_location).unwrap();
-    let program_data = &program_data[..];
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
     elf.dynsyms.iter().for_each(|sym| {
         let name = String::from(&elf.dynstrtab[sym.st_name]);
@@ -1191,6 +1193,74 @@ fn command_neon_elf(
             }
         }
     });
+}
+
+fn read_program_data_from_file(config: &Config,
+                               program_location: &str) -> CommandResult {
+    let program_data = read_program_data(program_location)?;
+    let program_data = &program_data[..];
+    read_elf_parameters(config, program_data);
+    Ok(())
+}
+
+fn read_program_data_from_account(config: &Config) -> CommandResult {
+    let account = config.rpc_client
+        .get_account_with_commitment(&config.evm_loader, config.commitment)?
+        .value.ok_or(format!("Unable to find the account {}", &config.evm_loader))?;
+
+    if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+        read_elf_parameters(config, &account.data);
+        Ok(())
+    } else if account.owner == bpf_loader_upgradeable::id() {
+        if let Ok(UpgradeableLoaderState::Program {
+                      programdata_address,
+                  }) = account.state()
+        {
+            let programdata_account = config.rpc_client
+                .get_account_with_commitment(&programdata_address, config.commitment)?
+                .value.ok_or(format!(
+                "Failed to find associated ProgramData account {} for the program {}",
+                programdata_address, &config.evm_loader))?;
+
+            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
+                let offset =
+                    UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                let program_data = &programdata_account.data[offset..];
+                read_elf_parameters(config, program_data);
+                Ok(())
+            } else {
+                Err(
+                    format!("Invalid associated ProgramData account {} found for the program {}",
+                            programdata_address, &config.evm_loader)
+                        .into(),
+                )
+            }
+
+        } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+            let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+            let program_data = &account.data[offset..];
+            read_elf_parameters(config, program_data);
+            Ok(())
+        } else {
+            Err(format!(
+                "{} is not an upgradeble loader buffer or program account",
+                &config.evm_loader
+            )
+                .into())
+        }
+    } else {
+        Err(format!("{} is not a BPF program", &config.evm_loader).into())
+    }
+}
+
+fn command_neon_elf(
+    config: &Config,
+    program_location: Option<&str>,
+) -> CommandResult {
+    program_location.map_or_else(
+        || read_program_data_from_account(config),
+        |program_location| read_program_data_from_file(config, program_location),
+    )
 }
 
 fn command_update_valids_table(
@@ -1533,7 +1603,7 @@ fn main() {
                         .index(1)
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
-                        .required(true)
+                        .required(false)
                         .help("/path/to/evm_loader.so"),
                 )
         )
@@ -1636,6 +1706,7 @@ fn main() {
                 // fee_payer,
                 signer,
                 keypair,
+                commitment,
             }
         };
 
@@ -1681,11 +1752,9 @@ fn main() {
                 command_cancel_trx(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
-                let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+                let program_location = arg_matches.value_of("program_location");
 
-                command_neon_elf(&config, &program_location);
-
-                Ok(())
+                command_neon_elf(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
