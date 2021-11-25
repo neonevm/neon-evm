@@ -171,7 +171,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
-    query_account_cache: query::AccountCache,
+    pub query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -718,14 +718,6 @@ impl ExecutorSubstate {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
         self.erc20_allowances.insert(key, approve.value);
     }
-
-    const fn query_account_cache(&self) -> &query::AccountCache {
-        &self.query_account_cache
-    }
-
-    fn query_account_cache_mut(&mut self) -> &mut query::AccountCache {
-        &mut self.query_account_cache
-    }
 }
 
 pub struct ExecutorState<'a, B: AccountStorage> {
@@ -1073,14 +1065,14 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_owner(&mut self, address: Pubkey) -> Option<Pubkey> {
-        let owner = self.substate.query_account_cache().get_owner(address);
+        let owner = self.substate.query_account_cache.get_owner(address);
         let owner = if let Some(owner) = owner { owner } else {
             let (data, owner) = self.backend.apply_to_solana_account(
                 &address,
                 || (Vec::default(), Pubkey::default()),
                 |data, owner| (data.to_owned(), *owner),
             );
-            self.substate.query_account_cache_mut().insert(address, owner, data);
+            self.substate.query_account_cache.insert(address, owner, data);
             owner
         };
         if owner == Pubkey::default() { None } else { Some(owner) }
@@ -1089,7 +1081,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::option_if_let_else)]
     pub fn query_solana_account_length(&mut self, address: Pubkey) -> Option<usize> {
-        let length = self.substate.query_account_cache().get_length(address);
+        let length = self.substate.query_account_cache.get_length(address);
         let length = if let Some(length) = length { length } else {
             let (data, owner) = self.backend.apply_to_solana_account(
                 &address,
@@ -1097,7 +1089,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 |data, owner| (data.to_owned(), *owner),
             );
             let length = data.len();
-            self.substate.query_account_cache_mut().insert(address, owner, data);
+            self.substate.query_account_cache.insert(address, owner, data);
             length
         };
         if length == 0 { None } else { Some(length) }
@@ -1113,7 +1105,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 Some(data[offset..offset + length].to_owned())
             }
         }
-        let data = self.substate.query_account_cache().get_data(address);
+        let data = self.substate.query_account_cache.get_data(address);
         if let Some(data) = data {
             chunk(data, offset, length)
         } else {
@@ -1123,7 +1115,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 |data, owner| (data.to_owned(), *owner),
             );
             let result = chunk(&data, offset, length);
-            self.substate.query_account_cache_mut().insert(address, owner, data);
+            self.substate.query_account_cache.insert(address, owner, data);
             result
         }
     }

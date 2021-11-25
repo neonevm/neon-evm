@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 
 /// Represents cache of queries to Solana accounts.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct AccountCache {
     cache: BTreeMap<Pubkey, Data>,
 }
@@ -39,8 +39,7 @@ impl AccountCache {
     }
 }
 
-#[derive(Default, Debug)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 struct Data {
     owner: Pubkey,
     contents: Vec<u8>,
