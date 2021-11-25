@@ -30,6 +30,10 @@ fn get_storage_info(
             match acc_data {
                 AccountData::Storage(acc) => acc,
                 AccountData::Empty => return Err ("Account is empty".into()),
+                AccountData::FinalizedStorage(acc) => {
+                    let msg = "Account is finalized ".to_string() + &acc.sender.to_string();
+                    return Err (msg.into())
+                },
                 _ => return Err("Account is not storage account".into())
             },
         Err(_) => return Err("Account unpack error".into())
