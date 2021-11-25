@@ -1175,7 +1175,6 @@ fn read_elf_parameters(
     _config: &Config,
     program_data: &[u8],
 ) {
-    //let program_data = &program_data[..];
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
     elf.dynsyms.iter().for_each(|sym| {
         let name = String::from(&elf.dynstrtab[sym.st_name]);
