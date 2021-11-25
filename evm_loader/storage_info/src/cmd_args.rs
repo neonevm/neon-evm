@@ -20,7 +20,7 @@ use solana_clap_utils::{
 };
 
 
-pub fn parse_program_args() -> (Pubkey, String, Pubkey) {
+pub fn parse_program_args() -> (Pubkey, String, Pubkey, u8) {
     let key = "EVM_LOADER";
     let env_evm_loader  = match env::var_os(key) {
         Some(val) => val.into_string().unwrap(),
@@ -66,6 +66,15 @@ pub fn parse_program_args() -> (Pubkey, String, Pubkey) {
                 .validator(is_valid_pubkey)
                 .help("Operator's pubkey")
         )
+        .arg(
+            Arg::with_name("max_index")
+                .value_name("max_index")
+                .takes_value(true)
+                .required(true)
+                .global(true)
+                .default_value("7")
+                .help("max storage account index")
+        )
         .get_matches();
 
     let evm_loader = pubkey_of(&app_matches, "evm_loader")
@@ -82,6 +91,9 @@ pub fn parse_program_args() -> (Pubkey, String, Pubkey) {
         });
     println!("operator:   {:?}", evm_loader);
 
+    let max_index = value_t_or_exit!(app_matches, "max_index", u8);
+
+
 
     let json_rpc_url = normalize_to_url_if_moniker(
         app_matches
@@ -89,6 +101,8 @@ pub fn parse_program_args() -> (Pubkey, String, Pubkey) {
     );
     println!("url:   {:?}", json_rpc_url);
 
+    let max_index : u8 =
 
-    return (evm_loader, json_rpc_url, operator);
+
+    return (evm_loader, json_rpc_url, operator, max_index);
 }

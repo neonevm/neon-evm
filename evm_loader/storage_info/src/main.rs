@@ -47,7 +47,8 @@ fn main() {
 
      let (evm_loader,
          json_rpc_url,
-         operator
+         operator,
+         max_index
      )
     = cmd_args::parse_program_args();
 
@@ -55,7 +56,7 @@ fn main() {
                                                              CommitmentConfig::confirmed()));
 
     println!("");
-    for index in 0..8{
+    for index in 0..(max_index+1){
         let mut bit_length = 0;
 
         for pos in  0..8{
