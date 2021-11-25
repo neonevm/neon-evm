@@ -4727,6 +4727,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
+name = "storage_info"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "bs58 0.4.0",
+ "clap",
+ "evm",
+ "evm-loader",
+ "hex",
+ "libsecp256k1",
+ "rlp",
+ "serde",
+ "serde_json",
+ "sha3 0.8.2",
+ "solana-clap-utils",
+ "solana-cli",
+ "solana-cli-config",
+ "solana-cli-output",
+ "solana-client",
+ "solana-program",
+ "solana-sdk",
+ "solana-transaction-status",
+ "spl-associated-token-account",
+ "spl-token",
+]
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
