@@ -1,5 +1,5 @@
 use crate::{
-    account_data::{ Storage, AccountData },
+    account_data::{ Storage, AccountData, FinalizedStorage},
     error::EvmLoaderError
 };
 use evm::{ H160 };
@@ -19,52 +19,76 @@ pub struct StorageAccount<'a> {
     data: AccountData
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<'a> StorageAccount<'a> {
-    pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64) -> Result<Self, ProgramError> {
-        let account_data = info.try_borrow_data()?;
+    pub fn new(info: &'a AccountInfo<'a>, operator: &AccountInfo, accounts: &[AccountInfo], caller: H160, nonce: u64, gas_limit: u64, gas_price: u64, sign: &[u8]) -> Result<Self, ProgramError> {
+       let mut account_data = info.try_borrow_mut_data()?;
 
-        if let AccountData::Empty = AccountData::unpack(&account_data)? {
-            let data = AccountData::Storage(
-                Storage { 
-                    caller,
-                    nonce,
-                    gas_limit,
-                    gas_price,
-                    slot: Clock::get()?.slot,
-                    operator: *operator.key,
-                    accounts_len: accounts.len(),
-                    executor_data_size: 0,
-                    evm_data_size: 0,
-                    gas_used_and_paid: 0,
-                    number_of_payments: 0,
-                }
-            );
-            Ok(Self { info, data })
-        } else {
-            Err!(ProgramError::InvalidAccountData; "storage account is not empty. key={:?}", info.key)
-        }
+       match AccountData::unpack(&account_data)? {
+            AccountData::FinalizedStorage(_) => {AccountData::pack(&AccountData::Empty, &mut account_data)?;},
+            AccountData::Empty => {},
+            _ => return Err!(ProgramError::InvalidAccountData; "storage account is not empty and is not finalized key={:?}", info.key)
+        };
+
+        let mut sign_:[u8; 65] =[0; 65];
+        sign_.copy_from_slice(sign);
+        let data = AccountData::Storage(
+            Storage {
+                caller,
+                nonce,
+                gas_limit,
+                gas_price,
+                slot: Clock::get()?.slot,
+                operator: *operator.key,
+                accounts_len: accounts.len(),
+                executor_data_size: 0,
+                evm_data_size: 0,
+                gas_used_and_paid: 0,
+                number_of_payments: 0,
+                sign: sign_
+            }
+        );
+
+        Ok(Self { info, data })
     }
 
     pub fn restore(info: &'a AccountInfo<'a>, operator: &AccountInfo) -> Result<Self, ProgramError> {
         let mut account_data = info.try_borrow_mut_data()?;
-        
-        if let AccountData::Storage(mut data) = AccountData::unpack(&account_data)? {
-            let clock = Clock::get()?;
-            if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
-                return Err!(ProgramError::InvalidAccountData);
+
+        match AccountData::unpack(&account_data)? {
+            AccountData::Storage(mut data) => {
+                let clock = Clock::get()?;
+                if (*operator.key != data.operator) && ((clock.slot - data.slot) <= OPERATOR_PRIORITY_SLOTS) {
+                    return Err!(ProgramError::InvalidAccountData);
+                }
+
+                if data.operator != *operator.key {
+                    data.operator = *operator.key;
+                    data.slot = clock.slot;
+                }
+
+                let data = AccountData::Storage(data);
+                AccountData::pack(&data, &mut account_data)?;
+
+                Ok(Self { info, data })
             }
+            AccountData::Empty =>  Err!(EvmLoaderError::StorageAccountUninitialized.into()),
+            AccountData::FinalizedStorage(_) => { Err!(EvmLoaderError::StorageAccountFinalized.into()) },
+            _ =>  Err!(ProgramError::InvalidAccountData)
+        }
+    }
 
-            if data.operator != *operator.key {
-                data.operator = *operator.key;
-                data.slot = clock.slot;
+    pub fn finalized_is_outdated(info: &'a AccountInfo<'a>, sign : &[u8], caller: &H160)  -> Result<bool, ProgramError> {
+        let account_data = info.try_borrow_data()?;
+
+        match AccountData::unpack(&account_data)? {
+            AccountData::FinalizedStorage(storage) => {
+                if storage.sender != *caller || !storage.sign.eq(sign) {
+                    return Ok(true);
+                }
+                Ok(false)
             }
-
-            let data = AccountData::Storage(data);
-            AccountData::pack(&data, &mut account_data)?;
-
-            Ok(Self { info, data })
-        } else {
-            Err!(ProgramError::InvalidAccountData)
+            _ =>  Err!(ProgramError::InvalidAccountData)
         }
     }
 
@@ -84,7 +108,7 @@ impl<'a> StorageAccount<'a> {
         Ok(())
     }
 
-    pub fn unblock_accounts_and_destroy(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    pub fn unblock_accounts_and_finalize(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
 
         for account_info in accounts.iter().filter(|a| a.owner == program_id) {
             let mut data = account_info.try_borrow_mut_data()?;
@@ -112,7 +136,8 @@ impl<'a> StorageAccount<'a> {
         }
 
         let mut account_data = self.info.try_borrow_mut_data()?;
-        AccountData::pack(&AccountData::Empty, &mut account_data)?;
+        let finalized_storage = FinalizedStorage{sender :self.caller_and_nonce()?.0, sign: self.get_sign()?};
+        AccountData::pack(&AccountData::FinalizedStorage(finalized_storage), &mut account_data)?;
 
         debug_print!("Destroying {:?}", self.info.key);
 
@@ -122,6 +147,11 @@ impl<'a> StorageAccount<'a> {
     pub fn caller_and_nonce(&self) -> Result<(H160, u64), ProgramError> {
         let storage = AccountData::get_storage(&self.data)?;
         Ok((storage.caller, storage.nonce))
+    }
+
+    pub fn get_sign(&self) -> Result<([u8; 65]), ProgramError> {
+        let storage = AccountData::get_storage(&self.data)?;
+        Ok(storage.sign)
     }
 
     pub fn get_gas_params(&self) -> Result<(u64, u64), ProgramError> {

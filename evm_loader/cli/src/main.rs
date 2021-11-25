@@ -60,7 +60,7 @@ use std::{
 };
 
 use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
+    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
     ArgMatches, SubCommand,
 };
 
@@ -214,7 +214,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
-    
+
             storage.apply(applies);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
@@ -622,7 +622,7 @@ fn fill_holder_account(
 // }
 
 fn get_ether_account_nonce(
-    config: &Config, 
+    config: &Config,
     caller_sol: &Pubkey
 ) -> Result<(u64, H160, Pubkey), Error> {
     let data : Vec<u8>;
@@ -664,7 +664,7 @@ fn get_program_ether(
 }
 
 fn get_ethereum_contract_account_credentials(
-    config: &Config, 
+    config: &Config,
     caller_ether: &H160,
     trx_count: u64,
 ) -> (Pubkey, H160, u8, Pubkey, Pubkey, String) {
@@ -719,12 +719,12 @@ fn create_ethereum_contract_accounts_in_solana(
 
     let instructions = vec![
         system_instruction::create_account_with_seed(
-            &creator.pubkey(), 
-            program_code, 
-            &creator.pubkey(), 
-            program_seed, 
-            minimum_balance_for_code, 
-            program_code_acc_len as u64, 
+            &creator.pubkey(),
+            program_code,
+            &creator.pubkey(),
+            program_seed,
+            minimum_balance_for_code,
+            program_code_acc_len as u64,
             &config.evm_loader
         ),
         Instruction::new_with_bincode(
@@ -762,7 +762,7 @@ fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
         &collateral_pool_base::id(),
-        &seed, 
+        &seed,
         &config.evm_loader).unwrap();
 
     (collateral_pool_account, collateral_pool_index)
@@ -797,10 +797,10 @@ fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransactio
 }
 
 fn create_account_with_seed(
-    config: &Config, 
-    funding: &Pubkey, 
-    base: &Pubkey, 
-    seed: &str, 
+    config: &Config,
+    funding: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
     len: u64
 ) -> Result<Pubkey, Error> {
     let created_account = Pubkey::create_with_seed(base, seed, &config.evm_loader).unwrap();
@@ -826,7 +826,7 @@ fn create_account_with_seed(
 }
 
 fn send_transaction(
-    config: &Config, 
+    config: &Config,
     instructions: &[Instruction]
 ) -> Result<Signature, Error> {
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
@@ -971,9 +971,9 @@ fn command_deploy(
                                                                  continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
-        // Check if Continue returned some result 
+        // Check if Continue returned some result
         let result = config.rpc_client.get_transaction_with_config(
-            &signature, 
+            &signature,
             RpcTransactionConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
                 encoding: Some(UiTransactionEncoding::Json),
@@ -1011,7 +1011,7 @@ fn command_get_ether_account_data (
 
             println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);
-    
+
             println!("Account fields");
             println!("    ether: {}", &account_data.ether);
             println!("    nonce: {}", &account_data.nonce);
@@ -1028,7 +1028,7 @@ fn command_get_ether_account_data (
             );
             println!("    token_account: {}", &account_data.eth_token_account);
             println!("    token_amount: {}", &balance);
-        
+
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
                 let header = AccountData::size(&code_data);
@@ -1038,7 +1038,7 @@ fn command_get_ether_account_data (
                 println!("    owner: {}", &code_data.owner);
                 println!("    code_size: {}", &code_data.code_size);
                 println!("    code as hex:");
-    
+
                 let code_size = code_data.code_size;
                 let mut offset = header;
                 while offset < ( code_size as usize + header) {
@@ -1048,7 +1048,7 @@ fn command_get_ether_account_data (
                     } else {
                         code_size as usize + header - offset
                     };
-    
+
                     println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
                     offset += remains;
                 }
@@ -1104,7 +1104,7 @@ fn command_cancel_trx(
             let data_end = data.size();
             let storage = if let AccountData::Storage(storage) = data {storage}
                     else {return Err("Not storage account".to_string().into());};
-    
+
             println!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
@@ -1161,7 +1161,7 @@ fn command_cancel_trx(
         for meta in &accounts_meta {
             println!("\t{:?}", meta);
         }
-        
+
         let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
         send_transaction(config, &[instruction])?;
 
@@ -1264,10 +1264,49 @@ fn command_neon_elf(
     )
 }
 
+fn command_update_valids_table(
+    config: &Config,
+    ether_address: &H160,
+) -> CommandResult {
+    let account_data = if let Some((account, _, _)) = EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
+        AccountData::unpack(&account.data)?
+    } else {
+        return Err(format!("Account not found {:#x}", ether_address).into());
+    };
+
+    let code_account = account_data.get_account()?.code_account;
+    if code_account == Pubkey::new_from_array([0_u8; 32]) {
+        return Err(format!("Code account not found {:#x}", ether_address).into());
+    }
+
+    let instruction = Instruction::new_with_bincode(
+        config.evm_loader,
+        &(23),
+        vec![AccountMeta::new(code_account, false)]
+    );
+
+    let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
+    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+
+    check_account_for_fee(
+        &config.rpc_client,
+        &config.signer.pubkey(),
+        &fee_calculator,
+        &finalize_message)?;
+
+    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
+    finalize_tx.try_sign(&[&*config.signer], blockhash)?;
+    debug!("signed: {:x?}", finalize_tx);
+
+    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+
+    Ok(())
+}
+
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
-    } else {        
+    } else {
         in_str
     }
 }
@@ -1355,11 +1394,22 @@ fn is_amount_u256<T>(amount: T) -> Result<(), String>
     }
 }
 
+macro_rules! neon_cli_pkg_version {
+    () => ( env!("CARGO_PKG_VERSION") )
+}
+macro_rules! neon_cli_revision {
+    () => ( env!("NEON_REVISION") )
+}
+macro_rules! version_string {
+    () => ( concat!("Neon-cli/v", neon_cli_pkg_version!(), "-", neon_cli_revision!()) )
+}
+
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(version_string!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -1369,7 +1419,7 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-                
+
             #[allow(clippy::option_if_let_else)]
             if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(config_file)
@@ -1578,6 +1628,18 @@ fn main() {
                         .required(true),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("update-valids-table")
+                .about("Update Valids Table")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+        )
         .get_matches();
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
@@ -1593,7 +1655,7 @@ fn main() {
         let mut wallet_manager = None;
         let config = {
             let cli_config = app_matches.value_of("config_file").map_or_else(
-                solana_cli_config::Config::default, 
+                solana_cli_config::Config::default,
                 |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
             );
 
@@ -1687,7 +1749,7 @@ fn main() {
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
-                
+
                 command_cancel_trx(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
@@ -1700,6 +1762,11 @@ fn main() {
                 let index = u256_of(arg_matches, "index").unwrap();
 
                 command_get_storage_at(&config, &contract_id, &index)
+            }
+            ("update-valids-table", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+
+                command_update_valids_table(&config, &contract_id)
             }
             _ => unreachable!(),
         };
