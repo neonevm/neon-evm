@@ -1060,22 +1060,52 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        let owner = self.backend.apply_to_solana_account(
+        let (found, owner) = self.backend.apply_to_solana_account(
             &address,
-            Pubkey::default,
-            |_, owner| *owner,
+            || (false, Pubkey::default()),
+            |info| (true, *info.owner),
         );
-        if owner == Pubkey::default() { None } else { Some(owner) }
+        if found { Some(owner) } else { None }
     }
 
     #[must_use]
     pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let length = self.backend.apply_to_solana_account(
+        let (found, length) = self.backend.apply_to_solana_account(
             &address,
-            usize::default,
-            |data, _| data.len(),
+            || (false, usize::default()),
+            |info| (true, info.data.borrow().len()),
         );
-        if length == usize::default() { None } else { Some(length) }
+        if found { Some(length) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
+        let (found, lamports) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, u64::default()),
+            |info| (true, info.lamports),
+        );
+        if found { Some(lamports) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
+        let (found, executable) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, bool::default()),
+            |info| (true, info.executable),
+        );
+        if found { Some(executable) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
+        let (found, rent_epoch) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, u64::default()),
+            |info| (true, info.rent_epoch),
+        );
+        if found { Some(rent_epoch) } else { None }
     }
 
     #[must_use]
@@ -1090,7 +1120,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.backend.apply_to_solana_account(
             &address,
             || None,
-            |data, _| clone_chunk(data, offset, length)
+            |info| clone_chunk(*info.data.borrow(), offset, length)
         )
     }
 

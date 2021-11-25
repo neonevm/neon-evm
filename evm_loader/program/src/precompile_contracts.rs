@@ -337,14 +337,41 @@ pub fn query_account<'a, B: AccountStorage>(
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
+            debug_print!("query_account get lamports {}", account_address);
+            let lamports = state.query_solana_account_lamports(account_address);
+            if let Some(lamports) = lamports {
+                debug_print!("query_account lamports result: {}", lamports);
+                let lamports: U256 = lamports.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                lamports.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
             let revert_message = b"QueryAccount.lamports failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
+            debug_print!("query_account get executable {}", account_address);
+            let executable = state.query_solana_account_executable(account_address);
+            if let Some(executable) = executable {
+                debug_print!("query_account executable result: {}", executable);
+                let executable: U256 = (executable as u8).into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                executable.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
             let revert_message = b"QueryAccount.executable failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
+            debug_print!("query_account get rent_epoch {}", account_address);
+            let rent_epoch = state.query_solana_account_rent_epoch(account_address);
+            if let Some(rent_epoch) = rent_epoch {
+                debug_print!("query_account rent_epoch result: {}", rent_epoch);
+                let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                rent_epoch.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
             let revert_message = b"QueryAccount.rent_epoch failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },

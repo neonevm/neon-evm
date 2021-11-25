@@ -1,7 +1,7 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solana_backend::{AccountStorage},
+    solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
@@ -493,12 +493,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
-        where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+        where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
               D: FnOnce() -> U
     {
         let account_info = self.solana_accounts.get(address);
         if let Some(account_info) = account_info {
-            f(&account_info.data.borrow(), account_info.owner)
+            f(&AccountStorageInfo::from(account_info))
         } else {
             panic!("Solana account {} must be present in the transaction", address)
         }
