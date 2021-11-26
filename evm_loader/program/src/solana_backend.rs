@@ -16,17 +16,17 @@ use core::cell::RefMut;
 
 /// Account information for `apply_to_solana_account`.
 pub struct AccountStorageInfo<'a> {
-    /// The lamports in the account
+    /// The lamports in account
     pub lamports: u64,
-    /// The data held in this account (for use in the emulator)
+    /// The data held in account (for use in the emulator)
     pub data: &'a [u8],
-    /// The data held in this account (for use in the EVM Loader)
+    /// The data held in account (for use in the EVM Loader)
     pub data_mut: Option<RefMut<'a, &'a mut [u8]>>,
-    /// Program that owns this account
+    /// Program that owns account
     pub owner: &'a Pubkey,
     /// This account's data contains a loaded program
     pub executable: bool,
-    /// The epoch at which this account will next owe rent
+    /// The epoch at which account will next owe rent
     pub rent_epoch: Epoch,
 }
 
@@ -48,7 +48,7 @@ impl<'a> AccountStorageInfo<'a> {
     #[must_use]
     pub fn data_ref(&self) -> &[u8] {
         match self.data_mut.as_ref() {
-            Some(data) => data,
+            Some(data_mut) => data_mut,
             None => self.data, // for emulator
         }
     }

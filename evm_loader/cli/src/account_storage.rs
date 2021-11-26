@@ -583,7 +583,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         let account = self.config.rpc_client.get_account_with_commitment(address, CommitmentConfig::processed()).unwrap().value;
         match account {
-            Some(mut account) => f(&account_storage_info(&mut account)),
+            Some(account) => f(&account_storage_info(&account)),
             None => d()
         }
     }
@@ -604,7 +604,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 }
 
 /// Creates new instance of `AccountStorageInfo` from `Account`.
-fn account_storage_info(account: &mut Account) -> AccountStorageInfo {
+fn account_storage_info(account: &Account) -> AccountStorageInfo {
     AccountStorageInfo {
         lamports: account.lamports,
         data: &account.data,
