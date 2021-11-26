@@ -1,19 +1,21 @@
 #[allow(unused)]
+
 use std::{
     borrow::BorrowMut,
     cell::RefCell,
+    collections::HashMap,
     convert::TryFrom,
     error,
+    process::exit,
     rc::Rc,
     thread::sleep,
     time::Duration,
 };
-use std::collections::HashMap;
-use std::process::exit;
 
 use evm::{H160, U256};
 use evm::backend::Apply;
 use serde::{Deserialize, Serialize};
+
 #[allow(unused)]
 use solana_client::{
     client_error,
@@ -605,7 +607,8 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 fn account_storage_info(account: &mut Account) -> AccountStorageInfo {
     AccountStorageInfo {
         lamports: account.lamports,
-        data: Rc::new(RefCell::new(&mut account.data)),
+        data: &account.data,
+        data_mut: None,
         owner: &account.owner,
         executable: account.executable,
         rent_epoch: account.rent_epoch,

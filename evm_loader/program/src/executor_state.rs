@@ -1073,7 +1073,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let (found, length) = self.backend.apply_to_solana_account(
             &address,
             || (false, usize::default()),
-            |info| (true, info.data.borrow().len()),
+            |info| (true, info.data_ref().len()),
         );
         if found { Some(length) } else { None }
     }
@@ -1120,7 +1120,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.backend.apply_to_solana_account(
             &address,
             || None,
-            |info| clone_chunk(*info.data.borrow(), offset, length)
+            |info| clone_chunk(info.data_ref(), offset, length)
         )
     }
 

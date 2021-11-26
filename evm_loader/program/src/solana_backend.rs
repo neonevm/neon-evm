@@ -12,18 +12,16 @@ use solana_program::{
     clock::Epoch,
     pubkey::Pubkey,
 };
-use std::{
-    cell::RefCell,
-    rc::Rc,
-};
+use core::cell::RefMut;
 
 /// Account information for `apply_to_solana_account`.
-#[derive(Clone)]
 pub struct AccountStorageInfo<'a> {
     /// The lamports in the account
     pub lamports: u64,
-    /// The data held in this account
-    pub data: Rc<RefCell<&'a mut [u8]>>,
+    /// The data held in this account (for use in the emulator)
+    pub data: &'a [u8],
+    /// The data held in this account (for use in the EVM Loader)
+    pub data_mut: Option<RefMut<'a, &'a mut [u8]>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
     /// This account's data contains a loaded program
@@ -38,10 +36,20 @@ impl<'a> AccountStorageInfo<'a> {
     pub fn from(info: &'a AccountInfo<'a>) -> Self {
         Self {
             lamports: **info.lamports.borrow(),
-            data: info.data.clone(),
+            data: &[] as &[u8], // empty
+            data_mut: Some(info.data.borrow_mut()),
             owner: info.owner,
             executable: info.executable,
             rent_epoch: info.rent_epoch,
+        }
+    }
+
+    /// Returns reference to inner data.
+    #[must_use]
+    pub fn data_ref(&self) -> &[u8] {
+        match self.data_mut.as_ref() {
+            Some(data) => data,
+            None => self.data, // for emulator
         }
     }
 }
@@ -81,7 +89,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_account,
             || 0_u64,
-            |info| get_token_account_data(*info.data.borrow(), info.owner).map_or(0, |a| a.amount)
+            |info| get_token_account_data(info.data_ref(), info.owner).map_or(0, |a| a.amount)
         )
     }
 
@@ -90,7 +98,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_mint,
             || 0_u64,
-            |info| get_token_mint_data(*info.data.borrow(), info.owner).map_or(0, |mint| mint.supply)
+            |info| get_token_mint_data(info.data_ref(), info.owner).map_or(0, |mint| mint.supply)
         )
     }
 
@@ -99,7 +107,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_mint,
             || 0_u8,
-            |info| get_token_mint_data(*info.data.borrow(), info.owner).map_or(0_u8, |mint| mint.decimals)
+            |info| get_token_mint_data(info.data_ref(), info.owner).map_or(0_u8, |mint| mint.decimals)
         )
     }
 
@@ -122,7 +130,7 @@ pub trait AccountStorage {
         let account_data = self.apply_to_solana_account(
             &allowance_address,
             || None,
-            |info| AccountData::unpack(*info.data.borrow()).ok()
+            |info| AccountData::unpack(info.data_ref()).ok()
         );
 
         account_data
