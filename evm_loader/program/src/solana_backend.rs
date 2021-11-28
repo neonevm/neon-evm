@@ -12,7 +12,7 @@ use solana_program::{
     clock::Epoch,
     pubkey::Pubkey,
 };
-use core::cell::RefMut;
+use core::cell::Ref;
 
 /// Account information for `apply_to_solana_account`.
 pub struct AccountStorageInfo<'a> {
@@ -21,7 +21,7 @@ pub struct AccountStorageInfo<'a> {
     /// The data held in account (for use in the emulator)
     pub data: &'a [u8],
     /// The data held in account (for use in the EVM Loader)
-    pub data_mut: Option<RefMut<'a, &'a mut [u8]>>,
+    pub data_ref: Option<Ref<'a, &'a mut [u8]>>,
     /// Program that owns account
     pub owner: &'a Pubkey,
     /// This account's data contains a loaded program
@@ -37,7 +37,7 @@ impl<'a> AccountStorageInfo<'a> {
         Self {
             lamports: **info.lamports.borrow(),
             data: &[] as &[u8], // empty
-            data_mut: Some(info.data.borrow_mut()),
+            data_ref: Some(info.data.borrow()),
             owner: info.owner,
             executable: info.executable,
             rent_epoch: info.rent_epoch,
@@ -47,8 +47,8 @@ impl<'a> AccountStorageInfo<'a> {
     /// Returns reference to inner data.
     #[must_use]
     pub fn data_ref(&self) -> &[u8] {
-        match self.data_mut.as_ref() {
-            Some(data_mut) => data_mut,
+        match self.data_ref.as_ref() {
+            Some(data_ref) => data_ref,
             None => self.data, // for emulator
         }
     }

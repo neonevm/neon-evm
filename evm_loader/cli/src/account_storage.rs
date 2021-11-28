@@ -608,7 +608,7 @@ fn account_storage_info(account: &Account) -> AccountStorageInfo {
     AccountStorageInfo {
         lamports: account.lamports,
         data: &account.data,
-        data_mut: None,
+        data_ref: None,
         owner: &account.owner,
         executable: account.executable,
         rent_epoch: account.rent_epoch,
