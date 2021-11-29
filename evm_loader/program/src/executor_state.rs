@@ -1124,6 +1124,16 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         )
     }
 
+    #[must_use]
+    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
+        &mut self.substate.metadata.gasometer
+    }
+
+    #[must_use]
+    pub fn gasometer(&self) -> &Gasometer {
+        self.substate.metadata().gasometer()
+    }
+
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
         Self { backend, substate }
     }
@@ -1139,19 +1149,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.substate.metadata.gasometer
-    }
-
-    #[must_use]
     pub fn deconstruct(
         self,
     ) -> ApplyState {
         self.substate.deconstruct(self.backend)
-    }
-
-    #[must_use]
-    pub fn gasometer(&self) -> &Gasometer {
-        self.substate.metadata().gasometer()
     }
 }
