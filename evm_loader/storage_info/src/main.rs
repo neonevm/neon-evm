@@ -15,16 +15,14 @@ fn keccak256(data: &[u8]) -> [u8; 32] {
 }
 
 pub enum StorageError {
-    // #[error("not exist")]
     AccountNotExist,
-    // #[error("other")]
     Other(String)
  }
 
 fn get_storage_info(
     rpc_client: &Arc<RpcClient>,
     account: &Pubkey
-) -> Result<((H160, u64)), StorageError> {
+) -> Result<((H160, u64, [u8;65])), StorageError> {
 
     let data : Vec<u8>;
     match rpc_client.get_account_with_commitment(account, CommitmentConfig::confirmed()).unwrap().value{
@@ -46,7 +44,7 @@ fn get_storage_info(
         Err(_) => return Err(StorageError::Other("Account unpack error".to_string()))
     };
 
-    Ok((data.caller, data.nonce))
+    Ok((data.caller, data.nonce, data.sign))
 }
 
 
@@ -91,7 +89,7 @@ fn main() {
             &evm_loader).unwrap();
 
         match get_storage_info(&rpc_client, &storage_sol){
-            Ok((caller, nonce)) => println!("{}: Storage {}, {}", storage_sol, &(hex::encode(caller)), nonce),
+            Ok((caller, nonce, sign)) => println!("{}: Storage {}, {}, {}", storage_sol, &(hex::encode(caller)), nonce, hex::encode(&sign)),
             Err(err) => {
                 match err{
                     StorageError::AccountNotExist =>{
