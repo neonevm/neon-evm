@@ -33,7 +33,7 @@ impl<'a> AccountStorageInfo<'a> {
     #[must_use]
     pub fn from(info: &'a AccountInfo<'a>) -> Self {
         Self {
-            lamports: **info.lamports.borrow(),
+            lamports: info.lamports(),
             data: info.data.clone(),
             owner: info.owner,
             executable: info.executable,
