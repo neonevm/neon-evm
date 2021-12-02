@@ -1,58 +1,62 @@
-use evm::backend::Apply;
-use evm::{H160, U256};
 #[allow(unused)]
-use solana_sdk::{
-    pubkey::Pubkey,
-    account::Account,
-    commitment_config::CommitmentConfig,
-    account_info::AccountInfo,
-    entrypoint::ProgramResult,
-    program::invoke_signed,
-    transaction::Transaction,
-    signer::keypair::Keypair,
-    signature::Signature,
-    signer::Signer,
-    program_error::ProgramError,
-    transaction::TransactionError,
-};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap};
-use std::process::exit;
-use evm_loader::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION, Contract},
-    hamt::Hamt,
-    solana_backend::AccountStorage,
-    solidity_account::SolidityAccount,
-    precompile_contracts::is_precompile_address,
-    executor_state::{SplTransfer, SplApprove, ERC20Approve}
-};
-#[allow(unused)]
+
 use std::{
     borrow::BorrowMut,
     cell::RefCell,
-    rc::Rc,
-    error,
-    time::Duration,
-    thread::sleep,
+    collections::HashMap,
     convert::TryFrom,
+    error,
+    process::exit,
+    rc::Rc,
+    thread::sleep,
+    time::Duration,
 };
-use crate::Config;
+
+use evm::{H160, U256};
+use evm::backend::Apply;
+use serde::{Deserialize, Serialize};
+
+#[allow(unused)]
+use solana_client::{
+    client_error,
+    client_error::reqwest::StatusCode,
+    rpc_client::RpcClient,
+    rpc_config::RpcSimulateTransactionConfig,
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+};
 #[allow(unused)]
 use solana_program::{
-    instruction::Instruction,
     instruction::AccountMeta,
+    instruction::Instruction,
     message::Message,
     native_token::lamports_to_sol,
 };
 #[allow(unused)]
-use solana_client::{
-    rpc_client::RpcClient,
-    rpc_config::RpcSimulateTransactionConfig,
-    client_error,
-    client_error::reqwest::StatusCode,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+use solana_sdk::{
+    account::Account,
+    account_info::AccountInfo,
+    commitment_config::CommitmentConfig,
+    entrypoint::ProgramResult,
+    program::invoke_signed,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    signature::Signature,
+    signer::keypair::Keypair,
+    signer::Signer,
+    transaction::Transaction,
+    transaction::TransactionError,
 };
 
+use evm_loader::{
+    account_data::{ACCOUNT_SEED_VERSION, AccountData, Contract},
+    executor_state::{ERC20Approve, SplApprove, SplTransfer},
+    hamt::Hamt,
+    precompile_contracts::is_precompile_address,
+    solana_backend::{AccountStorage, AccountStorageInfo},
+    solidity_account::SolidityAccount
+};
+
+use crate::Config;
 
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
@@ -562,7 +566,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, d: D, f: F) -> U
-    where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+    where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
           D: FnOnce() -> U
     {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
@@ -570,7 +574,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         let account = self.config.rpc_client.get_account_with_commitment(address, CommitmentConfig::processed()).unwrap().value;
         match account {
-            Some(account) => f(&account.data, &account.owner),
+            Some(mut account) => f(&account_storage_info(&mut account)),
             None => d()
         }
     }
@@ -587,5 +591,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn get_account_solana_address(&self, address: &H160) -> Pubkey {
         make_solana_program_address(address, &self.config.evm_loader).0
+    }
+}
+
+/// Creates new instance of `AccountStorageInfo` from `Account`.
+fn account_storage_info(account: &mut Account) -> AccountStorageInfo {
+    AccountStorageInfo {
+        lamports: account.lamports,
+        data: Rc::new(RefCell::new(&mut account.data)),
+        owner: &account.owner,
+        executable: account.executable,
+        rent_epoch: account.rent_epoch,
     }
 }
