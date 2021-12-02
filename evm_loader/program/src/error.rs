@@ -49,7 +49,7 @@ pub fn err_fn<T:>(err: ProgramError, fl: &str, ln: u32, info: &str) -> Result<T,
 /// Macro to log a `ProgramError` in the current transaction log
 /// with the source file position like: file.rc:42
 /// and additional info if needed
-/// See https://github.com/neonlabsorg/neon-evm/issues/159
+/// See `https://github.com/neonlabsorg/neon-evm/issues/159`
 ///
 /// # Examples
 ///
@@ -74,10 +74,10 @@ pub fn e_fn(e: ProgramError, fl: &str, ln: u32, info: &str) -> ProgramError {
     e
 }
 
-/// Macro to log a ProgramError in the current transaction log.
+/// Macro to log a `ProgramError` in the current transaction log.
 /// with the source file position like: file.rc:777
 /// and additional info if needed
-/// See https://github.com/neonlabsorg/neon-evm/issues/159
+/// See `https://github.com/neonlabsorg/neon-evm/issues/159`
 ///
 /// # Examples
 ///

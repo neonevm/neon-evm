@@ -1,20 +1,24 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
+/// Todo: document
+
+use core::mem;
 use std::{
     boxed::Box,
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    str::FromStr,
     vec::Vec
 };
-use core::mem;
-use std::cell::RefCell;
-use evm::gasometer::Gasometer;
+
+use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::{ExitError, Transfer, Valids, H160, H256, U256};
-use serde::{Serialize, Deserialize};
-use crate::utils::{keccak256_h256};
-use crate::solana_backend::AccountStorage;
+use evm::gasometer::Gasometer;
+use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
-use std::str::FromStr;
+
+use crate::solana_backend::AccountStorage;
+use crate::utils::keccak256_h256;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -1054,6 +1058,81 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
+    #[must_use]
+    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
+        let (found, owner) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, Pubkey::default()),
+            |info| (true, *info.owner),
+        );
+        if found { Some(owner) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
+        let (found, length) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, usize::default()),
+            |info| (true, info.data.borrow().len()),
+        );
+        if found { Some(length) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
+        let (found, lamports) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, u64::default()),
+            |info| (true, info.lamports),
+        );
+        if found { Some(lamports) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
+        let (found, executable) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, bool::default()),
+            |info| (true, info.executable),
+        );
+        if found { Some(executable) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
+        let (found, rent_epoch) = self.backend.apply_to_solana_account(
+            &address,
+            || (false, u64::default()),
+            |info| (true, info.rent_epoch),
+        );
+        if found { Some(rent_epoch) } else { None }
+    }
+
+    #[must_use]
+    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
+        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+            if offset >= data.len() || offset + length > data.len() {
+                None
+            } else {
+                Some(data[offset..offset + length].to_owned())
+            }
+        }
+        self.backend.apply_to_solana_account(
+            &address,
+            || None,
+            |info| clone_chunk(&info.data.borrow(), offset, length)
+        )
+    }
+
+    #[must_use]
+    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
+        &mut self.substate.metadata.gasometer
+    }
+
+    #[must_use]
+    pub fn gasometer(&self) -> &Gasometer {
+        self.substate.metadata().gasometer()
+    }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
         Self { backend, substate }
@@ -1070,19 +1149,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.substate.metadata.gasometer
-    }
-
-    #[must_use]
     pub fn deconstruct(
         self,
     ) -> ApplyState {
         self.substate.deconstruct(self.backend)
-    }
-
-    #[must_use]
-    pub fn gasometer(&self) -> &Gasometer {
-        self.substate.metadata().gasometer()
     }
 }
