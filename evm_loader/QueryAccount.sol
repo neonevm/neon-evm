@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0;
+pragma solidity >=0.7.1;
 
 contract QueryAccount {
     address constant precompiled = 0xff00000000000000000000000000000000000002;
