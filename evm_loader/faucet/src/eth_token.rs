@@ -13,17 +13,32 @@ pub struct Airdrop {
     wallet: String,
     /// Amount of a token to be received.
     amount: u64,
+    /// Specifies amount in whole tokens (false, default) or in 10E-9 fractions (true).
+    #[serde(default)]
+    pub in_fractions: bool,
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
 pub async fn airdrop(params: Airdrop) -> Result<()> {
     info!("Processing ETH {:?}...", params);
 
-    if params.amount > config::solana_max_amount() {
+    let limit = if !params.in_fractions {
+        config::solana_max_amount()
+    } else {
+        let decimals = config::solana_token_mint_decimals();
+        let factor = 10_u64
+            .checked_pow(decimals as u32)
+            .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
+        config::solana_max_amount()
+            .checked_mul(factor as u64)
+            .ok_or_else(|| eyre!("Overflow {}*{}", config::solana_max_amount(), factor))?
+    };
+
+    if params.amount > limit {
         return Err(eyre!(
             "Requested value {} exceeds the limit {}",
             params.amount,
-            config::solana_max_amount()
+            limit
         ));
     }
 
@@ -31,7 +46,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
     let ether_address = ethereum::address_from_str(&params.wallet)
         .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
-    solana::transfer_token(operator, ether_address, params.amount)
+    solana::transfer_token(operator, ether_address, params.amount, params.in_fractions)
         .await
         .map_err(|e| {
             eyre!(
