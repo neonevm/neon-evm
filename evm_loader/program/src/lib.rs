@@ -1,5 +1,5 @@
 #![deny(warnings)]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -8,12 +8,6 @@
 mod debug;
 #[macro_use]
 mod error;
-pub mod macrorules;
-pub mod config;
-pub mod entrypoint;
-/// hamt impl
-pub mod hamt;
-pub mod solana_backend;
 pub mod account_data;
 pub mod account_storage;
 pub mod solidity_account;
@@ -21,16 +15,22 @@ mod storage_account;
 mod query;
 pub mod instruction;
 mod transaction;
+pub mod config;
+pub mod entrypoint;
 /// Todo: document
 pub mod executor;
 /// Todo: document
 pub mod executor_state;
-pub mod utils;
+/// hamt impl
+pub mod hamt;
+pub mod macrorules;
 pub mod operator;
 pub mod payment;
-pub mod token;
-pub mod system;
 pub mod precompile_contracts;
+pub mod solana_backend;
+pub mod system;
+pub mod token;
+pub mod utils;
 
 // Export current solana-sdk types for downstream users who may also be building with a different
 // solana-sdk version
@@ -84,5 +84,5 @@ macro_rules! event {
     ($x:expr) => {};
 }
 
-pub(crate) use event;
 pub(crate) use emit_exit;
+pub(crate) use event;
