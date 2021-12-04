@@ -25,13 +25,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     let limit = if !params.in_fractions {
         config::solana_max_amount()
     } else {
-        let decimals = config::solana_token_mint_decimals();
-        let factor = 10_u64
-            .checked_pow(decimals as u32)
-            .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
-        config::solana_max_amount()
-            .checked_mul(factor as u64)
-            .ok_or_else(|| eyre!("Overflow {}*{}", config::solana_max_amount(), factor))?
+        solana::from_whole_to_fractions(config::solana_max_amount())?
     };
 
     if params.amount > limit {
