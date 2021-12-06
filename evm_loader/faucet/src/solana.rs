@@ -29,7 +29,7 @@ pub fn init_client(url: String) {
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
-pub fn from_whole_to_fractions(amount: u64) -> Result<u64> {
+pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
     let decimals = config::solana_token_mint_decimals();
     let factor = 10_u64
         .checked_pow(decimals as u32)
@@ -97,7 +97,7 @@ pub async fn transfer_token(
         let amount = if in_fractions {
             amount
         } else {
-            from_whole_to_fractions(amount)?
+            convert_whole_to_fractions(amount)?
         };
 
         info!("spl_token id = {}", spl_token::id());
