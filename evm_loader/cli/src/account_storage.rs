@@ -1,58 +1,62 @@
-use evm::backend::Apply;
-use evm::{H160, U256};
 #[allow(unused)]
-use solana_sdk::{
-    pubkey::Pubkey,
-    account::Account,
-    commitment_config::CommitmentConfig,
-    account_info::AccountInfo,
-    entrypoint::ProgramResult,
-    program::invoke_signed,
-    transaction::Transaction,
-    signer::keypair::Keypair,
-    signature::Signature,
-    signer::Signer,
-    program_error::ProgramError,
-    transaction::TransactionError,
-};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap};
-use std::process::exit;
-use evm_loader::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION, Contract},
-    hamt::Hamt,
-    solana_backend::AccountStorage,
-    solidity_account::SolidityAccount,
-    precompile_contracts::is_precompile_address,
-    executor_state::{SplTransfer, SplApprove, ERC20Approve}
-};
-#[allow(unused)]
+
 use std::{
     borrow::BorrowMut,
     cell::RefCell,
-    rc::Rc,
-    error,
-    time::Duration,
-    thread::sleep,
+    collections::HashMap,
     convert::TryFrom,
+    error,
+    process::exit,
+    rc::Rc,
+    thread::sleep,
+    time::Duration,
 };
-use crate::Config;
+
+use evm::{H160, U256};
+use evm::backend::Apply;
+use serde::{Deserialize, Serialize};
+
+#[allow(unused)]
+use solana_client::{
+    client_error,
+    client_error::reqwest::StatusCode,
+    rpc_client::RpcClient,
+    rpc_config::RpcSimulateTransactionConfig,
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+};
 #[allow(unused)]
 use solana_program::{
-    instruction::Instruction,
     instruction::AccountMeta,
+    instruction::Instruction,
     message::Message,
     native_token::lamports_to_sol,
 };
 #[allow(unused)]
-use solana_client::{
-    rpc_client::RpcClient,
-    rpc_config::RpcSimulateTransactionConfig,
-    client_error,
-    client_error::reqwest::StatusCode,
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+use solana_sdk::{
+    account::Account,
+    account_info::AccountInfo,
+    commitment_config::CommitmentConfig,
+    entrypoint::ProgramResult,
+    program::invoke_signed,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    signature::Signature,
+    signer::keypair::Keypair,
+    signer::Signer,
+    transaction::Transaction,
+    transaction::TransactionError,
 };
 
+use evm_loader::{
+    account_data::{ACCOUNT_SEED_VERSION, AccountData, Contract},
+    executor_state::{ERC20Approve, SplApprove, SplTransfer},
+    hamt::Hamt,
+    precompile_contracts::is_precompile_address,
+    solana_backend::{AccountStorage, AccountStorageInfo},
+    solidity_account::SolidityAccount
+};
+
+use crate::Config;
 
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
@@ -268,10 +272,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(U256, U256)>,
     {
-
-        let mut accounts = self.accounts.borrow_mut();
-        let mut new_accounts = self.new_accounts.borrow_mut();
-
         for apply in values {
             match apply {
                 Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
@@ -295,8 +295,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         }
                         storage.last_used() as usize
                     };
-
-
+                        
+                    let mut accounts = self.accounts.borrow_mut();
+                    let mut new_accounts = self.new_accounts.borrow_mut();
                     if let Some(acc) = accounts.get_mut(&address) {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
@@ -386,8 +387,20 @@ impl<'a> EmulatorAccountStorage<'a> {
                     }
                     eprintln!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
                 },
-                Apply::Delete {address: addr} => {
-                    eprintln!("Delete: {}", addr.to_string());
+                Apply::Delete {address} => {
+                    eprintln!("Delete: {}", address);
+
+                    self.create_acc_if_not_exists(&address);
+
+                    let mut accounts = self.accounts.borrow_mut();
+                    if let Some(account) = accounts.get_mut(&address) {
+                        account.writable = true;
+                    }
+
+                    let mut new_accounts = self.new_accounts.borrow_mut();
+                    if let Some(account) = new_accounts.get_mut(&address) {
+                        account.writable = true;
+                    }
                 },
             }
         };
@@ -431,8 +444,10 @@ impl<'a> EmulatorAccountStorage<'a> {
     pub fn apply_spl_approves(&self, approves: Vec<SplApprove>) {
         let mut token_accounts = self.token_accounts.borrow_mut();
 
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
         for approve in approves {
             self.create_acc_if_not_exists(&approve.owner);
+             solana_accounts.insert(approve.spender, AccountMeta::new(approve.spender, false));
 
             let (contract_solana_address, _) = make_solana_program_address(&approve.contract, &self.config.evm_loader);
             let (owner_solana_address, _) = make_solana_program_address(&approve.owner, &self.config.evm_loader);
@@ -562,7 +577,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, d: D, f: F) -> U
-    where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+    where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
           D: FnOnce() -> U
     {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
@@ -570,7 +585,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         let account = self.config.rpc_client.get_account_with_commitment(address, CommitmentConfig::processed()).unwrap().value;
         match account {
-            Some(account) => f(&account.data, &account.owner),
+            Some(mut account) => f(&account_storage_info(&mut account)),
             None => d()
         }
     }
@@ -587,5 +602,16 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn get_account_solana_address(&self, address: &H160) -> Pubkey {
         make_solana_program_address(address, &self.config.evm_loader).0
+    }
+}
+
+/// Creates new instance of `AccountStorageInfo` from `Account`.
+fn account_storage_info(account: &mut Account) -> AccountStorageInfo {
+    AccountStorageInfo {
+        lamports: account.lamports,
+        data: Rc::new(RefCell::new(&mut account.data)),
+        owner: &account.owner,
+        executable: account.executable,
+        rent_epoch: account.rent_epoch,
     }
 }
