@@ -1,7 +1,7 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solana_backend::{AccountStorage},
+    solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
     token::{get_token_account_balance, check_token_account, transfer_token},
@@ -24,7 +24,6 @@ use std::{
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
 use crate::account_data::ERC20Allowance;
-use spl_associated_token_account::get_associated_token_address;
 
 /// Sender
 pub enum Sender {
@@ -401,7 +400,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         for approve in approves {
             let source = self.get_account(&approve.owner).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-            let source_token = get_associated_token_address(&source.get_solana_address(), &approve.mint);
+            let (source_token, _) = self.get_erc20_token_address(&approve.owner, &approve.contract, &approve.mint);
 
             let instruction = spl_token::instruction::approve(
                 &spl_token::id(),
@@ -493,12 +492,12 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
-        where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+        where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
               D: FnOnce() -> U
     {
         let account_info = self.solana_accounts.get(address);
         if let Some(account_info) = account_info {
-            f(&account_info.data.borrow(), account_info.owner)
+            f(&AccountStorageInfo::from(account_info))
         } else {
             panic!("Solana account {} must be present in the transaction", address)
         }

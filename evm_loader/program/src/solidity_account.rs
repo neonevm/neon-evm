@@ -12,7 +12,7 @@ use solana_program::{
     pubkey::Pubkey,
     program_error::ProgramError,
 };
-use std::cell::RefCell;
+use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
 

@@ -1,12 +1,46 @@
 //! Solana Backend for rust evm
+
 use crate::{
-    solidity_account::SolidityAccount, 
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    solidity_account::SolidityAccount,
+    token::{get_token_account_data, get_token_mint_data},
     utils::keccak256_h256,
 };
 use evm::{backend::Basic, H160, H256, U256};
-use solana_program::pubkey::Pubkey;
-use crate::token::{get_token_account_data, get_token_mint_data};
-use crate::account_data::{AccountData, ACCOUNT_SEED_VERSION};
+use solana_program::{
+    account_info::AccountInfo,
+    clock::Epoch,
+    pubkey::Pubkey,
+};
+use std::{cell::RefCell, rc::Rc};
+
+/// Account information for `apply_to_solana_account`.
+pub struct AccountStorageInfo<'a> {
+    /// The lamports in account
+    pub lamports: u64,
+    /// The data held in account
+    pub data: Rc<RefCell<&'a mut [u8]>>,
+    /// Program that owns account
+    pub owner: &'a Pubkey,
+    /// This account's data contains a loaded program
+    pub executable: bool,
+    /// The epoch at which account will next owe rent
+    pub rent_epoch: Epoch,
+}
+
+impl<'a> AccountStorageInfo<'a> {
+    /// Creates new instance of `AccountStorageInfo` from `AccountInfo`.
+    #[must_use]
+    pub fn from(info: &'a AccountInfo<'a>) -> Self {
+        Self {
+            lamports: info.lamports(),
+            data: info.data.clone(),
+            owner: info.owner,
+            executable: info.executable,
+            rent_epoch: info.rent_epoch,
+        }
+    }
+}
 
 /// Account storage
 /// Trait to access account info
@@ -21,7 +55,7 @@ pub trait AccountStorage {
     /// Apply function to given Solana account
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, d: D, f: F) -> U
     where
-        F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+        F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
         D: FnOnce() -> U;
 
     /// Get `NeonEVM` program id
@@ -43,7 +77,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_account,
             || 0_u64,
-            |data, owner| get_token_account_data(data, owner).map_or(0, |a| a.amount)
+            |info| get_token_account_data(&info.data.borrow(), info.owner).map_or(0, |a| a.amount)
         )
     }
 
@@ -52,7 +86,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_mint,
             || 0_u64,
-            |data, owner| get_token_mint_data(data, owner).map_or(0, |mint| mint.supply)
+            |info| get_token_mint_data(&info.data.borrow(), info.owner).map_or(0, |mint| mint.supply)
         )
     }
 
@@ -61,7 +95,7 @@ pub trait AccountStorage {
         self.apply_to_solana_account(
             token_mint,
             || 0_u8,
-            |data, owner| get_token_mint_data(data, owner).map_or(0_u8, |mint| mint.decimals)
+            |info| get_token_mint_data(&info.data.borrow(), info.owner).map_or(0_u8, |mint| mint.decimals)
         )
     }
 
@@ -84,7 +118,7 @@ pub trait AccountStorage {
         let account_data = self.apply_to_solana_account(
             &allowance_address,
             || None,
-            |data, _| AccountData::unpack(data).ok()
+            |info| AccountData::unpack(&info.data.borrow()).ok()
         );
 
         account_data
