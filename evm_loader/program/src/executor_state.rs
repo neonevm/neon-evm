@@ -520,9 +520,9 @@ impl ExecutorSubstate {
         self.deletes.insert(address);
     }
 
-    pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
+    pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: &Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
-        self.account_mut(address, backend).code = Some(code);
+        self.account_mut(address, backend).code = Some(code.clone());
     }
 
     #[must_use]
@@ -895,7 +895,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.substate.set_deleted(address);
     }
 
-    pub fn set_code(&mut self, address: H160, code: Vec<u8>) {
+    pub fn set_code(&mut self, address: H160, code: &Vec<u8>) {
         self.substate.set_code(address, code, self.backend);
     }
 

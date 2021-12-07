@@ -574,14 +574,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-                    self.executor.state.set_code(address, return_value);
+                    self.executor.state.set_code(address, &return_value);
                 }
             };
         }
 
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
-            None => return Err((Vec::new(), reason))
+            None => return Err((return_value, reason))
         };
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),

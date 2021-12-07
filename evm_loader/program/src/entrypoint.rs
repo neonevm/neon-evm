@@ -1221,7 +1221,8 @@ fn invoke_on_return<'a>(
             match fatal_code {
                 ExitFatal::NotSupported => {("Fatal: The operation is not supported.", 0xf1)},
                 ExitFatal::UnhandledInterrupt => {("Fatal: The trap (interrupt) is unhandled.", 0xf2)},
-                ExitFatal::CallErrorAsFatal(_) => {("Fatal: The environment explictly set call errors as fatal error.", 0xf3)},
+                ExitFatal::CallErrorAsFatal(_) => {("Fatal: The environment explicitly set call errors as fatal error.", 0xf3)},
+                // ExitFatal::RuntimeError => {("asdf", 0xf4)},
             }
         },
         ExitReason::StepLimitReached => unreachable!(),
