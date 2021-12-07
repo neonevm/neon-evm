@@ -478,6 +478,7 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 }
 
+#[allow(clippy::nursery)]
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn apply_to_account<U, D, F>(&self, address: &H160, _d: D, f: F) -> U
         where F: FnOnce(&SolidityAccount) -> U,

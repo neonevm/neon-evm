@@ -3,10 +3,9 @@
 
 use num_derive::FromPrimitive;
 use solana_program::{decode_error::DecodeError, program_error::ProgramError};
-use thiserror::Error;
 
 /// Errors that may be returned by the EVM Loader program.
-#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+#[derive(thiserror::Error, Clone, Debug, Eq, PartialEq, FromPrimitive)]
 pub enum EvmLoaderError {
     /// Unknown Error.
     #[error("Unknown error. Attention required.")]

@@ -10,6 +10,7 @@ use evm::{backend::Basic, H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     clock::Epoch,
+    keccak::{Hash, Hasher},
     pubkey::Pubkey,
 };
 use std::{cell::RefCell, rc::Rc};
@@ -39,6 +40,18 @@ impl<'a> AccountStorageInfo<'a> {
             executable: info.executable,
             rent_epoch: info.rent_epoch,
         }
+    }
+
+    /// Calculates hash of the account.
+    #[must_use]
+    pub fn hash(&self) -> Hash {
+        let mut hasher = Hasher::default();
+        hasher.hash(&self.lamports.to_be_bytes());
+        hasher.hash(&self.data.borrow());
+        hasher.hash(&self.owner.to_bytes());
+        hasher.hash(&(self.executable as u8).to_be_bytes());
+        hasher.hash(&self.rent_epoch.to_be_bytes());
+        hasher.result()
     }
 }
 

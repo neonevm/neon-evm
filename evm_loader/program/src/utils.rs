@@ -29,14 +29,14 @@ pub fn u256_to_h256(value: U256) -> H256 {
     H256::from_slice(&v)
 }
 
-/// Check whether array is zero initialized
+/// Checks whether array is zero initialized.
+/// Uses `align_to` to convert the slice of u8 into a slice of u128,
+/// making the comparison much more efficient. See also:
+/// <https://stackoverflow.com/questions/65367552/checking-a-vecu8-to-see-if-its-all-zero>
 #[must_use]
 pub fn is_zero_initialized(data: &[u8]) -> bool {
-    for d in data {
-        if *d != 0_u8 {
-            return false;
-        }
-    }
-
-    true
+    let (prefix, aligned, suffix) = unsafe { data.align_to::<u128>() };
+    prefix.iter().all(|&x| x == 0)
+        && suffix.iter().all(|&x| x == 0)
+        && aligned.iter().all(|&x| x == 0)
 }

@@ -16,7 +16,9 @@ use evm::backend::{Apply, Log};
 use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
+use solana_program::keccak::Hash;
 
+use crate::query;
 use crate::solana_backend::AccountStorage;
 use crate::utils::keccak256_h256;
 
@@ -170,6 +172,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
+    query_account_cache: RefCell<query::AccountCache>,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -193,6 +196,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: RefCell::new(query::AccountCache::new()),
         }
     }
 
@@ -289,6 +293,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: RefCell::new(query::AccountCache::new()),
         };
         mem::swap(&mut entering, self);
 
@@ -714,6 +719,10 @@ impl ExecutorSubstate {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
         self.erc20_allowances.insert(key, approve.value);
     }
+
+    fn query_account_changed(&self, account: &Pubkey, hash: Hash) -> bool {
+        self.query_account_cache.borrow_mut().changed(account, hash)
+    }
 }
 
 pub struct ExecutorState<'a, B: AccountStorage> {
@@ -1058,58 +1067,82 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
-    #[must_use]
-    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        let (found, owner) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, Pubkey::default()),
-            |info| (true, *info.owner),
+    pub fn query_solana_account_owner(&self, address: &Pubkey) -> query::Result<Pubkey> {
+        let (found, hash, owner) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), Pubkey::default()),
+            |info| (true, info.hash(), *info.owner),
         );
-        if found { Some(owner) } else { None }
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        Ok(owner)
     }
 
-    #[must_use]
-    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let (found, length) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, usize::default()),
-            |info| (true, info.data.borrow().len()),
+    pub fn query_solana_account_length(&self, address: &Pubkey) -> query::Result<usize> {
+        let (found, hash, length) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), usize::default()),
+            |info| (true, info.hash(), info.data.borrow().len()),
         );
-        if found { Some(length) } else { None }
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        Ok(length)
     }
 
-    #[must_use]
-    pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
-        let (found, lamports) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.lamports),
+    pub fn query_solana_account_lamports(&self, address: &Pubkey) -> query::Result<u64> {
+        let (found, hash, lamports) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), u64::default()),
+            |info| (true, info.hash(), info.lamports),
         );
-        if found { Some(lamports) } else { None }
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        Ok(lamports)
     }
 
-    #[must_use]
-    pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
-        let (found, executable) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, bool::default()),
-            |info| (true, info.executable),
+    pub fn query_solana_account_executable(&self, address: &Pubkey) -> query::Result<bool> {
+        let (found, hash, executable) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), bool::default()),
+            |info| (true, info.hash(), info.executable),
         );
-        if found { Some(executable) } else { None }
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        Ok(executable)
     }
 
-    #[must_use]
-    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
-        let (found, rent_epoch) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.rent_epoch),
+    pub fn query_solana_account_rent_epoch(&self, address: &Pubkey) -> query::Result<u64> {
+        let (found, hash, rent_epoch) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), u64::default()),
+            |info| (true, info.hash(), info.rent_epoch),
         );
-        if found { Some(rent_epoch) } else { None }
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        Ok(rent_epoch)
     }
 
-    #[must_use]
-    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
+    pub fn query_solana_account_data(&self, address: &Pubkey, offset: usize, length: usize) -> query::Result<Vec<u8>> {
         fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
             if offset >= data.len() || offset + length > data.len() {
                 None
@@ -1117,11 +1150,22 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 Some(data[offset..offset + length].to_owned())
             }
         }
-        self.backend.apply_to_solana_account(
-            &address,
-            || None,
-            |info| clone_chunk(&info.data.borrow(), offset, length)
-        )
+
+        let (found, hash, data) = self.backend.apply_to_solana_account(
+            address,
+            || (false, Hash::default(), None),
+            |info| (true, info.hash(), clone_chunk(&info.data.borrow(), offset, length)),
+        );
+        if !found {
+            return Err(query::Error::AccountNotFound);
+        }
+        if self.substate.query_account_changed(address, hash) {
+            return Err(query::Error::AccountChanged);
+        }
+        if data.is_none() {
+            return Err(query::Error::InvalidArgument);
+        }
+        Ok(data.unwrap())
     }
 
     #[must_use]
