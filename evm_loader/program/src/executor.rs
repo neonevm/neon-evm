@@ -579,10 +579,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             };
         }
 
-        let runtime = match self.runtime.last_mut() {
-            Some((runtime, _)) => runtime,
-            None => return Err((return_value, reason))
+        let runtime = match (self.runtime.last_mut(), &reason) {
+            (Some((last_runtime, _)), _) => last_runtime,
+            (None, ExitReason::Revert(_)) => return Err((return_value, reason)),
+            (None, _) => return Err((Vec::<u8>::new(), reason))
         };
+
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
             Control::Exit(reason) => Err((Vec::new(), reason)),
