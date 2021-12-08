@@ -1,11 +1,10 @@
 //! `AccountStorage` for solana program realisation
+
 use std::{
     cell::RefCell,
     collections::BTreeMap
 };
 
-use evm::{H160, U256};
-use evm::backend::Apply;
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     entrypoint::ProgramResult,
@@ -15,17 +14,17 @@ use solana_program::{
     sysvar::{clock::Clock, Sysvar},
 };
 
+use evm::{backend::Apply, H160, U256};
+
 use crate::{
-    account_data::{ACCOUNT_SEED_VERSION, AccountData},
+    account_data::{ACCOUNT_SEED_VERSION, AccountData, ERC20Allowance},
+    executor_state::{ERC20Approve, SplApprove, SplTransfer},
     precompile_contracts::is_precompile_address,
     solana_backend::{AccountStorage, AccountStorageInfo},
-    // utils::keccak256_h256,
     solidity_account::SolidityAccount,
     system::create_pda_account,
-    token::{check_token_account, get_token_account_balance, transfer_token}
+    token::{check_token_account, get_token_account_balance, transfer_token},
 };
-use crate::account_data::ERC20Allowance;
-use crate::executor_state::{ERC20Approve, SplApprove, SplTransfer};
 
 /// Sender
 pub enum Sender {

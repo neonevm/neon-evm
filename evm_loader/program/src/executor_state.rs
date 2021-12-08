@@ -11,16 +11,12 @@ use std::{
     vec::Vec
 };
 
-use evm::{ExitError, H160, H256, Transfer, U256, Valids};
+use evm::{ExitError, gasometer::Gasometer, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey::Pubkey;
-use solana_program::keccak::Hash;
+use solana_program::{keccak::Hash, pubkey::Pubkey};
 
-use crate::query;
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_h256;
+use crate::{query, solana_backend::AccountStorage, utils::keccak256_h256};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {

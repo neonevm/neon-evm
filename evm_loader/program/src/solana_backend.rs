@@ -1,19 +1,22 @@
 //! Solana Backend for rust evm
 
-use crate::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solidity_account::SolidityAccount,
-    token::{get_token_account_data, get_token_mint_data},
-    utils::keccak256_h256,
-};
-use evm::{backend::Basic, H160, H256, U256};
+use std::{cell::RefCell, rc::Rc};
+
 use solana_program::{
     account_info::AccountInfo,
     clock::Epoch,
     keccak::{Hash, Hasher},
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, rc::Rc};
+
+use evm::{backend::Basic, H160, H256, U256};
+
+use crate::{
+    account_data::{AccountData, ACCOUNT_SEED_VERSION},
+    solidity_account::SolidityAccount,
+    token::{get_token_account_data, get_token_mint_data},
+    utils::keccak256_h256,
+};
 
 /// Account information for `apply_to_solana_account`.
 pub struct AccountStorageInfo<'a> {

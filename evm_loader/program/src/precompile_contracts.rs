@@ -1,16 +1,20 @@
 //! `EVMLoader` precompile contracts
 
 use core::convert::Infallible;
-use std::convert::TryInto;
+use std::convert::TryInto as _;
 
 use arrayref::{array_ref, array_refs};
 use evm::{Capture, ExitReason, H160, U256};
-use solana_program::pubkey::Pubkey;
-use solana_program::secp256k1_recover::secp256k1_recover;
+use solana_program::{
+    pubkey::Pubkey,
+    secp256k1_recover::secp256k1_recover,
+};
 
-use crate::executor_state::ExecutorState;
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_digest;
+use crate::{
+    executor_state::ExecutorState,
+    solana_backend::AccountStorage,
+    utils::keccak256_digest,
+};
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);

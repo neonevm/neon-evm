@@ -2,8 +2,7 @@
 
 use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
-use solana_program::keccak::Hash;
-use solana_program::pubkey::Pubkey;
+use solana_program::{keccak::Hash, pubkey::Pubkey};
 
 /// Represents error states of queries.
 #[derive(thiserror::Error, Debug)]
