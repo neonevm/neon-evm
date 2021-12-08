@@ -521,7 +521,7 @@ impl ExecutorSubstate {
     }
 
     pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: &[u8], backend: &B) {
-        self.account_mut(address, backend).valids = Some(Valids::compute(&code));
+        self.account_mut(address, backend).valids = Some(Valids::compute(code));
         self.account_mut(address, backend).code = Some(code.into());
     }
 
