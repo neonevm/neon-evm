@@ -211,7 +211,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     };
 
     debug!("Call done");
-    let status = match &exit_reason {
+    let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
 
