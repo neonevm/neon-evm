@@ -1,29 +1,31 @@
 //! `AccountStorage` for solana program realisation
-use crate::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solana_backend::{AccountStorage, AccountStorageInfo},
-    solidity_account::SolidityAccount,
-    // utils::keccak256_h256,
-    token::{get_token_account_balance, check_token_account, transfer_token},
-    precompile_contracts::is_precompile_address,
-    system::create_pda_account
-};
-use evm::backend::Apply;
-use evm::{H160,  U256};
-use solana_program::{
-    account_info::{AccountInfo, next_account_info},
-    pubkey::Pubkey,
-    program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar},
-    program::invoke_signed,
-    entrypoint::ProgramResult,
-};
 use std::{
     cell::RefCell,
     collections::BTreeMap
 };
-use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
+
+use evm::{H160, U256};
+use evm::backend::Apply;
+use solana_program::{
+    account_info::{AccountInfo, next_account_info},
+    entrypoint::ProgramResult,
+    program::invoke_signed,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+    sysvar::{clock::Clock, Sysvar},
+};
+
+use crate::{
+    account_data::{ACCOUNT_SEED_VERSION, AccountData},
+    precompile_contracts::is_precompile_address,
+    solana_backend::{AccountStorage, AccountStorageInfo},
+    // utils::keccak256_h256,
+    solidity_account::SolidityAccount,
+    system::create_pda_account,
+    token::{check_token_account, get_token_account_balance, transfer_token}
+};
 use crate::account_data::ERC20Allowance;
+use crate::executor_state::{ERC20Approve, SplApprove, SplTransfer};
 
 /// Sender
 pub enum Sender {
@@ -478,30 +480,23 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 }
 
-#[allow(clippy::nursery)]
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn apply_to_account<U, D, F>(&self, address: &H160, _d: D, f: F) -> U
         where F: FnOnce(&SolidityAccount) -> U,
               D: FnOnce() -> U
     {
-        let account = self.get_account(address);
-        if let Some(account) = account {
-            f(account)
-        } else {
-            panic!("Solidity account {} must be present in the transaction", address)
-        }
+        self.get_account(address).map_or_else(
+            || panic!("Solidity account {} must be present in the transaction", address),
+            f)
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
         where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
               D: FnOnce() -> U
     {
-        let account_info = self.solana_accounts.get(address);
-        if let Some(account_info) = account_info {
-            f(&AccountStorageInfo::from(account_info))
-        } else {
-            panic!("Solana account {} must be present in the transaction", address)
-        }
+        self.solana_accounts.get(address).map_or_else(
+            || panic!("Solana account {} must be present in the transaction", address),
+            |account_info| f(&AccountStorageInfo::from(account_info)))
     }
 
     fn program_id(&self) -> &Pubkey { &self.program_id }
@@ -527,11 +522,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn get_account_solana_address(&self, address: &H160) -> Pubkey {
-        let account = self.get_account(address);
-        if let Some(account) = account {
-            account.get_solana_address()
-        } else {
-            panic!("Solidity account {} must be present in the transaction", address)
-        }
+        self.get_account(address).map_or_else(
+            || panic!("Solidity account {} must be present in the transaction", address),
+            SolidityAccount::get_solana_address)
     }
 }
