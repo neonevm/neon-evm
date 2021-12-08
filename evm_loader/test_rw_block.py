@@ -330,7 +330,8 @@ class RW_Locking_Test(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex(), self.acc1)
 
         result = self.call_begin(storage, 10, msg, instruction, False, self.acc1, self.caller1, meta)
-        result = self.call_continue(storage, 1000, True, self.acc1, self.caller1, meta)
+        result = self.call_continue(storage, 450, True, self.acc1, self.caller1, meta)
+        result = self.call_continue(storage, 550, True, self.acc1, self.caller1, meta)
         self.check_continue_result(result["result"])
 
 
@@ -391,7 +392,7 @@ class RW_Locking_Test(unittest.TestCase):
         # send resizing transaction
         with self.assertRaisesRegex(Exception, "invalid instruction data"):
             send_transaction(client, Transaction().add(resize_instr), self.acc2)
-        
+
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
