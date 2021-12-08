@@ -1301,23 +1301,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a01317735d563b3bad2d5f90d2e1799f414165408251abb762510f40e790e69a"
 dependencies = [
  "anyhow",
- "ethereum-types 0.11.0",
- "hex",
- "serde",
- "serde_json",
- "sha3 0.9.1",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
-version = "15.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f76ef192b63e8a44b3d08832acebbb984c3fba154b5c26f70037c860202a0d4b"
-dependencies = [
- "anyhow",
- "ethereum-types 0.12.1",
+ "ethereum-types",
  "hex",
  "serde",
  "serde_json",
@@ -1349,21 +1333,7 @@ dependencies = [
  "fixed-hash",
  "impl-rlp",
  "impl-serde 0.3.1",
- "primitive-types 0.9.1",
- "uint",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05136f7057fe789f06e6d41d07b34e6f70d8c86e5693b60f97aaa6553553bdaf"
-dependencies = [
- "ethbloom",
- "fixed-hash",
- "impl-rlp",
- "impl-serde 0.3.1",
- "primitive-types 0.10.1",
+ "primitive-types",
  "uint",
 ]
 
@@ -1385,7 +1355,6 @@ dependencies = [
 name = "evm-core"
 version = "0.18.2"
 dependencies = [
- "ethabi 15.0.0",
  "fixed-hash",
  "impl-rlp",
  "log",
@@ -2613,7 +2582,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "clap",
- "ethereum-types 0.11.0",
+ "ethereum-types",
  "evm",
  "evm-loader",
  "getrandom 0.1.16",
@@ -3067,19 +3036,6 @@ name = "primitive-types"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06345ee39fbccfb06ab45f3a1a5798d9dafa04cb8921a76d227040003a234b0e"
-dependencies = [
- "fixed-hash",
- "impl-codec",
- "impl-rlp",
- "impl-serde 0.3.1",
- "uint",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "impl-codec",
@@ -5767,8 +5723,8 @@ dependencies = [
  "base64 0.13.0",
  "bytes 1.0.1",
  "derive_more",
- "ethabi 14.1.0",
- "ethereum-types 0.11.0",
+ "ethabi",
+ "ethereum-types",
  "futures 0.3.15",
  "futures-timer",
  "headers",
