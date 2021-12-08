@@ -23,6 +23,10 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
         }
         App::new()
             .wrap(cors)
+            .route(
+                "/request_neon_in_galans",
+                post().to(handle_request_neon_in_galans),
+            )
             .route("/request_eth_token", post().to(handle_request_eth_token))
             .route(
                 "/request_erc20_tokens",
@@ -36,6 +40,34 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+/// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON)
+async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
+    println!();
+    info!("Handling Request for NEON Airdrop in galans...");
+
+    let input = String::from_utf8(body.to_vec());
+    if let Err(err) = input {
+        error!("BadRequest (body): {}", err);
+        return HttpResponse::BadRequest();
+    }
+
+    let input = input.unwrap();
+    let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
+    if let Err(err) = airdrop {
+        error!("BadRequest (json): {} in '{}'", err, input);
+        return HttpResponse::BadRequest();
+    }
+
+    let mut airdrop = airdrop.unwrap();
+    airdrop.in_fractions = true;
+    if let Err(err) = eth_token::airdrop(airdrop).await {
+        error!("InternalServerError: {}", err);
+        return HttpResponse::InternalServerError();
+    }
+
+    HttpResponse::Ok()
 }
 
 /// Handles a request for ETH token airdrop.

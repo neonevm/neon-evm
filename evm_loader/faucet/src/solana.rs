@@ -28,11 +28,25 @@ pub fn init_client(url: String) {
     tokio::task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
 }
 
+/// Converts amount of tokens from whole value to fractions (usually 10E-9).
+pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
+    let decimals = config::solana_token_mint_decimals();
+    let factor = 10_u64
+        .checked_pow(decimals as u32)
+        .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
+    amount
+        .checked_mul(factor as u64)
+        .ok_or_else(|| eyre!("Overflow {}*{}", amount, factor))
+}
+
 /// Transfers `amount` of tokens.
+/// When in_fractions == false, amount is treated as whole token amount.
+/// When in_fractions == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
+    in_fractions: bool,
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader()).wrap_err_with(|| {
         format!(
@@ -80,9 +94,11 @@ pub async fn transfer_token(
             }
         }
 
-        let token_decimals = config::solana_token_mint_decimals();
-        let factor = 10_u64.pow(token_decimals as u32);
-        let amount = amount * factor;
+        let amount = if in_fractions {
+            amount
+        } else {
+            convert_whole_to_fractions(amount)?
+        };
 
         info!("spl_token id = {}", spl_token::id());
         info!("signer_token_account = {}", signer_token_account);
@@ -90,7 +106,7 @@ pub async fn transfer_token(
         info!("token_account = {}", token_account);
         info!("signer_account = {}", signer_account);
         info!("amount = {}", amount);
-        info!("token_decimals = {}", token_decimals);
+        info!("token_decimals = {}", config::solana_token_mint_decimals());
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -99,7 +115,7 @@ pub async fn transfer_token(
             &signer_account,
             &[],
             amount,
-            token_decimals,
+            config::solana_token_mint_decimals(),
         )?);
 
         if instructions.is_empty() {
