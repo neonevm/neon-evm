@@ -564,7 +564,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
-        let return_value: Vec<u8> = exited_runtime.machine().return_value();
+        let return_value = exited_runtime.machine().return_value();
 
         if reason.is_succeed() {
             match CONFIG.create_contract_limit {
@@ -574,12 +574,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-                    self.executor.state.set_code(address, &(Vec::<u8>::new()));
+                    self.executor.state.set_code(address, &return_value);
                 }
             };
         }
 
-        let runtime = match (self.runtime.last_mut(), reason) {
+        let runtime = match (self.runtime.last_mut(), &reason) {
             (Some((last_runtime, _)), _) => last_runtime,
             (None, ExitReason::Revert(_)) => return Err((return_value, reason)),
             (None, _) => return Err((Vec::<u8>::new(), reason))
