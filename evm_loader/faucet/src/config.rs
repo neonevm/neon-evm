@@ -95,9 +95,9 @@ pub fn show_env() {
 }
 
 /// Loads the config from a file and applies defined environment variables.
-pub fn load(filename: &Path) -> Result<()> {
-    if filename.exists() {
-        CONFIG.write().unwrap().load(filename)?;
+pub fn load(file: &Path) -> Result<()> {
+    if file.exists() {
+        CONFIG.write().unwrap().load(file)?;
     }
 
     for e in ENV {
@@ -414,10 +414,9 @@ struct Faucet {
 
 impl Faucet {
     /// Constructs config from a file.
-    fn load(&mut self, filename: &Path) -> Result<()> {
-        let text =
-            std::fs::read_to_string(filename).map_err(|e| Error::Read(e, filename.to_owned()))?;
-        *self = toml::from_str(&text).map_err(|e| Error::Parse(e, filename.to_owned()))?;
+    fn load(&mut self, file: &Path) -> Result<()> {
+        let text = std::fs::read_to_string(file).map_err(|e| Error::Read(e, file.to_owned()))?;
+        *self = toml::from_str(&text).map_err(|e| Error::Parse(e, file.to_owned()))?;
         Ok(())
     }
 }
