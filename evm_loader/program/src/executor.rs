@@ -572,18 +572,29 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                     self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     reason = ExitError::CreateContractLimit.into();
                 },
+                _ => {}
+            };
+        }
+
+        let runtime = match self.runtime.last_mut() {
+            Some((last_runtime, _)) => last_runtime,
+            None => return match reason {
+                ExitReason::Revert(_) => return Err((return_value, reason)),
+                _ => Err((Vec::<u8>::new(), reason))
+            }
+        };
+
+        if reason.is_succeed() {
+            match CONFIG.create_contract_limit {
+                Some(limit) if return_value.len() > limit => {
+                },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-                    self.executor.state.set_code(address, &return_value);
+                    self.executor.state.set_code(address, return_value);
                 }
             };
         }
 
-        let runtime = match (self.runtime.last_mut(), &reason) {
-            (Some((last_runtime, _)), _) => last_runtime,
-            (None, ExitReason::Revert(_)) => return Err((return_value, reason)),
-            (None, _) => return Err((Vec::<u8>::new(), reason))
-        };
 
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
