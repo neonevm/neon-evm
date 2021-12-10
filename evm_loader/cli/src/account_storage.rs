@@ -124,7 +124,6 @@ struct SolanaAccount {
     writable: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
-    balance: u64,
 }
 
 struct SolanaNewAccount {
@@ -134,9 +133,9 @@ struct SolanaNewAccount {
 }
 
 impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, balance: u64, code_account: Option<Account>) -> Self {
+    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         eprintln!("SolanaAccount::new");
-        Self{account, key, balance, writable: false, code_account, code_size: None, code_size_current : None}
+        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
     }
 }
 
@@ -246,8 +245,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
             let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
-            if let Some((acc, balance, code_account)) = Self::get_account_from_solana(self.config, address) {
-                accounts.insert(*address, SolanaAccount::new(acc, solana_address, balance, code_account));
+            if let Some((acc, _balance, code_account)) = Self::get_account_from_solana(self.config, address) {
+                accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
                 true
             }
             else {
@@ -566,10 +565,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                         Err(_) => return d(),
                     };
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, Some((contract_data, code_data)));
+                    let account = SolidityAccount::new(&acc.key, account_data, Some((contract_data, code_data)));
                     f(&account)
                 } else {
-                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, None);
+                    let account = SolidityAccount::new(&acc.key, account_data, None);
                     f(&account)
                 }
             },

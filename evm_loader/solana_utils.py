@@ -542,10 +542,8 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
@@ -585,10 +583,8 @@ def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
              ]
@@ -632,10 +628,8 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
              ]
@@ -676,10 +670,8 @@ def create_neon_evm_instr_20_continue(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
              ]
@@ -720,10 +712,8 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
@@ -757,10 +747,8 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
@@ -798,10 +786,8 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),

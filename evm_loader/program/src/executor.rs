@@ -189,7 +189,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         }
 
         let value = token::eth::round(value);
-        if self.balance(caller) < value {
+        if !value.is_zero() && (self.balance(caller) < value) {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
 

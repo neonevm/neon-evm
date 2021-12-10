@@ -234,8 +234,8 @@ pub fn user_pays_operator<'a>(
         accounts,
         user_token_account,
         operator_token_account,
-        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+        account_storage.get_caller_account_info(),
+        account_storage.get_caller_account(),
         &fee)?;
 
     Ok(())

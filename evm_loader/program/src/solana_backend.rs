@@ -6,7 +6,7 @@ use crate::{
     token::{get_token_account_data, get_token_mint_data},
     utils::keccak256_h256,
 };
-use evm::{backend::Basic, H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     clock::Epoch,
@@ -131,16 +131,37 @@ pub trait AccountStorage {
         self.apply_to_account(address, || false, |_| true)
     }
 
-    /// Get account basic info (balance and nonce)
-    fn basic(&self, address: &H160) -> Basic {
-        self.apply_to_account(
+    /// Get account nonce
+    fn nonce(&self, address: &H160) -> U256 {
+        let nonce = self.apply_to_account(
             address,
-            || Basic {
-                balance: U256::zero(),
-                nonce: U256::zero(),
-            },
-            |account| account.basic(),
-        )
+            || 0_u64,
+            |account| account.get_nonce(),
+        );
+
+        U256::from(nonce)
+    }
+
+    /// Get account balance
+    fn balance(&self, address: &H160) -> U256 {
+        let token_account = self.apply_to_account(
+            address,
+            || None,
+            |account| Some(*account.get_neon_token_solana_address())
+        ).and_then(|token_address| {
+            self.apply_to_solana_account(
+                &token_address,
+                || None,
+                |info| get_token_account_data(&info.data.borrow(), info.owner).ok()
+            )
+        });
+
+        let balance = match token_account {
+            Some(account) => U256::from(account.amount),
+            None => U256::zero()
+        };
+
+        balance * crate::token::eth::min_transfer_value()
     }
 
     /// Get code hash
