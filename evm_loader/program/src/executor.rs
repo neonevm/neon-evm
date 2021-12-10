@@ -586,15 +586,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
         if reason.is_succeed() {
             match CONFIG.create_contract_limit {
-                Some(limit) if return_value.len() > limit => {
-                },
+                Some(limit) if return_value.len() > limit => {},
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     self.executor.state.set_code(address, return_value);
                 }
             };
         }
-
 
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
