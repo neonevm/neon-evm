@@ -564,11 +564,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
-        let get_return_value = exited_runtime.machine().return_value;
-        let boxed: Option<Vec<u8>> = Option::Some(get_return_value());
+        let get_return_value = || {exited_runtime.machine().return_value()};
+        let mut ret_val_boxed: Option<Vec<u8>> = Option::Some(get_return_value());
 
         if reason.is_succeed() {
-            let return_value: & Vec<u8> = boxed.as_ref().unwrap();
+            let return_value: & Vec<u8> = ret_val_boxed.as_ref().unwrap();
             match CONFIG.create_contract_limit {
                 Some(limit) if return_value.len() > limit => {
                     self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
@@ -576,7 +576,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-                    self.executor.state.set_code(address, boxed.unwrap());
+                    self.executor.state.set_code(address, ret_val_boxed.unwrap());
+                    ret_val_boxed = Option::None;
                 }
             };
         }
@@ -585,7 +586,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             Some((runtime, _)) => runtime,
             None => return match reason {
                 ExitReason::Revert(_) => {
-                    let revert_result: Vec<u8> = boxed.unwrap_or_else(get_return_value);
+                    let revert_result: Vec<u8> = ret_val_boxed.unwrap_or_else(|| { get_return_value() });
                     Err((revert_result, reason))
                 },
                 _ => Err((Vec::<u8>::new(), reason))
