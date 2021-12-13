@@ -190,15 +190,13 @@ pub fn transfer_token(
 
     debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
-    let instruction = spl_token::instruction::transfer_checked(
+    let instruction = spl_token::instruction::transfer(
         &spl_token::id(),
         source_token_account.key,
-        &token_mint::id(),
         target_token_account.key,
         source_account.key,
         &[],
-        value,
-        token_mint::decimals(),
+        value
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
