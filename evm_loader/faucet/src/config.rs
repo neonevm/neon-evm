@@ -43,6 +43,7 @@ pub enum Error {
 /// Represents the config result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+const FAUCET_RPC_BIND: &str = "FAUCET_RPC_BIND";
 const FAUCET_RPC_PORT: &str = "FAUCET_RPC_PORT";
 const FAUCET_RPC_ALLOWED_ORIGINS: &str = "FAUCET_RPC_ALLOWED_ORIGINS";
 const FAUCET_WEB3_ENABLE: &str = "FAUCET_WEB3_ENABLE";
@@ -58,6 +59,7 @@ const NEON_TOKEN_MINT_DECIMALS: &str = "NEON_TOKEN_MINT_DECIMALS";
 const NEON_OPERATOR_KEYFILE: &str = "NEON_OPERATOR_KEYFILE";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 static ENV: &[&str] = &[
+    FAUCET_RPC_BIND,
     FAUCET_RPC_PORT,
     FAUCET_RPC_ALLOWED_ORIGINS,
     FAUCET_WEB3_ENABLE,
@@ -93,14 +95,15 @@ pub fn show_env() {
 }
 
 /// Loads the config from a file and applies defined environment variables.
-pub fn load(filename: &Path) -> Result<()> {
-    if filename.exists() {
-        CONFIG.write().unwrap().load(filename)?;
+pub fn load(file: &Path) -> Result<()> {
+    if file.exists() {
+        CONFIG.write().unwrap().load(file)?;
     }
 
     for e in ENV {
         if let Ok(val) = env::var(e) {
             match *e {
+                FAUCET_RPC_BIND => CONFIG.write().unwrap().rpc.bind = val,
                 FAUCET_RPC_PORT => CONFIG.write().unwrap().rpc.port = val.parse::<u16>()?,
                 FAUCET_RPC_ALLOWED_ORIGINS => {
                     CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(&val)
@@ -140,6 +143,16 @@ pub fn load(filename: &Path) -> Result<()> {
 /// Shows the current config.
 pub fn show() {
     println!("{}", CONFIG.read().unwrap())
+}
+
+/// Gets the `rpc.bind` value.
+pub fn rpc_bind() -> String {
+    let bind = CONFIG.read().unwrap().rpc.bind.clone();
+    if bind.is_empty() {
+        "0.0.0.0".into()
+    } else {
+        bind
+    }
 }
 
 /// Gets the `rpc.port` value.
@@ -228,12 +241,19 @@ pub fn solana_max_amount() -> u64 {
 #[serde(default)]
 #[serde(deny_unknown_fields)]
 struct Rpc {
+    bind: String,
     port: u16,
     allowed_origins: Vec<String>,
 }
 
 impl std::fmt::Display for Rpc {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "rpc.bind = {}", self.bind)?;
+        if env::var(FAUCET_RPC_BIND).is_ok() {
+            writeln!(f, " (overridden by {})", FAUCET_RPC_BIND)?;
+        } else {
+            writeln!(f)?;
+        }
         write!(f, "rpc.port = {}", self.port)?;
         if env::var(FAUCET_RPC_PORT).is_ok() {
             writeln!(f, " (overridden by {})", FAUCET_RPC_PORT)?;
@@ -394,10 +414,9 @@ struct Faucet {
 
 impl Faucet {
     /// Constructs config from a file.
-    fn load(&mut self, filename: &Path) -> Result<()> {
-        let text =
-            std::fs::read_to_string(filename).map_err(|e| Error::Read(e, filename.to_owned()))?;
-        *self = toml::from_str(&text).map_err(|e| Error::Parse(e, filename.to_owned()))?;
+    fn load(&mut self, file: &Path) -> Result<()> {
+        let text = std::fs::read_to_string(file).map_err(|e| Error::Read(e, file.to_owned()))?;
+        *self = toml::from_str(&text).map_err(|e| Error::Parse(e, file.to_owned()))?;
         Ok(())
     }
 }
