@@ -586,7 +586,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             Some((runtime, _)) => runtime,
             None => return match reason {
                 ExitReason::Revert(_) => {
-                    let revert_result: Vec<u8> = ret_val_boxed.unwrap_or_else(|| { get_return_value() });
+                    let revert_result: Vec<u8> = ret_val_boxed.unwrap_or_else(get_return_value);
                     Err((revert_result, reason))
                 },
                 _ => Err((Vec::<u8>::new(), reason))
