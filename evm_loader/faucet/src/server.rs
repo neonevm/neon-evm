@@ -10,8 +10,8 @@ use tracing::{error, info};
 use crate::{config, eth_token, tokens};
 
 /// Starts the server in listening mode.
-pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
-    info!("Port {}", rpc_port);
+pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
+    info!("Bind {}:{}", rpc_bind, rpc_port);
 
     HttpServer::new(|| {
         let mut cors = Cors::default()
@@ -34,7 +34,7 @@ pub async fn start(rpc_port: u16, workers: usize) -> Result<()> {
             )
             .route("/request_stop", post().to(handle_request_stop))
     })
-    .bind(("localhost", rpc_port))?
+    .bind((rpc_bind, rpc_port))?
     .workers(workers)
     .run()
     .await?;
