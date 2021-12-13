@@ -564,7 +564,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
-        let get_return_value = || {exited_runtime.machine().return_value()};
+        let get_return_value = || { exited_runtime.machine().return_value() };
         let mut ret_val_boxed: Option<Vec<u8>> = Option::Some(get_return_value());
 
         if reason.is_succeed() {
