@@ -4,7 +4,7 @@ use crate::{
     solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
-    token::{transfer_token, get_token_account_data},
+    token::{transfer_neon_token, get_token_account_data},
     precompile_contracts::is_precompile_address,
     system::create_pda_account
 };
@@ -196,7 +196,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let target = self.get_solidity_account(&transfer.target);
             let target_token_account = self.solana_accounts[target.get_neon_token_solana_address()];
 
-            transfer_token(
+            transfer_neon_token(
                 accounts,
                 source_token_account,
                 target_token_account,
