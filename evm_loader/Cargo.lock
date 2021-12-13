@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "evm-loader"
-version = "0.5.0"
+version = "0.5.0-rc3"
 dependencies = [
  "arrayref",
  "bincode",
