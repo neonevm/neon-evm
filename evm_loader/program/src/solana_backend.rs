@@ -64,6 +64,8 @@ pub trait AccountStorage {
     fn contract(&self) -> H160;
     /// Get caller address
     fn origin(&self) -> H160;
+    /// Get account balance
+    fn balance(&self, address: &H160) -> U256;
     /// Get block number
     fn block_number(&self) -> U256;
     /// Get block timestamp
@@ -140,28 +142,6 @@ pub trait AccountStorage {
         );
 
         U256::from(nonce)
-    }
-
-    /// Get account balance
-    fn balance(&self, address: &H160) -> U256 {
-        let token_account = self.apply_to_account(
-            address,
-            || None,
-            |account| Some(*account.get_neon_token_solana_address())
-        ).and_then(|token_address| {
-            self.apply_to_solana_account(
-                &token_address,
-                || None,
-                |info| get_token_account_data(&info.data.borrow(), info.owner).ok()
-            )
-        });
-
-        let balance = match token_account {
-            Some(account) => U256::from(account.amount),
-            None => U256::zero()
-        };
-
-        balance * crate::token::eth::min_transfer_value()
     }
 
     /// Get code hash

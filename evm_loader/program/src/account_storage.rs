@@ -4,7 +4,7 @@ use crate::{
     solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
-    token::{transfer_token},
+    token::{transfer_token, get_token_account_data},
     precompile_contracts::is_precompile_address,
     system::create_pda_account
 };
@@ -357,6 +357,16 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
     fn origin(&self) -> H160 {
         self.caller
+    }
+
+    fn balance(&self, address: &H160) -> U256 {
+        let account = self.get_solidity_account(address);
+        let token_account = &self.solana_accounts[account.get_neon_token_solana_address()];
+
+        let token = get_token_account_data(&token_account.data.borrow(), token_account.owner)
+            .expect("Invalid token account");
+
+        U256::from(token.amount) * crate::token::eth::min_transfer_value()
     }
 
     fn block_number(&self) -> U256 {
