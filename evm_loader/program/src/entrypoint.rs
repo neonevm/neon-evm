@@ -405,7 +405,7 @@ fn process_instruction<'a>(
                 program_id,
                 &mut account_storage,
                 accounts,
-                Some(operator_sol_info),
+                operator_sol_info,
                 evm_results.unwrap(),
                 used_gas)?;
 
@@ -501,7 +501,7 @@ fn process_instruction<'a>(
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
-            let caller_account_info = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+            let caller_account_info = account_storage.get_caller_account_info();
             let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
             let mut caller_account = caller_account_data.get_mut_account()?;
 
@@ -1027,7 +1027,7 @@ fn do_continue_top_level<'a>(
             program_id,
             &mut account_storage,
             accounts,
-            Some(operator_sol_info),
+            operator_sol_info,
             evm_results,
             used_gas)?;
 
@@ -1151,7 +1151,7 @@ fn applies_and_invokes<'a>(
     program_id: &Pubkey,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: Option<&AccountInfo<'a>>,
+    operator: &AccountInfo<'a>,
     evm_results: EvmResults,
     used_gas: UsedGas
 ) -> ProgramResult {
@@ -1246,7 +1246,7 @@ fn check_ethereum_transaction(
    transaction: &UnsignedTransaction
 ) -> ProgramResult
 {
-    let sender_account = account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+    let sender_account = account_storage.get_caller_account();
 
     if sender_account.get_ether() != *recovered_address {
         return Err!(ProgramError::InvalidArgument; "Invalid sender: actual {}, recovered {}", sender_account.get_ether(), recovered_address);
@@ -1265,7 +1265,7 @@ fn check_ethereum_transaction(
         },
         |to| to
     );
-    let contract_account = account_storage.get_contract_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+    let contract_account = account_storage.get_contract_account();
 
     if contract_account.get_ether() != contract_address {
         return Err!(ProgramError::InvalidArgument; "Invalid contract: actual {}, expected {}", contract_account.get_ether(), contract_address);

@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use evm::{H160, U256};
+use evm::{H160, U256, Transfer};
 use evm::backend::Apply;
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,8 @@ use evm_loader::{
     hamt::Hamt,
     precompile_contracts::is_precompile_address,
     solana_backend::{AccountStorage, AccountStorageInfo},
-    solidity_account::SolidityAccount
+    solidity_account::SolidityAccount,
+    config::token_mint
 };
 
 use crate::Config;
@@ -124,7 +125,6 @@ struct SolanaAccount {
     writable: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
-    balance: u64,
 }
 
 struct SolanaNewAccount {
@@ -134,9 +134,9 @@ struct SolanaNewAccount {
 }
 
 impl SolanaAccount {
-    pub fn new(account: Account, key: Pubkey, balance: u64, code_account: Option<Account>) -> Self {
+    pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         eprintln!("SolanaAccount::new");
-        Self{account, key, balance, writable: false, code_account, code_size: None, code_size_current : None}
+        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
     }
 }
 
@@ -246,8 +246,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut new_accounts = self.new_accounts.borrow_mut(); 
         if accounts.get(address).is_none() {
             let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
-            if let Some((acc, balance, code_account)) = Self::get_account_from_solana(self.config, address) {
-                accounts.insert(*address, SolanaAccount::new(acc, solana_address, balance, code_account));
+            if let Some((acc, _balance, code_account)) = Self::get_account_from_solana(self.config, address) {
+                accounts.insert(*address, SolanaAccount::new(acc, solana_address, code_account));
                 true
             }
             else {
@@ -404,6 +404,23 @@ impl<'a> EmulatorAccountStorage<'a> {
                 },
             }
         };
+    }
+
+    pub fn apply_transfers(&self, transfers: Vec<Transfer>) {
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+
+        for transfer in transfers {
+            self.create_acc_if_not_exists(&transfer.source);
+            self.create_acc_if_not_exists(&transfer.target);
+
+            let (source, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
+            let source_token = spl_associated_token_account::get_associated_token_address(&source, &token_mint::id());
+            solana_accounts.insert(source_token, AccountMeta::new(source_token, false));
+
+            let (target, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
+            let target_token = spl_associated_token_account::get_associated_token_address(&target, &token_mint::id());
+            solana_accounts.insert(target_token, AccountMeta::new(target_token, false));
+        }
     }
 
     pub fn apply_spl_transfers(&self, transfers: Vec<SplTransfer>) {
@@ -566,10 +583,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                         Err(_) => return d(),
                     };
                     let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, Some((contract_data, code_data)));
+                    let account = SolidityAccount::new(&acc.key, account_data, Some((contract_data, code_data)));
                     f(&account)
                 } else {
-                    let account = SolidityAccount::new(&acc.key, acc.balance, account_data, None);
+                    let account = SolidityAccount::new(&acc.key, account_data, None);
                     f(&account)
                 }
             },
@@ -595,6 +612,22 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn contract(&self) -> H160 { self.contract_id }
 
     fn origin(&self) -> H160 { self.caller_id }
+
+    fn balance(&self, address: &H160) -> U256 {
+        self.create_acc_if_not_exists(address);
+
+        let (account, _) = make_solana_program_address(address, &self.config.evm_loader);
+        let token_account = spl_associated_token_account::get_associated_token_address(&account, &token_mint::id());
+        
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        solana_accounts.entry(token_account).or_insert_with(|| AccountMeta::new_readonly(token_account, false));
+
+        if let Some((_, balance, _)) = Self::get_account_from_solana(self.config, address) {
+            U256::from(balance) * evm_loader::token::eth::min_transfer_value()
+        } else {
+            U256::zero()
+        }
+    }
 
     fn block_number(&self) -> U256 { self.block_number.into() }
 

@@ -241,7 +241,7 @@ impl ExecutorSubstate {
             let apply = {
                 let account = self.accounts.remove(&address).unwrap_or_else(
                     || ExecutorAccount {
-                        nonce: backend.basic(&address).nonce,
+                        nonce: backend.nonce(&address),
                         code: None,
                         valids: None,
                         reset: false,
@@ -463,7 +463,7 @@ impl ExecutorSubstate {
         if !self.accounts.contains_key(&address) {
             let account = self.known_account(address).cloned().map_or_else(
                 || ExecutorAccount {
-                    nonce: backend.basic(&address).nonce,
+                    nonce: backend.nonce(&address),
                     code: None,
                     valids: None,
                     reset: false,
@@ -541,7 +541,7 @@ impl ExecutorSubstate {
 
         value.map_or_else(
             || {
-                let balance = backend.basic(address).balance;
+                let balance = backend.balance(address);
                 self.balances.borrow_mut().insert(*address, balance);
 
                 balance
@@ -783,7 +783,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn nonce(&self, address: H160) -> U256 {
         self.substate
             .known_nonce(address)
-            .unwrap_or_else(|| self.backend.basic(&address).nonce)
+            .unwrap_or_else(|| self.backend.nonce(&address))
     }
 
     #[must_use]
@@ -856,8 +856,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             return known_empty;
         }
 
-        self.backend.basic(&address).balance == U256::zero()
-            && self.backend.basic(&address).nonce == U256::zero()
+        self.backend.balance(&address) == U256::zero()
+            && self.backend.nonce(&address) == U256::zero()
             && self.backend.code_size(&address) == 0
     }
 

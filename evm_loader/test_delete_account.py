@@ -121,7 +121,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
-        err = "invalid account data for instruction"
+        err = "Program failed to complete"
         with self.assertRaisesRegex(Exception,err):
             result = send_transaction(client, trx, self.acc)
             print(result)

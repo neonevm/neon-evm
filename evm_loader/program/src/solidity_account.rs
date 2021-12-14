@@ -3,9 +3,7 @@ use crate::{
     account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
-    token
 };
-use evm::backend::Basic;
 use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
@@ -22,7 +20,6 @@ pub struct SolidityAccount<'a> {
     account_data: AccountData,
     solana_address: &'a Pubkey,
     code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>,
-    balance: U256,
 }
 
 impl<'a> SolidityAccount<'a> {
@@ -31,15 +28,12 @@ impl<'a> SolidityAccount<'a> {
     /// ```
     /// let account_data = AccountData::unpack(&caller_info.data.borrow())?;
     /// account_data.get_account()?;
-    /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
+    /// let caller_acc = SolidityAccount::new(caller_info.key, account_data, None);
     /// ```
     #[must_use]
-    pub fn new(solana_address: &'a Pubkey, balance: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
-        let balance = U256::from(balance);
-        let balance = balance * token::eth::min_transfer_value();
-
-        debug_print!("  SolidityAccount::new solana_address={} balance={}", solana_address, balance);
-        Self{account_data, solana_address, code_data, balance}
+    pub fn new(solana_address: &'a Pubkey, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
+        debug_print!("  SolidityAccount::new solana_address={}", solana_address);
+        Self{account_data, solana_address, code_data}
     }
 
     /// Get ethereum account address
@@ -135,8 +129,26 @@ impl<'a> SolidityAccount<'a> {
 
     /// Get solana address
     #[must_use]
-    pub const fn get_solana_address(&self) -> Pubkey {
-        *self.solana_address
+    pub const fn get_solana_address(&self) -> &Pubkey {
+        self.solana_address
+    }
+
+    /// Get Neon solana address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
+    pub fn get_neon_token_solana_address(&self) -> &Pubkey {
+        &self.account_data.get_account().unwrap().eth_token_account
+    }
+
+    /// Get Neon solana address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
+    pub fn get_code_solana_address(&self) -> &Pubkey {
+        &self.account_data.get_account().unwrap().code_account
     }
 
     /// Get solana account seeds
@@ -145,18 +157,6 @@ impl<'a> SolidityAccount<'a> {
     /// Will panic `account_data` doesn't contain `Account` struct
     #[must_use]
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
-
-    /// Get ethereum account basic info
-    /// # Panics
-    ///
-    /// Will panic `account_data` doesn't contain `Account` struct
-    #[must_use]
-    pub fn basic(&self) -> Basic {
-        Basic {
-            balance: self.balance, 
-            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), 
-        }
-    }
 
     /// Get code hash
     #[must_use]
