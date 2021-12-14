@@ -54,8 +54,6 @@ struct Executor<'a, B: AccountStorage> {
     state: ExecutorState<'a, B>,
 }
 
-type Data = Vec<u8>;
-
 impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     type CreateInterrupt = crate::executor::CreateInterrupt;
     type CreateFeedback = Infallible;
@@ -82,11 +80,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         }
     }
 
-    fn code(&self, address: H160) -> Data {
+    fn code(&self, address: H160) -> Vec<u8> {
         self.state.code(address)
     }
 
-    fn valids(&self, address: H160) -> Data {
+    fn valids(&self, address: H160) -> Vec<u8> {
         self.state.valids(address)
     }
 
