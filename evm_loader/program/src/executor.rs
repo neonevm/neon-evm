@@ -579,7 +579,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             };
         }
 
-        let runtime: & mut evm::Runtime = match self.runtime.last_mut() {
+        let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
             None => return match reason {
                 ExitReason::Revert(_) => {
