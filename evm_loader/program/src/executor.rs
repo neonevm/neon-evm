@@ -54,6 +54,8 @@ struct Executor<'a, B: AccountStorage> {
     state: ExecutorState<'a, B>,
 }
 
+type Data = Vec<u8>;
+
 impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     type CreateInterrupt = crate::executor::CreateInterrupt;
     type CreateFeedback = Infallible;
@@ -80,11 +82,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         }
     }
 
-    fn code(&self, address: H160) -> Vec<u8> {
+    fn code(&self, address: H160) -> Data {
         self.state.code(address)
     }
 
-    fn valids(&self, address: H160) -> Vec<u8> {
+    fn valids(&self, address: H160) -> Data {
         self.state.valids(address)
     }
 
@@ -564,20 +566,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
-        let get_return_value = || { exited_runtime.machine().return_value() };
-        let mut ret_val_boxed: Option<Vec<u8>> = Option::Some(get_return_value());
 
         if reason.is_succeed() {
-            let return_value: & Vec<u8> = ret_val_boxed.as_ref().unwrap();
             match CONFIG.create_contract_limit {
-                Some(limit) if return_value.len() > limit => {
+                Some(limit) if exited_runtime.machine().return_value_len() > limit => {
                     self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     reason = ExitError::CreateContractLimit.into();
                 },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
-                    self.executor.state.set_code(address, ret_val_boxed.unwrap());
-                    ret_val_boxed = Option::None;
+                    let return_value = exited_runtime.machine().return_value();
+                    self.executor.state.set_code(address, return_value);
                 }
             };
         }
@@ -586,8 +585,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             Some((runtime, _)) => runtime,
             None => return match reason {
                 ExitReason::Revert(_) => {
-                    let revert_result: Vec<u8> = ret_val_boxed.unwrap_or_else(get_return_value);
-                    Err((revert_result, reason))
+                    let return_value = exited_runtime.machine().return_value();
+                    Err((return_value, reason))
                 },
                 _ => Err((Vec::<u8>::new(), reason))
             }
