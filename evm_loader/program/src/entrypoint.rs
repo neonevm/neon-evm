@@ -674,6 +674,9 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
+            if code_account_new_info.data_len() <= code_account_info.data_len(){
+                return Err!(ProgramError::InvalidAccountData; "new code account size is less than or equal to current code account size");
+            }
 
             let mut account_data = AccountData::unpack(&account_info.try_borrow_data()?)?;
             let account = account_data.get_mut_account()?;
