@@ -341,12 +341,9 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
               D: FnOnce() -> U
     {
-        let account_info = self.solana_accounts.get(address);
-        if let Some(account_info) = account_info {
-            f(&AccountStorageInfo::from(account_info))
-        } else {
-            panic!("Solana account {} must be present in the transaction", address)
-        }
+        self.solana_accounts.get(address).map_or_else(
+            || panic!("Solana account {} must be present in the transaction", address),
+            |account_info| f(&AccountStorageInfo::from(account_info)))
     }
 
     fn program_id(&self) -> &Pubkey { &self.program_id }

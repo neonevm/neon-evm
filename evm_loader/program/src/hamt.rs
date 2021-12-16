@@ -89,7 +89,7 @@ impl<'a> Hamt<'a> {
 
     fn release_item(&mut self, item_type: u8, item_pos: u32) {
         let free_pos = u32::from(item_type) * (size_of::<u32>() as u32);
-        if item_type >= 32 || item_type == 0 {panic!("Release unreleased items");};
+        assert!(!(item_type >= 32 || item_type == 0), "Release unreleased items");
         let size:u32 = match item_type {
             0 => (256+256)/8,
             _ => (4 + u32::from(item_type) * 4),

@@ -170,7 +170,7 @@ impl<'a> SolidityAccount<'a> {
     /// Get code size
     #[must_use]
     pub fn code_size(&self) -> usize {
-        self.code(|d| d.len())
+        self.code(<[u8]>::len)
     }
 
     /// Get code data

@@ -1,9 +1,9 @@
-#![deny(missing_docs)]
-//#![forbid(unsafe_code)]
 #![deny(warnings)]
-#![allow(deprecated)]
+#![deny(missing_docs)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(deprecated)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::semicolon_if_nothing_returned)]
 
 //! An ERC20-like Token program for the Solana blockchain
 #[macro_use]
