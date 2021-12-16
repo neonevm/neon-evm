@@ -10,17 +10,18 @@ use solana_program::pubkey::Pubkey;
 use solana_program::secp256k1_recover::secp256k1_recover;
 use std::convert::{TryInto};
 
-const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
-const SYSTEM_ACCOUNT_DATACOPY: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
-const SYSTEM_ACCOUNT_BIGMODEXP: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
-const SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
-const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
-const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
-const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
+const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =    H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_QUERY: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_CACHE: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
+const SYSTEM_ACCOUNT_ECRECOVER: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_SHA_256: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_RIPEMD160: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
+const SYSTEM_ACCOUNT_DATACOPY: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
+const SYSTEM_ACCOUNT_BIGMODEXP: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
+const SYSTEM_ACCOUNT_BN256_ADD: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
+const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
+const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =    H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
+const SYSTEM_ACCOUNT_BLAKE2F: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
 
 const GAS_COST_ECRECOVER: u64 = 3000;
 const GAS_COST_SHA256_BASE: u64 = 60;
@@ -55,6 +56,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_QUERY
+        || *address == SYSTEM_ACCOUNT_CACHE
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -81,6 +83,9 @@ pub fn call_precompile<'a, B: AccountStorage>(
     }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
+    }
+    if address == SYSTEM_ACCOUNT_CACHE {
+        return Some(cache_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -395,6 +400,17 @@ pub fn query_account<'a, B: AccountStorage>(
             Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
         }
     }
+}
+
+/// Call inner `cache_account`
+#[must_use]
+pub fn cache_account<'a, B: AccountStorage>(
+    _input: &[u8],
+    _state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
 }
 
 /// Call inner `ecrecover`
