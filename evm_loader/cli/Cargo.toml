@@ -1,6 +1,6 @@
 [package]
 name = "neon-cli"
-version = "0.5.0-rc3"
+version = "0.5.0-rc4"
 authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
 edition = "2018"
 
