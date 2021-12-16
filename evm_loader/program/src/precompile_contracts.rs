@@ -1,14 +1,16 @@
 //! `EVMLoader` precompile contracts
 
-use crate::executor_state::ExecutorState;
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_digest;
-use arrayref::{array_ref, array_refs};
 use core::convert::Infallible;
+use std::convert::TryInto;
+
+use arrayref::{array_ref, array_refs};
 use evm::{Capture, ExitReason, H160, U256};
 use solana_program::pubkey::Pubkey;
 use solana_program::secp256k1_recover::secp256k1_recover;
-use std::convert::{TryInto};
+
+use crate::executor_state::ExecutorState;
+use crate::solana_backend::AccountStorage;
+use crate::utils::keccak256_digest;
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =    H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
@@ -402,15 +404,45 @@ pub fn query_account<'a, B: AccountStorage>(
     }
 }
 
+// CacheAccount method ids:
+//------------------------------------------
+// contains(uint256) => 0xc34052e0
+//------------------------------------------
+
+const CACHE_ACCOUNT_METHOD_CONTAINS_ID: &[u8; 4] = &[0xc3, 0x40, 0x52, 0xe0];
+
 /// Call inner `cache_account`
 #[must_use]
 pub fn cache_account<'a, B: AccountStorage>(
-    _input: &[u8],
-    _state: &mut ExecutorState<'a, B>
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+    let (method_id, rest) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let (account_address, _rest) = rest.split_at(32);
+    let account_address = Pubkey::new(account_address);
+
+    match method_id {
+        CACHE_ACCOUNT_METHOD_CONTAINS_ID => {
+            debug_print!("cache_account contains {} ?", account_address);
+            let contains = state.query_solana_account_executable(account_address);
+            if let Some(contains) = contains {
+                debug_print!("cache_account contains result: {}", contains);
+                let contains: U256 = (contains as u8).into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                contains.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
+            let revert_message = b"CacheAccount.contains failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        _ => {
+            debug_print!("cache_account UNKNOWN {:?}", method_id);
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
 }
 
 /// Call inner `ecrecover`
