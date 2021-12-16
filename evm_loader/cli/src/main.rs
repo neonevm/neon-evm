@@ -321,7 +321,7 @@ fn command_create_ether_account (
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
         "nonce": nonce,
-    }).to_string());
+    }));
 
     Ok(())
 }
@@ -626,13 +626,11 @@ fn get_ether_account_nonce(
     config: &Config,
     caller_sol: &Pubkey
 ) -> Result<(u64, H160, Pubkey), Error> {
-    let data : Vec<u8>;
-    match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
-        Some(acc) =>   data = acc.data,
+    let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
+        Some(acc) => acc.data,
         None => return Ok((u64::default(), H160::default(), Pubkey::default()))
-    }
+    };
 
-    let trx_count : u64;
     debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
@@ -642,7 +640,7 @@ fn get_ether_account_nonce(
         },
         Err(_) => return Err("Caller unpack error".into())
     };
-    trx_count = account.trx_count;
+    let trx_count = account.trx_count;
     let caller_ether = account.ether;
     let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
 
@@ -996,7 +994,7 @@ fn command_deploy(
         "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
-    }).to_string());
+    }));
     Ok(())
 }
 
@@ -1098,7 +1096,7 @@ fn command_cancel_trx(
 
     if let Some(acc) = storage {
         if acc.owner != config.evm_loader {
-            return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
+            return Err(format!("Invalid owner {} for storage account", acc.owner).into());
         }
         let data = AccountData::unpack(&acc.data)?;
         let data_end = data.size();
@@ -1113,7 +1111,7 @@ fn command_cancel_trx(
                 return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
             };
 
-            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect()
+            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(Pubkey::new).collect()
         };
 
         let (caller_solana, _) = make_solana_program_address(&storage.caller, &config.evm_loader);

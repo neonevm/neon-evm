@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! `EvmInstruction` serialization/deserialization
 
 use serde::{Serialize, Serializer};
