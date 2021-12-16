@@ -185,7 +185,7 @@ impl<'a> StorageAccount<'a> {
 
         let keys_storage = &account_data[begin..end];
         let chunks = keys_storage.chunks_exact(32);
-        let keys = chunks.map(|c| Pubkey::new(c)).collect();
+        let keys = chunks.map(Pubkey::new).collect();
 
         Ok(keys)
     }
