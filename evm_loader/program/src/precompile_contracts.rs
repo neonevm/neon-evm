@@ -14,7 +14,6 @@ use crate::utils::keccak256_digest;
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =    H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_CACHE: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -58,7 +57,6 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_QUERY
-        || *address == SYSTEM_ACCOUNT_CACHE
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -85,9 +83,6 @@ pub fn call_precompile<'a, B: AccountStorage>(
     }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
-    }
-    if address == SYSTEM_ACCOUNT_CACHE {
-        return Some(cache_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -290,15 +285,17 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 }
 
 // QueryAccount method ids:
-//------------------------------------------
-// owner(uint256)              => 0xa123c33e
-// length(uint256)             => 0xaa8b99d2
-// lamports(uint256)           => 0x748f2d8a
-// executable(uint256)         => 0xc219a785
-// rent_epoch(uint256)         => 0xc4d369b5
-// data(uint256,uint64,uint64) => 0x43ca5161
-//------------------------------------------
+//-------------------------------------------
+// cache(uint256,uint64,uint64) => 0x2b3c8322
+// owner(uint256)               => 0xa123c33e
+// length(uint256)              => 0xaa8b99d2
+// lamports(uint256)            => 0x748f2d8a
+// executable(uint256)          => 0xc219a785
+// rent_epoch(uint256)          => 0xc4d369b5
+// data(uint256,uint64,uint64)  => 0x43ca5161
+//-------------------------------------------
 
+const QUERY_ACCOUNT_METHOD_CACHE_ID: &[u8; 4] = &[0x2b, 0x3c, 0x83, 0x22];
 const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
 const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
 const QUERY_ACCOUNT_METHOD_LAMPORTS_ID: &[u8; 4] = &[0x74, 0x8f, 0x2d, 0x8a];
@@ -320,6 +317,20 @@ pub fn query_account<'a, B: AccountStorage>(
     let account_address = Pubkey::new(account_address);
 
     match method_id {
+        QUERY_ACCOUNT_METHOD_CACHE_ID => {
+            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes
+            let (offset, rest) = rest.split_at(32);
+            let (length, _) = rest.split_at(32);
+            let offset = U256::from_big_endian_fast(offset).as_usize();
+            let length = U256::from_big_endian_fast(length).as_usize();
+            debug_print!("query_account cache {} {} {}", account_address, offset, length);
+            let r = state.cache_solana_account(account_address, offset, length);
+            if r.is_ok() {
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]));
+            }
+            let revert_message = format!("QueryAccount.cache failed: {:?}", r.err()).as_bytes().to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
         QUERY_ACCOUNT_METHOD_OWNER_ID => {
             debug_print!("query_account get owner {}", account_address);
             let owner = state.query_solana_account_owner(account_address);
@@ -399,47 +410,6 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         _ => {
             debug_print!("query_account UNKNOWN {:?}", method_id);
-            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
-        }
-    }
-}
-
-// CacheAccount method ids:
-//------------------------------------------
-// contains(uint256) => 0xc34052e0
-//------------------------------------------
-
-const CACHE_ACCOUNT_METHOD_CONTAINS_ID: &[u8; 4] = &[0xc3, 0x40, 0x52, 0xe0];
-
-/// Call inner `cache_account`
-#[must_use]
-pub fn cache_account<'a, B: AccountStorage>(
-    input: &[u8],
-    state: &mut ExecutorState<'a, B>
-)
-    -> Capture<(ExitReason, Vec<u8>), Infallible>
-{
-    let (method_id, rest) = input.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
-    let (account_address, _rest) = rest.split_at(32);
-    let account_address = Pubkey::new(account_address);
-
-    match method_id {
-        CACHE_ACCOUNT_METHOD_CONTAINS_ID => {
-            debug_print!("cache_account contains {} ?", account_address);
-            let contains = state.query_solana_account_executable(account_address);
-            if let Some(contains) = contains {
-                debug_print!("cache_account contains result: {}", contains);
-                let contains: U256 = (contains as u8).into(); // pad to 32 bytes
-                let mut bytes = vec![0_u8; 32];
-                contains.into_big_endian_fast(&mut bytes);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
-            }
-            let revert_message = b"CacheAccount.contains failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-        },
-        _ => {
-            debug_print!("cache_account UNKNOWN {:?}", method_id);
             Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
         }
     }

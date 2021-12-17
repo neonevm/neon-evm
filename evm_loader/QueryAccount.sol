@@ -5,6 +5,13 @@ contract QueryAccount {
     address constant precompiled = 0xff00000000000000000000000000000000000002;
 
     // Takes a Solana address, treats it as an address of an account.
+    // Puts the metadata and a chunk of data into the cache.
+    function cache(uint256 solana_address, uint64 offset, uint64 len) public {
+        (bool success, bytes memory _dummy) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
+        require(success, "QueryAccount.cache failed");
+    }
+
+    // Takes a Solana address, treats it as an address of an account.
     // Returns the account's owner Solana address (32 bytes).
     function owner(uint256 solana_address) public view returns (uint256) {
         (bool success, bytes memory result) = precompiled.staticcall(abi.encodeWithSignature("owner(uint256)", solana_address));
