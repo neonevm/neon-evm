@@ -3,8 +3,8 @@ FROM solanalabs/rust:latest AS builder
 RUN rustup toolchain install nightly
 RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.9/install)" && \
-    /root/.local/share/solana/install/releases/1.7.9/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
+    /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Build evm_loader
