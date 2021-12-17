@@ -12,7 +12,7 @@ use crate::account_data::ACCOUNT_MAX_SIZE;
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
-        const CHAIN_ID: u64 = 245_022_934;
+        const CHAIN_ID: u64 = 245022934;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
