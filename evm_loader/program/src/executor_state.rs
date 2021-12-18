@@ -15,7 +15,7 @@ use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
 use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
-use solana_program::{pubkey::Pubkey, clock::Epoch};
+use solana_program::pubkey::Pubkey;
 
 use crate::{
     query,
@@ -1066,54 +1066,24 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn cache_solana_account(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
-        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-            if offset >= data.len() || offset + length > data.len() {
-                None
-            } else {
-                Some(data[offset..offset + length].to_owned())
-            }
-        }
-
         if length > query::MAX_CHUNK_LEN {
             return Err(query::Error::InvalidArgument);
         }
-        let (found,
-            owner,
-            data_length,
-            lamports,
-            executable,
-            rent_epoch,
-            data) = self.backend.apply_to_solana_account(
+        let value = self.backend.apply_to_solana_account(
             &address,
-            || (false,
-                Pubkey::default(),
-                usize::default(),
-                u64::default(),
-                bool::default(),
-                Epoch::default(),
-                None),
-            |info| (true,
-                    *info.owner,
-                    info.data.borrow().len(),
-                    info.lamports,
-                    info.executable,
-                    info.rent_epoch,
-                    clone_chunk(&info.data.borrow(), offset, length)),
+            || None,
+            |info| Some(query::Value::from(info, offset, length)),
         );
-        if !found {
-            return Err(query::Error::AccountNotFound);
+        match value {
+            None => return Err(query::Error::AccountNotFound),
+            Some(value) => {
+                if !value.has_data() {
+                    Err(query::Error::InvalidArgument)
+                } else {
+                    self.substate.query_account_cache.borrow_mut().insert(address, value)
+                }
+            }
         }
-        if data.is_none() {
-            return Err(query::Error::InvalidArgument);
-        }
-        self.substate.query_account_cache.borrow_mut().insert(
-            address,
-            owner,
-            data_length,
-            lamports,
-            executable,
-            rent_epoch,
-            data.unwrap())
     }
 
     #[must_use]

@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use solana_program::{pubkey::Pubkey, clock::Epoch};
+use solana_program::{clock::Epoch, pubkey::Pubkey};
+
+use crate::solana_backend::AccountStorageInfo;
 
 const KB: usize = 1024;
 pub const MAX_CHUNK_LEN: usize = 8 * KB;
@@ -36,23 +38,7 @@ impl AccountCache {
         }
     }
 
-    pub fn insert(&mut self,
-                  address: Pubkey,
-                  owner: Pubkey,
-                  data_length: usize,
-                  lamports: u64,
-                  executable: bool,
-                  rent_epoch: Epoch,
-                  data: Vec<u8>,
-                  ) -> Result<()> {
-        let value = Value{
-            owner,
-            length: data_length,
-            lamports,
-            executable,
-            rent_epoch,
-            data,
-        };
+    pub fn insert(&mut self, address: Pubkey, value: Value) -> Result<()> {
         if self.cache.insert(address, value).is_some() {
             return Err(Error::AccountAlreadyCached);
         }
@@ -65,11 +51,36 @@ impl AccountCache {
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-struct Value {
+pub struct Value {
     owner: Pubkey,
     length: usize,
     lamports: u64,
     executable: bool,
     rent_epoch: Epoch,
-    data: Vec<u8>,
+    data: Option<Vec<u8>>,
+}
+
+impl Value {
+    pub fn from(info: &AccountStorageInfo, offset: usize, length: usize) -> Self {
+        Value {
+            owner: *info.owner,
+            length: info.data.borrow().len(),
+            lamports: info.lamports,
+            executable: info.executable,
+            rent_epoch: info.rent_epoch,
+            data: clone_chunk(&info.data.borrow(), offset, length)
+        }
+    }
+
+    pub fn has_data(&self) -> bool {
+        self.data.is_some()
+    }
+}
+
+fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+    if offset >= data.len() || offset + length > data.len() {
+        None
+    } else {
+        Some(data[offset..offset + length].to_owned())
+    }
 }
