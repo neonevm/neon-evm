@@ -30,14 +30,14 @@ pub struct AccountCache {
 
 impl Drop for AccountCache {
     fn drop(&mut self) {
-        debug_print!("==== dropping AccountCache");
+        debug_print!("drop AccountCache");
     }
 }
 
 impl AccountCache {
     /// Creates new instance of the cache object.
     pub fn new() -> Self {
-        debug_print!("==== new AccountCache");
+        debug_print!("new AccountCache");
         Self {
             cache: BTreeMap::new(),
         }
