@@ -334,7 +334,7 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_OWNER_ID => {
             debug_print!("query_account get owner {}", account_address);
-            if let Some(owner) = state.query_solana_account_owner(account_address) {
+            if let Some(owner) = state.query_solana_account().owner(&account_address) {
                 debug_print!("query_account owner result: {}", owner);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
             }
@@ -343,7 +343,7 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_LENGTH_ID => {
             debug_print!("query_account get length {}", account_address);
-            if let Some(length) = state.query_solana_account_length(account_address) {
+            if let Some(length) = state.query_solana_account().length(&account_address) {
                 debug_print!("query_account length result: {}", length);
                 let length: U256 = length.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
@@ -355,7 +355,7 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
             debug_print!("query_account get lamports {}", account_address);
-            if let Some(lamports) = state.query_solana_account_lamports(account_address) {
+            if let Some(lamports) = state.query_solana_account().lamports(&account_address) {
                 debug_print!("query_account lamports result: {}", lamports);
                 let lamports: U256 = lamports.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
@@ -367,7 +367,7 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
             debug_print!("query_account get executable {}", account_address);
-            if let Some(executable) = state.query_solana_account_executable(account_address) {
+            if let Some(executable) = state.query_solana_account().executable(&account_address) {
                 debug_print!("query_account executable result: {}", executable);
                 let executable: U256 = u8::from(executable).into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
@@ -379,7 +379,7 @@ pub fn query_account<'a, B: AccountStorage>(
         },
         QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
             debug_print!("query_account get rent_epoch {}", account_address);
-            if let Some(rent_epoch) = state.query_solana_account_rent_epoch(account_address) {
+            if let Some(rent_epoch) = state.query_solana_account().rent_epoch(&account_address) {
                 debug_print!("query_account rent_epoch result: {}", rent_epoch);
                 let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
@@ -396,7 +396,7 @@ pub fn query_account<'a, B: AccountStorage>(
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
-            match state.query_solana_account_data(account_address, offset, length) {
+            match state.query_solana_account().data(&account_address, offset, length) {
                 Ok(data) => {
                     debug_print!("query_account data result: {:?}", data);
                     Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data))
