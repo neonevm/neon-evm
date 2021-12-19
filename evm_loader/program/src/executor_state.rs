@@ -1065,6 +1065,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn cache_solana_account(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
+        if length == 0 {
+            self.substate.query_account_cache.borrow_mut().remove(address);
+            return Ok(());
+        }
         if length > query::MAX_CHUNK_LEN {
             return Err(query::Error::InvalidArgument);
         }

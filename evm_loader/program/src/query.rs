@@ -30,9 +30,16 @@ pub struct AccountCache {
     cache: BTreeMap<Pubkey, Value>,
 }
 
+impl Drop for AccountCache {
+    fn drop(&mut self) {
+        debug_print!("==== Dropping AccountCache");
+    }
+}
+
 impl AccountCache {
     /// Creates new instance of the cache object.
     pub fn new() -> Self {
+        debug_print!("==== new AccountCache");
         Self {
             cache: BTreeMap::new(),
         }
@@ -40,14 +47,25 @@ impl AccountCache {
 
     /// Inserts new entry into the cache. Error if already present.
     pub fn insert(&mut self, address: Pubkey, value: Value) -> Result<()> {
+        debug_print!("==== insert {} --> {:?}", address, value);
         if self.cache.insert(address, value).is_some() {
+            debug_print!("==== insert ALREADY CACHED");
             return Err(Error::AccountAlreadyCached);
         }
+        debug_print!("==== after insert len={}", self.cache.len());
         Ok(())
+    }
+
+    pub fn remove(&mut self, address: Pubkey) {
+        debug_print!("==== before remove len={}", self.cache.len());
+        debug_print!("==== remove {}", address);
+        self.cache.remove(&address);
     }
 
     /// Returns owner of an account if found.
     pub fn owner(&self, address: &Pubkey) -> Option<Pubkey> {
+        debug_print!("==== len={}", self.cache.len());
+        debug_print!("==== contains {}", self.cache.contains_key(address));
         self.cache.get(address).map(|v| v.owner)
     }
 
@@ -88,6 +106,14 @@ impl AccountCache {
     }
 }
 
+fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+    if offset >= data.len() || offset + length > data.len() {
+        None
+    } else {
+        Some(data[offset..offset + length].to_owned())
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Value {
     owner: Pubkey,
@@ -96,6 +122,7 @@ pub struct Value {
     executable: bool,
     rent_epoch: Epoch,
     data: Option<Vec<u8>>,
+    //offset: usize,
 }
 
 impl Value {
@@ -114,13 +141,5 @@ impl Value {
     /// Checks if account got data. Dataless accounts make no sense in the cache.
     pub const fn has_data(&self) -> bool {
         self.data.is_some()
-    }
-}
-
-fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-    if offset >= data.len() || offset + length > data.len() {
-        None
-    } else {
-        Some(data[offset..offset + length].to_owned())
     }
 }
