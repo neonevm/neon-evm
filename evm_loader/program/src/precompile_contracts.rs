@@ -152,7 +152,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     let token_mint = Pubkey::new(token_mint);
 
     let (method_id, rest) = rest.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     match method_id {
         ERC20_METHOD_DECIMALS_ID => {
@@ -305,6 +305,7 @@ const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
 
 /// Call inner `query_account`
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn query_account<'a, B: AccountStorage>(
     input: &[u8],
     state: &mut ExecutorState<'a, B>
@@ -312,7 +313,7 @@ pub fn query_account<'a, B: AccountStorage>(
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
     let (method_id, rest) = input.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
     let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::new(account_address);
 
@@ -372,7 +373,7 @@ pub fn query_account<'a, B: AccountStorage>(
             let executable = state.query_solana_account_executable(account_address);
             if let Some(executable) = executable {
                 debug_print!("query_account executable result: {}", executable);
-                let executable: U256 = (executable as u8).into(); // pad to 32 bytes
+                let executable: U256 = u8::from(executable).into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 executable.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
@@ -400,13 +401,16 @@ pub fn query_account<'a, B: AccountStorage>(
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
             debug_print!("query_account get data {} {} {}", account_address, offset, length);
-            let data = state.query_solana_account_data(account_address, offset, length);
-            if let Some(data) = data {
-                debug_print!("query_account data result: {:?}", data);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data));
+            match state.query_solana_account_data(account_address, offset, length) {
+                Ok(data) => {
+                    debug_print!("query_account data result: {:?}", data);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data))
+                },
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.data failed: {:?}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                },
             }
-            let revert_message = b"QueryAccount data failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         _ => {
             debug_print!("query_account UNKNOWN {:?}", method_id);

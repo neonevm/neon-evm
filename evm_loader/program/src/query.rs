@@ -38,6 +38,7 @@ impl AccountCache {
         }
     }
 
+    /// Inserts new entry into the cache. Error if already present.
     pub fn insert(&mut self, address: Pubkey, value: Value) -> Result<()> {
         if self.cache.insert(address, value).is_some() {
             return Err(Error::AccountAlreadyCached);
@@ -45,8 +46,45 @@ impl AccountCache {
         Ok(())
     }
 
+    /// Returns owner of an account if found.
     pub fn owner(&self, address: &Pubkey) -> Option<Pubkey> {
         self.cache.get(address).map(|v| v.owner)
+    }
+
+    /// Returns length of an account's data if found.
+    pub fn length(&self, address: &Pubkey) -> Option<usize> {
+        self.cache.get(address).map(|v| v.length)
+    }
+
+    /// Returns lamports value of an account if found.
+    pub fn lamports(&self, address: &Pubkey) -> Option<u64> {
+        self.cache.get(address).map(|v| v.lamports)
+    }
+
+    /// Returns executable flag of an account if found.
+    pub fn executable(&self, address: &Pubkey) -> Option<bool> {
+        self.cache.get(address).map(|v| v.executable)
+    }
+
+    /// Returns rent epoch of an account if found.
+    pub fn rent_epoch(&self, address: &Pubkey) -> Option<Epoch> {
+        self.cache.get(address).map(|v| v.rent_epoch)
+    }
+
+    /// Returns chunk of data of an account if found and correct range.
+    pub fn data(&self, address: &Pubkey, offset: usize, length: usize) -> Result<Vec<u8>> {
+        match self.cache.get(address) {
+            None => Err(Error::AccountNotFound),
+            Some(v) => {
+                match &v.data {
+                    None => Err(Error::InvalidArgument),
+                    Some(d) => clone_chunk(d, offset, length).map_or_else(
+                        || Err(Error::InvalidArgument),
+                        Ok
+                    ),
+                }
+            }
+        }
     }
 }
 
@@ -61,8 +99,9 @@ pub struct Value {
 }
 
 impl Value {
+    /// Constructs a cache entry value from corresponding account info.
     pub fn from(info: &AccountStorageInfo, offset: usize, length: usize) -> Self {
-        Value {
+        Self {
             owner: *info.owner,
             length: info.data.borrow().len(),
             lamports: info.lamports,
@@ -72,7 +111,8 @@ impl Value {
         }
     }
 
-    pub fn has_data(&self) -> bool {
+    /// Checks if account got data. Dataless accounts make no sense in the cache.
+    pub const fn has_data(&self) -> bool {
         self.data.is_some()
     }
 }

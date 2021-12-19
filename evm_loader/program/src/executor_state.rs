@@ -15,7 +15,7 @@ use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
 use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey::Pubkey;
+use solana_program::{clock::Epoch, pubkey::Pubkey};
 
 use crate::{
     query,
@@ -1064,7 +1064,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
-    #[must_use]
     pub fn cache_solana_account(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
         if length > query::MAX_CHUNK_LEN {
             return Err(query::Error::InvalidArgument);
@@ -1075,12 +1074,12 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             |info| Some(query::Value::from(info, offset, length)),
         );
         match value {
-            None => return Err(query::Error::AccountNotFound),
+            None => Err(query::Error::AccountNotFound),
             Some(value) => {
-                if !value.has_data() {
-                    Err(query::Error::InvalidArgument)
-                } else {
+                if value.has_data() {
                     self.substate.query_account_cache.borrow_mut().insert(address, value)
+                } else {
+                    Err(query::Error::InvalidArgument)
                 }
             }
         }
@@ -1093,58 +1092,26 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let (found, length) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, usize::default()),
-            |info| (true, info.data.borrow().len()),
-        );
-        if found { Some(length) } else { None }
+        self.substate.query_account_cache.borrow().length(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
-        let (found, lamports) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.lamports),
-        );
-        if found { Some(lamports) } else { None }
+        self.substate.query_account_cache.borrow().lamports(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
-        let (found, executable) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, bool::default()),
-            |info| (true, info.executable),
-        );
-        if found { Some(executable) } else { None }
+        self.substate.query_account_cache.borrow().executable(&address)
     }
 
     #[must_use]
-    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
-        let (found, rent_epoch) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.rent_epoch),
-        );
-        if found { Some(rent_epoch) } else { None }
+    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<Epoch> {
+        self.substate.query_account_cache.borrow().rent_epoch(&address)
     }
 
-    #[must_use]
-    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-            if offset >= data.len() || offset + length > data.len() {
-                None
-            } else {
-                Some(data[offset..offset + length].to_owned())
-            }
-        }
-        self.backend.apply_to_solana_account(
-            &address,
-            || None,
-            |info| clone_chunk(&info.data.borrow(), offset, length)
-        )
+    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<Vec<u8>> {
+        self.substate.query_account_cache.borrow().data(&address, offset, length)
     }
 
     #[must_use]
