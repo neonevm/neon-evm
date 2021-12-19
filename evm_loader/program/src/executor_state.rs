@@ -1075,7 +1075,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             None => Err(query::Error::AccountNotFound),
             Some(value) => {
                 if value.has_data() {
-                    self.query_account_cache.put(address, value)
+                    self.query_account_cache.put(address, value);
+                    Ok(())
                 } else {
                     Err(query::Error::InvalidArgument)
                 }

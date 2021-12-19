@@ -44,10 +44,9 @@ impl AccountCache {
     }
 
     /// Inserts or replaces entry into the cache.
-    pub fn put(&mut self, address: Pubkey, value: Value) -> Result<()> {
+    pub fn put(&mut self, address: Pubkey, value: Value) {
         self.cache.remove(&address);
         self.cache.insert(address, value);
-        Ok(())
     }
 
     /// Returns owner of an account if found.
