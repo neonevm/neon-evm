@@ -32,7 +32,7 @@ pub struct AccountCache {
 
 impl Drop for AccountCache {
     fn drop(&mut self) {
-        debug_print!("==== Dropping AccountCache");
+        debug_print!("==== dropping AccountCache");
     }
 }
 
@@ -47,25 +47,18 @@ impl AccountCache {
 
     /// Inserts new entry into the cache. Error if already present.
     pub fn insert(&mut self, address: Pubkey, value: Value) -> Result<()> {
-        debug_print!("==== insert {} --> {:?}", address, value);
         if self.cache.insert(address, value).is_some() {
-            debug_print!("==== insert ALREADY CACHED");
             return Err(Error::AccountAlreadyCached);
         }
-        debug_print!("==== after insert len={}", self.cache.len());
         Ok(())
     }
 
     pub fn remove(&mut self, address: Pubkey) {
-        debug_print!("==== before remove len={}", self.cache.len());
-        debug_print!("==== remove {}", address);
         self.cache.remove(&address);
     }
 
     /// Returns owner of an account if found.
     pub fn owner(&self, address: &Pubkey) -> Option<Pubkey> {
-        debug_print!("==== len={}", self.cache.len());
-        debug_print!("==== contains {}", self.cache.contains_key(address));
         self.cache.get(address).map(|v| v.owner)
     }
 
@@ -122,7 +115,7 @@ pub struct Value {
     executable: bool,
     rent_epoch: Epoch,
     data: Option<Vec<u8>>,
-    //offset: usize,
+    offset: usize,
 }
 
 impl Value {
@@ -134,7 +127,8 @@ impl Value {
             lamports: info.lamports,
             executable: info.executable,
             rent_epoch: info.rent_epoch,
-            data: clone_chunk(&info.data.borrow(), offset, length)
+            data: clone_chunk(&info.data.borrow(), offset, length),
+            offset
         }
     }
 

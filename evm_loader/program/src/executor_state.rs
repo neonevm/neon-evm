@@ -173,7 +173,6 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
-    query_account_cache: RefCell<query::AccountCache>,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -197,7 +196,6 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: RefCell::new(query::AccountCache::new()),
         }
     }
 
@@ -294,7 +292,6 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
-            query_account_cache: RefCell::new(query::AccountCache::new()),
         };
         mem::swap(&mut entering, self);
 
@@ -725,6 +722,7 @@ impl ExecutorSubstate {
 pub struct ExecutorState<'a, B: AccountStorage> {
     backend: &'a B,
     substate: Box<ExecutorSubstate>,
+    query_account_cache: RefCell<query::AccountCache>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -1066,7 +1064,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     pub fn cache_solana_account(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
         if length == 0 {
-            self.substate.query_account_cache.borrow_mut().remove(address);
+            self.query_account_cache.borrow_mut().remove(address);
             return Ok(());
         }
         if length > query::MAX_CHUNK_LEN {
@@ -1081,7 +1079,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             None => Err(query::Error::AccountNotFound),
             Some(value) => {
                 if value.has_data() {
-                    self.substate.query_account_cache.borrow_mut().insert(address, value)
+                    self.query_account_cache.borrow_mut().insert(address, value)
                 } else {
                     Err(query::Error::InvalidArgument)
                 }
@@ -1091,31 +1089,31 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        self.substate.query_account_cache.borrow().owner(&address)
+        self.query_account_cache.borrow().owner(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        self.substate.query_account_cache.borrow().length(&address)
+        self.query_account_cache.borrow().length(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
-        self.substate.query_account_cache.borrow().lamports(&address)
+        self.query_account_cache.borrow().lamports(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
-        self.substate.query_account_cache.borrow().executable(&address)
+        self.query_account_cache.borrow().executable(&address)
     }
 
     #[must_use]
     pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<Epoch> {
-        self.substate.query_account_cache.borrow().rent_epoch(&address)
+        self.query_account_cache.borrow().rent_epoch(&address)
     }
 
     pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> query::Result<Vec<u8>> {
-        self.substate.query_account_cache.borrow().data(&address, offset, length)
+        self.query_account_cache.borrow().data(&address, offset, length)
     }
 
     #[must_use]
@@ -1129,7 +1127,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
-        Self { backend, substate }
+        Self {
+            backend,
+            substate,
+            query_account_cache: RefCell::new(query::AccountCache::new()),
+        }
     }
 
     #[must_use]
