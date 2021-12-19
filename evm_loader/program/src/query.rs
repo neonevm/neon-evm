@@ -15,8 +15,6 @@ pub const MAX_CHUNK_LEN: usize = 8 * KB;
 pub enum Error {
     #[error("account not found")]
     AccountNotFound,
-    #[error("account already cached")]
-    AccountAlreadyCached,
     #[error("invalid argument")]
     InvalidArgument,
 }
@@ -45,16 +43,11 @@ impl AccountCache {
         }
     }
 
-    /// Inserts new entry into the cache. Error if already present.
-    pub fn insert(&mut self, address: Pubkey, value: Value) -> Result<()> {
-        if self.cache.insert(address, value).is_some() {
-            return Err(Error::AccountAlreadyCached);
-        }
-        Ok(())
-    }
-
-    pub fn remove(&mut self, address: Pubkey) {
+    /// Inserts or replaces entry into the cache.
+    pub fn put(&mut self, address: Pubkey, value: Value) -> Result<()> {
         self.cache.remove(&address);
+        self.cache.insert(address, value);
+        Ok(())
     }
 
     /// Returns owner of an account if found.
@@ -87,23 +80,18 @@ impl AccountCache {
         match self.cache.get(address) {
             None => Err(Error::AccountNotFound),
             Some(v) => {
+                if offset < v.offset {
+                    return Err(Error::InvalidArgument);
+                }
                 match &v.data {
                     None => Err(Error::InvalidArgument),
-                    Some(d) => clone_chunk(d, offset, length).map_or_else(
+                    Some(d) => clone_chunk(d, offset - v.offset, length).map_or_else(
                         || Err(Error::InvalidArgument),
                         Ok
                     ),
                 }
             }
         }
-    }
-}
-
-fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-    if offset >= data.len() || offset + length > data.len() {
-        None
-    } else {
-        Some(data[offset..offset + length].to_owned())
     }
 }
 
@@ -135,5 +123,14 @@ impl Value {
     /// Checks if account got data. Dataless accounts make no sense in the cache.
     pub const fn has_data(&self) -> bool {
         self.data.is_some()
+    }
+}
+
+/// Creates vector from a slice checking the range validity.
+fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+    if offset >= data.len() || offset + length > data.len() {
+        None
+    } else {
+        Some(data[offset..offset + length].to_owned())
     }
 }

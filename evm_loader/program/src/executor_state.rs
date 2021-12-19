@@ -1063,11 +1063,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn cache_solana_account(&mut self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
-        if length == 0 {
-            self.query_account_cache.remove(address);
-            return Ok(());
-        }
-        if length > query::MAX_CHUNK_LEN {
+        if length == 0 || length > query::MAX_CHUNK_LEN {
             return Err(query::Error::InvalidArgument);
         }
         let value = self.backend.apply_to_solana_account(
@@ -1079,7 +1075,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             None => Err(query::Error::AccountNotFound),
             Some(value) => {
                 if value.has_data() {
-                    self.query_account_cache.insert(address, value)
+                    self.query_account_cache.put(address, value)
                 } else {
                     Err(query::Error::InvalidArgument)
                 }
