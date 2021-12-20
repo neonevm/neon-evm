@@ -372,7 +372,7 @@ pub fn query_account<'a, B: AccountStorage>(
             debug_print!("query_account get executable {}", account_address);
             if let Some(executable) = state.query_solana_account().executable(&account_address) {
                 debug_print!("query_account executable result: {}", executable);
-                let executable: U256 = u8::from(executable).into(); // pad to 32 bytes
+                let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 executable.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
