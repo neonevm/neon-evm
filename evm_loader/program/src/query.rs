@@ -1,10 +1,8 @@
 //! `EVMLoader` query account cache.
 
 use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 use solana_program::{clock::Epoch, pubkey::Pubkey};
-
 use crate::solana_backend::AccountStorageInfo;
 
 const KB: usize = 1024;
