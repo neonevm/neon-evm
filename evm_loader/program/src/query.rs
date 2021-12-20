@@ -101,8 +101,8 @@ pub struct Value {
     lamports: u64,
     executable: bool,
     rent_epoch: Epoch,
-    data: Option<Vec<u8>>,
     offset: usize,
+    data: Option<Vec<u8>>,
 }
 
 impl Value {
@@ -114,8 +114,8 @@ impl Value {
             lamports: info.lamports,
             executable: info.executable,
             rent_epoch: info.rent_epoch,
+            offset,
             data: clone_chunk(&info.data.borrow(), offset, length),
-            offset
         }
     }
 
