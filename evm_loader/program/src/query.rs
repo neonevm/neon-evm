@@ -125,9 +125,10 @@ impl Value {
 
 /// Creates vector from a slice checking the range validity.
 fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-    if offset >= data.len() || offset + length > data.len() {
+    let right = offset.saturating_add(length);
+    if offset >= data.len() || right > data.len() {
         None
     } else {
-        Some(data[offset..offset + length].to_owned())
+        Some(data[offset..right].to_owned())
     }
 }

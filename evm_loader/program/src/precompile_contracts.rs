@@ -15,17 +15,17 @@ use crate::{
     utils::keccak256_digest,
 };
 
-const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =    H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_QUERY: H160 =            H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_ECRECOVER: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
-const SYSTEM_ACCOUNT_SHA_256: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_RIPEMD160: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
-const SYSTEM_ACCOUNT_DATACOPY: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
-const SYSTEM_ACCOUNT_BIGMODEXP: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
-const SYSTEM_ACCOUNT_BN256_ADD: H160 =        H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
-const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 = H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
-const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =    H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
-const SYSTEM_ACCOUNT_BLAKE2F: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
+const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
+const SYSTEM_ACCOUNT_DATACOPY: H160 =          H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
+const SYSTEM_ACCOUNT_BIGMODEXP: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
+const SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x06]);
+const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
+const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
+const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
 
 const GAS_COST_ECRECOVER: u64 = 3000;
 const GAS_COST_SHA256_BASE: u64 = 60;
@@ -315,97 +315,111 @@ pub fn query_account<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
+    debug_print!("query_account({})", hex::encode(&input));
+
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+
     let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::new(account_address);
 
     match method_id {
         QUERY_ACCOUNT_METHOD_CACHE_ID => {
-            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes
-            let (offset, rest) = rest.split_at(32);
-            let (length, _) = rest.split_at(32);
+            let arguments = array_ref![rest, 0, 64];
+            let (offset, length) = array_refs!(arguments, 32, 32);
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
-            debug_print!("query_account cache {} {} {}", account_address, offset, length);
+
+            debug_print!("query_account.cache({}, {}, {})", account_address, offset, length);
             let r = state.cache_solana_account(account_address, offset, length);
             if r.is_ok() {
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]));
             }
+
             let revert_message = b"QueryAccount.cache failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_OWNER_ID => {
-            debug_print!("query_account get owner {}", account_address);
+            debug_print!("query_account.owner({})", account_address);
+
             if let Some(owner) = state.query_solana_account().owner(&account_address) {
-                debug_print!("query_account owner result: {}", owner);
+                debug_print!("query_account.owner -> {}", owner);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
             }
+
             let revert_message = b"QueryAccount.owner failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LENGTH_ID => {
-            debug_print!("query_account get length {}", account_address);
+            debug_print!("query_account.length({})", account_address);
+
             if let Some(length) = state.query_solana_account().length(&account_address) {
-                debug_print!("query_account length result: {}", length);
+                debug_print!("query_account.length -> {}", length);
                 let length: U256 = length.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 length.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
             }
+
             let revert_message = b"QueryAccount.length failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
-            debug_print!("query_account get lamports {}", account_address);
+            debug_print!("query_account.lamports({})", account_address);
+
             if let Some(lamports) = state.query_solana_account().lamports(&account_address) {
-                debug_print!("query_account lamports result: {}", lamports);
+                debug_print!("query_account.lamports -> {}", lamports);
                 let lamports: U256 = lamports.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 lamports.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
             }
+
             let revert_message = b"QueryAccount.lamports failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
-            debug_print!("query_account get executable {}", account_address);
+            debug_print!("query_account.executable({})", account_address);
+
             if let Some(executable) = state.query_solana_account().executable(&account_address) {
-                debug_print!("query_account executable result: {}", executable);
+                debug_print!("query_account.executable -> {}", executable);
                 let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 executable.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
             }
+
             let revert_message = b"QueryAccount.executable failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
-            debug_print!("query_account get rent_epoch {}", account_address);
+            debug_print!("query_account.rent_epoch({})", account_address);
+
             if let Some(rent_epoch) = state.query_solana_account().rent_epoch(&account_address) {
-                debug_print!("query_account rent_epoch result: {}", rent_epoch);
+                debug_print!("query_account.rent_epoch -> {}", rent_epoch);
                 let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 rent_epoch.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
             }
+
             let revert_message = b"QueryAccount.rent_epoch failed".to_vec();
             Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
-            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes
-            let (offset, rest) = rest.split_at(32);
-            let (length, _) = rest.split_at(32);
+            let arguments = array_ref![rest, 0, 64];
+            let (offset, length) = array_refs!(arguments, 32, 32);
             let offset = U256::from_big_endian_fast(offset).as_usize();
             let length = U256::from_big_endian_fast(length).as_usize();
-            debug_print!("query_account get data {} {} {}", account_address, offset, length);
+            debug_print!("query_account.data({}, {}, {})", account_address, offset, length);
+
             match state.query_solana_account().data(&account_address, offset, length) {
                 Ok(data) => {
-                    debug_print!("query_account data result: {:?}", data);
+                    debug_print!("query_account.data got {} bytes", length);
                     Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data))
                 },
                 Err(err) => {
-                    let revert_message = format!("QueryAccount.data failed: {:?}", err).as_bytes().to_vec();
+                    let revert_message = format!("QueryAccount.data failed: {}", err).as_bytes().to_vec();
                     Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
                 },
             }

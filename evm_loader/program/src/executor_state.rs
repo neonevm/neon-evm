@@ -173,6 +173,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
+    query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -196,6 +197,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         }
     }
 
@@ -292,6 +294,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -722,7 +725,6 @@ impl ExecutorSubstate {
 pub struct ExecutorState<'a, B: AccountStorage> {
     backend: &'a B,
     substate: Box<ExecutorSubstate>,
-    query_account_cache: query::AccountCache,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -1075,7 +1077,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             None => Err(query::Error::AccountNotFound),
             Some(value) => {
                 if value.has_data() {
-                    self.query_account_cache.put(address, value);
+                    self.substate.query_account_cache.put(address, value);
                     Ok(())
                 } else {
                     Err(query::Error::InvalidArgument)
@@ -1086,7 +1088,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
     #[must_use]
     pub fn query_solana_account(&self) -> &query::AccountCache {
-        &self.query_account_cache
+        &self.substate.query_account_cache
     }
 
     #[must_use]
@@ -1100,11 +1102,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
-        Self {
-            backend,
-            substate,
-            query_account_cache: query::AccountCache::new(),
-        }
+        Self { backend, substate }
     }
 
     #[must_use]
