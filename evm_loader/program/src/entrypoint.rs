@@ -791,16 +791,8 @@ fn process_instruction<'a>(
             (&mut data[valids_begin..valids_end]).copy_from_slice(&valids);
 
             Ok(())
-        }
-
-        EvmInstruction::Write |
-        EvmInstruction::Cancel |
-        EvmInstruction::Finalise |
-        EvmInstruction::CreateAccountWithSeed |
-        EvmInstruction::ExecuteTrxFromAccountDataIterative |
-        EvmInstruction::PartialCallFromRawEthereumTX |
-        EvmInstruction::Continue
-        => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+        },
+        _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());

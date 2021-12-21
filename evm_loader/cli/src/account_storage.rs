@@ -202,7 +202,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         if let Some(acc) = config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::processed()).unwrap().value {
             eprintln!("Account found");
             eprintln!("Account data len {}", acc.data.len());
-            eprintln!("Account owner {}", acc.owner.to_string());
+            eprintln!("Account owner {}", acc.owner);
 
             let account_data = match AccountData::unpack(&acc.data) {
                 Ok(acc_data) => match acc_data {
@@ -220,14 +220,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 eprintln!("account key:  {}", &solana_address.to_string());
                 eprintln!("code account: {}", &account_data.code_account.to_string());
 
-                if let Some(acc) = config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::processed()).unwrap().value {
-                    eprintln!("Account found");
-                    Some(acc)
-                }
-                else {
-                    eprintln!("Account not found");
-                    None
-                }
+                config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::processed()).unwrap().value
             };
             let token_amount = config.rpc_client.get_token_account_balance_with_commitment(&account_data.eth_token_account, CommitmentConfig::processed()).unwrap().value;
             let balance = token_amount.amount.parse::<u64>().unwrap();
