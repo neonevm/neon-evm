@@ -764,11 +764,11 @@ fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
     Ok(storage)
 }
 
-fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
+fn get_collateral_pool_account_and_index(config: &Config, collateral_pool_base: &Pubkey) -> (Pubkey, u32) {
     let collateral_pool_index = 2;
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
-        &collateral_pool_base::id(),
+        collateral_pool_base,
         &seed,
         &config.evm_loader).unwrap();
 
@@ -878,7 +878,8 @@ fn generate_random_holder_seed() -> (u64, String) {
 fn command_deploy(
     config: &Config,
     program_location: &str,
-    token_mint: &Pubkey
+    token_mint: &Pubkey,
+    collateral_pool_base: &Pubkey
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
@@ -937,7 +938,7 @@ fn command_deploy(
     // Create storage account if not exists
     let storage = create_storage_account(config)?;
 
-    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config);
+    let (collateral_pool_acc, collateral_pool_index) = get_collateral_pool_account_and_index(config, collateral_pool_base);
 
     let accounts = vec![
                         AccountMeta::new(storage, false),
@@ -1623,7 +1624,16 @@ fn main() {
                         .takes_value(true)
                         .global(true)
                         .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
+                        .help("Neon token public key")
+                )
+                .arg(
+                    Arg::with_name("collateral_pool_base")
+                        .long("collateral_pool_base")
+                        .value_name("COLLATERAL_POOL_BASE")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Collateral_pool_base public key")
                 )
         )
         .subcommand(
@@ -1786,7 +1796,6 @@ fn main() {
 
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        println!("token_mint value is read from evm_loader data");
                         let elf_params = read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
@@ -1806,7 +1815,6 @@ fn main() {
 
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        println!("token_mint value is read from evm_loader data");
                         let elf_params = read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
@@ -1819,11 +1827,16 @@ fn main() {
 
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        println!("token_mint value is read from evm_loader data");
                         let elf_params = read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-                command_deploy(&config, &program_location, &token_mint)
+
+                let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
+                    .unwrap_or_else(|| {
+                        let elf_params = read_elf_parameters_from_account(&config).unwrap();
+                        Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
+                    });
+                command_deploy(&config, &program_location, &token_mint, &collateral_pool_base)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
@@ -1837,7 +1850,6 @@ fn main() {
 
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        println!("token_mint value is read from evm_loader data");
                         let elf_params = read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
