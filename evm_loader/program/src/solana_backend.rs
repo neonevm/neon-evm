@@ -6,7 +6,7 @@ use crate::{
     token::{get_token_account_data, get_token_mint_data},
     utils::keccak256_h256,
 };
-use evm::{backend::Basic, H160, H256, U256};
+use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     clock::Epoch,
@@ -64,6 +64,8 @@ pub trait AccountStorage {
     fn contract(&self) -> H160;
     /// Get caller address
     fn origin(&self) -> H160;
+    /// Get account balance
+    fn balance(&self, address: &H160) -> U256;
     /// Get block number
     fn block_number(&self) -> U256;
     /// Get block timestamp
@@ -131,16 +133,15 @@ pub trait AccountStorage {
         self.apply_to_account(address, || false, |_| true)
     }
 
-    /// Get account basic info (balance and nonce)
-    fn basic(&self, address: &H160) -> Basic {
-        self.apply_to_account(
+    /// Get account nonce
+    fn nonce(&self, address: &H160) -> U256 {
+        let nonce = self.apply_to_account(
             address,
-            || Basic {
-                balance: U256::zero(),
-                nonce: U256::zero(),
-            },
-            |account| account.basic(),
-        )
+            || 0_u64,
+            |account| account.get_nonce(),
+        );
+
+        U256::from(nonce)
     }
 
     /// Get code hash

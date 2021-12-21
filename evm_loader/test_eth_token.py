@@ -66,7 +66,11 @@ class EthTokenTest(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            evm_instruction
+            evm_instruction,
+            add_meta=[
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            ]
         )
         print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
         return neon_evm_instr_19_partial_call
@@ -81,7 +85,11 @@ class EthTokenTest(unittest.TestCase):
             self.re_code,
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
-            step_count
+            step_count,
+            add_meta=[
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            ]
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue

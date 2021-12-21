@@ -150,7 +150,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     let token_mint = Pubkey::new(token_mint);
 
     let (method_id, rest) = rest.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     match method_id {
         ERC20_METHOD_DECIMALS_ID => {
@@ -308,7 +308,7 @@ pub fn query_account<'a, B: AccountStorage>(
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
     let (method_id, rest) = input.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
     let (account_address, rest) = rest.split_at(32);
     let account_address = Pubkey::new(account_address);
 
@@ -354,7 +354,7 @@ pub fn query_account<'a, B: AccountStorage>(
             let executable = state.query_solana_account_executable(account_address);
             if let Some(executable) = executable {
                 debug_print!("query_account executable result: {}", executable);
-                let executable: U256 = (executable as u8).into(); // pad to 32 bytes
+                let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
                 let mut bytes = vec![0_u8; 32];
                 executable.into_big_endian_fast(&mut bytes);
                 return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
