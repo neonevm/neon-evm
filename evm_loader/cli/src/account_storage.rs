@@ -192,7 +192,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             caller_id,
             block_number: slot,
             block_timestamp: timestamp,
-            token_mint: token_mint
+            token_mint
         }
     }
 

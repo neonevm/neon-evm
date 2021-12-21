@@ -1279,10 +1279,9 @@ fn read_program_data_from_file(config: &Config,
 }
 
 
-fn read_program_data_from_account(config: &Config) -> CommandResult {
+fn read_program_data_from_account(config: &Config) {
     let elf_params = read_elf_parameters_from_account(config).unwrap();
     print_elf_parameters(&elf_params);
-    Ok(())
 }
 
 
@@ -1291,7 +1290,7 @@ fn command_neon_elf(
     program_location: Option<&str>,
 ) -> CommandResult {
     program_location.map_or_else(
-        || read_program_data_from_account(config),
+        || {read_program_data_from_account(config); Ok(())},
         |program_location| read_program_data_from_file(config, program_location),
     )
 }
