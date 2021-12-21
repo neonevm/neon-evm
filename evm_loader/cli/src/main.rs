@@ -517,6 +517,7 @@ fn make_deploy_ethereum_transaction(
     trx_count: u64,
     program_data: &[u8],
     caller_private: &SecretKey,
+    chain_id: u64
 ) -> Vec<u8> {
     let rlp_data = {
         let tx = UnsignedTransaction {
@@ -526,7 +527,7 @@ fn make_deploy_ethereum_transaction(
             gas_price: 0.into(),
             value: 0.into(),
             data: program_data.to_owned(),
-            chain_id: 111.into(), // Will fixed in #61 issue
+            chain_id: chain_id.into(),
         };
 
         rlp::encode(&tx).to_vec()
@@ -879,7 +880,8 @@ fn command_deploy(
     config: &Config,
     program_location: &str,
     token_mint: &Pubkey,
-    collateral_pool_base: &Pubkey
+    collateral_pool_base: &Pubkey,
+    chain_id: u64
 ) -> CommandResult {
     let creator = &config.signer;
     let program_data = read_program_data(program_location)?;
@@ -927,7 +929,7 @@ fn command_deploy(
     )?;
 
     // Create transaction prepared for execution from account
-    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
+    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth, chain_id);
 
     // Create holder account (if not exists)
     let (holder_id, holder_seed) = generate_random_holder_seed();
@@ -1635,6 +1637,14 @@ fn main() {
                         .validator(is_valid_pubkey)
                         .help("Collateral_pool_base public key")
                 )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
+                )
         )
         .subcommand(
             SubCommand::with_name("get-ether-account-data")
@@ -1825,18 +1835,30 @@ fn main() {
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
+                let mut elf_params : HashMap<String,String> = HashMap::new();
+
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        let elf_params = read_elf_parameters_from_account(&config).unwrap();
+                        elf_params = read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
 
                 let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
                     .unwrap_or_else(|| {
-                        let elf_params = read_elf_parameters_from_account(&config).unwrap();
+                        if elf_params.is_empty(){
+                            elf_params = read_elf_parameters_from_account(&config).unwrap();
+                        }
                         Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
                     });
-                command_deploy(&config, &program_location, &token_mint, &collateral_pool_base)
+
+                let chain_id = value_of(arg_matches, "chain_id")
+                    .unwrap_or_else(|| {
+                        if elf_params.is_empty(){
+                            elf_params = read_elf_parameters_from_account(&config).unwrap();
+                        }
+                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
+                    });
+                command_deploy(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
