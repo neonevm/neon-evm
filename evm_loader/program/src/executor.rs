@@ -189,7 +189,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         }
 
         let value = token::eth::round(value);
-        if self.balance(caller) < value {
+        if !value.is_zero() && (self.balance(caller) < value) {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
 
@@ -564,16 +564,16 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
-        let return_value = exited_runtime.machine().return_value();
 
         if reason.is_succeed() {
             match CONFIG.create_contract_limit {
-                Some(limit) if return_value.len() > limit => {
+                Some(limit) if exited_runtime.machine().return_value_len() > limit => {
                     self.executor.state.exit_discard().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
                     reason = ExitError::CreateContractLimit.into();
                 },
                 _ => {
                     self.executor.state.exit_commit().map_err(|e| (Vec::new(), ExitReason::from(e)))?;
+                    let return_value = exited_runtime.machine().return_value();
                     self.executor.state.set_code(address, return_value);
                 }
             };
@@ -581,8 +581,15 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
-            None => return Err((Vec::new(), reason))
+            None => return match reason {
+                ExitReason::Revert(_) => {
+                    let return_value = exited_runtime.machine().return_value();
+                    Err((return_value, reason))
+                },
+                _ => Err((Vec::<u8>::new(), reason))
+            }
         };
+
         match save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
             Control::Exit(reason) => Err((Vec::new(), reason)),
