@@ -213,9 +213,10 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
+            let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
 
             storage.apply(applies);
+            storage.apply_transfers(transfers);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
@@ -320,7 +321,7 @@ fn command_create_ether_account (
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
         "nonce": nonce,
-    }).to_string());
+    }));
 
     Ok(())
 }
@@ -625,13 +626,11 @@ fn get_ether_account_nonce(
     config: &Config,
     caller_sol: &Pubkey
 ) -> Result<(u64, H160, Pubkey), Error> {
-    let data : Vec<u8>;
-    match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
-        Some(acc) =>   data = acc.data,
+    let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
+        Some(acc) => acc.data,
         None => return Ok((u64::default(), H160::default(), Pubkey::default()))
-    }
+    };
 
-    let trx_count : u64;
     debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
@@ -641,7 +640,7 @@ fn get_ether_account_nonce(
         },
         Err(_) => return Err("Caller unpack error".into())
     };
-    trx_count = account.trx_count;
+    let trx_count = account.trx_count;
     let caller_ether = account.ether;
     let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
 
@@ -995,7 +994,7 @@ fn command_deploy(
         "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
-    }).to_string());
+    }));
     Ok(())
 }
 
@@ -1068,7 +1067,7 @@ fn command_get_storage_at(
     index: &U256
 ) -> CommandResult {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
-        Some((acc, balance, code_account)) => {
+        Some((acc, _balance, code_account)) => {
             let account_data = AccountData::unpack(&acc.data)?;
             let mut code_data = match code_account.as_ref() {
                 Some(code) => code.data.clone(),
@@ -1077,7 +1076,7 @@ fn command_get_storage_at(
             let contract_data = AccountData::unpack(&code_data)?;
             let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-            let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
+            let solidity_account = SolidityAccount::new(&solana_address, account_data,
                                                         Some((contract_data, code_data)));
             let value = solidity_account.get_storage(index);
             print!("{:#x}", value);
@@ -1096,15 +1095,15 @@ fn command_cancel_trx(
     let storage = config.rpc_client.get_account_with_commitment(storage_account, CommitmentConfig::processed()).unwrap().value;
 
     if let Some(acc) = storage {
-        let keys:Vec<Pubkey> = {
-            if acc.owner != config.evm_loader {
-                return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
-            }
-            let data = AccountData::unpack(&acc.data)?;
-            let data_end = data.size();
-            let storage = if let AccountData::Storage(storage) = data {storage}
-                    else {return Err("Not storage account".to_string().into());};
+        if acc.owner != config.evm_loader {
+            return Err(format!("Invalid owner {} for storage account", acc.owner).into());
+        }
+        let data = AccountData::unpack(&acc.data)?;
+        let data_end = data.size();
+        let storage = if let AccountData::Storage(storage) = data {storage}
+                else {return Err("Not storage account".to_string().into());};
 
+        let keys: Vec<Pubkey> = {
             println!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
@@ -1112,10 +1111,11 @@ fn command_cancel_trx(
                 return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
             };
 
-            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect()
+            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(Pubkey::new).collect()
         };
 
-        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &keys[3])?;
+        let (caller_solana, _) = make_solana_program_address(&storage.caller, &config.evm_loader);
+        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &caller_solana)?;
 
         let operator = &config.signer.pubkey();
         let operator_token = spl_associated_token_account::get_associated_token_address(operator, &token_mint::id());
