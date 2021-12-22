@@ -10,6 +10,14 @@ solana config set -u "$SOLANA_URL"
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
 export $(neon-cli --evm_loader="$EVM_LOADER" neon-elf-params ./evm_loader.so)
 
+
+echo "Deploying evm_loader at address $EVM_LOADER..."
+if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
+  echo "Failed to deploy evm_loader"
+  exit 1
+fi
+
+
 export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair.json)
 if [ "$ETH_TOKEN_MINT" != "$NEON_TOKEN_MINT" ]; then
   echo "Token address in evm_loader.so is $NEON_TOKEN_MINT"
@@ -39,9 +47,3 @@ fi
 echo "Creating collateral pool $NEON_POOL_BASE..."
 solana -k collateral-pool-keypair.json airdrop 1000
 python3 collateral_pool_generator.py collateral-pool-keypair.json
-
-echo "Deploying evm_loader at address $EVM_LOADER..."
-if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
-  echo "Failed to deploy evm_loader"
-  exit 1
-fi
