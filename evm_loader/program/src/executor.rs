@@ -447,7 +447,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         event!(TransactCall {
             caller,
             address: code_address,
-            value: U256::default(), // TODO
+            value: transfer_value,
             data: &input,
             gas_limit,
         });
