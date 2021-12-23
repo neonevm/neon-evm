@@ -545,7 +545,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
-    fn run(&mut self, _max_steps: u64) -> (u64, RuntimeApply) {
+    #[cfg(feature = "tracing")]
+    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
             None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
@@ -553,6 +554,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
         let mut steps_executed = 0;
         loop {
+            if steps_executed >= max_steps {
+                    return (steps_executed, RuntimeApply::Continue);
+            }
             if let Err(capture) = runtime.step(&mut self.executor) {
                 return match capture {
                     Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
@@ -572,6 +576,32 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 };
             }
             steps_executed += 1;
+        }
+    }
+
+    #[cfg(not(feature = "tracing"))]
+    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
+        };
+
+        let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
+        match capture {
+            Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
+            Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
+            Capture::Trap(interrupt) => {
+                match interrupt {
+                    Resolve::Call(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Call(interrupt))
+                    },
+                    Resolve::Create(interrupt, resolve) => {
+                        mem::forget(resolve);
+                        (steps_executed, RuntimeApply::Create(interrupt))
+                    },
+                }
+            }
         }
     }
 
