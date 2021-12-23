@@ -6,10 +6,12 @@ use crate::utils::keccak256_digest;
 use arrayref::{array_ref, array_refs};
 use core::convert::Infallible;
 use evm::{Capture, ExitReason, H160, U256};
+use solana_program::pubkey::Pubkey;
 use solana_program::secp256k1_recover::secp256k1_recover;
 use std::convert::{TryInto};
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -19,7 +21,6 @@ const SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
 const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
-
 
 const GAS_COST_ECRECOVER: u64 = 3000;
 const GAS_COST_SHA256_BASE: u64 = 60;
@@ -53,6 +54,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+        || *address == SYSTEM_ACCOUNT_QUERY
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -76,6 +78,9 @@ pub fn call_precompile<'a, B: AccountStorage>(
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
         return Some(erc20_wrapper(input, context, state));
+    }
+    if address == SYSTEM_ACCOUNT_QUERY {
+        return Some(query_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -139,15 +144,13 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    use solana_program::pubkey::Pubkey;
-
     debug_print!("erc20_wrapper({})", hex::encode(&input));
 
     let (token_mint, rest) = input.split_at(32);
     let token_mint = Pubkey::new(token_mint);
 
     let (method_id, rest) = rest.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     match method_id {
         ERC20_METHOD_DECIMALS_ID => {
@@ -192,7 +195,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
 
-            let status = state.erc20_transfer(token_mint, context,address, value);
+            let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
                 let revert_message = b"ERC20 transfer failed".to_vec();
                 return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
@@ -279,6 +282,120 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     }
 }
 
+// QueryAccount method ids:
+//------------------------------------------
+// owner(uint256)              => 0xa123c33e
+// length(uint256)             => 0xaa8b99d2
+// lamports(uint256)           => 0x748f2d8a
+// executable(uint256)         => 0xc219a785
+// rent_epoch(uint256)         => 0xc4d369b5
+// data(uint256,uint64,uint64) => 0x43ca5161
+//------------------------------------------
+
+const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
+const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
+const QUERY_ACCOUNT_METHOD_LAMPORTS_ID: &[u8; 4] = &[0x74, 0x8f, 0x2d, 0x8a];
+const QUERY_ACCOUNT_METHOD_EXECUTABLE_ID: &[u8; 4] = &[0xc2, 0x19, 0xa7, 0x85];
+const QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID: &[u8; 4] = &[0xc4, 0xd3, 0x69, 0xb5];
+const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
+
+/// Call inner `query_account`
+#[must_use]
+pub fn query_account<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    let (method_id, rest) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+    let (account_address, rest) = rest.split_at(32);
+    let account_address = Pubkey::new(account_address);
+
+    match method_id {
+        QUERY_ACCOUNT_METHOD_OWNER_ID => {
+            debug_print!("query_account get owner {}", account_address);
+            let owner = state.query_solana_account_owner(account_address);
+            if let Some(owner) = owner {
+                debug_print!("query_account owner result: {}", owner);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
+            }
+            let revert_message = b"QueryAccount.owner failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_LENGTH_ID => {
+            debug_print!("query_account get length {}", account_address);
+            let length = state.query_solana_account_length(account_address);
+            if let Some(length) = length {
+                debug_print!("query_account length result: {}", length);
+                let length: U256 = length.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                length.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
+            let revert_message = b"QueryAccount.length failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
+            debug_print!("query_account get lamports {}", account_address);
+            let lamports = state.query_solana_account_lamports(account_address);
+            if let Some(lamports) = lamports {
+                debug_print!("query_account lamports result: {}", lamports);
+                let lamports: U256 = lamports.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                lamports.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
+            let revert_message = b"QueryAccount.lamports failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
+            debug_print!("query_account get executable {}", account_address);
+            let executable = state.query_solana_account_executable(account_address);
+            if let Some(executable) = executable {
+                debug_print!("query_account executable result: {}", executable);
+                let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                executable.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
+            let revert_message = b"QueryAccount.executable failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
+            debug_print!("query_account get rent_epoch {}", account_address);
+            let rent_epoch = state.query_solana_account_rent_epoch(account_address);
+            if let Some(rent_epoch) = rent_epoch {
+                debug_print!("query_account rent_epoch result: {}", rent_epoch);
+                let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
+                let mut bytes = vec![0_u8; 32];
+                rent_epoch.into_big_endian_fast(&mut bytes);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            }
+            let revert_message = b"QueryAccount.rent_epoch failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_DATA_ID => {
+            // Note: abi.encodeWithSignature makes parameters padded to 32 bytes
+            let (offset, rest) = rest.split_at(32);
+            let (length, _) = rest.split_at(32);
+            let offset = U256::from_big_endian_fast(offset).as_usize();
+            let length = U256::from_big_endian_fast(length).as_usize();
+            debug_print!("query_account get data {} {} {}", account_address, offset, length);
+            let data = state.query_solana_account_data(account_address, offset, length);
+            if let Some(data) = data {
+                debug_print!("query_account data result: {:?}", data);
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data));
+            }
+            let revert_message = b"QueryAccount data failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        _ => {
+            debug_print!("query_account UNKNOWN {:?}", method_id);
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
+}
 
 /// Call inner `ecrecover`
 #[must_use]

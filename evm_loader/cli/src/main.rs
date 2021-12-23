@@ -37,6 +37,9 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
+    account_utils::StateMut,
+    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
 };
 use serde_json::json;
 use std::{
@@ -57,7 +60,7 @@ use std::{
 };
 
 use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
+    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
     ArgMatches, SubCommand,
 };
 
@@ -120,6 +123,7 @@ pub struct Config {
     // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
     keypair: Option<Keypair>,
+    commitment: CommitmentConfig,
 }
 
 impl Debug for Config {
@@ -209,9 +213,10 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs, _transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
-    
+            let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
+
             storage.apply(applies);
+            storage.apply_transfers(transfers);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
@@ -316,7 +321,7 @@ fn command_create_ether_account (
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
         "nonce": nonce,
-    }).to_string());
+    }));
 
     Ok(())
 }
@@ -618,16 +623,14 @@ fn fill_holder_account(
 // }
 
 fn get_ether_account_nonce(
-    config: &Config, 
+    config: &Config,
     caller_sol: &Pubkey
 ) -> Result<(u64, H160, Pubkey), Error> {
-    let data : Vec<u8>;
-    match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
-        Some(acc) =>   data = acc.data,
+    let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
+        Some(acc) => acc.data,
         None => return Ok((u64::default(), H160::default(), Pubkey::default()))
-    }
+    };
 
-    let trx_count : u64;
     debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
@@ -637,7 +640,7 @@ fn get_ether_account_nonce(
         },
         Err(_) => return Err("Caller unpack error".into())
     };
-    trx_count = account.trx_count;
+    let trx_count = account.trx_count;
     let caller_ether = account.ether;
     let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &token_mint::id());
 
@@ -660,7 +663,7 @@ fn get_program_ether(
 }
 
 fn get_ethereum_contract_account_credentials(
-    config: &Config, 
+    config: &Config,
     caller_ether: &H160,
     trx_count: u64,
 ) -> (Pubkey, H160, u8, Pubkey, Pubkey, String) {
@@ -715,12 +718,12 @@ fn create_ethereum_contract_accounts_in_solana(
 
     let instructions = vec![
         system_instruction::create_account_with_seed(
-            &creator.pubkey(), 
-            program_code, 
-            &creator.pubkey(), 
-            program_seed, 
-            minimum_balance_for_code, 
-            program_code_acc_len as u64, 
+            &creator.pubkey(),
+            program_code,
+            &creator.pubkey(),
+            program_seed,
+            minimum_balance_for_code,
+            program_code_acc_len as u64,
             &config.evm_loader
         ),
         Instruction::new_with_bincode(
@@ -758,7 +761,7 @@ fn get_collateral_pool_account_and_index(config: &Config) -> (Pubkey, u32) {
     let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
     let collateral_pool_account = Pubkey::create_with_seed(
         &collateral_pool_base::id(),
-        &seed, 
+        &seed,
         &config.evm_loader).unwrap();
 
     (collateral_pool_account, collateral_pool_index)
@@ -793,10 +796,10 @@ fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransactio
 }
 
 fn create_account_with_seed(
-    config: &Config, 
-    funding: &Pubkey, 
-    base: &Pubkey, 
-    seed: &str, 
+    config: &Config,
+    funding: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
     len: u64
 ) -> Result<Pubkey, Error> {
     let created_account = Pubkey::create_with_seed(base, seed, &config.evm_loader).unwrap();
@@ -822,7 +825,7 @@ fn create_account_with_seed(
 }
 
 fn send_transaction(
-    config: &Config, 
+    config: &Config,
     instructions: &[Instruction]
 ) -> Result<Signature, Error> {
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
@@ -967,9 +970,9 @@ fn command_deploy(
                                                                  continue_accounts);
         let signature = send_transaction(config, &[continue_instruction])?;
 
-        // Check if Continue returned some result 
+        // Check if Continue returned some result
         let result = config.rpc_client.get_transaction_with_config(
-            &signature, 
+            &signature,
             RpcTransactionConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
                 encoding: Some(UiTransactionEncoding::Json),
@@ -991,7 +994,7 @@ fn command_deploy(
         "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
-    }).to_string());
+    }));
     Ok(())
 }
 
@@ -1007,7 +1010,7 @@ fn command_get_ether_account_data (
 
             println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);
-    
+
             println!("Account fields");
             println!("    ether: {}", &account_data.ether);
             println!("    nonce: {}", &account_data.nonce);
@@ -1024,7 +1027,7 @@ fn command_get_ether_account_data (
             );
             println!("    token_account: {}", &account_data.eth_token_account);
             println!("    token_amount: {}", &balance);
-        
+
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
                 let header = AccountData::size(&code_data);
@@ -1034,7 +1037,7 @@ fn command_get_ether_account_data (
                 println!("    owner: {}", &code_data.owner);
                 println!("    code_size: {}", &code_data.code_size);
                 println!("    code as hex:");
-    
+
                 let code_size = code_data.code_size;
                 let mut offset = header;
                 while offset < ( code_size as usize + header) {
@@ -1044,7 +1047,7 @@ fn command_get_ether_account_data (
                     } else {
                         code_size as usize + header - offset
                     };
-    
+
                     println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
                     offset += remains;
                 }
@@ -1064,7 +1067,7 @@ fn command_get_storage_at(
     index: &U256
 ) -> CommandResult {
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
-        Some((acc, balance, code_account)) => {
+        Some((acc, _balance, code_account)) => {
             let account_data = AccountData::unpack(&acc.data)?;
             let mut code_data = match code_account.as_ref() {
                 Some(code) => code.data.clone(),
@@ -1073,7 +1076,7 @@ fn command_get_storage_at(
             let contract_data = AccountData::unpack(&code_data)?;
             let (solana_address, _solana_nonce) = make_solana_program_address(ether_address, &config.evm_loader);
             let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-            let solidity_account = SolidityAccount::new(&solana_address, balance, account_data,
+            let solidity_account = SolidityAccount::new(&solana_address, account_data,
                                                         Some((contract_data, code_data)));
             let value = solidity_account.get_storage(index);
             print!("{:#x}", value);
@@ -1092,15 +1095,15 @@ fn command_cancel_trx(
     let storage = config.rpc_client.get_account_with_commitment(storage_account, CommitmentConfig::processed()).unwrap().value;
 
     if let Some(acc) = storage {
-        let keys:Vec<Pubkey> = {
-            if acc.owner != config.evm_loader {
-                return Err(format!("Invalid owner {} for storage account", acc.owner.to_string()).into());
-            }
-            let data = AccountData::unpack(&acc.data)?;
-            let data_end = data.size();
-            let storage = if let AccountData::Storage(storage) = data {storage}
-                    else {return Err("Not storage account".to_string().into());};
-    
+        if acc.owner != config.evm_loader {
+            return Err(format!("Invalid owner {} for storage account", acc.owner).into());
+        }
+        let data = AccountData::unpack(&acc.data)?;
+        let data_end = data.size();
+        let storage = if let AccountData::Storage(storage) = data {storage}
+                else {return Err("Not storage account".to_string().into());};
+
+        let keys: Vec<Pubkey> = {
             println!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
@@ -1108,10 +1111,11 @@ fn command_cancel_trx(
                 return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
             };
 
-            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(|c| Pubkey::new(c)).collect()
+            acc.data[accounts_begin..accounts_end].chunks_exact(32).map(Pubkey::new).collect()
         };
 
-        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &keys[3])?;
+        let (caller_solana, _) = make_solana_program_address(&storage.caller, &config.evm_loader);
+        let (trx_count, _caller_ether, caller_token) = get_ether_account_nonce(config, &caller_solana)?;
 
         let operator = &config.signer.pubkey();
         let operator_token = spl_associated_token_account::get_associated_token_address(operator, &token_mint::id());
@@ -1157,7 +1161,7 @@ fn command_cancel_trx(
         for meta in &accounts_meta {
             println!("\t{:?}", meta);
         }
-        
+
         let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
         send_transaction(config, &[instruction])?;
 
@@ -1167,12 +1171,10 @@ fn command_cancel_trx(
     Ok(())
 }
 
-fn command_neon_elf(
+fn read_elf_parameters(
     _config: &Config,
-    program_location: &str,
+    program_data: &[u8],
 ) {
-    let program_data = read_program_data(program_location).unwrap();
-    let program_data = &program_data[..];
     let elf = goblin::elf::Elf::parse(program_data).expect("Unable to parse ELF file");
     elf.dynsyms.iter().for_each(|sym| {
         let name = String::from(&elf.dynstrtab[sym.st_name]);
@@ -1191,6 +1193,74 @@ fn command_neon_elf(
             }
         }
     });
+}
+
+fn read_program_data_from_file(config: &Config,
+                               program_location: &str) -> CommandResult {
+    let program_data = read_program_data(program_location)?;
+    let program_data = &program_data[..];
+    read_elf_parameters(config, program_data);
+    Ok(())
+}
+
+fn read_program_data_from_account(config: &Config) -> CommandResult {
+    let account = config.rpc_client
+        .get_account_with_commitment(&config.evm_loader, config.commitment)?
+        .value.ok_or(format!("Unable to find the account {}", &config.evm_loader))?;
+
+    if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+        read_elf_parameters(config, &account.data);
+        Ok(())
+    } else if account.owner == bpf_loader_upgradeable::id() {
+        if let Ok(UpgradeableLoaderState::Program {
+                      programdata_address,
+                  }) = account.state()
+        {
+            let programdata_account = config.rpc_client
+                .get_account_with_commitment(&programdata_address, config.commitment)?
+                .value.ok_or(format!(
+                "Failed to find associated ProgramData account {} for the program {}",
+                programdata_address, &config.evm_loader))?;
+
+            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
+                let offset =
+                    UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                let program_data = &programdata_account.data[offset..];
+                read_elf_parameters(config, program_data);
+                Ok(())
+            } else {
+                Err(
+                    format!("Invalid associated ProgramData account {} found for the program {}",
+                            programdata_address, &config.evm_loader)
+                        .into(),
+                )
+            }
+
+        } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+            let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+            let program_data = &account.data[offset..];
+            read_elf_parameters(config, program_data);
+            Ok(())
+        } else {
+            Err(format!(
+                "{} is not an upgradeble loader buffer or program account",
+                &config.evm_loader
+            )
+                .into())
+        }
+    } else {
+        Err(format!("{} is not a BPF program", &config.evm_loader).into())
+    }
+}
+
+fn command_neon_elf(
+    config: &Config,
+    program_location: Option<&str>,
+) -> CommandResult {
+    program_location.map_or_else(
+        || read_program_data_from_account(config),
+        |program_location| read_program_data_from_file(config, program_location),
+    )
 }
 
 fn command_update_valids_table(
@@ -1235,7 +1305,7 @@ fn command_update_valids_table(
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
-    } else {        
+    } else {
         in_str
     }
 }
@@ -1323,11 +1393,22 @@ fn is_amount_u256<T>(amount: T) -> Result<(), String>
     }
 }
 
+macro_rules! neon_cli_pkg_version {
+    () => ( env!("CARGO_PKG_VERSION") )
+}
+macro_rules! neon_cli_revision {
+    () => ( env!("NEON_REVISION") )
+}
+macro_rules! version_string {
+    () => ( concat!("Neon-cli/v", neon_cli_pkg_version!(), "-", neon_cli_revision!()) )
+}
+
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(version_string!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -1337,7 +1418,7 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-                
+
             #[allow(clippy::option_if_let_else)]
             if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(config_file)
@@ -1522,7 +1603,7 @@ fn main() {
                         .index(1)
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
-                        .required(true)
+                        .required(false)
                         .help("/path/to/evm_loader.so"),
                 )
         )
@@ -1573,7 +1654,7 @@ fn main() {
         let mut wallet_manager = None;
         let config = {
             let cli_config = app_matches.value_of("config_file").map_or_else(
-                solana_cli_config::Config::default, 
+                solana_cli_config::Config::default,
                 |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
             );
 
@@ -1625,6 +1706,7 @@ fn main() {
                 // fee_payer,
                 signer,
                 keypair,
+                commitment,
             }
         };
 
@@ -1666,15 +1748,13 @@ fn main() {
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
-                
+
                 command_cancel_trx(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
-                let program_location = arg_matches.value_of("program_location").unwrap().to_string();
+                let program_location = arg_matches.value_of("program_location");
 
-                command_neon_elf(&config, &program_location);
-
-                Ok(())
+                command_neon_elf(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();

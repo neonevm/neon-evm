@@ -112,6 +112,11 @@ cfg_if! {
                 "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
                 "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
                 "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
+                "2GDfarSJnNC6ii5tQVE9rBH81Ny35LxrSCZ7tFhktSqi",
+                "4Mh3ik4iS6MBxHy1VBN89vBiiPRDkebtnybDWnfTtpfC",
+                "CyepBgaNezMJgLjy6Zyz9ECUia33dwDi9aXtRsZEhWX1",
+                "HN4FeaSXB8t3FDW85hRw8mK1hYETJGeqhkkxJr6j2GiV",
+                "5kKd1iy6onhCkzDq6DBw6woHLas3fy6HX4Yz8t1VPc1r",
             ]
         );
 
@@ -178,9 +183,9 @@ cfg_if! {
 }
 
 /// `PAYMENT_TO_COLLATERAL_POOL`
-pub const PAYMENT_TO_TREASURE: u64 = 1000;
+pub const PAYMENT_TO_TREASURE: u64 = 5000;
 /// `PAYMENT_TO_DEPOSIT`
-pub const PAYMENT_TO_DEPOSIT: u64 = 1000;
+pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
 

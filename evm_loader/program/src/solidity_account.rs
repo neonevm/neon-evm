@@ -3,16 +3,14 @@ use crate::{
     account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
-    token
 };
-use evm::backend::Basic;
 use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
 };
-use std::cell::RefCell;
+use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
 
@@ -22,7 +20,6 @@ pub struct SolidityAccount<'a> {
     account_data: AccountData,
     solana_address: &'a Pubkey,
     code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>,
-    balance: U256,
 }
 
 impl<'a> SolidityAccount<'a> {
@@ -31,15 +28,12 @@ impl<'a> SolidityAccount<'a> {
     /// ```
     /// let account_data = AccountData::unpack(&caller_info.data.borrow())?;
     /// account_data.get_account()?;
-    /// let caller_acc = SolidityAccount::new(caller_info.key, caller_info.lamports(), account_data, None);
+    /// let caller_acc = SolidityAccount::new(caller_info.key, account_data, None);
     /// ```
     #[must_use]
-    pub fn new(solana_address: &'a Pubkey, balance: u64, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
-        let balance = U256::from(balance);
-        let balance = balance * token::eth::min_transfer_value();
-
-        debug_print!("  SolidityAccount::new solana_address={} balance={}", solana_address, balance);
-        Self{account_data, solana_address, code_data, balance}
+    pub fn new(solana_address: &'a Pubkey, account_data: AccountData, code_data: Option<(AccountData, Rc<RefCell<&'a mut [u8]>>)>) -> Self {
+        debug_print!("  SolidityAccount::new solana_address={}", solana_address);
+        Self{account_data, solana_address, code_data}
     }
 
     /// Get ethereum account address
@@ -56,15 +50,8 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
-    fn code<U, F>(&self, f: F) -> U
+    fn apply_to_code<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
-        /*if let AccountData::Account{code_size,..} = self.account_data {
-            if code_size > 0 {
-                let data = self.account_info.data.borrow();
-                let offset = AccountData::size();
-                return f(&data[offset..offset+code_size as usize])
-            }
-        }*/
         if self.code_data.is_none() {
             return f(&[])
         }
@@ -81,7 +68,7 @@ impl<'a> SolidityAccount<'a> {
         }
     }
 
-    fn valids<U, F>(&self, f: F) -> U
+    fn apply_to_valids<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
         if self.code_data.is_none() {
             return f(&[])
@@ -102,18 +89,8 @@ impl<'a> SolidityAccount<'a> {
         }
     }
 
-    fn storage<U, F>(&self, f: F) -> Result<U, ProgramError>
+    fn apply_to_storage<U, F>(&self, f: F) -> Result<U, ProgramError>
     where F: FnOnce(&mut Hamt) -> U {
-        /*if let AccountData::Account{code_size,..} = self.account_data {
-            if code_size > 0 {
-                let mut data = self.account_info.data.borrow_mut();
-                debug_print!("Storage data borrowed");
-                let offset = AccountData::size() + code_size as usize;
-                let mut hamt = Hamt::new(&mut data[offset..], false)?;
-                return Ok(f(&mut hamt));
-            }
-        }
-        Err!(ProgramError::UninitializedAccount)*/
         if self.code_data.is_none() {
             return Err!(ProgramError::UninitializedAccount)
         }
@@ -135,8 +112,26 @@ impl<'a> SolidityAccount<'a> {
 
     /// Get solana address
     #[must_use]
-    pub const fn get_solana_address(&self) -> Pubkey {
-        *self.solana_address
+    pub const fn get_solana_address(&self) -> &Pubkey {
+        self.solana_address
+    }
+
+    /// Get Neon solana address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
+    pub fn get_neon_token_solana_address(&self) -> &Pubkey {
+        &self.account_data.get_account().unwrap().eth_token_account
+    }
+
+    /// Get Neon solana address
+    /// # Panics
+    ///
+    /// Will panic `account_data` doesn't contain `Account` struct
+    #[must_use]
+    pub fn get_code_solana_address(&self) -> &Pubkey {
+        &self.account_data.get_account().unwrap().code_account
     }
 
     /// Get solana account seeds
@@ -146,48 +141,33 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn get_seeds(&self) -> (H160, u8) { (AccountData::get_account(&self.account_data).unwrap().ether, AccountData::get_account(&self.account_data).unwrap().nonce) }
 
-    /// Get ethereum account basic info
-    /// # Panics
-    ///
-    /// Will panic `account_data` doesn't contain `Account` struct
-    #[must_use]
-    pub fn basic(&self) -> Basic {
-        Basic {
-            balance: self.balance, 
-            nonce: U256::from(AccountData::get_account(&self.account_data).unwrap().trx_count), 
-        }
-    }
-
     /// Get code hash
     #[must_use]
     pub fn code_hash(&self) -> H256 {
-        self.code(|d| {
-            debug_print!("{}", &hex::encode(&d[0..32]));
-            keccak256_h256(d)
-        })
+        self.apply_to_code(keccak256_h256)
     }
 
     /// Get code size
     #[must_use]
     pub fn code_size(&self) -> usize {
-        self.code(|d| d.len())
+        self.apply_to_code(<[u8]>::len)
     }
 
     /// Get code data
     #[must_use]
     pub fn get_code(&self) -> Vec<u8> {
-        self.code(|d| d.into())
+        self.apply_to_code(|code| Vec::from(code))
     }
 
     /// Get code data
     #[must_use]
     pub fn get_valids(&self) -> Vec<u8> {
-        self.valids(|d| d.into())
+        self.apply_to_valids(|valids| Vec::from(valids))
     }
 
     /// Get storage record data
     pub fn get_storage(&self, index: &U256) -> U256 {
-        self.storage(|storage| storage.find(*index))
+        self.apply_to_storage(|storage| storage.find(*index))
             .unwrap_or_default()
             .unwrap_or_else(U256::zero)
     }

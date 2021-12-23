@@ -132,8 +132,6 @@ fn process_instruction<'a>(
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
 
-            authorized_operator_check(funding_info)?;
-
             debug_print!("Ether: {} {}", &(hex::encode(ether)), &hex::encode([nonce]));
 
             if !funding_info.is_signer {
@@ -217,8 +215,6 @@ fn process_instruction<'a>(
             let system_program = next_account_info(account_info_iter)?;
             let token_program = next_account_info(account_info_iter)?;
             let rent = next_account_info(account_info_iter)?;
-
-            authorized_operator_check(payer)?;
 
             if !payer.is_signer {
                 return Err!(ProgramError::InvalidArgument; "!payer.is_signer");
@@ -409,7 +405,7 @@ fn process_instruction<'a>(
                 program_id,
                 &mut account_storage,
                 accounts,
-                Some(operator_sol_info),
+                operator_sol_info,
                 evm_results.unwrap(),
                 used_gas)?;
 
@@ -505,7 +501,7 @@ fn process_instruction<'a>(
 
             let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
 
-            let caller_account_info = account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+            let caller_account_info = account_storage.get_caller_account_info();
             let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
             let mut caller_account = caller_account_data.get_mut_account()?;
 
@@ -678,6 +674,9 @@ fn process_instruction<'a>(
                 return Err!(ProgramError::InvalidAccountData);
             }
 
+            if code_account_new_info.data_len() <= code_account_info.data_len(){
+                return Err!(ProgramError::InvalidAccountData; "new code account size is less than or equal to current code account size");
+            }
 
             let mut account_data = AccountData::unpack(&account_info.try_borrow_data()?)?;
             let account = account_data.get_mut_account()?;
@@ -792,16 +791,8 @@ fn process_instruction<'a>(
             (&mut data[valids_begin..valids_end]).copy_from_slice(&valids);
 
             Ok(())
-        }
-
-        EvmInstruction::Write |
-        EvmInstruction::Cancel |
-        EvmInstruction::Finalise |
-        EvmInstruction::CreateAccountWithSeed |
-        EvmInstruction::ExecuteTrxFromAccountDataIterative |
-        EvmInstruction::PartialCallFromRawEthereumTX |
-        EvmInstruction::Continue
-        => Err!(ProgramError::InvalidInstructionData; "Deprecated instruction"),
+        },
+        _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
@@ -1031,7 +1022,7 @@ fn do_continue_top_level<'a>(
             program_id,
             &mut account_storage,
             accounts,
-            Some(operator_sol_info),
+            operator_sol_info,
             evm_results,
             used_gas)?;
 
@@ -1155,7 +1146,7 @@ fn applies_and_invokes<'a>(
     program_id: &Pubkey,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
-    operator: Option<&AccountInfo<'a>>,
+    operator: &AccountInfo<'a>,
     evm_results: EvmResults,
     used_gas: UsedGas
 ) -> ProgramResult {
@@ -1250,7 +1241,7 @@ fn check_ethereum_transaction(
    transaction: &UnsignedTransaction
 ) -> ProgramResult
 {
-    let sender_account = account_storage.get_caller_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+    let sender_account = account_storage.get_caller_account();
 
     if sender_account.get_ether() != *recovered_address {
         return Err!(ProgramError::InvalidArgument; "Invalid sender: actual {}, recovered {}", sender_account.get_ether(), recovered_address);
@@ -1269,7 +1260,7 @@ fn check_ethereum_transaction(
         },
         |to| to
     );
-    let contract_account = account_storage.get_contract_account().ok_or_else(||E!(ProgramError::InvalidArgument))?;
+    let contract_account = account_storage.get_contract_account();
 
     if contract_account.get_ether() != contract_address {
         return Err!(ProgramError::InvalidArgument; "Invalid contract: actual {}, expected {}", contract_account.get_ether(), contract_address);
