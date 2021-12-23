@@ -1,4 +1,5 @@
 //! Allows to listen to runtime events.
+#![allow(missing_docs)] /// Todo: document
 
 use evm::Context;
 use evm_runtime::{CreateScheme, ExitReason, Transfer};
