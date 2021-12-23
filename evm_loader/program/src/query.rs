@@ -77,7 +77,7 @@ impl AccountCache {
         match self.cache.get(address) {
             None => Err(Error::AccountNotFound),
             Some(v) => {
-                if offset < v.offset {
+                if offset < v.offset || length == 0 {
                     return Err(Error::InvalidArgument);
                 }
                 match &v.data {
