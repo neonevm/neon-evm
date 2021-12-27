@@ -245,8 +245,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                 true
             }
             else {
-                eprintln!("Account not found {}", &address.to_string());
-                new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+                if new_accounts.get(address).is_none() {
+                    eprintln!("Account not found {}", &address.to_string());
+                    new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+                }
                 false
             }
         } else {
