@@ -54,7 +54,6 @@ use evm_loader::{
     precompile_contracts::is_precompile_address,
     solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
-    config::token_mint
 };
 
 use crate::Config;
@@ -157,10 +156,11 @@ pub struct EmulatorAccountStorage<'a> {
     caller_id: H160,
     block_number: u64,
     block_timestamp: i64,
+    token_mint: Pubkey
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160, token_mint: Pubkey) -> EmulatorAccountStorage {
         eprintln!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {
@@ -192,6 +192,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             caller_id,
             block_number: slot,
             block_timestamp: timestamp,
+            token_mint
         }
     }
 
@@ -244,8 +245,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                 true
             }
             else {
-                eprintln!("Account not found {}", &address.to_string());
-                new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+                if new_accounts.get(address).is_none() {
+                    eprintln!("Account not found {}", &address.to_string());
+                    new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
+                }
                 false
             }
         } else {
@@ -399,7 +402,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         };
     }
 
-    pub fn apply_transfers(&self, transfers: Vec<Transfer>) {
+    pub fn apply_transfers(&self, transfers: Vec<Transfer>, token_mint: &Pubkey) {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
         for transfer in transfers {
@@ -407,11 +410,11 @@ impl<'a> EmulatorAccountStorage<'a> {
             self.create_acc_if_not_exists(&transfer.target);
 
             let (source, _) = make_solana_program_address(&transfer.source, &self.config.evm_loader);
-            let source_token = spl_associated_token_account::get_associated_token_address(&source, &token_mint::id());
+            let source_token = spl_associated_token_account::get_associated_token_address(&source, token_mint);
             solana_accounts.insert(source_token, AccountMeta::new(source_token, false));
 
             let (target, _) = make_solana_program_address(&transfer.target, &self.config.evm_loader);
-            let target_token = spl_associated_token_account::get_associated_token_address(&target, &token_mint::id());
+            let target_token = spl_associated_token_account::get_associated_token_address(&target, token_mint);
             solana_accounts.insert(target_token, AccountMeta::new(target_token, false));
         }
     }
@@ -610,7 +613,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         self.create_acc_if_not_exists(address);
 
         let (account, _) = make_solana_program_address(address, &self.config.evm_loader);
-        let token_account = spl_associated_token_account::get_associated_token_address(&account, &token_mint::id());
+        let token_account = spl_associated_token_account::get_associated_token_address(&account, &self.token_mint);
         
         let mut solana_accounts = self.solana_accounts.borrow_mut();
         solana_accounts.entry(token_account).or_insert_with(|| AccountMeta::new_readonly(token_account, false));
