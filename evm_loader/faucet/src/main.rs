@@ -7,6 +7,7 @@ mod cli;
 mod config;
 mod eth_token;
 mod ethereum;
+mod manual;
 mod server;
 mod solana;
 mod tokens;
@@ -65,6 +66,9 @@ async fn execute(app: cli::Application) -> Result<()> {
         cli::Command::Env {} => {
             config::show_env();
         }
+        cli::Command::Man {} => {
+            manual::show();
+        }
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {
                 num_cpus::get()
@@ -72,10 +76,10 @@ async fn execute(app: cli::Application) -> Result<()> {
                 workers.parse::<usize>()?
             };
             run(&app.config, workers).await?;
+            info!("Done.");
         }
     }
 
-    info!("Done.");
     Ok(())
 }
 

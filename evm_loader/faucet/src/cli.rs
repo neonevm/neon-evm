@@ -22,6 +22,9 @@ pub struct Application {
 
 #[derive(StructOpt)]
 pub enum Command {
+    #[structopt(about = "Shows manual")]
+    Man {},
+
     #[structopt(about = "Shows config")]
     Config {
         #[structopt(
