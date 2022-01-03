@@ -19,35 +19,49 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
-pub async fn airdrop(params: Airdrop) -> Result<()> {
-    info!("Processing ETH {:?}...", params);
+pub async fn airdrop(id: String, params: Airdrop) -> Result<()> {
+    info!("{} Processing ETH {:?}...", id, params);
 
     let limit = if !params.in_fractions {
         config::solana_max_amount()
     } else {
-        solana::convert_whole_to_fractions(config::solana_max_amount())?
+        solana::convert_whole_to_fractions(id.clone(), config::solana_max_amount())?
     };
 
     if params.amount > limit {
         return Err(eyre!(
-            "Requested value {} exceeds the limit {}",
+            "{} Requested value {} exceeds the limit {}",
+            id,
             params.amount,
             limit
         ));
     }
 
     let operator = config::solana_operator_keypair()
-        .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
-    let ether_address = ethereum::address_from_str(&params.wallet)
-        .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
-    solana::transfer_token(operator, ether_address, params.amount, params.in_fractions)
-        .await
-        .map_err(|e| {
-            eyre!(
-                "solana::transfer_token(operator, {}): {:?}",
-                ether_address,
-                e
-            )
-        })?;
+        .map_err(|e| eyre!("{} config::solana_operator_keypair: {:?}", id, e))?;
+    let ether_address = ethereum::address_from_str(&params.wallet).map_err(|e| {
+        eyre!(
+            "{} ethereum::address_from_str({}): {:?}",
+            id,
+            &params.wallet,
+            e
+        )
+    })?;
+    solana::transfer_token(
+        id.clone(),
+        operator,
+        ether_address,
+        params.amount,
+        params.in_fractions,
+    )
+    .await
+    .map_err(|e| {
+        eyre!(
+            "{} solana::transfer_token(operator, {}): {:?}",
+            id,
+            ether_address,
+            e
+        )
+    })?;
     Ok(())
 }

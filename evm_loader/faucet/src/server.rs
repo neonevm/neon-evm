@@ -41,26 +41,28 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
 async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
+    let id = generate_id();
+
     println!();
-    info!("Handling Request for NEON (in galans) Airdrop...");
+    info!("{} Handling Request for NEON (in galans) Airdrop...", id);
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest (body): {}", err);
+        error!("{} BadRequest (body): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     let input = input.unwrap();
     let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
     if let Err(err) = airdrop {
-        error!("BadRequest (json): {} in '{}'", err, input);
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
     let mut airdrop = airdrop.unwrap();
     airdrop.in_fractions = true;
-    if let Err(err) = eth_token::airdrop(airdrop).await {
-        error!("InternalServerError: {}", err);
+    if let Err(err) = eth_token::airdrop(id.clone(), airdrop).await {
+        error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
 
@@ -69,24 +71,26 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
 /// Handles a request for NEON airdrop.
 async fn handle_request_neon(body: Bytes) -> impl Responder {
+    let id = generate_id();
+
     println!();
-    info!("Handling Request for NEON Airdrop...");
+    info!("{} Handling Request for NEON Airdrop...", id);
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest (body): {}", err);
+        error!("{} BadRequest (body): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     let input = input.unwrap();
     let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
     if let Err(err) = airdrop {
-        error!("BadRequest (json): {} in '{}'", err, input);
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = eth_token::airdrop(airdrop.unwrap()).await {
-        error!("InternalServerError: {}", err);
+    if let Err(err) = eth_token::airdrop(id.clone(), airdrop.unwrap()).await {
+        error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
 
@@ -95,24 +99,26 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
 
 /// Handles a request for ERC20 tokens airdrop.
 async fn handle_request_erc20(body: Bytes) -> impl Responder {
+    let id = generate_id();
+
     println!();
-    info!("Handling Request for ERC20 Airdrop...");
+    info!("{} Handling Request for ERC20 Airdrop...", id);
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest (body): {}", err);
+        error!("{} BadRequest (body): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     let input = input.unwrap();
     let airdrop = serde_json::from_str::<tokens::Airdrop>(&input);
     if let Err(err) = airdrop {
-        error!("BadRequest (json): {} in '{}'", err, input);
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = tokens::airdrop(airdrop.unwrap()).await {
-        error!("InternalServerError: {}", err);
+    if let Err(err) = tokens::airdrop(id.clone(), airdrop.unwrap()).await {
+        error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
 
@@ -160,4 +166,15 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
     }
 
     HttpResponse::Ok()
+}
+
+/// Builds a (hopefully) unique string to mark requests.
+fn generate_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time went backwards");
+    let digest = md5::compute(since.as_millis().to_string());
+    let s = format!("{:x}", digest)[..7].to_string();
+    format!("[{}]", s)
 }
