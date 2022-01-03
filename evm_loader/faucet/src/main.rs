@@ -66,8 +66,8 @@ async fn execute(app: cli::Application) -> Result<()> {
         cli::Command::Env {} => {
             config::show_env();
         }
-        cli::Command::Man {} => {
-            manual::show();
+        cli::Command::Man { api, config, env } => {
+            manual::show(api, config, env);
         }
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {

@@ -1,7 +1,9 @@
 //! Faucet manual module.
 
-const MANUAL: &str = r##"
-# API Endpoints
+const MANUAL_API: &str = r##"
+# HTTP API Endpoints
+
+A client uses POST requests to send data to the server.
 
 |:-:|:-:|-
 |**Endpoint**|**Workload**|**Description**|
@@ -15,7 +17,7 @@ const MANUAL: &str = r##"
 Workload JSON schema:
 ```
 {
-"type": "object",
+    "type": "object",
     "properties": {
         "wallet": {
             "type": "string",
@@ -34,9 +36,21 @@ Workload JSON example:
 { "wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1 }
 ```
 
+Example of client request with **curl** utility:
+```
+curl -i -X POST \
+    -H 'Content-Type: text/plain' \
+    -d '{"wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1}' \
+    'http://localhost:3333/request_neon'
+```
+"##;
+
+const MANUAL_CONFIG: &str = r##"
 # Configuration
 
-Example of the configuration file:
+The configuration file should be in TOML format.
+
+Example of the configuration file contents:
 ```
 [rpc]
 bind = "0.0.0.0"
@@ -62,7 +76,9 @@ max_amount = 10
 ```
 
 The configuration file is optional and, if present, can be incomplete.
+"##;
 
+const MANUAL_ENV: &str = r##"
 # Environment Variables
 
 Environment variables, if present, override portions of the configuration.
@@ -92,8 +108,24 @@ Environment variables, if present, override portions of the configuration.
 use minimad::Alignment;
 use termimad::MadSkin;
 
-pub fn show() {
+pub fn show(api: bool, config: bool, env: bool) {
     let mut skin = MadSkin::default();
     skin.headers[0].align = Alignment::Left;
-    skin.print_text(MANUAL);
+
+    if api {
+        skin.print_text(MANUAL_API);
+    }
+    if config {
+        skin.print_text(MANUAL_CONFIG);
+    }
+    if env {
+        skin.print_text(MANUAL_ENV);
+    }
+
+    let all = !api && !config && !env;
+    if all {
+        skin.print_text(MANUAL_API);
+        skin.print_text(MANUAL_CONFIG);
+        skin.print_text(MANUAL_ENV);
+    }
 }
