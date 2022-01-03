@@ -1,5 +1,5 @@
-//! # NeonLabs Token Faucet (Airdrop)
-//! NeonLabs Token Faucet is a service which performs airdrop of tokens on user request.
+//! # Neon Faucet (Airdrop)
+//! Neon Faucet is a service which performs airdrop of tokens on user request.
 
 #![deny(warnings)]
 

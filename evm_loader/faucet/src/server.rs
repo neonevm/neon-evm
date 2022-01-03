@@ -27,11 +27,8 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
                 "/request_neon_in_galans",
                 post().to(handle_request_neon_in_galans),
             )
-            .route("/request_eth_token", post().to(handle_request_eth_token))
-            .route(
-                "/request_erc20_tokens",
-                post().to(handle_request_erc20_tokens),
-            )
+            .route("/request_neon", post().to(handle_request_neon))
+            .route("/request_erc20", post().to(handle_request_erc20))
             .route("/request_stop", post().to(handle_request_stop))
     })
     .bind((rpc_bind, rpc_port))?
@@ -42,10 +39,10 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
     Ok(())
 }
 
-/// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON)
+/// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
 async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
     println!();
-    info!("Handling Request for NEON Airdrop in galans...");
+    info!("Handling Request for NEON (in galans) Airdrop...");
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
@@ -70,10 +67,10 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
     HttpResponse::Ok()
 }
 
-/// Handles a request for ETH token airdrop.
-async fn handle_request_eth_token(body: Bytes) -> impl Responder {
+/// Handles a request for NEON airdrop.
+async fn handle_request_neon(body: Bytes) -> impl Responder {
     println!();
-    info!("Handling Request for ETH Airdrop...");
+    info!("Handling Request for NEON Airdrop...");
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
@@ -97,7 +94,7 @@ async fn handle_request_eth_token(body: Bytes) -> impl Responder {
 }
 
 /// Handles a request for ERC20 tokens airdrop.
-async fn handle_request_erc20_tokens(body: Bytes) -> impl Responder {
+async fn handle_request_erc20(body: Bytes) -> impl Responder {
     println!();
     info!("Handling Request for ERC20 Airdrop...");
 
