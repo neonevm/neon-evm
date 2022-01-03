@@ -3,7 +3,7 @@ name = "faucet"
 description = "Ethereum ERC20 Token Faucet Service"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
-version = "0.5.4-dev"
+version = "0.6.4-dev"
 build = "build.rs"
 edition = "2018"
 
@@ -27,7 +27,7 @@ spl-associated-token-account = { version = "1.0", default_features = false, feat
 spl-token = { version = "3.2", default_features = false, features = ["no-entrypoint"] }
 structopt = "0.3"
 thiserror = "1.0"
-tokio = { version = "1.10", default_features = false, features = ["rt"] }
+tokio = { version = "1.15", default_features = false, features = ["rt"] }
 toml = "0.5"
 tracing = "0.1"
 tracing-subscriber = "0.2"
