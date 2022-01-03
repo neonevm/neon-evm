@@ -19,7 +19,7 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
-pub async fn airdrop(id: String, params: Airdrop) -> Result<()> {
+pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     info!("{} Processing ETH {:?}...", id, params);
 
     let limit = if !params.in_fractions {
@@ -48,7 +48,7 @@ pub async fn airdrop(id: String, params: Airdrop) -> Result<()> {
         )
     })?;
     solana::transfer_token(
-        id.clone(),
+        id,
         operator,
         ether_address,
         params.amount,

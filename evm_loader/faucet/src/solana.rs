@@ -29,7 +29,7 @@ pub fn init_client(url: String) {
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
-pub fn convert_whole_to_fractions(id: String, amount: u64) -> Result<u64> {
+pub fn convert_whole_to_fractions(id: &str, amount: u64) -> Result<u64> {
     let decimals = config::solana_token_mint_decimals();
     let factor = 10_u64
         .checked_pow(decimals as u32)
@@ -43,7 +43,7 @@ pub fn convert_whole_to_fractions(id: String, amount: u64) -> Result<u64> {
 /// When in_fractions == false, amount is treated as whole token amount.
 /// When in_fractions == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
-    id: String,
+    id: &str,
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
@@ -72,6 +72,7 @@ pub async fn transfer_token(
     let token_account =
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
+    let id = id.to_owned();
     let r = tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
@@ -104,7 +105,7 @@ pub async fn transfer_token(
         let amount = if in_fractions {
             amount
         } else {
-            convert_whole_to_fractions(id.clone(), amount)?
+            convert_whole_to_fractions(&id, amount)?
         };
 
         info!("{} spl_token id = {}", id, spl_token::id());

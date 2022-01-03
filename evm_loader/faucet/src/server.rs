@@ -61,7 +61,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
     let mut airdrop = airdrop.unwrap();
     airdrop.in_fractions = true;
-    if let Err(err) = eth_token::airdrop(id.clone(), airdrop).await {
+    if let Err(err) = eth_token::airdrop(&id, airdrop).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -89,7 +89,7 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = eth_token::airdrop(id.clone(), airdrop.unwrap()).await {
+    if let Err(err) = eth_token::airdrop(&id, airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -117,7 +117,7 @@ async fn handle_request_erc20(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = tokens::airdrop(id.clone(), airdrop.unwrap()).await {
+    if let Err(err) = tokens::airdrop(&id, airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
