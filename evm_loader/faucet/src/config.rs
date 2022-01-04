@@ -256,7 +256,7 @@ struct Rpc {
 
 impl std::fmt::Display for Rpc {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "rpc.bind = {}", self.bind)?;
+        write!(f, "rpc.bind = \"{}\"", self.bind)?;
         if env::var(FAUCET_RPC_BIND).is_ok() {
             writeln!(f, " (overridden by {})", FAUCET_RPC_BIND)?;
         } else {
@@ -300,7 +300,7 @@ impl std::fmt::Display for Web3 {
             return Ok(());
         }
         writeln!(f)?;
-        write!(f, "web3.rpc_url = {}", self.rpc_url)?;
+        write!(f, "web3.rpc_url = \"{}\"", self.rpc_url)?;
         if env::var(WEB3_RPC_URL).is_ok() {
             writeln!(f, " (overridden by {})", WEB3_RPC_URL)?;
         } else {
@@ -308,7 +308,7 @@ impl std::fmt::Display for Web3 {
         }
         write!(
             f,
-            "web3.private_key = {}",
+            "web3.private_key = \"{}\"",
             obfuscate_string(&self.private_key)
         )?;
         if env::var(WEB3_PRIVATE_KEY).is_ok() {
@@ -360,7 +360,7 @@ impl std::fmt::Display for Solana {
             return Ok(());
         }
         writeln!(f)?;
-        write!(f, "solana.url = {}", self.url)?;
+        write!(f, "solana.url = \"{}\"", self.url)?;
         if env::var(SOLANA_URL).is_ok() {
             writeln!(f, " (overridden by {})", SOLANA_URL)?;
         } else {

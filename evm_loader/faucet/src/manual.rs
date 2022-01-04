@@ -126,13 +126,20 @@ Environment variables, if present, override portions of the configuration.
 |-
 "##;
 
-//use crossterm::style::Color::Yellow;
 use minimad::Alignment;
 use termimad::MadSkin;
 
+/// Renders manuals, all or selected.
 pub fn show(api: bool, config: bool, env: bool) {
     let mut skin = MadSkin::default();
     skin.headers[0].align = Alignment::Left;
+
+    let all = !api && !config && !env;
+    if all {
+        skin.print_text(MANUAL_API);
+        skin.print_text(MANUAL_CONFIG);
+        skin.print_text(MANUAL_ENV);
+    }
 
     if api {
         skin.print_text(MANUAL_API);
@@ -141,13 +148,6 @@ pub fn show(api: bool, config: bool, env: bool) {
         skin.print_text(MANUAL_CONFIG);
     }
     if env {
-        skin.print_text(MANUAL_ENV);
-    }
-
-    let all = !api && !config && !env;
-    if all {
-        skin.print_text(MANUAL_API);
-        skin.print_text(MANUAL_CONFIG);
         skin.print_text(MANUAL_ENV);
     }
 }

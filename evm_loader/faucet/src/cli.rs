@@ -22,7 +22,7 @@ pub struct Application {
 
 #[derive(StructOpt)]
 pub enum Command {
-    #[structopt(about = "Shows manuals. Shows all manuals when no one specified")]
+    #[structopt(about = "Shows manual(s)")]
     Man {
         #[structopt(long, help = "Shows HTTP API manual")]
         api: bool,
