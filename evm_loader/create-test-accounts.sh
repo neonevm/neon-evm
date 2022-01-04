@@ -15,7 +15,7 @@ fi
 
 NUM_ACCOUNTS=$1
 
-for i in {1..$NUM_ACCOUNTS}; do
+for i in $(seq 1 $NUM_ACCOUNTS); do
   echo "Creating test account-$i"
   ID_FILE="$HOME/.config/solana/id"
   if [ "$i" -gt "1" ]; then
