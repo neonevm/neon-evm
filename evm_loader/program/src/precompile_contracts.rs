@@ -3,11 +3,11 @@
 use std::convert::{Infallible, TryInto};
 
 use arrayref::{array_ref, array_refs};
+use evm::{Capture, ExitReason, H160, U256};
 use solana_program::{
     pubkey::Pubkey,
     secp256k1_recover::secp256k1_recover,
 };
-use evm::{Capture, ExitReason, H160, U256};
 
 use crate::{
     executor_state::ExecutorState,
@@ -342,69 +342,84 @@ pub fn query_account<'a, B: AccountStorage>(
         QUERY_ACCOUNT_METHOD_OWNER_ID => {
             debug_print!("query_account.owner({})", account_address);
 
-            if let Some(owner) = state.query_solana_account().owner(&account_address) {
-                debug_print!("query_account.owner -> {}", owner);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()));
+            match state.query_solana_account().owner(&account_address) {
+                Ok(owner) => {
+                    debug_print!("query_account.owner -> {}", owner);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.owner failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
             }
-
-            let revert_message = b"QueryAccount.owner failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LENGTH_ID => {
             debug_print!("query_account.length({})", account_address);
 
-            if let Some(length) = state.query_solana_account().length(&account_address) {
-                debug_print!("query_account.length -> {}", length);
-                let length: U256 = length.into(); // pad to 32 bytes
-                let mut bytes = vec![0_u8; 32];
-                length.into_big_endian_fast(&mut bytes);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            match state.query_solana_account().length(&account_address) {
+                Ok(length) => {
+                    debug_print!("query_account.length -> {}", length);
+                    let length: U256 = length.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    length.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.length failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
             }
-
-            let revert_message = b"QueryAccount.length failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
             debug_print!("query_account.lamports({})", account_address);
 
-            if let Some(lamports) = state.query_solana_account().lamports(&account_address) {
-                debug_print!("query_account.lamports -> {}", lamports);
-                let lamports: U256 = lamports.into(); // pad to 32 bytes
-                let mut bytes = vec![0_u8; 32];
-                lamports.into_big_endian_fast(&mut bytes);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            match state.query_solana_account().lamports(&account_address) {
+                Ok(lamports) => {
+                    debug_print!("query_account.lamports -> {}", lamports);
+                    let lamports: U256 = lamports.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    lamports.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.lamports failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
             }
-
-            let revert_message = b"QueryAccount.lamports failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
             debug_print!("query_account.executable({})", account_address);
 
-            if let Some(executable) = state.query_solana_account().executable(&account_address) {
-                debug_print!("query_account.executable -> {}", executable);
-                let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
-                let mut bytes = vec![0_u8; 32];
-                executable.into_big_endian_fast(&mut bytes);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            match state.query_solana_account().executable(&account_address) {
+                Ok(executable) => {
+                    debug_print!("query_account.executable -> {}", executable);
+                    let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    executable.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.executable failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
             }
-
-            let revert_message = b"QueryAccount.executable failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
             debug_print!("query_account.rent_epoch({})", account_address);
 
-            if let Some(rent_epoch) = state.query_solana_account().rent_epoch(&account_address) {
-                debug_print!("query_account.rent_epoch -> {}", rent_epoch);
-                let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
-                let mut bytes = vec![0_u8; 32];
-                rent_epoch.into_big_endian_fast(&mut bytes);
-                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes));
+            match state.query_solana_account().rent_epoch(&account_address) {
+                Ok(rent_epoch) => {
+                    debug_print!("query_account.rent_epoch -> {}", rent_epoch);
+                    let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    rent_epoch.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.rent_epoch failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
             }
-
-            let revert_message = b"QueryAccount.rent_epoch failed".to_vec();
-            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         },
         QUERY_ACCOUNT_METHOD_DATA_ID => {
             let arguments = array_ref![rest, 0, 64];

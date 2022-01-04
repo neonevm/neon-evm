@@ -1,8 +1,10 @@
 //! `EVMLoader` query account cache.
 
 use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use solana_program::{clock::Epoch, pubkey::Pubkey};
+
 use crate::solana_backend::AccountStorageInfo;
 
 const KB: usize = 1024;
@@ -43,33 +45,32 @@ impl AccountCache {
 
     /// Inserts or replaces entry into the cache.
     pub fn put(&mut self, address: Pubkey, value: Value) {
-        self.cache.remove(&address);
         self.cache.insert(address, value);
     }
 
     /// Returns owner of an account if found.
-    pub fn owner(&self, address: &Pubkey) -> Option<Pubkey> {
-        self.cache.get(address).map(|v| v.owner)
+    pub fn owner(&self, address: &Pubkey) -> Result<Pubkey> {
+        self.cache.get(address).map(|v| v.owner).ok_or(Error::AccountNotFound)
     }
 
     /// Returns length of an account's data if found.
-    pub fn length(&self, address: &Pubkey) -> Option<usize> {
-        self.cache.get(address).map(|v| v.length)
+    pub fn length(&self, address: &Pubkey) -> Result<usize> {
+        self.cache.get(address).map(|v| v.length).ok_or(Error::AccountNotFound)
     }
 
     /// Returns lamports value of an account if found.
-    pub fn lamports(&self, address: &Pubkey) -> Option<u64> {
-        self.cache.get(address).map(|v| v.lamports)
+    pub fn lamports(&self, address: &Pubkey) -> Result<u64> {
+        self.cache.get(address).map(|v| v.lamports).ok_or(Error::AccountNotFound)
     }
 
     /// Returns executable flag of an account if found.
-    pub fn executable(&self, address: &Pubkey) -> Option<bool> {
-        self.cache.get(address).map(|v| v.executable)
+    pub fn executable(&self, address: &Pubkey) -> Result<bool> {
+        self.cache.get(address).map(|v| v.executable).ok_or(Error::AccountNotFound)
     }
 
     /// Returns rent epoch of an account if found.
-    pub fn rent_epoch(&self, address: &Pubkey) -> Option<Epoch> {
-        self.cache.get(address).map(|v| v.rent_epoch)
+    pub fn rent_epoch(&self, address: &Pubkey) -> Result<Epoch> {
+        self.cache.get(address).map(|v| v.rent_epoch).ok_or(Error::AccountNotFound)
     }
 
     /// Returns chunk of data of an account if found and correct range.
