@@ -97,7 +97,7 @@ max_amount = 10
 ```
 
 The configuration file is optional and, if present, can be incomplete
-(default values or environment variables will be used in the case).
+(default values or environment variables will be used in such cases).
 "##;
 
 const MANUAL_ENV: &str = r##"

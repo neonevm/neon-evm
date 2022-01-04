@@ -25,7 +25,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     let limit = if !params.in_fractions {
         config::solana_max_amount()
     } else {
-        solana::convert_whole_to_fractions(id.clone(), config::solana_max_amount())?
+        solana::convert_whole_to_fractions(id, config::solana_max_amount())?
     };
 
     if params.amount > limit {
