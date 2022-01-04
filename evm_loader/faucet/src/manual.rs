@@ -4,6 +4,7 @@ const MANUAL_API: &str = r##"
 # HTTP API Endpoints
 
 A client uses POST requests to send data to the server.
+Several endpoints are supported.
 
 |:-:|:-:|-
 |**Endpoint**|**Workload**|**Description**|
@@ -50,6 +51,26 @@ const MANUAL_CONFIG: &str = r##"
 
 The configuration file should be in TOML format.
 
+|:-:|-
+|**Option**|**Description**|
+|:-|-
+| **rpc**.bind | Local interface TCP address
+| **rpc**.port | TCP port to listen
+| **rpc**.allowed_origins | List of client URLs that can send requests
+| **web3**.enable | Flag to on/off the entire **web3** section
+| **web3**.rpc_url | Ethereum network endpoint
+| **web3**.private_key | Ethereum private key to support operations
+| **web3**.tokens | List of available ERC20 token addresses
+| **web3**.max_amount | Max amount of ERC20 tokens to distribute with a single request
+| **solana**.enable | Flag to on/off the entire **solana** section
+| **solana**.url | Solana network endpoint
+| **solana**.operator_keyfile | Solana keyfile to support operations
+| **solana**.evm_loader | Address of the EVM Loader program
+| **solana**.token_mint | Address of the NEON token mint account
+| **solana**.token_mint_decimals | Fixed point number precision parameter
+| **solana**.max_amount | Max amount of NEONs to distribute with a single request
+|-
+
 Example of the configuration file contents:
 ```
 [rpc]
@@ -75,7 +96,8 @@ operator_keyfile = "operator_id.json"
 max_amount = 10
 ```
 
-The configuration file is optional and, if present, can be incomplete.
+The configuration file is optional and, if present, can be incomplete
+(default values or environment variables will be used in the case).
 "##;
 
 const MANUAL_ENV: &str = r##"
