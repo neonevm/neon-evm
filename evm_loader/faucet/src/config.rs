@@ -33,6 +33,9 @@ pub enum Error {
     #[error("Failed to parse integer number from config")]
     ParseInt(#[from] std::num::ParseIntError),
 
+    #[error("Failed to parse string literal '{0}' from config")]
+    ParseString(String),
+
     #[error("Invalid keypair '{0}' from file '{1}'")]
     InvalidKeypair(String, PathBuf),
 
@@ -103,16 +106,18 @@ pub fn load(file: &Path) -> Result<()> {
     for e in ENV {
         if let Ok(val) = env::var(e) {
             match *e {
-                FAUCET_RPC_BIND => CONFIG.write().unwrap().rpc.bind = val,
+                FAUCET_RPC_BIND => CONFIG.write().unwrap().rpc.bind = unquote('"', '"', &val)?,
                 FAUCET_RPC_PORT => CONFIG.write().unwrap().rpc.port = val.parse::<u16>()?,
                 FAUCET_RPC_ALLOWED_ORIGINS => {
-                    CONFIG.write().unwrap().rpc.allowed_origins = split_comma_separated_list(&val)
+                    CONFIG.write().unwrap().rpc.allowed_origins = parse_list_of_strings(&val)?
                 }
                 FAUCET_WEB3_ENABLE => CONFIG.write().unwrap().web3.enable = val.parse::<bool>()?,
-                WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
-                WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
+                WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = unquote('"', '"', &val)?,
+                WEB3_PRIVATE_KEY => {
+                    CONFIG.write().unwrap().web3.private_key = unquote('"', '"', &val)?
+                }
                 NEON_ERC20_TOKENS => {
-                    CONFIG.write().unwrap().web3.tokens = split_comma_separated_list(&val)
+                    CONFIG.write().unwrap().web3.tokens = parse_list_of_strings(&val)?
                 }
                 NEON_ERC20_MAX_AMOUNT => {
                     CONFIG.write().unwrap().web3.max_amount = val.parse::<u64>()?
@@ -120,14 +125,17 @@ pub fn load(file: &Path) -> Result<()> {
                 FAUCET_SOLANA_ENABLE => {
                     CONFIG.write().unwrap().solana.enable = val.parse::<bool>()?
                 }
-                SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
-                EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
-                NEON_TOKEN_MINT => CONFIG.write().unwrap().solana.token_mint = val,
+                SOLANA_URL => CONFIG.write().unwrap().solana.url = unquote('"', '"', &val)?,
+                EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = unquote('"', '"', &val)?,
+                NEON_TOKEN_MINT => {
+                    CONFIG.write().unwrap().solana.token_mint = unquote('"', '"', &val)?
+                }
                 NEON_TOKEN_MINT_DECIMALS => {
                     CONFIG.write().unwrap().solana.token_mint_decimals = val.parse::<u8>()?
                 }
                 NEON_OPERATOR_KEYFILE => {
-                    CONFIG.write().unwrap().solana.operator_keyfile = val.into()
+                    CONFIG.write().unwrap().solana.operator_keyfile =
+                        unquote('"', '"', &val)?.into()
                 }
                 NEON_ETH_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
@@ -489,6 +497,99 @@ fn test_obfuscate() {
     assert_eq!(s, "1,2,3,4,5,6,7,8");
     let s = obfuscate_solana_private_key("1,2,3,4,5,6,7,8,9");
     assert_eq!(s, "1,2,3,4•••6,7,8,9");
+}
+
+/// Parses `s` as string representing bracketed list of quoted strings.
+/// Example of input: ["AAA", "BBB", "CCC"]
+fn parse_list_of_strings(s: &str) -> Result<Vec<String>> {
+    let s = unquote('[', ']', s)?;
+    s.split(',').map(|s| unquote('"', '"', s)).collect()
+}
+
+#[test]
+fn test_parse_list_of_strings() {
+    let vs = parse_list_of_strings("");
+    assert!(vs.is_err());
+    assert_eq!(format!("{:?}", vs.err().unwrap()), "ParseString(\"\")");
+
+    let vs = parse_list_of_strings("[]");
+    assert!(vs.is_err());
+    assert_eq!(format!("{:?}", vs.err().unwrap()), "ParseString(\"\")");
+
+    let vs = parse_list_of_strings("[A]");
+    assert!(vs.is_err());
+    assert_eq!(format!("{:?}", vs.err().unwrap()), "ParseString(\"A\")");
+
+    let vs = parse_list_of_strings("[A,B,C]");
+    assert!(vs.is_err());
+    assert_eq!(format!("{:?}", vs.err().unwrap()), "ParseString(\"A\")");
+
+    let vs = parse_list_of_strings("[\"A\",B,C]");
+    assert!(vs.is_err());
+    assert_eq!(format!("{:?}", vs.err().unwrap()), "ParseString(\"B\")");
+
+    let vs = parse_list_of_strings("[\"A\"]");
+    assert!(vs.is_ok());
+    assert_eq!(vs.unwrap(), vec!["A"]);
+
+    let vs = parse_list_of_strings("[\"A\",\"B\"]");
+    assert!(vs.is_ok());
+    assert_eq!(vs.unwrap(), vec!["A", "B"]);
+
+    let vs = parse_list_of_strings("[\"A\",\"B\",\"C\"]");
+    assert!(vs.is_ok());
+    assert_eq!(vs.unwrap(), vec!["A", "B", "C"]);
+}
+
+/// Unquotes `s`.
+fn unquote(left_quote: char, right_quote: char, s: &str) -> Result<String> {
+    let s = s.trim();
+    if !(s.starts_with(left_quote) && s.ends_with(right_quote)) {
+        return Err(Error::ParseString(s.into()));
+    }
+    Ok(trim_first_and_last_chars(s).into())
+}
+
+#[test]
+fn test_unquote() {
+    const L: char = '[';
+    const R: char = ']';
+
+    let s = unquote(L, R, "");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"\")");
+
+    let s = unquote(L, R, "A");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"A\")");
+
+    let s = unquote(L, R, "AB");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"AB\")");
+
+    let s = unquote(L, R, "ABC");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"ABC\")");
+
+    let s = unquote(L, R, "[ABC");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"[ABC\")");
+
+    let s = unquote(L, R, "ABC]");
+    assert!(s.is_err());
+    assert_eq!(format!("{:?}", s.err().unwrap()), "ParseString(\"ABC]\")");
+
+    let s = unquote(L, R, "[]");
+    assert!(s.is_ok());
+    assert_eq!(s.unwrap(), "");
+
+    let s = unquote(L, R, "[ABC]");
+    assert!(s.is_ok());
+    assert_eq!(s.unwrap(), "ABC");
+
+    let s = unquote(L, R, "  [ABC]  ");
+    assert!(s.is_ok());
+    assert_eq!(s.unwrap(), "ABC");
 }
 
 /// Splits string as comma-separated list and trims whitespace.
