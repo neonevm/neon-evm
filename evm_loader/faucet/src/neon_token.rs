@@ -1,4 +1,4 @@
-//! Faucet ETH token module.
+//! Faucet NEON token module.
 
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
@@ -20,7 +20,7 @@ pub struct Airdrop {
 
 /// Processes the airdrop: sends needed transactions into Solana.
 pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
-    info!("{} Processing ETH {:?}...", id, params);
+    info!("{} Processing NEON {:?}...", id, params);
 
     let limit = if !params.in_fractions {
         config::solana_max_amount()

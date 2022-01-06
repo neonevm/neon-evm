@@ -5,12 +5,12 @@
 
 mod cli;
 mod config;
-mod eth_token;
+mod erc20_tokens;
 mod ethereum;
 mod manual;
+mod neon_token;
 mod server;
 mod solana;
-mod tokens;
 
 use color_eyre::Result;
 use tracing::info;

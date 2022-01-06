@@ -7,7 +7,7 @@ use actix_web::{App, HttpResponse, HttpServer, Responder};
 use color_eyre::Result;
 use tracing::{error, info};
 
-use crate::{config, eth_token, tokens};
+use crate::{config, erc20_tokens, neon_token};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
@@ -53,7 +53,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
     }
 
     let input = input.unwrap();
-    let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
+    let airdrop = serde_json::from_str::<neon_token::Airdrop>(&input);
     if let Err(err) = airdrop {
         error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
@@ -61,7 +61,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
     let mut airdrop = airdrop.unwrap();
     airdrop.in_fractions = true;
-    if let Err(err) = eth_token::airdrop(&id, airdrop).await {
+    if let Err(err) = neon_token::airdrop(&id, airdrop).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -83,13 +83,13 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
     }
 
     let input = input.unwrap();
-    let airdrop = serde_json::from_str::<eth_token::Airdrop>(&input);
+    let airdrop = serde_json::from_str::<neon_token::Airdrop>(&input);
     if let Err(err) = airdrop {
         error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = eth_token::airdrop(&id, airdrop.unwrap()).await {
+    if let Err(err) = neon_token::airdrop(&id, airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -111,13 +111,13 @@ async fn handle_request_erc20(body: Bytes) -> impl Responder {
     }
 
     let input = input.unwrap();
-    let airdrop = serde_json::from_str::<tokens::Airdrop>(&input);
+    let airdrop = serde_json::from_str::<erc20_tokens::Airdrop>(&input);
     if let Err(err) = airdrop {
         error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = tokens::airdrop(&id, airdrop.unwrap()).await {
+    if let Err(err) = erc20_tokens::airdrop(&id, airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -174,7 +174,7 @@ fn generate_id() -> String {
     let since = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time went backwards");
-    let digest = md5::compute(since.as_millis().to_string());
+    let digest = md5::compute(since.as_nanos().to_string());
     let s = format!("{:x}", digest)[..7].to_string();
     format!("[{}]", s)
 }
