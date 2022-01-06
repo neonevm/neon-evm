@@ -194,6 +194,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         ERC20_METHOD_TRANSFER_ID => {
             debug_print!("erc20_wrapper transfer");
 
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 transfer is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
             let arguments = array_ref![rest, 0, 64];
             let (_, address, value) = array_refs!(arguments, 12, 20, 32);
 
@@ -213,6 +218,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         },
         ERC20_METHOD_TRANSFER_FROM_ID => {
             debug_print!("erc20_wrapper transferFrom");
+
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 transferFrom is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
 
             let arguments = array_ref![rest, 0, 96];
             let (_, source, _, target, value) = array_refs!(arguments, 12, 20, 12, 20, 32);
@@ -234,6 +244,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         },
         ERC20_METHOD_APPROVE_ID => {
             debug_print!("erc20_wrapper approve");
+
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 approve is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
 
             let arguments = array_ref![rest, 0, 64];
             let (_, spender, value) = array_refs!(arguments, 12, 20, 32);
@@ -266,6 +281,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         },
         ERC20_METHOD_APPROVE_SOLANA_ID => {
             debug_print!("erc20_wrapper approve solana");
+
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 approveSolana is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
 
             let arguments = array_ref![rest, 0, 64];
             let (spender, _, value) = array_refs!(arguments, 32, 24, 8);
