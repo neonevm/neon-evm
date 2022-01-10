@@ -309,7 +309,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             transfer: &transfer,
             input: &input,
             target_gas,
-            is_static: _is_static,
+            is_static,
             context: &context,
         });
 
