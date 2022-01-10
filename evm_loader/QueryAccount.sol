@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
+// NeonLabs Contracts (evm_loader/QueryAccount.sol)
+
 pragma solidity >=0.7.0;
 
+/**
+ * @title QueryAccount
+ * @dev Wrappers around QueryAccount operations.
+ */
 library QueryAccount {
     address constant precompiled = 0xff00000000000000000000000000000000000002;
 
