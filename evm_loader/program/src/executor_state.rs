@@ -106,7 +106,6 @@ impl ExecutorMetadata {
         &mut self.gasometer
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static

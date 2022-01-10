@@ -31,6 +31,7 @@ struct CallInterrupt {
     code_address: H160,
     input: Vec<u8>,
     gas_limit: u64,
+    is_static: bool,
 }
 
 #[derive(Debug)]
@@ -149,16 +150,28 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn set_storage(&mut self, address: H160, index: U256, value: U256) -> Result<(), ExitError> {
+        if self.state.metadata().is_static() {
+            return Err(ExitError::StaticModeViolation);
+        }
+
         self.state.set_storage(address, index, value);
         Ok(())
     }
 
     fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError> {
+        if self.state.metadata().is_static() {
+            return Err(ExitError::StaticModeViolation);
+        }
+
         self.state.log(address, topics, data);
         Ok(())
     }
 
     fn mark_delete(&mut self, address: H160, target: H160) -> Result<(), ExitError> {
+        if self.state.metadata().is_static() {
+            return Err(ExitError::StaticModeViolation);
+        }
+
         let balance = self.balance(address);
         let transfer = evm::Transfer {
             source: address,
@@ -182,6 +195,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         debug_print!("create target_gas={:?}", target_gas);
+
+        if self.state.metadata().is_static() {
+            return Capture::Exit((ExitError::StaticModeViolation.into(), None, Vec::new()))
+        }
+
         if let Some(depth) = self.state.metadata().depth() {
             if depth + 1 > CONFIG.call_stack_limit {
                 return Capture::Exit((ExitError::CallTooDeep.into(), None, Vec::new()));
@@ -263,10 +281,14 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
         target_gas: Option<u64>,
-        _is_static: bool,
+        is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
         debug_print!("call target_gas={:?}", target_gas);
+
+        if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
+            return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
+        }
 
         let transfer = transfer.map(|t| {
             evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
@@ -320,7 +342,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit})
+        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit, is_static})
     }
 
     fn pre_validate(
@@ -501,7 +523,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
-        self.executor.state.enter(interrupt.gas_limit, false);
+        self.executor.state.enter(interrupt.gas_limit, interrupt.is_static);
         self.executor.state.touch(interrupt.code_address);
 
         if let Some(transfer) = interrupt.transfer {
