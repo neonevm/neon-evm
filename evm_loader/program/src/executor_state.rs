@@ -13,7 +13,6 @@ use std::{
 
 use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 
@@ -35,7 +34,6 @@ struct ExecutorAccount {
 
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorMetadata {
-    gasometer: Gasometer,
     is_static: bool,
     depth: Option<usize>,
     block_number: U256,
@@ -45,9 +43,8 @@ pub struct ExecutorMetadata {
 impl ExecutorMetadata {
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new<B: AccountStorage>(gas_limit: u64, backend: &B) -> Self {
+    pub fn new<B: AccountStorage>(backend: &B) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit),
             is_static: false,
             depth: None,
             block_number: backend.block_number(),
@@ -56,11 +53,7 @@ impl ExecutorMetadata {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
-	    self.gasometer.record_stipend(other.gasometer.gas())?;
-        self.gasometer
-            .record_refund(other.gasometer.refunded_gas())?;
-
+    pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
     	// The following fragment deleted in the mainstream code:
         // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
         //     let return_value = other.borrow().runtime().unwrap().machine().return_value();
@@ -70,10 +63,8 @@ impl ExecutorMetadata {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
-        self.gasometer.record_stipend(other.gasometer.gas())?;
-
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
+    pub fn swallow_revert(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
@@ -84,9 +75,8 @@ impl ExecutorMetadata {
 
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub fn spit_child(&self, is_static: bool) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit),
             is_static: is_static || self.is_static,
             depth: match self.depth {
                 None => Some(0),
@@ -95,15 +85,6 @@ impl ExecutorMetadata {
             block_number: self.block_number,
             block_timestamp: self.block_timestamp,
         }
-    }
-
-    #[must_use]
-    pub const fn gasometer(&self) -> &Gasometer {
-        &self.gasometer
-    }
-
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.gasometer
     }
 
     #[must_use]
@@ -180,9 +161,9 @@ pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfe
 impl ExecutorSubstate {
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new<B: AccountStorage>(gas_limit: u64, backend: &B) -> Self {
+    pub fn new<B: AccountStorage>(backend: &B) -> Self {
         Self {
-            metadata: ExecutorMetadata::new(gas_limit, backend),
+            metadata: ExecutorMetadata::new(backend),
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
@@ -277,9 +258,9 @@ impl ExecutorSubstate {
         (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
     }
 
-    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+    pub fn enter(&mut self, is_static: bool) {
         let mut entering = Self {
-            metadata: self.metadata.spit_child(gas_limit, is_static),
+            metadata: self.metadata.spit_child(is_static),
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
@@ -839,8 +820,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.substate.metadata_mut()
     }
 
-    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
-        self.substate.enter(gas_limit, is_static);
+    pub fn enter(&mut self, is_static: bool) {
+        self.substate.enter(is_static);
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -1088,16 +1069,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn query_solana_account(&self) -> &query::AccountCache {
         &self.substate.query_account_cache
-    }
-
-    #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.substate.metadata.gasometer
-    }
-
-    #[must_use]
-    pub fn gasometer(&self) -> &Gasometer {
-        self.substate.metadata().gasometer()
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {

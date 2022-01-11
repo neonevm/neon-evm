@@ -371,7 +371,6 @@ fn process_instruction<'a>(
             }
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
-            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
@@ -390,7 +389,7 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let evm_results = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            let evm_results = do_call(&mut account_storage, trx.call_data, trx.value)?;
 
             token::user_pays_operator(
                 trx_gas_price,
@@ -845,7 +844,6 @@ fn do_call(
     account_storage: &mut ProgramAccountStorage<'_>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
-    gas_limit: u64,
 ) -> CallResult
 {
     debug_print!("do_call");
@@ -854,7 +852,7 @@ fn do_call(
     debug_print!(" contract: {}", account_storage.contract());
 
     let evm_results = {
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+        let executor_substate = Box::new(ExecutorSubstate::new(account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
 
@@ -864,8 +862,7 @@ fn do_call(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
-            transfer_value,
-            gas_limit,
+            transfer_value
         )?;
 
         let (result, exit_reason) = executor.execute();
@@ -933,10 +930,10 @@ fn do_begin<'a>(
         system_info)?;
 
     if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?;
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?;
     };
 
     token::user_pays_operator(
@@ -1038,13 +1035,12 @@ fn do_partial_call(
     step_count: u64,
     account_storage: &ProgramAccountStorage,
     instruction_data: Vec<u8>,
-    transfer_value: U256,
-    gas_limit: u64,
+    transfer_value: U256
 ) -> ProgramResult
 {
     debug_print!("do_partial_call");
 
-    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_substate = Box::new(ExecutorSubstate::new(account_storage));
     let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
@@ -1058,7 +1054,6 @@ fn do_partial_call(
         account_storage.contract(),
         instruction_data,
         transfer_value,
-        gas_limit,
     )?;
 
     executor.execute_n_steps(step_count).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
@@ -1077,18 +1072,17 @@ fn do_partial_create<'a>(
     account_storage: &ProgramAccountStorage<'a>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
-    gas_limit: u64,
 ) -> ProgramResult
 {
-    debug_print!("do_partial_create gas_limit={}", gas_limit);
+    debug_print!("do_partial_create");
 
-    let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
+    let executor_substate = Box::new(ExecutorSubstate::new(account_storage));
     let executor_state = ExecutorState::new(executor_substate, account_storage);
     let mut executor = Machine::new(executor_state);
 
     debug_print!("Executor initialized");
 
-    executor.create_begin(account_storage.origin(), instruction_data, transfer_value, gas_limit)?;
+    executor.create_begin(account_storage.origin(), instruction_data, transfer_value)?;
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");

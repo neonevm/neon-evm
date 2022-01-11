@@ -5,7 +5,7 @@ use std::mem;
 
 use evm::{
     Capture, ExitError, ExitFatal, ExitReason,
-    gasometer, H160, H256, Handler, Resolve, Valids, U256,
+    H160, H256, Handler, Resolve, Valids, U256,
 };
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
@@ -20,9 +20,6 @@ use crate::token;
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
-const fn l64(gas: u64) -> u64 {
-    gas - gas / 64
-}
 
 #[derive(Debug)]
 struct CallInterrupt {
@@ -30,7 +27,6 @@ struct CallInterrupt {
     transfer: Option<evm::Transfer>,
     code_address: H160,
     input: Vec<u8>,
-    gas_limit: u64,
     is_static: bool,
 }
 
@@ -40,7 +36,6 @@ struct CreateInterrupt {
     transfer: Option<evm::Transfer>,
     address: H160,
     init_code: Vec<u8>,
-    gas_limit: u64,
 }
 
 #[derive(Debug)]
@@ -98,7 +93,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::from(self.state.metadata().gasometer().gas()) // U256::one()
+        U256::one() //U256::from(self.state.metadata().gasometer().gas())
     }
 
     fn gas_price(&self) -> U256 {
@@ -192,9 +187,9 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        target_gas: Option<u64>,
+        _target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        debug_print!("create target_gas={:?}", target_gas);
+        debug_print!("create");
 
         if self.state.metadata().is_static() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), None, Vec::new()))
@@ -209,28 +204,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         let value = token::eth::round(value);
         if !value.is_zero() && (self.balance(caller) < value) {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
-        }
-
-        let after_gas = if CONFIG.call_l64_after_gas {
-            if CONFIG.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), None, Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-
-        let gas_limit = core::cmp::min(target_gas, after_gas);
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), None, Vec::new()));
         }
 
         // Get the create address from given scheme.
@@ -272,7 +245,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
 
         let transfer = Some(evm::Transfer { source: caller, target: address, value });
 
-        Capture::Trap(CreateInterrupt{context, transfer, address, init_code, gas_limit})
+        Capture::Trap(CreateInterrupt{context, transfer, address, init_code})
     }
 
     fn call(
@@ -280,11 +253,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        target_gas: Option<u64>,
+        _target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        debug_print!("call target_gas={:?}", target_gas);
+        debug_print!("call");
 
         if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
@@ -310,65 +283,15 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        // These parameters should be true for call from another contract
-        let take_l64 = true;
-        let take_stipend = true;
-
-        let after_gas = if take_l64 && CONFIG.call_l64_after_gas {
-            if CONFIG.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-        let mut gas_limit = core::cmp::min(target_gas, after_gas);
-
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), Vec::new()));
-        }
-
-        if let Some(transfer) = transfer.as_ref() {
-            if take_stipend && transfer.value != U256::zero() {
-                gas_limit = gas_limit.saturating_add(CONFIG.call_stipend);
-            }
-        }
-
-        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit, is_static})
+        Capture::Trap(CallInterrupt{context, transfer, code_address, input, is_static})
     }
 
     fn pre_validate(
         &mut self,
-        context: &evm::Context,
-        opcode: evm::Opcode,
-        stack: &evm::Stack,
+        _context: &evm::Context,
+        _opcode: evm::Opcode,
+        _stack: &evm::Stack,
     ) -> Result<(), ExitError> {
-        if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-            self.state
-                .metadata_mut()
-                .gasometer_mut()
-                .record_cost(cost)?;
-        } else {
-            let is_static = self.state.metadata().is_static();
-            let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
-                context.address,
-                opcode,
-                stack,
-                is_static,
-                self,
-            )?;
-
-            self.state.metadata_mut().gasometer_mut().record_dynamic_cost(gas_cost, memory_cost)?;
-        }
-
         Ok(())
     }
 }
@@ -413,24 +336,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        gas_limit: u64,
     ) -> ProgramResult {
-        debug_print!("call_begin gas_limit={}", gas_limit);
-
-        let transaction_cost = gasometer::call_transaction_cost(&input);
-        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-
-        let after_gas = self.executor.state.metadata().gasometer().gas();
-        let gas_limit = core::cmp::min(gas_limit, after_gas);
-
-        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-
+        debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
-
-        self.executor.state.enter(gas_limit, false);
+        self.executor.state.enter(false);
         self.executor.state.touch(code_address);
 
         let transfer_value = token::eth::round(transfer_value);
@@ -452,22 +362,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        gas_limit: u64,
     ) -> ProgramResult {
-        debug_print!("create_begin gas_limit={}", gas_limit);
-        let transaction_cost = gasometer::create_transaction_cost(&code);
-        self.executor.state.metadata_mut().gasometer_mut()
-            .record_transaction(transaction_cost)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "ExitError={:?}", e))?;
+        debug_print!("create_begin");
 
         let scheme = evm::CreateScheme::Legacy { caller };
 
-        match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
+        match self.executor.create(caller, scheme, transfer_value, code, None) {
             Capture::Exit(e) => {
                 return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", e);
             },
             Capture::Trap(info) => {
-                self.executor.state.enter(info.gas_limit, false);
+                self.executor.state.enter(false);
 
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
@@ -523,7 +428,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
-        self.executor.state.enter(interrupt.gas_limit, interrupt.is_static);
+        self.executor.state.enter(interrupt.is_static);
         self.executor.state.touch(interrupt.code_address);
 
         if let Some(transfer) = interrupt.transfer {
@@ -543,7 +448,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
     fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
         debug_print!("apply_create {:?}", interrupt);
-        self.executor.state.enter(interrupt.gas_limit, false);
+        self.executor.state.enter( false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
         if CONFIG.create_increase_nonce {
