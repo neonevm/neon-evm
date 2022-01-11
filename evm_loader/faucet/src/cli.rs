@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
-#[structopt(about = "NeonLabs Token Faucet Service")]
+#[structopt(about = "NeonLabs Faucet Service")]
 pub struct Application {
     #[structopt(
         parse(from_os_str),

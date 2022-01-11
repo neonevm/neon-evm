@@ -108,20 +108,20 @@ Environment variables, if present, override portions of the configuration.
 |:-:|:-:|-
 |**Name**|**Overrides**|**Value Example**|
 |:-|:-|-
-| FAUCET_RPC_BIND | **rpc**.bind | `"0.0.0.0"`
+| FAUCET_RPC_BIND | **rpc**.bind | `0.0.0.0`
 | FAUCET_RPC_PORT | **rpc**.port | `3333`
 | FAUCET_RPC_ALLOWED_ORIGINS | **rpc**.allowed_origins | `["http://localhost"]`
 | FAUCET_WEB3_ENABLE | **web3**.enable | `true`
-| WEB3_RPC_URL | **web3**.rpc_url | `"http://localhost:9090/solana"`
-| WEB3_PRIVATE_KEY | **web3**.private_key | `"0x00A"`
+| WEB3_RPC_URL | **web3**.rpc_url | `http://localhost:9090/solana`
+| WEB3_PRIVATE_KEY | **web3**.private_key | `0x00A`
 | NEON_ERC20_TOKENS | **web3**.tokens | `["0x00B", "0x00C"]`
 | NEON_ERC20_MAX_AMOUNT | **web3**.max_amount | `1000`
 | FAUCET_SOLANA_ENABLE | **solana**.enable | `true`
-| SOLANA_URL | **solana**.url | `"http://localhost:8899"`
-| EVM_LOADER | **solana**.evm_loader | `"EvmLoaderId11111111111111111111111111111111"`
-| NEON_TOKEN_MINT | **solana**.token_mint | `"TokenMintId11111111111111111111111111111111"`
+| SOLANA_URL | **solana**.url | `http://localhost:8899`
+| EVM_LOADER | **solana**.evm_loader | `EvmLoaderId11111111111111111111111111111111`
+| NEON_TOKEN_MINT | **solana**.token_mint | `TokenMintId11111111111111111111111111111111`
 | NEON_TOKEN_MINT_DECIMALS | **solana**.token_mint_decimals | `9`
-| NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `"operator_id.json"`
+| NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `operator_id.json`
 | NEON_ETH_MAX_AMOUNT | **solana**.max_amount | `10`
 |-
 "##;

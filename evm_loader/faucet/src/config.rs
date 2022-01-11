@@ -106,16 +106,14 @@ pub fn load(file: &Path) -> Result<()> {
     for e in ENV {
         if let Ok(val) = env::var(e) {
             match *e {
-                FAUCET_RPC_BIND => CONFIG.write().unwrap().rpc.bind = unquote('"', '"', &val)?,
+                FAUCET_RPC_BIND => CONFIG.write().unwrap().rpc.bind = val,
                 FAUCET_RPC_PORT => CONFIG.write().unwrap().rpc.port = val.parse::<u16>()?,
                 FAUCET_RPC_ALLOWED_ORIGINS => {
                     CONFIG.write().unwrap().rpc.allowed_origins = parse_list_of_strings(&val)?
                 }
                 FAUCET_WEB3_ENABLE => CONFIG.write().unwrap().web3.enable = val.parse::<bool>()?,
-                WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = unquote('"', '"', &val)?,
-                WEB3_PRIVATE_KEY => {
-                    CONFIG.write().unwrap().web3.private_key = unquote('"', '"', &val)?
-                }
+                WEB3_RPC_URL => CONFIG.write().unwrap().web3.rpc_url = val,
+                WEB3_PRIVATE_KEY => CONFIG.write().unwrap().web3.private_key = val,
                 NEON_ERC20_TOKENS => {
                     CONFIG.write().unwrap().web3.tokens = parse_list_of_strings(&val)?
                 }
@@ -125,17 +123,14 @@ pub fn load(file: &Path) -> Result<()> {
                 FAUCET_SOLANA_ENABLE => {
                     CONFIG.write().unwrap().solana.enable = val.parse::<bool>()?
                 }
-                SOLANA_URL => CONFIG.write().unwrap().solana.url = unquote('"', '"', &val)?,
-                EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = unquote('"', '"', &val)?,
-                NEON_TOKEN_MINT => {
-                    CONFIG.write().unwrap().solana.token_mint = unquote('"', '"', &val)?
-                }
+                SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
+                EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
+                NEON_TOKEN_MINT => CONFIG.write().unwrap().solana.token_mint = val,
                 NEON_TOKEN_MINT_DECIMALS => {
                     CONFIG.write().unwrap().solana.token_mint_decimals = val.parse::<u8>()?
                 }
                 NEON_OPERATOR_KEYFILE => {
-                    CONFIG.write().unwrap().solana.operator_keyfile =
-                        unquote('"', '"', &val)?.into()
+                    CONFIG.write().unwrap().solana.operator_keyfile = val.into()
                 }
                 NEON_ETH_MAX_AMOUNT => {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?

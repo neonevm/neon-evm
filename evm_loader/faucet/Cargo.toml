@@ -1,6 +1,6 @@
 [package]
 name = "faucet"
-description = "Neon Faucet Service"
+description = "NeonLabs Faucet Service"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
 version = "0.6.0-dev"
