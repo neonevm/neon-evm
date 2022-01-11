@@ -25,28 +25,21 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     let limit = if !params.in_fractions {
         config::solana_max_amount()
     } else {
-        solana::convert_whole_to_fractions(id, config::solana_max_amount())?
+        solana::convert_whole_to_fractions(config::solana_max_amount())?
     };
 
     if params.amount > limit {
         return Err(eyre!(
-            "{} Requested value {} exceeds the limit {}",
-            id,
+            "Requested value {} exceeds the limit {}",
             params.amount,
             limit
         ));
     }
 
     let operator = config::solana_operator_keypair()
-        .map_err(|e| eyre!("{} config::solana_operator_keypair: {:?}", id, e))?;
-    let ether_address = ethereum::address_from_str(&params.wallet).map_err(|e| {
-        eyre!(
-            "{} ethereum::address_from_str({}): {:?}",
-            id,
-            &params.wallet,
-            e
-        )
-    })?;
+        .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
+    let ether_address = ethereum::address_from_str(&params.wallet)
+        .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
     solana::transfer_token(
         id,
         operator,
@@ -57,8 +50,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     .await
     .map_err(|e| {
         eyre!(
-            "{} solana::transfer_token(operator, {}): {:?}",
-            id,
+            "solana::transfer_token(operator, {}): {:?}",
             ether_address,
             e
         )

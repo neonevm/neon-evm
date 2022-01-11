@@ -29,8 +29,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
 
     if params.amount > config::web3_max_amount() {
         return Err(eyre!(
-            "{} Requested value {} exceeds the limit {}",
-            id,
+            "Requested value {} exceeds the limit {}",
             params.amount,
             config::web3_max_amount()
         ));
@@ -48,10 +47,10 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     let amount = U256::from(params.amount);
 
     for token in &config::tokens() {
-        let factor = U256::from(multiplication_factor(id, token)?);
+        let factor = U256::from(multiplication_factor(token)?);
         let internal_amount = amount
             .checked_mul(factor)
-            .ok_or_else(|| eyre!("{} Overflow {} * {}", id, amount, factor))?;
+            .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
         transfer(
             id,
             web3.eth(),
@@ -63,7 +62,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
         )
         .await
         .map_err(|e| {
-            error!("{} Failed transfer of token {}: {}", id, token, e);
+            error!("Failed transfer of token {}: {}", token, e);
             e
         })?;
     }
@@ -136,7 +135,7 @@ async fn get_decimals<T: Transport>(
 ) -> web3::contract::Result<u32> {
     let token = Contract::from_json(eth, token_address, include_bytes!("../erc20/ERC20.abi"))
         .map_err(|e| {
-            error!("{} Failed reading ERC20.abi: {}", id, e);
+            error!("Failed reading ERC20.abi: {}", e);
             e
         })?;
 
@@ -152,18 +151,18 @@ async fn get_decimals<T: Transport>(
 }
 
 /// Returns multiplication factor to convert whole token value to fractions.
-fn multiplication_factor(id: &str, token_address: &str) -> Result<u64> {
+fn multiplication_factor(token_address: &str) -> Result<u64> {
     let decimals = {
         TOKENS
             .read()
             .unwrap()
             .get(token_address)
-            .ok_or_else(|| eyre!("{} Token info in cache not found: {}", id, token_address))?
+            .ok_or_else(|| eyre!("Token info in cache not found: {}", token_address))?
             .decimals
     };
     let factor = 10_u64
         .checked_pow(decimals)
-        .ok_or_else(|| eyre!("{} Token {} overflow 10^{}", id, token_address, decimals))?;
+        .ok_or_else(|| eyre!("Token {} overflow 10^{}", token_address, decimals))?;
     Ok(factor)
 }
 
