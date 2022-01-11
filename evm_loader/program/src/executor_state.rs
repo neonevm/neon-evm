@@ -52,7 +52,7 @@ impl ExecutorMetadata {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
     pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
     	// The following fragment deleted in the mainstream code:
         // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
