@@ -57,6 +57,7 @@ use evm_loader::{
 };
 
 use crate::Config;
+use crate::error::NeonCliError;
 
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
@@ -236,8 +237,8 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     fn create_acc_if_not_exists(&self, address: &H160) -> bool {
-        let mut accounts = self.accounts.borrow_mut(); 
-        let mut new_accounts = self.new_accounts.borrow_mut(); 
+        let mut accounts = self.accounts.borrow_mut();
+        let mut new_accounts = self.new_accounts.borrow_mut();
         if accounts.get(address).is_none() {
             let (solana_address, _solana_nonce) = make_solana_program_address(address, &self.config.evm_loader);
             if let Some((acc, _balance, code_account)) = Self::get_account_from_solana(self.config, address) {
@@ -291,7 +292,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         }
                         storage.last_used() as usize
                     };
-                        
+
                     let mut accounts = self.accounts.borrow_mut();
                     let mut new_accounts = self.new_accounts.borrow_mut();
                     if let Some(acc) = accounts.get_mut(&address) {
@@ -306,7 +307,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 if let Some((code, valids)) = code_and_valids.clone() {
                                     if contract.code_size != 0 {
                                         eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                        exit(1)
+                                        exit(NeonCliError::AccountAlreadyInitialized as i32)
                                     }
                                     code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
                                     code_size = code.len();
@@ -315,7 +316,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 else{
                                     if contract.code_size == 0 {
                                         eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                        exit(1)
+                                        exit(NeonCliError::UninitializedAccount as i32)
                                     }
                                     code_begin = account_data_contract.size();
                                     code_size = contract.code_size as usize;
@@ -327,7 +328,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
 
-                                let trx_count = u64::try_from(nonce).map_err(|s| {eprintln!("convert nonce error, {:?}", s); exit(1)}).unwrap();
+                                let trx_count = u64::try_from(nonce).map_err(|s| {eprintln!("convert nonce error, {:?}", s); exit(NeonCliError::ConvertNonceError as i32)}).unwrap();
 
                                 if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
                                     *acc.writable.borrow_mut() = true;
@@ -336,13 +337,13 @@ impl<'a> EmulatorAccountStorage<'a> {
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
                                     eprintln!("deploy to existing account: {}", &address.to_string());
-                                    exit(1);
+                                    exit(NeonCliError::DeployToExistingAccount as i32);
                                 }
 
                                 code_begin = Contract::SIZE + 1;
                                 code_size = code.len();
                                 valids_size = valids.len();
-    
+
                                 let hamt_begin = code_begin + code_size + valids_size;
                                 *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                                 *acc.code_size_current.borrow_mut() = Some(0);
@@ -351,7 +352,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             else{
                                 if reset_storage || exist_items {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
-                                    exit(1);
+                                    exit(NeonCliError::ContractAccountIsExpected as i32);
                                 }
                                 *acc.writable.borrow_mut() = true;
                             }
@@ -359,7 +360,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         }
                         else{
                             eprintln!("Changes of incorrect account were found {}", &address.to_string());
-                            exit(1);
+                            exit(NeonCliError::IncorrectAccount as i32);
                         }
                     }
                     else if let Some(acc) = new_accounts.get_mut(&address) {
@@ -373,7 +374,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         }
                         else  if reset_storage || exist_items {
                                 eprintln!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
-                                exit(1);
+                                exit(NeonCliError::ContractAccountIsExpected as i32);
                             }
 
                         *acc.writable.borrow_mut() = true;
@@ -451,7 +452,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                     new: !target_token_exists
                 }
             );
-        } 
+        }
     }
 
     pub fn apply_spl_approves(&self, approves: Vec<SplApprove>) {
@@ -614,7 +615,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         let (account, _) = make_solana_program_address(address, &self.config.evm_loader);
         let token_account = spl_associated_token_account::get_associated_token_address(&account, &self.token_mint);
-        
+
         let mut solana_accounts = self.solana_accounts.borrow_mut();
         solana_accounts.entry(token_account).or_insert_with(|| AccountMeta::new_readonly(token_account, false));
 
