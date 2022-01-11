@@ -188,6 +188,8 @@ pub const PAYMENT_TO_TREASURE: u64 = 5000;
 pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
+/// `TRANSACTION_COST`
+pub const TRANSACTION_COST: u64 = 15000;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));

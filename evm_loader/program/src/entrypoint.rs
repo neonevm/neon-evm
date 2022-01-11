@@ -46,10 +46,10 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
+use crate::config::TRANSACTION_COST;
 
-type UsedGas = u64;
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
-type CallResult = Result<(Option<EvmResults>,UsedGas), ProgramError>;
+type CallResult = Result<Option<EvmResults>, ProgramError>;
 
 const HEAP_LENGTH: usize = 256*1024;
 
@@ -390,11 +390,11 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let (evm_results, used_gas) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            let evm_results = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
             token::user_pays_operator(
                 trx_gas_price,
-                used_gas,
+                TRANSACTION_COST,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
@@ -407,7 +407,7 @@ fn process_instruction<'a>(
                 accounts,
                 operator_sol_info,
                 evm_results.unwrap(),
-                used_gas)?;
+                TRANSACTION_COST)?;
 
             Ok(())
         },
@@ -853,7 +853,7 @@ fn do_call(
     debug_print!("   caller: {}", account_storage.origin());
     debug_print!(" contract: {}", account_storage.contract());
 
-    let (evm_results,used_gas) = {
+    let evm_results = {
         let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(executor_state);
@@ -873,17 +873,16 @@ fn do_call(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            ((exit_reason, result, Some(apply)), used_gas)
+            (exit_reason, result, Some(apply))
         } else {
-            ((exit_reason, result, None), used_gas)
+            (exit_reason, result, None)
         }
     };
 
-    Ok((Some(evm_results),used_gas))
+    Ok(Some(evm_results))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -933,21 +932,22 @@ fn do_begin<'a>(
         storage_info,
         system_info)?;
 
-    let (_,used_gas) = if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+    if trx.to.is_some() {
+        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
+        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?;
     };
 
-    token::user_pays_operator_for_iteration(
-        trx_gas_price, used_gas,
+    token::user_pays_operator(
+        trx_gas_price,
+        TRANSACTION_COST,
         user_eth_info,
         operator_eth_info,
         accounts,
-        &account_storage,
-        &mut storage,
+        &account_storage
     )?;
+    storage.add_gas_has_been_paid(TRANSACTION_COST)?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -991,33 +991,34 @@ fn do_continue_top_level<'a>(
         collateral_pool_sol_info,
         system_info)?;
 
-    let (results, used_gas) = {
+    let results = {
         if token::check_enough_funds(
             trx_gas_limit,
             trx_gas_price,
             user_eth_info,
             Some(&mut storage)).is_err() {
-            let used_gas = storage.get_payments_info()?.0;
-            (Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None)), used_gas)
+            Some((ExitReason::Error(ExitError::OutOfFund), vec![0; 0], None))
         } else {
             do_continue(&mut storage, step_count, &mut account_storage)?
         }
     };
 
-    token::user_pays_operator_for_iteration(
-        trx_gas_price, used_gas,
+    token::user_pays_operator(
+        trx_gas_price,
+        TRANSACTION_COST,
         user_eth_info,
         operator_eth_info,
         accounts,
-        &account_storage,
-        &mut storage,
+        &account_storage
     )?;
+    storage.add_gas_has_been_paid(TRANSACTION_COST)?;
 
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info)?;
 
+        let (used_gas, _) = storage.get_payments_info()?;
         applies_and_invokes(
             program_id,
             &mut account_storage,
@@ -1039,7 +1040,7 @@ fn do_partial_call(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> CallResult
+) -> ProgramResult
 {
     debug_print!("do_partial_call");
 
@@ -1065,11 +1066,9 @@ fn do_partial_call(
     debug_print!("save");
     executor.save_into(storage);
 
-    let executor_state = executor.into_state();
-    let used_gas = executor_state.gasometer().total_used_gas()/2;
-    debug_print!("first iteration complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+    debug_print!("first iteration complete; steps executed={:?}", step_count);
 
-    Ok((None,used_gas))
+    Ok(())
 }
 
 fn do_partial_create<'a>(
@@ -1079,7 +1078,7 @@ fn do_partial_create<'a>(
     instruction_data: Vec<u8>,
     transfer_value: U256,
     gas_limit: u64,
-) -> CallResult
+) -> ProgramResult
 {
     debug_print!("do_partial_create gas_limit={}", gas_limit);
 
@@ -1095,11 +1094,9 @@ fn do_partial_create<'a>(
     debug_print!("save");
     executor.save_into(storage);
 
-    let executor_state = executor.into_state();
-    let used_gas = executor_state.gasometer().total_used_gas()/2;
-    debug_print!("first iteration of deployment complete; steps executed={:?}; used_gas={:?}", step_count, used_gas);
+    debug_print!("first iteration of deployment complete; steps executed={:?}", step_count);
 
-    Ok((None,used_gas))
+    Ok(())
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -1111,7 +1108,7 @@ fn do_continue<'a>(
 {
     debug_print!("do_continue");
 
-    let (evm_results, used_gas) = {
+    let evm_results = {
         let mut executor = Machine::restore(storage, account_storage);
         debug_print!("Executor restored");
 
@@ -1119,9 +1116,7 @@ fn do_continue<'a>(
             Ok(()) => {
                 executor.save_into(storage);
                 debug_print!("{} steps executed", step_count);
-                let executor_state = executor.into_state();
-                let used_gas = executor_state.gasometer().total_used_gas()/2;
-                return Ok((None, used_gas));
+                return Ok(None);
             }
             Err((result, reason)) => (result, reason)
         };
@@ -1129,17 +1124,16 @@ fn do_continue<'a>(
         debug_print!("Call done");
 
         let executor_state = executor.into_state();
-        let used_gas = executor_state.gasometer().used_gas();
         if exit_reason.is_succeed() {
             debug_print!("Succeed execution");
             let apply = executor_state.deconstruct();
-            ((exit_reason, result, Some(apply)), used_gas)
+            (exit_reason, result, Some(apply))
         } else {
-            ((exit_reason, result, None), used_gas)
+            (exit_reason, result, None)
         }
     };
 
-    Ok((Some(evm_results),used_gas))
+    Ok(Some(evm_results))
 }
 
 fn applies_and_invokes<'a>(
@@ -1148,7 +1142,7 @@ fn applies_and_invokes<'a>(
     accounts: &'a [AccountInfo<'a>],
     operator: &AccountInfo<'a>,
     evm_results: EvmResults,
-    used_gas: UsedGas
+    used_gas: u64
 ) -> ProgramResult {
     let (exit_reason, result, applies_logs_transfers) = evm_results;
     if let Some(applies_logs_transfers) = applies_logs_transfers {
