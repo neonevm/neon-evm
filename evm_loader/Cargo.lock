@@ -2568,6 +2568,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-token",
  "stderrlog",
+ "thiserror",
 ]
 
 [[package]]
