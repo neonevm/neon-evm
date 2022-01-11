@@ -17,6 +17,8 @@ echo "Currently runned Docker-containers"
 docker ps -a
 
 docker-compose -f evm_loader/docker-compose-test.yml up -d
+sleep 20
+docker container ls -a
 
 function cleanup_docker {
     docker logs solana >solana.log 2>&1
