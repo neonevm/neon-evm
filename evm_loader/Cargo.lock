@@ -2552,6 +2552,7 @@ dependencies = [
  "hex",
  "libsecp256k1",
  "log",
+ "num-derive",
  "rand 0.8.4",
  "rlp",
  "serde",
