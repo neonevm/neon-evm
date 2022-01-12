@@ -157,12 +157,11 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         }
     };
 
-    let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
+    let (exit_reason, result, applies_logs, steps_executed) = {
         // u64::MAX is too large, remix gives this error:
         // Gas estimation errored with the following message (see below).
         // Number can only safely store up to 53 bits
-        let gas_limit = 50_000_000;
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
+        let executor_substate = Box::new(ExecutorSubstate::new(&storage));
         let executor_state = ExecutorState::new(executor_substate, &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
@@ -177,8 +176,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                 executor.call_begin(storage.origin(),
                                     storage.contract(),
                                     data.unwrap_or_default(),
-                                    value.unwrap_or_default(),
-                                    gas_limit)?;
+                                    value.unwrap_or_default())?;
                 executor.execute()
             },
             None => {
@@ -188,8 +186,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
                     value);
                 executor.create_begin(storage.origin(),
                                       data.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-                                      gas_limit)?;
+                                      value.unwrap_or_default())?;
                 executor.execute()
             }
         };
@@ -198,16 +195,12 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
 
         let steps_executed = executor.get_steps_executed();
         let executor_state = executor.into_state();
-        let used_gas = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas = executor_state.gasometer().refunded_gas();
-        let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
-        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), needed_gas, steps_executed)
+            (exit_reason, result, Some(apply), steps_executed)
         } else {
-            (exit_reason, result, None, needed_gas, steps_executed)
+            (exit_reason, result, None, steps_executed)
         }
     };
 
@@ -260,7 +253,6 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "token_accounts": token_accounts,
         "result": &hex::encode(&result),
         "exit_status": status,
-        "used_gas": used_gas,
         "steps_executed": steps_executed,
     }).to_string();
 
