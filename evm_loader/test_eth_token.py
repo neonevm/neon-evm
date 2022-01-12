@@ -148,11 +148,8 @@ class EthTokenTest(unittest.TestCase):
 
     def test_caller_balance(self):
         expected_balance = self.token.balance(self.caller_token)
-        print("expected_balance1", expected_balance)
-        expected_balance = int(expected_balance * 10**18)   # the "begin" iteration consumes gas
-        print("expected_balance2", expected_balance)
-        expected_balance = expected_balance - TRANSACTION_COST
-        print("expected_balance3", expected_balance)
+        expected_balance = int(expected_balance * 10**18) - TRANSACTION_COST  # the "begin" iteration consumes gas
+        print("expected_balance", expected_balance)
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
         input = func_name + bytes.fromhex("%064x" % expected_balance)
         result = self.call_partial_signed(input, 0)
