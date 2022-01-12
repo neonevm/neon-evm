@@ -2553,6 +2553,8 @@ dependencies = [
  "libsecp256k1",
  "log",
  "num-derive",
+ "num-traits",
+ "num_enum",
  "rand 0.8.4",
  "rlp",
  "serde",

@@ -57,7 +57,7 @@ use evm_loader::{
 };
 
 use crate::Config;
-use crate::error::NeonCliError;
+use crate::errors::NeonCliError;
 
 #[derive(Debug, Clone)]
 pub struct TokenAccount {

@@ -9,10 +9,10 @@ use thiserror::Error;
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
 pub enum NeonCliError {
     /// No Error.
-    #[error("no error.")]
+    #[error("no error")]
     NoError,
     /// Unknown Error.
-    #[error("Unknown error.")]
+    #[error("Unknown error")]
     UnknownError,
     /// Account is already initialized.
     #[error("Account is already initialized")]

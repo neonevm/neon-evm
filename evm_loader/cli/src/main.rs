@@ -2,7 +2,8 @@
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 
 mod account_storage;
-mod error;
+
+mod errors;
 
 use crate::{
     account_storage::{
@@ -111,7 +112,7 @@ use evm_loader::{
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount
 };
-use crate::error::NeonCliError;
+use crate::errors::NeonCliError;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
