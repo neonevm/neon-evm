@@ -236,7 +236,7 @@ class EventTest(unittest.TestCase):
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST) ]
+        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)

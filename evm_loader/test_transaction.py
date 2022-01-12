@@ -423,9 +423,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, 984)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 1548)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, EXPECTED_USED_GAS)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, TRANSACTION_COST*2)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, TRANSACTION_COST*3)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, TRANSACTION_COST*4)
         self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
 
         print('Check Transfer to treasures on each iteration #345.')
