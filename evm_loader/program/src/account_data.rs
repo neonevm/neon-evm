@@ -219,10 +219,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Account` struct
-    pub fn get_account(&self) -> Result<&Account, ProgramError>  {
+    pub const fn get_account(&self) -> Result<&Account, ProgramError>  {
         match self {
             Self::Account(ref acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -234,7 +234,7 @@ impl AccountData {
     pub fn get_mut_account(&mut self) -> Result<&mut Account, ProgramError>  {
         match self {
             Self::Account(ref mut acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -243,10 +243,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Contract` struct
-    pub fn get_contract(&self) -> Result<&Contract, ProgramError>  {
+    pub const fn get_contract(&self) -> Result<&Contract, ProgramError>  {
         match self {
             Self::Contract(ref acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -258,7 +258,7 @@ impl AccountData {
     pub fn get_mut_contract(&mut self) -> Result<&mut Contract, ProgramError>  {
         match self {
             Self::Contract(ref mut acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -267,10 +267,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub fn get_storage(&self) -> Result<&Storage, ProgramError>  {
+    pub const fn get_storage(&self) -> Result<&Storage, ProgramError>  {
         match self {
             Self::Storage(ref acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -282,7 +282,7 @@ impl AccountData {
     pub fn get_mut_storage(&mut self) -> Result<&mut Storage, ProgramError>  {
         match self {
             Self::Storage(ref mut acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -291,10 +291,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if doesn't contain `Storage` struct
-    pub fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
+    pub const fn get_erc20_allowance(&self) -> Result<&ERC20Allowance, ProgramError>  {
         match self {
             Self::ERC20Allowance(ref acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -306,7 +306,7 @@ impl AccountData {
     pub fn get_mut_erc20_allowance(&mut self) -> Result<&mut ERC20Allowance, ProgramError>  {
         match self {
             Self::ERC20Allowance(ref mut acc) => Ok(acc),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 
@@ -315,10 +315,10 @@ impl AccountData {
     ///
     /// Will return:
     /// `ProgramError::InvalidAccountData` if account is not empty
-    pub fn check_empty(&self) -> Result<(), ProgramError> {
+    pub const fn check_empty(&self) -> Result<(), ProgramError> {
         match self {
             Self::Empty => Ok(()),
-            _ => Err!(ProgramError::InvalidAccountData),
+            _ => Err(ProgramError::InvalidAccountData),
         }
     }
 }
