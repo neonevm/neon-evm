@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
-#[structopt(about = "NeonLabs Token Faucet Service")]
+#[structopt(about = "NeonLabs Faucet Service")]
 pub struct Application {
     #[structopt(
         parse(from_os_str),
@@ -22,6 +22,16 @@ pub struct Application {
 
 #[derive(StructOpt)]
 pub enum Command {
+    #[structopt(about = "Shows manual(s)")]
+    Man {
+        #[structopt(long, help = "Shows HTTP API manual")]
+        api: bool,
+        #[structopt(long, help = "Shows configuration file manual")]
+        config: bool,
+        #[structopt(long, help = "Shows environment variables manual")]
+        env: bool,
+    },
+
     #[structopt(about = "Shows config")]
     Config {
         #[structopt(

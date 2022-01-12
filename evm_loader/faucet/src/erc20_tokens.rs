@@ -24,8 +24,8 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Ethereum.
-pub async fn airdrop(params: Airdrop) -> Result<()> {
-    info!("Processing ERC20 {:?}...", params);
+pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
+    info!("{} Processing ERC20 {:?}...", id, params);
 
     if params.amount > config::web3_max_amount() {
         return Err(eyre!(
@@ -40,7 +40,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
     let web3 = web3::Web3::new(http);
 
     if TOKENS.write().unwrap().is_empty() {
-        init(web3.eth().clone(), config::tokens()).await?;
+        init(id, web3.eth().clone(), config::tokens()).await?;
     }
 
     let recipient = ethereum::address_from_str(&params.wallet)?;
@@ -52,6 +52,7 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
             .checked_mul(factor)
             .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
         transfer(
+            id,
             web3.eth(),
             ethereum::address_from_str(token)?,
             token,
@@ -70,23 +71,24 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
 }
 
 /// Initializes local cache of tokens properties.
-async fn init<T: Transport>(eth: Eth<T>, addresses: Vec<String>) -> Result<()> {
-    info!("Checking tokens...");
+async fn init<T: Transport>(id: &str, eth: Eth<T>, addresses: Vec<String>) -> Result<()> {
+    info!("{} Checking tokens...", id);
 
     for token_address in addresses {
         let a = ethereum::address_from_str(&token_address)?;
         TOKENS.write().unwrap().insert(
             token_address,
-            Token::new(get_decimals(eth.clone(), a).await?),
+            Token::new(get_decimals(id, eth.clone(), a).await?),
         );
     }
 
-    info!("All tokens are deployed and sane");
+    info!("{} All tokens are deployed and sane", id);
     Ok(())
 }
 
 /// Creates and sends a transfer transaction.
 async fn transfer<T: Transport>(
+    id: &str,
     eth: Eth<T>,
     token: ethereum::Address,
     token_name: &str,
@@ -95,18 +97,18 @@ async fn transfer<T: Transport>(
     amount: U256,
 ) -> web3::contract::Result<()> {
     info!(
-        "Transfer {} of token {} -> {}",
-        amount, token_name, recipient
+        "{} Transfer {} of token {} -> {}",
+        id, amount, token_name, recipient
     );
     let token =
         Contract::from_json(eth, token, include_bytes!("../erc20/ERC20.abi")).map_err(|e| {
-            error!("Failed reading ERC20.abi: {}", e);
+            error!("{} Failed reading ERC20.abi: {}", id, e);
             e
         })?;
 
     info!(
-        "Sending transaction for transfer of token {}...",
-        token_name
+        "{} Sending transaction for transfer of token {}...",
+        id, token_name
     );
     token
         .signed_call_with_confirmations(
@@ -118,15 +120,16 @@ async fn transfer<T: Transport>(
         )
         .await
         .map_err(|e| {
-            error!("Failed signed_call_with_confirmations: {}", e);
+            error!("{} Failed signed_call_with_confirmations: {}", id, e);
             e
         })?;
 
-    info!("OK");
+    info!("{} OK", id);
     Ok(())
 }
 
 async fn get_decimals<T: Transport>(
+    id: &str,
     eth: Eth<T>,
     token_address: ethereum::Address,
 ) -> web3::contract::Result<u32> {
@@ -139,7 +142,10 @@ async fn get_decimals<T: Transport>(
     let decimals = token
         .query("decimals", (), None, Options::default(), None)
         .await?;
-    info!("ERC20 token {} has decimals {}", token_address, decimals);
+    info!(
+        "{} ERC20 token {} has decimals {}",
+        id, token_address, decimals
+    );
 
     Ok(decimals)
 }
