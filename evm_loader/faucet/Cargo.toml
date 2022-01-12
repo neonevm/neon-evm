@@ -4,7 +4,6 @@ description = "NeonLabs Faucet Service"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
 version = "0.5.4-dev"
-build = "build.rs"
 edition = "2018"
 
 [dependencies]
@@ -36,6 +35,3 @@ tracing = "0.1.29"
 # tracing-subscriber with disabled feature "ansi" to force colorless logs
 tracing-subscriber = { version = "0.2.25", default_features = false, features = ["env-filter", "fmt", "tracing-log", "chrono", "smallvec", "parking_lot"] }
 web3 = "0.17"
-
-[build-dependencies]
-vergen = { version = "5.1", default-features = false, features = ["git"]  }

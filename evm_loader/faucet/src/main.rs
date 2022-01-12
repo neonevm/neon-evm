@@ -40,19 +40,25 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
+macro_rules! faucet_pkg_version {
+    () => {
+        env!("CARGO_PKG_VERSION")
+    };
+}
+macro_rules! faucet_revision {
+    () => {
+        env!("NEON_REVISION")
+    };
+}
+macro_rules! version_string {
+    () => {
+        concat!("Faucet/v", faucet_pkg_version!(), "-", faucet_revision!())
+    };
+}
+
 /// Shows semantic version and revision hash.
 fn show_version() {
-    let ver = env!("CARGO_PKG_VERSION");
-    let rev = if let Ok(rev) = std::env::var("VERGEN_GIT_SHA") {
-        if rev.len() < 7 {
-            rev
-        } else {
-            rev[..7].to_string()
-        }
-    } else {
-        "<unknown>".to_owned()
-    };
-    info!("version {} (revision {})", ver, rev);
+    info!(version_string!());
 }
 
 /// Dispatches CLI commands.
