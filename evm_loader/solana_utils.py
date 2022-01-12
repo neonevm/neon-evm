@@ -53,7 +53,7 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 ACCOUNT_SEED_VERSION=b'\1'
-
+TRANSACTION_COST = 15000    # the amount of gas per transaction iteration
 # DEFAULT_UNITS=500*1000
 # DEFAULT_HEAP_FRAME=256*1024
 

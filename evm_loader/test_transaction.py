@@ -260,7 +260,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST*4)  # used_gas
 
     # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_5_solana_transactions_sequentially(self):
@@ -311,7 +311,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST*4)  # used_gas
 
     # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
@@ -408,8 +408,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         data = b58decode(response_3['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        EXPECTED_USED_GAS = 24301
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), EXPECTED_USED_GAS)  # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST*4)  # used_gas
         print('the ether transaction was completed after creating solana-eth-account by three 0x0d transactions')
 
         try:

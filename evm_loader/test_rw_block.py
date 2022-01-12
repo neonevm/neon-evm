@@ -234,7 +234,7 @@ class RW_Locking_Test(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            self.assertEqual(int().from_bytes(data[2:10], 'little'), 21663) # used_gas
+            self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST*3) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
     # The first transaaction set lock on write to  contract account

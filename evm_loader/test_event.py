@@ -166,7 +166,7 @@ class EventTest(unittest.TestCase):
         self.call_begin(storage, 10, msg, instruction)
 
         while (True):
-            result = self.call_continue(storage, 50)["result"]
+            result = self.call_continue(storage, 500)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -177,8 +177,8 @@ class EventTest(unittest.TestCase):
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
-        calls = [ (self.call_signed, 1), (self.call_partial_signed, 0) ]
-        for (call, index) in calls:
+        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+        for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
@@ -188,14 +188,14 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21657) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
 
     # @unittest.skip("a.i.")
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1), (self.call_partial_signed, 0) ]
-        for (call, index) in calls:
+        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+        for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
@@ -205,15 +205,15 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 21719) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
 
     # @unittest.skip("a.i.")
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1), (self.call_partial_signed, 0) ]
-        for (call, index) in calls:
+        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+        for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
@@ -229,15 +229,15 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 22743) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
 
     # @unittest.skip("a.i.")
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1), (self.call_partial_signed, 0) ]
-        for (call, index) in calls:
+        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST) ]
+        for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
                 self.assertEqual(result['meta']['err'], None)
@@ -259,7 +259,7 @@ class EventTest(unittest.TestCase):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-                self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+                self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
 
     # @unittest.skip("a.i.")
@@ -308,7 +308,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
@@ -328,7 +328,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 23858) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
     # @unittest.skip("a.i.")
