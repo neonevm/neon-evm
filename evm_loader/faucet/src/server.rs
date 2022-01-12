@@ -23,6 +23,7 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
         }
         App::new()
             .wrap(cors)
+            .route("/request_ping", post().to(handle_request_ping))
             .route(
                 "/request_neon_in_galans",
                 post().to(handle_request_neon_in_galans),
@@ -37,6 +38,36 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
     .await?;
 
     Ok(())
+}
+
+/// Handles a ping request.
+async fn handle_request_ping(body: Bytes) -> impl Responder {
+    #[derive(Debug, serde::Deserialize)]
+    struct Ping {
+        ping: String,
+    }
+
+    let id = generate_id();
+
+    println!();
+    info!("{} Handling ping...", id);
+
+    let input = String::from_utf8(body.to_vec());
+    if let Err(err) = input {
+        error!("{} BadRequest (body): {}", id, err);
+        return HttpResponse::BadRequest();
+    }
+
+    let input = input.unwrap();
+    let ping = serde_json::from_str::<Ping>(&input);
+    if let Err(err) = ping {
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
+        return HttpResponse::BadRequest();
+    }
+
+    info!("{} ping {}", id, ping.unwrap().ping);
+
+    HttpResponse::Ok()
 }
 
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).

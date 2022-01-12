@@ -9,6 +9,7 @@ Several endpoints are supported.
 |:-:|:-:|-
 |**Endpoint**|**Workload**|**Description**|
 |:-|:-:|-
+| request_ping | JSON | Requests ping to check availability of the service
 | request_neon_in_galans | JSON | Requests NEON tokens, amount in galans (fractions)
 | request_neon | JSON | Requests NEON tokens
 | request_erc20 | JSON | Requests ERC20 tokens
@@ -43,6 +44,11 @@ curl -i -X POST \
     -H 'Content-Type: text/plain' \
     -d '{"wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1}' \
     'http://localhost:3333/request_neon'
+```
+
+Example of ping request:
+```
+curl -i -X POST -H 'Content-Type: text/plain' -d '{"ping": "Hello"}' 'http://localhost:3333/request_ping'
 ```
 "##;
 
