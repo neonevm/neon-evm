@@ -11,6 +11,7 @@ mod manual;
 mod neon_token;
 mod server;
 mod solana;
+mod version;
 
 use color_eyre::Result;
 use tracing::info;
@@ -40,25 +41,9 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
-macro_rules! faucet_pkg_version {
-    () => {
-        env!("CARGO_PKG_VERSION")
-    };
-}
-macro_rules! faucet_revision {
-    () => {
-        env!("NEON_REVISION")
-    };
-}
-macro_rules! version_string {
-    () => {
-        concat!("Faucet/v", faucet_pkg_version!(), "-", faucet_revision!())
-    };
-}
-
 /// Shows semantic version and revision hash.
 fn show_version() {
-    info!(version_string!());
+    info!(version::display!());
 }
 
 /// Dispatches CLI commands.
