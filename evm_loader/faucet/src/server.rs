@@ -4,7 +4,7 @@ use actix_cors::Cors;
 use actix_web::http::header;
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
-use color_eyre::Result;
+use eyre::Result;
 use tracing::{error, info};
 
 use crate::{config, erc20_tokens, neon_token};
@@ -156,15 +156,14 @@ async fn handle_request_erc20(body: Bytes) -> impl Responder {
     HttpResponse::Ok()
 }
 
-/// Represents packet of information needed for the stop.
-#[derive(Debug, serde::Deserialize)]
-pub struct Stop {
-    /// Milliseconds to wait before shutdown.
-    delay: u64,
-}
-
 /// Handles a request for graceful shutdown.
 async fn handle_request_stop(body: Bytes) -> impl Responder {
+    #[derive(serde::Deserialize)]
+    struct Stop {
+        /// Milliseconds to wait before shutdown.
+        delay: u64,
+    }
+
     use nix::sys::signal;
     use nix::unistd::Pid;
     use tokio::time::Duration;

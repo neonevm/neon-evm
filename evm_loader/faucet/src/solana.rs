@@ -4,8 +4,7 @@ use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 
-use color_eyre::eyre::{eyre, WrapErr};
-use color_eyre::Result;
+use eyre::{eyre, Result, WrapErr};
 use tracing::info;
 
 use solana_client::rpc_client::RpcClient;

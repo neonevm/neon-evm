@@ -13,7 +13,7 @@ mod server;
 mod solana;
 mod version;
 
-use color_eyre::Result;
+use eyre::Result;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -24,12 +24,11 @@ async fn main() -> Result<()> {
     execute(cli::application()).await
 }
 
-/// Initializes the logger and error handler.
+/// Initializes the logger.
 fn setup() -> Result<()> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
         std::env::set_var("RUST_LIB_BACKTRACE", "0")
     }
-    color_eyre::install()?;
 
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info")
