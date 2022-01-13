@@ -113,8 +113,7 @@ async fn ether_account_exists(id: String, account: Pubkey, token_account: Pubkey
     task::spawn_blocking(move || -> Result<bool> {
         let client = get_client();
         let balance = client.get_token_account_balance(&token_account);
-        let balance_exists = balance.is_ok();
-        if balance_exists {
+        if balance.is_ok() {
             info!(
                 "{} Token balance of recipient is {:?}",
                 id,
@@ -138,7 +137,7 @@ async fn ether_account_exists(id: String, account: Pubkey, token_account: Pubkey
     .await?
 }
 
-/// Creates ether account. Ignores possible error if the account already created.
+/// Creates ether account. Ignores possible error if the account was already created.
 async fn create_ether_account(
     signer: Vec<u8>,
     signer_account: Pubkey,
@@ -148,12 +147,11 @@ async fn create_ether_account(
     task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
 
-        let mut instructions = Vec::with_capacity(1);
-        instructions.push(create_ether_account_instruction(
+        let instructions = vec![create_ether_account_instruction(
             signer_account,
             evm_loader_id,
             ether_address,
-        ));
+        )];
 
         let signer = Keypair::from_bytes(&signer)?;
         let message = Message::new(&instructions, Some(&signer.pubkey()));
@@ -161,6 +159,7 @@ async fn create_ether_account(
         let (blockhash, _) = client.get_recent_blockhash()?;
         tx.try_sign(&[&signer], blockhash)?;
         let _ignore_error = client.send_and_confirm_transaction(&tx);
+
         Ok(())
     })
     .await?
@@ -186,8 +185,7 @@ async fn do_transfer_token(
             convert_whole_to_fractions(amount)?
         };
 
-        let mut instructions = Vec::with_capacity(1);
-        instructions.push(spl_token::instruction::transfer_checked(
+        let instructions = vec![spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
             &token_mint_id,
@@ -196,7 +194,7 @@ async fn do_transfer_token(
             &[],
             amount,
             config::solana_token_mint_decimals(),
-        )?);
+        )?];
 
         let signer = Keypair::from_bytes(&signer)?;
         let message = Message::new(&instructions, Some(&signer.pubkey()));
