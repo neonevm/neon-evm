@@ -7,8 +7,6 @@ use std::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use solana_sdk::signer::keypair::Keypair;
-
 use crate::ethereum;
 
 lazy_static::lazy_static! {
@@ -219,8 +217,8 @@ pub fn solana_token_mint_decimals() -> u8 {
     CONFIG.read().unwrap().solana.token_mint_decimals
 }
 
-/// Gets the `solana.operator` keypair value.
-pub fn solana_operator_keypair() -> Result<Keypair> {
+/// Gets the `solana.operator` keypair byte array.
+pub fn solana_operator_keypair_bytes() -> Result<Vec<u8>> {
     let keyfile = CONFIG.read().unwrap().solana.operator_keyfile.clone();
     let key = std::fs::read_to_string(&keyfile).map_err(|e| Error::Read(e, keyfile.clone()))?;
     let key = key.trim();
@@ -232,7 +230,7 @@ pub fn solana_operator_keypair() -> Result<Keypair> {
     for s in ss {
         bytes.push(s.parse::<u8>()?);
     }
-    Ok(Keypair::from_bytes(&bytes)?)
+    Ok(bytes)
 }
 
 /// Gets the `solana.max_amount` value

@@ -5,8 +5,6 @@ use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 
 use eyre::{eyre, Result, WrapErr};
-use tracing::info;
-
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
@@ -15,6 +13,8 @@ use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::{system_program, sysvar};
+use tokio::task;
+use tracing::info;
 
 use crate::{config, ethereum};
 
@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
 
 /// Creates the signleton instance of RpcClient.
 pub fn init_client(url: String) {
-    tokio::task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
+    task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
@@ -43,7 +43,7 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 /// When in_fractions == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
     id: &str,
-    signer: Keypair,
+    signer: Vec<u8>,
     ether_address: ethereum::Address,
     amount: u64,
     in_fractions: bool,
@@ -61,7 +61,7 @@ pub async fn transfer_token(
         )
     })?;
 
-    let signer_account = signer.pubkey();
+    let signer_account = Keypair::from_bytes(&signer)?.pubkey();
     let signer_token_account =
         spl_associated_token_account::get_associated_token_address(&signer_account, &token_mint_id);
 
@@ -69,11 +69,49 @@ pub async fn transfer_token(
     let token_account =
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
-    let id = id.to_owned();
-    let r = tokio::task::spawn_blocking(move || -> Result<()> {
-        let client = get_client();
-        let mut instructions = vec![];
+    info!("{} spl_token id = {}", id, spl_token::id());
+    info!("{} signer_token_account = {}", id, signer_token_account);
+    info!("{} token_mint_id = {}", id, token_mint_id);
+    info!("{} token_account = {}", id, token_account);
+    info!("{} signer_account = {}", id, signer_account);
+    info!("{} amount = {}", id, amount);
+    info!(
+        "{} token_decimals = {}",
+        id,
+        config::solana_token_mint_decimals()
+    );
 
+    let exists = ether_account_exists(id.to_owned(), account, token_account).await?;
+    if !exists {
+        if let Err(e) =
+            create_ether_account(signer.clone(), signer_account, evm_loader_id, ether_address).await
+        {
+            return Err(eyre!("{:?}", e));
+        }
+    }
+
+    if let Err(e) = do_transfer_token(
+        id.to_owned(),
+        signer,
+        signer_token_account,
+        token_mint_id,
+        token_account,
+        signer_account,
+        amount,
+        in_fractions,
+    )
+    .await
+    {
+        return Err(eyre!("{:?}", e));
+    }
+
+    Ok(())
+}
+
+/// Checks if ether account for Solana account exists.
+async fn ether_account_exists(id: String, account: Pubkey, token_account: Pubkey) -> Result<bool> {
+    task::spawn_blocking(move || -> Result<bool> {
+        let client = get_client();
         let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
         if balance_exists {
@@ -83,21 +121,64 @@ pub async fn transfer_token(
                 balance.unwrap()
             );
             info!("{} Ether {:?}", id, client.get_account(&account)?);
+            Ok(true)
         } else {
             info!("{} Empty balance of token account '{}'", id, token_account);
             let ether_account = client.get_account(&account);
             let ether_account_exists = ether_account.is_ok();
             if ether_account_exists {
                 info!("{} Ether {:?}", id, ether_account.unwrap());
+                Ok(true)
             } else {
                 info!("{} No ether account; will be created", id);
-                instructions.push(create_ether_account_instruction(
-                    signer_account,
-                    evm_loader_id,
-                    ether_address,
-                ));
+                Ok(false)
             }
         }
+    })
+    .await?
+}
+
+/// Creates ether account. Ignores possible error if the account already created.
+async fn create_ether_account(
+    signer: Vec<u8>,
+    signer_account: Pubkey,
+    evm_loader_id: Pubkey,
+    ether_address: ethereum::Address,
+) -> Result<()> {
+    task::spawn_blocking(move || -> Result<()> {
+        let client = get_client();
+
+        let mut instructions = Vec::with_capacity(1);
+        instructions.push(create_ether_account_instruction(
+            signer_account,
+            evm_loader_id,
+            ether_address,
+        ));
+
+        let signer = Keypair::from_bytes(&signer)?;
+        let message = Message::new(&instructions, Some(&signer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        let (blockhash, _) = client.get_recent_blockhash()?;
+        tx.try_sign(&[&signer], blockhash)?;
+        let _ignore_error = client.send_and_confirm_transaction(&tx);
+        Ok(())
+    })
+    .await?
+}
+
+/// Performs transfer from treasure to a Solana account.
+async fn do_transfer_token(
+    id: String,
+    signer: Vec<u8>,
+    signer_token_account: Pubkey,
+    token_mint_id: Pubkey,
+    token_account: Pubkey,
+    signer_account: Pubkey,
+    amount: u64,
+    in_fractions: bool,
+) -> Result<()> {
+    task::spawn_blocking(move || -> Result<()> {
+        let client = get_client();
 
         let amount = if in_fractions {
             amount
@@ -105,17 +186,7 @@ pub async fn transfer_token(
             convert_whole_to_fractions(amount)?
         };
 
-        info!("{} spl_token id = {}", id, spl_token::id());
-        info!("{} signer_token_account = {}", id, signer_token_account);
-        info!("{} token_mint_id = {}", id, token_mint_id);
-        info!("{} token_account = {}", id, token_account);
-        info!("{} signer_account = {}", id, signer_account);
-        info!("{} amount = {}", id, amount);
-        info!(
-            "{} token_decimals = {}",
-            id,
-            config::solana_token_mint_decimals()
-        );
+        let mut instructions = Vec::with_capacity(1);
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -127,31 +198,18 @@ pub async fn transfer_token(
             config::solana_token_mint_decimals(),
         )?);
 
-        if instructions.is_empty() {
-            return Err(eyre!("No instructions to submit"));
-        }
-
-        info!("{} Creating message...", id);
+        let signer = Keypair::from_bytes(&signer)?;
         let message = Message::new(&instructions, Some(&signer.pubkey()));
-        info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
-        info!("{} Getting recent blockhash...", id);
         let (blockhash, _) = client.get_recent_blockhash()?;
-        info!("{} Signing transaction...", id);
         tx.try_sign(&[&signer], blockhash)?;
-        info!("{} Sending and confirming transaction...", id);
+        info!("{} Sending transfer transaction...", id);
         client.send_and_confirm_transaction(&tx)?;
-        info!("{} Transaction is confirmed", id);
+        info!("{} Transfer transaction is confirmed", id);
 
         Ok(())
     })
-    .await?;
-
-    if let Err(e) = r {
-        return Err(eyre!("{:?}", e));
-    }
-
-    Ok(())
+    .await?
 }
 
 /// Maps an Ethereum address into a Solana address.

@@ -35,7 +35,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
         ));
     }
 
-    let operator = config::solana_operator_keypair()
+    let operator = config::solana_operator_keypair_bytes()
         .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
     let ether_address = ethereum::address_from_str(&params.wallet)
         .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
