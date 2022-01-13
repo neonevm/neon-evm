@@ -83,14 +83,10 @@ pub async fn transfer_token(
 
     let exists = ether_account_exists(id.to_owned(), account, token_account).await?;
     if !exists {
-        if let Err(e) =
-            create_ether_account(signer.clone(), signer_account, evm_loader_id, ether_address).await
-        {
-            return Err(eyre!("{:?}", e));
-        }
+        create_ether_account(signer.clone(), signer_account, evm_loader_id, ether_address).await?;
     }
 
-    if let Err(e) = do_transfer_token(
+    do_transfer_token(
         id.to_owned(),
         signer,
         signer_token_account,
@@ -100,10 +96,7 @@ pub async fn transfer_token(
         amount,
         in_fractions,
     )
-    .await
-    {
-        return Err(eyre!("{:?}", e));
-    }
+    .await?;
 
     Ok(())
 }
@@ -137,29 +130,29 @@ async fn ether_account_exists(id: String, account: Pubkey, token_account: Pubkey
     .await?
 }
 
-/// Creates ether account. Ignores possible error if the account was already created.
+/// Creates ether account. Ignores possible error if the account is already in use.
+/// In the Solana's log:
+/// `Allocate: account Address { address: ..., base: None } already in use`
 async fn create_ether_account(
     signer: Vec<u8>,
     signer_account: Pubkey,
     evm_loader_id: Pubkey,
     ether_address: ethereum::Address,
 ) -> Result<()> {
+    let signer = Keypair::from_bytes(&signer)?;
+    let instructions = vec![create_ether_account_instruction(
+        signer_account,
+        evm_loader_id,
+        ether_address,
+    )];
+    let message = Message::new(&instructions, Some(&signer.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+
     task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
-
-        let instructions = vec![create_ether_account_instruction(
-            signer_account,
-            evm_loader_id,
-            ether_address,
-        )];
-
-        let signer = Keypair::from_bytes(&signer)?;
-        let message = Message::new(&instructions, Some(&signer.pubkey()));
-        let mut tx = Transaction::new_unsigned(message);
         let (blockhash, _) = client.get_recent_blockhash()?;
         tx.try_sign(&[&signer], blockhash)?;
         let _ignore_error = client.send_and_confirm_transaction(&tx);
-
         Ok(())
     })
     .await?
@@ -176,29 +169,30 @@ async fn do_transfer_token(
     amount: u64,
     in_fractions: bool,
 ) -> Result<()> {
+    let amount = if in_fractions {
+        amount
+    } else {
+        convert_whole_to_fractions(amount)?
+    };
+
+    let instructions = vec![spl_token::instruction::transfer_checked(
+        &spl_token::id(),
+        &signer_token_account,
+        &token_mint_id,
+        &token_account,
+        &signer_account,
+        &[],
+        amount,
+        config::solana_token_mint_decimals(),
+    )?];
+
+    let signer = Keypair::from_bytes(&signer)?;
+    let message = Message::new(&instructions, Some(&signer.pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+
     task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
 
-        let amount = if in_fractions {
-            amount
-        } else {
-            convert_whole_to_fractions(amount)?
-        };
-
-        let instructions = vec![spl_token::instruction::transfer_checked(
-            &spl_token::id(),
-            &signer_token_account,
-            &token_mint_id,
-            &token_account,
-            &signer_account,
-            &[],
-            amount,
-            config::solana_token_mint_decimals(),
-        )?];
-
-        let signer = Keypair::from_bytes(&signer)?;
-        let message = Message::new(&instructions, Some(&signer.pubkey()));
-        let mut tx = Transaction::new_unsigned(message);
         let (blockhash, _) = client.get_recent_blockhash()?;
         tx.try_sign(&[&signer], blockhash)?;
         info!("{} Sending transfer transaction...", id);
