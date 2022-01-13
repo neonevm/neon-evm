@@ -15,7 +15,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "${PROXY_BRANCH:-develop}"
+       branch: "391_get_rid_of_floating_point_arithmetics" # TODO revert to "${PROXY_BRANCH:-develop}"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
