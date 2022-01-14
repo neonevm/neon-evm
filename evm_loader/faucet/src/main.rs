@@ -1,15 +1,16 @@
-//! # NeonLabs Token Faucet (Airdrop)
-//! NeonLabs Token Faucet is a service which performs airdrop of tokens on user request.
+//! # NeonLabs Faucet Service
+//! NeonLabs Faucet is a service which provides tokens to users.
 
 #![deny(warnings)]
 
 mod cli;
 mod config;
-mod eth_token;
+mod erc20_tokens;
 mod ethereum;
+mod manual;
+mod neon_token;
 mod server;
 mod solana;
-mod tokens;
 
 use color_eyre::Result;
 use tracing::info;
@@ -39,19 +40,25 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
+macro_rules! faucet_pkg_version {
+    () => {
+        env!("CARGO_PKG_VERSION")
+    };
+}
+macro_rules! faucet_revision {
+    () => {
+        env!("NEON_REVISION")
+    };
+}
+macro_rules! version_string {
+    () => {
+        concat!("Faucet/v", faucet_pkg_version!(), "-", faucet_revision!())
+    };
+}
+
 /// Shows semantic version and revision hash.
 fn show_version() {
-    let ver = env!("CARGO_PKG_VERSION");
-    let rev = if let Ok(rev) = std::env::var("VERGEN_GIT_SHA") {
-        if rev.len() < 7 {
-            rev
-        } else {
-            rev[..7].to_string()
-        }
-    } else {
-        "<unknown>".to_owned()
-    };
-    info!("version {} (revision {})", ver, rev);
+    info!(version_string!());
 }
 
 /// Dispatches CLI commands.
@@ -65,6 +72,9 @@ async fn execute(app: cli::Application) -> Result<()> {
         cli::Command::Env {} => {
             config::show_env();
         }
+        cli::Command::Man { api, config, env } => {
+            manual::show(api, config, env);
+        }
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {
                 num_cpus::get()
@@ -72,10 +82,10 @@ async fn execute(app: cli::Application) -> Result<()> {
                 workers.parse::<usize>()?
             };
             run(&app.config, workers).await?;
+            info!("Done.");
         }
     }
 
-    info!("Done.");
     Ok(())
 }
 

@@ -43,6 +43,7 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 /// When in_fractions == false, amount is treated as whole token amount.
 /// When in_fractions == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
+    id: &str,
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
@@ -50,13 +51,15 @@ pub async fn transfer_token(
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader()).wrap_err_with(|| {
         format!(
-            "config::solana_evm_loader returns {}",
+            "{} config::solana_evm_loader returns {}",
+            id,
             &config::solana_evm_loader()
         )
     })?;
     let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id()).wrap_err_with(|| {
         format!(
-            "config::solana_token_mint_id returns {}",
+            "{} config::solana_token_mint_id returns {}",
+            id,
             &config::solana_token_mint_id(),
         )
     })?;
@@ -69,6 +72,7 @@ pub async fn transfer_token(
     let token_account =
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
+    let id = id.to_owned();
     let r = tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = vec![];
@@ -76,16 +80,20 @@ pub async fn transfer_token(
         let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
         if balance_exists {
-            info!("Token balance of recipient is {:?}", balance.unwrap());
-            info!("Ether {:?}", client.get_account(&account)?);
+            info!(
+                "{} Token balance of recipient is {:?}",
+                id,
+                balance.unwrap()
+            );
+            info!("{} Ether {:?}", id, client.get_account(&account)?);
         } else {
-            info!("Empty balance of token account '{}'", token_account);
+            info!("{} Empty balance of token account '{}'", id, token_account);
             let ether_account = client.get_account(&account);
             let ether_account_exists = ether_account.is_ok();
             if ether_account_exists {
-                info!("Ether {:?}", ether_account.unwrap());
+                info!("{} Ether {:?}", id, ether_account.unwrap());
             } else {
-                info!("No ether account; will be created");
+                info!("{} No ether account; will be created", id);
                 instructions.push(create_ether_account_instruction(
                     signer_account,
                     evm_loader_id,
@@ -100,13 +108,17 @@ pub async fn transfer_token(
             convert_whole_to_fractions(amount)?
         };
 
-        info!("spl_token id = {}", spl_token::id());
-        info!("signer_token_account = {}", signer_token_account);
-        info!("token_mint_id = {}", token_mint_id);
-        info!("token_account = {}", token_account);
-        info!("signer_account = {}", signer_account);
-        info!("amount = {}", amount);
-        info!("token_decimals = {}", config::solana_token_mint_decimals());
+        info!("{} spl_token id = {}", id, spl_token::id());
+        info!("{} signer_token_account = {}", id, signer_token_account);
+        info!("{} token_mint_id = {}", id, token_mint_id);
+        info!("{} token_account = {}", id, token_account);
+        info!("{} signer_account = {}", id, signer_account);
+        info!("{} amount = {}", id, amount);
+        info!(
+            "{} token_decimals = {}",
+            id,
+            config::solana_token_mint_decimals()
+        );
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -122,17 +134,17 @@ pub async fn transfer_token(
             return Err(eyre!("No instructions to submit"));
         }
 
-        info!("Creating message...");
+        info!("{} Creating message...", id);
         let message = Message::new(&instructions, Some(&signer.pubkey()));
-        info!("Creating transaction...");
+        info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
-        info!("Getting recent blockhash...");
+        info!("{} Getting recent blockhash...", id);
         let (blockhash, _) = client.get_recent_blockhash()?;
-        info!("Signing transaction...");
+        info!("{} Signing transaction...", id);
         tx.try_sign(&[&signer], blockhash)?;
-        info!("Sending and confirming transaction...");
+        info!("{} Sending and confirming transaction...", id);
         client.send_and_confirm_transaction(&tx)?;
-        info!("Transaction is confirmed");
+        info!("{} Transaction is confirmed", id);
 
         Ok(())
     })
