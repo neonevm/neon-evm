@@ -25,7 +25,12 @@ lazy_static::lazy_static! {
 
 /// Creates the signleton instance of RpcClient.
 pub fn init_client(url: String) {
-    tokio::task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
+    tokio::task::spawn_blocking(|| {
+        CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new_with_commitment(
+            url,
+            CommitmentConfig::confirmed(),
+        ))
+    });
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
@@ -77,10 +82,7 @@ pub async fn transfer_token(
         let client = get_client();
         let mut instructions = Vec::with_capacity(2);
 
-        let balance = client.get_token_account_balance_with_commitment(
-            &token_account,
-            CommitmentConfig::confirmed(),
-        );
+        let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
         if balance_exists {
             info!(
@@ -88,15 +90,10 @@ pub async fn transfer_token(
                 id,
                 balance.unwrap()
             );
-            info!(
-                "{} Ether {:?}",
-                id,
-                client.get_account_with_commitment(&account, CommitmentConfig::confirmed())?
-            );
+            info!("{} Ether {:?}", id, client.get_account(&account)?);
         } else {
             info!("{} Empty balance of token account '{}'", id, token_account);
-            let ether_account =
-                client.get_account_with_commitment(&account, CommitmentConfig::confirmed());
+            let ether_account = client.get_account(&account);
             if ether_account.is_ok() {
                 info!("{} Ether {:?}", id, ether_account.unwrap());
             } else {
