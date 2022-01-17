@@ -1,11 +1,11 @@
 //! Faucet options parser.
 
-use crate::config;
+use crate::{config, version};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
-#[structopt(about = "NeonLabs Faucet Service")]
+#[structopt(name = "faucet:", version = version::display!(), about = "NeonLabs Faucet Service")]
 pub struct Application {
     #[structopt(
         parse(from_os_str),

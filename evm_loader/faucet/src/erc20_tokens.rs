@@ -1,7 +1,7 @@
 //! Faucet ERC20 tokens module.
 
-use color_eyre::{eyre::eyre, Result};
 use derive_new::new;
+use eyre::{eyre, Result};
 use tracing::{error, info};
 
 use secp256k1::SecretKey;

@@ -1,7 +1,6 @@
 //! Faucet NEON token module.
 
-use color_eyre::eyre::eyre;
-use color_eyre::Result;
+use eyre::{eyre, Result};
 use tracing::info;
 
 use crate::{config, ethereum, solana};

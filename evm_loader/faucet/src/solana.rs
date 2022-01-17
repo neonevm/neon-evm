@@ -4,11 +4,11 @@ use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 
-use color_eyre::eyre::{eyre, WrapErr};
-use color_eyre::Result;
+use eyre::{eyre, Result, WrapErr};
 use tracing::info;
 
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
@@ -25,7 +25,12 @@ lazy_static::lazy_static! {
 
 /// Creates the signleton instance of RpcClient.
 pub fn init_client(url: String) {
-    tokio::task::spawn_blocking(|| CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new(url)));
+    tokio::task::spawn_blocking(|| {
+        CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new_with_commitment(
+            url,
+            CommitmentConfig::confirmed(),
+        ))
+    });
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
@@ -40,8 +45,8 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 }
 
 /// Transfers `amount` of tokens.
-/// When in_fractions == false, amount is treated as whole token amount.
-/// When in_fractions == true, amount is treated as amount in galans (10E-9).
+/// When `in_fractions` == false, amount is treated as whole token amount.
+/// When `in_fractions` == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
     id: &str,
     signer: Keypair,
@@ -73,9 +78,9 @@ pub async fn transfer_token(
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
     let id = id.to_owned();
-    let r = tokio::task::spawn_blocking(move || -> Result<()> {
+    tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
-        let mut instructions = vec![];
+        let mut instructions = Vec::with_capacity(2);
 
         let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
@@ -89,8 +94,7 @@ pub async fn transfer_token(
         } else {
             info!("{} Empty balance of token account '{}'", id, token_account);
             let ether_account = client.get_account(&account);
-            let ether_account_exists = ether_account.is_ok();
-            if ether_account_exists {
+            if ether_account.is_ok() {
                 info!("{} Ether {:?}", id, ether_account.unwrap());
             } else {
                 info!("{} No ether account; will be created", id);
@@ -148,13 +152,7 @@ pub async fn transfer_token(
 
         Ok(())
     })
-    .await?;
-
-    if let Err(e) = r {
-        return Err(eyre!("{:?}", e));
-    }
-
-    Ok(())
+    .await?
 }
 
 /// Maps an Ethereum address into a Solana address.

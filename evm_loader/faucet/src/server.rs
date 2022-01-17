@@ -4,7 +4,7 @@ use actix_cors::Cors;
 use actix_web::http::header;
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
-use color_eyre::Result;
+use eyre::Result;
 use tracing::{error, info};
 
 use crate::{config, erc20_tokens, neon_token};
@@ -156,15 +156,14 @@ async fn handle_request_erc20(body: Bytes) -> impl Responder {
     HttpResponse::Ok()
 }
 
-/// Represents packet of information needed for the stop.
-#[derive(Debug, serde::Deserialize)]
-pub struct Stop {
-    /// Milliseconds to wait before shutdown.
-    delay: u64,
-}
-
 /// Handles a request for graceful shutdown.
 async fn handle_request_stop(body: Bytes) -> impl Responder {
+    #[derive(serde::Deserialize)]
+    struct Stop {
+        /// Milliseconds to wait before shutdown.
+        delay: u64,
+    }
+
     use nix::sys::signal;
     use nix::unistd::Pid;
     use tokio::time::Duration;
@@ -201,10 +200,14 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
 
 /// Builds a (hopefully) unique string to mark requests.
 fn generate_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let since = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("time went backwards");
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(since) => since,
+        Err(err) => {
+            error!("generate_id: time went backwards? {}", err);
+            Duration::default()
+        }
+    };
     let digest = md5::compute(since.as_nanos().to_string());
     let s = format!("{:x}", digest)[..7].to_string();
     format!("[{}]", s)

@@ -11,8 +11,9 @@ mod manual;
 mod neon_token;
 mod server;
 mod solana;
+mod version;
 
-use color_eyre::Result;
+use eyre::Result;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -23,12 +24,11 @@ async fn main() -> Result<()> {
     execute(cli::application()).await
 }
 
-/// Initializes the logger and error handler.
+/// Initializes the logger.
 fn setup() -> Result<()> {
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
         std::env::set_var("RUST_LIB_BACKTRACE", "0")
     }
-    color_eyre::install()?;
 
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info")
@@ -40,25 +40,9 @@ fn setup() -> Result<()> {
     Ok(())
 }
 
-macro_rules! faucet_pkg_version {
-    () => {
-        env!("CARGO_PKG_VERSION")
-    };
-}
-macro_rules! faucet_revision {
-    () => {
-        env!("NEON_REVISION")
-    };
-}
-macro_rules! version_string {
-    () => {
-        concat!("Faucet/v", faucet_pkg_version!(), "-", faucet_revision!())
-    };
-}
-
 /// Shows semantic version and revision hash.
 fn show_version() {
-    info!(version_string!());
+    info!(version::display!());
 }
 
 /// Dispatches CLI commands.
