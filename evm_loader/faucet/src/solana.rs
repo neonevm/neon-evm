@@ -147,10 +147,7 @@ pub async fn transfer_token(
         info!("{} Signing transaction...", id);
         tx.try_sign(&[&signer], blockhash)?;
         info!("{} Sending and confirming transaction...", id);
-        client.send_and_confirm_transaction_with_spinner_and_commitment(
-            &tx,
-            CommitmentConfig::finalized(),
-        )?;
+        client.send_and_confirm_transaction(&tx)?;
         info!("{} Transaction is confirmed", id);
 
         Ok(())
