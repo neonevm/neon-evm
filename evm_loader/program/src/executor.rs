@@ -14,7 +14,7 @@ use solana_program::program_error::ProgramError;
 use crate::executor_state::ExecutorState;
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
-use crate::precompile_contracts::call_precompile;
+use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::solana_backend::AccountStorage;
 use crate::token;
 
@@ -138,6 +138,10 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn exists(&self, address: H160) -> bool {
+        if is_precompile_address(&address) {
+            return true;
+        }
+        
         if CONFIG.empty_considered_exists {
             self.state.exists(address)
         } else {
