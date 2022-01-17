@@ -188,8 +188,10 @@ pub const PAYMENT_TO_TREASURE: u64 = 5000;
 pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
-/// `TRANSACTION_COST`
-pub const TRANSACTION_COST: u64 = 15000;
+/// `amount of gas per evm step`
+pub const EVM_STEP_COST: u64 = 150;
+/// `number of evm steps per transaction`
+pub const EVM_STEPS: u64  = 100;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -199,6 +201,8 @@ neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECI
 neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
+neon_elf_param!( NEON_EVM_STEP_COST         , formatcp!("{:?}", EVM_STEP_COST));
+neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 
 /// Chain ID
 #[must_use]
