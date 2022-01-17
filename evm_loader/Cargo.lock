@@ -1295,6 +1295,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "environmental"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68b91989ae21441195d7d9b9993a2f9295c7e1a8c96255d8b729accddc124797"
+
+[[package]]
 name = "ethabi"
 version = "14.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1382,6 +1388,7 @@ dependencies = [
  "bs58 0.3.1",
  "cfg-if 0.1.10",
  "const_format",
+ "environmental",
  "evm",
  "evm-runtime",
  "getrandom 0.1.16",

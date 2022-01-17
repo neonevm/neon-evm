@@ -1,3 +1,4 @@
+#![allow(missing_docs)] /// Todo: document
 use evm::{H160, U256};
 use serde::{Deserialize, Serialize};
 use solana_program::{ 
