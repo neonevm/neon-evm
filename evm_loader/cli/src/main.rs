@@ -2,6 +2,9 @@
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 
 mod account_storage;
+
+mod errors;
+
 use crate::{
     account_storage::{
         make_solana_program_address,
@@ -109,6 +112,7 @@ use evm_loader::{
     solana_backend::AccountStorage,
     solidity_account::SolidityAccount
 };
+use crate::errors::NeonCliError;
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -1726,7 +1730,7 @@ fn main() {
 
         let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
             error!("Invalid message verbosity");
-            exit(1);
+            exit(NeonCliError::InvalidMessageVerbosity as i32);
         });
         stderrlog::new()
             .module(module_path!())
@@ -1752,7 +1756,7 @@ fn main() {
             let evm_loader = pubkey_of(&app_matches, "evm_loader")
                     .unwrap_or_else(|| {
                         error!("Need specify evm_loader");
-                        exit(1);
+                        exit(NeonCliError::EvmLoaderNotSpecified as i32);
                     });
 
             let (signer, _fee_payer) = signer_from_path(
@@ -1765,7 +1769,7 @@ fn main() {
             ).map_or_else(
                 |e| {
                     error!("{}", e);
-                    exit(1);
+                    exit(NeonCliError::FeePayerNotSpecified as i32);
                 },
                 |s| {
                     let p = s.pubkey();
@@ -1893,10 +1897,10 @@ fn main() {
             _ => unreachable!(),
         };
         match result {
-            Ok(()) => exit(0),
+            Ok(()) => exit(NeonCliError::NoError as i32),
             Err(err) => {
                 error!("{}", err);
-                exit(1);
+                exit(NeonCliError::UnknownError as i32);
             }
         }
 }
