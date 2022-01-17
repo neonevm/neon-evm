@@ -200,10 +200,14 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
 
 /// Builds a (hopefully) unique string to mark requests.
 fn generate_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let since = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("time went backwards");
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(since) => since,
+        Err(err) => {
+            error!("generate_id: time went backwards? {}", err);
+            Duration::default()
+        }
+    };
     let digest = md5::compute(since.as_nanos().to_string());
     let s = format!("{:x}", digest)[..7].to_string();
     format!("[{}]", s)

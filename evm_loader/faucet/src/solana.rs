@@ -45,8 +45,8 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 }
 
 /// Transfers `amount` of tokens.
-/// When in_fractions == false, amount is treated as whole token amount.
-/// When in_fractions == true, amount is treated as amount in galans (10E-9).
+/// When `in_fractions` == false, amount is treated as whole token amount.
+/// When `in_fractions` == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
     id: &str,
     signer: Keypair,
