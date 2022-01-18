@@ -281,7 +281,7 @@ fn command_create_program_address (
     ether_address: &H160,
 ) {
     let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-    trace!("{} {}", solana_address, nonce);
+    println!("{} {}", solana_address, nonce);
 }
 
 fn command_create_ether_account (
