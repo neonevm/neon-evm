@@ -8,7 +8,7 @@ pub struct LogContext {
 }
 
 
-const LOG_MODULES: [&'static str; 2] = [
+const LOG_MODULES: [&str; 2] = [
   "neon_cli",
   "neon_cli::account_storage",
 ];
