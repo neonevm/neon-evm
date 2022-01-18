@@ -1026,16 +1026,16 @@ fn command_get_ether_account_data (
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
 
-            trace!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
-            trace!("Solana address: {}", solana_address);
+            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+            println!("Solana address: {}", solana_address);
 
-            trace!("Account fields");
-            trace!("    ether: {}", &account_data.ether);
-            trace!("    nonce: {}", &account_data.nonce);
-            trace!("    trx_count: {}", &account_data.trx_count);
-            trace!("    code_account: {}", &account_data.code_account);
-            trace!("    ro_blocked_cnt: {}", &account_data.ro_blocked_cnt);
-            trace!("    rw_blocked_acc: {}",
+            println!("Account fields");
+            println!("    ether: {}", &account_data.ether);
+            println!("    nonce: {}", &account_data.nonce);
+            println!("    trx_count: {}", &account_data.trx_count);
+            println!("    code_account: {}", &account_data.code_account);
+            println!("    ro_blocked_cnt: {}", &account_data.ro_blocked_cnt);
+            println!("    rw_blocked_acc: {}",
                      if account_data.rw_blocked_acc.is_some() {
                          account_data.rw_blocked_acc.unwrap().to_string()
                      }
@@ -1043,18 +1043,18 @@ fn command_get_ether_account_data (
                          "".to_string()
                      }
             );
-            trace!("    token_account: {}", &account_data.eth_token_account);
-            trace!("    token_amount: {}", &balance);
+            println!("    token_account: {}", &account_data.eth_token_account);
+            println!("    token_amount: {}", &balance);
 
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
                 let header = AccountData::size(&code_data);
                 let code_data = AccountData::get_contract(&code_data).unwrap();
 
-                trace!("Contract fields");
-                trace!("    owner: {}", &code_data.owner);
-                trace!("    code_size: {}", &code_data.code_size);
-                trace!("    code as hex:");
+                println!("Contract fields");
+                println!("    owner: {}", &code_data.owner);
+                println!("    code_size: {}", &code_data.code_size);
+                println!("    code as hex:");
 
                 let code_size = code_data.code_size;
                 let mut offset = header;
@@ -1066,7 +1066,7 @@ fn command_get_ether_account_data (
                         code_size as usize + header - offset
                     };
 
-                    trace!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
+                    println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
                     offset += remains;
                 }
             }
@@ -1074,7 +1074,7 @@ fn command_get_ether_account_data (
 
         },
         None => {
-            debug!("Account not found {}", &ether_address.to_string());
+            println!("Account not found {}", &ether_address.to_string());
         }
     }
 }
@@ -1269,7 +1269,7 @@ fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<String, S
 
 fn print_elf_parameters(params: &HashMap<String, String>){
     for (key, value) in params {
-        info!("{}={}", key, value);
+        println!("{}={}", key, value);
     }
 }
 
