@@ -240,7 +240,7 @@ pub enum EvmInstruction<'a> {
     ///
     ///   0. `[writable]` The NEON source account.
     ///   1. `[writable]` The NEON destination account.
-    ///   2. `[writable]` The Ether account to store balance.
+    ///   2. `[writable]` The Ether account to store balance of NEONs.
     ///   2. `[]` The EVM Loader program id.
     Deposit,
 }

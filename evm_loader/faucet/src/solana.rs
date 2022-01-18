@@ -80,7 +80,7 @@ pub async fn transfer_token(
     let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
-        let mut instructions = Vec::with_capacity(2);
+        let mut instructions = Vec::with_capacity(3);
 
         let balance = client.get_token_account_balance(&token_account);
         let balance_exists = balance.is_ok();
@@ -123,6 +123,8 @@ pub async fn transfer_token(
             id,
             config::solana_token_mint_decimals()
         );
+
+        /*
         instructions.push(spl_token::instruction::transfer_checked(
             &spl_token::id(),
             &signer_token_account,
@@ -132,7 +134,22 @@ pub async fn transfer_token(
             &[],
             amount,
             config::solana_token_mint_decimals(),
-        )?);
+        )?);*/
+
+        instructions.push(spl_approve_instruction(
+            &spl_token::id(),
+            &signer_token_account,
+            &token_account,
+            &signer_account,
+            amount,
+        ));
+
+        instructions.push(deposit_instruction(
+            signer_token_account,
+            token_account,
+            account,
+            evm_loader_id,
+        ));
 
         if instructions.is_empty() {
             return Err(eyre!("No instructions to submit"));
@@ -202,6 +219,50 @@ fn create_ether_account_instruction(
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(spl_associated_token_account::id(), false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
+        ],
+    )
+}
+
+/// Returns instruction to approve transfer of NEON tokens.
+fn spl_approve_instruction(
+    token_program_id: &Pubkey,
+    source_pubkey: &Pubkey,
+    delegate_pubkey: &Pubkey,
+    owner_pubkey: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    use spl_token::instruction::TokenInstruction;
+
+    let accounts = vec![
+        AccountMeta::new(*source_pubkey, false),
+        AccountMeta::new_readonly(*delegate_pubkey, false),
+        AccountMeta::new_readonly(*owner_pubkey, true),
+    ];
+
+    let data = TokenInstruction::Approve { amount }.pack();
+
+    Instruction {
+        program_id: *token_program_id,
+        accounts,
+        data,
+    }
+}
+
+/// Returns instruction to deposit NEON tokens.
+fn deposit_instruction(
+    source_account: Pubkey,
+    destination_account: Pubkey,
+    ether_account: Pubkey,
+    evm_loader_id: Pubkey,
+) -> Instruction {
+    Instruction::new_with_bincode(
+        evm_loader_id,
+        &evm_loader::instruction::EvmInstruction::Deposit,
+        vec![
+            AccountMeta::new(source_account, false),
+            AccountMeta::new(destination_account, false),
+            AccountMeta::new(ether_account, false),
+            AccountMeta::new_readonly(evm_loader_id, false),
         ],
     )
 }

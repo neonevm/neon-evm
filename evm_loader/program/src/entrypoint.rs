@@ -793,6 +793,10 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Deposit => {
+            let _source_info = next_account_info(account_info_iter)?;
+            let _destination_info = next_account_info(account_info_iter)?;
+            let _ether_info = next_account_info(account_info_iter)?;
+            let _evm_loader_id = next_account_info(account_info_iter)?;
             Ok(())
         },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
@@ -1309,4 +1313,3 @@ mod tests {
         );
     }
 }
-
