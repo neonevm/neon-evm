@@ -264,6 +264,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "token_accounts": token_accounts,
         "result": &hex::encode(&result),
         "exit_status": status,
+        "exit_reason": exit_reason,
         "used_gas": used_gas,
         "steps_executed": steps_executed,
     }).to_string();
