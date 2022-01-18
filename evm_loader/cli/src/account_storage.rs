@@ -12,6 +12,8 @@ use std::{
     time::Duration,
 };
 
+use log::{error, warn, info, trace};
+
 use evm::{H160, U256, Transfer};
 use evm::backend::Apply;
 use serde::{Deserialize, Serialize};
@@ -135,7 +137,7 @@ struct SolanaNewAccount {
 
 impl SolanaAccount {
     pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
-        eprintln!("SolanaAccount::new");
+        trace!("SolanaAccount::new");
         Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
     }
 }
@@ -162,24 +164,24 @@ pub struct EmulatorAccountStorage<'a> {
 
 impl<'a> EmulatorAccountStorage<'a> {
     pub fn new(config: &'a Config, contract_id: H160, caller_id: H160, token_mint: Pubkey) -> EmulatorAccountStorage {
-        eprintln!("backend::new");
+        trace!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {
-            eprintln!("Got slot");
-            eprintln!("Slot {}", slot);
+            trace!("Got slot");
+            trace!("Slot {}", slot);
             slot
         }
         else {
-            eprintln!("Get slot error");
+            error!("Get slot error");
             0
         };
 
         let timestamp = if let Ok(timestamp) = config.rpc_client.get_block_time(slot) {
-            eprintln!("Got timestamp");
-            eprintln!("timestamp {}", timestamp);
+            trace!("Got timestamp");
+            trace!("timestamp {}", timestamp);
             timestamp
         } else {
-            eprintln!("Get timestamp error");
+            error!("Get timestamp error");
             0
         };
 
@@ -199,12 +201,12 @@ impl<'a> EmulatorAccountStorage<'a> {
 
     pub fn get_account_from_solana(config: &'a Config, address: &H160) -> Option<(Account, u64, Option<Account>)> {
         let (solana_address, _solana_nonce) = make_solana_program_address(address, &config.evm_loader);
-        eprintln!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
+        info!("Not found account for 0x{} => {}", &hex::encode(&address.as_fixed_bytes()), &solana_address.to_string());
 
         if let Some(acc) = config.rpc_client.get_account_with_commitment(&solana_address, CommitmentConfig::processed()).unwrap().value {
-            eprintln!("Account found");
-            eprintln!("Account data len {}", acc.data.len());
-            eprintln!("Account owner {}", acc.owner);
+            trace!("Account found");
+            trace!("Account data len {}", acc.data.len());
+            trace!("Account owner {}", acc.owner);
 
             let account_data = match AccountData::unpack(&acc.data) {
                 Ok(acc_data) => match acc_data {
@@ -215,12 +217,12 @@ impl<'a> EmulatorAccountStorage<'a> {
             };
 
             let code_account = if account_data.code_account == Pubkey::new_from_array([0_u8; 32]) {
-                eprintln!("code_account == Pubkey::new_from_array([0u8; 32])");
+                info!("code_account == Pubkey::new_from_array([0u8; 32])");
                 None
             } else {
-                eprintln!("code_account != Pubkey::new_from_array([0u8; 32])");
-                eprintln!("account key:  {}", &solana_address.to_string());
-                eprintln!("code account: {}", &account_data.code_account.to_string());
+                info!("code_account != Pubkey::new_from_array([0u8; 32])");
+                trace!("account key:  {}", &solana_address.to_string());
+                trace!("code account: {}", &account_data.code_account.to_string());
 
                 config.rpc_client.get_account_with_commitment(&account_data.code_account, CommitmentConfig::processed()).unwrap().value
             };
@@ -230,7 +232,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             Some((acc, balance, code_account))
         }
         else {
-            eprintln!("Account not found {}", &address.to_string());
+            error!("Account not found {}", &address.to_string());
 
             None
         }
@@ -247,7 +249,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             }
             else {
                 if new_accounts.get(address).is_none() {
-                    eprintln!("Account not found {}", &address.to_string());
+                    error!("Account not found {}", &address.to_string());
                     new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
                 }
                 false
@@ -287,7 +289,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
                         for (key, value) in storage_iter {
-                            eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                            info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                             storage.insert(key, value).unwrap();
                         }
                         storage.last_used() as usize
@@ -306,7 +308,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                 if let Some((code, valids)) = code_and_valids.clone() {
                                     if contract.code_size != 0 {
-                                        eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        info!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         exit(NeonCliError::AccountAlreadyInitialized as i32)
                                     }
                                     code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
@@ -315,7 +317,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 }
                                 else{
                                     if contract.code_size == 0 {
-                                        eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        info!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         exit(NeonCliError::UninitializedAccount as i32)
                                     }
                                     code_begin = account_data_contract.size();
@@ -328,7 +330,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
 
-                                let trx_count = u64::try_from(nonce).map_err(|s| {eprintln!("convert nonce error, {:?}", s); exit(NeonCliError::ConvertNonceError as i32)}).unwrap();
+                                let trx_count = u64::try_from(nonce).map_err(|s| {
+                                    error!("convert nonce error, {:?}", s); exit(NeonCliError::ConvertNonceError as i32)
+                                }).unwrap();
 
                                 if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
                                     *acc.writable.borrow_mut() = true;
@@ -336,7 +340,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
-                                    eprintln!("deploy to existing account: {}", &address.to_string());
+                                    info!("deploy to existing account: {}", &address.to_string());
                                     exit(NeonCliError::DeployToExistingAccount as i32);
                                 }
 
@@ -351,7 +355,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else{
                                 if reset_storage || exist_items {
-                                    eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
+                                    info!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(NeonCliError::ContractAccountIsExpected as i32);
                                 }
                                 *acc.writable.borrow_mut() = true;
@@ -359,7 +363,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         }
                         else{
-                            eprintln!("Changes of incorrect account were found {}", &address.to_string());
+                            warn!("Changes of incorrect account were found {}", &address.to_string());
                             exit(NeonCliError::IncorrectAccount as i32);
                         }
                     }
@@ -373,19 +377,19 @@ impl<'a> EmulatorAccountStorage<'a> {
                             *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                         }
                         else  if reset_storage || exist_items {
-                                eprintln!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
+                                info!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
                                 exit(NeonCliError::ContractAccountIsExpected as i32);
                             }
 
                         *acc.writable.borrow_mut() = true;
                     }
                     else {
-                        eprintln!("Account not found {}", &address.to_string());
+                        error!("Account not found {}", &address.to_string());
                     }
-                    eprintln!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
+                    info!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
                 },
                 Apply::Delete {address} => {
-                    eprintln!("Delete: {}", address);
+                    info!("Delete: {}", address);
 
                     self.create_acc_if_not_exists(&address);
 

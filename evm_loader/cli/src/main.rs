@@ -4,6 +4,7 @@
 mod account_storage;
 
 mod errors;
+mod logs;
 
 use crate::{
     account_storage::{
@@ -101,7 +102,9 @@ use libsecp256k1::PublicKey;
 
 use rlp::RlpStream;
 
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
+use logs::LogContext;
+
 use crate::account_storage::SolanaAccountJSON;
 use evm_loader::{
     executor_state::{
@@ -268,7 +271,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "steps_executed": steps_executed,
     }).to_string();
 
-    println!("{}", js);
+    trace!("{}", js);
 
     Ok(())
 }
@@ -278,7 +281,7 @@ fn command_create_program_address (
     ether_address: &H160,
 ) {
     let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-    println!("{} {}", solana_address, nonce);
+    trace!("{} {}", solana_address, nonce);
 }
 
 fn command_create_ether_account (
@@ -323,7 +326,7 @@ fn command_create_ether_account (
 
     config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
 
-    println!("{}", json!({
+    info!("{}", json!({
         "solana": solana_address.to_string(),
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
@@ -1004,7 +1007,7 @@ fn command_deploy(
         }
     }
 
-    println!("{}", json!({
+    info!("{}", json!({
         "programId": format!("{}", program_id),
         "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
@@ -1023,16 +1026,16 @@ fn command_get_ether_account_data (
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
 
-            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
-            println!("Solana address: {}", solana_address);
+            trace!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+            trace!("Solana address: {}", solana_address);
 
-            println!("Account fields");
-            println!("    ether: {}", &account_data.ether);
-            println!("    nonce: {}", &account_data.nonce);
-            println!("    trx_count: {}", &account_data.trx_count);
-            println!("    code_account: {}", &account_data.code_account);
-            println!("    ro_blocked_cnt: {}", &account_data.ro_blocked_cnt);
-            println!("    rw_blocked_acc: {}",
+            trace!("Account fields");
+            trace!("    ether: {}", &account_data.ether);
+            trace!("    nonce: {}", &account_data.nonce);
+            trace!("    trx_count: {}", &account_data.trx_count);
+            trace!("    code_account: {}", &account_data.code_account);
+            trace!("    ro_blocked_cnt: {}", &account_data.ro_blocked_cnt);
+            trace!("    rw_blocked_acc: {}",
                      if account_data.rw_blocked_acc.is_some() {
                          account_data.rw_blocked_acc.unwrap().to_string()
                      }
@@ -1040,18 +1043,18 @@ fn command_get_ether_account_data (
                          "".to_string()
                      }
             );
-            println!("    token_account: {}", &account_data.eth_token_account);
-            println!("    token_amount: {}", &balance);
+            trace!("    token_account: {}", &account_data.eth_token_account);
+            trace!("    token_amount: {}", &balance);
 
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();
                 let header = AccountData::size(&code_data);
                 let code_data = AccountData::get_contract(&code_data).unwrap();
 
-                println!("Contract fields");
-                println!("    owner: {}", &code_data.owner);
-                println!("    code_size: {}", &code_data.code_size);
-                println!("    code as hex:");
+                trace!("Contract fields");
+                trace!("    owner: {}", &code_data.owner);
+                trace!("    code_size: {}", &code_data.code_size);
+                trace!("    code as hex:");
 
                 let code_size = code_data.code_size;
                 let mut offset = header;
@@ -1063,7 +1066,7 @@ fn command_get_ether_account_data (
                         code_size as usize + header - offset
                     };
 
-                    println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
+                    trace!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
                     offset += remains;
                 }
             }
@@ -1071,7 +1074,7 @@ fn command_get_ether_account_data (
 
         },
         None => {
-            eprintln!("Account not found {}", &ether_address.to_string());
+            debug!("Account not found {}", &ether_address.to_string());
         }
     }
 }
@@ -1120,7 +1123,7 @@ fn command_cancel_trx(
                 else {return Err("Not storage account".to_string().into());};
 
         let keys: Vec<Pubkey> = {
-            println!("{:?}", storage);
+            info!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
             if acc.data.len() < accounts_end {
@@ -1175,7 +1178,7 @@ fn command_cancel_trx(
             }
         }
         for meta in &accounts_meta {
-            println!("\t{:?}", meta);
+            info!("\t{:?}", meta);
         }
 
         let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
@@ -1266,7 +1269,7 @@ fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<String, S
 
 fn print_elf_parameters(params: &HashMap<String, String>){
     for (key, value) in params {
-        println!("{}={}", key, value);
+        info!("{}={}", key, value);
     }
 }
 
@@ -1509,6 +1512,15 @@ fn main() {
                 .default_value("max")
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
+        .arg(
+            Arg::with_name("logging_ctx")
+                .short("L")
+                .long("logging_ctx")
+                .value_name("LOG_CONTEST")
+                .takes_value(true)
+                .global(true)
+                .help("Logging context"),
+        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
@@ -1728,15 +1740,21 @@ fn main() {
         )
         .get_matches();
 
-        let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
-            error!("Invalid message verbosity");
-            exit(NeonCliError::InvalidMessageVerbosity as i32);
-        });
-        stderrlog::new()
-            .module(module_path!())
-            .verbosity(verbosity)
-            .init()
-            .unwrap();
+        let context: LogContext =
+            app_matches.value_of("logging_ctx")
+                .map(|ctx| serde_json::from_str(ctx).unwrap() )
+                .unwrap_or_default();
+        logs::init(context).unwrap();
+
+        // let _verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
+        //     error!("Invalid message verbosity");
+        //     exit(NeonCliError::InvalidMessageVerbosity as i32);
+        // });
+        // stderrlog::new()
+        //     .module(module_path!())
+        //     .verbosity(verbosity)
+        //     .init()
+        //     .unwrap();
 
         let mut wallet_manager = None;
         let config = {
