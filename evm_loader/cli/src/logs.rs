@@ -31,7 +31,7 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
                 record.target(),
                 context.req_id,
                 message
-            ))
+            ));
         })
         .chain(std::io::stderr())
         .apply()
