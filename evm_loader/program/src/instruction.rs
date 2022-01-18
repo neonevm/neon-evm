@@ -233,6 +233,16 @@ pub enum EvmInstruction<'a> {
     /// # Account references
     ///   0. \[WRITE\] Code account
     UpdateValidsTable,
+
+    /// Deposits NEON tokens to a Ether account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   0. `[writable]` The NEON source account.
+    ///   1. `[writable]` The NEON destination account.
+    ///   2. `[writable]` The Ether account to store balance.
+    ///   2. `[]` The EVM Loader program id.
+    Deposit,
 }
 
 impl<'a> EvmInstruction<'a> {
@@ -361,6 +371,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
             },
             23 => EvmInstruction::UpdateValidsTable,
+            24 => EvmInstruction::Deposit,
 
             _ => return Err(InvalidInstructionData),
         })

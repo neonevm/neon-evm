@@ -792,6 +792,9 @@ fn process_instruction<'a>(
 
             Ok(())
         },
+        EvmInstruction::Deposit => {
+            Ok(())
+        },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
