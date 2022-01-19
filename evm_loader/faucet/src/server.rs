@@ -44,11 +44,6 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a ping request.
 async fn handle_request_ping(body: Bytes) -> impl Responder {
-    #[derive(serde::Deserialize)]
-    struct Ping {
-        ping: String,
-    }
-
     let id = generate_id();
 
     println!();
@@ -60,14 +55,8 @@ async fn handle_request_ping(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    let input = input.unwrap();
-    let ping = serde_json::from_str::<Ping>(&input);
-    if let Err(err) = ping {
-        error!("{} BadRequest (json): {} in '{}'", id, err, input);
-        return HttpResponse::BadRequest();
-    }
-
-    info!("{} Ping '{}'", id, ping.unwrap().ping);
+    let ping = input.unwrap();
+    info!("{} Ping '{}'", id, ping);
 
     HttpResponse::Ok()
 }

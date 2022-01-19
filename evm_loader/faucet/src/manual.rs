@@ -9,7 +9,7 @@ Several endpoints are supported.
 |:-:|:-:|-
 |**Endpoint**|**Workload**|**Description**|
 |:-|:-:|-
-| request_ping | JSON | Requests ping to check availability of the service
+| request_ping | text | Requests ping to check availability of the service
 | request_version | | Requests version of the service
 | request_neon_in_galans | JSON | Requests NEON tokens, amount in galans (fractions)
 | request_neon | JSON | Requests NEON tokens
@@ -34,22 +34,27 @@ Workload JSON schema:
 }
 ```
 
-Workload JSON example:
+Example of JSON workload:
 ```
 { "wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1 }
 ```
 
-Example of client request with **curl** utility:
+Example of ping request with **curl** utility:
+```
+curl -i -X POST -H 'Content-Type: text/plain' -d 'Hello' 'http://localhost:3333/request_ping'
+```
+
+Example of version request with **curl** utility:
+```
+curl -i -X POST 'http://localhost:3333/request_version'
+```
+
+Example of NEON drop request with **curl** utility:
 ```
 curl -i -X POST \
     -H 'Content-Type: text/plain' \
     -d '{"wallet": "0x4570e07200b6332989Dc04fA2a671b839D26eF0E", "amount": 1}' \
     'http://localhost:3333/request_neon'
-```
-
-Example of ping request:
-```
-curl -i -X POST -H 'Content-Type: text/plain' -d '{"ping": "Hello"}' 'http://localhost:3333/request_ping'
 ```
 "##;
 
