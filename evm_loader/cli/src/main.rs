@@ -1007,7 +1007,7 @@ fn command_deploy(
         }
     }
 
-    info!("{}", json!({
+    println!("{}", json!({
         "programId": format!("{}", program_id),
         "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
