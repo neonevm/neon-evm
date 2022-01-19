@@ -40,7 +40,7 @@ use crate::{
     instruction::{EvmInstruction, on_event, on_return},
     payment,
     token,
-    token::{create_associated_token_account},
+    token::{create_associated_token_account, get_token_account_delegated_amount},
     operator::authorized_operator_check,
     system::create_pda_account,
     utils::is_zero_initialized
@@ -793,10 +793,23 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::Deposit => {
-            let _source_info = next_account_info(account_info_iter)?;
-            let _destination_info = next_account_info(account_info_iter)?;
+            let source_info = next_account_info(account_info_iter)?;
+            let destination_info = next_account_info(account_info_iter)?;
             let _ether_info = next_account_info(account_info_iter)?;
-            let _evm_loader_id = next_account_info(account_info_iter)?;
+            let evm_loader_id = next_account_info(account_info_iter)?.key;
+
+            let amount = get_token_account_delegated_amount(source_info, evm_loader_id)?;
+
+            let transfer = spl_token::instruction::transfer(
+                &spl_token::id(),
+                source_info.key,
+                destination_info.key,
+                evm_loader_id,
+                &[&evm_loader_id],
+                amount
+            )?;
+            invoke(&transfer, accounts)?;
+
             Ok(())
         },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),

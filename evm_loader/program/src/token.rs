@@ -1,23 +1,25 @@
 //! `EVMLoader` token functions
-use crate::{
-    account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solidity_account::SolidityAccount,
-    storage_account::StorageAccount,
-    account_storage::ProgramAccountStorage,
-    config::token_mint
-};
-use evm::{U256};
-use solana_program::{
-    instruction::{AccountMeta, Instruction},
-    account_info::{AccountInfo},
-    pubkey::Pubkey,
-    system_program, sysvar,
-    program_error::ProgramError,
-    program_pack::Pack,
-    program::invoke_signed
-};
-use std::vec;
 use std::convert::TryFrom;
+use std::vec;
+
+use evm::U256;
+use solana_program::{
+    account_info::AccountInfo,
+    instruction::{AccountMeta, Instruction},
+    program::invoke_signed,
+    program_error::ProgramError, program_pack::Pack,
+    pubkey::Pubkey,
+    system_program,
+    sysvar
+};
+
+use crate::{
+    account_data::{ACCOUNT_SEED_VERSION, AccountData},
+    account_storage::ProgramAccountStorage,
+    config::token_mint,
+    solidity_account::SolidityAccount,
+    storage_account::StorageAccount
+};
 
 /// Native token info
 pub mod eth {
@@ -99,6 +101,31 @@ pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramE
     let data = spl_token::state::Account::unpack(&account.data.borrow())?;
 
     Ok(data.owner)
+}
+
+/// Extracts a token delegated amount from `AccountInfo`
+///
+/// # Errors
+///
+/// Will return:
+/// `ProgramError::IncorrectProgramId` if account is not token account or no delegate
+pub fn get_token_account_delegated_amount(account: &AccountInfo, delegate_pubkey: &Pubkey) -> Result<u64, ProgramError> {
+    if account.data_is_empty() {
+        return Ok(0_u64);
+    }
+
+    if *account.owner != spl_token::id() {
+        return Err!(ProgramError::IncorrectProgramId; "*account.owner<{:?}> != spl_token::id()<{:?}>", *account.owner,  spl_token::id());
+    }
+
+    let data = spl_token::state::Account::unpack(&account.data.borrow())?;
+
+    if data.delegate.is_none() ||
+        data.delegate.unwrap() != *delegate_pubkey {
+        return Err!(ProgramError::IncorrectProgramId; "delegate<{:?}> != evm_loader_id<{:?}>", data.delegate, delegate_pubkey);
+    }
+
+    Ok(data.delegated_amount)
 }
 
 /// Extract a token mint data from the account data
