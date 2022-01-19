@@ -112,23 +112,10 @@ pub async fn deposit_token(
             config::solana_token_mint_decimals()
         );
 
-        /*
-        instructions.push(spl_token::instruction::transfer_checked(
-            &spl_token::id(),
-            &signer_token_account,
-            &token_mint_id,
-            &token_account,
-            &signer_account,
-            &[],
-            amount,
-            config::solana_token_mint_decimals(),
-        )?);
-        */
-
         instructions.push(spl_approve_instruction(
             spl_token::id(),
             signer_token_pubkey,
-            evm_token_pubkey,
+            evm_loader_id,
             signer_pubkey,
             amount,
         ));

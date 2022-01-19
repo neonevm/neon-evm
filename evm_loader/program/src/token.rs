@@ -111,7 +111,7 @@ pub fn get_token_account_owner(account: &AccountInfo) -> Result<Pubkey, ProgramE
 /// `ProgramError::IncorrectProgramId` if account is not token account or no delegate
 pub fn get_token_account_delegated_amount(account: &AccountInfo, delegate_pubkey: &Pubkey) -> Result<u64, ProgramError> {
     if account.data_is_empty() {
-        return Ok(0_u64);
+        return Err!(ProgramError::InvalidAccountData; "empty account<{:?}>", account.key);
     }
 
     if *account.owner != spl_token::id() {
@@ -122,7 +122,11 @@ pub fn get_token_account_delegated_amount(account: &AccountInfo, delegate_pubkey
 
     if data.delegate.is_none() ||
         data.delegate.unwrap() != *delegate_pubkey {
-        return Err!(ProgramError::IncorrectProgramId; "delegate<{:?}> != evm_loader_id<{:?}>", data.delegate, delegate_pubkey);
+        return Err!(ProgramError::InvalidAccountData; "delegate<{:?}> != evm_loader_id<{:?}>", data.delegate, delegate_pubkey);
+    }
+
+    if data.delegated_amount == 0 {
+        return Err!(ProgramError::InvalidAccountData; "zero amount to delegate<{:?}>", delegate_pubkey);
     }
 
     Ok(data.delegated_amount)
