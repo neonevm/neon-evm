@@ -71,37 +71,27 @@ pub async fn deposit_token(
     let signer_token_pubkey =
         spl_associated_token_account::get_associated_token_address(&signer_pubkey, &token_mint_id);
 
-    let (account, _nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
-    let token_account =
-        spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
+    let (ether_pubkey, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
+    dbg!(nonce);
+
+    let evm_token_pubkey =
+        spl_associated_token_account::get_associated_token_address(&evm_loader_id, &token_mint_id);
 
     let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = Vec::with_capacity(3);
 
-        let balance = client.get_token_account_balance(&token_account);
-        let balance_exists = balance.is_ok();
-        if balance_exists {
-            info!(
-                "{} Token balance of recipient is {:?}",
-                id,
-                balance.unwrap()
-            );
-            info!("{} Ether {:?}", id, client.get_account(&account)?);
+        let ether_account = client.get_account(&ether_pubkey);
+        if ether_account.is_ok() {
+            info!("{} Ether {:?}", id, ether_account.unwrap());
         } else {
-            info!("{} Empty balance of token account '{}'", id, token_account);
-            let ether_account = client.get_account(&account);
-            if ether_account.is_ok() {
-                info!("{} Ether {:?}", id, ether_account.unwrap());
-            } else {
-                info!("{} No ether account; will be created", id);
-                instructions.push(create_ether_account_instruction(
-                    signer_pubkey,
-                    evm_loader_id,
-                    ether_address,
-                ));
-            }
+            info!("{} No ether account; will be created", id);
+            instructions.push(create_ether_account_instruction(
+                signer_pubkey,
+                evm_loader_id,
+                ether_address,
+            ));
         }
 
         let amount = if in_fractions {
@@ -113,7 +103,7 @@ pub async fn deposit_token(
         info!("{} spl_token id = {}", id, spl_token::id());
         info!("{} signer_token_pubkey = {}", id, signer_token_pubkey);
         info!("{} token_mint_id = {}", id, token_mint_id);
-        info!("{} token_account = {}", id, token_account);
+        info!("{} evm_token_pubkey = {}", id, evm_token_pubkey);
         info!("{} signer_pubkey = {}", id, signer_pubkey);
         info!("{} amount = {}", id, amount);
         info!(
@@ -136,17 +126,17 @@ pub async fn deposit_token(
         */
 
         instructions.push(spl_approve_instruction(
-            &spl_token::id(),
-            &signer_token_pubkey,
-            &token_account,
-            &signer_pubkey,
+            spl_token::id(),
+            signer_token_pubkey,
+            evm_token_pubkey,
+            signer_pubkey,
             amount,
         ));
 
         instructions.push(deposit_instruction(
             signer_token_pubkey,
-            token_account,
-            account,
+            evm_token_pubkey,
+            ether_pubkey,
             evm_loader_id,
         ));
 
@@ -224,24 +214,24 @@ fn create_ether_account_instruction(
 
 /// Returns instruction to approve transfer of NEON tokens.
 fn spl_approve_instruction(
-    token_program_id: &Pubkey,
-    source_pubkey: &Pubkey,
-    delegate_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
+    token_program_id: Pubkey,
+    source_pubkey: Pubkey,
+    delegate_pubkey: Pubkey,
+    owner_pubkey: Pubkey,
     amount: u64,
 ) -> Instruction {
     use spl_token::instruction::TokenInstruction;
 
     let accounts = vec![
-        AccountMeta::new(*source_pubkey, false),
-        AccountMeta::new_readonly(*delegate_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, true),
+        AccountMeta::new(source_pubkey, false),
+        AccountMeta::new_readonly(delegate_pubkey, false),
+        AccountMeta::new_readonly(owner_pubkey, true),
     ];
 
     let data = TokenInstruction::Approve { amount }.pack();
 
     Instruction {
-        program_id: *token_program_id,
+        program_id: token_program_id,
         accounts,
         data,
     }
