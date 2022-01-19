@@ -308,8 +308,9 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                 if let Some((code, valids)) = code_and_valids.clone() {
                                     if contract.code_size != 0 {
-                                        info!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                        exit(NeonCliError::AccountAlreadyInitialized as i32)
+                                        NeonCliError::AccountAlreadyInitialized.report_and_exit();
+                                        error!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        // exit(NeonCliError::AccountAlreadyInitialized as i32)
                                     }
                                     code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
                                     code_size = code.len();
@@ -317,8 +318,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 }
                                 else{
                                     if contract.code_size == 0 {
-                                        info!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
-                                        exit(NeonCliError::UninitializedAccount as i32)
+                                        NeonCliError::AccountUninitialized.report_and_exit();
+                                        error!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
+                                        // exit(NeonCliError::UninitializedAccount as i32)
                                     }
                                     code_begin = account_data_contract.size();
                                     code_size = contract.code_size as usize;
@@ -331,7 +333,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
 
                                 let trx_count = u64::try_from(nonce).map_err(|s| {
-                                    error!("convert nonce error, {:?}", s); exit(NeonCliError::ConvertNonceError as i32)
+                                    NeonCliError::ConvertNonceError(nonce).report_and_exit();
+                                    error!("convert nonce error, {:?}", s);
+                                    // exit(NeonCliError::ConvertNonceError as i32)
                                 }).unwrap();
 
                                 if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
@@ -340,8 +344,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
+                                    NeonCliError::DeploymentToExistingAccount.report_and_exit();
                                     info!("deploy to existing account: {}", &address.to_string());
-                                    exit(NeonCliError::DeployToExistingAccount as i32);
+                                    // exit(NeonCliError::DeployToExistingAccount as i32);
                                 }
 
                                 code_begin = Contract::SIZE + 1;
@@ -355,16 +360,18 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else{
                                 if reset_storage || exist_items {
+                                    NeonCliError::ContractAccountExpected.report_and_exit();
                                     info!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
-                                    exit(NeonCliError::ContractAccountIsExpected as i32);
+                                    // exit(NeonCliError::ContractAccountIsExpected as i32);
                                 }
                                 *acc.writable.borrow_mut() = true;
                             }
 
                         }
                         else{
+                            NeonCliError::IncorrectAccount.report_and_exit();
                             warn!("Changes of incorrect account were found {}", &address.to_string());
-                            exit(NeonCliError::IncorrectAccount as i32);
+                            // exit(NeonCliError::IncorrectAccount as i32);
                         }
                     }
                     else if let Some(acc) = new_accounts.get_mut(&address) {
@@ -377,8 +384,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                             *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                         }
                         else  if reset_storage || exist_items {
+                                NeonCliError::ContractAccountExpected.report_and_exit();
                                 info!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
-                                exit(NeonCliError::ContractAccountIsExpected as i32);
+                                // exit(NeonCliError::ContractAccountIsExpected as i32);
                             }
 
                         *acc.writable.borrow_mut() = true;

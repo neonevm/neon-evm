@@ -1,4 +1,4 @@
-#![deny(warnings)]
+// #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 
 mod account_storage;
@@ -102,7 +102,7 @@ use libsecp256k1::PublicKey;
 
 use rlp::RlpStream;
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use logs::LogContext;
 
 use crate::account_storage::SolanaAccountJSON;
@@ -271,7 +271,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "steps_executed": steps_executed,
     }).to_string();
 
-    trace!("{}", js);
+    println!("{}", js);
 
     Ok(())
 }
@@ -1771,11 +1771,17 @@ fn main() {
                     .unwrap_or(&cli_config.json_rpc_url),
             );
 
-            let evm_loader = pubkey_of(&app_matches, "evm_loader")
-                    .unwrap_or_else(|| {
-                        error!("Need specify evm_loader");
-                        exit(NeonCliError::EvmLoaderNotSpecified as i32);
-                    });
+            let evm_loader = 
+                if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
+                    evm_loader
+                } else {
+                    error!("Need specify evm_loader");
+                    NeonCliError::EvmLoaderNotSpecified.report_and_exit();
+                    return;
+                };
+                    // .unwrap_or_else(|| {
+                    //     // exit(NeonCliError::EvmLoaderNotSpecified as i32);
+                    // });
 
             let (signer, _fee_payer) = signer_from_path(
                 &app_matches,
@@ -1787,7 +1793,8 @@ fn main() {
             ).map_or_else(
                 |e| {
                     error!("{}", e);
-                    exit(NeonCliError::FeePayerNotSpecified as i32);
+                    NeonCliError::FeePayerNotSpecified.report_and_exit();
+                    exit(1);
                 },
                 |s| {
                     let p = s.pubkey();
@@ -1915,10 +1922,11 @@ fn main() {
             _ => unreachable!(),
         };
         match result {
-            Ok(()) => exit(NeonCliError::NoError as i32),
+            Ok(()) => exit(0),
             Err(err) => {
                 error!("{}", err);
-                exit(NeonCliError::UnknownError as i32);
+                NeonCliError::UnknownError.report_and_exit();
+                // exit(NeonCliError::UnknownError as i32);
             }
         }
 }
