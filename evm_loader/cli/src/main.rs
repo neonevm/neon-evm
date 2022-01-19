@@ -1,9 +1,10 @@
 #![deny(warnings)]
-#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![deny(clippy::all, clippy::pedantic)]
 
 mod account_storage;
 
 mod errors;
+mod logs;
 
 use crate::{
     account_storage::{
@@ -102,6 +103,8 @@ use libsecp256k1::PublicKey;
 use rlp::RlpStream;
 
 use log::{debug, error, info};
+use logs::LogContext;
+
 use crate::account_storage::SolanaAccountJSON;
 use evm_loader::{
     executor_state::{
@@ -264,6 +267,7 @@ fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, 
         "token_accounts": token_accounts,
         "result": &hex::encode(&result),
         "exit_status": status,
+        "exit_reason": exit_reason,
         "used_gas": used_gas,
         "steps_executed": steps_executed,
     }).to_string();
@@ -323,7 +327,7 @@ fn command_create_ether_account (
 
     config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
 
-    println!("{}", json!({
+    info!("{}", json!({
         "solana": solana_address.to_string(),
         "token": token_address.to_string(),
         "ether": hex::encode(ether_address),
@@ -1071,7 +1075,7 @@ fn command_get_ether_account_data (
 
         },
         None => {
-            eprintln!("Account not found {}", &ether_address.to_string());
+            println!("Account not found {}", &ether_address.to_string());
         }
     }
 }
@@ -1120,7 +1124,7 @@ fn command_cancel_trx(
                 else {return Err("Not storage account".to_string().into());};
 
         let keys: Vec<Pubkey> = {
-            println!("{:?}", storage);
+            info!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
             if acc.data.len() < accounts_end {
@@ -1175,7 +1179,7 @@ fn command_cancel_trx(
             }
         }
         for meta in &accounts_meta {
-            println!("\t{:?}", meta);
+            info!("\t{:?}", meta);
         }
 
         let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
@@ -1509,6 +1513,15 @@ fn main() {
                 .default_value("max")
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
+        .arg(
+            Arg::with_name("logging_ctx")
+                .short("L")
+                .long("logging_ctx")
+                .value_name("LOG_CONTEST")
+                .takes_value(true)
+                .global(true)
+                .help("Logging context"),
+        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
@@ -1728,15 +1741,21 @@ fn main() {
         )
         .get_matches();
 
-        let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
-            error!("Invalid message verbosity");
-            exit(NeonCliError::InvalidMessageVerbosity as i32);
-        });
-        stderrlog::new()
-            .module(module_path!())
-            .verbosity(verbosity)
-            .init()
-            .unwrap();
+        let context: LogContext =
+            app_matches.value_of("logging_ctx")
+                .map(|ctx| serde_json::from_str(ctx).unwrap() )
+                .unwrap_or_default();
+        logs::init(context).unwrap();
+
+        // let _verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
+        //     error!("Invalid message verbosity");
+        //     exit(NeonCliError::InvalidMessageVerbosity as i32);
+        // });
+        // stderrlog::new()
+        //     .module(module_path!())
+        //     .verbosity(verbosity)
+        //     .init()
+        //     .unwrap();
 
         let mut wallet_manager = None;
         let config = {
@@ -1753,11 +1772,13 @@ fn main() {
                     .unwrap_or(&cli_config.json_rpc_url),
             );
 
-            let evm_loader = pubkey_of(&app_matches, "evm_loader")
-                    .unwrap_or_else(|| {
-                        error!("Need specify evm_loader");
-                        exit(NeonCliError::EvmLoaderNotSpecified as i32);
-                    });
+            let evm_loader = 
+                if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
+                    evm_loader
+                } else {
+                    NeonCliError::EvmLoaderNotSpecified.report_and_exit();
+                    return;
+                };
 
             let (signer, _fee_payer) = signer_from_path(
                 &app_matches,
@@ -1769,7 +1790,8 @@ fn main() {
             ).map_or_else(
                 |e| {
                     error!("{}", e);
-                    exit(NeonCliError::FeePayerNotSpecified as i32);
+                    NeonCliError::FeePayerNotSpecified.report_and_exit();
+                    exit(1);
                 },
                 |s| {
                     let p = s.pubkey();
@@ -1897,10 +1919,11 @@ fn main() {
             _ => unreachable!(),
         };
         match result {
-            Ok(()) => exit(NeonCliError::NoError as i32),
+            Ok(()) => exit(0),
             Err(err) => {
                 error!("{}", err);
-                exit(NeonCliError::UnknownError as i32);
+                NeonCliError::UnknownError.report_and_exit();
+                // exit(NeonCliError::UnknownError as i32);
             }
         }
 }
