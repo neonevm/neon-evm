@@ -44,10 +44,10 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
         .ok_or_else(|| eyre!("Overflow {}*{}", amount, factor))
 }
 
-/// Transfers `amount` of tokens.
+/// Deposits `amount` of tokens from main account to associated account.
 /// When `in_fractions` == false, amount is treated as whole token amount.
 /// When `in_fractions` == true, amount is treated as amount in galans (10E-9).
-pub async fn transfer_token(
+pub async fn deposit_token(
     id: &str,
     signer: Keypair,
     ether_address: ethereum::Address,
@@ -56,15 +56,13 @@ pub async fn transfer_token(
 ) -> Result<()> {
     let evm_loader_id = Pubkey::from_str(&config::solana_evm_loader()).wrap_err_with(|| {
         format!(
-            "{} config::solana_evm_loader returns {}",
-            id,
+            "config::solana_evm_loader returns {}",
             &config::solana_evm_loader()
         )
     })?;
     let token_mint_id = Pubkey::from_str(&config::solana_token_mint_id()).wrap_err_with(|| {
         format!(
-            "{} config::solana_token_mint_id returns {}",
-            id,
+            "config::solana_token_mint_id returns {}",
             &config::solana_token_mint_id(),
         )
     })?;
@@ -134,7 +132,8 @@ pub async fn transfer_token(
             &[],
             amount,
             config::solana_token_mint_decimals(),
-        )?);*/
+        )?);
+        */
 
         instructions.push(spl_approve_instruction(
             &spl_token::id(),

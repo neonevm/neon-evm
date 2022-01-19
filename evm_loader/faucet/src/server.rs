@@ -209,6 +209,5 @@ fn generate_id() -> String {
         }
     };
     let digest = md5::compute(since.as_nanos().to_string());
-    let s = format!("{:x}", digest)[..7].to_string();
-    format!("[{}]", s)
+    format!("[{}]", &format!("{:x}", digest)[..7])
 }
