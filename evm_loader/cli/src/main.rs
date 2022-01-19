@@ -1775,13 +1775,9 @@ fn main() {
                 if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
                     evm_loader
                 } else {
-                    error!("Need specify evm_loader");
                     NeonCliError::EvmLoaderNotSpecified.report_and_exit();
                     return;
                 };
-                    // .unwrap_or_else(|| {
-                    //     // exit(NeonCliError::EvmLoaderNotSpecified as i32);
-                    // });
 
             let (signer, _fee_payer) = signer_from_path(
                 &app_matches,
