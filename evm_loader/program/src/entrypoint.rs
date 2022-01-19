@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_STEP_COST, EVM_STEPS};
+use crate::config::{EVM_STEP_COST, EVM_STEPS, HOLDER_MSG_SIZE};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -336,7 +336,7 @@ fn process_instruction<'a>(
             let trx_accounts = &accounts[7..];
 
             let holder_data = holder_info.data.borrow();
-            let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
+            let (unsigned_msg, signature, unsigned_msg_size) = get_transaction_from_data(&holder_data)?;
 
             let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
@@ -347,7 +347,8 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
-                signature
+                signature,
+                unsigned_msg_size
             )?;
 
             Ok(())
@@ -444,7 +445,8 @@ fn process_instruction<'a>(
                 operator_sol_info, collateral_pool_sol_info,
                 operator_eth_info, user_eth_info,
                 system_info,
-                sign
+                sign,
+                0
             )?;
 
             Ok(())
@@ -562,7 +564,8 @@ fn process_instruction<'a>(
                             operator_sol_info, collateral_pool_sol_info,
                             operator_eth_info, user_eth_info,
                             system_info,
-                            sign
+                            sign,
+                            0
                         )?;
                     }
                     else{
@@ -597,7 +600,7 @@ fn process_instruction<'a>(
             match StorageAccount::restore(storage_info, operator_sol_info) {
                 Err(err) => {
                     let holder_data = holder_info.data.borrow();
-                    let (unsigned_msg, signature) = get_transaction_from_data(&holder_data)?;
+                    let (unsigned_msg, signature, unsigned_msg_size) = get_transaction_from_data(&holder_data)?;
                     let caller = verify_tx_signature(signature, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))?;
                     let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
 
@@ -615,7 +618,8 @@ fn process_instruction<'a>(
                             operator_sol_info, collateral_pool_sol_info,
                             operator_eth_info, user_eth_info,
                             system_info,
-                            signature
+                            signature,
+                            unsigned_msg_size
                         )?;
                     }
                     else{
@@ -801,7 +805,7 @@ fn process_instruction<'a>(
 
 fn get_transaction_from_data(
     data: &[u8]
-) -> Result<(&[u8], &[u8]), ProgramError>
+) -> Result<(&[u8], &[u8], u64), ProgramError>
 {
     let account_info_data = AccountData::unpack(data)?;
     match account_info_data {
@@ -816,7 +820,7 @@ fn get_transaction_from_data(
     let trx_len = usize::try_from(trx_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
     let (trx, _rest) = rest.split_at(trx_len as usize);
 
-    Ok((trx, signature))
+    Ok((trx, signature, trx_len as u64))
 }
 
 fn do_write(account_info: &AccountInfo, offset: u32, bytes: &[u8]) -> ProgramResult {
@@ -900,7 +904,8 @@ fn do_begin<'a>(
     operator_eth_info: &'a AccountInfo<'a>,
     user_eth_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>,
-    trx_sign: &[u8]
+    trx_sign: &[u8],
+    holder_data_size: u64
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -939,10 +944,12 @@ fn do_begin<'a>(
         do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?
     };
 
+     // TODO: may be: if steps_executed < EVM_STEPS ?
     if steps_executed == 0 {
         steps_executed = EVM_STEPS;
     }
-    let gas = steps_executed * EVM_STEP_COST;
+    let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
+    let gas = (steps_executed + holder_trx_count * EVM_STEPS) * EVM_STEP_COST;
 
     token::user_pays_operator(
         trx_gas_price,

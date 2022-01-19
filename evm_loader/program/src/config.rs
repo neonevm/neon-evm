@@ -192,6 +192,8 @@ pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
 pub const EVM_STEP_COST: u64 = 150;
 /// `number of evm steps per transaction`
 pub const EVM_STEPS: u64  = 100;
+/// `the message size that is used to holder-account filling`
+pub const HOLDER_MSG_SIZE: u64 = 1000;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -203,6 +205,7 @@ neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOS
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 neon_elf_param!( NEON_EVM_STEP_COST         , formatcp!("{:?}", EVM_STEP_COST));
 neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
+neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 
 /// Chain ID
 #[must_use]
