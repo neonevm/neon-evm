@@ -67,9 +67,9 @@ pub async fn deposit_token(
         )
     })?;
 
-    let signer_account = signer.pubkey();
-    let signer_token_account =
-        spl_associated_token_account::get_associated_token_address(&signer_account, &token_mint_id);
+    let signer_pubkey = signer.pubkey();
+    let signer_token_pubkey =
+        spl_associated_token_account::get_associated_token_address(&signer_pubkey, &token_mint_id);
 
     let (account, _nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
     let token_account =
@@ -97,7 +97,7 @@ pub async fn deposit_token(
             } else {
                 info!("{} No ether account; will be created", id);
                 instructions.push(create_ether_account_instruction(
-                    signer_account,
+                    signer_pubkey,
                     evm_loader_id,
                     ether_address,
                 ));
@@ -111,10 +111,10 @@ pub async fn deposit_token(
         };
 
         info!("{} spl_token id = {}", id, spl_token::id());
-        info!("{} signer_token_account = {}", id, signer_token_account);
+        info!("{} signer_token_pubkey = {}", id, signer_token_pubkey);
         info!("{} token_mint_id = {}", id, token_mint_id);
         info!("{} token_account = {}", id, token_account);
-        info!("{} signer_account = {}", id, signer_account);
+        info!("{} signer_pubkey = {}", id, signer_pubkey);
         info!("{} amount = {}", id, amount);
         info!(
             "{} token_decimals = {}",
@@ -137,14 +137,14 @@ pub async fn deposit_token(
 
         instructions.push(spl_approve_instruction(
             &spl_token::id(),
-            &signer_token_account,
+            &signer_token_pubkey,
             &token_account,
-            &signer_account,
+            &signer_pubkey,
             amount,
         ));
 
         instructions.push(deposit_instruction(
-            signer_token_account,
+            signer_token_pubkey,
             token_account,
             account,
             evm_loader_id,
@@ -188,7 +188,7 @@ fn make_solana_program_address(
 
 /// Returns instruction for creation of account.
 fn create_ether_account_instruction(
-    signer: Pubkey,
+    signer_pubkey: Pubkey,
     evm_loader_id: Pubkey,
     ether_address: ethereum::Address,
 ) -> Instruction {
@@ -210,7 +210,7 @@ fn create_ether_account_instruction(
             nonce,
         },
         vec![
-            AccountMeta::new(signer, true),
+            AccountMeta::new(signer_pubkey, true),
             AccountMeta::new(solana_address, false),
             AccountMeta::new(token_address, false),
             AccountMeta::new_readonly(system_program::id(), false),
@@ -249,18 +249,18 @@ fn spl_approve_instruction(
 
 /// Returns instruction to deposit NEON tokens.
 fn deposit_instruction(
-    source_account: Pubkey,
-    destination_account: Pubkey,
-    ether_account: Pubkey,
+    source_pubkey: Pubkey,
+    destination_pubkey: Pubkey,
+    ether_account_pubkey: Pubkey,
     evm_loader_id: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         evm_loader_id,
         &evm_loader::instruction::EvmInstruction::Deposit,
         vec![
-            AccountMeta::new(source_account, false),
-            AccountMeta::new(destination_account, false),
-            AccountMeta::new(ether_account, false),
+            AccountMeta::new(source_pubkey, false),
+            AccountMeta::new(destination_pubkey, false),
+            AccountMeta::new(ether_account_pubkey, false),
             AccountMeta::new_readonly(evm_loader_id, false),
         ],
     )

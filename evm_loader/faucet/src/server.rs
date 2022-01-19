@@ -1,9 +1,10 @@
 //! Faucet server implementation.
 
 use actix_cors::Cors;
-use actix_web::http::header;
+use actix_web::http::{header, StatusCode};
 use actix_web::web::{post, Bytes};
-use actix_web::{App, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder};
+
 use eyre::Result;
 use tracing::{error, info};
 
@@ -24,6 +25,7 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
         App::new()
             .wrap(cors)
             .route("/request_ping", post().to(handle_request_ping))
+            .route("/request_version", post().to(handle_request_version))
             .route(
                 "/request_neon_in_galans",
                 post().to(handle_request_neon_in_galans),
@@ -68,6 +70,20 @@ async fn handle_request_ping(body: Bytes) -> impl Responder {
     info!("{} Ping '{}'", id, ping.unwrap().ping);
 
     HttpResponse::Ok()
+}
+
+/// Handles a version request.
+async fn handle_request_version(request: HttpRequest) -> impl Responder {
+    let id = generate_id();
+
+    println!();
+    info!("{} Handling version request...", id);
+
+    let version = crate::version::display!();
+    info!("{} Faucet {}", id, version);
+
+    let responder = version.customize().with_status(StatusCode::OK);
+    responder.respond_to(&request)
 }
 
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
