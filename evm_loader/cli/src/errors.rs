@@ -45,7 +45,7 @@ pub enum NeonCliError {
 }
 
 impl NeonCliError {
-    pub fn error_code(&self) -> i32 {
+    pub fn error_code(&self) -> u32 {
         match self {
             NeonCliError::EvmLoaderNotSpecified       => 4001,
             NeonCliError::FeePayerNotSpecified        => 4002,
@@ -61,13 +61,13 @@ impl NeonCliError {
     }
     pub fn report_and_exit(self) {
         error!("Emulator Error: {}", &self);
-        exit(self.error_code());
+        exit(self.error_code() as i32);
     }
 }
 
 impl From<NeonCliError> for ProgramError {
     fn from(e: NeonCliError) -> Self {
-        Self::Custom(e.error_code() as u32)
+        Self::Custom(e.error_code())
     }
 }
 

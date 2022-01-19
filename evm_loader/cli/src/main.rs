@@ -1,4 +1,4 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 
 mod account_storage;
