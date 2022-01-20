@@ -1,4 +1,4 @@
-#[allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions)]
 use evm::{H160};
 
 use evm_loader::{
