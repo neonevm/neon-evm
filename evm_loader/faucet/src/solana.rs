@@ -76,7 +76,7 @@ pub async fn deposit_token(
 
     let (evm_token_authority, _) = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id);
 
-    let (ether_pubkey, _) = make_solana_program_address(&ether_address, &evm_loader_id);
+    let (ether_pubkey, _) = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id);
 
     let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
@@ -150,8 +150,7 @@ pub async fn deposit_token(
 }
 
 /// Maps an Ethereum address into a Solana address.
-/// Copied here from evm_loader/cli/src/account_storage.rs.
-fn make_solana_program_address(
+fn ether_address_to_solana_pubkey(
     ether_address: &ethereum::Address,
     program_id: &Pubkey,
 ) -> (Pubkey, u8) {
@@ -173,7 +172,7 @@ fn create_ether_account_instruction(
     let token_mint_id =
         Pubkey::from_str(&config::solana_token_mint_id()).expect("invalid token mint id");
 
-    let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
+    let (solana_address, nonce) = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id);
     let token_address =
         spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint_id);
 

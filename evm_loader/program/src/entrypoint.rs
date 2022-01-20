@@ -803,7 +803,7 @@ fn process_instruction<'a>(
             let _ether_info = next_account_info(account_info_iter)?;
             let authority_info = next_account_info(account_info_iter)?;
             let evm_loader_info = next_account_info(account_info_iter)?;
-            let spl_token_info = next_account_info(account_info_iter)?;
+            let token_program_info = next_account_info(account_info_iter)?;
 
             let amount = get_token_account_delegated_amount(source_info, authority_info)?;
             debug_print!("Deposit delegated amount {}", amount);
@@ -813,7 +813,7 @@ fn process_instruction<'a>(
                 target_info.clone(),
                 authority_info.clone(),
                 evm_loader_info.clone(),
-                spl_token_info.clone(),
+                token_program_info.clone(),
                 amount)?;
             debug_print!("Deposit transfer completed");
 
@@ -837,7 +837,7 @@ fn transfer_deposit<'a>(
     target_info: AccountInfo<'a>,
     authority_info: AccountInfo<'a>,
     evm_loader_info: AccountInfo<'a>,
-    spl_token_info: AccountInfo<'a>,
+    token_program_info: AccountInfo<'a>,
     value: u64,
 ) -> Result<(), ProgramError> {
     debug_print!("Deposit transfer_neon_token");
@@ -865,7 +865,7 @@ fn transfer_deposit<'a>(
     debug_print!("Transfer NEON tokens from {} to {} value {}", source_info.key, target_info.key, value);
 
     let transfer = spl_token::instruction::transfer(
-        spl_token_info.key,
+        token_program_info.key,
         source_info.key,
         target_info.key,
         &authority_key,
@@ -874,7 +874,7 @@ fn transfer_deposit<'a>(
     )?;
 
     invoke_signed(&transfer,
-                  &[source_info, target_info, authority_info, spl_token_info],
+                  &[source_info, target_info, authority_info, token_program_info],
                   &[&[&b"Deposit"[..], &[bump_seed]]])?;
 
     Ok(())
