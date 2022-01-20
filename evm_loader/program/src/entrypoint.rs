@@ -808,13 +808,13 @@ fn process_instruction<'a>(
             let amount = get_token_account_delegated_amount(source_info, authority_info)?;
             debug_print!("Deposit delegated amount {}", amount);
 
-            transfer_neon_token(
-                source_info,
-                target_info,
-                authority_info,
-                evm_loader_info,
-                spl_token_info,
-                &amount.into())?;
+            transfer_deposit(
+                source_info.clone(),
+                target_info.clone(),
+                authority_info.clone(),
+                evm_loader_info.clone(),
+                spl_token_info.clone(),
+                amount)?;
             debug_print!("Deposit transfer completed");
 
             Ok(())
@@ -832,23 +832,20 @@ fn process_instruction<'a>(
 ///
 /// Could return:
 /// `ProgramError::InvalidInstructionData`
-fn transfer_neon_token(
-    source_info: &AccountInfo,
-    target_info: &AccountInfo,
-    authority_info: &AccountInfo,
-    evm_loader_info: &AccountInfo,
-    spl_token_info: &AccountInfo,
-    value: &U256,
+fn transfer_deposit<'a>(
+    source_info: AccountInfo<'a>,
+    target_info: AccountInfo<'a>,
+    authority_info: AccountInfo<'a>,
+    evm_loader_info: AccountInfo<'a>,
+    spl_token_info: AccountInfo<'a>,
+    value: u64,
 ) -> Result<(), ProgramError> {
     debug_print!("Deposit transfer_neon_token");
 
-    check_token_mint(source_info, &token_mint::id())?;
-    check_token_mint(target_info, &token_mint::id())?;
+    check_token_mint(&source_info, &token_mint::id())?;
+    check_token_mint(&target_info, &token_mint::id())?;
 
-    let value = value / token::eth::min_transfer_value();
-    let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
-
-    let source_balance = get_token_account_balance(source_info)?;
+    let source_balance = get_token_account_balance(&source_info)?;
     if source_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
             "Insufficient funds on token account {:?} {:?}",
@@ -877,7 +874,7 @@ fn transfer_neon_token(
     )?;
 
     invoke_signed(&transfer,
-                  &[source_info.clone(), /*target_info.clone()*//*, authority_info.clone()*//*, spl_token_info.clone()*/],
+                  &[source_info, target_info, authority_info, spl_token_info],
                   &[&[&b"Deposit"[..], &[bump_seed]]])?;
 
     Ok(())
