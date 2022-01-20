@@ -127,10 +127,6 @@ pub async fn deposit_token(
             evm_loader_id,
         ));
 
-        if instructions.is_empty() {
-            return Err(eyre!("No instructions to submit"));
-        }
-
         info!("{} Creating message...", id);
         let message = Message::new(&instructions, Some(&signer.pubkey()));
         info!("{} Creating transaction...", id);
@@ -233,12 +229,13 @@ fn deposit_instruction(
 ) -> Instruction {
     Instruction::new_with_bincode(
         evm_loader_id,
-        &evm_loader::instruction::EvmInstruction::Deposit,
+        &24, // Index of the Deposit instruction in EVM Loader
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),
             AccountMeta::new(ether_account_pubkey, false),
-            AccountMeta::new_readonly(evm_loader_id, false),
+            AccountMeta::new_readonly(evm_loader_id, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
     )
 }

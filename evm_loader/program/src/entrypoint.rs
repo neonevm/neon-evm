@@ -5,8 +5,8 @@
 use std::{
     alloc::Layout,
     convert::{TryFrom, TryInto},
-    mem::size_of, 
-    ptr::null_mut, 
+    mem::size_of,
+    ptr::null_mut,
     usize
 };
 
@@ -14,35 +14,34 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
-
 use solana_program::{
-    account_info::{next_account_info, AccountInfo},
-    entrypoint, entrypoint::{ProgramResult, HEAP_START_ADDRESS},
-    program_error::{ProgramError}, pubkey::Pubkey,
-    program::{invoke},
+    account_info::{AccountInfo, next_account_info},
+    entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
+    keccak::Hasher, msg,
+    program::invoke,
+    program_error::ProgramError,
+    pubkey::Pubkey,
     rent::Rent,
     sysvar::Sysvar,
-    keccak::Hasher,
-    msg,
 };
 
 use crate::{
     //    bump_allocator::BumpAllocator,
-    config::{ chain_id, token_mint },
-    account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
+    account_data::{Account, ACCOUNT_MAX_SIZE, ACCOUNT_SEED_VERSION, AccountData, Contract},
     account_storage::{ProgramAccountStorage, /* Sender */ },
-    solana_backend::{AccountStorage},
-    transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
-    executor_state::{ ExecutorState, ExecutorSubstate, ApplyState },
-    storage_account::{ StorageAccount },
+    config::{chain_id, token_mint},
     error::EvmLoaderError,
     executor::Machine,
+    executor_state::{ApplyState, ExecutorState, ExecutorSubstate},
     instruction::{EvmInstruction, on_event, on_return},
+    operator::authorized_operator_check,
     payment,
+    solana_backend::AccountStorage,
+    storage_account::StorageAccount,
+    system::create_pda_account,
     token,
     token::{create_associated_token_account, get_token_account_delegated_amount},
-    operator::authorized_operator_check,
-    system::create_pda_account,
+    transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
@@ -794,21 +793,35 @@ fn process_instruction<'a>(
         },
         EvmInstruction::Deposit => {
             let source_info = next_account_info(account_info_iter)?;
-            let destination_info = next_account_info(account_info_iter)?;
+            let target_info = next_account_info(account_info_iter)?;
             let _ether_info = next_account_info(account_info_iter)?;
-            let evm_loader_id = next_account_info(account_info_iter)?.key;
+            let evm_loader_info = next_account_info(account_info_iter)?;
+            let spl_token_info = next_account_info(account_info_iter)?;
+
+            let evm_loader_id = evm_loader_info.key;
 
             let amount = get_token_account_delegated_amount(source_info, evm_loader_id)?;
+            debug_print!("Deposit delegated amount {}", amount);
 
+            debug_print!("Deposit invoking SPL transfer");
             let transfer = spl_token::instruction::transfer(
                 &spl_token::id(),
                 source_info.key,
-                destination_info.key,
+                target_info.key,
                 evm_loader_id,
                 &[&evm_loader_id],
                 amount
             )?;
-            invoke(&transfer, accounts)?;
+            invoke(
+                &transfer,
+                &[
+                    source_info.clone(),
+                    target_info.clone(),
+                    evm_loader_info.clone(),
+                    spl_token_info.clone(),
+                ],
+            )?;
+            debug_print!("Deposit SPL transfer completed");
 
             Ok(())
         },
@@ -818,6 +831,56 @@ fn process_instruction<'a>(
     solana_program::msg!("Total memory occupied: {}", &BumpAllocator::occupied());
     result
 }
+
+/*
+fn transfer_neon_token(
+    accounts: &[AccountInfo],
+    source_token_account: &AccountInfo,
+    target_token_account: &AccountInfo,
+    source_account: &AccountInfo,
+    source_solidity_account: &SolidityAccount,
+    value: &U256,
+) -> Result<(), ProgramError> {
+    debug_print!("transfer_neon_token");
+    if get_token_account_owner(source_token_account)? != *source_account.key {
+        return Err!(ProgramError::InvalidInstructionData;
+            "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
+            source_token_account, source_account
+        );
+    }
+
+    check_token_mint(source_token_account, &token_mint::id())?;
+    check_token_mint(target_token_account, &token_mint::id())?;
+
+    let value = value / eth::min_transfer_value();
+    let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
+
+    let source_token_balance = get_token_account_balance(source_token_account)?;
+    if source_token_balance < value {
+        return Err!(ProgramError::InvalidInstructionData;
+            "Insufficient funds on token account {:?} {:?}",
+            source_token_account, source_token_balance
+        );
+    }
+
+    debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+
+    let instruction = spl_token::instruction::transfer(
+        &spl_token::id(),
+        source_token_account.key,
+        target_token_account.key,
+        source_account.key,
+        &[],
+        value
+    )?;
+
+    let (ether, nonce) = source_solidity_account.get_seeds();
+    let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
+    invoke_signed(&instruction, accounts, &[program_seeds])?;
+
+    Ok(())
+}
+*/
 
 fn get_transaction_from_data(
     data: &[u8]
