@@ -1,17 +1,35 @@
-use serde::{ Deserialize, Serialize };
+use serde::{ Deserialize };
 use fern::{ Dispatch };
 
-#[derive(Deserialize,Serialize)]
+#[derive(Deserialize)]
 #[derive(Default)]
 pub struct LogContext {
     req_id: String,
 }
 
+impl LogContext {
+    pub fn new(id: String) -> LogContext {
+        LogContext {
+            req_id: id,
+        }
+    }
+}
 
-const LOG_MODULES: [&str; 2] = [
+
+const LOG_MODULES: [&str; 11] = [
   "neon_cli",
   "neon_cli::account_storage",
+  "neon_cli::commands::cancel_trx",
+  "neon_cli::commands::create_ether_account",
+  "neon_cli::commands::create_program_address",
+  "neon_cli::commands::deploy",
+  "neon_cli::commands::emulate",
+  "neon_cli::commands::get_ether_account_data",
+  "neon_cli::commands::get_neon_elf",
+  "neon_cli::commands::get_storage_at",
+  "neon_cli::commands::update_valids_table",
 ];
+
 
 pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
     let mut dispatch: Dispatch =
@@ -32,7 +50,7 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
                 "Undefined",
                 "Emulator",
                 record.target(),
-                serde_json::to_string(&context).unwrap(),
+                context.req_id,
                 message
             ));
         })
