@@ -74,6 +74,8 @@ pub async fn deposit_token(
     let evm_token_pubkey =
         spl_associated_token_account::get_associated_token_address(&evm_loader_id, &token_mint_id);
 
+    let (evm_token_authority, _) = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id);
+
     let (ether_pubkey, _) = make_solana_program_address(&ether_address, &evm_loader_id);
 
     let id = id.to_owned();
@@ -104,6 +106,7 @@ pub async fn deposit_token(
         info!("{} signer_token_pubkey = {}", id, signer_token_pubkey);
         info!("{} token_mint_id = {}", id, token_mint_id);
         info!("{} evm_token_pubkey = {}", id, evm_token_pubkey);
+        info!("{} evm_token_authority = {}", id, evm_token_authority);
         info!("{} signer_pubkey = {}", id, signer_pubkey);
         info!("{} amount = {}", id, amount);
         info!(
@@ -115,7 +118,7 @@ pub async fn deposit_token(
         instructions.push(spl_approve_instruction(
             spl_token::id(),
             signer_token_pubkey,
-            evm_loader_id,
+            evm_token_authority,
             signer_pubkey,
             amount,
         ));
@@ -124,11 +127,13 @@ pub async fn deposit_token(
             signer_token_pubkey,
             evm_token_pubkey,
             ether_pubkey,
+            evm_token_authority,
             evm_loader_id,
+            spl_token::id(),
         ));
 
         info!("{} Creating message...", id);
-        let message = Message::new(&instructions, Some(&signer.pubkey()));
+        let message = Message::new(&instructions, Some(&signer_pubkey));
         info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
         info!("{} Getting recent blockhash...", id);
@@ -225,7 +230,9 @@ fn deposit_instruction(
     source_pubkey: Pubkey,
     destination_pubkey: Pubkey,
     ether_account_pubkey: Pubkey,
+    evm_token_authority: Pubkey,
     evm_loader_id: Pubkey,
+    spl_token_id: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         evm_loader_id,
@@ -234,8 +241,9 @@ fn deposit_instruction(
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),
             AccountMeta::new(ether_account_pubkey, false),
-            AccountMeta::new_readonly(evm_loader_id, true),
-            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(evm_token_authority, false),
+            AccountMeta::new_readonly(evm_loader_id, false),
+            AccountMeta::new_readonly(spl_token_id, false),
         ],
     )
 }

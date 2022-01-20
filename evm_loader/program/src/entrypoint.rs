@@ -14,11 +14,12 @@ use evm::{
     ExitError, ExitFatal, ExitReason, ExitSucceed,
     H160, U256,
 };
+
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
     entrypoint, entrypoint::{HEAP_START_ADDRESS, ProgramResult},
     keccak::Hasher, msg,
-    program::invoke,
+    program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
@@ -40,7 +41,12 @@ use crate::{
     storage_account::StorageAccount,
     system::create_pda_account,
     token,
-    token::{create_associated_token_account, get_token_account_delegated_amount},
+    token::{
+        check_token_mint,
+        create_associated_token_account,
+        get_token_account_balance,
+        get_token_account_delegated_amount
+    },
     transaction::{check_secp256k1_instruction, UnsignedTransaction, verify_tx_signature},
     utils::is_zero_initialized
 };
@@ -795,33 +801,21 @@ fn process_instruction<'a>(
             let source_info = next_account_info(account_info_iter)?;
             let target_info = next_account_info(account_info_iter)?;
             let _ether_info = next_account_info(account_info_iter)?;
+            let authority_info = next_account_info(account_info_iter)?;
             let evm_loader_info = next_account_info(account_info_iter)?;
             let spl_token_info = next_account_info(account_info_iter)?;
 
-            let evm_loader_id = evm_loader_info.key;
-
-            let amount = get_token_account_delegated_amount(source_info, evm_loader_id)?;
+            let amount = get_token_account_delegated_amount(source_info, authority_info)?;
             debug_print!("Deposit delegated amount {}", amount);
 
-            debug_print!("Deposit invoking SPL transfer");
-            let transfer = spl_token::instruction::transfer(
-                &spl_token::id(),
-                source_info.key,
-                target_info.key,
-                evm_loader_id,
-                &[&evm_loader_id],
-                amount
-            )?;
-            invoke(
-                &transfer,
-                &[
-                    source_info.clone(),
-                    target_info.clone(),
-                    evm_loader_info.clone(),
-                    spl_token_info.clone(),
-                ],
-            )?;
-            debug_print!("Deposit SPL transfer completed");
+            transfer_neon_token(
+                source_info,
+                target_info,
+                authority_info,
+                evm_loader_info,
+                spl_token_info,
+                &amount.into())?;
+            debug_print!("Deposit transfer completed");
 
             Ok(())
         },
@@ -832,55 +826,62 @@ fn process_instruction<'a>(
     result
 }
 
-/*
+/// Transfer Tokens
+///
+/// # Errors
+///
+/// Could return:
+/// `ProgramError::InvalidInstructionData`
 fn transfer_neon_token(
-    accounts: &[AccountInfo],
-    source_token_account: &AccountInfo,
-    target_token_account: &AccountInfo,
-    source_account: &AccountInfo,
-    source_solidity_account: &SolidityAccount,
+    source_info: &AccountInfo,
+    target_info: &AccountInfo,
+    authority_info: &AccountInfo,
+    evm_loader_info: &AccountInfo,
+    spl_token_info: &AccountInfo,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    debug_print!("transfer_neon_token");
-    if get_token_account_owner(source_token_account)? != *source_account.key {
-        return Err!(ProgramError::InvalidInstructionData;
-            "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
-            source_token_account, source_account
-        );
-    }
+    debug_print!("Deposit transfer_neon_token");
 
-    check_token_mint(source_token_account, &token_mint::id())?;
-    check_token_mint(target_token_account, &token_mint::id())?;
+    check_token_mint(source_info, &token_mint::id())?;
+    check_token_mint(target_info, &token_mint::id())?;
 
-    let value = value / eth::min_transfer_value();
+    let value = value / token::eth::min_transfer_value();
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
 
-    let source_token_balance = get_token_account_balance(source_token_account)?;
-    if source_token_balance < value {
+    let source_balance = get_token_account_balance(source_info)?;
+    if source_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
             "Insufficient funds on token account {:?} {:?}",
-            source_token_account, source_token_balance
+            source_info, source_balance
         );
     }
 
-    debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
+    let (authority_key, bump_seed) =
+        Pubkey::find_program_address(&[b"Deposit"], &evm_loader_info.key);
+    if authority_key != *authority_info.key {
+        return Err!(ProgramError::InvalidInstructionData;
+            "Incorrect evm token authority {:?} {:?}",
+            authority_key, authority_info.key
+        );
+    }
 
-    let instruction = spl_token::instruction::transfer(
-        &spl_token::id(),
-        source_token_account.key,
-        target_token_account.key,
-        source_account.key,
-        &[],
+    debug_print!("Transfer NEON tokens from {} to {} value {}", source_info.key, target_info.key, value);
+
+    let transfer = spl_token::instruction::transfer(
+        spl_token_info.key,
+        source_info.key,
+        target_info.key,
+        &authority_key,
+        &[&authority_key],
         value
     )?;
 
-    let (ether, nonce) = source_solidity_account.get_seeds();
-    let program_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], ether.as_bytes(), &[nonce]];
-    invoke_signed(&instruction, accounts, &[program_seeds])?;
+    invoke_signed(&transfer,
+                  &[source_info.clone(), /*target_info.clone()*//*, authority_info.clone()*//*, spl_token_info.clone()*/],
+                  &[&[&b"Deposit"[..], &[bump_seed]]])?;
 
     Ok(())
 }
-*/
 
 fn get_transaction_from_data(
     data: &[u8]
