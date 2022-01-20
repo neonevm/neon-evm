@@ -1,3 +1,4 @@
+#[allow(clippy::module_name_repetitions)]
 use log::{ debug };
 
 use solana_sdk::{
