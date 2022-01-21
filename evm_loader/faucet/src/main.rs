@@ -25,6 +25,9 @@ async fn main() -> Result<()> {
 
 /// Initializes the logger.
 fn setup() -> Result<()> {
+    use time::macros::format_description;
+    use time::UtcOffset;
+    use tracing_subscriber::fmt::time::OffsetTime;
     use tracing_subscriber::EnvFilter;
 
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
@@ -35,7 +38,13 @@ fn setup() -> Result<()> {
         std::env::set_var("RUST_LOG", "info")
     }
 
+    let offset = UtcOffset::current_local_offset().expect("get local offset failed");
+    let timer = OffsetTime::new(
+        offset,
+        format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"),
+    );
     tracing_subscriber::fmt::fmt()
+        .with_timer(timer)
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 

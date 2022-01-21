@@ -29,9 +29,10 @@ spl-token = { version = "3.2.0", default_features = false, features = ["no-entry
 structopt = "0.3.26"
 termimad = "0.20.0"
 thiserror = "1.0.30"
+time = { version = "0.3.6", default_features = false, features = ["macros"] }
 tokio = { version = "1.15.0", default_features = false, features = ["rt"] }
 toml = "0.5.8"
 tracing = "0.1.29"
 # tracing-subscriber with disabled feature "ansi" to force colorless logs
-tracing-subscriber = { version = "0.3.6", default_features = false, features = ["env-filter", "fmt", "tracing-log", "smallvec", "parking_lot"] }
+tracing-subscriber = { version = "0.3.6", default_features = false, features = ["env-filter", "fmt", "time", "local-time", "tracing-log", "smallvec", "parking_lot"] }
 web3 = "0.17.0"
