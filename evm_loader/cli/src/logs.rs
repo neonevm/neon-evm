@@ -1,7 +1,7 @@
-use serde::{ Deserialize };
+use serde::{ Deserialize, Serialize };
 use fern::{ Dispatch };
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Serialize)]
 #[derive(Default)]
 pub struct LogContext {
     req_id: String,
@@ -25,12 +25,14 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
     dispatch
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "{:23} {:8} {:>15}:{:30} {} {}",
+                "{:23} {:>8} {:>6}:{:10} {:>15}:{:30} {} {}",
                 chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 record.level(),
+                "NA",
+                "Undefined",
                 "Emulator",
                 record.target(),
-                context.req_id,
+                serde_json::to_string(&context).unwrap(),
                 message
             ));
         })
