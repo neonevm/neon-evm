@@ -118,6 +118,7 @@ static mut A: BumpAllocator = BumpAllocator;
 entrypoint!(process_instruction);
 
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
 fn process_instruction<'a>(
     program_id: &Pubkey,
     accounts: &'a [AccountInfo<'a>],
@@ -805,6 +806,12 @@ fn process_instruction<'a>(
             let evm_loader_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
+            debug_print!("source_info {:?}", source_info);
+            debug_print!("target_info {:?}", target_info);
+            debug_print!("authority_info {:?}", authority_info);
+            debug_print!("evm_loader_info {:?}", evm_loader_info);
+            debug_print!("token_program_info {:?}", token_program_info);
+
             let amount = get_token_account_delegated_amount(source_info, authority_info)?;
             debug_print!("Deposit delegated amount {}", amount);
 
@@ -812,8 +819,8 @@ fn process_instruction<'a>(
                 source_info.clone(),
                 target_info.clone(),
                 authority_info.clone(),
-                evm_loader_info,
                 token_program_info.clone(),
+                evm_loader_info,
                 amount)?;
             debug_print!("Deposit transfer completed");
 
@@ -832,13 +839,12 @@ fn process_instruction<'a>(
 ///
 /// Could return:
 /// `ProgramError::InvalidInstructionData`
-#[inline(never)]
 fn transfer_deposit<'a>(
     source_info: AccountInfo<'a>,
     target_info: AccountInfo<'a>,
     authority_info: AccountInfo<'a>,
-    evm_loader_info: &'a AccountInfo<'a>,
     token_program_info: AccountInfo<'a>,
+    evm_loader_info: &'a AccountInfo<'a>,
     value: u64,
 ) -> Result<(), ProgramError> {
     debug_print!("Deposit transfer_neon_token");
@@ -849,8 +855,8 @@ fn transfer_deposit<'a>(
     let source_balance = get_token_account_balance(&source_info)?;
     if source_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
-            "Insufficient funds on token account {:?} {:?}",
-            source_info, source_balance
+            "Insufficient funds on token account {} {}",
+            source_info.key, source_balance
         );
     }
 

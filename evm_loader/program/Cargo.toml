@@ -20,7 +20,7 @@ no-entrypoint = []
 test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
-tracing = [ "environmental" ]
+tracing = ["environmental"]
 
 [dependencies]
 solana-program = { version = "=1.7.9", default_features = false }

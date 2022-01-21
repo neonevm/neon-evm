@@ -192,9 +192,10 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn check_token_mint(token: &AccountInfo, mint: &Pubkey) -> Result<(), ProgramError> {
-    debug_print!("check_token_mint");
+    debug_print!("check_token_mint {}", token.key);
 
     let token_data = get_token_account_data(&token.data.borrow(), token.owner)?;
+    debug_print!("token mint {}", token_data.mint);
     if token_data.mint == *mint {
         Ok(())
     } else {

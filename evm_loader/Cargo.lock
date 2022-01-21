@@ -5352,7 +5352,6 @@ version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
 dependencies = [
- "chrono",
  "lazy_static",
  "matchers",
  "parking_lot 0.11.1",

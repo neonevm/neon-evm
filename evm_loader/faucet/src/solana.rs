@@ -74,9 +74,9 @@ pub async fn deposit_token(
     let evm_token_pubkey =
         spl_associated_token_account::get_associated_token_address(&evm_loader_id, &token_mint_id);
 
-    let (evm_token_authority, _) = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id);
+    let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id).0;
 
-    let (ether_pubkey, _) = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id);
+    let ether_pubkey = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id).0;
 
     let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
@@ -84,7 +84,7 @@ pub async fn deposit_token(
         let mut instructions = Vec::with_capacity(3);
 
         let ether_account = client.get_account(&ether_pubkey);
-        if !ether_account.is_ok() {
+        if ether_account.is_err() {
             info!(
                 "{} No ether account for {}; will be created",
                 id, ether_address

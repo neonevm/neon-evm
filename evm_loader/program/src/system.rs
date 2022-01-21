@@ -16,7 +16,6 @@ use solana_program::{
 /// Will return:
 /// `ProgramError::AccountBorrowFailed` is `new_account` data already borrowed
 /// `ProgramError::Custom` from `invoke_signed`
-#[inline(never)]
 pub fn create_pda_account(
     owner: &Pubkey,
     accounts: &[AccountInfo],
