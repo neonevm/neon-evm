@@ -812,7 +812,7 @@ fn process_instruction<'a>(
                 source_info.clone(),
                 target_info.clone(),
                 authority_info.clone(),
-                evm_loader_info.clone(),
+                evm_loader_info,
                 token_program_info.clone(),
                 amount)?;
             debug_print!("Deposit transfer completed");
@@ -832,11 +832,12 @@ fn process_instruction<'a>(
 ///
 /// Could return:
 /// `ProgramError::InvalidInstructionData`
+#[inline(never)]
 fn transfer_deposit<'a>(
     source_info: AccountInfo<'a>,
     target_info: AccountInfo<'a>,
     authority_info: AccountInfo<'a>,
-    evm_loader_info: AccountInfo<'a>,
+    evm_loader_info: &'a AccountInfo<'a>,
     token_program_info: AccountInfo<'a>,
     value: u64,
 ) -> Result<(), ProgramError> {
@@ -854,7 +855,7 @@ fn transfer_deposit<'a>(
     }
 
     let (authority_key, bump_seed) =
-        Pubkey::find_program_address(&[b"Deposit"], &evm_loader_info.key);
+        Pubkey::find_program_address(&[b"Deposit"], evm_loader_info.key);
     if authority_key != *authority_info.key {
         return Err!(ProgramError::InvalidInstructionData;
             "Incorrect evm token authority {:?} {:?}",

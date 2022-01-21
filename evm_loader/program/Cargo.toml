@@ -23,38 +23,38 @@ default = ["custom-heap"]
 tracing = [ "environmental" ]
 
 [dependencies]
-solana-program = { version = "1.7.9", default_features = false }
-spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
+solana-program = { version = "=1.7.9", default_features = false }
+spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
 #num-bigint = "0.4"
-num-derive = "0.3"
-num-traits = "0.2"
+num-derive = "0.3.3"
+num-traits = "0.2.14"
 remove_dir_all = "=0.5.0"
-thiserror = "1.0"
+thiserror = "1.0.30"
 arrayref = "0.3.6"
-num_enum = "0.5.1"
-hex = "0.4.2"
-bs58 = "0.3.1"
+num_enum = "0.5.6"
+hex = "0.4.3"
+bs58 = "0.4.0"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 #k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
 #tbn = { version = "0.4.4", default-features = false }
 ripemd160 = "0.9.1"
-serde = "1.0.112"
-serde_bytes = "0.11"
-serde_derive = "1.0.103"
-impl-serde = "0.1"
-rlp = "0.5"
+serde = "1.0.134"
+serde_bytes = "0.11.5"
+serde_derive = "1.0.134"
+impl-serde = "0.3.2"
+rlp = "0.5.1"
 bincode = "1.3.3"
-evm = { version = "0.18.0", path = "../rust-evm", default_features = false, features = ["with-serde"] }
+evm = { version = "0.18", path = "../rust-evm", default_features = false, features = ["with-serde"] }
 evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
-const_format = { version = "0.2.21" }
+const_format = { version = "0.2.22" }
 macros = { version = "0.1", path = "../macro" }
-cfg-if = { version = "1.0" }
-log = "0.4"
-environmental = { version = "1.1", optional = true, default-features = false }
+cfg-if = { version = "1.0.0" }
+log = "0.4.14"
+environmental = { version = "1.1.3", optional = true, default-features = false }
 
 [dev-dependencies]
-rand = { version = "0.7.0"}
+rand = { version = "0.7.3"}
 solana-program-test = "1.7.9"
 solana-sdk = "1.7.9"
 
