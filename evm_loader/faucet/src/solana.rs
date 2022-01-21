@@ -132,7 +132,11 @@ pub async fn deposit_token(
             spl_token::id(),
         ));
 
-        info!("{} Creating message...", id);
+        info!(
+            "{} Creating message with {} instructions...",
+            id,
+            instructions.len()
+        );
         let message = Message::new(&instructions, Some(&signer_pubkey));
         info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
@@ -235,7 +239,7 @@ fn deposit_instruction(
 ) -> Instruction {
     Instruction::new_with_bincode(
         evm_loader_id,
-        &24, // Index of the Deposit instruction in EVM Loader
+        &(24_u8), // Index of the Deposit instruction in EVM Loader
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),
