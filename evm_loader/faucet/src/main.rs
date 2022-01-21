@@ -38,7 +38,7 @@ fn setup() -> Result<()> {
         std::env::set_var("RUST_LOG", "info")
     }
 
-    let offset = UtcOffset::current_local_offset().expect("get local offset failed");
+    let offset = UtcOffset::current_local_offset()?;
     let timer = OffsetTime::new(
         offset,
         format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"),
