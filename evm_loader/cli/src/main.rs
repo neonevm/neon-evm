@@ -74,6 +74,7 @@ use solana_clap_utils::{
 use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcSendTransactionConfig},
+    client_error::Result as SolanaClientResult,
 };
 
 use rlp::RlpStream;
@@ -83,8 +84,7 @@ use logs::LogContext;
 
 use crate::errors::NeonCliError;
 
-type Error = Box<dyn std::error::Error>;
-type CommandResult = Result<(), Error>;
+type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
     rpc_client: Arc<RpcClient>,
@@ -103,14 +103,16 @@ impl Debug for Config {
     }
 }
 
-fn read_program_data(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let mut file = File::open(program_location).map_err(|err| {
-        format!("Unable to open program file '{}': {}", program_location, err)
-    })?;
+fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
+    let mut file = File::open(program_location)?;
+    // let mut file = File::open(program_location).map_err(|err| {
+    //     format!("Unable to open program file '{}': {}", program_location, err)
+    // })?;
     let mut program_data = Vec::new();
-    file.read_to_end(&mut program_data).map_err(|err| {
-        format!("Unable to read program file '{}': {}", program_location, err)
-    })?;
+    file.read_to_end(&mut program_data)?;
+    // file.read_to_end(&mut program_data).map_err(|err| {
+    //     format!("Unable to read program file '{}': {}", program_location, err)
+    // })?;
 
     Ok(program_data)
 }
@@ -185,7 +187,7 @@ fn get_ether_account_nonce(
     config: &Config,
     caller_sol: &Pubkey,
     token_mint: &Pubkey
-) -> Result<(u64, H160, Pubkey), Error> {
+) -> Result<(u64, H160, Pubkey),NeonCliError> {
     let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
         Some(acc) => acc.data,
         None => return Ok((u64::default(), H160::default(), Pubkey::default()))
@@ -196,9 +198,10 @@ fn get_ether_account_nonce(
         Ok(acc_data) =>
             match acc_data {
             AccountData::Account(acc) => acc,
-            _ => return Err("Caller has incorrect type".into())
+            // _ => return Err("Caller has incorrect type".into())
+            _ => return Err(NeonCliError::AccountIncorrectType(acc_data))
         },
-        Err(_) => return Err("Caller unpack error".into())
+        Err(e) => return Err(NeonCliError::ProgramError(e))
     };
     let trx_count = account.trx_count;
     let caller_ether = account.ether;
@@ -222,7 +225,7 @@ fn get_program_ether(
     keccak256_h256(&stream.out()).into()
 }
 
-fn create_storage_account(config: &Config) -> Result<Pubkey, Error> {
+fn create_storage_account(config: &Config) -> SolanaClientResult<Pubkey> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let creator = &config.signer;
@@ -249,7 +252,7 @@ fn create_account_with_seed(
     base: &Pubkey,
     seed: &str,
     len: u64
-) -> Result<Pubkey, Error> {
+) -> SolanaClientResult<Pubkey> {
     let created_account = Pubkey::create_with_seed(base, seed, &config.evm_loader).unwrap();
 
     if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
@@ -275,7 +278,7 @@ fn create_account_with_seed(
 fn send_transaction(
     config: &Config,
     instructions: &[Instruction]
-) -> Result<Signature, Error> {
+) -> SolanaClientResult<Signature> {
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
@@ -284,16 +287,16 @@ fn send_transaction(
         .value;
     transaction.try_sign(&signers, blockhash)?;
 
-    let tx_sig = config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+    config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &transaction,
         CommitmentConfig::confirmed(),
         RpcSendTransactionConfig {
             preflight_commitment: Some(CommitmentLevel::Confirmed),
             ..RpcSendTransactionConfig::default()
         },
-    )?;
+    )
 
-    Ok(tx_sig)
+    // Ok(tx_sig)
 }
 
 /// Returns random nonce and the corresponding seed.
@@ -715,86 +718,89 @@ fn main() {
         )
         .get_matches();
 
-        let context: LogContext =
-            app_matches.value_of("logging_ctx")
-                .map(|ctx| LogContext::new(ctx.to_string()) )
-                .unwrap_or_default();
-        logs::init(context).unwrap();
+    let context: LogContext =
+        app_matches.value_of("logging_ctx")
+            .map(|ctx| LogContext::new(ctx.to_string()) )
+            .unwrap_or_default();
+    logs::init(context).unwrap();
 
-        // let _verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
-        //     error!("Invalid message verbosity");
-        //     exit(NeonCliError::InvalidMessageVerbosity as i32);
-        // });
-        // stderrlog::new()
-        //     .module(module_path!())
-        //     .verbosity(verbosity)
-        //     .init()
-        //     .unwrap();
+    // let _verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
+    //     error!("Invalid message verbosity");
+    //     exit(NeonCliError::InvalidMessageVerbosity as i32);
+    // });
+    // stderrlog::new()
+    //     .module(module_path!())
+    //     .verbosity(verbosity)
+    //     .init()
+    //     .unwrap();
 
-        let mut wallet_manager = None;
-        let config = {
-            let cli_config = app_matches.value_of("config_file").map_or_else(
-                solana_cli_config::Config::default,
-                |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
-            );
+    let mut wallet_manager = None;
+    let config = {
+        let cli_config = app_matches.value_of("config_file").map_or_else(
+            solana_cli_config::Config::default,
+            |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
+        );
 
-            let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
+        let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
 
-            let json_rpc_url = normalize_to_url_if_moniker(
-                app_matches
-                    .value_of("json_rpc_url")
-                    .unwrap_or(&cli_config.json_rpc_url),
-            );
+        let json_rpc_url = normalize_to_url_if_moniker(
+            app_matches
+                .value_of("json_rpc_url")
+                .unwrap_or(&cli_config.json_rpc_url),
+        );
 
-            let evm_loader = 
-                if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
-                    evm_loader
-                } else {
-                    NeonCliError::EvmLoaderNotSpecified.report_and_exit();
-                    return;
-                };
+        let evm_loader = 
+            if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
+                evm_loader
+            } else {
+                let e = NeonCliError::EvmLoaderNotSpecified;
+                error!("{}", e);
+                exit(e.error_code() as i32);
+            };
 
-            let (signer, _fee_payer) = signer_from_path(
-                &app_matches,
-                app_matches
-                    .value_of("fee_payer")
-                    .unwrap_or(&cli_config.keypair_path),
-                "fee_payer",
-                &mut wallet_manager,
-            ).map_or_else(
-                |e| {
-                    error!("{}", e);
-                    NeonCliError::FeePayerNotSpecified.report_and_exit();
-                    exit(1);
-                },
-                |s| {
-                    let p = s.pubkey();
-                    (s, p)
-                }
-            );
-
-            let keypair = keypair_from_path(
-                &app_matches,
-                app_matches
-                    .value_of("fee_payer")
-                    .unwrap_or(&cli_config.keypair_path),
-                "fee_payer",
-                true,
-            ).ok();
-
-            Config {
-                rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
-                websocket_url: "".to_string(),
-                evm_loader,
-                // fee_payer,
-                signer,
-                keypair,
-                commitment,
+        let (signer, _fee_payer) = signer_from_path(
+            &app_matches,
+            app_matches
+                .value_of("fee_payer")
+                .unwrap_or(&cli_config.keypair_path),
+            "fee_payer",
+            &mut wallet_manager,
+        ).map_or_else(
+            |e| {
+                error!("{}", e);
+                let e = NeonCliError::FeePayerNotSpecified;
+                error!("{}", e);
+                exit(e.error_code() as i32);
+            },
+            |s| {
+                let p = s.pubkey();
+                (s, p)
             }
-        };
+        );
 
-        let (sub_command, sub_matches) = app_matches.subcommand();
-        let result = match (sub_command, sub_matches) {
+        let keypair = keypair_from_path(
+            &app_matches,
+            app_matches
+                .value_of("fee_payer")
+                .unwrap_or(&cli_config.keypair_path),
+            "fee_payer",
+            true,
+        ).ok();
+
+        Config {
+            rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
+            websocket_url: "".to_string(),
+            evm_loader,
+            // fee_payer,
+            signer,
+            keypair,
+            commitment,
+        }
+    };
+
+    let (sub_command, sub_matches) = app_matches.subcommand();
+    let result: NeonCliResult =
+        match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
@@ -806,12 +812,12 @@ fn main() {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-                emulate::command_emulate(&config, contract, sender, data, value, &token_mint)
+                emulate::execute(&config, contract, sender, data, value, &token_mint)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "seed").unwrap();
 
-                create_program_address::command_create_program_address(&config, &ether);
+                create_program_address::execute(&config, &ether);
 
                 Ok(())
             }
@@ -827,7 +833,7 @@ fn main() {
                     });
 
 
-                create_ether_account::command_create_ether_account(&config, &ether, lamports, space, &token_mint)
+                create_ether_account::execute(&config, &ether, lamports, space, &token_mint)
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
@@ -855,12 +861,12 @@ fn main() {
                         }
                         u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
-                deploy::command_deploy(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
+                deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id).map_err(|e|e.into())
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
 
-                get_ether_account_data::command_get_ether_account_data(&config, &ether);
+                get_ether_account_data::execute(&config, &ether);
 
                 Ok(())
             }
@@ -872,32 +878,35 @@ fn main() {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-                cancel_trx::command_cancel_trx(&config, &storage_account, &token_mint)
+                cancel_trx::execute(&config, &storage_account, &token_mint)
             }
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");
 
-                get_neon_elf::command_neon_elf(&config, program_location)
+                get_neon_elf::execute(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
 
-                get_storage_at::command_get_storage_at(&config, &contract_id, &index)
+                get_storage_at::execute(&config, contract_id, &index)
             }
             ("update-valids-table", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
 
-                update_valids_table::command_update_valids_table(&config, &contract_id)
+                update_valids_table::execute(&config, contract_id)
             }
             _ => unreachable!(),
         };
+    
+    let exit_code: i32 =
         match result {
-            Ok(()) => exit(0),
-            Err(err) => {
-                error!("{}", err);
-                NeonCliError::UnknownError.report_and_exit();
-                // exit(NeonCliError::UnknownError as i32);
+            Ok(_)  => 0,
+            Err(e) => {
+                error!("{}", e);
+                e.error_code() as i32
             }
-        }
+        };
+    
+    exit(exit_code)
 }

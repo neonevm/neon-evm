@@ -59,6 +59,7 @@ use evm_loader::{
 };
 
 use crate::Config;
+use crate::NeonCliResult;
 use crate::errors::NeonCliError;
 
 #[derive(Debug, Clone)]
@@ -266,7 +267,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     // }
 
     #[allow(clippy::too_many_lines)]
-    pub fn apply<A, I>(&self, values: A)
+    pub fn apply<A, I>(&self, values: A) -> NeonCliResult
             where
                 A: IntoIterator<Item=Apply<I>>,
                 I: IntoIterator<Item=(U256, U256)>,
@@ -308,7 +309,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                 if let Some((code, valids)) = code_and_valids.clone() {
                                     if contract.code_size != 0 {
-                                        NeonCliError::AccountAlreadyInitialized(acc.key,acc_desc.code_account).report_and_exit();
+                                        return Err(NeonCliError::AccountAlreadyInitialized(acc.key,acc_desc.code_account));
                                         // error!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         // exit(NeonCliError::AccountAlreadyInitialized as i32)
                                     }
@@ -318,7 +319,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 }
                                 else{
                                     if contract.code_size == 0 {
-                                        NeonCliError::AccountUninitialized(acc.key,acc_desc.code_account).report_and_exit();
+                                        return Err(NeonCliError::AccountUninitialized(acc.key,acc_desc.code_account));
                                         // error!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         // exit(NeonCliError::UninitializedAccount as i32)
                                     }
@@ -332,11 +333,11 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
 
-                                let trx_count = u64::try_from(nonce).map_err(|s| {
-                                    NeonCliError::ConvertNonceError(nonce).report_and_exit();
-                                    error!("convert nonce error, {:?}", s);
-                                    // exit(NeonCliError::ConvertNonceError as i32)
-                                }).unwrap();
+                                let trx_count: u64 =
+                                    match u64::try_from(nonce) {
+                                        Ok(u64_nonce)   => u64_nonce,
+                                        Err(_)          => return Err(NeonCliError::ConvertNonceError(nonce)),
+                                    };
 
                                 if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
                                     *acc.writable.borrow_mut() = true;
@@ -344,7 +345,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
-                                    NeonCliError::DeploymentToExistingAccount(address).report_and_exit();
+                                    return Err(NeonCliError::DeploymentToExistingAccount(address));
                                     // info!("deploy to existing account: {}", &address.to_string());
                                     // exit(NeonCliError::DeployToExistingAccount as i32);
                                 }
@@ -360,7 +361,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             }
                             else{
                                 if reset_storage || exist_items {
-                                    NeonCliError::ContractAccountExpected(address).report_and_exit();
+                                    return Err(NeonCliError::ContractAccountExpected(address));
                                     // info!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     // exit(NeonCliError::ContractAccountIsExpected as i32);
                                 }
@@ -369,7 +370,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         }
                         else{
-                            NeonCliError::IncorrectAccount(address).report_and_exit();
+                            return Err(NeonCliError::IncorrectAccount(address));
                             // warn!("Changes of incorrect account were found {}", &address.to_string());
                             // exit(NeonCliError::IncorrectAccount as i32);
                         }
@@ -384,7 +385,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
                         }
                         else  if reset_storage || exist_items {
-                                NeonCliError::ContractAccountExpected(address).report_and_exit();
+                                return Err(NeonCliError::ContractAccountExpected(address));
                                 // info!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
                                 // exit(NeonCliError::ContractAccountIsExpected as i32);
                             }
@@ -413,6 +414,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 },
             }
         };
+        Ok(())
     }
 
     pub fn apply_transfers(&self, transfers: Vec<Transfer>, token_mint: &Pubkey) {

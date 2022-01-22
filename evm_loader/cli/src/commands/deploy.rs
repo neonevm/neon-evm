@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -53,9 +52,9 @@ use evm_loader::{
 };
 
 use crate::{
-    Error,
+    errors::NeonCliError,
     Config,
-    CommandResult,
+    NeonCliResult,
 };
 
 
@@ -101,7 +100,7 @@ fn create_ethereum_contract_accounts_in_solana(
     program_seed: &str,
     program_code_len: usize,
     token_mint: &Pubkey
-) -> Result<Vec<Instruction>, Error> {
+) -> Result<Vec<Instruction>, NeonCliError> {
     let account_header_size = 1+Account::SIZE;
     let contract_header_size = 1+Contract::SIZE;
 
@@ -111,9 +110,10 @@ fn create_ethereum_contract_accounts_in_solana(
     let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(account_header_size)?;
     let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_acc_len)?;
 
-    if let Some(_account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
+    if let Some(account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
-        return Err("Account already exist".to_string().into());
+        return Err(NeonCliError::AccountAlreadyExists(account));
+        // return Err("Account already exist".to_string().into());
         // debug!("Account already exist");
     }
 
@@ -152,7 +152,7 @@ fn fill_holder_account(
     holder: &Pubkey,
     holder_id: u64,
     msg: &[u8],
-) -> Result<(), Error> {
+) -> Result<(), NeonCliError> {
     let creator = &config.signer;
     let signers = [&*config.signer];
 
@@ -160,7 +160,7 @@ fn fill_holder_account(
     debug!("Write code");
     let mut write_messages = vec![];
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
-        let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
+        let offset = u32::try_from(i*DATA_CHUNK_SIZE).unwrap();
 
         let instruction = Instruction::new_with_bincode(
             config.evm_loader,
@@ -196,7 +196,7 @@ fn fill_holder_account(
             &signers,
             CommitmentConfig::confirmed(),
             last_valid_slot,
-        ).map_err(|err| format!("Data writes to program account failed: {}", err))?;
+        )?;
         debug!("Writing program data done");
     }
 
@@ -274,7 +274,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     signer_keys: &T,
     commitment: CommitmentConfig,
     mut last_valid_slot: Slot,
-) -> CommandResult {
+) -> NeonCliResult {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
 
@@ -377,7 +377,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         }
 
         if send_retries == 0 {
-            return Err("Transactions failed".into());
+            return Err(NeonCliError::TransactionFailed);
+            // return Err("Transactions failed".into());
         }
         send_retries -= 1;
 
@@ -395,13 +396,13 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn command_deploy(
+pub fn execute(
     config: &Config,
     program_location: &str,
     token_mint: &Pubkey,
     collateral_pool_base: &Pubkey,
     chain_id: u64
-) -> CommandResult {
+) -> NeonCliResult {
     let creator = &config.signer;
     let program_data = crate::read_program_data(program_location)?;
     let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), token_mint);
@@ -423,7 +424,7 @@ pub fn command_deploy(
 
     if config.rpc_client.get_account_with_commitment(&caller_sol, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Caller account not found");
-        crate::commands::create_ether_account::command_create_ether_account(config, &caller_ether, 10_u64.pow(9), 0, token_mint)?;
+        crate::commands::create_ether_account::execute(config, &caller_ether, 10_u64.pow(9), 0, token_mint)?;
     } else {
         debug!(" Caller account found");
     }

@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use std::convert::TryFrom;
 use log::{debug, info};
 
@@ -25,12 +24,12 @@ use crate::{
         TokenAccountJSON,
     },
     Config,
-    CommandResult,
+    NeonCliResult,
 };
 
 #[allow(clippy::too_many_lines)]
-pub fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>,
-                   value: Option<U256>, token_mint: &Pubkey) -> CommandResult {
+pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>,
+                   value: Option<U256>, token_mint: &Pubkey) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
         contract_id,
@@ -94,9 +93,9 @@ pub fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H1
 
         let steps_executed = executor.get_steps_executed();
         let executor_state = executor.into_state();
-        let used_gas = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas = executor_state.gasometer().refunded_gas();
-        let needed_gas = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas)? } else { 0 });
+        let used_gas: u64 = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
+        let refunded_gas: i64 = executor_state.gasometer().refunded_gas();
+        let needed_gas: u64 = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas).unwrap_or(0) } else { 0 });
         debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
@@ -112,7 +111,7 @@ pub fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H1
         ExitReason::Succeed(_) => {
             let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
 
-            storage.apply(applies);
+            storage.apply(applies)?;
             storage.apply_transfers(transfers, token_mint);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
