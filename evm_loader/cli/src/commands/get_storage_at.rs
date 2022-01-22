@@ -45,7 +45,7 @@ pub fn execute(
             Ok(())
         },
         None => {
-            return Err(NeonCliError::AccountNotFoundAtAddress(ether_address));
+            Err(NeonCliError::AccountNotFoundAtAddress(ether_address))
         }
     }
 }

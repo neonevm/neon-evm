@@ -1,5 +1,6 @@
 #![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
+#![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
 
@@ -861,7 +862,7 @@ fn main() {
                         }
                         u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
-                deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id).map_err(|e|e.into())
+                deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();

@@ -35,20 +35,20 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
         .and_then(|(account,_,_)| {
             info!("account: {:?}", account);
 
-            AccountData::unpack(&account.data).map_err(|e|e.into())
+            AccountData::unpack(&account.data).map_err(NeonCliError::from)
         })
         .and_then(|account_data| {
             info!("account data: {:?}", account_data);
 
             account_data.get_account()
                 .map(|account|account.code_account)
-                .map_err(|e|e.into())
+                .map_err(NeonCliError::from)
         })
         .and_then(|code_account|
-            if code_account != Pubkey::new_from_array([0_u8; 32]) {
-                Ok(code_account)
-            } else {
+            if code_account == Pubkey::new_from_array([0_u8; 32]) {
                 Err(NeonCliError::CodeAccountNotFound(ether_address))
+            } else {
+                Ok(code_account)
             }
         )
         .and_then(|code_account| {
@@ -77,7 +77,7 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
 
             config.rpc_client
                 .send_and_confirm_transaction_with_spinner(&finalize_tx)
-                .map_err(|e|e.into())
+                .map_err(NeonCliError::from)
         })
         .map(|_|())
 }
