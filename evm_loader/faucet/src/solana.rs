@@ -239,7 +239,7 @@ fn deposit_instruction(
 ) -> Instruction {
     Instruction::new_with_bincode(
         evm_loader_id,
-        &(24_u8), // Index of the Deposit instruction in EVM Loader
+        &(24), // Index of the Deposit instruction in EVM Loader
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),

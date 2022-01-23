@@ -39,7 +39,7 @@ getrandom = { version = "0.1.16", default_features = false, features = ["dummy"]
 #k256 = { version = "0.4.0", default-features = false, features = ["ecdsa"] }
 #tbn = { version = "0.4.4", default-features = false }
 ripemd160 = "0.9.1"
-serde = "1.0.134"
+serde = { version = "1.0.134", default_features = false }
 serde_bytes = "0.11.5"
 serde_derive = "1.0.134"
 impl-serde = "0.3.2"

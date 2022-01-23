@@ -235,6 +235,8 @@ pub enum EvmInstruction<'a> {
     UpdateValidsTable,
 
     /// Deposits NEON tokens to a Ether account.
+    /// Requires previously executed SPL-Token.Approve which
+    /// delegates the deposit amount to the NEON destination account.
     ///
     /// Accounts expected by this instruction:
     ///
