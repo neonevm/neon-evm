@@ -1,18 +1,22 @@
 //! Solidity Account info manipulations
+use crate::account_data::{AccountData, ACCOUNT_MAX_SIZE};
 use crate::{
-    account_data::AccountData,
     hamt::Hamt,
     utils::{keccak256_h256},
 };
+
 use evm::{H160, H256, U256};
 use solana_program::{
     account_info::AccountInfo,
     pubkey::Pubkey,
     program_error::ProgramError,
+    program_pack::Pack
 };
+
 use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
+use crate::config::CONTRACT_EXTRA_SPACE;
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -48,7 +52,14 @@ impl<'a> SolidityAccount<'a> {
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
     #[must_use]
-    pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
+    pub fn get_nonce(&self) -> u64 {
+        let trx_count = AccountData::get_account(&self.account_data).unwrap().trx_count;
+        if trx_count == u64::MAX {
+            0
+        } else {
+            trx_count
+        }
+    }
 
     fn apply_to_code<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
@@ -190,20 +201,10 @@ impl<'a> SolidityAccount<'a> {
         code_and_valids: &Option<(Vec<u8>, Vec<u8>)>,
         storage_items: I,
         reset_storage: bool,
-    ) -> Result<(), ProgramError>
+    ) -> Result<u64, ProgramError>
     where I: IntoIterator<Item = (U256, U256)> 
     {
         debug_print!("Update: {}", solidity_address);
-        let mut data = (*account_info.data).borrow_mut();
-        // **account_info.lamports.borrow_mut() = lamports;
-
-        /*let mut current_code_size = match self.account_data {
-            AccountData::Empty => 0,
-            AccountData::Foreign => 0,
-            AccountData::Account{code_size, ..} => code_size as usize,
-        };*/
-        let nonce = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;
-        AccountData::get_mut_account(&mut self.account_data)?.trx_count = nonce;
 
         if let Some((code, valids)) = code_and_valids {
             debug_print!("Write contract");
@@ -235,34 +236,57 @@ impl<'a> SolidityAccount<'a> {
             }
         }
 
-        debug_print!("Write account data");        
-        self.account_data.pack(&mut data)?;
+        let contract_space = {
+            let mut storage_iter = storage_items.into_iter().peekable();
+            let exist_items = matches!(storage_iter.peek(), Some(_));
+            if reset_storage || exist_items {
+                debug_print!("Update storage");
+                if let Some((ref contract_data, ref mut code_data)) = self.code_data {
+                    let mut code_data = code_data.borrow_mut();
 
-        let mut storage_iter = storage_items.into_iter().peekable();
-        let exist_items = matches!(storage_iter.peek(), Some(_));
-        if reset_storage || exist_items {
-            debug_print!("Update storage");
-            if let Some((ref contract_data, ref mut code_data)) = self.code_data {
-                let mut code_data = code_data.borrow_mut();
-    
-                let contract = AccountData::get_contract(contract_data)?;
-                if contract.code_size == 0 {return Err!(ProgramError::UninitializedAccount; "contract.code_size={:?}", contract.code_size);};
-                let code_size = contract.code_size as usize;
-                let valids_size = (code_size / 8) + 1;
-    
-                let mut storage = Hamt::new(&mut code_data[contract_data.size()+code_size+valids_size..], reset_storage)?;
-                debug_print!("Storage initialized");
-                for (key, value) in storage_iter {
-                    debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                    storage.insert(key, value)?;
+                    let contract = AccountData::get_contract(contract_data)?;
+                    if contract.code_size == 0 {return Err!(ProgramError::UninitializedAccount; "contract.code_size={:?}", contract.code_size);};
+                    let code_size = contract.code_size as usize;
+                    let valids_size = (code_size / 8) + 1;
+
+                    let hamt_begin = contract_data.size()+code_size+valids_size;
+                    let mut storage = Hamt::new(&mut code_data[hamt_begin..], reset_storage)?;
+                    debug_print!("Storage initialized");
+                    for (key, value) in storage_iter {
+                        debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+                        storage.insert(key, value)?;
+                    }
+
+                    hamt_begin +
+                        usize::try_from(storage.last_used()).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))? +
+                        usize::try_from(CONTRACT_EXTRA_SPACE).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?
+                }
+                else {
+                    return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
                 }
             }
-            else {
-                return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
+            else{
+                0
             }
-        }
+        };
 
+
+        let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
+        let allocated_space = {
+            if account_data.trx_count == u64::MAX{
+                ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN + contract_space
+            }
+            else{
+                0
+            }
+        };
+        account_data.trx_count = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;
+
+        debug_print!("Write account data");
+        let mut data = (*account_info.data).borrow_mut();
+        self.account_data.pack(&mut data)?;
         debug_print!("Account updated");
-        Ok(())
+
+        Ok(allocated_space as u64)
     }
 }

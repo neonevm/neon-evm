@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_STEP_COST, EVM_STEPS, HOLDER_MSG_SIZE};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -197,7 +197,7 @@ fn process_instruction<'a>(
             AccountData::Account(Account {
                 ether,
                 nonce,
-                trx_count: 0_u64,
+                trx_count: u64::MAX,
                 code_account: code_account_key,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
@@ -392,10 +392,9 @@ fn process_instruction<'a>(
 
             let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value)?;
 
-            let used_gas = steps_executed * EVM_STEP_COST;
             token::user_pays_operator(
                 trx_gas_price,
-                used_gas,
+                steps_executed,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
@@ -408,7 +407,7 @@ fn process_instruction<'a>(
                 accounts,
                 operator_sol_info,
                 evm_results.unwrap(),
-                used_gas)?;
+                steps_executed)?;
 
             Ok(())
         },
@@ -949,17 +948,17 @@ fn do_begin<'a>(
         steps_executed = EVM_STEPS;
     }
     let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
-    let gas = (steps_executed + holder_trx_count * EVM_STEPS) * EVM_STEP_COST;
+    steps_executed += holder_trx_count * EVM_STEPS;
 
     token::user_pays_operator(
         trx_gas_price,
-        gas,
+        steps_executed,
         user_eth_info,
         operator_eth_info,
         accounts,
         &account_storage
     )?;
-    storage.add_gas_has_been_paid(gas)?;
+    storage.add_gas_has_been_paid(steps_executed)?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -1013,16 +1012,15 @@ fn do_continue_top_level<'a>(
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
 
-    let gas = steps_executed * EVM_STEP_COST;
     token::user_pays_operator(
         trx_gas_price,
-        gas,
+        steps_executed,
         user_eth_info,
         operator_eth_info,
         accounts,
         &account_storage
     )?;
-    storage.add_gas_has_been_paid(gas)?;
+    storage.add_gas_has_been_paid(steps_executed)?;
 
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
@@ -1154,29 +1152,36 @@ fn applies_and_invokes<'a>(
     used_gas: u64
 ) -> ProgramResult {
     let (exit_reason, result, applies_logs_transfers) = evm_results;
-    if let Some(applies_logs_transfers) = applies_logs_transfers {
-        let (
-            applies,
-            logs,
-            transfers,
-            spl_transfers,
-            spl_approves,
-            erc20_approves,
-        ) = applies_logs_transfers;
 
-        account_storage.apply_transfers(accounts, transfers)?;
-        account_storage.apply_spl_approves(accounts, spl_approves)?;
-        account_storage.apply_spl_transfers(accounts, spl_transfers)?;
-        account_storage.apply_erc20_approves(accounts, operator, erc20_approves)?;
-        account_storage.apply(applies, operator, false)?;
+    let gas = {
+        if let Some(applies_logs_transfers) = applies_logs_transfers {
+            let (
+                applies,
+                logs,
+                transfers,
+                spl_transfers,
+                spl_approves,
+                erc20_approves,
+            ) = applies_logs_transfers;
 
-        debug_print!("Applies done");
-        for log in logs {
-            invoke(&on_event(program_id, log), accounts)?;
+            account_storage.apply_transfers(accounts, transfers)?;
+            account_storage.apply_spl_approves(accounts, spl_approves)?;
+            account_storage.apply_spl_transfers(accounts, spl_transfers)?;
+            account_storage.apply_erc20_approves(accounts, operator, erc20_approves)?;
+            let allocated_space = account_storage.apply(applies, operator, false)?;
+
+            debug_print!("Applies done");
+            for log in logs {
+                invoke(&on_event(program_id, log), accounts)?;
+            }
+            used_gas + allocated_space * EVM_BYTE_COST
         }
-    }
+        else {
+            used_gas
+        }
+    };
 
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, gas, &result)?;
 
     Ok(())
 }
