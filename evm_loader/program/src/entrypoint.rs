@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, INIT_TRX_COUNT};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -197,7 +197,7 @@ fn process_instruction<'a>(
             AccountData::Account(Account {
                 ether,
                 nonce,
-                trx_count: u64::MAX,
+                trx_count: INIT_TRX_COUNT,
                 code_account: code_account_key,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
@@ -392,22 +392,27 @@ fn process_instruction<'a>(
 
             let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value)?;
 
+
+
+            let (exit_reason, result, allocated_space) = applies_and_invokes(
+                program_id,
+                &mut account_storage,
+                accounts,
+                operator_sol_info,
+                evm_results.unwrap()
+                )?;
+
+            let used_gas = steps_executed + allocated_space * EVM_BYTE_COST;
             token::user_pays_operator(
                 trx_gas_price,
-                steps_executed,
+                used_gas,
                 user_eth_info,
                 operator_eth_info,
                 accounts,
                 &account_storage
             )?;
 
-            applies_and_invokes(
-                program_id,
-                &mut account_storage,
-                accounts,
-                operator_sol_info,
-                evm_results.unwrap(),
-                steps_executed)?;
+            invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
 
             Ok(())
         },
@@ -1012,31 +1017,47 @@ fn do_continue_top_level<'a>(
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
 
-    token::user_pays_operator(
-        trx_gas_price,
-        steps_executed,
-        user_eth_info,
-        operator_eth_info,
-        accounts,
-        &account_storage
-    )?;
-    storage.add_gas_has_been_paid(steps_executed)?;
-
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info)?;
 
-        let (used_gas, _) = storage.get_payments_info()?;
-        applies_and_invokes(
+
+        let (exit_reason, result, allocated_space) = applies_and_invokes(
             program_id,
             &mut account_storage,
             accounts,
             operator_sol_info,
-            evm_results,
-            used_gas)?;
+            evm_results
+        )?;
+        let currrent_gas = steps_executed + allocated_space * EVM_BYTE_COST;
+
+        token::user_pays_operator(
+            trx_gas_price,
+            currrent_gas,
+            user_eth_info,
+            operator_eth_info,
+            accounts,
+            &account_storage
+        )?;
+
+        let used_gas = storage.get_payments_info()?.0 + currrent_gas;
+        invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
 
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
+    }
+    else{
+        let current_gas = steps_executed;
+
+        token::user_pays_operator(
+            trx_gas_price,
+            current_gas,
+            user_eth_info,
+            operator_eth_info,
+            accounts,
+            &account_storage
+        )?;
+        storage.add_gas_has_been_paid(current_gas)?;
     }
 
     Ok(())
@@ -1149,11 +1170,10 @@ fn applies_and_invokes<'a>(
     accounts: &'a [AccountInfo<'a>],
     operator: &AccountInfo<'a>,
     evm_results: EvmResults,
-    used_gas: u64
-) -> ProgramResult {
+) -> Result<(ExitReason, Vec<u8>, u64), ProgramError> {
     let (exit_reason, result, applies_logs_transfers) = evm_results;
 
-    let gas = {
+    let allocated_space = {
         if let Some(applies_logs_transfers) = applies_logs_transfers {
             let (
                 applies,
@@ -1174,16 +1194,14 @@ fn applies_and_invokes<'a>(
             for log in logs {
                 invoke(&on_event(program_id, log), accounts)?;
             }
-            used_gas + allocated_space * EVM_BYTE_COST
+            allocated_space
         }
         else {
-            used_gas
+            0
         }
     };
 
-    invoke_on_return(program_id, accounts, exit_reason, gas, &result)?;
-
-    Ok(())
+    Ok((exit_reason, result, allocated_space))
 }
 
 fn invoke_on_return<'a>(

@@ -16,7 +16,7 @@ use solana_program::{
 use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
-use crate::config::CONTRACT_EXTRA_SPACE;
+use crate::config::{CONTRACT_EXTRA_SPACE, INIT_TRX_COUNT};
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -54,7 +54,7 @@ impl<'a> SolidityAccount<'a> {
     #[must_use]
     pub fn get_nonce(&self) -> u64 {
         let trx_count = AccountData::get_account(&self.account_data).unwrap().trx_count;
-        if trx_count == u64::MAX {
+        if trx_count == INIT_TRX_COUNT {
             0
         } else {
             trx_count
@@ -273,7 +273,7 @@ impl<'a> SolidityAccount<'a> {
 
         let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
         let allocated_space = {
-            if account_data.trx_count == u64::MAX{
+            if account_data.trx_count == INIT_TRX_COUNT{
                 ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN + contract_space
             }
             else{
