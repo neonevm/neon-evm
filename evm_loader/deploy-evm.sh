@@ -47,3 +47,6 @@ fi
 echo "Creating collateral pool $NEON_POOL_BASE..."
 solana -k collateral-pool-keypair.json airdrop 1000
 python3 collateral_pool_generator.py collateral-pool-keypair.json
+
+echo "Creating EVM Loader token bank..."
+spl-token create-account $NEON_TOKEN_MINT --owner evm_loader-keypair.json
