@@ -241,7 +241,7 @@ pub enum EvmInstruction<'a> {
     /// Accounts expected by this instruction:
     ///
     ///   0. `[writable]` NEON source account.
-    ///   1. `[writable]` NEON destination account.
+    ///   1. `[writable]` NEON bank (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
     ///   3. `[]` EVM Loader authority account (PDA).
     ///   4. `[]` EVM Loader program id.
