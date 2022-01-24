@@ -801,19 +801,14 @@ fn process_instruction<'a>(
         EvmInstruction::Deposit => {
             let source_info = next_account_info(account_info_iter)?;
             let target_info = next_account_info(account_info_iter)?;
-            let _ether_info = next_account_info(account_info_iter)?;
+            let ether_info = next_account_info(account_info_iter)?;
             let authority_info = next_account_info(account_info_iter)?;
             let evm_loader_info = next_account_info(account_info_iter)?;
             let token_program_info = next_account_info(account_info_iter)?;
 
-            debug_print!("source_info {:?}", source_info);
-            debug_print!("target_info {:?}", target_info);
-            debug_print!("authority_info {:?}", authority_info);
-            debug_print!("evm_loader_info {:?}", evm_loader_info);
-            debug_print!("token_program_info {:?}", token_program_info);
+            debug_print!("Deposit ether_info {}", ether_info.key);
 
             let amount = get_token_account_delegated_amount(source_info, authority_info)?;
-            debug_print!("Deposit delegated amount {}", amount);
 
             transfer_deposit(
                 source_info.clone(),
@@ -822,7 +817,6 @@ fn process_instruction<'a>(
                 token_program_info.clone(),
                 evm_loader_info,
                 amount)?;
-            debug_print!("Deposit transfer completed");
 
             Ok(())
         },
@@ -839,6 +833,7 @@ fn process_instruction<'a>(
 ///
 /// Could return:
 /// `ProgramError::InvalidInstructionData`
+#[inline(never)]
 fn transfer_deposit<'a>(
     source_info: AccountInfo<'a>,
     target_info: AccountInfo<'a>,
@@ -847,12 +842,13 @@ fn transfer_deposit<'a>(
     evm_loader_info: &'a AccountInfo<'a>,
     value: u64,
 ) -> Result<(), ProgramError> {
-    debug_print!("Deposit transfer_neon_token");
+    debug_print!("Deposit transfer {}", value);
 
     check_token_mint(&source_info, &token_mint::id())?;
     check_token_mint(&target_info, &token_mint::id())?;
 
     let source_balance = get_token_account_balance(&source_info)?;
+    debug_print!("Deposit source balance {}", source_balance);
     if source_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
             "Insufficient funds on token account {} {}",
@@ -868,8 +864,6 @@ fn transfer_deposit<'a>(
             authority_key, authority_info.key
         );
     }
-
-    debug_print!("Transfer NEON tokens from {} to {} value {}", source_info.key, target_info.key, value);
 
     let transfer = spl_token::instruction::transfer(
         token_program_info.key,
