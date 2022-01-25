@@ -179,12 +179,16 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
         }
 
-        // Account whitelists: Allowance tokens
-        declare_param_id!(NEON_CLIENT_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
-        declare_param_id!(NEON_CONTRACT_ALLOWANCE_TOKEN, "2JM7W4Uxpm2ja4tKXFSm2QPRSM7tCrefXjmRpb9Ca5qU");
-        declare_param_id!(NEON_CLIENT_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
-        declare_param_id!(NEON_CONTRACT_DENIAL_TOKEN, "Gg829D5BmsTBp6tBuH5NVvgPnXdcVSmNNHPBK4g52ogo");
-        neon_elf_param!(NEON_MINIMAL_ALLOWANCE_BALANCE, formatcp!("{:?}", 0));
+        /// Account whitelists: Allowance tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_CLIENT_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
+            neon_elf_param!(NEON_CONTRACT_ALLOWANCE_TOKEN, "2JM7W4Uxpm2ja4tKXFSm2QPRSM7tCrefXjmRpb9Ca5qU");
+            neon_elf_param!(NEON_CLIENT_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
+            neon_elf_param!(NEON_CONTRACT_DENIAL_TOKEN, "Gg829D5BmsTBp6tBuH5NVvgPnXdcVSmNNHPBK4g52ogo");
+            neon_elf_param!(NEON_MINIMAL_ALLOWANCE_BALANCE, "0");
+        }
     }
 }
 
