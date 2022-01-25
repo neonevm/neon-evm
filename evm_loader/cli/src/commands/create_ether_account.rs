@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use log::{debug, info};
 
 use solana_sdk::{
@@ -22,17 +21,17 @@ use evm_loader::{
 
 use crate::{
     Config,
-    CommandResult,
+    NeonCliResult,
 };
 
 
-pub fn command_create_ether_account (
+pub fn execute (
     config: &Config,
     ether_address: &H160,
     lamports: u64,
     space: u64,
     token_mint: &Pubkey
-) -> CommandResult {
+) -> NeonCliResult {
 
     let (solana_address, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
     let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, token_mint);

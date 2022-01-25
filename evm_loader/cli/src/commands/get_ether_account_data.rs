@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use evm::{H160};
 
 use evm_loader::{
@@ -13,7 +12,7 @@ use crate::{
 };
 
 
-pub fn command_get_ether_account_data (
+pub fn execute (
     config: &Config,
     ether_address: &H160,
 ) {
