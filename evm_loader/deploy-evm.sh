@@ -32,10 +32,10 @@ function DeployToken {
       exit 1
     fi
   else
-    echo "Token ${!NEON_TOKEN_ADDR_VAR} already exist"
+    echo "$TOKEN_NAME ${!NEON_TOKEN_ADDR_VAR} already exist"
   fi
 
-  echo "Token $TOKEN_NAME successfully deployed"
+  echo "$TOKEN_NAME successfully deployed"
 }
 
 DeployToken "Client Allowance Token" NEON_CLIENT_ALLOWANCE_TOKEN client_allowance_token_keypair.json
@@ -50,23 +50,7 @@ if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loade
 fi
 sleep 30
 
-export ETH_TOKEN_MINT=$(solana address -k neon_token_keypair.json)
-if [ "$ETH_TOKEN_MINT" != "$NEON_TOKEN_MINT" ]; then
-  echo "Token address in evm_loader.so is $NEON_TOKEN_MINT"
-  echo "Token address in neon_token_keypair.json is  $ETH_TOKEN_MINT"
-  echo "Failed to deploy NEON token"
-  exit 1
-fi
-
-if ! solana account "$ETH_TOKEN_MINT" >/dev/null 2>&1; then
-  echo "Creating NEON token $ETH_TOKEN_MINT..."
-  if ! spl-token create-token --owner evm_loader-keypair.json -- neon_token_keypair.json; then
-    echo "ETH token mint is not created"
-    exit 1
-  fi
-else
-  echo "Token $ETH_TOKEN_MINT already exist"
-fi
+DeployToken "Neon Token" NEON_TOKEN_MINT neon_token_keypair.json
 
 export COLLATERAL_POOL_BASE=$(solana address -k collateral-pool-keypair.json)
 if [ "$COLLATERAL_POOL_BASE" != "$NEON_POOL_BASE" ]; then
