@@ -29,6 +29,7 @@ fn setup() -> Result<()> {
     use time::UtcOffset;
     use tracing_subscriber::fmt::time::OffsetTime;
     use tracing_subscriber::EnvFilter;
+
     if std::env::var("RUST_LIB_BACKTRACE").is_err() {
         std::env::set_var("RUST_LIB_BACKTRACE", "0")
     }
@@ -36,6 +37,7 @@ fn setup() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info")
     }
+
     let offset = UtcOffset::current_local_offset()?;
     let timer = OffsetTime::new(
         offset,

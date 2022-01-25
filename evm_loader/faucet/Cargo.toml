@@ -20,8 +20,8 @@ md5 = "0.7.0"
 nix = "0.23.1"
 num_cpus = "1.13.1"
 secp256k1 = "0.20.3"
-serde = { version = "1.0.135", features = ["derive"] }
-serde_json = "1.0.78"
+serde = { version = "1.0.135", default_features = false }
+serde_json = "1.0.75"
 solana-client = "1.7.9"
 solana-sdk = "1.7.9"
 spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
@@ -29,9 +29,10 @@ spl-token = { version = "3.2.0", default_features = false, features = ["no-entry
 structopt = "0.3.26"
 termimad = "0.20.0"
 thiserror = "1.0.30"
+time = { version = "0.3.6", default_features = false, features = ["macros"] }
 tokio = { version = "1.15.0", default_features = false, features = ["rt"] }
 toml = "0.5.8"
 tracing = "0.1.29"
 # tracing-subscriber with disabled feature "ansi" to force colorless logs
-tracing-subscriber = { version = "0.2.25", default_features = false, features = ["env-filter", "fmt", "tracing-log", "chrono", "smallvec", "parking_lot"] }
+tracing-subscriber = { version = "0.3.6", default_features = false, features = ["env-filter", "std", "fmt", "json", "time", "local-time", "tracing-log", "smallvec", "parking_lot"] }
 web3 = "0.17.0"
