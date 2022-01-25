@@ -848,10 +848,9 @@ fn transfer_deposit<'a>(
     check_token_mint(&target_info, &token_mint::id())?;
 
     let source_balance = get_token_account_balance(&source_info)?;
-    debug_print!("Deposit source balance {}", source_balance);
     if source_balance < value {
         return Err!(ProgramError::InvalidInstructionData;
-            "Insufficient funds on token account {} {}",
+            "Insufficient funds on token account {}: {}",
             source_info.key, source_balance
         );
     }
