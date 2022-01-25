@@ -29,7 +29,7 @@ use solana_program::{
 use crate::{
     //    bump_allocator::BumpAllocator,
     config::{ chain_id, token_mint },
-    account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE},
+    account_data::{Account, AccountData, Contract, ACCOUNT_SEED_VERSION, ACCOUNT_MAX_SIZE, AccountState},
     account_storage::{ProgramAccountStorage, /* Sender */ },
     solana_backend::{AccountStorage},
     transaction::{UnsignedTransaction, verify_tx_signature, check_secp256k1_instruction},
@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, INIT_TRX_COUNT};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -197,11 +197,12 @@ fn process_instruction<'a>(
             AccountData::Account(Account {
                 ether,
                 nonce,
-                trx_count: INIT_TRX_COUNT,
+                trx_count: 0_u64,
                 code_account: code_account_key,
                 rw_blocked_acc: None,
                 eth_token_account: *token_account_info.key,
                 ro_blocked_cnt: 0_u8,
+                state: AccountState::Uninitialized
             }).pack(&mut account_info.data.borrow_mut())?;
 
             Ok(())

@@ -1,5 +1,5 @@
 //! Solidity Account info manipulations
-use crate::account_data::{AccountData, ACCOUNT_MAX_SIZE};
+use crate::account_data::{AccountData, AccountState, ACCOUNT_MAX_SIZE};
 use crate::{
     hamt::Hamt,
     utils::{keccak256_h256},
@@ -16,7 +16,6 @@ use solana_program::{
 use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
-use crate::config::{CONTRACT_EXTRA_SPACE, INIT_TRX_COUNT};
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -52,14 +51,7 @@ impl<'a> SolidityAccount<'a> {
     ///
     /// Will panic `account_data` doesn't contain `Account` struct
     #[must_use]
-    pub fn get_nonce(&self) -> u64 {
-        let trx_count = AccountData::get_account(&self.account_data).unwrap().trx_count;
-        if trx_count == INIT_TRX_COUNT {
-            0
-        } else {
-            trx_count
-        }
-    }
+    pub fn get_nonce(&self) -> u64 {AccountData::get_account(&self.account_data).unwrap().trx_count}
 
     fn apply_to_code<U, F>(&self, f: F) -> U
     where F: FnOnce(&[u8]) -> U {
@@ -205,6 +197,7 @@ impl<'a> SolidityAccount<'a> {
     where I: IntoIterator<Item = (U256, U256)> 
     {
         debug_print!("Update: {}", solidity_address);
+        let mut found_deploy = false;
 
         if let Some((code, valids)) = code_and_valids {
             debug_print!("Write contract");
@@ -230,13 +223,14 @@ impl<'a> SolidityAccount<'a> {
                 let valids_end = valids_begin + valids.len();
                 code_data[valids_begin..valids_end].copy_from_slice(valids);
                 debug_print!("Valids written");
+                found_deploy = true;
             }
             else {
                 return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
             }
         }
 
-        let contract_space = {
+        let (storage_increment, contract_space) = {
             let mut storage_iter = storage_items.into_iter().peekable();
             let exist_items = matches!(storage_iter.peek(), Some(_));
             if reset_storage || exist_items {
@@ -251,33 +245,41 @@ impl<'a> SolidityAccount<'a> {
 
                     let hamt_begin = contract_data.size()+code_size+valids_size;
                     let mut storage = Hamt::new(&mut code_data[hamt_begin..], reset_storage)?;
+                    let orig_size = storage.last_used();
                     debug_print!("Storage initialized");
                     for (key, value) in storage_iter {
                         debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                         storage.insert(key, value)?;
                     }
-
-                    hamt_begin +
-                        usize::try_from(storage.last_used()).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))? +
-                        usize::try_from(CONTRACT_EXTRA_SPACE).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?
+                    let increment = if storage.last_used() >= orig_size  {
+                        storage.last_used() - orig_size
+                    }
+                    else{
+                        storage.last_used()
+                    };
+                    (increment, code_data.len())
                 }
                 else {
                     return Err!(ProgramError::NotEnoughAccountKeys; "Expected code account");
                 }
             }
             else{
-                0
+                if found_deploy{
+                    return Err!(ProgramError::InvalidAccountData; "Contract deployment: reset_storage flag is missing");
+                }
+                (0, 0)
             }
         };
 
 
         let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
         let allocated_space = {
-            if account_data.trx_count == INIT_TRX_COUNT{
+            if account_data.state == AccountState::Uninitialized{
+                account_data.state = AccountState::Initialized;
                 ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN + contract_space
             }
             else{
-                0
+                storage_increment as usize
             }
         };
         account_data.trx_count = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;

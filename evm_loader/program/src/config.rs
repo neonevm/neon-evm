@@ -195,10 +195,6 @@ pub const EVM_BYTE_COST: u64 = 140;
 pub const EVM_STEPS: u64  = 100;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 1000;
-/// `the amount of additional space used by the CreateAccountWithSeed instuction to deploy the contract`
-pub const CONTRACT_EXTRA_SPACE: u64 = 2048;
-/// `trx_count init value`
-pub const INIT_TRX_COUNT: u64 = u64::MAX;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -212,8 +208,6 @@ neon_elf_param!( NEON_EVM_BYTE_COST         , formatcp!("{:?}", EVM_BYTE_COST));
 neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
-neon_elf_param!( NEON_CONTRACT_EXTRA_SPACE,   formatcp!("{:?}", CONTRACT_EXTRA_SPACE));
-neon_elf_param!( NEON_INIT_TRX_COUNT,         formatcp!("{:?}", INIT_TRX_COUNT));
 
 /// Chain ID
 #[must_use]
