@@ -70,12 +70,11 @@ COPY evm_loader/*.py \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
-    evm_loader/neon_token_keypair.json /opt/
-
-# Next 2 strings are for backward compatibility with proxy-model.py
-# Can be deleted after issue https://github.com/neonlabsorg/proxy-model.py/issues/249 resolved
-COPY evm_loader/neon_token_keypair.json /opt/test_token_keypair
-COPY evm_loader/evm_loader-keypair.json /opt/test_token_owner
+    evm_loader/neon_token_keypair.json \
+    evm_loader/client_allowance_token_keypair.json \
+    evm_loader/client_denial_token_keypair.json \
+    evm_loader/contract_allowance_token_keypair.json \
+    evm_loader/contract_denial_token_keypair.json /opt/
 
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/

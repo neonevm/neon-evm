@@ -10,6 +10,38 @@ solana config set -u "$SOLANA_URL"
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
 export $(neon-cli --evm_loader="$EVM_LOADER" neon-elf-params ./evm_loader.so)
 
+function DeployToken {
+  TOKEN_NAME=$1
+  NEON_TOKEN_ADDR_VAR=$2
+  KEYPAIR_FILE=$3
+
+  echo "Deploying token $TOKEN_NAME..."
+
+  export EXPECTED_VALUE=$(solana address -k "$KEYPAIR_FILE")
+  if [ "$EXPECTED_VALUE" != "${!NEON_TOKEN_ADDR_VAR}" ]; then
+    echo "Client $TOKEN_NAME address in evm_loader.so is ${!NEON_TOKEN_ADDR_VAR}"
+    echo "Expected token address in $KEYPAIR_FILE is $EXPECTED_VALUE"
+    echo "Failed to deploy $TOKEN_NAME"
+    exit 1
+  fi
+
+  if ! solana account "${!NEON_TOKEN_ADDR_VAR}" >/dev/null 2>&1; then
+    echo "Creating $TOKEN_NAME ${!NEON_TOKEN_ADDR_VAR}..."
+    if ! spl-token create-token --owner evm_loader-keypair.json -- "$KEYPAIR_FILE"; then
+      echo "$TOKEN_NAME is not created"
+      exit 1
+    fi
+  else
+    echo "Token ${!NEON_TOKEN_ADDR_VAR} already exist"
+  fi
+
+  echo "Token $TOKEN_NAME successfully deployed"
+}
+
+DeployToken "Client Allowance Token" NEON_CLIENT_ALLOWANCE_TOKEN client_allowance_token_keypair.json
+DeployToken "Client Denial Token" NEON_CLIENT_DENIAL_TOKEN client_denial_token_keypair.json
+DeployToken "Contract Allowance Token" NEON_CONTRACT_ALLOWANCE_TOKEN contract_allowance_token_keypair.json
+DeployToken "Contract Denial Token" NEON_CONTRACT_DENIAL_TOKEN contract_denial_token_keypair.json
 
 echo "Deploying evm_loader at address $EVM_LOADER..."
 if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
