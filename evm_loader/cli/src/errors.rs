@@ -24,94 +24,94 @@ use evm_loader::{
 #[derive(Debug, Error)]
 pub enum NeonCliError {
     /// Std IO Error
-    #[error("Std I/O error {0:?}")]
+    #[error("Std I/O error. {0:?}")]
     StdIoError(std::io::Error),
     /// Solana Client Error
-    #[error("Solana program error {0:?}")]
+    #[error("Solana program error. {0:?}")]
     ProgramError(SolanaProgramError),
     /// Solana Client Error
-    #[error("Solana client error {0:?}")]
+    #[error("Solana client error. {0:?}")]
     ClientError(SolanaClientError),
     /// Solana Signer Error
-    #[error("Solana signer error {0:?}")]
+    #[error("Solana signer error. {0:?}")]
     SignerError(SolanaSignerError),
     /// Solana Cli Error
-    #[error("Solana CLI error {0:?}")]
+    #[error("Solana CLI error. {0:?}")]
     CliError(SolanaCliError),
     /// TPU Sender Error
-    #[error("TPU sender error {0:?}")]
+    #[error("TPU sender error. {0:?}")]
     TpuSenderError(SolanaTpuSenderError),
     /// Need specify evm_loader
-    #[error("EVM loader must be specified")]
+    #[error("EVM loader must be specified.")]
     EvmLoaderNotSpecified,
     /// Need specify fee payer
-    #[error("Fee payer must be specified")]
+    #[error("Fee payer must be specified.")]
     FeePayerNotSpecified,
     /// Account not found at address
-    #[error("Account not found at address {0:?}")]
+    #[error("Account not found at address {0:?}.")]
     AccountNotFoundAtAddress(H160),
     /// Code account not found
-    #[error("Code account not found at address {0:?}")]
+    #[error("Code account not found at address {0:?}.")]
     CodeAccountNotFound(H160),
     /// Code account not found
-    #[error("Code account required at address {0:?}")]
+    #[error("Code account required at address {0:?}.")]
     CodeAccountRequired(H160),
     /// Changes of incorrect account were found
-    #[error("Incorrect account at address {0:?}")]
+    #[error("Incorrect account at address {0:?}.")]
     IncorrectAccount(H160),
     /// Account already exists
-    #[error("Account already exists {0:?}")]
+    #[error("Account already exists. {0:?}")]
     AccountAlreadyExists(Account),
     /// Account is uninitialized.
-    #[error("Uninitialized account  account={0:?}, code_account={1:?}")]
+    #[error("Uninitialized account.  account={0:?}, code_account={1:?}")]
     AccountUninitialized(Pubkey,Pubkey),
     /// Account is already initialized.
-    #[error("Account is already initialized  account={0:?}, code_account={1:?}")]
+    #[error("Account is already initialized.  account={0:?}, code_account={1:?}")]
     AccountAlreadyInitialized(Pubkey,Pubkey),
     /// Changes to the storage can only be applied to the contract account
-    #[error("Contract account expected at address {0:?}")]
+    #[error("Contract account expected at address {0:?}.")]
     ContractAccountExpected(H160),
     /// Deploy to existing account.
-    #[error("Attempt to deploy to existing account at address {0:?}")]
+    #[error("Attempt to deploy to existing account at address {0:?}.")]
     DeploymentToExistingAccount(H160),
     /// Invalid storage account owner
-    #[error("Invalid storage account owner {0:?}")]
+    #[error("Invalid storage account owner {0:?}.")]
     InvalidStorageAccountOwner(Pubkey),
     /// Storage account required
-    #[error("Storage account required {0:?}")]
+    #[error("Storage account required. {0:?}")]
     StorageAccountRequired(AccountData),
     /// Account incorrect type
-    #[error("Account incorrect type {0:?}")]
+    #[error("Account incorrect type. {0:?}")]
     AccountIncorrectType(AccountData),
     /// Account data too small
     #[error("Account data too small. account_data.len()={0:?} < end={1:?}")]
     AccountDataTooSmall(usize,usize),
     /// Account not found
-    #[error("Account not found {0:?}")]
+    #[error("Account not found {0:?}.")]
     AccountNotFound(Pubkey),
     /// Account is not BFP
-    #[error("Account is not BPF {0:?}")]
+    #[error("Account is not BPF {0:?}.")]
     AccountIsNotBpf(Pubkey),
     /// Account is not upgradeable
-    #[error("Account is not upgradeable {0:?}")]
+    #[error("Account is not upgradeable {0:?}.")]
     AccountIsNotUpgradeable(Pubkey),
     /// Convert nonce error
-    #[error("Nonce conversion error {0:?}")]
+    #[error("Nonce conversion error. {0:?}")]
     ConvertNonceError(U256),
     /// Program data account not found
-    #[error("Associated PDA not found {0:?} for Program {1:?}")]
+    #[error("Associated PDA not found {0:?} for Program {1:?}.")]
     AssociatedPdaNotFound(Pubkey,Pubkey),
     /// Program data account not found
-    #[error("Invalid Associated PDA {0:?} for Program {1:?}")]
+    #[error("Invalid Associated PDA {0:?} for Program {1:?}.")]
     InvalidAssociatedPda(Pubkey,Pubkey),
     /// Invalid message verbosity
-    #[error("Invalid verbosity message")]
+    #[error("Invalid verbosity message.")]
     InvalidVerbosityMessage,
     /// Transaction failed
-    #[error("Transaction failed")]
+    #[error("Transaction failed.")]
     TransactionFailed,
     /// Unknown Error.
-    #[error("Unknown error")]
+    #[error("Unknown error.")]
     UnknownError,
 }
 

@@ -893,8 +893,9 @@ fn main() {
         match result {
             Ok(_)  => 0,
             Err(e) => {
-                error!("{}", e);
-                e.error_code() as i32
+                let error_code = e.error_code();
+                error!("NeonCli Error ({}): {}", error_code, e);
+                error_code as i32
             }
         };
     
