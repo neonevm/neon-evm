@@ -126,7 +126,7 @@ impl NeonCliError {
             NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
             NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
             NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
-            NeonCliError::AccountNotFound(_)                => 202, // => 4005,
+            NeonCliError::AccountNotFound(_)                => 205, // => 4005,
             NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
             NeonCliError::CodeAccountNotFound(_)            => 207, // => 4007,
             NeonCliError::CodeAccountRequired(_)            => 208, // => 4008,
