@@ -50,7 +50,7 @@ use std::{
     fs::File,
     env,
     str::FromStr,
-    process::exit,
+    process::{exit},
     sync::Arc,
     convert::{TryInto},
     fmt,
@@ -725,16 +725,6 @@ fn main() {
             .unwrap_or_default();
     logs::init(context).unwrap();
 
-    // let _verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
-    //     error!("Invalid message verbosity");
-    //     exit(NeonCliError::InvalidMessageVerbosity as i32);
-    // });
-    // stderrlog::new()
-    //     .module(module_path!())
-    //     .verbosity(verbosity)
-    //     .init()
-    //     .unwrap();
-
     let mut wallet_manager = None;
     let config = {
         let cli_config = app_matches.value_of("config_file").map_or_else(
@@ -792,7 +782,6 @@ fn main() {
             rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
             websocket_url: "".to_string(),
             evm_loader,
-            // fee_payer,
             signer,
             keypair,
             commitment,

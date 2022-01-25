@@ -113,8 +113,6 @@ fn create_ethereum_contract_accounts_in_solana(
     if let Some(account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
         return Err(NeonCliError::AccountAlreadyExists(account));
-        // return Err("Account already exist".to_string().into());
-        // debug!("Account already exist");
     }
 
     let instructions = vec![
@@ -378,7 +376,6 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
         if send_retries == 0 {
             return Err(NeonCliError::TransactionFailed);
-            // return Err("Transactions failed".into());
         }
         send_retries -= 1;
 

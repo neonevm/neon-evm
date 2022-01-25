@@ -2,7 +2,6 @@
 #![allow(clippy::use_self)]
 #![allow(clippy::cast_possible_wrap)]
 
-// use std::process::exit;
 use log::{ error };
 
 use evm::{ H160, U256 };
@@ -24,9 +23,6 @@ use evm_loader::{
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
 pub enum NeonCliError {
-    // /// Std IO Error
-    // #[error("Try_from error")]
-    // TryFromError,
     /// Std IO Error
     #[error("Std I/O error {0:?}")]
     StdIoError(std::io::Error),
@@ -117,59 +113,44 @@ pub enum NeonCliError {
     /// Unknown Error.
     #[error("Unknown error")]
     UnknownError,
-    // /// Unknown Error.
-    // #[error("Cli Box Compatibility Error")]
-    // CliBoxCompatError(crate::Error),
 }
 
 impl NeonCliError {
     pub fn error_code(&self) -> u32 {
         match self {
-            // NeonCliError::TryFrom                           => 1001,
-            NeonCliError::StdIoError(_)                     => 1002,
-            NeonCliError::ProgramError(_)                   => 1011,
-            NeonCliError::SignerError(_)                    => 1012,
-            NeonCliError::ClientError(_)                    => 1013,
-            NeonCliError::CliError(_)                       => 1014,
-            NeonCliError::TpuSenderError(_)                 => 1015,
-            NeonCliError::EvmLoaderNotSpecified             => 4001,
-            NeonCliError::FeePayerNotSpecified              => 4002,
-            NeonCliError::AccountNotFound(_)                => 4005,
-            NeonCliError::AccountNotFoundAtAddress(_)       => 4006,
-            NeonCliError::CodeAccountNotFound(_)            => 4007,
-            NeonCliError::CodeAccountRequired(_)            => 4008,
-            NeonCliError::IncorrectAccount(_)               => 4009,
-            NeonCliError::AccountAlreadyExists(_)           => 4010,
-            NeonCliError::AccountUninitialized(_,_)         => 4012,
-            NeonCliError::AccountAlreadyInitialized(_,_)    => 4013,
-            NeonCliError::ContractAccountExpected(_)        => 4015,
-            NeonCliError::DeploymentToExistingAccount(_)    => 4021,
-            NeonCliError::InvalidStorageAccountOwner(_)     => 4022,
-            NeonCliError::StorageAccountRequired(_)         => 4023,
-            NeonCliError::AccountIncorrectType(_)           => 4024,
-            NeonCliError::AccountDataTooSmall(_,_)          => 4025,
-            NeonCliError::AccountIsNotBpf(_)                => 4026,
-            NeonCliError::AccountIsNotUpgradeable(_)        => 4027,
-            NeonCliError::ConvertNonceError(_)              => 4030,
-            NeonCliError::AssociatedPdaNotFound(_,_)        => 4041,
-            NeonCliError::InvalidAssociatedPda(_,_)         => 4042,
-            NeonCliError::InvalidVerbosityMessage           => 4100,
-            NeonCliError::TransactionFailed                 => 4200,
-            NeonCliError::UnknownError                      => 4900,
-            // NeonCliError::CliBoxCompatError(_)              => 4999,
+            NeonCliError::StdIoError(_)                     => 102, // => 1002,
+            NeonCliError::ProgramError(_)                   => 111, // => 1011,
+            NeonCliError::SignerError(_)                    => 112, // => 1012,
+            NeonCliError::ClientError(_)                    => 113, // => 1013,
+            NeonCliError::CliError(_)                       => 114, // => 1014,
+            NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
+            NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
+            NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
+            NeonCliError::AccountNotFound(_)                => 202, // => 4005,
+            NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
+            NeonCliError::CodeAccountNotFound(_)            => 207, // => 4007,
+            NeonCliError::CodeAccountRequired(_)            => 208, // => 4008,
+            NeonCliError::IncorrectAccount(_)               => 209, // => 4009,
+            NeonCliError::AccountAlreadyExists(_)           => 210, // => 4010,
+            NeonCliError::AccountUninitialized(_,_)         => 212, // => 4012,
+            NeonCliError::AccountAlreadyInitialized(_,_)    => 213, // => 4013,
+            NeonCliError::ContractAccountExpected(_)        => 215, // => 4015,
+            NeonCliError::DeploymentToExistingAccount(_)    => 221, // => 4021,
+            NeonCliError::InvalidStorageAccountOwner(_)     => 222, // => 4022,
+            NeonCliError::StorageAccountRequired(_)         => 223, // => 4023,
+            NeonCliError::AccountIncorrectType(_)           => 224, // => 4024,
+            NeonCliError::AccountDataTooSmall(_,_)          => 225, // => 4025,
+            NeonCliError::AccountIsNotBpf(_)                => 226, // => 4026,
+            NeonCliError::AccountIsNotUpgradeable(_)        => 227, // => 4027,
+            NeonCliError::ConvertNonceError(_)              => 230, // => 4030,
+            NeonCliError::AssociatedPdaNotFound(_,_)        => 241, // => 4041,
+            NeonCliError::InvalidAssociatedPda(_,_)         => 242, // => 4042,
+            NeonCliError::InvalidVerbosityMessage           => 243, // => 4100,
+            NeonCliError::TransactionFailed                 => 244, // => 4200,
+            NeonCliError::UnknownError                      => 249, // => 4900,
         }
     }
-    // pub fn report_and_exit(self) {
-    //     error!("Emulator Error: {}", &self);
-    //     exit(self.error_code() as i32);
-    // }
 }
-
-// impl From<std::convert::TryFrom<u64, Error = NeonCliError>> for NeonCliError {
-//     fn from(_: std::convert::TryFrom<u64, Error = NeonCliError>) -> NeonCliError {
-//         NeonCliError::TryFromError
-//     }
-// }
 
 impl From<std::io::Error> for NeonCliError {
     fn from(e: std::io::Error) -> NeonCliError {
@@ -206,12 +187,6 @@ impl From<SolanaTpuSenderError> for NeonCliError {
         NeonCliError::TpuSenderError(e)
     }
 }
-
-// impl From<crate::Error> for NeonCliError {
-//     fn from(e: crate::Error) -> NeonCliError {
-//         NeonCliError::CliBoxCompatError(e)
-//     }
-// }
 
 impl From<NeonCliError> for SolanaProgramError {
     fn from(e: NeonCliError) -> Self {
