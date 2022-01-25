@@ -1,12 +1,10 @@
-#![allow(clippy::module_name_repetitions)]
-
 use evm::{H160};
 
 use crate::{
     Config,
 };
 
-pub fn command_create_program_address (
+pub fn execute (
     config: &Config,
     ether_address: &H160,
 ) {
