@@ -44,23 +44,23 @@ fn setup() -> Result<()> {
     }
     let json = env::var("NEON_LOG").unwrap().contains("json");
 
-    let offset = UtcOffset::current_local_offset()?;
-    let timer = OffsetTime::new(
-        offset,
-        format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"),
-    );
-
-    if !json {
+    if json {
         tracing_subscriber::fmt::fmt()
-            .with_timer(timer)
-            .with_env_filter(EnvFilter::from_default_env())
-            .init();
-    } else {
-        tracing_subscriber::fmt::fmt()
-            .with_timer(timer)
             .with_env_filter(EnvFilter::from_default_env())
             .json()
             .flatten_event(true)
+            .init();
+    } else {
+        let offset = UtcOffset::current_local_offset()?;
+        let timer = OffsetTime::new(
+            offset,
+            format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
+            ),
+        );
+        tracing_subscriber::fmt::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_default_env())
             .init();
     }
 
