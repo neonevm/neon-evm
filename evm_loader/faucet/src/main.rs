@@ -25,28 +25,44 @@ async fn main() -> Result<()> {
 
 /// Initializes the logger.
 fn setup() -> Result<()> {
+    use std::env;
     use time::macros::format_description;
     use time::UtcOffset;
     use tracing_subscriber::fmt::time::OffsetTime;
     use tracing_subscriber::EnvFilter;
 
-    if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "0")
+    if env::var("RUST_LIB_BACKTRACE").is_err() {
+        env::set_var("RUST_LIB_BACKTRACE", "0")
     }
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info")
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
     }
+
+    if env::var("NEON_LOG").is_err() {
+        env::set_var("NEON_LOG", "plain")
+    }
+    let json = env::var("NEON_LOG").unwrap().contains("json");
 
     let offset = UtcOffset::current_local_offset()?;
     let timer = OffsetTime::new(
         offset,
         format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"),
     );
-    tracing_subscriber::fmt::fmt()
-        .with_timer(timer)
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+
+    if !json {
+        tracing_subscriber::fmt::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+    } else {
+        tracing_subscriber::fmt::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .flatten_event(true)
+            .init();
+    }
 
     Ok(())
 }
