@@ -38,10 +38,8 @@ function DeployToken {
   echo "$TOKEN_NAME successfully deployed"
 }
 
-DeployToken "Client Allowance Token" NEON_CLIENT_ALLOWANCE_TOKEN client_allowance_token_keypair.json
-DeployToken "Client Denial Token" NEON_CLIENT_DENIAL_TOKEN client_denial_token_keypair.json
-DeployToken "Contract Allowance Token" NEON_CONTRACT_ALLOWANCE_TOKEN contract_allowance_token_keypair.json
-DeployToken "Contract Denial Token" NEON_CONTRACT_DENIAL_TOKEN contract_denial_token_keypair.json
+DeployToken "Permission Allowance Token" NEON_PERMISSION_ALLOWANCE_TOKEN permission_allowance_token_keypair.json
+DeployToken "Permission Denial Token" NEON_PERMISSION_DENIAL_TOKEN permission_denial_token_keypair.json
 
 echo "Deploying evm_loader at address $EVM_LOADER..."
 if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
