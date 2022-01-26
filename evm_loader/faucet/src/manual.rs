@@ -135,6 +135,7 @@ Environment variables, if present, override portions of the configuration.
 | NEON_TOKEN_MINT_DECIMALS | **solana**.token_mint_decimals | `9`
 | NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `operator_id.json`
 | NEON_ETH_MAX_AMOUNT | **solana**.max_amount | `10`
+| NEON_LOG | | `json`
 |-
 "##;
 
