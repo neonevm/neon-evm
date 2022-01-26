@@ -96,6 +96,8 @@ pub struct AccountJSON {
     new: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
+    storage_increment: Option<u32>,
+    deploy: bool
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -124,24 +126,28 @@ struct SolanaAccount {
     writable: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
+    storage_increment: Option<u32>,
+    deploy: bool
 }
 
 struct SolanaNewAccount {
     key: Pubkey,
     writable: bool,
-    code_size: Option<usize>
+    code_size: Option<usize>,
+    deploy: bool
 }
 
 impl SolanaAccount {
     pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         eprintln!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
+        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None,
+            storage_increment: None, deploy: false}
     }
 }
 
 impl SolanaNewAccount {
     pub const fn new(key: Pubkey) -> Self {
-        Self{key, writable: false, code_size: None}
+        Self{key, writable: false, code_size: None, deploy: false}
     }
 }
 
@@ -279,17 +285,24 @@ impl<'a> EmulatorAccountStorage<'a> {
                     let mut storage_iter = storage.into_iter().peekable();
                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
-                    let hamt_size = |code_data : &Vec<u8>, hamt_begin : usize| -> usize {
+                    let hamt_info = |code_data : &Vec<u8>, hamt_begin : usize| -> (usize, u32) {
                         let mut empty_data: Vec<u8> = Vec::new();
                         empty_data.resize(10_485_760, 0);
                         empty_data[0..code_data.len()].copy_from_slice(code_data);
 
                         let mut storage = Hamt::new(&mut empty_data[hamt_begin..], reset_storage).unwrap();
+                        let orig_size :u32 = storage.last_used();
                         for (key, value) in storage_iter {
                             eprintln!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                             storage.insert(key, value).unwrap();
                         }
-                        storage.last_used() as usize
+                        let increment: u32 = if reset_storage {
+                            storage.last_used()
+                        }
+                        else{
+                            storage.last_used() - orig_size
+                        };
+                        (storage.last_used() as usize, increment)
                     };
                         
                     let mut accounts = self.accounts.borrow_mut();
@@ -302,36 +315,33 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                                 let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
                                 let contract = AccountData::get_contract(&account_data_contract).unwrap();
-
+                                let found_deploy;
                                 if let Some((code, valids)) = code_and_valids.clone() {
                                     if contract.code_size != 0 {
                                         eprintln!("AccountAlreadyInitialized; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         exit(1)
                                     }
-                                    code_begin = AccountData::Contract( Contract {owner: Pubkey::new_from_array([0_u8; 32]), code_size: 0_u32} ).size();
                                     code_size = code.len();
                                     valids_size = valids.len();
+                                    found_deploy = true;
                                 }
                                 else{
                                     if contract.code_size == 0 {
                                         eprintln!("UninitializedAccount; account={:?}, code_account={:?}", acc.key, acc_desc.code_account );
                                         exit(1)
                                     }
-                                    code_begin = account_data_contract.size();
                                     code_size = contract.code_size as usize;
                                     valids_size = (code_size / 8) + 1;
+                                    found_deploy = false
                                 }
 
+                                code_begin = Contract::SIZE + 1;
                                 let hamt_begin = code_begin + code_size + valids_size;
-
-                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&code_account.data, hamt_begin));
+                                let (hamt_size, hamt_increment) = hamt_info(&code_account.data, hamt_begin);
+                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size);
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
-
-                                let trx_count = u64::try_from(nonce).map_err(|s| {eprintln!("convert nonce error, {:?}", s); exit(1)}).unwrap();
-
-                                if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
-                                    *acc.writable.borrow_mut() = true;
-                                }
+                                *acc.storage_increment.borrow_mut() = Some(hamt_increment);
+                                *acc.deploy.borrow_mut() = found_deploy;
                             }
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
@@ -344,18 +354,19 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 valids_size = valids.len();
     
                                 let hamt_begin = code_begin + code_size + valids_size;
-                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
+                                let (hamt_size, hamt_increment) = hamt_info(&vec![0_u8; 0], hamt_begin);
+                                *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size);
                                 *acc.code_size_current.borrow_mut() = Some(0);
-                                *acc.writable.borrow_mut() = true;
+                                *acc.storage_increment.borrow_mut() = Some(hamt_increment);
+                                *acc.deploy.borrow_mut() = true;
                             }
                             else{
                                 if reset_storage || exist_items {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(1);
                                 }
-                                *acc.writable.borrow_mut() = true;
                             }
-
+                            *acc.writable.borrow_mut() = true;
                         }
                         else{
                             eprintln!("Changes of incorrect account were found {}", &address.to_string());
@@ -369,13 +380,14 @@ impl<'a> EmulatorAccountStorage<'a> {
                             valids_size = valids.len();
 
                             let hamt_begin = code_begin + code_size + valids_size;
-                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size(&vec![0_u8; 0], hamt_begin));
+                            let (hamt_size, _) = hamt_info(&vec![0_u8; 0], hamt_begin);
+                            *acc.code_size.borrow_mut() = Some(hamt_begin + hamt_size);
+                            *acc.deploy.borrow_mut() = true;
                         }
                         else  if reset_storage || exist_items {
                                 eprintln!("changes to the storage can only be applied to the contract account; new address: {}", &address.to_string());
                                 exit(1);
                             }
-
                         *acc.writable.borrow_mut() = true;
                     }
                     else {
@@ -521,7 +533,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: solana_address.to_string(),
                         contract: contract_address.map(|v| v.to_string()),
                         code_size: acc.code_size,
-                        code_size_current: acc.code_size_current
+                        code_size_current: acc.code_size_current,
+                        storage_increment: acc.storage_increment,
+                        deploy: acc.deploy
                 });
             }
         }
@@ -536,7 +550,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: acc.key.to_string(),
                         contract: None,
                         code_size: acc.code_size,
-                        code_size_current : None
+                        code_size_current : None,
+                        storage_increment: None,
+                        deploy: acc.deploy
                 });
             }
         }

@@ -251,12 +251,13 @@ impl<'a> SolidityAccount<'a> {
                         debug_print!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                         storage.insert(key, value)?;
                     }
-                    let increment = if storage.last_used() >= orig_size  {
-                        storage.last_used() - orig_size
-                    }
-                    else{
+                    let increment =   if reset_storage {
                         storage.last_used()
+                    }
+                    else {
+                        storage.last_used() - orig_size
                     };
+
                     (increment, code_data.len())
                 }
                 else {
@@ -274,13 +275,17 @@ impl<'a> SolidityAccount<'a> {
 
         let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
         let allocated_space = {
-            if account_data.state == AccountState::Uninitialized{
-                account_data.state = AccountState::Initialized;
-                ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN + contract_space
+            let mut space =  if found_deploy {
+                contract_space
             }
             else{
                 storage_increment as usize
+            };
+            if account_data.state == AccountState::Uninitialized{
+                account_data.state = AccountState::Initialized;
+                space += ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN
             }
+            space
         };
         account_data.trx_count = u64::try_from(nonce).map_err(|s| E!(ProgramError::InvalidArgument; "s={:?}", s))?;
 
