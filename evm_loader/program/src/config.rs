@@ -45,6 +45,16 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
         }
 
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "1");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "1");
+        }
+
     } else if #[cfg(feature = "testnet")] {
 
         const CHAIN_ID: u64 = 245022940;
@@ -179,15 +189,14 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
         }
 
-        /// Account whitelists: Allowance tokens
+        /// Account whitelists: Permission tokens
         pub mod account_whitelists {
            use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
 
-            neon_elf_param!(NEON_CLIENT_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
-            neon_elf_param!(NEON_CONTRACT_ALLOWANCE_TOKEN, "2JM7W4Uxpm2ja4tKXFSm2QPRSM7tCrefXjmRpb9Ca5qU");
-            neon_elf_param!(NEON_CLIENT_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
-            neon_elf_param!(NEON_CONTRACT_DENIAL_TOKEN, "Gg829D5BmsTBp6tBuH5NVvgPnXdcVSmNNHPBK4g52ogo");
-            neon_elf_param!(NEON_MINIMAL_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
         }
     }
 }
