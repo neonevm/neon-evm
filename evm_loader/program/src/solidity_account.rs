@@ -283,7 +283,7 @@ impl<'a> SolidityAccount<'a> {
             };
             if account_data.state == AccountState::Uninitialized{
                 account_data.state = AccountState::Initialized;
-                space += ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN
+                space += ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN;
             }
             space
         };
