@@ -332,7 +332,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                     }
                                     code_size = contract.code_size as usize;
                                     valids_size = (code_size / 8) + 1;
-                                    found_deploy = false
+                                    found_deploy = false;
                                 }
 
                                 code_begin = Contract::SIZE + 1;
@@ -360,11 +360,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.storage_increment.borrow_mut() = Some(hamt_increment);
                                 *acc.deploy.borrow_mut() = true;
                             }
-                            else{
-                                if reset_storage || exist_items {
+                            else if reset_storage || exist_items {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(1);
-                                }
                             }
                             *acc.writable.borrow_mut() = true;
                         }
