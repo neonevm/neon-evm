@@ -1,19 +1,20 @@
-//! # NeonLabs Token Faucet (Airdrop)
-//! NeonLabs Token Faucet is a service which performs airdrop of tokens on user request.
+//! # NeonLabs Faucet Service
+//! NeonLabs Faucet is a service which provides tokens to users.
 
 #![deny(warnings)]
 
 mod cli;
 mod config;
-mod eth_token;
+mod erc20_tokens;
 mod ethereum;
+mod manual;
+mod neon_token;
 mod server;
 mod solana;
-mod tokens;
+mod version;
 
-use color_eyre::Result;
+use eyre::Result;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
@@ -22,36 +23,53 @@ async fn main() -> Result<()> {
     execute(cli::application()).await
 }
 
-/// Initializes the logger and error handler.
+/// Initializes the logger.
 fn setup() -> Result<()> {
-    if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "0")
-    }
-    color_eyre::install()?;
+    use std::env;
+    use time::macros::format_description;
+    use time::UtcOffset;
+    use tracing_subscriber::fmt::time::OffsetTime;
+    use tracing_subscriber::EnvFilter;
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info")
+    if env::var("RUST_LIB_BACKTRACE").is_err() {
+        env::set_var("RUST_LIB_BACKTRACE", "0")
     }
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
+    }
+
+    if env::var("NEON_LOG").is_err() {
+        env::set_var("NEON_LOG", "plain")
+    }
+    let json = env::var("NEON_LOG").unwrap().contains("json");
+
+    if json {
+        tracing_subscriber::fmt::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .flatten_event(true)
+            .init();
+    } else {
+        let offset = UtcOffset::current_local_offset()?;
+        let timer = OffsetTime::new(
+            offset,
+            format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
+            ),
+        );
+        tracing_subscriber::fmt::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+    }
 
     Ok(())
 }
 
 /// Shows semantic version and revision hash.
 fn show_version() {
-    let ver = env!("CARGO_PKG_VERSION");
-    let rev = if let Ok(rev) = std::env::var("VERGEN_GIT_SHA") {
-        if rev.len() < 7 {
-            rev
-        } else {
-            rev[..7].to_string()
-        }
-    } else {
-        "<unknown>".to_owned()
-    };
-    info!("version {} (revision {})", ver, rev);
+    info!(version::display!());
 }
 
 /// Dispatches CLI commands.
@@ -65,6 +83,9 @@ async fn execute(app: cli::Application) -> Result<()> {
         cli::Command::Env {} => {
             config::show_env();
         }
+        cli::Command::Man { api, config, env } => {
+            manual::show(api, config, env);
+        }
         cli::Command::Run { workers } => {
             let workers = if workers == config::AUTO {
                 num_cpus::get()
@@ -72,10 +93,10 @@ async fn execute(app: cli::Application) -> Result<()> {
                 workers.parse::<usize>()?
             };
             run(&app.config, workers).await?;
+            info!("Done.");
         }
     }
 
-    info!("Done.");
     Ok(())
 }
 
@@ -85,7 +106,6 @@ use std::path::Path;
 async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::check_file_exists(config_file);
     config::load(config_file)?;
-    config::show();
 
     if config::solana_enabled() {
         solana::init_client(config::solana_url());
