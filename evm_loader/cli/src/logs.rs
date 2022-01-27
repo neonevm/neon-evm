@@ -44,7 +44,7 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
         .format(move |out, message, record| {
             out.finish(format_args!(
                 "{:23} {:>8} {:>6}:{:10} {:>15}:{:30} {} {}",
-                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%3f"),
+                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 record.level(),
                 "NA",
                 "Undefined",
