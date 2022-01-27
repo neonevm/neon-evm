@@ -53,7 +53,22 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 ACCOUNT_SEED_VERSION=b'\1'
-TRANSACTION_COST = 15000    # the amount of gas per transaction iteration
+
+# amount of gas per 1 byte evm_storage
+EVM_BYTE_COST = 140
+# number of evm steps per transaction
+EVM_STEPS = 100
+# the message size that is used to holder-account filling
+HOLDER_MSG_SIZE = 1000
+# gas multiplier
+GAS_MULTIPLIER = 1000
+# Ethereum account allocated data size
+ACCOUNT_MAX_SIZE = 256
+# spl-token account allocated data size
+SPL_TOKEN_ACCOUNT_SIZE = 165
+# gas multipliergas multiplier
+GAS_MULTIPLIER = 21000
+
 # DEFAULT_UNITS=500*1000
 # DEFAULT_HEAP_FRAME=256*1024
 

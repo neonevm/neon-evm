@@ -436,6 +436,8 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
         result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        print("test_01_callFoo result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
@@ -493,6 +495,8 @@ class EventTest(unittest.TestCase):
         contract_nonce_pre = getTransactionCount(http_client, self.reId_caller)
         # result = self.call_signed(input=data, contract=self.reId_caller)
         result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        print("test02_ecrecover result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 6) # TODO: why not 3?
@@ -575,7 +579,7 @@ class EventTest(unittest.TestCase):
 
         print('Call creator() with holder account:')
         result = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
-        print('result:', result)
+        print('test_03_create2_opcode_by_0x0e_without_accounts result:', result)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_create_caller)
         # Nonce increased on create other contract from contract
@@ -660,7 +664,8 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
         result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
-
+        print("test_05_nested_revert result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)  # TODO: why not 1?

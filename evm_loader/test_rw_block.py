@@ -225,6 +225,12 @@ class RW_Locking_Test(unittest.TestCase):
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
+        evm_step_executed = 87
+        begin_steps = 10
+        begin_gas = EVM_STEPS * GAS_MULTIPLIER
+        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        gas = begin_gas + continue_gas
+
         for result in ([result1["result"], result2["result"]]):
             print('result:', result)
             self.assertEqual(result['meta']['err'], None)
@@ -234,7 +240,7 @@ class RW_Locking_Test(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST*3) # used_gas
+            self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
     # The first transaaction set lock on write to  contract account

@@ -311,6 +311,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
                         if let AccountData::Account(acc_desc) = account_data {
+                            let trx_count = u64::try_from(nonce).map_err(|s| {eprintln!("convert nonce error, {:?}", s); exit(1)}).unwrap();
                             if let Some(ref mut code_account) = acc.code_account{
 
                                 let account_data_contract = AccountData::unpack(&code_account.data).unwrap();
@@ -342,6 +343,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size_current.borrow_mut() = Some(code_account.data.len());
                                 *acc.storage_increment.borrow_mut() = Some(hamt_increment);
                                 *acc.deploy.borrow_mut() = found_deploy;
+
+                                if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
+                                    *acc.writable.borrow_mut() = true;
+                                }
                             }
                             else if let Some((code, valids)) = code_and_valids.clone() {
                                 if acc_desc.trx_count != 0 {
@@ -359,12 +364,17 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 *acc.code_size_current.borrow_mut() = Some(0);
                                 *acc.storage_increment.borrow_mut() = Some(hamt_increment);
                                 *acc.deploy.borrow_mut() = true;
+                                *acc.writable.borrow_mut() = true;
                             }
-                            else if reset_storage || exist_items {
+                            else{
+                                if reset_storage || exist_items {
                                     eprintln!("changes to the storage can only be applied to the contract account; existing address: {}", &address.to_string());
                                     exit(1);
+                                }
+                                if acc_desc.trx_count != trx_count {
+                                    *acc.writable.borrow_mut() = true;
+                                }
                             }
-                            *acc.writable.borrow_mut() = true;
                         }
                         else{
                             eprintln!("Changes of incorrect account were found {}", &address.to_string());

@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, GAS_MULTIPLIER};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -403,7 +403,10 @@ fn process_instruction<'a>(
                 evm_results.unwrap()
                 )?;
 
-            let used_gas = steps_executed + allocated_space * EVM_BYTE_COST;
+            let used_gas = (steps_executed + allocated_space * EVM_BYTE_COST) * GAS_MULTIPLIER;
+
+            invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+
             token::user_pays_operator(
                 trx_gas_price,
                 used_gas,
@@ -413,7 +416,6 @@ fn process_instruction<'a>(
                 &account_storage
             )?;
 
-            invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
 
             Ok(())
         },
@@ -949,22 +951,21 @@ fn do_begin<'a>(
         do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?
     };
 
-     // TODO: may be: if steps_executed < EVM_STEPS ?
-    if steps_executed == 0 {
+    if steps_executed < EVM_STEPS {
         steps_executed = EVM_STEPS;
     }
     let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
-    steps_executed += holder_trx_count * EVM_STEPS;
+    let used_gas = (steps_executed + holder_trx_count * EVM_STEPS) * GAS_MULTIPLIER;
 
     token::user_pays_operator(
         trx_gas_price,
-        steps_executed,
+        used_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
         &account_storage
     )?;
-    storage.add_gas_has_been_paid(steps_executed)?;
+    storage.add_gas_has_been_paid(used_gas)?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -1031,7 +1032,10 @@ fn do_continue_top_level<'a>(
             operator_sol_info,
             evm_results
         )?;
-        let currrent_gas = steps_executed + allocated_space * EVM_BYTE_COST;
+
+        let currrent_gas = (steps_executed + allocated_space * EVM_BYTE_COST) * GAS_MULTIPLIER;
+        let used_gas = storage.get_payments_info()?.0 + currrent_gas;
+        invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
 
         token::user_pays_operator(
             trx_gas_price,
@@ -1042,13 +1046,10 @@ fn do_continue_top_level<'a>(
             &account_storage
         )?;
 
-        let used_gas = storage.get_payments_info()?.0 + currrent_gas;
-        invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
-
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
     else{
-        let current_gas = steps_executed;
+        let current_gas = steps_executed * GAS_MULTIPLIER;
 
         token::user_pays_operator(
             trx_gas_price,

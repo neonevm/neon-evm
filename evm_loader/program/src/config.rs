@@ -195,6 +195,8 @@ pub const EVM_BYTE_COST: u64 = 140;
 pub const EVM_STEPS: u64  = 100;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 1000;
+/// `gas multiplier`
+pub const GAS_MULTIPLIER: u64 = 21000;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -208,6 +210,7 @@ neon_elf_param!( NEON_EVM_BYTE_COST         , formatcp!("{:?}", EVM_BYTE_COST));
 neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
+neon_elf_param!( NEON_GAS_MULTIPLIER        , formatcp!("{:?}", GAS_MULTIPLIER));
 
 /// Chain ID
 #[must_use]

@@ -177,7 +177,14 @@ class EventTest(unittest.TestCase):
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
-        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+
+        evm_step_executed = 87
+        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        begin_steps = 10
+        begin_gas = EVM_STEPS * GAS_MULTIPLIER
+        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas ) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -194,7 +201,14 @@ class EventTest(unittest.TestCase):
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+
+        evm_step_executed = 109
+        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        begin_steps = 10
+        begin_gas = EVM_STEPS * GAS_MULTIPLIER
+        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -212,10 +226,19 @@ class EventTest(unittest.TestCase):
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+
+        evm_step_executed = 109
+        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        begin_steps = 10
+        begin_gas = EVM_STEPS * GAS_MULTIPLIER
+        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
+                print("test_addReturnEvent result:")
+                print(result)
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
@@ -236,10 +259,20 @@ class EventTest(unittest.TestCase):
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
-        calls = [ (self.call_signed, 1, TRANSACTION_COST), (self.call_partial_signed, 0, TRANSACTION_COST*2) ]
+
+        evm_step_executed = 109
+        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        begin_steps = 10
+        begin_gas = EVM_STEPS * GAS_MULTIPLIER
+        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
+                print("test_addReturnEventTwice result:")
+                print(result)
+
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
@@ -284,6 +317,11 @@ class EventTest(unittest.TestCase):
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
+        print("test_events_of_different_instructions(self): result:")
+        print(result)
+
+        evm_step_executed = 109
+        gas_used = evm_step_exected * GAS_MULTIPLIER
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
@@ -308,7 +346,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), gas_used) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0x5)) # sum
 
         # log sol_instr_05(from_addr2 + sign2 + msg2)
@@ -328,7 +366,7 @@ class EventTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][1]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06')   # 6 means OnReturn
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), TRANSACTION_COST) # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), gas_used) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
     # @unittest.skip("a.i.")
