@@ -17,6 +17,7 @@ cfg_if! {
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
+                "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
                 "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
             ]
@@ -26,7 +27,7 @@ cfg_if! {
         pub mod token_mint {
             use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
 
-            declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+            declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
             /// Ethereum account version
             pub const DECIMALS: u8 = 9;
 
@@ -39,7 +40,7 @@ cfg_if! {
         pub mod collateral_pool_base {
             use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
 
-            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
+            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
