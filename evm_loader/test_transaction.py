@@ -270,7 +270,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -299,7 +298,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -321,7 +319,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -344,7 +341,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -366,7 +362,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d_2)
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '

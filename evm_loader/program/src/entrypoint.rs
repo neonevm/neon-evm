@@ -551,7 +551,9 @@ fn process_instruction<'a>(
                     };
 
                     if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
-                        check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+                        if caller != verify_tx_signature(sign, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))? {
+                            return Err(E!(ProgramError::InvalidInstructionData));
+                        }
 
                         let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                             .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
