@@ -43,6 +43,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 1;
         }
 
         /// Account whitelists: Permission tokens
@@ -99,6 +102,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 1;
         }
 
         /// Account whitelists: Permission tokens
@@ -161,6 +167,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
@@ -207,6 +216,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
@@ -236,6 +248,7 @@ neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECI
 neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
+neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
 
 /// Chain ID
 #[must_use]
