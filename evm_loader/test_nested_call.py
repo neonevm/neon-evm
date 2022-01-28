@@ -554,8 +554,8 @@ class EventTest(unittest.TestCase):
 
         func_name = abi.function_signature_to_4byte_selector('creator()')
         print("Expecting Exception: Program failed to complete")
-        # with self.assertRaisesRegex(Exception, 'Program failed to complete'):
-        with self.assertRaisesRegex(Exception, 'insufficient account keys for instruction'):
+        with self.assertRaisesRegex(Exception, 'Program failed to complete'):
+        # with self.assertRaisesRegex(Exception, 'insufficient account keys for instruction'):
             response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
             print('response:', response)
         neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))

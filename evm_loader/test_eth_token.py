@@ -150,7 +150,7 @@ class EthTokenTest(unittest.TestCase):
         wei_scale = 10**9
         initial_balance = int(self.token.balance(self.caller_token))* 10**9
         gas_used =  EVM_STEPS * GAS_MULTIPLIER  # gas for begin iteration
-        expected_balance_WEI = (initial_balance - gas_used) * wei_scale # * gas_price/10**9
+        expected_balance_wei = (initial_balance - gas_used) * wei_scale # * gas_price/10**9
         print("expected_balance_wei", expected_balance_wei)
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
         input = func_name + bytes.fromhex("%064x" % expected_balance_wei)
