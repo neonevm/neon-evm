@@ -1,6 +1,5 @@
 //! Faucet Solana utilities module.
 
-use std::mem;
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex};
 
@@ -15,7 +14,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::{system_program, sysvar};
+use solana_sdk::{system_program};
 
 use crate::{config, ethereum};
 
@@ -163,7 +162,7 @@ fn make_solana_program_address(
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
         &[
-            &[evm_loader::account_data::ACCOUNT_SEED_VERSION],
+            &[evm_loader::account::ACCOUNT_SEED_VERSION],
             ether_address.as_bytes(),
         ],
         program_id,
@@ -176,33 +175,16 @@ fn create_ether_account_instruction(
     evm_loader_id: Pubkey,
     ether_address: ethereum::Address,
 ) -> Instruction {
-    let token_mint_id =
-        Pubkey::from_str(&config::solana_token_mint_id()).expect("invalid token mint id");
-
     let (solana_address, nonce) = make_solana_program_address(&ether_address, &evm_loader_id);
-    let token_address =
-        spl_associated_token_account::get_associated_token_address(&solana_address, &token_mint_id);
-
-    let lamports = 0;
-    let space = 0;
+    
     Instruction::new_with_bincode(
         evm_loader_id,
-        &evm_loader::instruction::EvmInstruction::CreateAccount {
-            lamports,
-            space,
-            ether: unsafe { mem::transmute(ether_address) },
-            nonce,
-        },
+        &(24_u8, ether_address.as_fixed_bytes(), nonce),
         vec![
             AccountMeta::new(signer, true),
-            AccountMeta::new(solana_address, false),
-            AccountMeta::new(token_address, false),
             AccountMeta::new_readonly(system_program::id(), false),
-            AccountMeta::new_readonly(token_mint_id, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-            AccountMeta::new_readonly(sysvar::rent::id(), false),
-        ],
+            AccountMeta::new(solana_address, false),
+        ]
     )
 }
 
