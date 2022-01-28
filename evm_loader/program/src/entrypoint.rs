@@ -393,30 +393,19 @@ fn process_instruction<'a>(
 
             let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value)?;
 
+            let trx_gas = steps_executed * GAS_MULTIPLIER;
 
-
-            let (exit_reason, result, allocated_space) = applies_and_invokes(
+            applies_and_invokes(
                 program_id,
                 &mut account_storage,
                 accounts,
                 operator_sol_info,
-                evm_results.unwrap()
-                )?;
-
-            let used_gas = (steps_executed + allocated_space * EVM_BYTE_COST) * GAS_MULTIPLIER;
-
-            invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
-
-            token::user_pays_operator(
+                evm_results.unwrap(),
+                trx_gas,
                 trx_gas_price,
-                used_gas,
                 user_eth_info,
                 operator_eth_info,
-                accounts,
-                &account_storage
             )?;
-
-
             Ok(())
         },
         EvmInstruction::OnReturn {status: _, bytes: _} => {
@@ -1018,48 +1007,37 @@ fn do_continue_top_level<'a>(
     }
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
+    let trx_gas = steps_executed * GAS_MULTIPLIER;
 
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info)?;
 
-
-        let (exit_reason, result, allocated_space) = applies_and_invokes(
+        applies_and_invokes(
             program_id,
             &mut account_storage,
             accounts,
             operator_sol_info,
-            evm_results
-        )?;
-
-        let currrent_gas = (steps_executed + allocated_space * EVM_BYTE_COST) * GAS_MULTIPLIER;
-        let used_gas = storage.get_payments_info()?.0 + currrent_gas;
-        invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
-
-        token::user_pays_operator(
+            evm_results,
+            trx_gas,
             trx_gas_price,
-            currrent_gas,
             user_eth_info,
             operator_eth_info,
-            accounts,
-            &account_storage
         )?;
 
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
     else{
-        let current_gas = steps_executed * GAS_MULTIPLIER;
-
         token::user_pays_operator(
             trx_gas_price,
-            current_gas,
+            trx_gas,
             user_eth_info,
             operator_eth_info,
             accounts,
             &account_storage
         )?;
-        storage.add_gas_has_been_paid(current_gas)?;
+        storage.add_gas_has_been_paid(trx_gas)?;
     }
 
     Ok(())
@@ -1166,16 +1144,21 @@ fn do_continue<'a>(
     Ok((Some(evm_results), steps_executed))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn applies_and_invokes<'a>(
     program_id: &Pubkey,
     account_storage: &mut ProgramAccountStorage<'a>,
     accounts: &'a [AccountInfo<'a>],
     operator: &AccountInfo<'a>,
     evm_results: EvmResults,
-) -> Result<(ExitReason, Vec<u8>, u64), ProgramError> {
-    let (exit_reason, result, applies_logs_transfers) = evm_results;
+    trx_gas: u64,
+    gas_price: u64,
+    user_eth_info: &'a AccountInfo<'a>,
+    operator_eth_info: &'a AccountInfo<'a>,
+) -> ProgramResult {
 
-    let allocated_space = {
+    let (exit_reason, result, applies_logs_transfers) = evm_results;
+    let (allocated_space,  logs) = {
         if let Some(applies_logs_transfers) = applies_logs_transfers {
             let (
                 applies,
@@ -1190,20 +1173,34 @@ fn applies_and_invokes<'a>(
             account_storage.apply_spl_approves(accounts, spl_approves)?;
             account_storage.apply_spl_transfers(accounts, spl_transfers)?;
             account_storage.apply_erc20_approves(accounts, operator, erc20_approves)?;
-            let allocated_space = account_storage.apply(applies, operator, false)?;
+            let space = account_storage.apply(applies, operator, false)?;
 
             debug_print!("Applies done");
-            for log in logs {
-                invoke(&on_event(program_id, log), accounts)?;
-            }
-            allocated_space
+            (space, Some(logs))
         }
-        else {
-            0
+        else{
+            (0, None)
         }
     };
 
-    Ok((exit_reason, result, allocated_space))
+    let used_gas = trx_gas + allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER;
+    token::user_pays_operator(
+        gas_price,
+        used_gas,
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        account_storage
+    )?;
+
+    if let Some(logs) = logs {
+        for log in logs {
+            invoke(&on_event(program_id, log), accounts)?;
+        }
+    }
+    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+
+    Ok(())
 }
 
 fn invoke_on_return<'a>(
