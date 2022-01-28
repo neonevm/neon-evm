@@ -1,7 +1,3 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
-
-/// Todo: document
-
 use core::mem;
 use std::{
     boxed::Box,
@@ -19,7 +15,7 @@ use solana_program::pubkey::Pubkey;
 
 use crate::{
     query,
-    solana_backend::AccountStorage,
+    account_storage::AccountStorage,
     utils::keccak256_h256
 };
 
@@ -734,10 +730,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         U256::zero()
     }
 
-    #[must_use]
-    pub fn origin(&self) -> H160 {
-        self.backend.origin()
-    }
 
     #[must_use]
     #[allow(clippy::unused_self)]
@@ -1067,11 +1059,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         if length == 0 || length > query::MAX_CHUNK_LEN {
             return Err(query::Error::InvalidArgument);
         }
-        let value = self.backend.apply_to_solana_account(
-            &address,
-            || None,
-            |info| Some(query::Value::from(info, offset, length)),
-        );
+        let value = self.backend.query_account(&address, offset, length);
         match value {
             None => Err(query::Error::AccountNotFound),
             Some(value) => {

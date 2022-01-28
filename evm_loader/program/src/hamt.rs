@@ -1,5 +1,6 @@
 #![allow(clippy::cast_possible_truncation, clippy::similar_names)]
 
+use std::cell::RefMut;
 use evm::U256;
 use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
@@ -23,7 +24,7 @@ struct HamtHeader {
 /// Hamt implementation
 #[derive(Debug)]
 pub struct Hamt<'a> {
-    data: &'a mut [u8],
+    data: RefMut<'a, [u8]>,
     //header: HamtHeader,
     last_used: u32,
     used: u32,
@@ -40,26 +41,33 @@ impl<'a> Hamt<'a> {
 
     /// Hamt constructor
     /// # Errors
-    pub fn new(data: &'a mut [u8], reset: bool) -> Result<Self, ProgramError> {
+    pub fn new(mut data: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
         let header_len = size_of::<u32>() * 32 * 2;
 
         if data.len() < header_len {
             return Err!(ProgramError::AccountDataTooSmall; "data.len()={:?} < header_len={:?}", data.len(), header_len);
         }
 
-        if reset {
-            data[0..header_len].copy_from_slice(&vec![0_u8; header_len]);
-            let last_used_ptr = array_mut_ref![data, 0, 4];
+        let last_used_ptr = array_mut_ref![data, 0, 4];
+        if last_used_ptr == &[0; 4] { // new account
             *last_used_ptr = (header_len as u32).to_le_bytes();
-            Ok(Hamt {data, last_used: header_len as u32, used: 0, item_count: 0})
-        } else {
-            let last_used_ptr = array_mut_ref![data, 0, 4];
-            let last_used = u32::from_le_bytes(*last_used_ptr);
-            if last_used < header_len as u32 {
-                return Err!(ProgramError::InvalidAccountData; "last_used={:?} < header_len={:?}", last_used, header_len);
-            }
-            Ok(Hamt {data, last_used, used: 0, item_count: 0})
         }
+
+        let last_used = u32::from_le_bytes(*last_used_ptr);
+        Ok(Hamt {data, last_used, used: 0, item_count: 0})
+    }
+
+    pub fn clear(&mut self) {
+        let header_len = size_of::<u32>() * 32 * 2;
+
+        self.data.fill(0);
+
+        let last_used_ptr = array_mut_ref![self.data, 0, 4];
+        *last_used_ptr = (header_len as u32).to_le_bytes();
+
+        self.last_used =  u32::from_le_bytes(*last_used_ptr);
+        self.used = 0;
+        self.item_count = 0;
     }
 
     fn allocate_item(&mut self, item_type: u8) -> Result<u32, ProgramError> {
@@ -192,7 +200,7 @@ impl<'a> Hamt<'a> {
 
                 let array_pos = self.place_items2(tags, item1_pos, item2_pos)?;
                 self.save_u32(ptr_pos, array_pos);
-                
+
                 return Ok(());
             },
             ItemType::Array{pos} => {

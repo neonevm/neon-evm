@@ -1,5 +1,3 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
-
 use std::convert::Infallible;
 use std::mem;
 
@@ -12,11 +10,9 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::executor_state::ExecutorState;
-use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::{call_precompile, is_precompile_address};
-use crate::solana_backend::AccountStorage;
-use crate::token;
+use crate::account_storage::AccountStorage;
 use crate::{event, emit_exit};
 
 
@@ -58,6 +54,7 @@ enum RuntimeApply{
 }
 
 struct Executor<'a, B: AccountStorage> {
+    origin: H160,
     state: ExecutorState<'a, B>,
 }
 
@@ -132,7 +129,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn origin(&self) -> H160 {
-        self.state.origin()
+        self.origin
     }
 
     fn block_hash(&self, number: U256) -> H256 {
@@ -236,7 +233,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        let value = token::eth::round(value);
         if !value.is_zero() && (self.balance(caller) < value) {
             return Capture::Exit((ExitError::OutOfFund.into(), None, Vec::new()))
         }
@@ -322,15 +318,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
         }
-
-        let transfer = transfer.map(|t| {
-            evm::Transfer { source: t.source, target: t.target, value: token::eth::round(t.value) }
-        });
-        let context = evm::Context {
-            address: context.address,
-            caller: context.caller,
-            apparent_value: token::eth::round(context.apparent_value)
-        };
 
         let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
         if let Some(Capture::Exit(exit_value)) = precompile_result {
@@ -422,22 +409,23 @@ pub struct Machine<'a, B: AccountStorage> {
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
-    pub fn new(state: ExecutorState<'a, B>) -> Self {
-        let executor = Executor { state };
+    pub fn new(origin: H160, state: ExecutorState<'a, B>) -> Self {
+        let executor = Executor { origin, state };
         Self{ executor, runtime: Vec::new(), steps_executed: 0 }
     }
 
-    pub fn save_into(&self, storage: &mut StorageAccount) {
+    pub fn save_into(&self, storage: &mut crate::account::Storage) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
     #[must_use]
-    pub fn restore(storage: &StorageAccount, backend: &'a B) -> Self {
+    pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
 
+        let origin = storage.caller;
         let state = ExecutorState::new(substate, backend);
 
-        let executor = Executor { state };
+        let executor = Executor { origin, state };
         Self{ executor, runtime, steps_executed: 0 }
     }
 
@@ -475,7 +463,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.state.enter(gas_limit, false);
         self.executor.state.touch(code_address);
 
-        let transfer_value = token::eth::round(transfer_value);
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
         self.executor.state.transfer(&transfer)
             .map_err(emit_exit)
@@ -761,6 +748,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
     pub fn get_steps_executed(&self) -> u64 {
         self.steps_executed
+    }
+
+    #[must_use]
+    pub fn gasometer(&self) -> &gasometer::Gasometer {
+        self.executor.state.gasometer()
     }
 
     #[must_use]
