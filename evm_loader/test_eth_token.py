@@ -112,7 +112,7 @@ class EthTokenTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -181,6 +181,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
     def test_transfer_and_call(self):
+        print("\ntest_transfer_and_call")
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
 
         contract_balance_before = int(self.token.balance(contract_token)) * 10**9
@@ -204,6 +205,13 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_after = int(self.token.balance(contract_token)) * 10**9
         caller_balance_after = int(self.token.balance(self.caller_token)) * 10**9
+
+        print("contract_balance_before", contract_balance_before)
+        print("caller_balance_before", caller_balance_before)
+        print("gas_fee", gas_fee)
+        print("contract_balance_after", contract_balance_after)
+        print("caller_balance_after", caller_balance_after)
+
         self.assertEqual(contract_balance_after, contract_balance_before + value)
         self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 

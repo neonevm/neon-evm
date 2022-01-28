@@ -340,7 +340,7 @@ class EventTest(unittest.TestCase):
             confirm_transaction(http_client, rcpt)
 
     def call_partial_signed(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9_999_999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999_999_999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -363,7 +363,7 @@ class EventTest(unittest.TestCase):
                     return result
 
     def call_with_holder_account(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -387,7 +387,7 @@ class EventTest(unittest.TestCase):
                     return result
 
     def call_with_holder_account_by_0x0e(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -476,7 +476,7 @@ class EventTest(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_02_ecrecover(self):
         print('\ntest_02_ecrecover')
-        tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())

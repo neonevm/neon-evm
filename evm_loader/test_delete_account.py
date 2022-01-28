@@ -60,7 +60,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         tx = {
             'to': contract_eth,
             'value': 0,
-            'gas': 9999999,
+            'gas': 999999999,
             'gasPrice': 1_000_000_000,
             'nonce': nonce,
             'data': abi.function_signature_to_4byte_selector('callSelfDestruct()'),
