@@ -1,10 +1,6 @@
 use std::convert::TryFrom;
 use log::{debug, info};
 
-use solana_sdk::{
-    pubkey::Pubkey,
-};
-
 use evm::{H160, U256, ExitReason,};
 
 use evm_loader::{
@@ -13,7 +9,6 @@ use evm_loader::{
         ExecutorSubstate,
     },
     executor::Machine,
-    solana_backend::AccountStorage,
 };
 
 use crate::{
@@ -28,8 +23,13 @@ use crate::{
 };
 
 #[allow(clippy::too_many_lines)]
-pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>,
-                   value: Option<U256>, token_mint: &Pubkey) -> NeonCliResult {
+pub fn execute(
+    config: &Config, 
+    contract_id: Option<H160>, 
+    caller_id: H160, 
+    data: Option<Vec<u8>>,
+    value: Option<U256>
+) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
         contract_id,
@@ -37,19 +37,18 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
         &hex::encode(data.clone().unwrap_or_default()),
         value);
 
-    let storage = match &contract_id {
-        Some(program_id) =>  {
-            debug!("program_id to call: {:?}", *program_id);
-            EmulatorAccountStorage::new(config, *program_id, caller_id, *token_mint)
-        },
-        None => {
-            let (solana_address, _nonce) = crate::make_solana_program_address(&caller_id, &config.evm_loader);
-            let trx_count = crate::get_ether_account_nonce(config, &solana_address, token_mint)?;
-            let trx_count= trx_count.0;
-            let program_id = crate::get_program_ether(&caller_id, trx_count);
-            debug!("program_id to deploy: {:?}", program_id);
-            EmulatorAccountStorage::new(config, program_id, caller_id, *token_mint)
-        }
+    let storage = EmulatorAccountStorage::new(config);
+    
+    let program_id = if let Some(program_id) = contract_id {
+        debug!("program_id to call: {}", program_id);
+        program_id
+    } else {
+        let (solana_address, _nonce) = crate::make_solana_program_address(&caller_id, &config.evm_loader);
+        let trx_count = crate::get_ether_account_nonce(config, &solana_address)?;
+        let trx_count= trx_count.0;
+        let program_id = crate::get_program_ether(&caller_id, trx_count);
+        debug!("program_id to deploy: {}", program_id);
+        program_id
     };
 
     let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
@@ -59,29 +58,29 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
         let gas_limit = 50_000_000;
         let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
         let executor_state = ExecutorState::new(executor_substate, &storage);
-        let mut executor = Machine::new(executor_state);
+        let mut executor = Machine::new(caller_id, executor_state);
         debug!("Executor initialized");
 
         let (result, exit_reason) = match &contract_id {
             Some(_) =>  {
-                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?}, value={:?})",
-                    storage.origin(),
-                    storage.contract(),
+                debug!("call_begin(caller_id={:?}, program_id={:?}, data={:?}, value={:?})",
+                    caller_id,
+                    program_id,
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.call_begin(storage.origin(),
-                                    storage.contract(),
+                executor.call_begin(caller_id,
+                                    program_id,
                                     data.unwrap_or_default(),
                                     value.unwrap_or_default(),
                                     gas_limit)?;
                 executor.execute()
             },
             None => {
-                debug!("create_begin(storage.origin()={:?}, data={:?}, value={:?})",
-                    storage.origin(),
+                debug!("create_begin(caller_id={:?}, data={:?}, value={:?})",
+                    caller_id,
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.create_begin(storage.origin(),
+                executor.create_begin(caller_id,
                                       data.unwrap_or_default(),
                                       value.unwrap_or_default(),
                                       gas_limit)?;
@@ -112,7 +111,7 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
             let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
 
             storage.apply(applies)?;
-            storage.apply_transfers(transfers, token_mint);
+            storage.apply_transfers(transfers);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
