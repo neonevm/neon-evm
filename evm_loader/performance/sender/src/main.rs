@@ -65,11 +65,6 @@ use solana_transaction_status::{
 };
 use std::borrow::{Borrow, BorrowMut};
 
-use evm_loader::{
-    instruction::EvmInstruction,
-    // solana_backend::SolanaBackend,
-    account_data::{AccountData, Account, Contract},
-};
 use evm::{H160, H256, U256};
 use solana_sdk::recent_blockhashes_account::update_account;
 
@@ -319,17 +314,14 @@ fn make_instruction_05(trx : &trx_t, evm_loader_key : &Pubkey, operator_sol : &P
         AccountMeta::new_readonly(sysinstruct, false),
         AccountMeta::new(*operator_sol, true),
         AccountMeta::new(collateral_pool_acc, false),
-        AccountMeta::new(operator_token, false),
-        AccountMeta::new(caller_token, false),
-        AccountMeta::new(system, false),
+        AccountMeta::new(caller, false), // pay gas to yourself
+        AccountMeta::new_readonly(system, false),
+        AccountMeta::new_readonly(*evm_loader_key, false),
 
         AccountMeta::new(contract, false),
-        AccountMeta::new(contract_token, false),
         // AccountMeta::new(contract_code, false),
         AccountMeta::new(caller, false),
-        AccountMeta::new(caller_token, false),
-
-        AccountMeta::new_readonly(*evm_loader_key, false),
+   
         AccountMeta::new_readonly(token_id, false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvarclock, false),
