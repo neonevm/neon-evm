@@ -427,7 +427,7 @@ class EventTest(unittest.TestCase):
             )
             res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_01_callFoo(self):
         print('\ntest_01_callFoo')
 
