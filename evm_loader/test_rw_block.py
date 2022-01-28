@@ -225,7 +225,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
-        evm_step_executed = 87
+        evm_step_executed = 99
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER

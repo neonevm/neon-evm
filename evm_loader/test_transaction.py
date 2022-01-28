@@ -90,7 +90,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': self.eth_contract,
             'value': 0,
             'gas': 999999999,
-            'gasPrice': 1_000_000_000,
+            'gasPrice': 1_000_000,
             'nonce': nonce,
             'data': '3917b3df',
             'chainId': 111
@@ -257,7 +257,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response_4:', response)
 
-        evm_step_executed = 87
+        evm_step_executed = 230
         begin_steps = 0
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -299,8 +299,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 raise
 
     # @unittest.skip("a.i.")
-    def test_04_success_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
-        step_count = 100
+    def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
+        step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
@@ -309,8 +309,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
+            # .add(neon_emv_instr_0d)  # transaction too large
 
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
@@ -329,7 +329,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
-        step_count = 150
+        step_count = 200
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
@@ -338,8 +338,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
+            # .add(neon_emv_instr_0d)
         try:
             send_transaction(client, trx, self.acc)
         except Exception as err:
