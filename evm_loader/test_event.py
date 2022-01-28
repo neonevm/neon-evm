@@ -227,7 +227,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
-        evm_step_executed = 109
+        evm_step_executed = 125
         gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
@@ -260,7 +260,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
-        evm_step_executed = 109
+        evm_step_executed = 156
         gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
@@ -320,7 +320,7 @@ class EventTest(unittest.TestCase):
         print("test_events_of_different_instructions(self): result:")
         print(result)
 
-        evm_step_executed = 109
+        evm_step_executed = 156
         gas_used = evm_step_executed * GAS_MULTIPLIER
 
         self.assertEqual(result['meta']['err'], None)
