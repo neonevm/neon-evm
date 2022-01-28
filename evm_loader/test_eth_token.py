@@ -147,13 +147,13 @@ class EthTokenTest(unittest.TestCase):
 
 
     def test_caller_balance(self):
-        expected_balance = self.token.balance(self.caller_token)
+        expected_balance = int(self.token.balance(self.caller_token) * 10**9)
         gas_price_wei = 10**9
-        wei_scale = 10**18
+        wei_scale = 10**9
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         holder_gas = 0  # don't used
         gas_used = begin_gas + holder_gas  # gas for begin iteration and holder account usage
-        expected_balance_WEI = int(expected_balance * wei_scale) - gas_used * gas_price_wei  # the "begin" iteration consumes gas
+        expected_balance_WEI = expected_balance * wei_scale - gas_used * gas_price_wei  # the "begin" iteration consumes gas
         print("expected_balance", expected_balance)
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
         input = func_name + bytes.fromhex("%064x" % expected_balance)
@@ -201,7 +201,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
+        gas_used = Decimal(GAS_MULTIPLIER * int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
 
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)

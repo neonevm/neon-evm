@@ -179,7 +179,7 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
 
         evm_step_executed = 87
-        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -203,7 +203,7 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -228,7 +228,7 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -261,7 +261,7 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_exected * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -321,7 +321,7 @@ class EventTest(unittest.TestCase):
         print(result)
 
         evm_step_executed = 109
-        gas_used = evm_step_exected * GAS_MULTIPLIER
+        gas_used = evm_step_executed * GAS_MULTIPLIER
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value

@@ -393,7 +393,7 @@ fn process_instruction<'a>(
 
             let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value)?;
 
-            let trx_gas = steps_executed * GAS_MULTIPLIER;
+            let unpaid_gas = steps_executed * GAS_MULTIPLIER;
 
             applies_and_invokes(
                 program_id,
@@ -401,7 +401,8 @@ fn process_instruction<'a>(
                 accounts,
                 operator_sol_info,
                 evm_results.unwrap(),
-                trx_gas,
+                unpaid_gas,
+                0,
                 trx_gas_price,
                 user_eth_info,
                 operator_eth_info,
@@ -1007,12 +1008,14 @@ fn do_continue_top_level<'a>(
     }
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
-    let trx_gas = steps_executed * GAS_MULTIPLIER;
+    let unpaid_gas = steps_executed * GAS_MULTIPLIER;
 
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info)?;
+
+        let paid_gas = storage.get_payments_info()?.0;
 
         applies_and_invokes(
             program_id,
@@ -1020,7 +1023,8 @@ fn do_continue_top_level<'a>(
             accounts,
             operator_sol_info,
             evm_results,
-            trx_gas,
+            unpaid_gas,
+            paid_gas,
             trx_gas_price,
             user_eth_info,
             operator_eth_info,
@@ -1031,13 +1035,13 @@ fn do_continue_top_level<'a>(
     else{
         token::user_pays_operator(
             trx_gas_price,
-            trx_gas,
+            unpaid_gas,
             user_eth_info,
             operator_eth_info,
             accounts,
             &account_storage
         )?;
-        storage.add_gas_has_been_paid(trx_gas)?;
+        storage.add_gas_has_been_paid(unpaid_gas)?;
     }
 
     Ok(())
@@ -1151,7 +1155,8 @@ fn applies_and_invokes<'a>(
     accounts: &'a [AccountInfo<'a>],
     operator: &AccountInfo<'a>,
     evm_results: EvmResults,
-    trx_gas: u64,
+    unpaid_gas: u64,
+    paid_gas: u64,
     gas_price: u64,
     user_eth_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
@@ -1183,10 +1188,10 @@ fn applies_and_invokes<'a>(
         }
     };
 
-    let used_gas = trx_gas + allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER;
+    let unpaid_gas = unpaid_gas + allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER;
     token::user_pays_operator(
         gas_price,
-        used_gas,
+        unpaid_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
@@ -1198,7 +1203,7 @@ fn applies_and_invokes<'a>(
             invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(program_id, accounts, exit_reason, used_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, unpaid_gas + paid_gas, &result)?;
 
     Ok(())
 }
