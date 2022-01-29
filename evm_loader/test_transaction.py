@@ -315,7 +315,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
 
-        evm_step_executed = 87
+        evm_step_executed = 230
         begin_steps = 0
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -419,7 +419,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_balance_on_response_3 = self.token.balance(self.caller_token_2)
         print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
 
-        evm_step_executed = 87
+
+        evm_step_executed = 59197
         begin_steps = 0
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue1_gas = (20) * GAS_MULTIPLIER
@@ -444,6 +445,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
         neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
+
+        print("neon_balance_on_response_1", neon_balance_on_response_1)
+        print("neon_balance_on_response_2", neon_balance_on_response_2)
+        print("neon_balance_on_response_3", neon_balance_on_response_3)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
         self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, begin_gas + continue1_gas)

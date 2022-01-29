@@ -195,14 +195,15 @@ class RW_Locking_Test(unittest.TestCase):
         return storage
 
     def check_continue_result(self, result):
-        if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-            data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-            self.assertEqual(data[0], 6)
+        self.assertEqual(result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions'], True)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+        self.assertEqual(data[0], 6)
 
     # the contract account is locked by the read-only lock
     # two transactions of the one contract are executed by two callers
     # @unittest.skip("a.i.")
     def test_01_caseReadOlnyBlocking(self):
+        print("\ntest_01_caseReadOlnyBlocking")
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
@@ -225,7 +226,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
-        evm_step_executed = 99
+        evm_step_executed = 59039
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
@@ -240,7 +241,9 @@ class RW_Locking_Test(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
+            actual_gas = int().from_bytes(data[2:10], 'little')
+            print("actual_gas", actual_gas)
+            self.assertEqual(actual_gas, gas) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
     # The first transaaction set lock on write to  contract account
@@ -248,6 +251,8 @@ class RW_Locking_Test(unittest.TestCase):
     # Then lock removed by Cancel operation
     # @unittest.skip("a.i.")
     def test_02_caseWriteBlocking(self):
+        print("\ntest_02_caseWriteBlocking")
+
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1))
 
@@ -287,6 +292,8 @@ class RW_Locking_Test(unittest.TestCase):
         raise("contract_eth not found in  the emulator output, ", self.reId_eth)
 
     def test_03_writable_flag_from_emulator(self):
+        print("\ntest_03_writable_flag_from_emulator")
+
         # 1. "writable" must be False. Storage is not changed
         print("reId_code", self.re_code)
 
@@ -351,6 +358,7 @@ class RW_Locking_Test(unittest.TestCase):
     #  the test must be run last, because it changes contract code account
     #  resizing is blocked  by locking of the account in other transaction.
     def test_04_resizing_with_account_lock(self):
+        print("\ntest_04_resizing_with_account_lock")
 
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint256)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1)) # update storage without account resizing

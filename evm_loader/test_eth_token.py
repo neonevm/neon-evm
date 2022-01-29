@@ -191,7 +191,7 @@ class EthTokenTest(unittest.TestCase):
 
         contract_balance_before = int(self.token.balance(contract_token)) * 10**9
         caller_balance_before = int(self.token.balance(self.caller_token)) * 10**9
-        before = get_associated_token_address(self.acc.public_key, ETH_TOKEN_MINT_ID)
+        before = get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID)
         value = 10**9
 
         func_name = abi.function_signature_to_4byte_selector('nop()')
