@@ -11,8 +11,8 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
 INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
 
-NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 0))
-NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 0))
+NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 5000))
+NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
 
 
 class Step(IntEnum):
@@ -373,7 +373,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
-        step_count = 100
+        step_count = EVM_STEPS
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
@@ -399,34 +399,40 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
         print("Caller_2:", self.caller_ether_2.hex(), self.caller_nonce_2, "->", self.caller_2,
               "({})".format(bytes(PublicKey(self.caller_2)).hex()))
-        neon_balance_on_start = self.token.balance(self.caller_token_2)
+        neon_balance_on_start = int(self.token.balance(self.caller_token_2)*10**9)
         print("Caller_2 NEON-token balance:", neon_balance_on_start)
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
+
         response_0 = send_transaction(client, trx, self.acc)
         print('response_0:', response_0)
         response_1 = send_transaction(client, trx, self.acc)
         print('response_1:', response_1)
-        neon_balance_on_response_1 = self.token.balance(self.caller_token_2)
+        neon_balance_on_response_1 = int(self.token.balance(self.caller_token_2)*10**9)
         print("Caller_2 NEON-token balance on response_1:", neon_balance_on_response_1)
+
         response_2 = send_transaction(client, trx, self.acc)
         print('response_2:', response_2)
-        neon_balance_on_response_2 = self.token.balance(self.caller_token_2)
+        neon_balance_on_response_2 = int(self.token.balance(self.caller_token_2)*10**9)
         print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
+
         response_3 = send_transaction(client, trx, self.acc)
         print('response_3:', response_3)
-        neon_balance_on_response_3 = self.token.balance(self.caller_token_2)
+        neon_balance_on_response_3 = int(self.token.balance(self.caller_token_2)*10**9)
         print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
 
 
-        evm_step_executed = 59197
-        begin_steps = 0
+        allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue1_gas = (20) * GAS_MULTIPLIER
-        continue2_gas = (20) * GAS_MULTIPLIER
-        continue3_gas = (20) * GAS_MULTIPLIER
+        continue1_gas = step_count * GAS_MULTIPLIER
+        continue2_gas = step_count * GAS_MULTIPLIER
+        continue3_gas = (30  + allocated_space_caller2 * EVM_BYTE_COST) * GAS_MULTIPLIER
         gas = begin_gas + continue1_gas + continue2_gas + continue3_gas
+        # gas_price == 10**6
+        fee1 = (begin_gas + continue1_gas) / 1000
+        fee2 = continue2_gas / 1000
+        fee3 = continue3_gas / 1000
 
         self.assertEqual(response_3['result']['meta']['err'], None)
         data = b58decode(response_3['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
@@ -444,16 +450,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 pass
             else:
                 raise
-        neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
+        neon_balance_on_5_th_transaction = int(self.token.balance(self.caller_token_2)*10**9)
 
         print("neon_balance_on_response_1", neon_balance_on_response_1)
         print("neon_balance_on_response_2", neon_balance_on_response_2)
         print("neon_balance_on_response_3", neon_balance_on_response_3)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, begin_gas + continue1_gas)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, begin_gas + continue1_gas + continue2_gas)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, begin_gas + continue1_gas + continue2_gas + continue3_gas)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_1 , fee1)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_2, fee1 + fee2)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_3, fee1 + fee2 + fee3)
         self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
 
         print('Check Transfer to treasures on each iteration #345.')

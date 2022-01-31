@@ -17,7 +17,8 @@ use evm_loader::{
         ACCOUNT_SEED_VERSION,
         AccountData,
         Account,
-        Contract
+        Contract,
+        AccountState
     },
     config::{  collateral_pool_base },
 };
@@ -1011,6 +1012,10 @@ fn command_get_ether_account_data (
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
 
+            let state = match &account_data.state{
+                AccountState::Uninitialized => "Uninitialized",
+                AccountState::Initialized => "Initialized"
+            };
             println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);
 
@@ -1029,6 +1034,7 @@ fn command_get_ether_account_data (
                      }
             );
             println!("    token_account: {}", &account_data.eth_token_account);
+            println!("    state: {}", state);
             println!("    token_amount: {}", &balance);
 
             if let Some(code_account) = code_account {
