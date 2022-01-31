@@ -189,15 +189,14 @@ class EthTokenTest(unittest.TestCase):
         print("\ntest_transfer_and_call")
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
 
-        contract_balance_before = int(self.token.balance(contract_token)) * 10**9
-        caller_balance_before = int(self.token.balance(self.caller_token)) * 10**9
-        before = get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID)
-        value = 10**9
+        contract_balance_before = int(self.token.balance(contract_token)* 10**9)
+        caller_balance_before = int(self.token.balance(self.caller_token)* 10**9)
 
+        value = 1
         func_name = abi.function_signature_to_4byte_selector('nop()')
-        wei_scale = 10**9
-        result = self.call_partial_signed(func_name, value * wei_scale)
+        result = self.call_partial_signed(func_name, value*(10**9))
         print("result: ", result)
+
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
@@ -205,22 +204,11 @@ class EthTokenTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
-
         gas_used = int().from_bytes(data[2:10],'little')
-        gas_fee = gas_used # * gas_price / 10**9
 
-        contract_balance_after = int(self.token.balance(contract_token)) * 10**9
-        caller_balance_after = int(self.token.balance(self.caller_token)) * 10**9
-
-        after = get_associated_token_address(self.acc.public_key, ETH_TOKEN_MINT_ID)
-        print ("self.acc.public_key before", before)
-        print ("self.acc.public_key after", after)
-        print("contract_balance_before", contract_balance_before)
-        print("caller_balance_before", caller_balance_before)
-        print("gas_fee", gas_fee)
-        print("contract_balance_after", contract_balance_after)
-        print("caller_balance_after", caller_balance_after)
-
+        contract_balance_after = int(self.token.balance(contract_token)* 10**9)
+        caller_balance_after = int(self.token.balance(self.caller_token)* 10**9)
+ 
         self.assertEqual(contract_balance_after, contract_balance_before + value)
         self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
