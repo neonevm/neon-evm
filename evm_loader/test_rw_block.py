@@ -83,9 +83,14 @@ class RW_Locking_Test(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        # other wallet
-        wallet2 = OperatorAccount(operator2_keypair_path())
+
+        wallet2 = RandomAccount()
         cls.acc2 = wallet2.get_acc()
+        print("wallet2: ", wallet2.path)
+
+        # other wallet
+        # wallet2 = OperatorAccount(operator2_keypair_path())
+        # cls.acc2 = wallet2.get_acc()
 
         if getBalance(wallet2.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet2.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
@@ -208,20 +213,20 @@ class RW_Locking_Test(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1, msg1, _) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2, msg2, _) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
+        (from_addr2, sign2, msg2, _) = self.get_call_parameters(input, self.acc1, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
-        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc2)
+        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc1)
 
         result = self.call_begin(storage1, 10, msg1, instruction1, False, self.acc1, self.caller1)
-        result = self.call_begin(storage2, 10, msg2, instruction2, False, self.acc2, self.caller2)
+        result = self.call_begin(storage2, 10, msg2, instruction2, False, self.acc1, self.caller2)
         result = self.call_continue(storage1, 10, False, self.acc1, self.caller1)
-        result = self.call_continue(storage2, 10, False, self.acc2, self.caller2)
+        result = self.call_continue(storage2, 10, False, self.acc1, self.caller2)
         result1 = self.call_continue(storage1, 1000, False, self.acc1, self.caller1)
-        result2 = self.call_continue(storage2, 1000, False, self.acc2, self.caller2)
+        result2 = self.call_continue(storage2, 1000, False, self.acc1, self.caller2)
 
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
@@ -260,18 +265,18 @@ class RW_Locking_Test(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1, msg1, nonce1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
+        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(input, self.acc1, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
-        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc2)
+        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc1)
 
         result = self.call_begin(storage1, 10, msg1, instruction1, True, self.acc1, self.caller1)
 
         try:
-            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.acc2, self.caller2)
+            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.acc1, self.caller2)
         except SendTransactionError as err:
             print("Ok")
 
@@ -388,17 +393,17 @@ class RW_Locking_Test(unittest.TestCase):
                 code_size = info["code_size"] + 2048
                 seed_bin = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
                 seed = seed_bin.decode('utf8')
-                code_account_new = accountWithSeed(self.acc2.public_key(), seed, PublicKey(evm_loader_id))
+                code_account_new = accountWithSeed(self.acc1.public_key(), seed, PublicKey(evm_loader_id))
 
                 print("creating new code_account with increased size %s", code_account_new)
-                create_account_with_seed(client, self.acc2, self.acc2, seed, code_size);
+                create_account_with_seed(client, self.acc1, self.acc1, seed, code_size);
 
                 resize_instr = TransactionInstruction(
                     keys=[
                         AccountMeta(pubkey=PublicKey(info["account"]), is_signer=False, is_writable=True),
                         AccountMeta(pubkey=info["contract"], is_signer=False, is_writable=True),
                         AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=self.acc2.public_key(), is_signer=True, is_writable=False)
+                        AccountMeta(pubkey=self.acc1.public_key(), is_signer=True, is_writable=False)
                     ],
                     program_id=evm_loader_id,
                     data=bytearray.fromhex("11") + bytes(seed_bin)  # 17- ResizeStorageAccount
@@ -408,7 +413,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertIsNotNone(resize_instr)
         # send resizing transaction
         with self.assertRaisesRegex(Exception, "invalid instruction data"):
-            send_transaction(client, Transaction().add(resize_instr), self.acc2)
+            send_transaction(client, Transaction().add(resize_instr), self.acc1)
 
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
@@ -424,7 +429,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertNotEqual(getBalance(self.re_code), 0)
 
         # try next attempt to resize storage account and check it
-        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        send_transaction(client, Transaction().add(resize_instr), self.acc1)
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 
