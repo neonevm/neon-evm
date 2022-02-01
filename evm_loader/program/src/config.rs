@@ -75,6 +75,14 @@ cfg_if! {
                 "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
                 "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
                 "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
+                "AqwN5pPsf9pnUZUSo7SmELRrBxxFnycEnTx5spVji4R6",
+                "FtFt7sMNfPUTWKx3otH4aor4KWoFdk9p5qSyxmSj4ZVH",
+                "FMMshJoSaNaNFdHseaWAgvHTypS4zggr3fpqEa1FPqYT",
+                "2S6YTfDmk3PMZUorMqkCRM8zJqTrMtzu8x5eo1YboMGg",
+                "72jAG5diJkivWJ2Var2SFuYK2P2vjxaZ2wEUSR23GX7a",
+                "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
+                "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
+                "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
             ]
         );
 
@@ -137,6 +145,14 @@ cfg_if! {
                 "CyepBgaNezMJgLjy6Zyz9ECUia33dwDi9aXtRsZEhWX1",
                 "HN4FeaSXB8t3FDW85hRw8mK1hYETJGeqhkkxJr6j2GiV",
                 "5kKd1iy6onhCkzDq6DBw6woHLas3fy6HX4Yz8t1VPc1r",
+                "AqwN5pPsf9pnUZUSo7SmELRrBxxFnycEnTx5spVji4R6",
+                "FtFt7sMNfPUTWKx3otH4aor4KWoFdk9p5qSyxmSj4ZVH",
+                "FMMshJoSaNaNFdHseaWAgvHTypS4zggr3fpqEa1FPqYT",
+                "2S6YTfDmk3PMZUorMqkCRM8zJqTrMtzu8x5eo1YboMGg",
+                "72jAG5diJkivWJ2Var2SFuYK2P2vjxaZ2wEUSR23GX7a",
+                "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
+                "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
+                "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
             ]
         );
 
