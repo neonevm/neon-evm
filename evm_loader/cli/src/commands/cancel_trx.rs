@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use log::{info};
 
 use solana_sdk::{
@@ -18,33 +17,38 @@ use crate::{
     account_storage::{
         make_solana_program_address,
     },
+    errors::NeonCliError,
     Config,
-    CommandResult,
+    NeonCliResult,
 };
 
 
-pub fn command_cancel_trx(
+pub fn execute(
     config: &Config,
     storage_account: &Pubkey,
     token_mint: &Pubkey
-) -> CommandResult {
+) -> NeonCliResult {
     let storage = config.rpc_client.get_account_with_commitment(storage_account, CommitmentConfig::processed()).unwrap().value;
 
     if let Some(acc) = storage {
         if acc.owner != config.evm_loader {
-            return Err(format!("Invalid owner {} for storage account", acc.owner).into());
+            return Err(NeonCliError::InvalidStorageAccountOwner(acc.owner));
         }
         let data = AccountData::unpack(&acc.data)?;
         let data_end = data.size();
-        let storage = if let AccountData::Storage(storage) = data {storage}
-                else {return Err("Not storage account".to_string().into());};
+        let storage =
+            if let AccountData::Storage(storage) = data {
+                storage
+            } else {
+                return Err(NeonCliError::StorageAccountRequired(data));
+            };
 
         let keys: Vec<Pubkey> = {
             info!("{:?}", storage);
             let accounts_begin = data_end;
             let accounts_end = accounts_begin + storage.accounts_len * 32;
             if acc.data.len() < accounts_end {
-                return Err(format!("Accounts data too small: account_data.len()={:?} < end={:?}", acc.data.len(), accounts_end).into());
+                return Err(NeonCliError::AccountDataTooSmall(acc.data.len(),accounts_end));
             };
 
             acc.data[accounts_begin..accounts_end].chunks_exact(32).map(Pubkey::new).collect()
@@ -102,7 +106,7 @@ pub fn command_cancel_trx(
         crate::send_transaction(config, &[instruction])?;
 
     } else {
-        return Err(format!("Account not found {}", &storage_account.to_string()).into());
+        return Err(NeonCliError::AccountNotFound(*storage_account));
     }
     Ok(())
 }
