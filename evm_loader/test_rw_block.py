@@ -213,7 +213,7 @@ class RW_Locking_Test(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1, msg1, _) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2, msg2, _) = self.get_call_parameters(input, self.acc1, self.caller2, self.caller2_ether)
+        (from_addr2, sign2, msg2, _) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
@@ -265,7 +265,7 @@ class RW_Locking_Test(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1))
 
         (from_addr1, sign1, msg1, nonce1) = self.get_call_parameters(input, self.acc1, self.caller1, self.caller1_ether)
-        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(input, self.acc1, self.caller2, self.caller2_ether)
+        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(input, self.acc2, self.caller2, self.caller2_ether)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
