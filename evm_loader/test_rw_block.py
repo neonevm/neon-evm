@@ -237,10 +237,10 @@ class RW_Locking_Test(unittest.TestCase):
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
         allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST * GAS_MULTIPLIER
-        gas = begin_gas + continue_gas + allocated_space_gas
+        # gas = begin_gas + continue_gas + allocated_space_gas
         # gas = begin_gas + continue_gas
 
-        for result in ([result1["result"], result2["result"]]):
+        for (result, gas) in [(result1["result"],   begin_gas + continue_gas), (result2["result"], begin_gas + continue_gas + allocated_space_gas)]:
             print('result:', result)
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
