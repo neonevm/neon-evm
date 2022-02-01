@@ -60,11 +60,11 @@ pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize
 
     let message_len = u16::try_from(message_len).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
     
-    let current_instruction = load_current_index_checked(&sysvar_info)?;
+    let current_instruction = load_current_index_checked(sysvar_info)?;
     let current_instruction = u8::try_from(current_instruction).map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
     let index = current_instruction - 1;
 
-    if let Ok(instr) = load_instruction_at_checked(index.into(), &sysvar_info) {
+    if let Ok(instr) = load_instruction_at_checked(index.into(), sysvar_info) {
         if secp256k1_program::check_id(&instr.program_id) {
             let reference_instruction = make_secp256k1_instruction(current_instruction, message_len, data_offset);
             if reference_instruction != instr.data {
