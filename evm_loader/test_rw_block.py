@@ -195,9 +195,9 @@ class RW_Locking_Test(unittest.TestCase):
         return storage
 
     def check_continue_result(self, result):
-        self.assertEqual(result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions'], True)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-        self.assertEqual(data[0], 6)
+        if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+            data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+            self.assertEqual(data[0], 6)
 
     # the contract account is locked by the read-only lock
     # two transactions of the one contract are executed by two callers
