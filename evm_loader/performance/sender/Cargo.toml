@@ -1,6 +1,6 @@
 [package]
 name = "sender"
-version = "0.5.3"
+version = "0.5.3.1"
 authors = ["Cyber-Core Maintainers <maintainers@cyber-core.dev>"]
 edition = "2018"
 
