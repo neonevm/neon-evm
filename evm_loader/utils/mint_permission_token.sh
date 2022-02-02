@@ -3,9 +3,11 @@
 SOLANA_URL=$1
 EVM_LOADER=$2
 MINT_AUTHORITY_FILE=$3
+OPERATION=$4
+NEON_ETH_ADDRESS=$5
 
 show_help_and_exit() {
-  echo "Usage: mint_allowance_to_contract.sh <solana_url> <evm_loader_id> <mint_authority_json_file>:"
+  echo "Usage: mint_permission_token.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <neon_eth_address>"
   exit 1
 }
 
@@ -21,8 +23,25 @@ if [ -z "$MINT_AUTHORITY_FILE" ]; then
   show_help_and_exit
 fi
 
-export $(neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader="$EVM_LOADER" neon-elf-params)
+if [ -z "$OPERATION" ]; then
+  show_help_and_exit
+fi
 
+if [[ "$OPERATION" != "allow" && "$OPERATION" != "deny" ]]; then
+  echo "specify either 'allow' or 'deny' operation as 4-th argument"
+  exit 1 
+fi
+
+if [ -z "$NEON_ETH_ADDRESS" ]; then
+  show_help_and_exit
+fi
+
+export $(neon-cli --commitment confirmed --url $SOLANA_URL --evm_loader="$EVM_LOADER" neon-elf-params)
+if [ "$?" -ne "0" ]; then
+  exit 1
+fi
+
+echo "" #Just to separate different accounts in script output
 echo "Neon permission allowance token address: $NEON_PERMISSION_ALLOWANCE_TOKEN"
 echo "Neon permission denial token address: $NEON_PERMISSION_DENIAL_TOKEN"
 echo "Minimal client allowance balance: $NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE"
@@ -53,9 +72,7 @@ get_token_balance() {
   return 0
 }
 
-calc_permission_tokens_diff() {
-  echo "" #Just to separate different accounts in script output 
-  
+calc_permission_tokens_diff() { 
   NEON_ADDRESS=$1  
   NEON_SOLANA_ADDRESS=$(neon-cli create-program-address --evm_loader "$EVM_LOADER" "$NEON_ADDRESS" | awk '{ print $1 }')
   echo "Processing NEON account $NEON_ADDRESS <--> $NEON_SOLANA_ADDRESS"  
@@ -111,6 +128,13 @@ mint_allowance_token() {
   fi
 }
 
-TEST_ADDRESS="0x6926a674a132747fb7F28F34Dab0B3861Ff503e6"
-mint_denial_token "$TEST_ADDRESS"
-mint_allowance_token "$TEST_ADDRESS"
+if [ "$OPERATION" == "allow" ]; then
+  mint_allowance_token "$NEON_ETH_ADDRESS"
+  exit "$?"
+fi
+
+if [ "$OPERATION" == "deny" ]; then
+  mint_denial_token "$NEON_ETH_ADDRESS"
+  exit "$?"
+fi
+
