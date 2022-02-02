@@ -52,24 +52,17 @@ get_or_create_token_account() {
    OWNER=$1
    TOKEN_MINT=$2
    TOKEN_ACCOUNT=$( (spl-token create-account --url "$SOLANA_URL" --owner "$OWNER" "$TOKEN_MINT" || true) | grep -Po 'Creating account \K[^\n]*')
-   if [ "$?" -ne "0" ]; then
-      return "$?"
-   fi
+   if [ "$?" -ne "0" ]; then exit "$?"; fi
    
    echo $TOKEN_ACCOUNT
-   return 0
 }
 
 get_token_balance() {
   TOKEN_ACCOUNT=$1
   TOKEN_BALANCE=$(spl-token balance --url "$SOLANA_URL" --address "$TOKEN_ACCOUNT")
-  if [ "$?" -ne "0" ]; then
-    echo "Failed to read token account balance: $TOKEN_ACCOUNT"
-    return 1
-  fi
+  if [ "$?" -ne "0" ]; then exit "$?"; fi
   
   echo "$TOKEN_BALANCE"
-  return 0
 }
 
 calc_permission_tokens_diff() { 
@@ -78,25 +71,10 @@ calc_permission_tokens_diff() {
   echo "Processing NEON account $NEON_ADDRESS <--> $NEON_SOLANA_ADDRESS"  
   
   ALLOWANCE_TOKEN_ACCOUNT=$(get_or_create_token_account $NEON_SOLANA_ADDRESS $NEON_PERMISSION_ALLOWANCE_TOKEN)
-  if [ "$?" -ne "0" ]; then
-    return 1
-  fi
-  
   DENIAL_TOKEN_ACCOUNT=$(get_or_create_token_account $NEON_SOLANA_ADDRESS $NEON_PERMISSION_DENIAL_TOKEN)
-  if [ "$?" -ne "0" ]; then
-    return 1
-  fi
-  
   ALLOWANCE_TOKEN_BALANCE=$(get_token_balance $ALLOWANCE_TOKEN_ACCOUNT)
-  if [ "$?" -ne "0" ]; then
-    return 1
-  fi
-  
   DENIAL_TOKEN_BALANCE=$(get_token_balance $DENIAL_TOKEN_ACCOUNT)
-  if [ "$?" -ne "0" ]; then
-    return 1
-  fi
-  
+
   echo "Allowance token account $ALLOWANCE_TOKEN_ACCOUNT balance: $ALLOWANCE_TOKEN_BALANCE"
   echo "Denial token account $DENIAL_TOKEN_ACCOUNT balance: $DENIAL_TOKEN_BALANCE"
   export DIFFERENCE=$(($ALLOWANCE_TOKEN_BALANCE - $DENIAL_TOKEN_BALANCE))
