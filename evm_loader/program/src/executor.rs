@@ -14,9 +14,15 @@ use solana_program::program_error::ProgramError;
 use crate::executor_state::ExecutorState;
 use crate::storage_account::StorageAccount;
 use crate::utils::{keccak256_h256, keccak256_h256_v};
-use crate::precompile_contracts::call_precompile;
+use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::solana_backend::AccountStorage;
 use crate::token;
+use crate::{event, emit_exit};
+
+
+fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
+    emit_exit!(error)
+}
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -48,6 +54,26 @@ enum RuntimeApply{
 
 struct Executor<'a, B: AccountStorage> {
     state: ExecutorState<'a, B>,
+}
+
+impl<'a, B: AccountStorage> Executor<'a, B> {
+    fn create_address(&self, scheme: evm::CreateScheme) -> H160 {
+        match scheme {
+            evm::CreateScheme::Create2 { caller, code_hash, salt } => {
+                keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
+            },
+            evm::CreateScheme::Legacy { caller } => {
+                let nonce = self.state.nonce(caller);
+                let mut stream = rlp::RlpStream::new_list(2);
+                stream.append(&caller);
+                stream.append(&nonce);
+                keccak256_h256(&stream.out()).into()
+            },
+            evm::CreateScheme::Fixed(naddress) => {
+                naddress
+            },
+        }
+    }
 }
 
 impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
@@ -133,6 +159,10 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn exists(&self, address: H160) -> bool {
+        if is_precompile_address(&address) {
+            return true;
+        }
+        
         if CONFIG.empty_considered_exists {
             self.state.exists(address)
         } else {
@@ -207,22 +237,38 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         }
 
         // Get the create address from given scheme.
-        let address =
-            match scheme {
-                evm::CreateScheme::Create2 { caller, code_hash, salt } => {
-                    keccak256_h256_v(&[&[0xff], &caller[..], &salt[..], &code_hash[..]]).into()
-                },
-                evm::CreateScheme::Legacy { caller } => {
-                    let nonce = self.state.nonce(caller);
-                    let mut stream = rlp::RlpStream::new_list(2);
-                    stream.append(&caller);
-                    stream.append(&nonce);
-                    keccak256_h256(&stream.out()).into()
-                },
-                evm::CreateScheme::Fixed(naddress) => {
-                    naddress
-                },
-            };
+        let address = self.create_address(scheme);
+
+        event!(Create {
+            caller,
+            address,
+            scheme,
+            value,
+            init_code: &init_code,
+            target_gas,
+        });
+
+        let after_gas = if CONFIG.call_l64_after_gas {
+            if CONFIG.estimate {
+                let initial_after_gas = self.state.metadata().gasometer().gas();
+                let diff = initial_after_gas - l64(initial_after_gas);
+                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
+                    return Capture::Exit((e.into(), None, Vec::new()));
+                }
+                self.state.metadata().gasometer().gas()
+            } else {
+                l64(self.state.metadata().gasometer().gas())
+            }
+        } else {
+            self.state.metadata().gasometer().gas()
+        };
+
+        let target_gas = target_gas.unwrap_or(after_gas);
+
+        let gas_limit = core::cmp::min(target_gas, after_gas);
+        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
+            return Capture::Exit((e.into(), None, Vec::new()));
+        }
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
@@ -257,6 +303,15 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
+        event!(Call {
+            code_address,
+            transfer: &transfer,
+            input: &input,
+            target_gas,
+            is_static,
+            context: &context,
+        });
+
         debug_print!("call");
 
         if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
@@ -337,6 +392,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         input: Vec<u8>,
         transfer_value: U256,
     ) -> ProgramResult {
+	event!(TransactCall {
+            caller,
+            address: code_address,
+            value: transfer_value,
+            data: &input,
+            gas_limit,
+        })
         debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
@@ -345,7 +407,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
         let transfer_value = token::eth::round(transfer_value);
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
-        self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
+        self.executor.state.transfer(&transfer)
+            .map_err(emit_exit)
+            .map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
         let valids = self.executor.valids(code_address);
@@ -363,13 +427,22 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         code: Vec<u8>,
                         transfer_value: U256,
     ) -> ProgramResult {
-        debug_print!("create_begin");
+        event!(TransactCreate {
+            caller,
+            value: transfer_value,
+            init_code: &code,
+            gas_limit,
+            address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
+        });
 
+        debug_print!("create_begin");
+  
         let scheme = evm::CreateScheme::Legacy { caller };
 
         match self.executor.create(caller, scheme, transfer_value, code, None) {
-            Capture::Exit(e) => {
-                return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", e);
+            Capture::Exit((reason, addr, value)) => {
+                let (value, reason) = emit_exit!(value, reason);
+                return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", (reason, addr, value));
             },
             Capture::Trap(info) => {
                 self.executor.state.enter(false);
@@ -381,7 +454,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 }
 
                 if let Some(transfer) = info.transfer {
-                    self.executor.state.transfer(&transfer).map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
+                    self.executor.state.transfer(&transfer)
+                        .map_err(emit_exit)
+                        .map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
                 }
 
                 let valids = Valids::compute(&info.init_code);
@@ -398,6 +473,41 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    #[cfg(feature = "tracing")]
+    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
+        let runtime = match self.runtime.last_mut() {
+            Some((runtime, _)) => runtime,
+            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
+        };
+
+        let mut steps_executed = 0;
+        loop {
+            if steps_executed >= max_steps {
+                    return (steps_executed, RuntimeApply::Continue);
+            }
+            if let Err(capture) = runtime.step(&mut self.executor) {
+                return match capture {
+                    Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
+                    Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
+                    Capture::Trap(interrupt) => {
+                        match interrupt {
+                            Resolve::Call(interrupt, resolve) => {
+                                mem::forget(resolve);
+                                (steps_executed, RuntimeApply::Call(interrupt))
+                            },
+                            Resolve::Create(interrupt, resolve) => {
+                                mem::forget(resolve);
+                                (steps_executed, RuntimeApply::Create(interrupt))
+                            },
+                        }
+                    }
+                };
+            }
+            steps_executed += 1;
+        }
+    }
+
+    #[cfg(not(feature = "tracing"))]
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
@@ -530,6 +640,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
         };
 
+        emit_exit!(exited_runtime.machine().return_value(), reason);
+
         match reason {
             ExitReason::Succeed(_) => Ok(()),
             ExitReason::Revert(_) => self.executor.state.exit_revert(),
@@ -560,7 +672,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             self.steps_executed += steps_executed;
 
             match apply {
-                RuntimeApply::Continue => {},
+                RuntimeApply::Continue => (),
                 RuntimeApply::Call(info) => self.apply_call(info)?,
                 RuntimeApply::Create(info) => self.apply_create(info)?,
                 RuntimeApply::Exit(reason) => self.apply_exit(reason)?,

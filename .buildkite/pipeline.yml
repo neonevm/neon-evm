@@ -19,7 +19,7 @@ steps:
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
-          SOLANA_REVISION: "v1.7.9-testnet"
+          SOLANA_REVISION: "v1.8.12-testnet"
 
   - wait
 

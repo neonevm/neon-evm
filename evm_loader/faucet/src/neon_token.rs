@@ -1,7 +1,6 @@
-//! Faucet ETH token module.
+//! Faucet NEON token module.
 
-use color_eyre::eyre::eyre;
-use color_eyre::Result;
+use eyre::{eyre, Result};
 use tracing::info;
 
 use crate::{config, ethereum, solana};
@@ -19,8 +18,8 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
-pub async fn airdrop(params: Airdrop) -> Result<()> {
-    info!("Processing ETH {:?}...", params);
+pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
+    info!("{} Processing NEON {:?}...", id, params);
 
     let limit = if !params.in_fractions {
         config::solana_max_amount()
@@ -40,14 +39,20 @@ pub async fn airdrop(params: Airdrop) -> Result<()> {
         .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
     let ether_address = ethereum::address_from_str(&params.wallet)
         .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
-    solana::transfer_token(operator, ether_address, params.amount, params.in_fractions)
-        .await
-        .map_err(|e| {
-            eyre!(
-                "solana::transfer_token(operator, {}): {:?}",
-                ether_address,
-                e
-            )
-        })?;
+    solana::transfer_token(
+        id,
+        operator,
+        ether_address,
+        params.amount,
+        params.in_fractions,
+    )
+    .await
+    .map_err(|e| {
+        eyre!(
+            "solana::transfer_token(operator, {}): {:?}",
+            ether_address,
+            e
+        )
+    })?;
     Ok(())
 }

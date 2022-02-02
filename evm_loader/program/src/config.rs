@@ -46,6 +46,16 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
         }
 
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "1");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "1");
+        }
+
     } else if #[cfg(feature = "testnet")] {
 
         const CHAIN_ID: u64 = 245022940;
@@ -66,6 +76,14 @@ cfg_if! {
                 "EMgay3kYFzHSh9PruAeRHxuGmNdsRQ6yPxzSAtU7PF7N",
                 "4s5hHKLrfF7mcjfgwsRKdkubnC2VtswGpR2XGTCJaz3M",
                 "F3V1pCfk1ZNk7Sdyh9N1H5eMtJq9XfhHR83fF8qa41Vt",
+                "AqwN5pPsf9pnUZUSo7SmELRrBxxFnycEnTx5spVji4R6",
+                "FtFt7sMNfPUTWKx3otH4aor4KWoFdk9p5qSyxmSj4ZVH",
+                "FMMshJoSaNaNFdHseaWAgvHTypS4zggr3fpqEa1FPqYT",
+                "2S6YTfDmk3PMZUorMqkCRM8zJqTrMtzu8x5eo1YboMGg",
+                "72jAG5diJkivWJ2Var2SFuYK2P2vjxaZ2wEUSR23GX7a",
+                "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
+                "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
+                "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
             ]
         );
 
@@ -90,6 +108,16 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+        }
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
         }
         
     } else if #[cfg(feature = "devnet")] {
@@ -118,6 +146,14 @@ cfg_if! {
                 "CyepBgaNezMJgLjy6Zyz9ECUia33dwDi9aXtRsZEhWX1",
                 "HN4FeaSXB8t3FDW85hRw8mK1hYETJGeqhkkxJr6j2GiV",
                 "5kKd1iy6onhCkzDq6DBw6woHLas3fy6HX4Yz8t1VPc1r",
+                "AqwN5pPsf9pnUZUSo7SmELRrBxxFnycEnTx5spVji4R6",
+                "FtFt7sMNfPUTWKx3otH4aor4KWoFdk9p5qSyxmSj4ZVH",
+                "FMMshJoSaNaNFdHseaWAgvHTypS4zggr3fpqEa1FPqYT",
+                "2S6YTfDmk3PMZUorMqkCRM8zJqTrMtzu8x5eo1YboMGg",
+                "72jAG5diJkivWJ2Var2SFuYK2P2vjxaZ2wEUSR23GX7a",
+                "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
+                "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
+                "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
             ]
         );
 
@@ -143,6 +179,16 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
         }
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
+        }
         
     } else {
 
@@ -154,6 +200,19 @@ cfg_if! {
                 "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
                 "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
                 "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "5mszzfV23zRfcAdn9d7kmW6Qn57SGkpGywyqyVCVc817",
+                "AdtXr9yGAsTokY75WernsmQdcBPu2LE2Bsh8Nx3ApbbR",
+                "2k8NURTZ8xd1qD2JhujP2MjxkLgLHUmwpXP8FNSP7ntd",
+                "EkEBZJmw4uKfvruf3c6EFJeWeAY3rev3hRsp2S4BDV3M",
+                "9LosHtRuxtFYtj2bJfvkcZpDywtdktpAabRQ7hCQasmt",
+                "FHYUtkDhNaMdaKzP2y7ZXmy6HtiKz7uahz19CPUkjeiD",
+                "3NqgsSRfjpmDfzRH4PLKrzBvMc8MgFXgU58Yy8n41KF5",
+                "8HStt6KLgRY8CBNmDjwMTZhCFrXeVrEgVp3jTS4gaRYR",
+                "V6fr3EgLUYFSGgzPBxTnhrieeAratBX46AGvAtmQ2Xe",
+                "7r5GAh4SDhBwxg98vT86Q8sA8c9zEgJduSWWCV1y48V",
+                "GwUnjJs6i7TKGjy71PvFpGN7yu9xqA8Cs1oyV4zSVPvq",
+                "EdSEh9UxXjbrrHLrH5manpxfXi7HxzkAMDAotPC5DggQ",
+                "9s7umnvnGqT1nvrCgzvBwWFyaaYABj64LxiBpjAayLiv",
             ]
         );
     
@@ -179,7 +238,16 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
         }
-        
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
+        }
     }
 }
 

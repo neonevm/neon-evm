@@ -55,7 +55,9 @@ class EthTokenTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction):
+        cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
+
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction, additional_accounts = []):
         neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
             self.loader.loader_id,
             self.caller,
@@ -70,12 +72,12 @@ class EthTokenTest(unittest.TestCase):
             add_meta=[
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            ]
+            ] + additional_accounts
         )
         print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
         return neon_evm_instr_19_partial_call
 
-    def sol_instr_20_continue(self, storage_account, step_count):
+    def sol_instr_20_continue(self, storage_account, step_count, additional_accounts = []):
         neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.loader.loader_id,
             self.caller,
@@ -89,7 +91,7 @@ class EthTokenTest(unittest.TestCase):
             add_meta=[
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            ]
+            ] + additional_accounts
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
@@ -98,17 +100,17 @@ class EthTokenTest(unittest.TestCase):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def call_begin(self, storage, steps, msg, instruction):
+    def call_begin(self, storage, steps, msg, instruction, additional_accounts = []):
         print("Begin")
         trx = Transaction()
         trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
-        trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
+        trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
-    def call_continue(self, storage, steps):
+    def call_continue(self, storage, steps, additional_accounts = []):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_20_continue(storage, steps))
+        trx.add(self.sol_instr_20_continue(storage, steps, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
@@ -130,15 +132,14 @@ class EthTokenTest(unittest.TestCase):
 
         return storage
 
-    def call_partial_signed(self, input, value):
+    def call_partial_signed(self, input, value, additional_accounts = []):
         (from_addr, sign,  msg) = self.get_call_parameters(input, value)
         instruction = from_addr + sign + msg
 
-        storage = self.create_storage_account(sign[:8].hex())
-        result = self.call_begin(storage, 0, msg, instruction)
+        result = self.call_begin(self.storage, 0, msg, instruction, additional_accounts)
 
         while (True):
-            result = self.call_continue(storage, 400)["result"]
+            result = self.call_continue(self.storage, 400, additional_accounts)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -238,6 +239,36 @@ class EthTokenTest(unittest.TestCase):
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
         self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
+
+    def test_empty_account_balance(self):
+        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        (empty_solana_address, _) = self.loader.ether2program(empty_account)
+        expected_balance: int = 0
+
+        func_name = abi.function_signature_to_4byte_selector('checkUserBalance(address,uint256)')
+        input = func_name + bytes(12) + empty_account + bytes.fromhex("%064x" % int(expected_balance * 10**18))
+        result = self.call_partial_signed(input, 0,
+            additional_accounts=[ AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False), ]
+        )
+
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+        self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+        self.assertEqual(data[1], 0x11)  #  0x11 - stoped
+
+    def test_transfer_to_empty(self):
+        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        (empty_solana_address, _) = self.loader.ether2program(empty_account)
+
+        func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
+        input = func_name + bytes(12) + empty_account
+
+        with self.assertRaisesRegex(Exception, 'instruction requires an initialized account'):
+            self.call_partial_signed(input, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
+
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
 if __name__ == '__main__':
     unittest.main()
