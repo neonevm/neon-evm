@@ -8,6 +8,7 @@ RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+
 # Build evm_loader
 # Note: create stub Cargo.toml to speedup build
 FROM builder AS evm-loader-builder
