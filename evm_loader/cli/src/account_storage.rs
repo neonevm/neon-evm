@@ -315,11 +315,11 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         let account_data = AccountData::unpack(&acc.account.data).unwrap();
                         if let AccountData::Account(acc_desc) = account_data {
-                                let trx_count: u64 =
-                                    match u64::try_from(nonce) {
-                                        Ok(u64_nonce)   => u64_nonce,
-                                        Err(_)          => return Err(NeonCliError::ConvertNonceError(nonce)),
-                                    };
+                            let trx_count: u64 =
+                                match u64::try_from(nonce) {
+                                    Ok(u64_nonce)   => u64_nonce,
+                                    Err(_)          => return Err(NeonCliError::ConvertNonceError(nonce)),
+                                };
                             if let Some(ref mut code_account) = acc.code_account{
 
                                 let account_data_contract = AccountData::unpack(&code_account.data).unwrap();

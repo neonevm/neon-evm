@@ -29,7 +29,7 @@ use evm_loader::{
     account_data::{
         ACCOUNT_SEED_VERSION,
         AccountData,
-        Contract
+        Contract,
         AccountState
     },
     config::{  collateral_pool_base },
@@ -108,12 +108,6 @@ impl Debug for Config {
 
 fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
     let mut file = File::open(program_location)?;
-    let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
-                                    value.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-            (exit_reason, result, Some(apply), needed_gas, steps_executed)
-            (exit_reason, result, None, needed_gas, steps_executed)
     // let mut file = File::open(program_location).map_err(|err| {
     //     format!("Unable to open program file '{}': {}", program_location, err)
     // })?;
@@ -170,7 +164,6 @@ impl rlp::Encodable for UnsignedTransaction {
     }
 }
 
-            gas_limit: 9_999_999.into(),
 // fn get_ethereum_caller_credentials(
 //     config: &Config,
 // ) -> (SecretKey, H160, Pubkey, u8, Pubkey, Pubkey) {
