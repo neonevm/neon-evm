@@ -4,10 +4,11 @@ SOLANA_URL=$1
 EVM_LOADER=$2
 MINT_AUTHORITY_FILE=$3
 OPERATION=$4
-NEON_ETH_ADDRESS=$5
+ACCOUNT_TYPE=$5
+NEON_ETH_ADDRESS=$6
 
 show_help_and_exit() {
-  echo "Usage: mint_permission_token.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <neon_eth_address>"
+  echo "Usage: mint_permission_token.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <neon_eth_address>"
   exit 1
 }
 
@@ -29,6 +30,15 @@ fi
 
 if [[ "$OPERATION" != "allow" && "$OPERATION" != "deny" ]]; then
   echo "specify either 'allow' or 'deny' operation as 4-th argument"
+  exit 1 
+fi
+
+if [ -z "$ACCOUNT_TYPE" ]; then
+  show_help_and_exit
+fi
+
+if [[ "$ACCOUNT_TYPE" != "client" && "$ACCOUNT_TYPE" != "contract" ]]; then
+  echo "specify either 'client' or 'contract' account type as 5-th argument"
   exit 1 
 fi
 
@@ -82,10 +92,11 @@ calc_permission_tokens_diff() {
 
 mint_denial_token() {
   NEON_ADDRESS=$1
+  MINMAL_BALANCE=$2
   calc_permission_tokens_diff $NEON_ADDRESS
   
-  if [ "$DIFFERENCE" -ge "$NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE" ]; then
-    MINT_AMOUNT=$(($DIFFERENCE - $NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE + 1))
+  if [ "$DIFFERENCE" -ge "$MINMAL_BALANCE" ]; then
+    MINT_AMOUNT=$(($DIFFERENCE - $MINMAL_BALANCE + 1))
     echo "Minting $MINT_AMOUNT denial tokens to $NEON_ADDRESS"
     spl-token mint --url http://localhost:8899 --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_DENIAL_TOKEN" "$MINT_AMOUNT" -- "$DENIAL_TOKEN_ACCOUNT"
   else
@@ -95,10 +106,11 @@ mint_denial_token() {
 
 mint_allowance_token() {
   NEON_ADDRESS=$1
+  MINMAL_BALANCE=$2
   calc_permission_tokens_diff $NEON_ADDRESS
 
-  if [ "$DIFFERENCE" -lt "$NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE" ]; then
-    MINT_AMOUNT=$(($NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE - $DIFFERENCE))
+  if [ "$DIFFERENCE" -lt "$MINMAL_BALANCE" ]; then
+    MINT_AMOUNT=$(($MINMAL_BALANCE - $DIFFERENCE))
     echo "Minting $MINT_AMOUNT allowance tokens to $NEON_ADDRESS"
     spl-token mint --url http://localhost:8899 --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_ALLOWANCE_TOKEN" "$MINT_AMOUNT" -- "$ALLOWANCE_TOKEN_ACCOUNT"
   else
@@ -107,12 +119,26 @@ mint_allowance_token() {
 }
 
 if [ "$OPERATION" == "allow" ]; then
-  mint_allowance_token "$NEON_ETH_ADDRESS"
-  exit "$?"
+  if [ "$ACCOUNT_TYPE" == "client" ]; then
+    mint_allowance_token "$NEON_ETH_ADDRESS" "$NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE"
+    exit "$?"
+  fi
+  
+  if [ "$ACCOUNT_TYPE" == "contract" ]; then
+    mint_allowance_token "$NEON_ETH_ADDRESS" "$NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE"
+    exit "$?"
+  fi
 fi
 
 if [ "$OPERATION" == "deny" ]; then
-  mint_denial_token "$NEON_ETH_ADDRESS"
-  exit "$?"
+  if [ "$ACCOUNT_TYPE" == "client" ]; then
+    mint_denial_token "$NEON_ETH_ADDRESS" "$NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE"
+    exit "$?"
+  fi
+  
+  if [ "$ACCOUNT_TYPE" == "contract" ]; then
+    mint_denial_token "$NEON_ETH_ADDRESS" "$NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE"
+    exit "$?"
+  fi
 fi
 
