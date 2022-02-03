@@ -247,7 +247,7 @@ pub fn user_pays_operator<'a>(
 ) -> Result<(), ProgramError> {
 
     if paid_gas + unpaid_gas > gas_limit {
-        E!(EvmLoaderError::OutOfGas.into());
+        return Err!(EvmLoaderError::OutOfGas.into());
     }
 
     let gas_price_wei = U256::from(gas_price);
