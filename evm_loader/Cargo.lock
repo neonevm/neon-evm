@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "evm-loader"
-version = "0.5.4-dev"
+version = "0.6.0-rc3"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1492,7 +1492,7 @@ checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
 name = "faucet"
-version = "0.5.4-dev"
+version = "0.6.0-rc3"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.5.4-dev"
+version = "0.6.0-rc3"
 dependencies = [
  "arrayref",
  "base64 0.13.0",
@@ -3554,7 +3554,7 @@ dependencies = [
 
 [[package]]
 name = "sender"
-version = "0.5.4-dev"
+version = "0.6.0-rc3"
 dependencies = [
  "bincode",
  "bs58 0.4.0",
