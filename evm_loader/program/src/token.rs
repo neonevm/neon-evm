@@ -234,6 +234,7 @@ pub fn transfer_neon_token(
 ///
 /// Could return:
 /// `ProgramError::InvalidArgument`
+#[allow(clippy::too_many_arguments)]
 pub fn user_pays_operator<'a>(
     user_token_account: &'a AccountInfo<'a>,
     operator_token_account: &'a AccountInfo<'a>,

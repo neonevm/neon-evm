@@ -1218,10 +1218,10 @@ fn applies_and_invokes<'a>(
         ){
         Err(err) => {
             if err == EvmLoaderError::OutOfGas.into() {
-                reason = ExitReason::Error(ExitError::OutOfGas)
+                reason = ExitReason::Error(ExitError::OutOfGas);
             }
             else{
-                return Err!(err)
+                return Err!(err);
             }
         },
         Ok(()) => {reason = exit_reason;}
