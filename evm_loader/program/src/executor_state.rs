@@ -17,8 +17,11 @@ use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_h256;
+use crate::{
+    query,
+    solana_backend::AccountStorage,
+    utils::keccak256_h256
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -103,7 +106,6 @@ impl ExecutorMetadata {
         &mut self.gasometer
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
@@ -170,6 +172,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
+    query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -193,6 +196,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         }
     }
 
@@ -289,6 +293,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -1058,70 +1063,31 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
-    #[must_use]
-    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        let (found, owner) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, Pubkey::default()),
-            |info| (true, *info.owner),
-        );
-        if found { Some(owner) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let (found, length) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, usize::default()),
-            |info| (true, info.data.borrow().len()),
-        );
-        if found { Some(length) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
-        let (found, lamports) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.lamports),
-        );
-        if found { Some(lamports) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
-        let (found, executable) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, bool::default()),
-            |info| (true, info.executable),
-        );
-        if found { Some(executable) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
-        let (found, rent_epoch) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.rent_epoch),
-        );
-        if found { Some(rent_epoch) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-            if offset >= data.len() || offset + length > data.len() {
-                None
-            } else {
-                Some(data[offset..offset + length].to_owned())
-            }
+    pub fn cache_solana_account(&mut self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
+        if length == 0 || length > query::MAX_CHUNK_LEN {
+            return Err(query::Error::InvalidArgument);
         }
-        self.backend.apply_to_solana_account(
+        let value = self.backend.apply_to_solana_account(
             &address,
             || None,
-            |info| clone_chunk(&info.data.borrow(), offset, length)
-        )
+            |info| Some(query::Value::from(info, offset, length)),
+        );
+        match value {
+            None => Err(query::Error::AccountNotFound),
+            Some(value) => {
+                if value.has_data() {
+                    self.substate.query_account_cache.put(address, value);
+                    Ok(())
+                } else {
+                    Err(query::Error::InvalidArgument)
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn query_solana_account(&self) -> &query::AccountCache {
+        &self.substate.query_account_cache
     }
 
     #[must_use]

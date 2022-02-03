@@ -1209,6 +1209,7 @@ fn invoke_on_return<'a>(
                 ExitError::OutOfFund => {("ExitError: Not enough fund to start the execution (runtime).", 0xeb)},
                 ExitError::PCUnderflow => {("ExitError: PC underflowed (unused).", 0xec)},
                 ExitError::CreateEmpty => {("ExitError: Attempt to create an empty account (runtime, unused).", 0xed)},
+                ExitError::StaticModeViolation => {("ExitError: STATICCALL tried to change state", 0xee)}
             }
         },
         ExitReason::Revert(_) => {("Revert", 0xd0)},

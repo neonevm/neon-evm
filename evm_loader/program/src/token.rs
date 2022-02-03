@@ -72,7 +72,7 @@ pub fn create_associated_token_account(
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
-    if account.data_len() == 0 {
+    if account.data_is_empty() {
         return Ok(0_u64);
     }
 
