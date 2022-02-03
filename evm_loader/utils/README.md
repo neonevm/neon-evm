@@ -36,3 +36,4 @@ This script accepts almost the same set of argument except the last one:
     - address_list_file - path to file on a local filesystem containing list of NEON account addresses written one in a row (without any punktuation marks)
 
 This script will call mint_permission_token.sh for every account from <address_list_file>
+Failed account ids will be collected in output file with name <address_list_file>.err this file will have the same format as input file.
