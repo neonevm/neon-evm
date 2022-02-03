@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use log::{debug, info};
 
 use solana_sdk::{
@@ -53,7 +52,8 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
     };
 
     let (exit_reason, result, applies_logs,  steps_executed) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
+        let gas_limit = 999_999_999_999_u64;
+        let executor_substate = Box::new(ExecutorSubstate::new(&storage));
         let executor_state = ExecutorState::new(executor_substate, &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
@@ -65,10 +65,13 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     storage.contract(),
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.call_begin(storage.origin(),
-                                    storage.contract(),
-                                    data.unwrap_or_default(),
-                                    value.unwrap_or_default())?;
+                executor.call_begin(
+                    storage.origin(),
+                    storage.contract(),
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit,
+                    )?;
                 executor.execute()
             },
             None => {
@@ -76,9 +79,12 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     storage.origin(),
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.create_begin(storage.origin(),
-                                      data.unwrap_or_default(),
-                                      value.unwrap_or_default())?;
+                executor.create_begin(
+                    storage.origin(),
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit
+                    )?;
                 executor.execute()
             }
         };

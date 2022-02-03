@@ -245,30 +245,9 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             scheme,
             value,
             init_code: &init_code,
-            target_gas,
+            _target_gas,
         });
 
-        let after_gas = if CONFIG.call_l64_after_gas {
-            if CONFIG.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), None, Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-
-        let gas_limit = core::cmp::min(target_gas, after_gas);
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), None, Vec::new()));
-        }
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
@@ -307,7 +286,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             code_address,
             transfer: &transfer,
             input: &input,
-            target_gas,
+            _target_gas,
             is_static,
             context: &context,
         });
@@ -391,14 +370,15 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
+        _gas_limit: u64
     ) -> ProgramResult {
-	event!(TransactCall {
+	    event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
             data: &input,
-            gas_limit,
-        })
+            gas_limit
+        });
         debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
@@ -426,12 +406,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
+                        _gas_limit: u64,
     ) -> ProgramResult {
         event!(TransactCreate {
             caller,
             value: transfer_value,
             init_code: &code,
-            gas_limit,
+            _gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 

@@ -29,8 +29,6 @@ use evm_loader::{
     account_data::{
         ACCOUNT_SEED_VERSION,
         AccountData,
-        Contract,
-        AccountState
     },
     config::{  collateral_pool_base },
 };

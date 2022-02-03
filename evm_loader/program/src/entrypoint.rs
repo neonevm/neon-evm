@@ -373,6 +373,7 @@ fn process_instruction<'a>(
             }
 
             let trx: UnsignedTransaction = rlp::decode(unsigned_msg).map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
+            let trx_gas_limit = u64::try_from(trx.gas_limit).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             let trx_gas_price = u64::try_from(trx.gas_price).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
             // if trx_gas_price < 1_000_000_000_u64 {
             //     return Err!(ProgramError::InvalidArgument; "trx_gas_price < 1_000_000_000_u64: {} ", trx_gas_price);
@@ -391,7 +392,7 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value)?;
+            let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
 
             let unpaid_gas = steps_executed * GAS_MULTIPLIER;
 
@@ -401,11 +402,12 @@ fn process_instruction<'a>(
                 accounts,
                 operator_sol_info,
                 evm_results.unwrap(),
-                unpaid_gas,
-                0,
-                trx_gas_price,
                 user_eth_info,
                 operator_eth_info,
+                trx_gas_limit,
+                trx_gas_price,
+                0,
+                unpaid_gas,
             )?;
             Ok(())
         },
@@ -846,6 +848,7 @@ fn do_call(
     account_storage: &mut ProgramAccountStorage<'_>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
+    gas_limit: u64,
 ) -> CallResult
 {
     debug_print!("do_call");
@@ -864,7 +867,8 @@ fn do_call(
             account_storage.origin(),
             account_storage.contract(),
             instruction_data,
-            transfer_value
+            transfer_value,
+            gas_limit,
         )?;
 
         let (result, exit_reason) = executor.execute();
@@ -935,27 +939,29 @@ fn do_begin<'a>(
         system_info)?;
 
     let mut steps_executed = if trx.to.is_some() {
-        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?
+        do_partial_call(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     }
     else {
-        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value)?
+        do_partial_create(&mut storage, step_count, &account_storage, trx.call_data, trx.value, trx_gas_limit)?
     };
 
     if steps_executed < EVM_STEPS {
         steps_executed = EVM_STEPS;
     }
     let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
-    let used_gas = (steps_executed + holder_trx_count * EVM_STEPS) * GAS_MULTIPLIER;
+    let unpaid_gas = (steps_executed + holder_trx_count * EVM_STEPS) * GAS_MULTIPLIER;
 
     token::user_pays_operator(
-        trx_gas_price,
-        used_gas,
         user_eth_info,
         operator_eth_info,
         accounts,
-        &account_storage
+        &account_storage,
+        trx_gas_limit,
+        trx_gas_price,
+        0,
+        unpaid_gas,
     )?;
-    storage.add_gas_has_been_paid(used_gas)?;
+    storage.add_gas_has_been_paid(unpaid_gas)?;
 
     storage.block_accounts(program_id, trx_accounts)?;
 
@@ -1009,13 +1015,13 @@ fn do_continue_top_level<'a>(
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
     let unpaid_gas = steps_executed * GAS_MULTIPLIER;
+    let paid_gas = storage.get_payments_info()?.0;
 
     if let Some(evm_results) = results {
         payment::transfer_from_deposit_to_operator(
             storage_info,
             operator_sol_info)?;
 
-        let paid_gas = storage.get_payments_info()?.0;
 
         applies_and_invokes(
             program_id,
@@ -1023,23 +1029,28 @@ fn do_continue_top_level<'a>(
             accounts,
             operator_sol_info,
             evm_results,
-            unpaid_gas,
-            paid_gas,
-            trx_gas_price,
             user_eth_info,
             operator_eth_info,
+            trx_gas_limit,
+            trx_gas_price,
+            paid_gas,
+            unpaid_gas,
         )?;
 
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
     else{
+        // TODO: there are two different behaviour: OutOfGas in the not-finalized transaction and OutOfGasin the finalized transaction
+        // It is requires only one behaviour
         token::user_pays_operator(
-            trx_gas_price,
-            unpaid_gas,
             user_eth_info,
             operator_eth_info,
             accounts,
-            &account_storage
+            &account_storage,
+            trx_gas_limit,
+            trx_gas_price,
+            paid_gas,
+            unpaid_gas,
         )?;
         storage.add_gas_has_been_paid(unpaid_gas)?;
     }
@@ -1052,7 +1063,8 @@ fn do_partial_call(
     step_count: u64,
     account_storage: &ProgramAccountStorage,
     instruction_data: Vec<u8>,
-    transfer_value: U256
+    transfer_value: U256,
+    gas_limit: u64
 ) -> Result<u64, ProgramError>
 {
     debug_print!("do_partial_call");
@@ -1071,6 +1083,7 @@ fn do_partial_call(
         account_storage.contract(),
         instruction_data,
         transfer_value,
+        gas_limit,
     )?;
 
     executor.execute_n_steps(step_count).map_err(|e| E!(ProgramError::InvalidInstructionData; "e={:?}", e))?;
@@ -1089,6 +1102,7 @@ fn do_partial_create<'a>(
     account_storage: &ProgramAccountStorage<'a>,
     instruction_data: Vec<u8>,
     transfer_value: U256,
+    gas_limit: u64,
 ) -> Result<u64, ProgramError>
 {
     debug_print!("do_partial_create");
@@ -1099,7 +1113,7 @@ fn do_partial_create<'a>(
 
     debug_print!("Executor initialized");
 
-    executor.create_begin(account_storage.origin(), instruction_data, transfer_value)?;
+    executor.create_begin(account_storage.origin(), instruction_data, transfer_value, gas_limit)?;
     executor.execute_n_steps(step_count).unwrap();
 
     debug_print!("save");
@@ -1155,11 +1169,12 @@ fn applies_and_invokes<'a>(
     accounts: &'a [AccountInfo<'a>],
     operator: &AccountInfo<'a>,
     evm_results: EvmResults,
-    unpaid_gas: u64,
-    paid_gas: u64,
-    gas_price: u64,
     user_eth_info: &'a AccountInfo<'a>,
     operator_eth_info: &'a AccountInfo<'a>,
+    gas_limit: u64,
+    gas_price: u64,
+    paid_gas: u64,
+    unpaid_gas: u64,
 ) -> ProgramResult {
 
     let (exit_reason, result, applies_logs_transfers) = evm_results;
@@ -1189,21 +1204,35 @@ fn applies_and_invokes<'a>(
     };
 
     let unpaid_gas = unpaid_gas + allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER;
-    token::user_pays_operator(
-        gas_price,
-        unpaid_gas,
-        user_eth_info,
-        operator_eth_info,
-        accounts,
-        account_storage
-    )?;
+    let reason : ExitReason;
+    match
+        token::user_pays_operator(
+            user_eth_info,
+            operator_eth_info,
+            accounts,
+            account_storage,
+            gas_limit,
+            gas_price,
+            paid_gas,
+            unpaid_gas,
+        ){
+        Err(err) => {
+            if err == EvmLoaderError::OutOfGas.into() {
+                reason = ExitReason::Error(ExitError::OutOfGas)
+            }
+            else{
+                return Err!(err)
+            }
+        },
+        Ok(()) => {reason = exit_reason;}
+    }
 
     if let Some(logs) = logs {
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(program_id, accounts, exit_reason, unpaid_gas + paid_gas, &result)?;
+    invoke_on_return(program_id, accounts, reason, unpaid_gas + paid_gas, &result)?;
 
     Ok(())
 }
