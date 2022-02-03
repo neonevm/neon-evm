@@ -27,7 +27,7 @@ Arguments:
 
 mint_permission_token.sh script will estimate current state of client's/contract's permission tokens balances and mint selected tokens if needed
 
-## Permission management for several clients
+## Permission management for several clients/contracts
 
 mint_many.sh operates with permission tokens balances of several clients/contracts. Here is common form of calling this script:
     >Usage: mint_many.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <address_list_file>
