@@ -19,7 +19,7 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
-
+@unittest.skip("AccountV2 balance repair")
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -38,7 +38,7 @@ class EthTokenTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -69,10 +69,7 @@ class EthTokenTest(unittest.TestCase):
             self.collateral_pool_address,
             step_count,
             evm_instruction,
-            add_meta=[
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            ] + additional_accounts
+            add_meta=additional_accounts
         )
         print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
         return neon_evm_instr_19_partial_call
@@ -88,10 +85,7 @@ class EthTokenTest(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            add_meta=[
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            ] + additional_accounts
+            add_meta=additional_accounts
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
@@ -114,7 +108,7 @@ class EthTokenTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)

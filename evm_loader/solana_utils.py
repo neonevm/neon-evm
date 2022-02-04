@@ -5,7 +5,7 @@ import subprocess
 import time
 from enum import Enum
 from hashlib import sha256
-from typing import NamedTuple
+from typing import NamedTuple, Tuple, Union
 
 import base58
 import rlp
@@ -28,8 +28,6 @@ from spl.token.instructions import get_associated_token_address
 import base58
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
-    "lamports" / Int64ul,
-    "space" / Int64ul,
     "ether" / Bytes(20),
     "nonce" / Int8ul
 )
@@ -187,7 +185,7 @@ class neon_cli:
         self.verbose_flags = verbose_flags
 
     def call(self, arguments):
-        cmd = 'neon-cli {} --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
+        cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -196,7 +194,7 @@ class neon_cli:
             raise
 
     def emulate(self, loader_id, arguments):
-        cmd = 'neon-cli {} --commitment=recent --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
+        cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
                                                                                            loader_id,
                                                                                            solana_url,
                                                                                            arguments)
@@ -300,32 +298,7 @@ class EvmLoader:
         return result
 
     def createEtherAccount(self, ether):
-        if isinstance(ether, str):
-            if ether.startswith('0x'): ether = ether[2:]
-        else:
-            ether = ether.hex()
-        (sol, nonce) = self.ether2program(ether)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-        associated_token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
-        trx = Transaction()
-        base = self.acc.get_acc().public_key()
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10 ** 9,
-                space=0,
-                ether=bytes.fromhex(ether),
-                nonce=nonce)),
-            keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=associated_token, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
-            ]))
+        (trx, sol) = self.createEtherAccountTrx(ether)
         result = send_transaction(client, trx, self.acc.get_acc())
         print('result:', result)
         return sol
@@ -368,21 +341,17 @@ class EvmLoader:
         else:
             return program[0], ether, code[0]
 
-    def createEtherAccountTrx(self, ether, code_acc=None):
+    def createEtherAccountTrx(self, ether: Union[str, bytes], code_acc=None) -> Tuple[Transaction, str]:
         if isinstance(ether, str):
             if ether.startswith('0x'): ether = ether[2:]
         else:
             ether = ether.hex()
+
         (sol, nonce) = self.ether2program(ether)
-        token = get_associated_token_address(PublicKey(sol), ETH_TOKEN_MINT_ID)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-        seed = b58encode(bytes.fromhex(ether))
+
         base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('02000000') + CREATE_ACCOUNT_LAYOUT.build(dict(
-            lamports=10 ** 9,
-            space=0,
-            ether=bytes.fromhex(ether),
-            nonce=nonce))
+        data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
         trx = Transaction()
         if code_acc is None:
             trx.add(TransactionInstruction(
@@ -390,13 +359,8 @@ class EvmLoader:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
                 ]))
         else:
             trx.add(TransactionInstruction(
@@ -404,40 +368,11 @@ class EvmLoader:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=token, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
                 ]))
         return (trx, sol)
-
-
-def create_with_seed_loader_instruction(evm_loader_id, funding, created, base, seed, lamports, space, owner):
-    return TransactionInstruction(
-        program_id=evm_loader_id,
-        data=bytes.fromhex("04000000") + \
-            bytes(base) + \
-            len(seed).to_bytes(8, byteorder='little') + \
-            bytes(seed, 'utf8') + \
-            lamports.to_bytes(8, byteorder='little') + \
-            space.to_bytes(8, byteorder='little') + \
-            bytes(owner) + \
-            bytes(created),
-        keys=[
-            AccountMeta(pubkey=funding, is_signer=True, is_writable=False),
-            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=base, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=created, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(evm_loader_id), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(tokenkeg), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(rentid), is_signer=False, is_writable=True),
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=True),
-        ])
 
 
 def getBalance(account):
@@ -449,10 +384,9 @@ ACCOUNT_INFO_LAYOUT = cStruct(
     "ether" / Bytes(20),
     "nonce" / Int8ul,
     "trx_count" / Bytes(8),
+    "balance" / Bytes(32),
     "code_account" / Bytes(32),
     "is_rw_blocked" / Int8ul,
-    "rw_blocked_acc" / Bytes(32),
-    "eth_token_account" / Bytes(32),
     "ro_blocked_cnt" / Int8ul,
 )
 
@@ -534,19 +468,17 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator's NEON account:
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+            
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -574,22 +506,19 @@ def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator's NEON account:
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-             ]
-             + add_meta +
-             [
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+        ] + add_meta + [
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -618,22 +547,17 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator's NEON account:
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-             ]
-             + add_meta +
-             [
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+        ] + add_meta + [
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -659,22 +583,17 @@ def create_neon_evm_instr_20_continue(evm_loader_program_id,
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator's NEON account:
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
-
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-             ]
-             + add_meta +
-             [
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
+        ] + add_meta + [
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -701,18 +620,16 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
             # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -732,21 +649,13 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
 
             # Operator's SOL account:
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # Incenirator
+            # Incinerator
             AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
-            # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -772,19 +681,17 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(operator_sol_acc, ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User's NEON token account:
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller_sol_acc), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator's NEON account:
+            AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-            AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 #

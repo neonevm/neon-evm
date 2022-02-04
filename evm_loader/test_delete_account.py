@@ -29,7 +29,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -61,7 +61,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': contract_eth,
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1_000_000_000,
+            'gasPrice': 0,
             'nonce': nonce,
             'data': abi.function_signature_to_4byte_selector('callSelfDestruct()'),
             'chainId': 111
@@ -91,21 +91,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator ETH address (stub for now):
-            AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-            # User ETH address (stub for now):
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            # Operator ETH address:
+            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=owner_contract, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
             AccountMeta(pubkey=contract_code, is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
 
@@ -127,6 +123,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print(result)
 
 
+    @unittest.skip("AccountV2 balance repair")
     def test_success_deletion(self):
         (owner_contract, eth_contract, contract_code) = self.deploy_contract()
         self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))

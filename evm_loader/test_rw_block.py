@@ -66,7 +66,7 @@ class RW_Locking_Test(unittest.TestCase):
             print("Create.caller1 account...")
             _ = cls.loader.createEtherAccount(cls.caller1_ether)
             print("Done\n")
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller1), ETH_TOKEN_MINT_ID))
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller1), ETH_TOKEN_MINT_ID))
 
         print('Account1:', cls.acc1.public_key(), bytes(cls.acc1.public_key()).hex())
         print("Caller1:", cls.caller1_ether.hex(), cls.caller1_nonce, "->", cls.caller1,
@@ -103,7 +103,7 @@ class RW_Locking_Test(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller2_ether)
             print("Done\n")
 
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller2), ETH_TOKEN_MINT_ID))
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller2), ETH_TOKEN_MINT_ID))
 
         print('Account2:', cls.acc2.public_key(), bytes(cls.acc2.public_key()).hex())
         print("Caller2:", cls.caller2_ether.hex(), cls.caller2_nonce, "->", cls.caller2,
@@ -173,7 +173,7 @@ class RW_Locking_Test(unittest.TestCase):
 
     def get_call_parameters(self, input, acc, caller, caller_ether):
         nonce = getTransactionCount(client, caller)
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 0,
             'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)
@@ -318,7 +318,6 @@ class RW_Locking_Test(unittest.TestCase):
 
                 meta = [
                     AccountMeta(pubkey=PublicKey(info["account"]), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=get_associated_token_address(PublicKey(info["account"]), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=PublicKey(new_contract_code), is_signer=False, is_writable=True),
                        ]
                 print("new_contract_code", new_contract_code)
@@ -329,7 +328,7 @@ class RW_Locking_Test(unittest.TestCase):
         instruction = from_addr + sign + msg
         storage = self.create_storage_account(sign[:8].hex(), self.acc1)
 
-        result = self.call_begin(storage, 10, msg, instruction, False, self.acc1, self.caller1, meta)
+        result = self.call_begin(storage, 10, msg, instruction, True, self.acc1, self.caller1, meta)
         result = self.call_continue(storage, 450, True, self.acc1, self.caller1, meta)
         result = self.call_continue(storage, 550, True, self.acc1, self.caller1, meta)
         self.check_continue_result(result["result"])

@@ -105,7 +105,8 @@ class Test_Write(unittest.TestCase):
             self.write_to_account(self.signer, self.signer, wrong_holder_id, test_data)
             self.assertTrue(False)
         except SendTransactionError as err:
-            self.check_err_is_invalid_program_argument(str(err))
+            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
+            print('!!!! This error is expected')
         except Exception as err:
             print('type(err):', type(err))
             print('err:', str(err))
@@ -115,19 +116,16 @@ class Test_Write(unittest.TestCase):
     def test_instruction_write_fails_wrong_operator(self):
         print()
         try:
-            print('!!!! Expecting error "invalid program argument"')
+            print('!!!! Expecting error "expected authorized operator"')
             self.write_to_account(self.attacker, self.attacker, holder_id, test_data)
             self.assertTrue(False)
         except SendTransactionError as err:
-            self.check_err_is_invalid_program_argument(str(err))
+            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 0: custom program error: 0x3')
+            print('!!!! This error is expected')
         except Exception as err:
             print('type(err):', type(err))
             print('err:', str(err))
             raise
-
-    def check_err_is_invalid_program_argument(self, message):
-        self.assertEqual(message, 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
-        print('!!!! This error is expected')
 
     @classmethod
     def tearDownClass(cls):

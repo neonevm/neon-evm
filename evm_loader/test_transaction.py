@@ -39,7 +39,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
+            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -90,7 +90,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': self.eth_contract,
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 1_000_000_000,
+            'gasPrice': 0,
             'nonce': nonce,
             'data': '3917b3df',
             'chainId': 111
@@ -118,24 +118,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
             # Collateral pool address:
             AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
-            # Operator ETH address (stub for now):
-            AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
-            # User ETH address (stub for now):
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
+            # Operator ETH address:
+            AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            # NeonEVM program account
+            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
 
             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
             AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID),
-                        is_signer=False, is_writable=True),
 
-            AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ]
@@ -238,7 +231,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response:', response)
 
     # @unittest.skip("a.i.")
-    def test_02_success_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
+    def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -254,8 +247,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_2:', response)
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
-        response = send_transaction(client, trx, self.acc)
-        print('response_4:', response)
+
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
@@ -263,7 +255,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
 
     # @unittest.skip("a.i.")
-    def test_03_failure_tx_send_iteratively_in_5_solana_transactions_sequentially(self):
+    def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -279,8 +271,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_2:', response)
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
-        response = send_transaction(client, trx, self.acc)
-        print('response_4:', response)
+
         try:
             send_transaction(client, trx, self.acc)
         except Exception as err:
@@ -292,7 +283,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 raise
 
     # @unittest.skip("a.i.")
-    def test_04_success_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
+    def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -300,7 +291,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         trx = Transaction() \
             .add(keccak_instruction) \
-            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
@@ -330,7 +320,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 4: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 3: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -357,7 +347,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('the solana transaction is too large')
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("AccountV2 balance repair")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)

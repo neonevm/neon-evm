@@ -34,7 +34,7 @@ class EventTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -129,7 +129,7 @@ class EventTest(unittest.TestCase):
 
     def get_call_parameters(self, input):
         nonce = getTransactionCount(client, self.caller)
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 0,
             'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -267,9 +267,9 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
-        tx1 =  {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx1 =  {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 111}
-        tx2 =  {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx2 =  {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 111}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())
@@ -350,7 +350,7 @@ class EventTest(unittest.TestCase):
             result = self.call_continue(storage, 10)
             print(result)
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("AccountV2 balance repair")
     def test_caseSuccessRunOtherTransactionAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))

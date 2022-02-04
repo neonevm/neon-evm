@@ -51,7 +51,7 @@ class FundReturnTest(unittest.TestCase):
 
 
     def test_creator_not_signer(self):
-        err_msg = "Creator acc must be signer."
+        err_msg = "expected signer"
 
         try:
             self.call_refund_tx(self.fail_acc, self.alice_acc, self.fail_seed, self.bob_acc)
@@ -66,7 +66,7 @@ class FundReturnTest(unittest.TestCase):
 
 
     def test_error_on_wrong_creator(self):
-        err_msg = "Deleted account info doesn't equal to generated."
+        err_msg = "invalid account data for instruction"
 
         try:
             self.call_refund_tx(self.fail_acc, self.bob_acc, self.fail_seed, self.bob_acc)
@@ -81,7 +81,7 @@ class FundReturnTest(unittest.TestCase):
 
 
     def test_error_on_wrong_seed(self):
-        err_msg = "Deleted account info doesn't equal to generated."
+        err_msg = "invalid account data for instruction"
 
         try:
             self.call_refund_tx(self.fail_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
