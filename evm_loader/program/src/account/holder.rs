@@ -65,7 +65,7 @@ impl<'a> Holder<'a> {
         let signature = Ref::map(signature, |s| s.try_into().expect("s.len() == 65"));
 
         let (trx_len, rest) = split_ref_at(rest, 8);
-        let trx_len = (&*trx_len).try_into().ok().map(u64::from_le_bytes).expect("trx_len is 8 bytes");
+        let trx_len = (*trx_len).try_into().ok().map(u64::from_le_bytes).expect("trx_len is 8 bytes");
         let trx_len = usize::try_from(trx_len).expect("usize is 8 bytes");
 
         let (trx, _) = split_ref_at(rest, trx_len);

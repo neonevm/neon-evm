@@ -24,7 +24,7 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
-from spl.token.instructions import get_associated_token_address
+from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import base58
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
@@ -274,7 +274,7 @@ class OperatorAccount:
 
 
 class EvmLoader:
-    def __init__(self, acc, programId=EVM_LOADER):
+    def __init__(self, acc: OperatorAccount, programId=EVM_LOADER):
         if programId == None:
             print("Load EVM loader...")
             result = json.loads(solana_cli(acc).call('deploy {}'.format(EVM_LOADER_SO)))
@@ -285,6 +285,43 @@ class EvmLoader:
         self.loader_id = EvmLoader.loader_id
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
+
+    def airdropNeonTokens(self, user_ether_address: Union[str, bytes], amount: int) -> None:
+        operator = self.acc.get_acc()
+
+        (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(self.loader_id))
+        pool_token_account = get_associated_token_address(neon_evm_authority, ETH_TOKEN_MINT_ID)
+        source_token_account = get_associated_token_address(operator.public_key(), ETH_TOKEN_MINT_ID)
+        (user_solana_address, _) = self.ether2program(user_ether_address)
+
+        pool_account_exists = client.get_account_info(pool_token_account, commitment="processed")["result"]["value"] is not None
+        print("Pool Account Exists: ", pool_account_exists)
+
+        trx = Transaction()
+        if not pool_account_exists:
+            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
+
+        trx.add(approve(ApproveParams(
+            program_id=TOKEN_PROGRAM_ID,
+            source=source_token_account,
+            delegate=neon_evm_authority,
+            owner=operator.public_key(),
+            amount=amount * (10**9),
+        )))
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=bytes.fromhex("19"),
+            keys=[
+                AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=user_solana_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+            ]
+        ))
+        result = send_transaction(client, trx, operator)
+        print("Airdrop transaction: ", result)
+
 
     def deploy(self, contract_path, config=None):
         print('deploy contract')
@@ -403,7 +440,7 @@ class AccountInfo(NamedTuple):
         return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 
-def getAccountData(client, account, expected_length):
+def getAccountData(client: Client, account: Union[str, PublicKey], expected_length: int) -> bytes:
     info = client.get_account_info(account, commitment=Confirmed)['result']['value']
     if info is None:
         raise Exception("Can't get information about {}".format(account))
@@ -415,12 +452,19 @@ def getAccountData(client, account, expected_length):
     return data
 
 
-def getTransactionCount(client, sol_account):
+def getTransactionCount(client: Client, sol_account: Union[str, PublicKey]) -> int:
     info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
     acc_info = AccountInfo.frombytes(info)
     res = int.from_bytes(acc_info.trx_count, 'little')
     print('getTransactionCount {}: {}'.format(sol_account, res))
     return res
+
+def getNeonBalance(client: Client, sol_account: Union[str, PublicKey]) -> int:
+    info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
+    account = ACCOUNT_INFO_LAYOUT.parse(info)
+    balance = int.from_bytes(account.balance, byteorder="little")
+    print('getNeonBalance {}: {}'.format(sol_account, balance))
+    return balance
 
 
 def wallet_path():

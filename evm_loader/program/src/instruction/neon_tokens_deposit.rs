@@ -55,7 +55,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
         return Err!(ProgramError::InvalidArgument; "Account {} - expected Neon Token account", accounts.pool.info.key);
     }
 
-    if accounts.source.delegate.contains(accounts.authority.key) {
+    if !accounts.source.delegate.contains(accounts.authority.key) {
         return Err!(ProgramError::InvalidArgument; "Account {} - expected tokens delegated to authority account", accounts.source.info.key);
     }
 
