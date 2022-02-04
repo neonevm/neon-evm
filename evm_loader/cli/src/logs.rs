@@ -1,7 +1,6 @@
 use serde::{ Deserialize };
 use fern::{ Dispatch };
 use std::{ process, path };
-use std::ffi::OsStr;
 
 #[derive(Deserialize)]
 #[derive(Default)]
