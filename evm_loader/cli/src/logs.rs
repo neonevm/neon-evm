@@ -44,15 +44,15 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
         .format(move |out, message, record| {
             let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
 
-            let _path = record.file().unwrap_or("Undefined");
-            let file_path = path::Path::new(_path).file_name()
+            let file_path = record.file().unwrap_or("Undefined");
+            let file_name = path::Path::new(file_path).file_name()
                                                   .map_or("Undefined", |v| v.to_str().unwrap());
 
             out.finish(format_args!(
                 "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
                 datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 level=record.level(),
-                file=file_path,
+                file=file_name,
                 lineno=line,
                 pid=process::id(),
                 component="Emulator",
