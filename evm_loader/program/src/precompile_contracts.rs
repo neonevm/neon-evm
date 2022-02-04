@@ -17,6 +17,7 @@ use crate::{
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_WITHDRAW_NEON: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -60,6 +61,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_QUERY
+        || *address == SYSTEM_ACCOUNT_WITHDRAW_NEON
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -86,6 +88,9 @@ pub fn call_precompile<'a, B: AccountStorage>(
     }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
+    }
+    if address == SYSTEM_ACCOUNT_WITHDRAW_NEON {
+        return Some(withdraw_neon(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -305,6 +310,19 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
         }
     }
+}
+
+/// Call inner `withdraw_neon`
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn withdraw_neon<'a, B: AccountStorage>(
+    input: &[u8],
+    context: &evm::Context,
+    state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
 }
 
 // QueryAccount method ids:
