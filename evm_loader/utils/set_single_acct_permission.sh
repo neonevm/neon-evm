@@ -8,7 +8,7 @@ ACCOUNT_TYPE=$5
 NEON_ETH_ADDRESS=$6
 
 show_help_and_exit() {
-  echo "Usage: mint_permission_token.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <neon_eth_address>"
+  echo "Usage: set_single_acct_permission.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <neon_eth_address>"
   exit 1
 }
 
@@ -98,7 +98,7 @@ mint_denial_token() {
   if [ "$DIFFERENCE" -ge "$MINMAL_BALANCE" ]; then
     MINT_AMOUNT=$(($DIFFERENCE - $MINMAL_BALANCE + 1))
     echo "Minting $MINT_AMOUNT denial tokens to $NEON_ADDRESS"
-    spl-token mint --url http://localhost:8899 --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_DENIAL_TOKEN" "$MINT_AMOUNT" -- "$DENIAL_TOKEN_ACCOUNT"
+    spl-token mint --url "$SOLANA_URL" --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_DENIAL_TOKEN" "$MINT_AMOUNT" -- "$DENIAL_TOKEN_ACCOUNT"
   else
     echo "There's no need to mint denial token"
   fi
@@ -112,7 +112,7 @@ mint_allowance_token() {
   if [ "$DIFFERENCE" -lt "$MINMAL_BALANCE" ]; then
     MINT_AMOUNT=$(($MINMAL_BALANCE - $DIFFERENCE))
     echo "Minting $MINT_AMOUNT allowance tokens to $NEON_ADDRESS"
-    spl-token mint --url http://localhost:8899 --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_ALLOWANCE_TOKEN" "$MINT_AMOUNT" -- "$ALLOWANCE_TOKEN_ACCOUNT"
+    spl-token mint --url "$SOLANA_URL" --mint-authority "$MINT_AUTHORITY_FILE" "$NEON_PERMISSION_ALLOWANCE_TOKEN" "$MINT_AMOUNT" -- "$ALLOWANCE_TOKEN_ACCOUNT"
   else
     echo "There's no need to mint allowance token"
   fi

@@ -8,7 +8,7 @@ ACCOUNT_TYPE=$5
 ADDRESS_LIST_FILE=$6
 
 show_help_and_exit() {
-  echo "Usage: mint_many.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <address_list_file>"
+  echo "Usage: set_many_accts_permission.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <address_list_file>"
   exit 1
 }
 
@@ -51,7 +51,7 @@ echo "Failed ID's will be collected in $ERROR_FILE"
 touch $ERROR_FILE
 
 while read line; do 
-  ./mint_permission_token.sh $SOLANA_URL $EVM_LOADER $MINT_AUTHORITY_FILE $OPERATION $ACCOUNT_TYPE $line
+  ./set_single_acct_permission.sh $SOLANA_URL $EVM_LOADER $MINT_AUTHORITY_FILE $OPERATION $ACCOUNT_TYPE $line
   if [ "$?" -ne "0" ]; then
     echo "$line" >> $ERROR_FILE
   fi
