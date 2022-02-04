@@ -1,5 +1,7 @@
 use serde::{ Deserialize };
 use fern::{ Dispatch };
+use std::{ process, path };
+use std::ffi::OsStr;
 
 #[derive(Deserialize)]
 #[derive(Default)]
@@ -41,16 +43,19 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
 
     dispatch
         .format(move |out, message, record| {
-            let file = record.file().unwrap_or("Undefined");
             let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
+
+            let _path = record.file().unwrap_or("Undefined");
+            let file_path = path::Path::new(_path).file_name()
+                                                  .map_or("Undefined", |v| v.to_str().unwrap());
 
             out.finish(format_args!(
                 "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
                 datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 level=record.level(),
-                file=file,
+                file=file_path,
                 lineno=line,
-                pid="NA",
+                pid=process::id(),
                 component="Emulator",
                 entity="Undefined",
                 context=context.req_id,
