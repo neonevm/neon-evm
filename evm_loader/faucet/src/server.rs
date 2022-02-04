@@ -1,9 +1,10 @@
 //! Faucet server implementation.
 
 use actix_cors::Cors;
-use actix_web::http::header;
+use actix_web::http::{header};
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
+
 use eyre::Result;
 use tracing::{error, info};
 
@@ -24,6 +25,7 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
         App::new()
             .wrap(cors)
             .route("/request_ping", post().to(handle_request_ping))
+            .route("/request_version", post().to(handle_request_version))
             .route(
                 "/request_neon_in_galans",
                 post().to(handle_request_neon_in_galans),
@@ -42,11 +44,6 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a ping request.
 async fn handle_request_ping(body: Bytes) -> impl Responder {
-    #[derive(serde::Deserialize)]
-    struct Ping {
-        ping: String,
-    }
-
     let id = generate_id();
 
     println!();
@@ -58,16 +55,23 @@ async fn handle_request_ping(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    let input = input.unwrap();
-    let ping = serde_json::from_str::<Ping>(&input);
-    if let Err(err) = ping {
-        error!("{} BadRequest (json): {} in '{}'", id, err, input);
-        return HttpResponse::BadRequest();
-    }
-
-    info!("{} Ping '{}'", id, ping.unwrap().ping);
+    let ping = input.unwrap();
+    info!("{} Ping '{}'", id, ping);
 
     HttpResponse::Ok()
+}
+
+/// Handles a version request.
+async fn handle_request_version() -> impl Responder {
+    let id = generate_id();
+
+    println!();
+    info!("{} Handling version request...", id);
+
+    let version = crate::version::display!();
+    info!("{} Faucet {}", id, version);
+
+    version
 }
 
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
@@ -209,6 +213,5 @@ fn generate_id() -> String {
         }
     };
     let digest = md5::compute(since.as_nanos().to_string());
-    let s = format!("{:x}", digest)[..7].to_string();
-    format!("[{}]", s)
+    format!("[{}]", &format!("{:x}", digest)[..7])
 }

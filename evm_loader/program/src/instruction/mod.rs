@@ -118,11 +118,24 @@ pub enum EvmInstruction {
 
     /// Create Ethereum account
     /// # Account references
-    ///   0. [] System Program
-    ///   1. [WRITE, SIGNER] Funding account
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [] System Program
     ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
     ///   3. (for contract creation) [WRITE] Code account for new contract account
     CreateAccountV02,
+
+    /// Deposits NEON tokens to a Ether account.
+    /// Requires previously executed SPL-Token.Approve which
+    /// delegates the deposit amount to the NEON destination account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   0. `[writable]` NEON source account.
+    ///   1. `[writable]` NEON bank (destination) account.
+    ///   2. `[writable]` Ether account to store balance of NEONs.
+    ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
+    ///   5. `[]` SPL Token program id.
+    Deposit,
 }
 
 impl EvmInstruction {
@@ -152,6 +165,7 @@ impl EvmInstruction {
             22 => Self::ExecuteTrxFromAccountDataIterativeV02,
             23 => Self::UpdateValidsTable,
             24 => Self::CreateAccountV02,
+            25 => Self::Deposit,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -163,6 +177,7 @@ pub mod account_create;
 pub mod account_delete_holder_storage;
 pub mod account_resize;
 pub mod erc20_account_create;
+pub mod neon_tokens_deposit;
 pub mod transaction_write_to_holder;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;

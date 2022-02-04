@@ -98,6 +98,9 @@ fn process_instruction<'a>(
         EvmInstruction::ERC20CreateTokenAccount => {
             instruction::erc20_account_create::process(program_id, accounts, instruction)
         }
+        EvmInstruction::Deposit => {
+            instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
+        }
         EvmInstruction::UpdateValidsTable => {
             instruction::update_valids_table::process(program_id, accounts, instruction)
         }

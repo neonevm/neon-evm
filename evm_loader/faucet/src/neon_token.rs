@@ -39,7 +39,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
         .map_err(|e| eyre!("config::solana_operator_keypair: {:?}", e))?;
     let ether_address = ethereum::address_from_str(&params.wallet)
         .map_err(|e| eyre!("ethereum::address_from_str({}): {:?}", &params.wallet, e))?;
-    solana::transfer_token(
+    solana::deposit_token(
         id,
         operator,
         ether_address,
@@ -49,7 +49,7 @@ pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
     .await
     .map_err(|e| {
         eyre!(
-            "solana::transfer_token(operator, {}): {:?}",
+            "solana::deposit_token(operator, {}): {:?}",
             ether_address,
             e
         )

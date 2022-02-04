@@ -15,7 +15,6 @@ mod version;
 
 use eyre::Result;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
@@ -26,16 +25,44 @@ async fn main() -> Result<()> {
 
 /// Initializes the logger.
 fn setup() -> Result<()> {
-    if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "0")
+    use std::env;
+    use time::macros::format_description;
+    use time::UtcOffset;
+    use tracing_subscriber::fmt::time::OffsetTime;
+    use tracing_subscriber::EnvFilter;
+
+    if env::var("RUST_LIB_BACKTRACE").is_err() {
+        env::set_var("RUST_LIB_BACKTRACE", "0")
     }
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info")
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
     }
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+
+    if env::var("NEON_LOG").is_err() {
+        env::set_var("NEON_LOG", "plain")
+    }
+    let json = env::var("NEON_LOG").unwrap().contains("json");
+
+    if json {
+        tracing_subscriber::fmt::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .json()
+            .flatten_event(true)
+            .init();
+    } else {
+        let offset = UtcOffset::current_local_offset()?;
+        let timer = OffsetTime::new(
+            offset,
+            format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
+            ),
+        );
+        tracing_subscriber::fmt::fmt()
+            .with_timer(timer)
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+    }
 
     Ok(())
 }
@@ -79,7 +106,6 @@ use std::path::Path;
 async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::check_file_exists(config_file);
     config::load(config_file)?;
-    config::show();
 
     if config::solana_enabled() {
         solana::init_client(config::solana_url());
