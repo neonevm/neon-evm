@@ -44,9 +44,11 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
         .format(move |out, message, record| {
             let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
 
-            let file_path = record.file().unwrap_or("Undefined");
-            let file_name = path::Path::new(file_path).file_name()
-                                                  .map_or("Undefined", |v| v.to_str().unwrap());
+            let file_name: &str = record.file()
+                                        .and_then(|filepath| path::Path::new(filepath).file_name())
+                                        .and_then(|filename| filename.to_str() )
+                                        .unwrap_or("Undefined");
+
 
             out.finish(format_args!(
                 "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
