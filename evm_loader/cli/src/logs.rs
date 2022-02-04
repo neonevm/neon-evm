@@ -49,7 +49,6 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
                                         .and_then(|filename| filename.to_str() )
                                         .unwrap_or("Undefined");
 
-
             out.finish(format_args!(
                 "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
                 datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
