@@ -45,7 +45,7 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
             let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
 
             out.finish(format_args!(
-                "{datetime:23} {level:.1} {file:} {lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
+                "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
                 datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 level=record.level(),
                 file=file,
