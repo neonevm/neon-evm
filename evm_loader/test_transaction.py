@@ -245,7 +245,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -366,7 +365,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
               'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
-        with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
+        with self.assertRaisesRegex(Exception, "Error processing Instruction 0: insufficient funds for instruction"):
             send_transaction(client, trx, self.acc)
 
         if getBalance(self.caller_2) == 0:
@@ -411,7 +410,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
                 print("Exception was expected, OK")
                 pass
             else:
