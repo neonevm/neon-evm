@@ -1,6 +1,6 @@
 use serde::{ Deserialize };
 use fern::{ Dispatch };
-use std::{ process, path };
+use std::{ process, path, ffi::OsStr };
 
 #[derive(Deserialize)]
 #[derive(Default)]
@@ -46,7 +46,7 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
 
             let file_name: &str = record.file()
                                         .and_then(|filepath| path::Path::new(filepath).file_name())
-                                        .and_then(|filename| filename.to_str() )
+                                        .and_then(OsStr::to_str)
                                         .unwrap_or("Undefined");
 
             out.finish(format_args!(
