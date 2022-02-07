@@ -264,7 +264,7 @@ pub const EVM_STEPS: u64  = 100;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 1000;
 /// `gas multiplier`
-pub const GAS_MULTIPLIER: u64 = 21000;
+pub const GAS_MULTIPLIER: u64 = 1;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));

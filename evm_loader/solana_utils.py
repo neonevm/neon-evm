@@ -67,7 +67,7 @@ ACCOUNT_MAX_SIZE = 256
 # spl-token account allocated data size
 SPL_TOKEN_ACCOUNT_SIZE = 165
 # gas multipliergas multiplier
-GAS_MULTIPLIER = 21000
+GAS_MULTIPLIER = 1
 
 # DEFAULT_UNITS=500*1000
 # DEFAULT_HEAP_FRAME=256*1024
