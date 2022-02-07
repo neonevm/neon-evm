@@ -30,6 +30,7 @@ use evm_loader::{
     precompile_contracts::is_precompile_address,
     hamt::Hamt,
 };
+use evm_loader::executor_state::Withdraw;
 
 use crate::Config;
 use crate::NeonCliResult;
@@ -429,6 +430,10 @@ impl<'a> EmulatorAccountStorage<'a> {
 
             solana_accounts.insert(address, AccountMeta::new(address, false));
         }
+    }
+
+    pub fn apply_withdrawals(&self, _: Vec<Withdraw>) {
+
     }
 
     pub fn get_used_accounts(&self) -> Vec<AccountJSON>

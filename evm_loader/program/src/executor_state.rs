@@ -1092,7 +1092,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         &self.substate.query_account_cache
     }
 
-    #[must_use]
     pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256)
     {
         let dest_neon_acct = get_associated_token_address(
