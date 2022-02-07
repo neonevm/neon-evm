@@ -15,9 +15,11 @@ use crate::{
     utils::keccak256_digest,
 };
 
+use spl_associated_token_account::get_associated_token_address;
+
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
-const SYSTEM_ACCOUNT_WITHDRAW_NEON: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
+const SYSTEM_ACCOUNT_NEON_TOKEN: H160 =        H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -61,7 +63,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_QUERY
-        || *address == SYSTEM_ACCOUNT_WITHDRAW_NEON
+        || *address == SYSTEM_ACCOUNT_NEON_TOKEN
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -89,8 +91,8 @@ pub fn call_precompile<'a, B: AccountStorage>(
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
     }
-    if address == SYSTEM_ACCOUNT_WITHDRAW_NEON {
-        return Some(withdraw_neon(input, context, state));
+    if address == SYSTEM_ACCOUNT_NEON_TOKEN {
+        return Some(neon_token(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -312,17 +314,59 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     }
 }
 
-/// Call inner `withdraw_neon`
+// Neon token method ids:
+//--------------------------------------------------
+// withdraw(bytes32)           => 8e19899e
+//--------------------------------------------------
+const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
+
+/// Call inner `neon_token`
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn withdraw_neon<'a, B: AccountStorage>(
+pub fn neon_token<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+    debug_print!("neon_token({})", hex::encode(&input));
+
+    let (method_id, rest) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+
+    match method_id {
+        NEON_TOKEN_METHOD_WITHDRAW_ID => {
+            if state.metadata().is_static() {
+                let revert_message = b"neon_token: withdraw is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
+            let source = context.address; // caller contract
+            let amount = context.apparent_value;
+
+            if state.balance(source) < amount {
+                let revert_message = b"neon_token.withdraw: caller contract has insufficient balance".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
+            // owner of the associated token account
+            let dest_owner = array_ref![rest, 0, 32];
+            let dest_owner = Pubkey::new_from_array(*dest_owner);
+
+            let dest_neon_acct = get_associated_token_address(
+                &dest_owner,
+                &crate::config::token_mint::id()
+            );
+
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+        }
+
+        _ => {
+            debug_print!("neon_token UNKNOWN");
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
 }
 
 // QueryAccount method ids:
