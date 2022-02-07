@@ -393,7 +393,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                   "completion")
             _ = self.loader.createEtherAccount(self.caller_ether_2)
             print('Transfer tokens to the user token account')
-            self.token.transfer(ETH_TOKEN_MINT_ID, 1, self.caller_token_2)
+            self.token.transfer(ETH_TOKEN_MINT_ID, 100, self.caller_token_2)
             print("Done\n")
 
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
