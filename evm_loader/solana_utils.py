@@ -60,8 +60,6 @@ EVM_BYTE_COST = 140
 EVM_STEPS = 100
 # the message size that is used to holder-account filling
 HOLDER_MSG_SIZE = 1000
-# gas multiplier
-GAS_MULTIPLIER = 1000
 # Ethereum account allocated data size
 ACCOUNT_MAX_SIZE = 256
 # spl-token account allocated data size

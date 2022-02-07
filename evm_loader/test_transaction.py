@@ -90,7 +90,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': self.eth_contract,
             'value': 0,
             'gas': 9999999999,
-            'gasPrice': 1_000_000,
+            'gasPrice': 1_000_000_000,
             'nonce': nonce,
             'data': '3917b3df',
             'chainId': 111
@@ -430,9 +430,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         continue3_gas = (30  + allocated_space_caller2 * EVM_BYTE_COST) * GAS_MULTIPLIER
         gas = begin_gas + continue1_gas + continue2_gas + continue3_gas
         # gas_price == 10**6
-        fee1 = (begin_gas + continue1_gas) / 1000
-        fee2 = continue2_gas / 1000
-        fee3 = continue3_gas / 1000
+        fee1 = (begin_gas + continue1_gas)
+        fee2 = continue2_gas
+        fee3 = continue3_gas
 
         self.assertEqual(response_3['result']['meta']['err'], None)
         data = b58decode(response_3['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
