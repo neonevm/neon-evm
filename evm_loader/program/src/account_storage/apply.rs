@@ -5,7 +5,7 @@ use evm::backend::Apply;
 use solana_program::program_error::ProgramError;
 use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
-use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer};
+use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
 use crate::precompile_contracts::is_precompile_address;
 
 
@@ -53,6 +53,7 @@ impl<'a> ProgramAccountStorage<'a> {
             transfers,
             spl_transfers,
             spl_approves,
+            withdrawals,
             erc20_approves,
         ) = state;
 
@@ -72,6 +73,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
         if !erc20_approves.is_empty() {
             self.apply_erc20_approves( operator, system_program, erc20_approves)?;
+        }
+
+        if !withdrawals.is_empty() {
+            self.apply_withdrawals(withdrawals)?;
         }
 
         if !applies.is_empty() {
@@ -263,6 +268,10 @@ impl<'a> ProgramAccountStorage<'a> {
             token_program.approve(authority, source, &approve.spender, approve.value)?;
         }
 
+        Ok(())
+    }
+
+    fn apply_withdrawals(&mut self, _: Vec<Withdraw>) -> Result<(), ProgramError> {
         Ok(())
     }
 

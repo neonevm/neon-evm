@@ -353,7 +353,7 @@ pub fn neon_token<'a, B: AccountStorage>(
             let destination = Pubkey::new_from_array(*destination);
 
             state.withdraw(source, destination, amount);
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
+            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
         }
 
         _ => {

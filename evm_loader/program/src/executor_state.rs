@@ -1093,13 +1093,18 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256) -> bool {
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256)
+    {
         let dest_neon_acct = get_associated_token_address(
             &destination,
             &crate::config::token_mint::id()
         );
 
-        let withdraw = Withdraw{ source, destination, amount };
+        let withdraw = Withdraw{
+            source: source,
+            destination: dest_neon_acct,
+            amount: amount
+        };
         self.substate.withdrawals.push(withdraw);
     }
 
