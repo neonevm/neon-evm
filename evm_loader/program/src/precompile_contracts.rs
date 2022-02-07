@@ -15,8 +15,6 @@ use crate::{
     utils::keccak256_digest,
 };
 
-use spl_associated_token_account::get_associated_token_address;
-
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_NEON_TOKEN: H160 =        H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -351,14 +349,10 @@ pub fn neon_token<'a, B: AccountStorage>(
             }
 
             // owner of the associated token account
-            let dest_owner = array_ref![rest, 0, 32];
-            let dest_owner = Pubkey::new_from_array(*dest_owner);
+            let destination = array_ref![rest, 0, 32];
+            let destination = Pubkey::new_from_array(*destination);
 
-            let dest_neon_acct = get_associated_token_address(
-                &dest_owner,
-                &crate::config::token_mint::id()
-            );
-
+            state.withdraw(source, destination, amount);
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output))
         }
 

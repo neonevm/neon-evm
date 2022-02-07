@@ -19,6 +19,8 @@ use crate::{
     utils::keccak256_h256
 };
 
+use spl_associated_token_account::get_associated_token_address;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub nonce: U256,
@@ -152,6 +154,13 @@ pub struct ERC20Approve {
     pub value: U256
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Withdraw {
+    pub source: H160,
+    pub destination: Pubkey,
+    pub amount: U256
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate {
     metadata: ExecutorMetadata,
@@ -166,12 +175,13 @@ pub struct ExecutorSubstate {
     spl_supply: RefCell<BTreeMap<Pubkey, u64>>,
     spl_transfers: Vec<SplTransfer>,
     spl_approves: Vec<SplApprove>,
+    withdrawals: Vec<Withdraw>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
     query_account_cache: query::AccountCache,
 }
 
-pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
+pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<Withdraw>, Vec<ERC20Approve>);
 
 impl ExecutorSubstate {
     #[allow(clippy::missing_const_for_fn)]
@@ -190,6 +200,7 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
+            withdrawals: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
@@ -270,7 +281,7 @@ impl ExecutorSubstate {
             erc20_approves.push(approve);
         }
 
-        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
+        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, self.withdrawals, erc20_approves)
     }
 
     pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
@@ -287,6 +298,7 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
+            withdrawals: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
@@ -310,6 +322,8 @@ impl ExecutorSubstate {
         self.spl_supply.borrow_mut().append(&mut exited.spl_supply.borrow_mut());
         self.spl_transfers.append(&mut exited.spl_transfers);
         self.spl_approves.append(&mut exited.spl_approves);
+
+        self.withdrawals.append(&mut exited.withdrawals);
 
         self.erc20_allowances.append(&mut exited.erc20_allowances);
 
@@ -1076,6 +1090,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn query_solana_account(&self) -> &query::AccountCache {
         &self.substate.query_account_cache
+    }
+
+    #[must_use]
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256) -> bool {
+        let dest_neon_acct = get_associated_token_address(
+            &destination,
+            &crate::config::token_mint::id()
+        );
+
+        let withdraw = Withdraw{ source, destination, amount };
+        self.substate.withdrawals.push(withdraw);
     }
 
     #[must_use]
