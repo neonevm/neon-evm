@@ -123,13 +123,12 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             print(result)
 
 
-    @unittest.skip("AccountV2 balance repair")
     def test_success_deletion(self):
         (owner_contract, eth_contract, contract_code) = self.deploy_contract()
-        self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+        self.loader.airdropNeonTokens(eth_contract, 100)
 
-        operator_token_balance = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
-        contract_token_balance = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+        operator_token_balance = getNeonBalance(client, self.caller)
+        contract_token_balance = getNeonBalance(client, owner_contract)
 
         caller_balance_pre = getBalance(self.acc.public_key())
         contract_balance_pre = getBalance(owner_contract)
@@ -144,8 +143,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         contract_balance_post = getBalance(owner_contract)
         code_balance_post = getBalance(contract_code)
 
-        operator_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
-        contract_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+        operator_token_balance_post = getNeonBalance(client, self.caller)
 
         # Check that lamports moved from code accounts to caller
         self.assertGreater(caller_balance_post, contract_balance_pre)
@@ -153,7 +151,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertEqual(contract_balance_post, 0)
         self.assertEqual(code_balance_post, 0)
         self.assertEqual(code_balance_post, 0)
-        self.assertEqual(contract_token_balance_post, 0)
         self.assertAlmostEqual(operator_token_balance_post, contract_token_balance + operator_token_balance, 3)
 
         err = "Can't get information about"

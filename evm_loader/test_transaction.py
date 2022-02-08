@@ -39,7 +39,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
+            cls.loader.airdropNeonTokens(cls.caller_ether, 201)
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -70,7 +70,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # Create ethereum account for user 2 account
         cls.caller_ether_2 = eth_keys.PrivateKey(cls.acc_2.secret_key()).public_key.to_canonical_address()
         (cls.caller_2, cls.caller_nonce_2) = cls.loader.ether2program(cls.caller_ether_2)
-        cls.caller_token_2 = get_associated_token_address(PublicKey(cls.caller_2), ETH_TOKEN_MINT_ID)
 
     def create_storage_account(self, seed):
         storage = PublicKey(
@@ -90,7 +89,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             'to': self.eth_contract,
             'value': 0,
             'gas': 9999999,
-            'gasPrice': 0,
+            'gasPrice': 1_000_000_000,
             'nonce': nonce,
             'data': '3917b3df',
             'chainId': 111
@@ -119,7 +118,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             # Collateral pool address:
             AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
             # Operator ETH address:
-            AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
             # System program account:
             AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
             # NeonEVM program account
@@ -347,7 +346,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('the solana transaction is too large')
 
-    @unittest.skip("AccountV2 balance repair")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
@@ -361,7 +359,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
               'and make sure of the error. See https://github.com/neonlabsorg/neon-evm/pull/320')
-        with self.assertRaisesRegex(Exception, "Error processing Instruction 1: insufficient funds for instruction"):
+        with self.assertRaisesRegex(Exception, "invalid program argument"):
             send_transaction(client, trx, self.acc)
 
         if getBalance(self.caller_2) == 0:
@@ -369,33 +367,32 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                   "completion")
             _ = self.loader.createEtherAccount(self.caller_ether_2)
             print('Transfer tokens to the user token account')
-            self.token.transfer(ETH_TOKEN_MINT_ID, 1, self.caller_token_2)
+            self.loader.airdropNeonTokens(self.caller_ether_2, 1)
             print("Done\n")
 
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
         print("Caller_2:", self.caller_ether_2.hex(), self.caller_nonce_2, "->", self.caller_2,
               "({})".format(bytes(PublicKey(self.caller_2)).hex()))
-        neon_balance_on_start = self.token.balance(self.caller_token_2)
+        neon_balance_on_start = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance:", neon_balance_on_start)
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
         response_0 = send_transaction(client, trx, self.acc)
         print('response_0:', response_0)
+        neon_balance_on_response_0 = getNeonBalance(client, self.caller_2)
+        print("Caller_2 NEON-token balance on response_0:", neon_balance_on_response_0)
         response_1 = send_transaction(client, trx, self.acc)
         print('response_1:', response_1)
-        neon_balance_on_response_1 = self.token.balance(self.caller_token_2)
+        neon_balance_on_response_1 = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance on response_1:", neon_balance_on_response_1)
         response_2 = send_transaction(client, trx, self.acc)
         print('response_2:', response_2)
-        neon_balance_on_response_2 = self.token.balance(self.caller_token_2)
+        neon_balance_on_response_2 = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
-        response_3 = send_transaction(client, trx, self.acc)
-        print('response_3:', response_3)
-        neon_balance_on_response_3 = self.token.balance(self.caller_token_2)
-        print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
-        self.assertEqual(response_3['result']['meta']['err'], None)
-        data = b58decode(response_3['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
+
+        self.assertEqual(response_2['result']['meta']['err'], None)
+        data = b58decode(response_2['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         EXPECTED_USED_GAS = 24301
@@ -411,13 +408,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 pass
             else:
                 raise
-        neon_balance_on_5_th_transaction = self.token.balance(self.caller_token_2)
+        neon_balance_on_5_th_transaction = getNeonBalance(client, self.caller_2)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1) * 1_000_000_000, 984)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2) * 1_000_000_000, 1548)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_3) * 1_000_000_000, EXPECTED_USED_GAS)
-        self.assertEqual(neon_balance_on_response_3 - neon_balance_on_5_th_transaction, 0)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_0), 984 * 1_000_000_000)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1), 1548 * 1_000_000_000)
+        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2), EXPECTED_USED_GAS * 1_000_000_000)
+        self.assertEqual(neon_balance_on_response_2 - neon_balance_on_5_th_transaction, 0)
 
         print('Check Transfer to treasures on each iteration #345.')
         print('See https://github.com/neonlabsorg/neon-evm/issues/345:')
@@ -432,9 +429,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Iteration)
         self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
-                                                                          deposit_sol_acc, collateral_pool_sol_acc,
-                                                                          step=Step.Iteration)
-        self.check_transfers_between_operator_deposit_and_collateral_pool(response_3, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Complete)
 

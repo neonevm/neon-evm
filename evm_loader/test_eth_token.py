@@ -19,7 +19,6 @@ sysvarclock = "SysvarC1ock11111111111111111111111111111111"
 
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
-@unittest.skip("AccountV2 balance repair")
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -33,13 +32,13 @@ class EthTokenTest(unittest.TestCase):
         # Create ethereum account for user account
         cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
         (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
-        cls.caller_token = get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
+
+        cls.loader.airdropNeonTokens(cls.caller_ether, 201)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -142,10 +141,10 @@ class EthTokenTest(unittest.TestCase):
 
 
     def test_caller_balance(self):
-        expected_balance = self.token.balance(self.caller_token)
+        expected_balance = getNeonBalance(client, self.caller)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % expected_balance)
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -157,11 +156,10 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
     def test_contract_balance(self):
-        contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        expected_balance = self.token.balance(contract_token)
+        expected_balance = getNeonBalance(client, self.reId)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % int(expected_balance * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % expected_balance)
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -173,14 +171,12 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
     def test_transfer_and_call(self):
-        contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-
-        contract_balance_before = self.token.balance(contract_token)
-        caller_balance_before = self.token.balance(self.caller_token)
-        value = 10
+        contract_balance_before = getNeonBalance(client, self.reId)
+        caller_balance_before = getNeonBalance(client, self.caller)
+        value = 10 * (10**18)
 
         func_name = abi.function_signature_to_4byte_selector('nop()')
-        result = self.call_partial_signed(func_name, value * (10**18))
+        result = self.call_partial_signed(func_name, value)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -190,22 +186,19 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
-
-        contract_balance_after = self.token.balance(contract_token)
-        caller_balance_after = self.token.balance(self.caller_token)
+        contract_balance_after = getNeonBalance(client, self.reId)
+        caller_balance_after = getNeonBalance(client, self.caller)
         self.assertEqual(contract_balance_after, contract_balance_before + value)
-        self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
+        self.assertEqual(caller_balance_after, caller_balance_before - value)
 
     def test_transfer_internal(self):
-        contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
+        self.loader.airdropNeonTokens(self.reId_eth, 500)
 
-        contract_balance_before = self.token.balance(contract_token)
-        caller_balance_before = self.token.balance(self.caller_token)
-        value = 5
+        contract_balance_before = getNeonBalance(client, self.reId)
+        caller_balance_before = getNeonBalance(client, self.caller)
+        value = 5 * (10**18)
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % value)
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -216,12 +209,10 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
-        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
-
-        contract_balance_after = self.token.balance(contract_token)
-        caller_balance_after = self.token.balance(self.caller_token)
+        contract_balance_after = getNeonBalance(client, self.reId)
+        caller_balance_after = getNeonBalance(client, self.caller)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
-        self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
+        self.assertEqual(caller_balance_after, caller_balance_before + value)
 
     def test_empty_account_balance(self):
         empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
@@ -229,7 +220,7 @@ class EthTokenTest(unittest.TestCase):
         expected_balance: int = 0
 
         func_name = abi.function_signature_to_4byte_selector('checkUserBalance(address,uint256)')
-        input = func_name + bytes(12) + empty_account + bytes.fromhex("%064x" % int(expected_balance * 10**18))
+        input = func_name + bytes(12) + empty_account + bytes.fromhex("%064x" % expected_balance)
         result = self.call_partial_signed(input, 0,
             additional_accounts=[ AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False), ]
         )
@@ -248,7 +239,7 @@ class EthTokenTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
         input = func_name + bytes(12) + empty_account
 
-        with self.assertRaisesRegex(Exception, 'instruction requires an initialized account'):
+        with self.assertRaisesRegex(Exception, 'invalid program argument'):
             self.call_partial_signed(input, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
 
         neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
