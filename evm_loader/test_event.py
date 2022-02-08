@@ -178,8 +178,8 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
 
+        gas_05 = EVM_STEPS * GAS_MULTIPLIER
         evm_step_executed = 87
-        gas_05 = evm_step_executed * GAS_MULTIPLIER
         begin_steps = 10
         begin_gas = EVM_STEPS * GAS_MULTIPLIER
         continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER

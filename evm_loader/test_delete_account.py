@@ -143,7 +143,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         send_transaction(client, trx, self.acc)
 
-        steps_executed = 30
+        steps_executed = EVM_STEPS
         gas_used = steps_executed * GAS_MULTIPLIER
         gas_fee = gas_used  #  * gas_price / 1_000_000_000
 
