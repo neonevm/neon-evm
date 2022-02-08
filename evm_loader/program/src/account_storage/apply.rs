@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use evm::{H160, U256};
 use evm::backend::Apply;
-use solana_program::program_error::ProgramError;
+use solana_program::{
+    program_error::ProgramError,
+    pubkey::Pubkey
+};
 use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
 use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
@@ -271,7 +274,23 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn apply_withdrawals(&mut self, _: Vec<Withdraw>) -> Result<(), ProgramError> {
+    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>) -> Result<(), ProgramError> {
+        debug_print!("apply_withdrawals {:?}", withdrawals);
+
+        let (deposit, _) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
+        let token_program = self.token_program.as_ref()
+            .ok_or_else(|| E!(ProgramError::MissingRequiredSignature; "Token program not found"))?;
+
+        for withdraw in withdrawals {
+            let authority = self.ethereum_account(&withdraw.source)
+                .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Solidity account {} must be initialized", withdraw.source))?;
+
+            let source = self.solana_accounts[&deposit];
+            let target = self.solana_accounts[&withdraw.dest_neon];
+
+            token_program.transfer(authority, source, target, withdraw.amount.as_u64())?;
+        }
+
         Ok(())
     }
 
