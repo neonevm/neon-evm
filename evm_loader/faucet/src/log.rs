@@ -28,8 +28,12 @@ where
         let level = &format!("{}", meta.level())[..1];
         let file_lineno = filename_with_line_number(meta);
         let process = std::process::id();
+        let entity = get_component_entity(meta);
 
-        let meta = format!("{} {} {} {}", timestamp, level, file_lineno, process);
+        let meta = format!(
+            "{} {} {} {} {}",
+            timestamp, level, file_lineno, process, entity
+        );
 
         write!(writer, "{} ", meta)?;
         ctx.format_fields(writer.by_ref(), event)?;
@@ -56,4 +60,21 @@ fn filename_with_line_number(meta: &Metadata) -> String {
     let line = meta.line().map_or("NA".to_string(), |v| v.to_string());
 
     format!("{}:{}", filename, line)
+}
+
+/// Returns info related to subsystems.
+fn get_component_entity(meta: &Metadata) -> String {
+    let component = "faucet";
+    let entity = normalize(meta.module_path().unwrap_or("Undefined"));
+    format!("{}:{}", component, entity)
+}
+
+/// Converts module path to a "standard" form.
+fn normalize(s: &str) -> String {
+    let mut i = s.split("::");
+    let mut first = i.next().unwrap_or("Undefined");
+    if first == "faucet" {
+        first = i.next().unwrap_or("main");
+    }
+    first.to_owned()
 }

@@ -14,7 +14,7 @@ pub fn generate() -> ReqId {
     };
     let digest = md5::compute(since.as_nanos().to_string());
     ReqId {
-        id: format!("[{}]", &format!("{:x}", digest)[..7]),
+        id: format!("{:x}", digest)[..7].to_string(),
     }
 }
 
