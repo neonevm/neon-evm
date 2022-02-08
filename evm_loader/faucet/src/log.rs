@@ -1,6 +1,6 @@
 //! Faucet log module.
 
-use tracing::{subscriber::Subscriber, Event};
+use tracing::{subscriber::Subscriber, Event, Metadata};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
     fmt::{format, FmtContext, FormatEvent, FormatFields},
@@ -21,33 +21,38 @@ where
         mut writer: format::Writer<'_>,
         event: &Event<'_>,
     ) -> Result<(), std::fmt::Error> {
-        let timestamp = current_local_timestamp();
-
         let normalized_meta = event.normalized_metadata();
         let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
 
+        let timestamp = current_local_timestamp();
         let level = &format!("{}", meta.level())[..1];
+        let file_lineno = filename_with_line_number(meta);
 
-        let meta = format!(
-            "{} {} {}{}{} ",
-            timestamp,
-            level,
-            meta.file().unwrap_or(""),
-            String::from(":"),
-            meta.line().unwrap_or(0),
-        );
+        let meta = format!("{} {} {}", timestamp, level, file_lineno,);
 
-        write!(writer, "{}", meta)?;
+        write!(writer, "{} ", meta)?;
         ctx.format_fields(writer.by_ref(), event)?;
-        writeln!(writer)?;
-
-        Ok(())
+        writeln!(writer)
     }
 }
 
 /// Returns formatted timestamp.
 fn current_local_timestamp() -> String {
-    use chrono::Local;
-    let now = Local::now();
+    let now = chrono::Local::now();
     now.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+}
+
+/// Returns filename with line number of an event.
+fn filename_with_line_number(meta: &Metadata) -> String {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    let filename: &str = meta
+        .file()
+        .and_then(|filepath| Path::new(filepath).file_name())
+        .and_then(OsStr::to_str)
+        .unwrap_or("Undefined");
+    let line = meta.line().map_or("NA".to_string(), |v| v.to_string());
+
+    format!("{}:{}", filename, line)
 }
