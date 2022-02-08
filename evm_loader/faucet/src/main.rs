@@ -7,6 +7,7 @@ mod cli;
 mod config;
 mod erc20_tokens;
 mod ethereum;
+mod id;
 mod log;
 mod manual;
 mod neon_token;

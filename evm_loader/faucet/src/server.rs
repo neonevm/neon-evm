@@ -7,7 +7,7 @@ use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder};
 use eyre::Result;
 use tracing::{error, info};
 
-use crate::{config, erc20_tokens, neon_token};
+use crate::{config, erc20_tokens, id, neon_token};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
@@ -43,7 +43,7 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a ping request.
 async fn handle_request_ping(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling ping...", id);
@@ -62,7 +62,7 @@ async fn handle_request_ping(body: Bytes) -> impl Responder {
 
 /// Handles a version request.
 async fn handle_request_version(request: HttpRequest) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling version request...", id);
@@ -75,7 +75,7 @@ async fn handle_request_version(request: HttpRequest) -> impl Responder {
 }
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
 async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for NEON (in galans) Airdrop...", id);
@@ -105,7 +105,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
 /// Handles a request for NEON airdrop.
 async fn handle_request_neon(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for NEON Airdrop...", id);
@@ -133,7 +133,7 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
 
 /// Handles a request for ERC20 tokens airdrop.
 async fn handle_request_erc20(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for ERC20 Airdrop...", id);
@@ -199,18 +199,4 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
     }
 
     HttpResponse::Ok()
-}
-
-/// Builds a (hopefully) unique string to mark requests.
-fn generate_id() -> String {
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-    let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(since) => since,
-        Err(err) => {
-            error!("generate_id: time went backwards? {}", err);
-            Duration::default()
-        }
-    };
-    let digest = md5::compute(since.as_nanos().to_string());
-    format!("[{}]", &format!("{:x}", digest)[..7])
 }
