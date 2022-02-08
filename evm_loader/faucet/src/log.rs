@@ -27,8 +27,9 @@ where
         let timestamp = current_local_timestamp();
         let level = &format!("{}", meta.level())[..1];
         let file_lineno = filename_with_line_number(meta);
+        let process = std::process::id();
 
-        let meta = format!("{} {} {}", timestamp, level, file_lineno,);
+        let meta = format!("{} {} {} {}", timestamp, level, file_lineno, process);
 
         write!(writer, "{} ", meta)?;
         ctx.format_fields(writer.by_ref(), event)?;
