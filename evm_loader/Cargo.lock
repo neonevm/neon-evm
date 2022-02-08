@@ -1496,6 +1496,7 @@ version = "0.6.0-dev"
 dependencies = [
  "actix-cors",
  "actix-web",
+ "chrono",
  "derive-new",
  "ed25519-dalek",
  "evm-loader",

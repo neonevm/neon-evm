@@ -21,7 +21,7 @@ where
         mut writer: format::Writer<'_>,
         event: &Event<'_>,
     ) -> Result<(), std::fmt::Error> {
-        let time_now = String::from("timestamp");
+        let timestamp = current_local_timestamp();
 
         let normalized_meta = event.normalized_metadata();
         let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
@@ -30,7 +30,7 @@ where
 
         let meta = format!(
             "{} {} {}{}{} ",
-            time_now,
+            timestamp,
             level,
             meta.file().unwrap_or(""),
             String::from(":"),
@@ -43,4 +43,11 @@ where
 
         Ok(())
     }
+}
+
+/// Returns formatted timestamp.
+fn current_local_timestamp() -> String {
+    use chrono::Local;
+    let now = Local::now();
+    now.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
 }

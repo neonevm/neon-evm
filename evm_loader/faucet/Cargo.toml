@@ -9,10 +9,11 @@ edition = "2018"
 [dependencies]
 actix-cors = { version = "0.6.0-beta.8", default-features = false }
 actix-web = { version = "4.0.0-beta.21", default-features = false }
-eyre = "0.6"
+chrono = "0.4"
 derive-new = "0.5"
 ed25519-dalek = "1.0"
 evm-loader = { path = "../program", default_features = false, features = ["no-entrypoint"] }
+eyre = "0.6"
 hex = "0.4"
 lazy_static = "1.4"
 minimad = "0.9"
