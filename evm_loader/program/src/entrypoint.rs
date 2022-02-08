@@ -392,8 +392,10 @@ fn process_instruction<'a>(
                 collateral_pool_sol_info,
                 system_info)?;
 
-            let (evm_results, steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
-
+            let (evm_results, mut steps_executed) = do_call(&mut account_storage, trx.call_data, trx.value, trx_gas_limit)?;
+            if steps_executed < EVM_STEPS {
+                steps_executed = EVM_STEPS;
+            }
             let unpaid_gas = steps_executed * GAS_MULTIPLIER;
 
             applies_and_invokes(
