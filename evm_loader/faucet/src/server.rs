@@ -11,7 +11,7 @@ use crate::{config, erc20_tokens, id, neon_token};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
-    info!("Bind {}:{}", rpc_bind, rpc_port);
+    info!("{} Bind {}:{}", id::generate(), rpc_bind, rpc_port);
 
     HttpServer::new(|| {
         let mut cors = Cors::default()
@@ -171,30 +171,32 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
     use nix::unistd::Pid;
     use tokio::time::Duration;
 
-    info!("Shutting down...");
+    let id = id::generate();
+
+    info!("{} Shutting down...", id);
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest (body): {}", err);
+        error!("{} BadRequest (body): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     let input = input.unwrap();
     let stop = serde_json::from_str::<Stop>(&input);
     if let Err(err) = stop {
-        error!("BadRequest (json): {} in '{}'", err, input);
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
     let delay = stop.unwrap().delay;
     if delay > 0 {
-        info!("Sleeping {} millis...", delay);
+        info!("{} Sleeping {} millis...", id, delay);
         tokio::time::sleep(Duration::from_millis(delay)).await;
     }
 
     let terminate = signal::kill(Pid::this(), signal::SIGTERM);
     if let Err(err) = terminate {
-        error!("BadRequest (terminate): {}", err);
+        error!("{} BadRequest (terminate): {}", id, err);
         return HttpResponse::BadRequest();
     }
 

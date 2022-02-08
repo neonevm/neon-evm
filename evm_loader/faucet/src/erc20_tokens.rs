@@ -62,7 +62,7 @@ pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
         )
         .await
         .map_err(|e| {
-            error!("Failed transfer of token {}: {}", token, e);
+            error!("{} Failed transfer of token {}: {}", id, token, e);
             e
         })?;
     }
@@ -135,7 +135,7 @@ async fn get_decimals<T: Transport>(
 ) -> web3::contract::Result<u32> {
     let token = Contract::from_json(eth, token_address, include_bytes!("../erc20/ERC20.abi"))
         .map_err(|e| {
-            error!("Failed reading ERC20.abi: {}", e);
+            error!("{} Failed reading ERC20.abi: {}", id, e);
             e
         })?;
 

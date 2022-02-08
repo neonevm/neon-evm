@@ -62,8 +62,7 @@ fn setup() -> Result<()> {
 
 /// Shows semantic version and revision hash.
 fn show_version() {
-    //info!("{} {}", id::generate(), version::display!());
-    info!("{} {}", "XXX", version::display!());
+    info!("{} {}", id::generate(), version::display!());
 }
 
 /// Dispatches CLI commands.
