@@ -1116,17 +1116,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         );
 
         let withdraw = Withdraw{
-            source: source,
+            source,
             dest: destination,
             dest_neon: dest_neon_acct,
-            amount: amount
+            amount
         };
 
         if self.substate.withdraw(withdraw, self.backend).is_err() {
             return false;
         };
 
-        return true;
+        true
     }
 
     #[must_use]

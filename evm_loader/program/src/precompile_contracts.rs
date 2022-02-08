@@ -333,32 +333,28 @@ pub fn neon_token<'a, B: AccountStorage>(
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
-    match method_id {
-        NEON_TOKEN_METHOD_WITHDRAW_ID => {
-            if state.metadata().is_static() {
-                let revert_message = b"neon_token: withdraw is not allowed in static context".to_vec();
-                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-            }
-
-            let source = context.address; // caller contract
-            let amount = context.apparent_value;
-
-            // owner of the associated token account
-            let destination = array_ref![rest, 0, 32];
-            let destination = Pubkey::new_from_array(*destination);
-
-            if !state.withdraw(source, destination, amount) {
-                let revert_message = b"neon_token.withdraw: failed to withdraw NEON".to_vec();
-                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-            }
-            Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
+    if method_id == NEON_TOKEN_METHOD_WITHDRAW_ID  {
+        if state.metadata().is_static() {
+            let revert_message = b"neon_token: withdraw is not allowed in static context".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        _ => {
-            debug_print!("neon_token UNKNOWN");
-            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        let source = context.address; // caller contract
+        let amount = context.apparent_value;
+
+        // owner of the associated token account
+        let destination = array_ref![rest, 0, 32];
+        let destination = Pubkey::new_from_array(*destination);
+
+        if !state.withdraw(source, destination, amount) {
+            let revert_message = b"neon_token.withdraw: failed to withdraw NEON".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
-    }
+        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]));
+    };
+
+    debug_print!("neon_token UNKNOWN");
+    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
 }
 
 // QueryAccount method ids:
