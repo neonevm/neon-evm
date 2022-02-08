@@ -7,6 +7,7 @@ mod cli;
 mod config;
 mod erc20_tokens;
 mod ethereum;
+mod log;
 mod manual;
 mod neon_token;
 mod server;
@@ -26,10 +27,7 @@ async fn main() -> Result<()> {
 /// Initializes the logger.
 fn setup() -> Result<()> {
     use std::env;
-    use time::macros::format_description;
-    use time::UtcOffset;
-    use tracing_subscriber::fmt::time::OffsetTime;
-    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::{fmt, EnvFilter};
 
     if env::var("RUST_LIB_BACKTRACE").is_err() {
         env::set_var("RUST_LIB_BACKTRACE", "0")
@@ -42,25 +40,19 @@ fn setup() -> Result<()> {
     if env::var("NEON_LOG").is_err() {
         env::set_var("NEON_LOG", "plain")
     }
+
     let json = env::var("NEON_LOG").unwrap().contains("json");
 
     if json {
-        tracing_subscriber::fmt::fmt()
+        fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .json()
             .flatten_event(true)
             .init();
     } else {
-        let offset = UtcOffset::current_local_offset()?;
-        let timer = OffsetTime::new(
-            offset,
-            format_description!(
-                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
-            ),
-        );
-        tracing_subscriber::fmt::fmt()
-            .with_timer(timer)
+        fmt()
             .with_env_filter(EnvFilter::from_default_env())
+            .event_format(log::PlainFormat)
             .init();
     }
 
@@ -69,7 +61,8 @@ fn setup() -> Result<()> {
 
 /// Shows semantic version and revision hash.
 fn show_version() {
-    info!(version::display!());
+    //info!("{} {}", id::generate(), version::display!());
+    info!("{} {}", "XXX", version::display!());
 }
 
 /// Dispatches CLI commands.

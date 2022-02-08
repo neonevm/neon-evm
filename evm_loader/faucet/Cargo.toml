@@ -33,6 +33,7 @@ time = { version = "0.3.6", default_features = false, features = ["macros"] }
 tokio = { version = "1.15.0", default_features = false, features = ["rt"] }
 toml = "0.5.8"
 tracing = "0.1.29"
+tracing-log = "0.1"
 # tracing-subscriber with disabled feature "ansi" to force colorless logs
 tracing-subscriber = { version = "0.3.6", default_features = false, features = ["env-filter", "std", "fmt", "json", "time", "local-time", "tracing-log", "smallvec", "parking_lot"] }
 web3 = "0.17.0"

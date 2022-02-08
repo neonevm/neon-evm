@@ -43,7 +43,6 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a ping request.
 async fn handle_request_ping(body: Bytes) -> impl Responder {
-
     let id = generate_id();
 
     println!();
