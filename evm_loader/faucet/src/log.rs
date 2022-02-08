@@ -28,14 +28,15 @@ where
         let level = &format!("{}", meta.level())[..1];
         let file_lineno = filename_with_line_number(meta);
         let process = std::process::id();
-        let entity = get_component_entity(meta);
+        let (entity, unknown_context) = get_component_entity(meta);
+        let context_placeholder = if unknown_context { "{} " } else { "" };
 
         let meta = format!(
-            "{} {} {} {} {}",
-            timestamp, level, file_lineno, process, entity
+            "{} {} {} {} {} {}",
+            timestamp, level, file_lineno, process, entity, context_placeholder
         );
 
-        write!(writer, "{} ", meta)?;
+        write!(writer, "{}", meta)?;
         ctx.format_fields(writer.by_ref(), event)?;
         writeln!(writer)
     }
@@ -63,18 +64,20 @@ fn filename_with_line_number(meta: &Metadata) -> String {
 }
 
 /// Returns info related to subsystems.
-fn get_component_entity(meta: &Metadata) -> String {
+fn get_component_entity(meta: &Metadata) -> (String, bool) {
     let component = "faucet";
-    let entity = normalize(meta.module_path().unwrap_or("Undefined"));
-    format!("{}:{}", component, entity)
+    let (entity, unknown_context) = normalize(meta.module_path().unwrap_or("Undefined"));
+    (format!("{}:{}", component, entity), unknown_context)
 }
 
 /// Converts module path to a "standard" form.
-fn normalize(s: &str) -> String {
+fn normalize(s: &str) -> (String, bool) {
     let mut i = s.split("::");
     let mut first = i.next().unwrap_or("Undefined");
+    let mut unknown_context = true;
     if first == "faucet" {
         first = i.next().unwrap_or("main");
+        unknown_context = false;
     }
-    first.to_owned()
+    (first.to_owned(), unknown_context)
 }

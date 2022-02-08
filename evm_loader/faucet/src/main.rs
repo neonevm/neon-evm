@@ -62,7 +62,7 @@ fn setup() -> Result<()> {
 
 /// Shows semantic version and revision hash.
 fn show_version() {
-    info!("{} {}", id::generate(), version::display!());
+    info!("{} {}", id::default(), version::display!());
 }
 
 /// Dispatches CLI commands.
@@ -86,7 +86,7 @@ async fn execute(app: cli::Application) -> Result<()> {
                 workers.parse::<usize>()?
             };
             run(&app.config, workers).await?;
-            info!("Done.");
+            info!("{} Done.", id::default());
         }
     }
 

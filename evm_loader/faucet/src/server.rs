@@ -11,7 +11,7 @@ use crate::{config, erc20_tokens, id, neon_token};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
-    info!("{} Bind {}:{}", id::generate(), rpc_bind, rpc_port);
+    info!("{} Bind {}:{}", id::default(), rpc_bind, rpc_port);
 
     HttpServer::new(|| {
         let mut cors = Cors::default()

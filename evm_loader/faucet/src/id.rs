@@ -3,6 +3,11 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::error;
 
+/// Returns empty id.
+pub fn default() -> ReqId {
+    ReqId::default()
+}
+
 /// Builds a (hopefully) unique string to mark requests.
 pub fn generate() -> ReqId {
     let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -19,7 +24,7 @@ pub fn generate() -> ReqId {
 }
 
 /// Represents some context: request id.
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct ReqId {
     id: String,
 }
@@ -28,6 +33,10 @@ use std::fmt;
 
 impl fmt::Display for ReqId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{\"req_id\": \"{}\"}}", self.id)
+        if self.id.is_empty() {
+            write!(f, "{{}}")
+        } else {
+            write!(f, "{{\"req_id\": \"{}\"}}", self.id)
+        }
     }
 }
