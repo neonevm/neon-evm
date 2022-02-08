@@ -343,16 +343,14 @@ pub fn neon_token<'a, B: AccountStorage>(
             let source = context.address; // caller contract
             let amount = context.apparent_value;
 
-            if state.balance(source) < amount {
-                let revert_message = b"neon_token.withdraw: caller contract has insufficient balance".to_vec();
-                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-            }
-
             // owner of the associated token account
             let destination = array_ref![rest, 0, 32];
             let destination = Pubkey::new_from_array(*destination);
 
-            state.withdraw(source, destination, amount);
+            if !state.withdraw(source, destination, amount) {
+                let revert_message = b"neon_token.withdraw: failed to withdraw NEON".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
             Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]))
         }
 

@@ -12,6 +12,7 @@ use evm::backend::{Apply, Log};
 use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
+use crate::account::ACCOUNT_SEED_VERSION;
 
 use crate::{
     query,
@@ -157,7 +158,9 @@ pub struct ERC20Approve {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Withdraw {
     pub source: H160,
-    pub destination: Pubkey,
+    pub source_neon: Pubkey,
+    pub dest: Pubkey,
+    pub dest_neon: Pubkey,
     pub amount: U256
 }
 
@@ -644,6 +647,21 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    fn withdraw<B: AccountStorage>(&mut self, withdraw: Withdraw, backend: &B) -> Result<(), ExitError> {
+        debug_print!("withdraw: {:?}", withdraw);
+
+        let new_source_balance = {
+            let balance = self.balance(&withdraw.source, backend);
+            balance.checked_sub(withdraw.amount).ok_or(ExitError::OutOfFund)?
+        };
+
+        let mut balances = self.balances.borrow_mut();
+        balances.insert(withdraw.source, new_source_balance);
+        self.withdrawals.push(withdraw);
+
+        Ok(())
+    }
+
     fn spl_approve(&mut self, approve: SplApprove) {
         self.spl_approves.push(approve);
     }
@@ -1092,8 +1110,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         &self.substate.query_account_cache
     }
 
-    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256)
+    #[must_use]
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256) -> bool
     {
+        let (evm_acct, _) = Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], source.as_bytes()], self.backend.program_id());
+        let src_neon_acct = get_associated_token_address(
+            &evm_acct,
+            &crate::config::token_mint::id()
+        );
+
         let dest_neon_acct = get_associated_token_address(
             &destination,
             &crate::config::token_mint::id()
@@ -1101,10 +1126,17 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
 
         let withdraw = Withdraw{
             source: source,
-            destination: dest_neon_acct,
+            source_neon: src_neon_acct,
+            dest: destination,
+            dest_neon: dest_neon_acct,
             amount: amount
         };
-        self.substate.withdrawals.push(withdraw);
+
+        if self.substate.withdraw(withdraw, self.backend).is_err() {
+            return false;
+        };
+
+        return true;
     }
 
     #[must_use]

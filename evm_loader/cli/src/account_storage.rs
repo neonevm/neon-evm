@@ -432,8 +432,11 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn apply_withdrawals(&self, _: Vec<Withdraw>) {
-
+    pub fn apply_withdrawals(&self, withdrawals: Vec<Withdraw>) {
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        for withdraw in withdrawals {
+            solana_accounts.insert(withdraw.dest_neon, AccountMeta::new(withdraw.dest_neon, false));
+        }
     }
 
     pub fn get_used_accounts(&self) -> Vec<AccountJSON>
