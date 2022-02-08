@@ -136,6 +136,7 @@ Environment variables, if present, override portions of the configuration.
 | NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `operator_id.json`
 | NEON_ETH_MAX_AMOUNT | **solana**.max_amount | `10`
 | NEON_LOG | | `json`
+| RUST_LOG | | `info`
 |-
 "##;
 
