@@ -9,7 +9,7 @@ use tracing::warn;
 
 use solana_sdk::signer::keypair::Keypair;
 
-use crate::ethereum;
+use crate::{ethereum, id};
 
 lazy_static::lazy_static! {
     static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
@@ -87,7 +87,8 @@ static ENV: &[&str] = &[
 pub fn check_file_exists(file: &Path) {
     if !file.exists() {
         warn!(
-            "File {:?} is missing; environment variables will be used",
+            "{} File {:?} is missing; environment variables will be used",
+            id::default(),
             file
         );
     }
