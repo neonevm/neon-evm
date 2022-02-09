@@ -13,7 +13,7 @@ pub fn generate() -> ReqId {
     let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(since) => since,
         Err(err) => {
-            error!("generate_id: time went backwards? {}", err);
+            error!("{{}} generate_id: time went backwards? {}", err);
             Duration::default()
         }
     };
