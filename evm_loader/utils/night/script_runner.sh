@@ -16,6 +16,6 @@ neon_eth_address=0x4cEf46ef9064a6Ec7FfB9a6C905845dc345bfd12
 # whitelist 02
 # neon_eth_address=""
 address_list_file=./addresses.txt
-echo "$solana_url $evm_loader_id $mint_authority_json_file $permission $grantee $neon_eth_address"
+echo "./set_single_acct_permission.sh $solana_url $evm_loader_id $mint_authority_json_file $1 $2 $neon_eth_address"
 
 ../set_single_acct_permission.sh "$solana_url" "$evm_loader_id" "$mint_authority_json_file" $1 $2 "$neon_eth_address"
