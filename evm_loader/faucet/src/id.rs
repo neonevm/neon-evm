@@ -10,13 +10,13 @@ pub fn default() -> ReqId {
 
 /// Builds a (hopefully) unique string to mark requests.
 pub fn generate() -> ReqId {
-    let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(since) => since,
-        Err(err) => {
-            error!("{{}} generate_id: time went backwards? {}", err);
+    let since = SystemTime::now().duration_since(UNIX_EPOCH).map_or_else(
+        |e| {
+            error!("{{}} generate_id: time went backwards? {}", e);
             Duration::default()
-        }
-    };
+        },
+        |s| s,
+    );
     let digest = md5::compute(since.as_nanos().to_string());
     ReqId {
         id: format!("{:x}", digest)[..7].to_string(),
