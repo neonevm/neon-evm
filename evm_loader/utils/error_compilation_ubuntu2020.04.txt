@@ -1,0 +1,32 @@
+neonuser@neonhost:~/work/neon/neon-evm/evm_loader$ cargo build --release
+error: failed to get `evm` as a dependency of package `neon-cli v0.6.0-dev (/home/neonuser/work/neon/neon-evm/evm_loader/cli)`
+
+Caused by:
+  failed to load source for dependency `evm`
+
+Caused by:
+  Unable to update /home/neonuser/work/neon/neon-evm/evm_loader/rust-evm
+
+Caused by:
+  failed to read `/home/neonuser/work/neon/neon-evm/evm_loader/rust-evm/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)
+neonuser@neonhost:~/work/neon/neon-evm/evm_loader$ cd utils/
+neonuser@neonhost:~/work/neon/neon-evm/evm_loader/utils$ cd ../cli/
+neonuser@neonhost:~/work/neon/neon-evm/evm_loader/cli$ cargo build --release
+error: failed to get `evm` as a dependency of package `neon-cli v0.6.0-dev (/home/neonuser/work/neon/neon-evm/evm_loader/cli)`
+
+Caused by:
+  failed to load source for dependency `evm`
+
+Caused by:
+  Unable to update /home/neonuser/work/neon/neon-evm/evm_loader/rust-evm
+
+Caused by:
+  failed to read `/home/neonuser/work/neon/neon-evm/evm_loader/rust-evm/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)
+neonuser@neonhost:~/work/neon/neon-evm/evm_loader/cli$ 
+
