@@ -314,8 +314,8 @@ class DeployTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
-        print("Expecting Exception: invalid program argument")
-        with self.assertRaisesRegex(Exception, 'invalid program argument'):
+        print("Expecting Exception: Program failed to complete")
+        with self.assertRaisesRegex(Exception, 'Program failed to complete'):
             response = send_transaction(client, trx, self.operator_acc)
             print('response:', response)
 

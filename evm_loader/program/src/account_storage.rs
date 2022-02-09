@@ -1,75 +1,52 @@
 //! `AccountStorage` for solana program realisation
 use crate::{
     account_data::{AccountData, ACCOUNT_SEED_VERSION},
-    solana_backend::{AccountStorage},
+    solana_backend::{AccountStorage, AccountStorageInfo},
     solidity_account::SolidityAccount,
     // utils::keccak256_h256,
-    token::{get_token_account_balance, check_token_account, transfer_token},
+    token::{transfer_neon_token, get_token_account_data},
     precompile_contracts::is_precompile_address,
     system::create_pda_account
 };
 use evm::backend::Apply;
 use evm::{H160,  U256};
 use solana_program::{
-    account_info::{AccountInfo, next_account_info},
+    account_info::{AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
     sysvar::{clock::Clock, Sysvar},
     program::invoke_signed,
     entrypoint::ProgramResult,
+    system_program,
 };
 use std::{
-    cell::RefCell,
-    collections::BTreeMap
+    collections::BTreeMap,
+    cell::RefCell
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
 use crate::account_data::ERC20Allowance;
-use spl_associated_token_account::get_associated_token_address;
 
-/// Sender
-pub enum Sender {
-    /// Ethereum account address
-    Ethereum (H160),
-    /// Solana account ethereum address
-    Solana (H160),
-}
 
-struct AccountMeta<'a> {
-    account: &'a AccountInfo<'a>,
-    #[allow(dead_code)]
-    token: &'a AccountInfo<'a>,
-    code: Option<&'a AccountInfo<'a>>
-}
 
 /// `AccountStorage` for solana program realization
 pub struct ProgramAccountStorage<'a> {
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
-    accounts: Vec<SolidityAccount<'a>>,
-    aliases: RefCell<Vec<(H160, usize)>>,
-    account_metas: Vec<AccountMeta<'a>>,
-    contract_id: H160,
-    sender: Sender,
+    solidity_accounts: Vec<SolidityAccount<'a>>,
+    empty_solidity_accounts: RefCell<BTreeMap<H160, &'a AccountInfo<'a>>>,
+    contract: H160,
+    caller: H160,
     program_id: Pubkey
 }
 
-
 impl<'a> ProgramAccountStorage<'a> {
     /// `ProgramAccountStorage` constructor
-    /// 
-    /// `account_infos` expectations: 
-    /// 
-    /// 0. contract account info
-    /// 1. contract code info
-    /// 2. caller or caller account info(for ether account)
-    /// 3. ... other accounts
-    /// 
+    ///
     /// # Errors
     ///
     /// Will return: 
     /// `ProgramError::InvalidArgument` if account in `account_infos` is wrong or in wrong place
     /// `ProgramError::InvalidAccountData` if account's data doesn't meet requirements
     /// `ProgramError::NotEnoughAccountKeys` if `account_infos` doesn't meet expectations
-    #[allow(clippy::too_many_lines)]
     pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
@@ -78,172 +55,92 @@ impl<'a> ProgramAccountStorage<'a> {
             solana_accounts.insert(*info.key, info);
         }
 
-        let account_info_iter = &mut account_infos.iter();
-
-        let mut accounts = Vec::with_capacity(account_infos.len());
-        let mut aliases = Vec::with_capacity(account_infos.len());
-        let mut account_metas = Vec::with_capacity(account_infos.len());
-
-        let mut push_account = |sol_account: SolidityAccount<'a>, account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: Option<&'a AccountInfo<'a>>| {
-            aliases.push((sol_account.get_ether(), accounts.len()));
-            accounts.push(sol_account);
-            account_metas.push(AccountMeta{account: account_info, token: token_info, code: code_info});
-        };
-
-        let construct_contract_account = |account_info: &'a AccountInfo<'a>, token_info: &'a AccountInfo<'a>, code_info: &'a AccountInfo<'a>,| -> Result<SolidityAccount<'a>, ProgramError>
-        {
-            if account_info.owner != program_id || code_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "Invalid owner! account_info.owner={:?}, code_info.owner={:?}, program_id={:?}", account_info.owner, code_info.owner, program_id);
+        let mut solidity_accounts = Vec::new();
+        for account_info in account_infos {
+            if account_info.owner != program_id {
+                continue;
             }
 
             let account_data = AccountData::unpack(&account_info.data.borrow())?;
-            let account = account_data.get_account()?;
-    
-            if *code_info.key != account.code_account {
-                return Err!(ProgramError::InvalidAccountData; "code_info.key={:?}, account.code_account={:?}", *code_info.key, account.code_account)
-            }
-    
-            let code_data = code_info.data.clone();
-            let code_acc = AccountData::unpack(&code_data.borrow())?;
-            code_acc.get_contract()?;
-    
-            Ok(SolidityAccount::new(account_info.key, get_token_account_balance(token_info)?, account_data, Some((code_acc, code_data))))
-        };
-
-        let contract_id = {
-            let program_info = next_account_info(account_info_iter)?;
-            if program_info.owner != program_id {
-                return Err!(ProgramError::InvalidArgument; "Invalid owner! program_info.owner={:?}, program_id={:?}", program_info.owner, program_id);
-            }
-
-            let program_token = next_account_info(account_info_iter)?;
-            check_token_account(program_token, program_info)?;
-
-            let account_data = AccountData::unpack(&program_info.data.borrow())?;
-            let account = account_data.get_account()?;
-
-            let (contract_acc, program_code) = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
-                (SolidityAccount::new(program_info.key, get_token_account_balance(program_token)?, account_data, None) , None)
-            } else {
-                let program_code = next_account_info(account_info_iter)?;
-                (construct_contract_account(program_info, program_token, program_code)?, Some(program_code))
+            let account = match account_data.get_account() {
+                Ok(account) => account,
+                Err(_) => continue
             };
-            
-            let contract_id = contract_acc.get_ether();
-            push_account(contract_acc, program_info, program_token, program_code);
 
-            contract_id
-        };
-
-        let sender = {
-            let caller_info = next_account_info(account_info_iter)?;
-            
-            if caller_info.owner == program_id {
-                let caller_token_info = next_account_info(account_info_iter)?;
-                check_token_account(caller_token_info, caller_info)?;
-
-                let account_data = AccountData::unpack(&caller_info.data.borrow())?;
-                account_data.get_account()?;
-                
-                let caller_acc = SolidityAccount::new(caller_info.key, get_token_account_balance(caller_token_info)?, account_data, None);
-                let caller_address = caller_acc.get_ether();
-                push_account(caller_acc, caller_info, caller_token_info, None);
-                Sender::Ethereum(caller_address)
+            let code = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
+                None
             } else {
-                // TODO: EvmInstruction::Call
-                // https://github.com/neonlabsorg/neon-evm/issues/188
-                // Does not fit in current vision.
-                // It is needed to update behavior for all system in whole.
-                return Err!(ProgramError::InvalidArgument; "Caller could not be Solana user. It must be neon-evm owned account");
+                let code_info = solana_accounts[&account.code_account];
+                let code_data = AccountData::unpack(&code_info.data.borrow())?;
+                Some((code_data, code_info.data.clone()))
+            };
 
-                // if !caller_info.is_signer {
-                //     return Err!(ProgramError::InvalidArgument; "Caller must be signer. Caller pubkey: {} ", &caller_info.key.to_string());
-                // }
-
-                // Sender::Solana(keccak256_h256(&caller_info.key.to_bytes()).into())
-            }
-        };
-
-        while let Ok(account_info) = next_account_info(account_info_iter) {
-            if account_info.owner == program_id {
-                let account_data = AccountData::unpack(&account_info.data.borrow())?;
-                let account = match account_data {
-                    AccountData::Account(ref acc) => acc,
-                    _ => { continue; },
-                };
-
-                let token_info = next_account_info(account_info_iter)?;
-                check_token_account(token_info, account_info)?;
-
-                let (sol_account, code_info) = if account.code_account == Pubkey::new_from_array([0_u8; 32]) {
-                    debug_print!("User account");
-                    (SolidityAccount::new(account_info.key, get_token_account_balance(token_info)?, account_data, None) , None)
-                } else {
-                    debug_print!("Contract account");
-                    let code_info = next_account_info(account_info_iter)?;
-
-                    (construct_contract_account(account_info, token_info, code_info)?, Some(code_info))
-                };
-
-                push_account(sol_account, account_info, token_info, code_info);
-            }
+            let solidity_account = SolidityAccount::new(account_info.key, account_data, code);
+            solidity_accounts.push(solidity_account);
         }
 
-        debug_print!("Accounts was read");
-        aliases.sort_by_key(|v| v.0);
+        let contract = solidity_accounts[0].get_ether();
+        let caller = solidity_accounts[1].get_ether();
 
-        Ok(Self {
+        solidity_accounts.sort_by_key(SolidityAccount::get_ether);
+
+        Ok(ProgramAccountStorage{
             solana_accounts,
-            accounts,
-            aliases: RefCell::new(aliases),
-            account_metas,
-            contract_id,
-            sender,
+            solidity_accounts,
+            empty_solidity_accounts: RefCell::new(BTreeMap::new()),
+            contract,
+            caller,
             program_id: *program_id
         })
     }
 
-    /// Get sender address
-    pub const fn get_sender(&self) -> &Sender {
-        &self.sender
+    #[must_use]
+    fn get_solidity_account_index(&self, address: &H160) -> usize {
+        self.solidity_accounts.binary_search_by_key(address, SolidityAccount::get_ether)
+            .unwrap_or_else(|_| panic!("Solidity account {} must be present in the transaction", address))
+    }
+
+    #[must_use]
+    fn get_solidity_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
+        if let Ok(index) = self.solidity_accounts.binary_search_by_key(address, SolidityAccount::get_ether) {
+            return Some(&self.solidity_accounts[index]);
+        }
+
+        let mut empty_accounts = self.empty_solidity_accounts.borrow_mut();
+        if empty_accounts.contains_key(address) {
+            return None;
+        }
+
+        let (solana_address, _) = Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id());
+        if let Some(account) = self.solana_accounts.get(&solana_address) {
+            assert!(system_program::check_id(account.owner), "Empty solidity account {} must belong to the system program", address);
+
+            empty_accounts.insert(*address, account);
+            return None;
+        }
+
+        panic!("Solidity account {} must be present in the transaction", address)
     }
 
     /// Get contract `SolidityAccount`
-    pub fn get_contract_account(&self) -> Option<&SolidityAccount<'a>> {
-        self.get_account(&self.contract_id)
+    #[must_use]
+    pub fn get_contract_account(&self) -> &SolidityAccount<'a> {
+        self.get_solidity_account(&self.contract)
+            .expect("Contract account must always present in the transaction")
     }
 
     /// Get caller `SolidityAccount`
-    pub fn get_caller_account(&self) -> Option<&SolidityAccount<'a>> {
-        match self.sender {
-            Sender::Ethereum(addr) => self.get_account(&addr),
-            Sender::Solana(_addr) => None,
-        }
+    #[must_use]
+    pub fn get_caller_account(&self) -> &SolidityAccount<'a> {
+        self.get_solidity_account(&self.caller)
+            .expect("Caller account must always present in the transaction")
     }
 
-    fn find_account(&self, address: &H160) -> Option<usize> {
-        let aliases = self.aliases.borrow();
-        if let Ok(pos) = aliases.binary_search_by_key(&address, |v| &v.0) {
-            debug_print!("Found account for {:?} on position {}", &address, &pos.to_string());
-            Some(aliases[pos].1)
-        }
-        else {
-            debug_print!("Not found account for {:?}", &address);
-            None
-        }
-    }
-
-    fn get_account(&self, address: &H160) -> Option<&SolidityAccount<'a>> {
-        self.find_account(address).map(|pos| &self.accounts[pos])
-    }
-
-    /// Get caller account info
-    pub fn get_caller_account_info(&self) -> Option<&AccountInfo<'a>> {
-        if let Some(account_index) = self.find_account(&self.origin()) {
-            let AccountMeta{ account, token: _, code: _ } = &self.account_metas[account_index];
-            return Some(account);
-        }
-        None
+    /// Get caller `AccountInfo`
+    #[must_use]
+    pub fn get_caller_account_info(&self) -> &AccountInfo<'a> {
+        let caller = self.get_caller_account();
+        self.solana_accounts[caller.get_solana_address()]
     }
 
     /// Apply contact execution results
@@ -255,7 +152,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// or `account.update` errors
     pub fn apply<A, I>(
         &mut self, values: A,
-        operator: Option<&AccountInfo<'a>>,
+        operator: &AccountInfo<'a>,
         _delete_empty: bool
     ) -> Result<(), ProgramError>
     where
@@ -268,58 +165,36 @@ impl<'a> ProgramAccountStorage<'a> {
                     if is_precompile_address(&address) {
                         continue;
                     }
-                    if let Some(pos) = self.find_account(&address) {
-                        let account = &mut self.accounts[pos];
-                        let AccountMeta{ account: account_info, token: _, code: _ } = &self.account_metas[pos];
-                        account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
-                    } else {
-                        if let Sender::Solana(addr) = self.sender {
-                            if addr == address {
-                                debug_print!("This is solana user, because {:?} == {:?}.", address, addr);
-                                continue;
-                            }
-                        }
-                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
-                    }
+                    
+                    let index = self.get_solidity_account_index(&address);
+                    let account = &mut self.solidity_accounts[index];
+                    let account_info = self.solana_accounts[account.get_solana_address()];
+                    account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
                 },
                 Apply::Delete { address } => {
                     debug_print!("Going to delete address = {:?}.", address);
 
-                    if let Some(pos) = self.find_account(&address) {
-                        let AccountMeta{ account: account_info, token: _, code: code_info } = &self.account_metas[pos];
-                        let code_info = if let Some(code_info) = code_info {
-                            code_info
-                        } else {
-                            return Err!(ProgramError::InvalidAccountData; "Only contract account could be deleted. account = {:?} -> {:?}.", address, account_info.key);
-                        };
+                    let index = self.get_solidity_account_index(&address);
+                    let account = &mut self.solidity_accounts[index];
+                    let account_info = self.solana_accounts[account.get_solana_address()];
+                    let code_info = self.solana_accounts[account.get_code_solana_address()];
 
-                        let recipient = if let Some(some_operator) = operator {
-                            some_operator
-                        } else {
-                            self.get_caller_account_info().ok_or_else(|| E!(ProgramError::InvalidArgument))?
-                        };
+                    debug_print!("Move funds from account");
+                    **operator.lamports.borrow_mut() += account_info.lamports();
+                    **account_info.lamports.borrow_mut() = 0;
 
-                        debug_print!("Move funds from account");
-                        **recipient.lamports.borrow_mut() += account_info.lamports();
-                        **account_info.lamports.borrow_mut() = 0;
+                    debug_print!("Move funds from code");
+                    **operator.lamports.borrow_mut() += code_info.lamports();
+                    **code_info.lamports.borrow_mut() = 0;
 
-                        debug_print!("Move funds from code");
-                        **recipient.lamports.borrow_mut() += code_info.lamports();
-                        **code_info.lamports.borrow_mut() = 0;
-
-                        debug_print!("Mark accounts empty");
-                        let mut account_data = account_info.try_borrow_mut_data()?;
-                        AccountData::pack(&AccountData::Empty, &mut account_data)?;
-                        let mut code_data = code_info.try_borrow_mut_data()?;
-                        AccountData::pack(&AccountData::Empty, &mut code_data)?;
-                    } else {
-                        return Err!(ProgramError::NotEnoughAccountKeys; "Apply can't be done. Not found account for address = {:?}.", address);
-                    }
+                    debug_print!("Mark accounts empty");
+                    let mut account_data = account_info.try_borrow_mut_data()?;
+                    AccountData::pack(&AccountData::Empty, &mut account_data)?;
+                    let mut code_data = code_info.try_borrow_mut_data()?;
+                    AccountData::pack(&AccountData::Empty, &mut code_data)?;
                 }
             }
         }
-
-        //for log in logs {};
 
         Ok(())
     }
@@ -335,19 +210,21 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("apply_transfers {:?}", transfers);
 
         for transfer in transfers {
-            let source_account_index = self.find_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-            let AccountMeta{ account: source_account, token: source_token_account, code: _ } = &self.account_metas[source_account_index];
-            let source_solidity_account = &self.accounts[source_account_index];
+            let source = self.get_solidity_account(&transfer.source)
+                .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Solidity account {} must be initialized", transfer.source))?;
+            let source_account = self.solana_accounts[source.get_solana_address()];
+            let source_token_account = self.solana_accounts[source.get_neon_token_solana_address()];
 
-            let target_account_index = self.find_account(&transfer.target).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-            let AccountMeta{ account: _, token: target_token_account, code: _ } = &self.account_metas[target_account_index];
+            let target = self.get_solidity_account(&transfer.target)
+                .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Solidity account {} must be initialized", transfer.target))?;
+            let target_token_account = self.solana_accounts[target.get_neon_token_solana_address()];
 
-            transfer_token(
+            transfer_neon_token(
                 accounts,
                 source_token_account,
                 target_token_account,
                 source_account,
-                source_solidity_account,
+                source,
                 &transfer.value,
             )?;
         }
@@ -368,13 +245,14 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("apply_spl_transfers {:?}", transfers);
 
         for transfer in transfers {
-            let source = self.get_account(&transfer.source).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
+            let source = self.get_solidity_account(&transfer.source)
+                .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Solidity account {} must be initialized", transfer.source))?;
 
             let instruction = spl_token::instruction::transfer(
                 &spl_token::id(),
                 &transfer.source_token,
                 &transfer.target_token,
-                &source.get_solana_address(),
+                source.get_solana_address(),
                 &[],
                 transfer.value
             )?;
@@ -400,14 +278,14 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("apply_spl_approves {:?}", approves);
 
         for approve in approves {
-            let source = self.get_account(&approve.owner).ok_or_else(||E!(ProgramError::NotEnoughAccountKeys))?;
-            let source_token = get_associated_token_address(&source.get_solana_address(), &approve.mint);
+            let source = self.get_solidity_account(&approve.owner).ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys))?;
+            let (source_token, _) = self.get_erc20_token_address(&approve.owner, &approve.contract, &approve.mint);
 
             let instruction = spl_token::instruction::approve(
                 &spl_token::id(),
                 &source_token,
                 &approve.spender,
-                &source.get_solana_address(),
+                source.get_solana_address(),
                 &[],
                 approve.value
             )?;
@@ -429,7 +307,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// Will return:
     /// `ProgramError::NotEnoughAccountKeys` if need to apply changes to missing account
     /// or `account.update` errors
-    pub fn apply_erc20_approves(&mut self, accounts: &[AccountInfo], operator: Option<&AccountInfo>, approves: Vec<ERC20Approve>) -> ProgramResult {
+    pub fn apply_erc20_approves(&mut self, accounts: &[AccountInfo], operator: &AccountInfo, approves: Vec<ERC20Approve>) -> ProgramResult {
         debug_print!("apply_erc20_approves {:?}", approves);
 
         for approve in approves {
@@ -455,17 +333,12 @@ impl<'a> ProgramAccountStorage<'a> {
 
             let account = self.solana_accounts[&account_address];
             if account.data_is_empty() {
-                let operator = match operator {
-                    Some(operator) => operator.key,
-                    None => return Err!(ProgramError::NotEnoughAccountKeys)
-                };
-
                 create_pda_account(
                     self.program_id(),
                     accounts,
                     account,
                     seeds,
-                    operator,
+                    operator.key,
                     data.size()
                 )?;
             }
@@ -480,36 +353,40 @@ impl<'a> ProgramAccountStorage<'a> {
 }
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
-    fn apply_to_account<U, D, F>(&self, address: &H160, _d: D, f: F) -> U
+    fn apply_to_account<U, D, F>(&self, address: &H160, d: D, f: F) -> U
         where F: FnOnce(&SolidityAccount) -> U,
               D: FnOnce() -> U
     {
-        let account = self.get_account(address);
-        if let Some(account) = account {
-            f(account)
-        } else {
-            panic!("Solidity account {} must be present in the transaction", address)
-        }
+        self.get_solidity_account(address).map_or_else(d, f)
     }
 
     fn apply_to_solana_account<U, D, F>(&self, address: &Pubkey, _d: D, f: F) -> U
-        where F: FnOnce(/*data: */ &[u8], /*owner: */ &Pubkey) -> U,
+        where F: FnOnce(/*info: */ &AccountStorageInfo) -> U,
               D: FnOnce() -> U
     {
-        let account_info = self.solana_accounts.get(address);
-        if let Some(account_info) = account_info {
-            f(&account_info.data.borrow(), account_info.owner)
-        } else {
-            panic!("Solana account {} must be present in the transaction", address)
-        }
+        self.solana_accounts.get(address).map_or_else(
+            || panic!("Solana account {} must be present in the transaction", address),
+            |account_info| f(&AccountStorageInfo::from(account_info)))
     }
 
     fn program_id(&self) -> &Pubkey { &self.program_id }
-    fn contract(&self) -> H160 { self.contract_id }
+    
+    fn contract(&self) -> H160 {
+        self.contract
+    }
+
     fn origin(&self) -> H160 {
-        match self.sender {
-            Sender::Ethereum(value) | Sender::Solana(value) => value,
-        }
+        self.caller
+    }
+
+    fn balance(&self, address: &H160) -> U256 {
+        self.get_solidity_account(address).map_or_else(U256::zero, |account| {
+            let token_account = &self.solana_accounts[account.get_neon_token_solana_address()];
+            let token = get_token_account_data(&token_account.data.borrow(), token_account.owner)
+                .expect("Invalid token account");
+    
+            U256::from(token.amount) * crate::token::eth::min_transfer_value()
+        })
     }
 
     fn block_number(&self) -> U256 {
@@ -523,15 +400,18 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn exists(&self, address: &H160) -> bool {
-        self.find_account(address).is_some()
+        self.get_solidity_account(address).is_some()
     }
 
     fn get_account_solana_address(&self, address: &H160) -> Pubkey {
-        let account = self.get_account(address);
-        if let Some(account) = account {
-            account.get_solana_address()
-        } else {
-            panic!("Solidity account {} must be present in the transaction", address)
-        }
+        self.get_solidity_account(address).map_or_else(
+            || {
+                let empty_accounts = self.empty_solidity_accounts.borrow();
+                *empty_accounts[address].key
+            },
+            |account| {
+                *account.get_solana_address()
+            }
+        )
     }
 }

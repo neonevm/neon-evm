@@ -1,20 +1,27 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
+/// Todo: document
+
+use core::mem;
 use std::{
     boxed::Box,
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    str::FromStr,
     vec::Vec
 };
-use core::mem;
-use std::cell::RefCell;
-use evm::gasometer::Gasometer;
+
+use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::{ExitError, Transfer, Valids, H160, H256, U256};
-use serde::{Serialize, Deserialize};
-use crate::utils::{keccak256_h256};
-use crate::solana_backend::AccountStorage;
+use evm::gasometer::Gasometer;
+use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
-use std::str::FromStr;
+
+use crate::{
+    query,
+    solana_backend::AccountStorage,
+    utils::keccak256_h256
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -99,7 +106,6 @@ impl ExecutorMetadata {
         &mut self.gasometer
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
@@ -166,6 +172,7 @@ pub struct ExecutorSubstate {
     spl_approves: Vec<SplApprove>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
+    query_account_cache: query::AccountCache,
 }
 
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
@@ -189,6 +196,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         }
     }
 
@@ -237,7 +245,7 @@ impl ExecutorSubstate {
             let apply = {
                 let account = self.accounts.remove(&address).unwrap_or_else(
                     || ExecutorAccount {
-                        nonce: backend.basic(&address).nonce,
+                        nonce: backend.nonce(&address),
                         code: None,
                         valids: None,
                         reset: false,
@@ -285,6 +293,7 @@ impl ExecutorSubstate {
             spl_approves: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
@@ -459,7 +468,7 @@ impl ExecutorSubstate {
         if !self.accounts.contains_key(&address) {
             let account = self.known_account(address).cloned().map_or_else(
                 || ExecutorAccount {
-                    nonce: backend.basic(&address).nonce,
+                    nonce: backend.nonce(&address),
                     code: None,
                     valids: None,
                     reset: false,
@@ -537,7 +546,7 @@ impl ExecutorSubstate {
 
         value.map_or_else(
             || {
-                let balance = backend.basic(address).balance;
+                let balance = backend.balance(address);
                 self.balances.borrow_mut().insert(*address, balance);
 
                 balance
@@ -779,7 +788,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn nonce(&self, address: H160) -> U256 {
         self.substate
             .known_nonce(address)
-            .unwrap_or_else(|| self.backend.basic(&address).nonce)
+            .unwrap_or_else(|| self.backend.nonce(&address))
     }
 
     #[must_use]
@@ -852,8 +861,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             return known_empty;
         }
 
-        self.backend.basic(&address).balance == U256::zero()
-            && self.backend.basic(&address).nonce == U256::zero()
+        self.backend.balance(&address) == U256::zero()
+            && self.backend.nonce(&address) == U256::zero()
             && self.backend.code_size(&address) == 0
     }
 
@@ -1054,6 +1063,42 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
+    pub fn cache_solana_account(&mut self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
+        if length == 0 || length > query::MAX_CHUNK_LEN {
+            return Err(query::Error::InvalidArgument);
+        }
+        let value = self.backend.apply_to_solana_account(
+            &address,
+            || None,
+            |info| Some(query::Value::from(info, offset, length)),
+        );
+        match value {
+            None => Err(query::Error::AccountNotFound),
+            Some(value) => {
+                if value.has_data() {
+                    self.substate.query_account_cache.put(address, value);
+                    Ok(())
+                } else {
+                    Err(query::Error::InvalidArgument)
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn query_solana_account(&self) -> &query::AccountCache {
+        &self.substate.query_account_cache
+    }
+
+    #[must_use]
+    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
+        &mut self.substate.metadata.gasometer
+    }
+
+    #[must_use]
+    pub fn gasometer(&self) -> &Gasometer {
+        self.substate.metadata().gasometer()
+    }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
         Self { backend, substate }
@@ -1070,19 +1115,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.substate.metadata.gasometer
-    }
-
-    #[must_use]
     pub fn deconstruct(
         self,
     ) -> ApplyState {
         self.substate.deconstruct(self.backend)
-    }
-
-    #[must_use]
-    pub fn gasometer(&self) -> &Gasometer {
-        self.substate.metadata().gasometer()
     }
 }

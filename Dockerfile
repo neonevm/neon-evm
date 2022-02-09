@@ -1,10 +1,13 @@
+ARG SOLANA_REVISION=v1.8.12-testnet
 # Install BPF SDK
-FROM solanalabs/rust:1.53.0 AS builder
-RUN rustup component add clippy
+FROM solanalabs/rust:latest AS builder
+RUN rustup toolchain install nightly
+RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.9/install)" && \
-    /root/.local/share/solana/install/releases/1.7.9/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
+    /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 
 # Build evm_loader
 # Note: create stub Cargo.toml to speedup build
@@ -14,7 +17,7 @@ WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo clippy && \
+RUN cargo +nightly clippy && \
     cargo build --release && \
     cargo build-bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
@@ -43,7 +46,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM neonlabsorg/solana:v1.7.9-resources AS solana
+FROM neonlabsorg/solana:${SOLANA_REVISION} AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -69,12 +72,9 @@ COPY evm_loader/*.py \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
-    evm_loader/neon_token_keypair.json /opt/
-
-# Next 2 strings are for backward compatibility with proxy-model.py
-# Can be deleted after issue https://github.com/neonlabsorg/proxy-model.py/issues/249 resolved
-COPY evm_loader/neon_token_keypair.json /opt/test_token_keypair
-COPY evm_loader/evm_loader-keypair.json /opt/test_token_owner
+    evm_loader/neon_token_keypair.json \
+    evm_loader/permission_allowance_token_keypair.json \
+    evm_loader/permission_denial_token_keypair.json /opt/
 
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/

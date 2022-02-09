@@ -1,15 +1,22 @@
 //! `EVMLoader` precompile contracts
 
-use crate::executor_state::ExecutorState;
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_digest;
+use std::convert::{Infallible, TryInto};
+
 use arrayref::{array_ref, array_refs};
-use core::convert::Infallible;
 use evm::{Capture, ExitReason, H160, U256};
-use solana_program::secp256k1_recover::secp256k1_recover;
-use std::convert::{TryInto};
+use solana_program::{
+    pubkey::Pubkey,
+    secp256k1_recover::secp256k1_recover,
+};
+
+use crate::{
+    executor_state::ExecutorState,
+    solana_backend::AccountStorage,
+    utils::keccak256_digest,
+};
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -19,7 +26,6 @@ const SYSTEM_ACCOUNT_BN256_ADD: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07]);
 const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
-
 
 const GAS_COST_ECRECOVER: u64 = 3000;
 const GAS_COST_SHA256_BASE: u64 = 60;
@@ -53,6 +59,7 @@ const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
+        || *address == SYSTEM_ACCOUNT_QUERY
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -76,6 +83,9 @@ pub fn call_precompile<'a, B: AccountStorage>(
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
         return Some(erc20_wrapper(input, context, state));
+    }
+    if address == SYSTEM_ACCOUNT_QUERY {
+        return Some(query_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input, state));
@@ -139,15 +149,13 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    use solana_program::pubkey::Pubkey;
-
     debug_print!("erc20_wrapper({})", hex::encode(&input));
 
     let (token_mint, rest) = input.split_at(32);
     let token_mint = Pubkey::new(token_mint);
 
     let (method_id, rest) = rest.split_at(4);
-    let method_id: &[u8; 4] = method_id.try_into().unwrap_or_else(|_| &[0_u8; 4]);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     match method_id {
         ERC20_METHOD_DECIMALS_ID => {
@@ -186,13 +194,18 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         ERC20_METHOD_TRANSFER_ID => {
             debug_print!("erc20_wrapper transfer");
 
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 transfer is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
             let arguments = array_ref![rest, 0, 64];
             let (_, address, value) = array_refs!(arguments, 12, 20, 32);
 
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
 
-            let status = state.erc20_transfer(token_mint, context,address, value);
+            let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
                 let revert_message = b"ERC20 transfer failed".to_vec();
                 return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
@@ -205,6 +218,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         },
         ERC20_METHOD_TRANSFER_FROM_ID => {
             debug_print!("erc20_wrapper transferFrom");
+
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 transferFrom is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
 
             let arguments = array_ref![rest, 0, 96];
             let (_, source, _, target, value) = array_refs!(arguments, 12, 20, 12, 20, 32);
@@ -226,6 +244,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         },
         ERC20_METHOD_APPROVE_ID => {
             debug_print!("erc20_wrapper approve");
+
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 approve is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
 
             let arguments = array_ref![rest, 0, 64];
             let (_, spender, value) = array_refs!(arguments, 12, 20, 32);
@@ -259,6 +282,11 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
         ERC20_METHOD_APPROVE_SOLANA_ID => {
             debug_print!("erc20_wrapper approve solana");
 
+            if state.metadata().is_static() {
+                let revert_message = b"ERC20 approveSolana is not allowed in static context".to_vec();
+                return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+            }
+
             let arguments = array_ref![rest, 0, 64];
             let (spender, _, value) = array_refs!(arguments, 32, 24, 8);
 
@@ -279,6 +307,164 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
     }
 }
 
+// QueryAccount method ids:
+//-------------------------------------------
+// cache(uint256,uint64,uint64) => 0x2b3c8322
+// owner(uint256)               => 0xa123c33e
+// length(uint256)              => 0xaa8b99d2
+// lamports(uint256)            => 0x748f2d8a
+// executable(uint256)          => 0xc219a785
+// rent_epoch(uint256)          => 0xc4d369b5
+// data(uint256,uint64,uint64)  => 0x43ca5161
+//-------------------------------------------
+
+const QUERY_ACCOUNT_METHOD_CACHE_ID: &[u8; 4] = &[0x2b, 0x3c, 0x83, 0x22];
+const QUERY_ACCOUNT_METHOD_OWNER_ID: &[u8; 4] = &[0xa1, 0x23, 0xc3, 0x3e];
+const QUERY_ACCOUNT_METHOD_LENGTH_ID: &[u8; 4] = &[0xaa, 0x8b, 0x99, 0xd2];
+const QUERY_ACCOUNT_METHOD_LAMPORTS_ID: &[u8; 4] = &[0x74, 0x8f, 0x2d, 0x8a];
+const QUERY_ACCOUNT_METHOD_EXECUTABLE_ID: &[u8; 4] = &[0xc2, 0x19, 0xa7, 0x85];
+const QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID: &[u8; 4] = &[0xc4, 0xd3, 0x69, 0xb5];
+const QUERY_ACCOUNT_METHOD_DATA_ID: &[u8; 4] = &[0x43, 0xca, 0x51, 0x61];
+
+/// Call inner `query_account`
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn query_account<'a, B: AccountStorage>(
+    input: &[u8],
+    state: &mut ExecutorState<'a, B>
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    debug_print!("query_account({})", hex::encode(&input));
+
+    let (method_id, rest) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+
+    let (account_address, rest) = rest.split_at(32);
+    let account_address = Pubkey::new(account_address);
+
+    match method_id {
+        QUERY_ACCOUNT_METHOD_CACHE_ID => {
+            let arguments = array_ref![rest, 0, 64];
+            let (offset, length) = array_refs!(arguments, 32, 32);
+            let offset = U256::from_big_endian_fast(offset).as_usize();
+            let length = U256::from_big_endian_fast(length).as_usize();
+
+            debug_print!("query_account.cache({}, {}, {})", account_address, offset, length);
+            let r = state.cache_solana_account(account_address, offset, length);
+            if r.is_ok() {
+                return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]));
+            }
+
+            let revert_message = b"QueryAccount.cache failed".to_vec();
+            Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        },
+        QUERY_ACCOUNT_METHOD_OWNER_ID => {
+            debug_print!("query_account.owner({})", account_address);
+
+            match state.query_solana_account().owner(&account_address) {
+                Ok(owner) => {
+                    debug_print!("query_account.owner -> {}", owner);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), owner.as_ref().to_owned()))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.owner failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
+            }
+        },
+        QUERY_ACCOUNT_METHOD_LENGTH_ID => {
+            debug_print!("query_account.length({})", account_address);
+
+            match state.query_solana_account().length(&account_address) {
+                Ok(length) => {
+                    debug_print!("query_account.length -> {}", length);
+                    let length: U256 = length.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    length.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.length failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
+            }
+        },
+        QUERY_ACCOUNT_METHOD_LAMPORTS_ID => {
+            debug_print!("query_account.lamports({})", account_address);
+
+            match state.query_solana_account().lamports(&account_address) {
+                Ok(lamports) => {
+                    debug_print!("query_account.lamports -> {}", lamports);
+                    let lamports: U256 = lamports.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    lamports.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.lamports failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
+            }
+        },
+        QUERY_ACCOUNT_METHOD_EXECUTABLE_ID => {
+            debug_print!("query_account.executable({})", account_address);
+
+            match state.query_solana_account().executable(&account_address) {
+                Ok(executable) => {
+                    debug_print!("query_account.executable -> {}", executable);
+                    let executable: U256 = if executable { U256::one() } else { U256::zero() }; // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    executable.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.executable failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
+            }
+        },
+        QUERY_ACCOUNT_METHOD_RENT_EPOCH_ID => {
+            debug_print!("query_account.rent_epoch({})", account_address);
+
+            match state.query_solana_account().rent_epoch(&account_address) {
+                Ok(rent_epoch) => {
+                    debug_print!("query_account.rent_epoch -> {}", rent_epoch);
+                    let rent_epoch: U256 = rent_epoch.into(); // pad to 32 bytes
+                    let mut bytes = vec![0_u8; 32];
+                    rent_epoch.into_big_endian_fast(&mut bytes);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), bytes))
+                }
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.rent_epoch failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                }
+            }
+        },
+        QUERY_ACCOUNT_METHOD_DATA_ID => {
+            let arguments = array_ref![rest, 0, 64];
+            let (offset, length) = array_refs!(arguments, 32, 32);
+            let offset = U256::from_big_endian_fast(offset).as_usize();
+            let length = U256::from_big_endian_fast(length).as_usize();
+            debug_print!("query_account.data({}, {}, {})", account_address, offset, length);
+
+            match state.query_solana_account().data(&account_address, offset, length) {
+                Ok(data) => {
+                    debug_print!("query_account.data got {} bytes", length);
+                    Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), data))
+                },
+                Err(err) => {
+                    let revert_message = format!("QueryAccount.data failed: {}", err).as_bytes().to_vec();
+                    Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+                },
+            }
+        },
+        _ => {
+            debug_print!("query_account UNKNOWN {:?}", method_id);
+            Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+        }
+    }
+}
 
 /// Call inner `ecrecover`
 #[must_use]

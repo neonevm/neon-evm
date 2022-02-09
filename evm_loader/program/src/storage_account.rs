@@ -1,6 +1,7 @@
 use crate::{
     account_data::{ Storage, AccountData, FinalizedStorage},
-    error::EvmLoaderError
+    config::OPERATOR_PRIORITY_SLOTS,
+    error::EvmLoaderError,
 };
 use evm::{ H160 };
 use solana_program::{
@@ -12,7 +13,6 @@ use solana_program::{
 };
 use serde::{ Serialize, de::DeserializeOwned };
 use std::convert::TryInto;
-use crate::config::OPERATOR_PRIORITY_SLOTS;
 
 pub struct StorageAccount<'a> {
     info: &'a AccountInfo<'a>,
@@ -185,7 +185,7 @@ impl<'a> StorageAccount<'a> {
 
         let keys_storage = &account_data[begin..end];
         let chunks = keys_storage.chunks_exact(32);
-        let keys = chunks.map(|c| Pubkey::new(c)).collect();
+        let keys = chunks.map(Pubkey::new).collect();
 
         Ok(keys)
     }

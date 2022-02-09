@@ -1,6 +1,6 @@
 //! Faucet Ethereum utilities module.
 
-use color_eyre::Result;
+use eyre::Result;
 
 pub type Address = web3::types::Address;
 

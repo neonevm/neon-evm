@@ -72,7 +72,7 @@ pub fn create_associated_token_account(
 /// Will return: 
 /// `ProgramError::IncorrectProgramId` if account is not token account
 pub fn get_token_account_balance(account: &AccountInfo) -> Result<u64, ProgramError> {
-    if account.data_len() == 0 {
+    if account.data_is_empty() {
         return Ok(0_u64);
     }
 
@@ -154,6 +154,23 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
     Ok(())
 }
 
+/// Validate Token Account Mint
+/// 
+/// # Errors
+///
+/// Will return: 
+/// `ProgramError::IncorrectProgramId` if account is not token account
+pub fn check_token_mint(token: &AccountInfo, mint: &Pubkey) -> Result<(), ProgramError> {
+    debug_print!("check_token_mint");
+
+    let token_data = get_token_account_data(&token.data.borrow(), token.owner)?;
+    if token_data.mint == *mint {
+        Ok(())
+    } else {
+        Err!(ProgramError::IncorrectProgramId; "token_data.mint<{}> == *mint<{}>", token_data.mint, mint)
+    }
+}
+
 
 /// Transfer Tokens
 /// 
@@ -161,7 +178,7 @@ pub fn check_token_account(token: &AccountInfo, account: &AccountInfo) -> Result
 ///
 /// Could return: 
 /// `ProgramError::InvalidInstructionData`
-pub fn transfer_token(
+pub fn transfer_neon_token(
     accounts: &[AccountInfo],
     source_token_account: &AccountInfo,
     target_token_account: &AccountInfo,
@@ -169,13 +186,16 @@ pub fn transfer_token(
     source_solidity_account: &SolidityAccount,
     value: &U256,
 ) -> Result<(), ProgramError> {
-    debug_print!("transfer_token");
+    debug_print!("transfer_neon_token");
     if get_token_account_owner(source_token_account)? != *source_account.key {
         return Err!(ProgramError::InvalidInstructionData;
             "Invalid account owner; source_token_account = {:?}, source_account = {:?}",
             source_token_account, source_account
         );
     }
+
+    check_token_mint(source_token_account, &token_mint::id())?;
+    check_token_mint(target_token_account, &token_mint::id())?;
 
     let value = value / eth::min_transfer_value();
     let value = u64::try_from(value).map_err(|_| E!(ProgramError::InvalidInstructionData))?;
@@ -190,15 +210,13 @@ pub fn transfer_token(
 
     debug_print!("Transfer NEON tokens from {} to {} value {}", source_token_account.key, target_token_account.key, value);
 
-    let instruction = spl_token::instruction::transfer_checked(
+    let instruction = spl_token::instruction::transfer(
         &spl_token::id(),
         source_token_account.key,
-        &token_mint::id(),
         target_token_account.key,
         source_account.key,
         &[],
-        value,
-        token_mint::decimals(),
+        value
     )?;
 
     let (ether, nonce) = source_solidity_account.get_seeds();
@@ -230,12 +248,12 @@ pub fn user_pays_operator<'a>(
         .checked_mul(gas_price_wei)
         .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
-    transfer_token(
+    transfer_neon_token(
         accounts,
         user_token_account,
         operator_token_account,
-        account_storage.get_caller_account_info().ok_or_else(||E!(ProgramError::InvalidArgument))?,
-        account_storage.get_caller_account().ok_or_else(|| E!(ProgramError::InvalidArgument))?,
+        account_storage.get_caller_account_info(),
+        account_storage.get_caller_account(),
         &fee)?;
 
     Ok(())
