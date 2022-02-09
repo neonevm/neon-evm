@@ -29,4 +29,4 @@ echo "$solana_url $evm_loader_id $mint_authority_json_file $permission $grantee 
 # ./set_many_accts_permission.sh $solana_url $evm_loader_id $mint_authority_json_file $1 $2 $address_list_file
 
 
-set_single_acct_permission.sh "http://proxy.night.stand.neontest.xyz/solana" "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU" "../evm_loader_keypair.json" "allow" "client" "0x4cEf46ef9064a6Ec7FfB9a6C905845dc345bfd12"
+./set_single_acct_permission.sh "http://proxy.night.stand.neontest.xyz/solana" "eeLSJgWzzxrqKv1UxtRVVH8FX3qCQWUs9QuAjJpETGU" "../evm_loader_keypair.json" "allow" "client" "0x4cEf46ef9064a6Ec7FfB9a6C905845dc345bfd12"
