@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use log::{error, info, trace};
+use log::{error, info, trace, warn};
 
 use evm::{H160, U256, Transfer};
 use evm::backend::Apply;
@@ -233,7 +233,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             Some((acc, balance, code_account))
         }
         else {
-            error!("Account not found {}", &address.to_string());
+            warn!("Account not found {}", &address.to_string());
 
             None
         }
@@ -250,7 +250,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             }
             else {
                 if new_accounts.get(address).is_none() {
-                    error!("Account not found {}", &address.to_string());
+                    warn!("Account not found {}", &address.to_string());
                     new_accounts.insert(*address, SolanaNewAccount::new(solana_address));
                 }
                 false
@@ -381,7 +381,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         *acc.writable.borrow_mut() = true;
                     }
                     else {
-                        error!("Account not found {}", &address.to_string());
+                        warn!("Account not found {}", &address.to_string());
                     }
                     info!("Modify: {} {} {}", &address.to_string(), &nonce.as_u64(), &reset_storage.to_string());
                 },
