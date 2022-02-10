@@ -18,6 +18,7 @@ use crate::{
         create_program_address,
         create_ether_account,
         deploy,
+        deposit,
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
@@ -596,6 +597,27 @@ fn main() {
                 )
         )
         .subcommand(
+            SubCommand::with_name("deposit")
+                .about("Deposit neons to ether account")
+                .arg(
+                    Arg::with_name("amount")
+                        .index(1)
+                        .value_name("amount")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Amount to deposit"),
+                )
+                .arg(
+                    Arg::with_name("ether")
+                        .index(2)
+                        .value_name("ether")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("get-ether-account-data")
                 .about("Get values stored in associated with given address account data")
                 .arg(
@@ -785,6 +807,11 @@ fn main() {
                         u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
                 deploy::execute(&config, &program_location, &collateral_pool_base, chain_id)
+            }
+            ("deposit", Some(arg_matches)) => {
+                let amount = value_of(arg_matches, "amount").unwrap();
+                let ether = h160_of(arg_matches, "ether").unwrap();
+                deposit::execute(&config, amount, &ether)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
