@@ -402,6 +402,20 @@ fn is_amount_u256<T>(amount: T) -> Result<(), String>
     }
 }
 
+fn is_amount_u64<T>(amount: T) -> Result<(), String>
+    where
+        T: AsRef<str> + Display,
+{
+    if amount.as_ref().parse::<u64>().is_ok() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unable to parse input amount as integer u64, provided: {}",
+            amount
+        ))
+    }
+}
+
 macro_rules! neon_cli_pkg_version {
     () => ( env!("CARGO_PKG_VERSION") )
 }
@@ -602,15 +616,16 @@ fn main() {
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
-                        .value_name("amount")
+                        .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_amount_u64)
                         .help("Amount to deposit"),
                 )
                 .arg(
                     Arg::with_name("ether")
                         .index(2)
-                        .value_name("ether")
+                        .value_name("ETHER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_h160)
