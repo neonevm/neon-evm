@@ -33,6 +33,6 @@ services:
       - ../evm_loader-keypair.json:/opt/permission_token_mint_authority.json  # Permission tokens mint authority keypair
       - ~/.config/solana/id.json:/root/.config/solana/id.json                 # Payer keypair (should have non-zero balance)
       - ./example_address_list:/opt/set_permissions                           # File with list of IDs
-      - ./error_list:/opt/set_permissions.err                                 # File where failed IDs will be collected
+      - ./example_error_list:/opt/set_permissions.err                         # File where failed IDs will be collected
     entrypoint: >
       ./set_many_accts_permission.sh
