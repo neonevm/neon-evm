@@ -1,5 +1,6 @@
 use serde::{ Deserialize };
 use fern::{ Dispatch };
+use std::{ process, path, ffi::OsStr };
 
 #[derive(Deserialize)]
 #[derive(Default)]
@@ -32,9 +33,8 @@ const LOG_MODULES: [&str; 11] = [
 
 
 pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
-    let mut dispatch: Dispatch =
-        fern::Dispatch::new()
-            .level(log::LevelFilter::Error);
+
+    let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
 
     for module_name in LOG_MODULES {
         dispatch = dispatch.level_for(module_name, log::LevelFilter::Trace);
@@ -42,16 +42,24 @@ pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
 
     dispatch
         .format(move |out, message, record| {
+            let line: String = record.line().map_or("NA".to_string(), |v| v.to_string());
+
+            let file_name: &str = record.file()
+                                        .and_then(|filepath| path::Path::new(filepath).file_name())
+                                        .and_then(OsStr::to_str)
+                                        .unwrap_or("Undefined");
+
             out.finish(format_args!(
-                "{:23} {:>8} {:>6}:{:10} {:>15}:{:30} {} {}",
-                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                record.level(),
-                "NA",
-                "Undefined",
-                "Emulator",
-                record.target(),
-                context.req_id,
-                message
+                "{datetime:23} {level:.1} {file:}:{lineno:} {pid:} {component:}:{entity:} {context:} {message:}",
+                datetime=chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                level=record.level(),
+                file=file_name,
+                lineno=line,
+                pid=process::id(),
+                component="Emulator",
+                entity="Undefined",
+                context=context.req_id,
+                message=message
             ));
         })
         .chain(std::io::stderr())

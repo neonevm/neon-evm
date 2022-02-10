@@ -424,9 +424,15 @@ impl<'a> EmulatorAccountStorage<'a> {
 
     pub fn apply_spl_transfers(&self, transfers: Vec<SplTransfer>) {
         let mut token_accounts = self.token_accounts.borrow_mut();
+
         for transfer in transfers {
             self.create_acc_if_not_exists(&transfer.source);
             self.create_acc_if_not_exists(&transfer.target);
+
+            let mut new_accounts = self.new_accounts.borrow_mut();
+            if let Some(ref mut account) = new_accounts.get_mut(&transfer.target) {
+                account.writable = true;
+            }
 
             let (contract_solana_address, _) = make_solana_program_address(&transfer.contract, &self.config.evm_loader);
 
