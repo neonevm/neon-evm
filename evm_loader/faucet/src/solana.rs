@@ -17,7 +17,7 @@ use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::{system_program, sysvar};
 
-use crate::{config, ethereum};
+use crate::{config, ethereum, id::ReqId};
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
@@ -48,7 +48,7 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 /// When `in_fractions` == false, amount is treated as whole token amount.
 /// When `in_fractions` == true, amount is treated as amount in galans (10E-9).
 pub async fn transfer_token(
-    id: &str,
+    id: ReqId,
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
@@ -77,7 +77,6 @@ pub async fn transfer_token(
     let token_account =
         spl_associated_token_account::get_associated_token_address(&account, &token_mint_id);
 
-    let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = Vec::with_capacity(2);
