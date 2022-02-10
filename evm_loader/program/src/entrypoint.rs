@@ -5,8 +5,8 @@
 use std::{
     alloc::Layout,
     convert::{TryFrom, TryInto},
-    mem::size_of, 
-    ptr::null_mut, 
+    mem::size_of,
+    ptr::null_mut,
     usize
 };
 
@@ -127,7 +127,7 @@ fn process_instruction<'a>(
     let result = match instruction {
         EvmInstruction::CreateAccount {lamports: _, space: _, ether, nonce} => {
             let rent = Rent::get()?;
-            
+
             let funding_info = next_account_info(account_info_iter)?;
             let account_info = next_account_info(account_info_iter)?;
             let token_account_info = next_account_info(account_info_iter)?;
@@ -528,7 +528,7 @@ fn process_instruction<'a>(
         EvmInstruction::PartialCallOrContinueFromRawEthereumTX {collateral_pool_index, step_count, from_addr, sign, unsigned_msg} => {
             debug_print!("Execute from raw ethereum transaction iterative or continue");
             let storage_info = next_account_info(account_info_iter)?;
-            let sysvar_info = next_account_info(account_info_iter)?;
+            let _sysvar_info = next_account_info(account_info_iter)?;
             let operator_sol_info = next_account_info(account_info_iter)?;
             let collateral_pool_sol_info = next_account_info(account_info_iter)?;
             let operator_eth_info = next_account_info(account_info_iter)?;
@@ -551,7 +551,9 @@ fn process_instruction<'a>(
                     };
 
                     if err == EvmLoaderError::StorageAccountUninitialized.into() || finalized_is_outdated {
-                        check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 13_u16)?;
+                        if caller != verify_tx_signature(sign, unsigned_msg).map_err(|e| E!(ProgramError::MissingRequiredSignature; "Error={:?}", e))? {
+                            return Err(E!(ProgramError::InvalidInstructionData));
+                        }
 
                         let trx: UnsignedTransaction = rlp::decode(unsigned_msg)
                             .map_err(|e| E!(ProgramError::InvalidInstructionData; "DecoderError={:?}", e))?;
@@ -766,7 +768,7 @@ fn process_instruction<'a>(
         },
         EvmInstruction::UpdateValidsTable => {
             let code_info = next_account_info(account_info_iter)?;
-            
+
             let mut data = code_info.try_borrow_mut_data()?;
             let account_data = AccountData::unpack(&data)?;
             let contract = account_data.get_contract()?;
