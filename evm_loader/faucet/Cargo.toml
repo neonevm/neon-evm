@@ -3,7 +3,7 @@ name = "faucet"
 description = "Ethereum ERC20 Token Faucet Service"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 repository = "https://github.com/neonlabsorg/neon-evm/evm_loader/faucet"
-version = "0.5.4"
+version = "0.5.5"
 build = "build.rs"
 edition = "2018"
 
