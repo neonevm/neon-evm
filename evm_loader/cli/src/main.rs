@@ -388,30 +388,17 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-fn is_amount_u256<T>(amount: T) -> Result<(), String>
+fn is_valid<T, U>(amount: U) -> Result<(), String>
     where
-        T: AsRef<str> + Display,
+        T: std::str::FromStr,
+        U: AsRef<str> + Display,
 {
-    if amount.as_ref().parse::<U256>().is_ok() {
+    if amount.as_ref().parse::<T>().is_ok() {
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse input amount as integer U256, provided: {}",
-            amount
-        ))
-    }
-}
-
-fn is_amount_u64<T>(amount: T) -> Result<(), String>
-    where
-        T: AsRef<str> + Display,
-{
-    if amount.as_ref().parse::<u64>().is_ok() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Unable to parse input amount as integer u64, provided: {}",
-            amount
+            "Unable to parse input amount as {}, provided: {}",
+            std::any::type_name::<T>(), amount
         ))
     }
 }
@@ -543,7 +530,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_amount_u256)
+                        .validator(is_valid::<U256, _>)
                         .help("Transaction value")
                 )
                 .arg(
@@ -619,7 +606,7 @@ fn main() {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_amount_u64)
+                        .validator(is_valid::<u64, _>)
                         .help("Amount to deposit"),
                 )
                 .arg(
