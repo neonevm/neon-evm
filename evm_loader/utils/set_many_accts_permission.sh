@@ -1,31 +1,23 @@
 #!/bin/bash
 
-SOLANA_URL=$1
-EVM_LOADER=$2
-MINT_AUTHORITY_FILE=$3
-OPERATION=$4
-ACCOUNT_TYPE=$5
-ADDRESS_LIST_FILE=$6
-
-show_help_and_exit() {
-  echo "Usage: set_many_accts_permission.sh <solana_url> <evm_loader_id> <mint_authority_json_file> <allow|deny> <client|contract> <address_list_file>"
-  exit 1
-}
-
 if [ -z "$SOLANA_URL" ]; then
-  show_help_and_exit
+  echo "SOLANA_URL not defined"
+  exit 1
 fi
 
 if [ -z "$EVM_LOADER" ]; then
-  show_help_and_exit
+  echo "EVM_LOADER not defined"
+  exit 1
 fi
 
 if [ -z "$MINT_AUTHORITY_FILE" ]; then
-  show_help_and_exit
+  echo "MINT_AUTHORITY_FILE not defined"
+  exit 1
 fi
 
 if [ -z "$OPERATION" ]; then
-  show_help_and_exit
+  echo "OPERATION not defined"
+  exit 1
 fi
 
 if [[ "$OPERATION" != "allow" && "$OPERATION" != "deny" ]]; then
@@ -34,7 +26,8 @@ if [[ "$OPERATION" != "allow" && "$OPERATION" != "deny" ]]; then
 fi
 
 if [ -z "$ACCOUNT_TYPE" ]; then
-  show_help_and_exit
+  echo "ACCOUNT_TYPE not defined"
+  exit 1
 fi
 
 if [[ "$ACCOUNT_TYPE" != "client" && "$ACCOUNT_TYPE" != "contract" ]]; then
@@ -43,15 +36,17 @@ if [[ "$ACCOUNT_TYPE" != "client" && "$ACCOUNT_TYPE" != "contract" ]]; then
 fi
 
 if [ -z "$ADDRESS_LIST_FILE" ]; then
-  show_help_and_exit
+  echo "ADDRESS_LIST_FILE not defined"
+  exit 1
 fi
 
 ERROR_FILE="$ADDRESS_LIST_FILE.err"
 echo "Failed ID's will be collected in $ERROR_FILE"
 touch $ERROR_FILE
 
-while read line; do 
-  ./set_single_acct_permission.sh $SOLANA_URL $EVM_LOADER $MINT_AUTHORITY_FILE $OPERATION $ACCOUNT_TYPE $line
+while read line; do
+  export NEON_ETH_ADDRESS=$line
+  ./set_single_acct_permission.sh
   if [ "$?" -ne "0" ]; then
     echo "$line" >> $ERROR_FILE
   fi
