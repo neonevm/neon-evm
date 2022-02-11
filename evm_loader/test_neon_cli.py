@@ -3,8 +3,6 @@ import os
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
-
 class NeonCliTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
