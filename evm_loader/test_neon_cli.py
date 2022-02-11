@@ -1,4 +1,5 @@
 import unittest
+import os
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 
