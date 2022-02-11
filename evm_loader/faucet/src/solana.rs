@@ -70,10 +70,9 @@ pub async fn deposit_token(
     let signer_token_pubkey =
         spl_associated_token_account::get_associated_token_address(&signer_pubkey, &token_mint_id);
 
-    let evm_bank_pubkey =
-        spl_associated_token_account::get_associated_token_address(&evm_loader_id, &token_mint_id);
-
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id).0;
+    let evm_bank_pubkey =
+        spl_associated_token_account::get_associated_token_address(&evm_token_authority, &token_mint_id);
 
     let ether_pubkey = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id).0;
 
