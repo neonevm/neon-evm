@@ -4,35 +4,34 @@ services:
   set_single_acct_permission:
     container_name: set_single_acct_permission
     image: neonlabsorg/evm_loader:${REVISION:-latest}
+    env_file:
+      - ./config/${CONFIG_NAME}/.env
     environment:
-      SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana 
-      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       MINT_AUTHORITY_FILE: /opt/permission_token_mint_authority.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
-      OPERATION: allow
-      ACCOUNT_TYPE: client
-      NEON_ETH_ADDRESS: 0x4cEf46ef9064a6Ec7FfB9a6C905845dc345bfd12
     volumes:
-      # Edit first part of mappings only (before ':')
-      - ../evm_loader-keypair.json:/opt/permission_token_mint_authority.json  # Permission tokens mint authority keypair
-      - ~/.config/solana/id.json:/root/.config/solana/id.json                 # Payer keypair (should have non-zero balance)
+      # Permission tokens mint authority keypair
+      - ./config/${CONFIG_NAME}/mint_authority_keypair.json:/opt/permission_token_mint_authority.json
+      # Payer keypair should have non-zero balance (using default id.json)
+      - ~/.config/solana/id.json:/root/.config/solana/id.json
     entrypoint: >
       ./set_single_acct_permission.sh
       
   set_many_accts_permission:
     container_name: set_many_accts_permission
     image: neonlabsorg/evm_loader:${REVISION:-latest}
+    env_file:
+      - ./config/${CONFIG_NAME}/.env
     environment:
-      SOLANA_URL: http://proxy.night.stand.neontest.xyz/node-solana 
-      EVM_LOADER: 53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io
       MINT_AUTHORITY_FILE: /opt/permission_token_mint_authority.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
-      OPERATION: deny
-      ACCOUNT_TYPE: client
       ADDRESS_LIST_FILE: /opt/set_permissions # DO NOT CHANGE! Edit corresponding line in volumes section instead
     volumes:
-      # Edit first part of mappings only (before ':')
-      - ../evm_loader-keypair.json:/opt/permission_token_mint_authority.json  # Permission tokens mint authority keypair
-      - ~/.config/solana/id.json:/root/.config/solana/id.json                 # Payer keypair (should have non-zero balance)
-      - ./example_address_list:/opt/set_permissions                           # File with list of IDs
-      - ./example_error_list:/opt/set_permissions.err                         # File where failed IDs will be collected
+      # Permission tokens mint authority keypair
+      - ./config/${CONFIG_NAME}/mint_authority_keypair.json:/opt/permission_token_mint_authority.json
+      # Payer keypair should have non-zero balance (using default id.json)
+      - ~/.config/solana/id.json:/root/.config/solana/id.json
+      # File with list of IDs
+      - ./config/${CONFIG_NAME}/address_list:/opt/set_permissions
+      # File where failed IDs will be collected
+      - ./config/${CONFIG_NAME}/address_list.err:/opt/set_permissions.err
     entrypoint: >
       ./set_many_accts_permission.sh
