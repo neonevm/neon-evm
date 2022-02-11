@@ -1,18 +1,17 @@
 //! Faucet server implementation.
 
 use actix_cors::Cors;
-use actix_web::http::{header};
+use actix_web::http::header;
 use actix_web::web::{post, Bytes};
 use actix_web::{App, HttpResponse, HttpServer, Responder};
-
 use eyre::Result;
 use tracing::{error, info};
 
-use crate::{config, erc20_tokens, neon_token};
+use crate::{config, erc20_tokens, id, neon_token};
 
 /// Starts the server in listening mode.
 pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> {
-    info!("Bind {}:{}", rpc_bind, rpc_port);
+    info!("{} Bind {}:{}", id::default(), rpc_bind, rpc_port);
 
     HttpServer::new(|| {
         let mut cors = Cors::default()
@@ -44,7 +43,7 @@ pub async fn start(rpc_bind: &str, rpc_port: u16, workers: usize) -> Result<()> 
 
 /// Handles a ping request.
 async fn handle_request_ping(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling ping...", id);
@@ -63,7 +62,7 @@ async fn handle_request_ping(body: Bytes) -> impl Responder {
 
 /// Handles a version request.
 async fn handle_request_version() -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling version request...", id);
@@ -76,7 +75,7 @@ async fn handle_request_version() -> impl Responder {
 
 /// Handles a request for NEON airdrop in galans (1 galan = 10E-9 NEON).
 async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for NEON (in galans) Airdrop...", id);
@@ -96,7 +95,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
     let mut airdrop = airdrop.unwrap();
     airdrop.in_fractions = true;
-    if let Err(err) = neon_token::airdrop(&id, airdrop).await {
+    if let Err(err) = neon_token::airdrop(id.clone(), airdrop).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -106,7 +105,7 @@ async fn handle_request_neon_in_galans(body: Bytes) -> impl Responder {
 
 /// Handles a request for NEON airdrop.
 async fn handle_request_neon(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for NEON Airdrop...", id);
@@ -124,7 +123,7 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = neon_token::airdrop(&id, airdrop.unwrap()).await {
+    if let Err(err) = neon_token::airdrop(id.clone(), airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -134,7 +133,7 @@ async fn handle_request_neon(body: Bytes) -> impl Responder {
 
 /// Handles a request for ERC20 tokens airdrop.
 async fn handle_request_erc20(body: Bytes) -> impl Responder {
-    let id = generate_id();
+    let id = id::generate();
 
     println!();
     info!("{} Handling Request for ERC20 Airdrop...", id);
@@ -152,7 +151,7 @@ async fn handle_request_erc20(body: Bytes) -> impl Responder {
         return HttpResponse::BadRequest();
     }
 
-    if let Err(err) = erc20_tokens::airdrop(&id, airdrop.unwrap()).await {
+    if let Err(err) = erc20_tokens::airdrop(id.clone(), airdrop.unwrap()).await {
         error!("{} InternalServerError: {}", id, err);
         return HttpResponse::InternalServerError();
     }
@@ -172,46 +171,34 @@ async fn handle_request_stop(body: Bytes) -> impl Responder {
     use nix::unistd::Pid;
     use tokio::time::Duration;
 
-    info!("Shutting down...");
+    let id = id::generate();
+
+    info!("{} Shutting down...", id);
 
     let input = String::from_utf8(body.to_vec());
     if let Err(err) = input {
-        error!("BadRequest (body): {}", err);
+        error!("{} BadRequest (body): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     let input = input.unwrap();
     let stop = serde_json::from_str::<Stop>(&input);
     if let Err(err) = stop {
-        error!("BadRequest (json): {} in '{}'", err, input);
+        error!("{} BadRequest (json): {} in '{}'", id, err, input);
         return HttpResponse::BadRequest();
     }
 
     let delay = stop.unwrap().delay;
     if delay > 0 {
-        info!("Sleeping {} millis...", delay);
+        info!("{} Sleeping {} millis...", id, delay);
         tokio::time::sleep(Duration::from_millis(delay)).await;
     }
 
     let terminate = signal::kill(Pid::this(), signal::SIGTERM);
     if let Err(err) = terminate {
-        error!("BadRequest (terminate): {}", err);
+        error!("{} BadRequest (terminate): {}", id, err);
         return HttpResponse::BadRequest();
     }
 
     HttpResponse::Ok()
-}
-
-/// Builds a (hopefully) unique string to mark requests.
-fn generate_id() -> String {
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-    let since = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(since) => since,
-        Err(err) => {
-            error!("generate_id: time went backwards? {}", err);
-            Duration::default()
-        }
-    };
-    let digest = md5::compute(since.as_nanos().to_string());
-    format!("[{}]", &format!("{:x}", digest)[..7])
 }

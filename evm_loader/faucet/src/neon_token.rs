@@ -3,7 +3,7 @@
 use eyre::{eyre, Result};
 use tracing::info;
 
-use crate::{config, ethereum, solana};
+use crate::{config, ethereum, id::ReqId, solana};
 
 /// Represents packet of information needed for single airdrop operation.
 #[derive(Debug, serde::Deserialize)]
@@ -18,7 +18,7 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
-pub async fn airdrop(id: &str, params: Airdrop) -> Result<()> {
+pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
     info!("{} Processing NEON {:?}...", id, params);
 
     let limit = if !params.in_fractions {

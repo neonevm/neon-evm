@@ -237,7 +237,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -261,7 +260,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -275,7 +273,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -289,7 +287,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
@@ -310,7 +307,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -319,7 +315,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 3: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 2: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -333,7 +329,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
+            .add(neon_emv_instr_0d) \
+            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -354,7 +351,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
-            .add(keccak_instruction) \
             .add(neon_emv_instr_0d_2)
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
@@ -403,7 +399,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
                 print("Exception was expected, OK")
                 pass
             else:

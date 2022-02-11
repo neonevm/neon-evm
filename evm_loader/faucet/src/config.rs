@@ -9,7 +9,7 @@ use tracing::warn;
 
 use solana_sdk::signer::keypair::Keypair;
 
-use crate::ethereum;
+use crate::{ethereum, id};
 
 lazy_static::lazy_static! {
     static ref CONFIG: RwLock<Faucet> = RwLock::new(Faucet::default());
@@ -62,6 +62,7 @@ const NEON_TOKEN_MINT_DECIMALS: &str = "NEON_TOKEN_MINT_DECIMALS";
 const NEON_OPERATOR_KEYFILE: &str = "NEON_OPERATOR_KEYFILE";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 const NEON_LOG: &str = "NEON_LOG";
+const RUST_LOG: &str = "RUST_LOG";
 static ENV: &[&str] = &[
     FAUCET_RPC_BIND,
     FAUCET_RPC_PORT,
@@ -79,13 +80,15 @@ static ENV: &[&str] = &[
     NEON_OPERATOR_KEYFILE,
     NEON_ETH_MAX_AMOUNT,
     NEON_LOG,
+    RUST_LOG,
 ];
 
 /// Reports if no file exists (it's normal, will be another source of config).
 pub fn check_file_exists(file: &Path) {
     if !file.exists() {
         warn!(
-            "File {:?} is missing; environment variables will be used",
+            "{} File {:?} is missing; environment variables will be used",
+            id::default(),
             file
         );
     }
@@ -138,6 +141,7 @@ pub fn load(file: &Path) -> Result<()> {
                     CONFIG.write().unwrap().solana.max_amount = val.parse::<u64>()?
                 }
                 NEON_LOG => {}
+                RUST_LOG => {}
                 _ => unreachable!(),
             }
         }
