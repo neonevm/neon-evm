@@ -1,5 +1,6 @@
 import unittest
-import os
+
+from solana_utils import *
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 
