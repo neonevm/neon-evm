@@ -149,7 +149,7 @@ class EthTokenTest(unittest.TestCase):
 
     def test_caller_balance(self):
         print("\ntest_caller_balance")
-        gas_used =  EVM_STEPS * GAS_MULTIPLIER  # gas for begin iteration
+        gas_used =  EVM_STEPS * EVM_STEP_COST  # gas for begin iteration
         wei_scale = 10**9
         initial_balance = int(self.token.balance(self.caller_token)* 10**9)
         expected_balance_wei = (initial_balance - gas_used) * wei_scale # * gas_price/10**9

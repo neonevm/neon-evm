@@ -231,12 +231,12 @@ class RW_Locking_Test(unittest.TestCase):
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
-        evm_step_executed = 99
+        # evm_step_executed = 99
+        # begin_steps = 10
         allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-        begin_steps = 10
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
-        allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST * GAS_MULTIPLIER
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = EVM_STEPS * EVM_STEP_COST
+        allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST
         # gas = begin_gas + continue_gas + allocated_space_gas
         # gas = begin_gas + continue_gas
 

@@ -258,8 +258,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         evm_step_executed = 230
         begin_steps = 0
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = 3 * EVM_STEPS * EVM_STEP_COST
         gas = begin_gas + continue_gas
 
         self.assertEqual(response['result']['meta']['err'], None)
@@ -314,8 +314,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         evm_step_executed = 230
         begin_steps = 0
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = 3 * EVM_STEPS * EVM_STEP_COST
         gas = begin_gas + continue_gas
 
         self.assertEqual(response['result']['meta']['err'], None)
@@ -368,10 +368,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
-        step_count = EVM_STEPS
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
+        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(EVM_STEPS, trx_data, storage, self.caller_2)
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
@@ -418,10 +417,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
 
         allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue1_gas = step_count * GAS_MULTIPLIER
-        continue2_gas = step_count * GAS_MULTIPLIER
-        continue3_gas = (30  + allocated_space_caller2 * EVM_BYTE_COST) * GAS_MULTIPLIER
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue1_gas = EVM_STEPS * EVM_STEP_COST
+        continue2_gas = EVM_STEPS * EVM_STEP_COST
+        continue3_gas = EVM_STEPS  + allocated_space_caller2 * EVM_BYTE_COST
         gas = begin_gas + continue1_gas + continue2_gas + continue3_gas
         # gas_price == 10**6
         fee1 = (begin_gas + continue1_gas)

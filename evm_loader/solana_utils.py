@@ -26,6 +26,7 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
 import base58
+import math
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "lamports" / Int64ul,
@@ -55,7 +56,7 @@ path_to_solana = 'solana'
 ACCOUNT_SEED_VERSION=b'\1'
 
 # amount of gas per 1 byte evm_storage
-EVM_BYTE_COST = 140
+EVM_BYTE_COST = 6940  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
 EVM_STEPS = 100
 # the message size that is used to holder-account filling
@@ -64,8 +65,13 @@ HOLDER_MSG_SIZE = 1000
 ACCOUNT_MAX_SIZE = 256
 # spl-token account allocated data size
 SPL_TOKEN_ACCOUNT_SIZE = 165
+# payment to treasure
+PAYMENT_TO_TREASURE = 5000
+# payment for solana signature verification
+PAYMENT_FOR_SIGNATURE = 5000
 # gas multipliergas multiplier
-GAS_MULTIPLIER = 1
+EVM_STEP_COST = math.ceil((PAYMENT_FOR_SIGNATURE  + PAYMENT_TO_TREASURE) / EVM_STEPS)
+
 
 # DEFAULT_UNITS=500*1000
 # DEFAULT_HEAP_FRAME=256*1024

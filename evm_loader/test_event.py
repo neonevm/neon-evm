@@ -178,11 +178,11 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
 
-        gas_05 = EVM_STEPS * GAS_MULTIPLIER
-        evm_step_executed = 87
-        begin_steps = 10
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        gas_05 = EVM_STEPS * EVM_STEP_COST
+        # evm_step_executed = 87
+        # begin_steps = 10
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = EVM_STEPS * EVM_STEP_COST
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas ) ]
         for (call, index, gas) in calls:
@@ -203,10 +203,10 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_executed * GAS_MULTIPLIER
-        begin_steps = 10
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        # begin_steps = 10
+        gas_05 = evm_step_executed * EVM_STEP_COST
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = EVM_STEPS * EVM_STEP_COST
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
@@ -228,10 +228,10 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 125
-        gas_05 = evm_step_executed * GAS_MULTIPLIER
-        begin_steps = 10
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * EVM_STEP_COST
+        # begin_steps = 10
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = 2 * EVM_STEPS * EVM_STEP_COST
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
@@ -261,10 +261,10 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 156
-        gas_05 = evm_step_executed * GAS_MULTIPLIER
-        begin_steps = 10
-        begin_gas = EVM_STEPS * GAS_MULTIPLIER
-        continue_gas = (evm_step_executed - begin_steps) * GAS_MULTIPLIER
+        gas_05 = evm_step_executed * EVM_STEP_COST
+        # begin_steps = 10
+        begin_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = 2 * EVM_STEPS * EVM_STEP_COST
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
@@ -321,7 +321,7 @@ class EventTest(unittest.TestCase):
         print(result)
 
         evm_step_executed = 156
-        gas_used = evm_step_executed * GAS_MULTIPLIER
+        gas_used = evm_step_executed * EVM_STEP_COST
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value

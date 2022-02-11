@@ -46,7 +46,7 @@ use crate::{
     utils::is_zero_initialized
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, GAS_MULTIPLIER};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, EVM_STEP_COST};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -396,7 +396,7 @@ fn process_instruction<'a>(
             if steps_executed < EVM_STEPS {
                 steps_executed = EVM_STEPS;
             }
-            let unpaid_gas = steps_executed * GAS_MULTIPLIER;
+            let unpaid_gas = steps_executed * EVM_STEP_COST;
 
             applies_and_invokes(
                 program_id,
@@ -953,7 +953,7 @@ fn do_begin<'a>(
         steps_executed = EVM_STEPS;
     }
     let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
-    let unpaid_gas = (steps_executed + holder_trx_count * EVM_STEPS) * GAS_MULTIPLIER;
+    let unpaid_gas = (steps_executed + holder_trx_count * EVM_STEPS) * EVM_STEP_COST;
 
     token::user_pays_operator(
         user_eth_info,
@@ -1018,7 +1018,6 @@ fn do_continue_top_level<'a>(
     }
 
     let (results, steps_executed) = do_continue(&mut storage, step_count, &mut account_storage)?;
-    let unpaid_gas = steps_executed * GAS_MULTIPLIER;
     let paid_gas = storage.get_payments_info()?.0;
 
     if let Some(evm_results) = results {
@@ -1026,6 +1025,12 @@ fn do_continue_top_level<'a>(
             storage_info,
             operator_sol_info)?;
 
+        let unpaid_gas  = if steps_executed < EVM_STEPS {
+            EVM_STEPS * EVM_STEP_COST
+        }
+        else{
+            steps_executed * EVM_STEP_COST
+        };
 
         applies_and_invokes(
             program_id,
@@ -1044,6 +1049,7 @@ fn do_continue_top_level<'a>(
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
     else{
+        let unpaid_gas = steps_executed * EVM_STEP_COST;
         // TODO: there are two different behaviour: OutOfGas in the not-finalized transaction and OutOfGasin the finalized transaction
         // It is requires only one behaviour
         token::user_pays_operator(
@@ -1207,7 +1213,7 @@ fn applies_and_invokes<'a>(
         }
     };
 
-    let unpaid_gas = unpaid_gas + allocated_space * EVM_BYTE_COST * GAS_MULTIPLIER;
+    let unpaid_gas = unpaid_gas + allocated_space * EVM_BYTE_COST;
     let reason : ExitReason;
     match
         token::user_pays_operator(

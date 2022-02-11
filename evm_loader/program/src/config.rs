@@ -1,5 +1,8 @@
 //! CONFIG MODULE
 #![allow(clippy::use_self,clippy::nursery)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
 
 use const_format::formatcp;
 use cfg_if::cfg_if;
@@ -9,6 +12,7 @@ use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
 use crate::account_data::ACCOUNT_SEED_VERSION;
 use crate::account_data::ACCOUNT_MAX_SIZE;
 use solana_program::{program_pack::Pack};
+use solana_program::rent::{DEFAULT_LAMPORTS_PER_BYTE_YEAR, DEFAULT_EXEMPTION_THRESHOLD};
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
@@ -293,14 +297,17 @@ pub const PAYMENT_TO_TREASURE: u64 = 5000;
 pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
-/// `amount of gas per 1 byte evm_storage`
-pub const EVM_BYTE_COST: u64 = 140;
+/// `amount of gas per 1 byte of the solana space`
+pub const EVM_BYTE_COST: u64 = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 * DEFAULT_EXEMPTION_THRESHOLD) as u64;
 /// `number of evm steps per transaction`
 pub const EVM_STEPS: u64  = 100;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 1000;
-/// `gas multiplier`
-pub const GAS_MULTIPLIER: u64 = 1;
+
+// TODO: replace 5000 to fee_calculator from sdk
+/// `amout of gas per 1 evm_step`
+pub const EVM_STEP_COST: u64 = (PAYMENT_TO_TREASURE + 5000) / EVM_STEPS + ((PAYMENT_TO_TREASURE + 5000) % EVM_STEPS != 0) as u64;
+
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -314,7 +321,7 @@ neon_elf_param!( NEON_EVM_BYTE_COST         , formatcp!("{:?}", EVM_BYTE_COST));
 neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
-neon_elf_param!( NEON_GAS_MULTIPLIER        , formatcp!("{:?}", GAS_MULTIPLIER));
+neon_elf_param!( NEON_EVM_STEP_COST        , formatcp!("{:?}", EVM_STEP_COST));
 
 /// Chain ID
 #[must_use]
