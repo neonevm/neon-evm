@@ -395,7 +395,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
         for approve in approves {
             self.create_acc_if_not_exists(&approve.owner, false);
-            solana_accounts.insert(approve.spender, AccountMeta::new(approve.spender, false));
+            solana_accounts.entry(approve.spender).or_insert_with(|| AccountMeta::new_readonly(approve.spender, false));
 
             let (contract_solana_address, _) = make_solana_program_address(&approve.contract, &self.config.evm_loader);
             let (owner_solana_address, _) = make_solana_program_address(&approve.owner, &self.config.evm_loader);
