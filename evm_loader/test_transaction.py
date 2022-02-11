@@ -420,7 +420,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         begin_gas = EVM_STEPS * EVM_STEP_COST
         continue1_gas = EVM_STEPS * EVM_STEP_COST
         continue2_gas = EVM_STEPS * EVM_STEP_COST
-        continue3_gas = EVM_STEPS  + allocated_space_caller2 * EVM_BYTE_COST
+        continue3_gas = EVM_STEPS * EVM_STEP_COST  + allocated_space_caller2 * EVM_BYTE_COST
         gas = begin_gas + continue1_gas + continue2_gas + continue3_gas
         # gas_price == 10**6
         fee1 = (begin_gas + continue1_gas)
