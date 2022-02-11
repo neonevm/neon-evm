@@ -3,6 +3,7 @@ use std::convert::TryInto;
 use evm::{H160, U256};
 use evm::backend::Apply;
 use solana_program::{
+    account_info::AccountInfo,
     program_error::ProgramError,
     pubkey::Pubkey
 };
@@ -10,6 +11,8 @@ use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Oper
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
 use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
 use crate::precompile_contracts::is_precompile_address;
+use solana_program::program::invoke_signed;
+use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -79,7 +82,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if !withdrawals.is_empty() {
-            self.apply_withdrawals(withdrawals)?;
+            self.apply_withdrawals(withdrawals, operator)?;
         }
 
         if !applies.is_empty() {
@@ -274,21 +277,46 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>) -> Result<(), ProgramError> {
+    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>, &Pubkey: operator) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
 
-        let (deposit, _) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
         let token_program = self.token_program.as_ref()
             .ok_or_else(|| E!(ProgramError::MissingRequiredSignature; "Token program not found"))?;
 
+        let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
+        let pool_address = get_associated_token_address(
+            &authority,
+            &crate::config::token_mint::id()
+        );
+
+        let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
+
         for withdraw in withdrawals {
-            let authority = self.ethereum_account(&withdraw.source)
-                .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Solidity account {} must be initialized", withdraw.source))?;
+            let destination = self.solana_accounts[&withdraw.dest_neon];
 
-            let source = self.solana_accounts[&deposit];
-            let target = self.solana_accounts[&withdraw.dest_neon];
+            if destination.data_is_empty() {
+                create_associated_token_account(operator,
+                                                destination.key,
+                                                crate::config::token_mint::id())?;
+            };
 
-            token_program.transfer(authority, source, target, withdraw.amount.as_u64())?;
+            let transfer_instr = spl_token::instruction::transfer(
+                spl_token::id(),
+                &pool_address,
+                &destination.key,
+                &authority,
+                &[],
+                withdraw.amount.as_u64()
+            )?;
+
+            let account_infos: &[AccountInfo] = &[
+                self.solana_accounts[&pool_address].clone(),        // source
+                destination.clone(),                                // destination
+                self.solana_accounts[&authority].clone(),           // authority
+                self.solana_accounts[&spl_token.id()].clone(),      // token program
+            ];
+
+            invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
         }
 
         Ok(())
