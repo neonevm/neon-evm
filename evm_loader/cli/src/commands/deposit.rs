@@ -20,7 +20,7 @@ use crate::{
     NeonCliResult,
 };
 
-//#[allow(clippy::unnecessary_wraps)]
+/// Executes subcommand `deposit`.
 pub fn execute(
     config: &Config,
     amount: u64,
