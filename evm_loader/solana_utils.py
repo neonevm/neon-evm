@@ -56,7 +56,7 @@ path_to_solana = 'solana'
 ACCOUNT_SEED_VERSION=b'\1'
 
 # amount of gas per 1 byte evm_storage
-EVM_BYTE_COST = 6940  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
+EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
 EVM_STEPS = 100
 # the message size that is used to holder-account filling

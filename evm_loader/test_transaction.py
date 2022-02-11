@@ -315,7 +315,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         evm_step_executed = 230
         begin_steps = 0
         begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue_gas = 3 * EVM_STEPS * EVM_STEP_COST
+        continue_gas = (step_count + EVM_STEPS) * EVM_STEP_COST
         gas = begin_gas + continue_gas
 
         self.assertEqual(response['result']['meta']['err'], None)

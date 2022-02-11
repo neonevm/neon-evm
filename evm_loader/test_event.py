@@ -163,10 +163,10 @@ class EventTest(unittest.TestCase):
         instruction = from_addr + sign + msg
 
         storage = self.create_storage_account(sign[:8].hex())
-        self.call_begin(storage, 10, msg, instruction)
+        self.call_begin(storage, 0, msg, instruction)
 
         while (True):
-            result = self.call_continue(storage, 500)["result"]
+            result = self.call_continue(storage, EVM_STEPS)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -180,7 +180,6 @@ class EventTest(unittest.TestCase):
 
         gas_05 = EVM_STEPS * EVM_STEP_COST
         # evm_step_executed = 87
-        # begin_steps = 10
         begin_gas = EVM_STEPS * EVM_STEP_COST
         continue_gas = EVM_STEPS * EVM_STEP_COST
 
@@ -203,10 +202,9 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        # begin_steps = 10
         gas_05 = evm_step_executed * EVM_STEP_COST
         begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue_gas = EVM_STEPS * EVM_STEP_COST
+        continue_gas = 2 * EVM_STEPS * EVM_STEP_COST
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
         for (call, index, gas) in calls:
@@ -229,7 +227,6 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 125
         gas_05 = evm_step_executed * EVM_STEP_COST
-        # begin_steps = 10
         begin_gas = EVM_STEPS * EVM_STEP_COST
         continue_gas = 2 * EVM_STEPS * EVM_STEP_COST
 
@@ -262,7 +259,6 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 156
         gas_05 = evm_step_executed * EVM_STEP_COST
-        # begin_steps = 10
         begin_gas = EVM_STEPS * EVM_STEP_COST
         continue_gas = 2 * EVM_STEPS * EVM_STEP_COST
 
