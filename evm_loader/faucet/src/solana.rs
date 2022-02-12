@@ -13,8 +13,8 @@ use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
+use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::{system_program};
 
 use crate::{config, ethereum, id::ReqId};
 
@@ -47,7 +47,7 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
 /// When `in_fractions` == false, amount is treated as whole token amount.
 /// When `in_fractions` == true, amount is treated as amount in galans (10E-9).
 pub async fn deposit_token(
-    id: ReqId,
+    id: &ReqId,
     signer: Keypair,
     ether_address: ethereum::Address,
     amount: u64,
@@ -71,11 +71,14 @@ pub async fn deposit_token(
         spl_associated_token_account::get_associated_token_address(&signer_pubkey, &token_mint_id);
 
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id).0;
-    let evm_bank_pubkey =
-        spl_associated_token_account::get_associated_token_address(&evm_token_authority, &token_mint_id);
+    let evm_bank_pubkey = spl_associated_token_account::get_associated_token_address(
+        &evm_token_authority,
+        &token_mint_id,
+    );
 
     let ether_pubkey = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id).0;
 
+    let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
         let mut instructions = Vec::with_capacity(3);
@@ -171,7 +174,7 @@ fn create_ether_account_instruction(
     ether_address: ethereum::Address,
 ) -> Instruction {
     let (solana_address, nonce) = ether_address_to_solana_pubkey(&ether_address, &evm_loader_id);
-    
+
     Instruction::new_with_bincode(
         evm_loader_id,
         &(24_u8, ether_address.as_fixed_bytes(), nonce),
@@ -179,7 +182,7 @@ fn create_ether_account_instruction(
             AccountMeta::new(signer_pubkey, true),
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new(solana_address, false),
-        ]
+        ],
     )
 }
 

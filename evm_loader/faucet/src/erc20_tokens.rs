@@ -24,7 +24,7 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Ethereum.
-pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
+pub async fn airdrop(id: &ReqId, params: Airdrop) -> Result<()> {
     info!("{} Processing ERC20 {:?}...", id, params);
 
     if params.amount > config::web3_max_amount() {
@@ -40,7 +40,7 @@ pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
     let web3 = web3::Web3::new(http);
 
     if TOKENS.write().unwrap().is_empty() {
-        init(id.clone(), web3.eth().clone(), config::tokens()).await?;
+        init(id, web3.eth().clone(), config::tokens()).await?;
     }
 
     let recipient = ethereum::address_from_str(&params.wallet)?;
@@ -52,7 +52,7 @@ pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
             .checked_mul(factor)
             .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
         transfer(
-            id.clone(),
+            id,
             web3.eth(),
             ethereum::address_from_str(token)?,
             token,
@@ -71,14 +71,14 @@ pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
 }
 
 /// Initializes local cache of tokens properties.
-async fn init<T: Transport>(id: ReqId, eth: Eth<T>, addresses: Vec<String>) -> Result<()> {
+async fn init<T: Transport>(id: &ReqId, eth: Eth<T>, addresses: Vec<String>) -> Result<()> {
     info!("{} Checking tokens...", id);
 
     for token_address in addresses {
         let a = ethereum::address_from_str(&token_address)?;
         TOKENS.write().unwrap().insert(
             token_address,
-            Token::new(get_decimals(id.clone(), eth.clone(), a).await?),
+            Token::new(get_decimals(id, eth.clone(), a).await?),
         );
     }
 
@@ -88,7 +88,7 @@ async fn init<T: Transport>(id: ReqId, eth: Eth<T>, addresses: Vec<String>) -> R
 
 /// Creates and sends a transfer transaction.
 async fn transfer<T: Transport>(
-    id: ReqId,
+    id: &ReqId,
     eth: Eth<T>,
     token: ethereum::Address,
     token_name: &str,
@@ -129,7 +129,7 @@ async fn transfer<T: Transport>(
 }
 
 async fn get_decimals<T: Transport>(
-    id: ReqId,
+    id: &ReqId,
     eth: Eth<T>,
     token_address: ethereum::Address,
 ) -> web3::contract::Result<u32> {
