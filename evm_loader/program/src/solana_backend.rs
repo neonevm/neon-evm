@@ -70,6 +70,8 @@ pub trait AccountStorage {
     fn block_number(&self) -> U256;
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
+    /// Get chain id
+    fn chain_id(&self) -> u64;
 
     /// Get solana address for given ethereum account
     fn get_account_solana_address(&self, address: &H160) -> Pubkey;

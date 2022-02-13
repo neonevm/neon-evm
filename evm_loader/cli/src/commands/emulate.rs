@@ -29,7 +29,7 @@ use crate::{
 
 #[allow(clippy::too_many_lines)]
 pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>,
-                   value: Option<U256>, token_mint: &Pubkey) -> NeonCliResult {
+                   value: Option<U256>, token_mint: &Pubkey, chain_id: u64) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
         contract_id,
@@ -40,7 +40,7 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
     let storage = match &contract_id {
         Some(program_id) =>  {
             debug!("program_id to call: {:?}", *program_id);
-            EmulatorAccountStorage::new(config, *program_id, caller_id, *token_mint)
+            EmulatorAccountStorage::new(config, *program_id, caller_id, *token_mint, chain_id)
         },
         None => {
             let (solana_address, _nonce) = crate::make_solana_program_address(&caller_id, &config.evm_loader);
@@ -48,7 +48,7 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
             let trx_count= trx_count.0;
             let program_id = crate::get_program_ether(&caller_id, trx_count);
             debug!("program_id to deploy: {:?}", program_id);
-            EmulatorAccountStorage::new(config, program_id, caller_id, *token_mint)
+            EmulatorAccountStorage::new(config, program_id, caller_id, *token_mint, chain_id)
         }
     };
 

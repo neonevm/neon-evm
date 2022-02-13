@@ -776,7 +776,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        crate::config::chain_id()
+        U256::from(self.backend.chain_id())
+        // crate::config::chain_id()
     }
 
     #[must_use]

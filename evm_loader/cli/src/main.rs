@@ -548,6 +548,14 @@ fn main() {
                         .validator(is_valid_pubkey)
                         .help("Pubkey for token_mint")
                 )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Network chain_id"),
+                )
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")
@@ -796,13 +804,14 @@ fn main() {
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
+                let chain_id = value_t_or_exit!(arg_matches, "chain_id", u64);
 
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-                emulate::execute(&config, contract, sender, data, value, &token_mint)
+                emulate::execute(&config, contract, sender, data, value, &token_mint, chain_id)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "seed").unwrap();

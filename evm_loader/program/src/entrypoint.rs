@@ -378,7 +378,7 @@ fn process_instruction<'a>(
             // }
 
             StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, true)?;
-            let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+            let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts, chain_id().as_u64())?;
 
             check_secp256k1_instruction(sysvar_info, unsigned_msg.len(), 5_u16)?;
             check_ethereum_transaction(&account_storage, &H160::from_slice(from_addr), &trx)?;
@@ -499,7 +499,7 @@ fn process_instruction<'a>(
                 return Err(err)
             }
 
-            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+            let account_storage = ProgramAccountStorage::new(program_id, trx_accounts, chain_id().as_u64())?;
 
             let caller_account_info = account_storage.get_caller_account_info();
             let mut caller_account_data = AccountData::unpack(&caller_account_info.try_borrow_data()?)?;
@@ -921,7 +921,7 @@ fn do_begin<'a>(
 
     let mut storage = StorageAccount::new(storage_info, operator_sol_info, trx_accounts, caller, trx.nonce, trx_gas_limit, trx_gas_price, trx_sign)?;
     StorageAccount::check_for_blocked_accounts(program_id, trx_accounts, false)?;
-    let account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+    let account_storage = ProgramAccountStorage::new(program_id, trx_accounts, chain_id().as_u64())?;
     check_ethereum_transaction(&account_storage, &caller, &trx)?;
 
     payment::transfer_from_operator_to_collateral_pool(
@@ -983,7 +983,7 @@ fn do_continue_top_level<'a>(
         return Err(err)
     }
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts)?;
+    let mut account_storage = ProgramAccountStorage::new(program_id, trx_accounts, chain_id().as_u64())?;
     let (trx_gas_limit, trx_gas_price) = storage.get_gas_params()?;
 
     payment::transfer_from_operator_to_collateral_pool(

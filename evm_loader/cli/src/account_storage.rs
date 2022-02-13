@@ -160,11 +160,12 @@ pub struct EmulatorAccountStorage<'a> {
     caller_id: H160,
     block_number: u64,
     block_timestamp: i64,
-    token_mint: Pubkey
+    token_mint: Pubkey,
+    chain_id: u64,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160, token_mint: Pubkey) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, contract_id: H160, caller_id: H160, token_mint: Pubkey, chain_id: u64) -> EmulatorAccountStorage {
         trace!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {
@@ -196,7 +197,8 @@ impl<'a> EmulatorAccountStorage<'a> {
             caller_id,
             block_number: slot,
             block_timestamp: timestamp,
-            token_mint
+            token_mint,
+            chain_id,
         }
     }
 
@@ -637,6 +639,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn block_number(&self) -> U256 { self.block_number.into() }
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
+
+    fn chain_id(&self) -> u64 {
+        self.chain_id
+    }
 
     fn get_account_solana_address(&self, address: &H160) -> Pubkey {
         make_solana_program_address(address, &self.config.evm_loader).0

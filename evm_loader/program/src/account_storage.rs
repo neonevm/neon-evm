@@ -9,7 +9,7 @@ use crate::{
     system::create_pda_account
 };
 use evm::backend::Apply;
-use evm::{H160,  U256};
+use evm::{H160, U256};
 use solana_program::{
     account_info::{AccountInfo},
     pubkey::Pubkey,
@@ -35,7 +35,8 @@ pub struct ProgramAccountStorage<'a> {
     empty_solidity_accounts: RefCell<BTreeMap<H160, &'a AccountInfo<'a>>>,
     contract: H160,
     caller: H160,
-    program_id: Pubkey
+    program_id: Pubkey,
+    chain_id: u64,
 }
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -47,7 +48,7 @@ impl<'a> ProgramAccountStorage<'a> {
     /// `ProgramError::InvalidArgument` if account in `account_infos` is wrong or in wrong place
     /// `ProgramError::InvalidAccountData` if account's data doesn't meet requirements
     /// `ProgramError::NotEnoughAccountKeys` if `account_infos` doesn't meet expectations
-    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
+    pub fn new(program_id: &Pubkey, account_infos: &'a [AccountInfo<'a>], chain_id: u64) -> Result<Self, ProgramError> {
         debug_print!("account_storage::new");
 
         let mut solana_accounts = BTreeMap::new();
@@ -90,7 +91,8 @@ impl<'a> ProgramAccountStorage<'a> {
             empty_solidity_accounts: RefCell::new(BTreeMap::new()),
             contract,
             caller,
-            program_id: *program_id
+            program_id: *program_id,
+            chain_id
         })
     }
 
@@ -413,5 +415,9 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 *account.get_solana_address()
             }
         )
+    }
+
+    fn chain_id(&self) -> u64 {
+        self.chain_id
     }
 }
