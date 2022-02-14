@@ -1,10 +1,10 @@
 use crate::account::{Operator, program, EthereumAccount, sysvar, Treasury, Storage};
-use crate::transaction::{check_secp256k1_instruction, UnsignedTransaction};
+use crate::transaction::{UnsignedTransaction, verify_tx_signature};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
 use evm::H160;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult,
+    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::{Accounts, is_new_transaction, do_begin, do_continue};
@@ -18,10 +18,13 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let caller = H160::from(*array_ref![instruction, 4 + 8, 20]);
     let signature = array_ref![instruction, 4 + 8 + 20, 65];
     let unsigned_msg = &instruction[4 + 8 + 20 + 65..];
-
+    
+    if caller != verify_tx_signature(signature, unsigned_msg)? {
+        return Err!(ProgramError::InvalidInstructionData; "Invalid signature");
+    }
 
     let storage_info = &accounts[0];
-    let sysvar_instructions = sysvar::Instructions::from_account(&accounts[1])?;
+    let _sysvar_instructions = sysvar::Instructions::from_account(&accounts[1])?; // TODO remove it
 
     let accounts = Accounts {
         operator: Operator::from_account(&accounts[2])?,
@@ -36,8 +39,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
 
     if is_new_transaction(program_id, storage_info, signature, &caller)? {
-        check_secp256k1_instruction(sysvar_instructions.info, unsigned_msg.len(), 13_u16)?;
-
         let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
         let storage = Storage::new(program_id, storage_info, &accounts, caller, &trx, signature)?;
 

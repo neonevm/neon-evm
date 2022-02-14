@@ -31,7 +31,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     };
 
     let bump_seed = validate(program_id, &parsed_accounts)?;
-    execute(program_id, &parsed_accounts, bump_seed)
+    execute(&parsed_accounts, bump_seed)
 }
 
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
@@ -56,7 +56,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
     Ok(bump_seed)
 }
 
-fn execute(program_id: &Pubkey, accounts: &Accounts, bump_seed: u8) -> ProgramResult {
+fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     let seeds: &[&[u8]] = &[
         &[ACCOUNT_SEED_VERSION], b"ERC20Balance", &accounts.mint.info.key.to_bytes(),
         accounts.erc20_contract.address.as_bytes(), accounts.user.address.as_bytes(),
@@ -64,7 +64,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, bump_seed: u8) -> ProgramRe
     ];
 
     accounts.system_program.create_pda_account(
-        program_id,
+        &spl_token::id(),
         &accounts.operator,
         accounts.user_token,
         seeds,

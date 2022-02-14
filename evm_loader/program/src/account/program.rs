@@ -281,19 +281,20 @@ impl<'a> Token<'a> {
         &self,
         authority: &EthereumAccount<'a>,
         source: &AccountInfo<'a>,
-        delegate: &Pubkey,
+        delegate: &AccountInfo<'a>,
         value: u64
     ) -> Result<(), ProgramError> {
         let instruction = spl_token::instruction::approve(
             &spl_token::id(),
             source.key,
-            delegate,
+            delegate.key,
             authority.info.key,
             &[],
             value
         )?;
         let accounts = &[
             source.clone(),
+            delegate.clone(),
             authority.info.clone(),
             self.info.clone(),
         ];

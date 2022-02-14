@@ -270,8 +270,9 @@ impl<'a> ProgramAccountStorage<'a> {
 
             let (source_key, _) = self.get_erc20_token_address(&approve.owner, &approve.contract, &approve.mint);
             let source = self.solana_accounts[&source_key];
+            let delegate = self.solana_accounts[&approve.spender];
 
-            token_program.approve(authority, source, &approve.spender, approve.value)?;
+            token_program.approve(authority, source, delegate, approve.value)?;
         }
 
         Ok(())
