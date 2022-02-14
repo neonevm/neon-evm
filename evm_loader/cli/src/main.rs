@@ -553,7 +553,7 @@ fn main() {
                         .long("chain_id")
                         .value_name("CHAIN_ID")
                         .takes_value(true)
-                        .required(true)
+                        .required(false)
                         .help("Network chain_id"),
                 )
         )
@@ -800,78 +800,61 @@ fn main() {
     let result: NeonCliResult =
         match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
+                let elf_params = get_neon_elf::CachedElfParams::new(&config);
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
-                let chain_id = value_t_or_exit!(arg_matches, "chain_id", u64);
-
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
+                    });
+                let chain_id = value_of(arg_matches, "chain_id")
+                    .unwrap_or_else(|| {
+                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
                 emulate::execute(&config, contract, sender, data, value, &token_mint, chain_id)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "seed").unwrap();
-
                 create_program_address::execute(&config, &ether);
-
                 Ok(())
             }
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 let lamports = value_t_or_exit!(arg_matches, "lamports", u64);
                 let space = value_t_or_exit!(arg_matches, "space", u64);
-
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-
-
                 create_ether_account::execute(&config, &ether, lamports, space, &token_mint)
             }
             ("deploy", Some(arg_matches)) => {
+                let elf_params = get_neon_elf::CachedElfParams::new(&config);
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-
-                let mut elf_params : HashMap<String,String> = HashMap::new();
-
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
-                        elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-
                 let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
                     .unwrap_or_else(|| {
-                        if elf_params.is_empty(){
-                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        }
                         Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
                     });
-
                 let chain_id = value_of(arg_matches, "chain_id")
                     .unwrap_or_else(|| {
-                        if elf_params.is_empty(){
-                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        }
                         u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
                 deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
-
                 get_ether_account_data::execute(&config, &ether);
-
                 Ok(())
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
-
                 let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
@@ -881,18 +864,15 @@ fn main() {
             }
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");
-
                 get_neon_elf::execute(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
-
                 get_storage_at::execute(&config, contract_id, &index)
             }
             ("update-valids-table", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
-
                 update_valids_table::execute(&config, contract_id)
             }
             _ => unreachable!(),

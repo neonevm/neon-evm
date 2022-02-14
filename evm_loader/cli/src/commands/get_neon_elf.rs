@@ -11,6 +11,19 @@ use solana_sdk::{
 
 use crate::{ Config, errors::NeonCliError, NeonCliResult };
 
+pub struct CachedElfParams {
+    elf_params: HashMap<String,String>,
+}
+impl CachedElfParams {
+    pub fn new(config: &Config) -> Self {
+        Self {
+            elf_params: read_elf_parameters_from_account(config).unwrap(),
+        }
+    }
+    pub fn get(&self, param_name: &str) -> Option<&String> {
+        self.elf_params.get(param_name)
+    }
+}
 
 fn read_elf_parameters(
         _config: &Config,
