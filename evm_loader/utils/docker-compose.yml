@@ -7,11 +7,12 @@ services:
     env_file:
       - ./config/${CONFIG_NAME}/.env
     environment:
-      MINT_AUTHORITY_FILE: /opt/permission_token_mint_authority.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
+      OPERATION: ${OPERATION}
+      ACCOUNT_TYPE: ${ACCOUNT_TYPE}
+      NEON_ETH_ADDRESS: ${NEON_ETH_ADDRESS}
+      MINT_AUTHORITY_FILE: /opt/config/mint_authority_keypair.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
     volumes:
-      # Permission tokens mint authority keypair
-      - ./config/${CONFIG_NAME}/mint_authority_keypair.json:/opt/permission_token_mint_authority.json
-      # Payer keypair should have non-zero balance (using default id.json)
+      - ./config/${CONFIG_NAME}/:/opt/config/
       - ~/.config/solana/id.json:/root/.config/solana/id.json
     entrypoint: >
       ./set_single_acct_permission.sh
@@ -22,16 +23,12 @@ services:
     env_file:
       - ./config/${CONFIG_NAME}/.env
     environment:
-      MINT_AUTHORITY_FILE: /opt/permission_token_mint_authority.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
-      ADDRESS_LIST_FILE: /opt/set_permissions # DO NOT CHANGE! Edit corresponding line in volumes section instead
+      OPERATION: ${OPERATION}
+      ACCOUNT_TYPE: ${ACCOUNT_TYPE}
+      ADDRESS_LIST_FILE: /opt/config/address_list
+      MINT_AUTHORITY_FILE: /opt/config/mint_authority_keypair.json
     volumes:
-      # Permission tokens mint authority keypair
-      - ./config/${CONFIG_NAME}/mint_authority_keypair.json:/opt/permission_token_mint_authority.json
-      # Payer keypair should have non-zero balance (using default id.json)
+      - ./config/${CONFIG_NAME}/:/opt/config/
       - ~/.config/solana/id.json:/root/.config/solana/id.json
-      # File with list of IDs
-      - ./config/${CONFIG_NAME}/address_list:/opt/set_permissions
-      # File where failed IDs will be collected
-      - ./config/${CONFIG_NAME}/address_list.err:/opt/set_permissions.err
     entrypoint: >
       ./set_many_accts_permission.sh
