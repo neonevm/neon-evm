@@ -347,10 +347,14 @@ pub fn neon_token<'a, B: AccountStorage>(
         let destination = Pubkey::new_from_array(*destination);
 
         if !state.withdraw(source, destination, amount) {
-            let revert_message = b"neon_token.withdraw: failed to withdraw NEON".to_vec();
+            let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![]));
+
+        let mut output = vec![0_u8; 32];
+        output[31] = 1; // return true
+
+        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output));
     };
 
     debug_print!("neon_token UNKNOWN");

@@ -298,8 +298,11 @@ impl<'a> ProgramAccountStorage<'a> {
                                                                                  &crate::config::token_mint::id());
 
                 let account_infos: &[AccountInfo] = &[
-                    self.solana_accounts[&pool_address].clone(),        // source
-                    destination.clone(),                                // destination
+                    self.solana_accounts[operator].clone(),
+                    self.solana_accounts[&pool_address].clone(),
+                    destination.clone(),
+                    self.solana_accounts[&spl_token::id()].clone(),
+                    self.solana_accounts[&crate::config::token_mint::id()].clone(),
                 ];
 
                 invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
@@ -315,10 +318,11 @@ impl<'a> ProgramAccountStorage<'a> {
             )?;
 
             let account_infos: &[AccountInfo] = &[
-                self.solana_accounts[&pool_address].clone(),        // source
-                destination.clone(),                                // destination
-                self.solana_accounts[&authority].clone(),           // authority
-                self.solana_accounts[&spl_token::id()].clone(),      // token program
+                self.solana_accounts[&pool_address].clone(),
+                destination.clone(),
+                self.solana_accounts[&authority].clone(),
+                self.solana_accounts[&spl_token::id()].clone(),
+                self.solana_accounts[operator].clone(),
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
