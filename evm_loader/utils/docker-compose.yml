@@ -10,7 +10,7 @@ services:
       OPERATION: ${OPERATION}
       ACCOUNT_TYPE: ${ACCOUNT_TYPE}
       NEON_ETH_ADDRESS: ${NEON_ETH_ADDRESS}
-      MINT_AUTHORITY_FILE: /opt/config/mint_authority_keypair.json # DO NOT CHANGE! Edit corresponding line in volumes section instead
+      MINT_AUTHORITY_FILE: /opt/config/mint_authority_keypair.json
     volumes:
       - ./config/${CONFIG_NAME}/:/opt/config/
       - ~/.config/solana/id.json:/root/.config/solana/id.json

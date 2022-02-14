@@ -6,7 +6,7 @@ export ACCOUNT_TYPE=$3
 export OPERATION=$4
 
 show_usage() {
-  echo "usage: ./run_config.sh <CONFIG_NAME> single|many <ACCOUNT_TYPE> <OPERATION> [NEON_ETH_ADDR]"
+  echo "usage: ./set_permissions.sh <CONFIG_NAME> single|many <ACCOUNT_TYPE> <OPERATION> [NEON_ETH_ADDR]"
   echo "    CONFIG_NAME - name of the stand configuration - must correspond to subdirectory in ./config"
   echo "    ACCOUNT_TYPE - either 'contract' or 'client'"
   echo "    OPERATION - either 'allow' or 'deny'"
@@ -51,7 +51,7 @@ elif [ "$SINGLE_OR_MANY" == "many" ]; then
 
 else
   echo "unknown argument '$SINGLE_OR_MANY'"
-  echo "usage: ./run_config.sh <CONFIG_NAME> single|many"
+  show_usage
   exit 1
 fi
 
