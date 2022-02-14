@@ -74,7 +74,9 @@ COPY evm_loader/*.py \
     evm_loader/deploy-test.sh \
     evm_loader/neon_token_keypair.json \
     evm_loader/permission_allowance_token_keypair.json \
-    evm_loader/permission_denial_token_keypair.json /opt/
+    evm_loader/permission_denial_token_keypair.json \
+    evm_loader/utils/set_single_acct_permission.sh \
+    evm_loader/utils/set_many_accts_permission.sh /opt/
 
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/
