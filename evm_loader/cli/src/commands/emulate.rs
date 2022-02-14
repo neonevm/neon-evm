@@ -22,13 +22,16 @@ use crate::{
     NeonCliResult,
 };
 
+use solana_sdk::pubkey::Pubkey;
+
 #[allow(clippy::too_many_lines)]
 pub fn execute(
     config: &Config, 
     contract_id: Option<H160>, 
     caller_id: H160, 
     data: Option<Vec<u8>>,
-    value: Option<U256>
+    value: Option<U256>,
+    token_mint: &Pubkey
 ) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -121,7 +124,7 @@ pub fn execute(
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
-            storage.apply_withdrawals(withdrawals);
+            storage.apply_withdrawals(withdrawals, token_mint);
 
             debug!("Applies done");
             "succeed".to_string()

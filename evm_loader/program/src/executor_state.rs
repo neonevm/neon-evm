@@ -156,7 +156,6 @@ pub struct ERC20Approve {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Withdraw {
-    pub neon_mint: Pubkey,
     pub source: H160,
     pub dest: Pubkey,
     pub dest_neon: Pubkey,
@@ -1117,7 +1116,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         );
 
         let withdraw = Withdraw{
-            neon_mint: crate::config::token_mint::id(),
             source,
             dest: destination,
             dest_neon: dest_neon_acct,
