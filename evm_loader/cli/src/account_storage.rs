@@ -441,6 +441,10 @@ impl<'a> EmulatorAccountStorage<'a> {
     }
 
     pub fn apply_withdrawals(&self, withdrawals: Vec<Withdraw>, token_mint: &Pubkey) {
+        if withdrawals.is_empty() {
+            return;
+        }
+
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
         let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);
