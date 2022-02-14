@@ -2,7 +2,10 @@ import unittest
 
 from solana_utils import *
 
+solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 evm_loader_id = os.environ.get("EVM_LOADER")
+
+client = Client(solana_url)
 
 class NeonCliTest(unittest.TestCase):
     @classmethod
