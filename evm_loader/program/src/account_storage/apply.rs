@@ -82,7 +82,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if !withdrawals.is_empty() {
-            self.apply_withdrawals(withdrawals, operator)?;
+            self.apply_withdrawals(withdrawals, operator.key)?;
         }
 
         if !applies.is_empty() {
@@ -277,11 +277,8 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>, &Pubkey: operator) -> Result<(), ProgramError> {
+    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>, operator: &Pubkey) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
-
-        let token_program = self.token_program.as_ref()
-            .ok_or_else(|| E!(ProgramError::MissingRequiredSignature; "Token program not found"))?;
 
         let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
         let pool_address = get_associated_token_address(
@@ -295,17 +292,24 @@ impl<'a> ProgramAccountStorage<'a> {
             let destination = self.solana_accounts[&withdraw.dest_neon];
 
             if destination.data_is_empty() {
-                create_associated_token_account(operator,
-                                                destination.key,
-                                                crate::config::token_mint::id())?;
+                let create_acc_insrt = create_associated_token_account(operator,
+                                                                                 destination.key,
+                                                                                 &crate::config::token_mint::id());
+
+                let account_infos: &[AccountInfo] = &[
+                    self.solana_accounts[&pool_address].clone(),        // source
+                    destination.clone(),                                // destination
+                ];
+
+                invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
             };
 
             let transfer_instr = spl_token::instruction::transfer(
-                spl_token::id(),
+                &spl_token::id(),
                 &pool_address,
                 &destination.key,
                 &authority,
-                &[],
+                &[operator],
                 withdraw.amount.as_u64()
             )?;
 
@@ -313,7 +317,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 self.solana_accounts[&pool_address].clone(),        // source
                 destination.clone(),                                // destination
                 self.solana_accounts[&authority].clone(),           // authority
-                self.solana_accounts[&spl_token.id()].clone(),      // token program
+                self.solana_accounts[&spl_token::id()].clone(),      // token program
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;

@@ -36,6 +36,8 @@ use crate::Config;
 use crate::NeonCliResult;
 use crate::NeonCliError;
 
+use spl_associated_token_account::{get_associated_token_address};
+
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
     owner: Pubkey,
@@ -434,7 +436,18 @@ impl<'a> EmulatorAccountStorage<'a> {
 
     pub fn apply_withdrawals(&self, withdrawals: Vec<Withdraw>) {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
+
+        let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);
+        solana_accounts.insert(authority, AccountMeta::new_readonly(authority, false));
+
+        solana_accounts.insert(spl_token::id(), AccountMeta::new_readonly(spl_token::id(), false));
+
         for withdraw in withdrawals {
+            let pool_address = get_associated_token_address(
+                &authority,
+                &withdraw.neon_mint
+            );
+            solana_accounts.insert(authority, AccountMeta::new(pool_address, false));
             solana_accounts.insert(withdraw.dest_neon, AccountMeta::new(withdraw.dest_neon, false));
         }
     }
