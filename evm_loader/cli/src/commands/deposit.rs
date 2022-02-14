@@ -45,8 +45,6 @@ pub fn execute(
 
     let signer_token_pubkey =
         spl_associated_token_account::get_associated_token_address(&config.signer.pubkey(), &token_mint_id);
-    let evm_bank_pubkey =
-        spl_associated_token_account::get_associated_token_address(&config.evm_loader, &token_mint_id);
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
 
     instructions.push(spl_approve_instruction(
@@ -56,10 +54,13 @@ pub fn execute(
         amount,
     ));
 
+    let evm_pool_pubkey =
+        spl_associated_token_account::get_associated_token_address(&evm_token_authority, &token_mint_id);
+
     instructions.push(deposit_instruction(
         config,
         signer_token_pubkey,
-        evm_bank_pubkey,
+        evm_pool_pubkey,
         ether_pubkey,
         evm_token_authority,
     ));
