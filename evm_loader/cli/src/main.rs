@@ -388,7 +388,7 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-fn is_valid<T, U>(amount: U) -> Result<(), String>
+fn is_amount<T, U>(amount: U) -> Result<(), String>
     where
         T: std::str::FromStr,
         U: AsRef<str> + Display,
@@ -530,7 +530,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_valid::<U256, _>)
+                        .validator(is_amount::<U256, _>)
                         .help("Transaction value")
                 )
                 .arg(
@@ -606,7 +606,7 @@ fn main() {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid::<u64, _>)
+                        .validator(is_amount::<u64, _>)
                         .help("Amount to deposit"),
                 )
                 .arg(
