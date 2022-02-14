@@ -8,7 +8,7 @@ interface INeon {
 contract NeonToken is INeon {
     address constant NeonPrecompiled = 0xFF00000000000000000000000000000000000003;
 
-    function withdraw(bytes32 spender) public payable returns (bool) {
+    function withdraw(bytes32 spender) public override payable returns (bool) {
         return INeon(NeonPrecompiled).withdraw{value: msg.value}(spender);
     }
 }
