@@ -15,7 +15,6 @@ use solana_cli::{
 use evm::{H160};
 
 use crate::{
-    //errors::NeonCliError,
     Config,
     NeonCliResult,
 };
