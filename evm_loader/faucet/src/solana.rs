@@ -71,7 +71,7 @@ pub async fn deposit_token(
         spl_associated_token_account::get_associated_token_address(&signer_pubkey, &token_mint_id);
 
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &evm_loader_id).0;
-    let evm_bank_pubkey = spl_associated_token_account::get_associated_token_address(
+    let evm_pool_pubkey = spl_associated_token_account::get_associated_token_address(
         &evm_token_authority,
         &token_mint_id,
     );
@@ -105,7 +105,7 @@ pub async fn deposit_token(
         info!("{} spl_token id = {}", id, spl_token::id());
         info!("{} signer_token_pubkey = {}", id, signer_token_pubkey);
         info!("{} token_mint_id = {}", id, token_mint_id);
-        info!("{} evm_bank_pubkey = {}", id, evm_bank_pubkey);
+        info!("{} evm_pool_pubkey = {}", id, evm_pool_pubkey);
         info!("{} evm_token_authority = {}", id, evm_token_authority);
         info!("{} signer_pubkey = {}", id, signer_pubkey);
         info!("{} amount = {}", id, amount);
@@ -125,7 +125,7 @@ pub async fn deposit_token(
 
         instructions.push(deposit_instruction(
             signer_token_pubkey,
-            evm_bank_pubkey,
+            evm_pool_pubkey,
             ether_pubkey,
             evm_token_authority,
             evm_loader_id,
