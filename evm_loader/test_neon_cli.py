@@ -16,9 +16,11 @@ class NeonCliTest(unittest.TestCase):
         neon_cli().call("deposit 10 {} --evm_loader {}".format(ether_account, evm_loader_id))
         # Get account's balance after
         output = neon_cli().call("get-ether-account-data {} --evm_loader {}".format(ether_account, evm_loader_id))
-        balance = re.compile("balance: (.*)")
-        balance = balance.match(output).group(1)
-        #self.assertEqual(balance, '10000000000')
+        balance = re.compile(r".*balance:\s+(\d+).*")
+        balance = balance.match(output)
+        self.assertIsNotNone(balance)
+        balance = balance.group(1)
+        self.assertEqual(balance, '10000000000')
 
 if __name__ == '__main__':
     unittest.main()
