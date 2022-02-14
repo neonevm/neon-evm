@@ -45,7 +45,6 @@ use solana_sdk::{
     system_instruction,
 };
 use std::{
-    collections::HashMap,
     io::{Read},
     fs::File,
     env,
