@@ -429,6 +429,7 @@ pub struct Machine<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
+    /// Creates instance of the Machine.
     #[must_use]
     pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
@@ -802,6 +803,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    /// Returns number of executed steps.
     #[must_use]
     pub fn get_steps_executed(&self) -> u64 {
         self.steps_executed
