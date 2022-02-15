@@ -14,8 +14,8 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
-RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
+RUN cd program && /opt/evm_loader/ci_checks.sh
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
     cargo build --release && \
