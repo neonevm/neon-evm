@@ -16,7 +16,7 @@ class SolanaCliTests(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest.py setUpClass")
 
-        cls.acc = WalletAccount(wallet_path())
+        cls.acc = OperatorAccount(operator1_keypair_path())
         if getBalance(cls.acc.get_acc().public_key()) == 0:
             tx = client.request_airdrop(cls.acc.get_acc().public_key(), 10 * 10 ** 9)
             confirm_transaction(client, tx['result'])
@@ -239,7 +239,6 @@ class EvmLoaderTests(unittest.TestCase):
                 AccountMeta(pubkey=self.contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
 
@@ -263,7 +262,6 @@ class EvmLoaderTests(unittest.TestCase):
                 AccountMeta(pubkey=self.contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
 

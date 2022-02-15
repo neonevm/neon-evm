@@ -22,12 +22,14 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 client = Client(solana_url)
 
 
+@unittest.skip("Depends on 03 instruction that is disabled now")
 class EvmLoaderTestsNewAccount(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_remove_caller.py setUpClass")
 
-        wallet = WalletAccount(wallet_path())
+        cls.token = SplToken(solana_url)
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -38,33 +40,46 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
               "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
-        program_and_code = cls.loader.deployChecked(
+        (cls.owner_contract, cls.eth_contract, cls.contract_code) = cls.loader.deployChecked(
                 CONTRACTS_DIR+'helloWorld.binary',
                 cls.caller, cls.caller_ether
             )
-        cls.owner_contract = program_and_code[0]
-        cls.contract_code = program_and_code[2]
         
-        print("contract id: ", cls.owner_contract, solana2ether(cls.owner_contract).hex())
+        print("contract id: ", cls.owner_contract, cls.eth_contract)
         print("code id: ", cls.contract_code)
 
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+
     def test_call_by_some_caller(self):
-        call_hello = bytearray.fromhex("033917b3df")
         trx = Transaction().add(
-            TransactionInstruction(program_id=self.loader.loader_id, data=call_hello, keys=[
+            TransactionInstruction(program_id=self.loader.loader_id,
+            data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
+            keys=[
+                # Operator address:
+                AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=get_associated_token_address(self.acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ]))
         result = send_transaction(client, trx, self.acc)
         print(result)
@@ -79,9 +94,17 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             confirm_transaction(client, tx['result'])
             balance = client.get_balance(acc.public_key())['result']['value']
             print("Done\n")
-        call_hello = bytearray.fromhex("033917b3df")
         trx = Transaction().add(
-            TransactionInstruction(program_id=self.loader.loader_id, data=call_hello, keys=[
+            TransactionInstruction(program_id=self.loader.loader_id,
+            data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
+            keys=[
+                # Operator address:
+                AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=True),
+                # Collateral pool address:
+                AccountMeta(pubkey=self.collateral_pool_address, is_signer=False, is_writable=True),
+                # System program account:
+                AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+
                 AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.owner_contract), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.contract_code, is_signer=False, is_writable=True),
@@ -89,8 +112,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=acc.public_key(), is_signer=True, is_writable=False),
                 AccountMeta(pubkey=get_associated_token_address(acc.public_key(), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+
                 AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             ]))
 
         #err = "invalid program argument"

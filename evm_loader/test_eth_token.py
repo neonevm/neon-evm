@@ -7,6 +7,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
+from decimal import Decimal
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -22,8 +23,10 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        print("\ntest_event.py setUpClass")
+
         cls.token = SplToken(solana_url)
-        wallet = WalletAccount(wallet_path())
+        wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
         cls.acc = wallet.get_acc()
 
@@ -35,9 +38,8 @@ class EthTokenTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
-
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 100, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -49,60 +51,70 @@ class EthTokenTest(unittest.TestCase):
         print ('contract_eth', cls.reId_eth.hex())
         print ('contract_code', cls.re_code)
 
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def sol_instr_09_partial_call(self, storage_account, step_count, evm_instruction):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("09") + step_count.to_bytes(8, byteorder='little') + evm_instruction,
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+        cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
 
-    def sol_instr_10_continue(self, storage_account, step_count):
-        return TransactionInstruction(program_id=self.loader.loader_id,
-                                   data=bytearray.fromhex("0A") + step_count.to_bytes(8, byteorder='little'),
-                                   keys=[
-                                       AccountMeta(pubkey=storage_account, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.reId, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.re_code, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=self.caller_token, is_signer=False, is_writable=True),
-                                       AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=self.loader.loader_id, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                                       AccountMeta(pubkey=PublicKey(sysvarclock), is_signer=False, is_writable=False),
-                                   ])
+    def sol_instr_19_partial_call(self, storage_account, step_count, evm_instruction, additional_accounts = []):
+        neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
+            step_count,
+            evm_instruction,
+            add_meta=[
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            ] + additional_accounts
+        )
+        print('neon_evm_instr_19_partial_call:', neon_evm_instr_19_partial_call)
+        return neon_evm_instr_19_partial_call
+
+    def sol_instr_20_continue(self, storage_account, step_count, additional_accounts = []):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
+            step_count,
+            add_meta=[
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+                AccountMeta(pubkey=get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
+            ] + additional_accounts
+        )
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
 
     def sol_instr_keccak(self, keccak_instruction):
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
                 AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def call_begin(self, storage, steps, msg, instruction):
+    def call_begin(self, storage, steps, msg, instruction, additional_accounts = []):
         print("Begin")
         trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 9)))
-        trx.add(self.sol_instr_09_partial_call(storage, steps, instruction))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
-    def call_continue(self, storage, steps):
+    def call_continue(self, storage, steps, additional_accounts = []):
         print("Continue")
         trx = Transaction()
-        trx.add(self.sol_instr_10_continue(storage, steps))
+        trx.add(self.sol_instr_20_continue(storage, steps, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': solana2ether(self.reId), 'value': value, 'gas': 99999999, 'gasPrice': 1,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -120,15 +132,14 @@ class EthTokenTest(unittest.TestCase):
 
         return storage
 
-    def call_partial_signed(self, input, value):
+    def call_partial_signed(self, input, value, additional_accounts = []):
         (from_addr, sign,  msg) = self.get_call_parameters(input, value)
         instruction = from_addr + sign + msg
 
-        storage = self.create_storage_account(sign[:8].hex())
-        result = self.call_begin(storage, 0, msg, instruction)
+        result = self.call_begin(self.storage, 0, msg, instruction, additional_accounts)
 
         while (True):
-            result = self.call_continue(storage, 400)["result"]
+            result = self.call_continue(self.storage, 400, additional_accounts)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
@@ -140,14 +151,14 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(self.caller_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -156,14 +167,14 @@ class EthTokenTest(unittest.TestCase):
         expected_balance = self.token.balance(contract_token)
 
         func_name = abi.function_signature_to_4byte_selector('checkContractBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % (expected_balance * (10**18)))
+        input = func_name + bytes.fromhex("%064x" % int(expected_balance * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
+        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
-        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][0]['data'])
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
@@ -173,47 +184,80 @@ class EthTokenTest(unittest.TestCase):
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 10
-        
+
         func_name = abi.function_signature_to_4byte_selector('nop()')
         result = self.call_partial_signed(func_name, value * (10**18))
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before + value)
-        self.assertEqual(caller_balance_after, caller_balance_before - value)
+        self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
     def test_transfer_internal(self):
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
-        self.token.transfer(ETH_TOKEN_MINT_ID, 100, contract_token)
+        self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
 
         contract_balance_before = self.token.balance(contract_token)
         caller_balance_before = self.token.balance(self.caller_token)
         value = 5
-        
         func_name = abi.function_signature_to_4byte_selector('retrieve(uint256)')
         input = func_name + bytes.fromhex("%064x" % (value * (10**18)))
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
+        # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
         self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
+        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
+
         contract_balance_after = self.token.balance(contract_token)
         caller_balance_after = self.token.balance(self.caller_token)
         self.assertEqual(contract_balance_after, contract_balance_before - value)
-        self.assertEqual(caller_balance_after, caller_balance_before + value)
+        self.assertEqual(caller_balance_after, caller_balance_before + value - gas_used)
+
+    def test_empty_account_balance(self):
+        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        (empty_solana_address, _) = self.loader.ether2program(empty_account)
+        expected_balance: int = 0
+
+        func_name = abi.function_signature_to_4byte_selector('checkUserBalance(address,uint256)')
+        input = func_name + bytes(12) + empty_account + bytes.fromhex("%064x" % int(expected_balance * 10**18))
+        result = self.call_partial_signed(input, 0,
+            additional_accounts=[ AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False), ]
+        )
+
+        self.assertEqual(result['meta']['err'], None)
+        self.assertEqual(len(result['meta']['innerInstructions']), 1)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+        self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
+        self.assertEqual(data[1], 0x11)  #  0x11 - stoped
+
+    def test_transfer_to_empty(self):
+        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        (empty_solana_address, _) = self.loader.ether2program(empty_account)
+
+        func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
+        input = func_name + bytes(12) + empty_account
+
+        with self.assertRaisesRegex(Exception, 'instruction requires an initialized account'):
+            self.call_partial_signed(input, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
+
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
 if __name__ == '__main__':
     unittest.main()

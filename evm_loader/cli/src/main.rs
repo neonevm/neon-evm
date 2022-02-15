@@ -1,60 +1,69 @@
 #![deny(warnings)]
-#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![deny(clippy::all, clippy::pedantic)]
+#![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
+
+mod errors;
+mod logs;
+mod commands;
+
 use crate::{
     account_storage::{
-        EmulatorAccountStorage,
-        AccountJSON,
+        make_solana_program_address,
+    },
+    commands::{
+        emulate,
+        create_program_address,
+        create_ether_account,
+        deploy,
+        get_ether_account_data,
+        cancel_trx,
+        get_neon_elf,
+        get_storage_at,
+        update_valids_table,
     },
 };
 
 use evm_loader::{
-    instruction::EvmInstruction,
-    solana_backend::SolanaBackend,
-    account_data::{AccountData, Account, Contract},
+    account_data::{
+        ACCOUNT_SEED_VERSION,
+        AccountData,
+    },
+    config::{  collateral_pool_base },
 };
 
-use evm::{H160, H256, U256, ExitReason,};
+use evm::{H160, H256, U256};
 use solana_sdk::{
-    clock::Slot,
     commitment_config::{CommitmentConfig, CommitmentLevel},
-    instruction::{AccountMeta, Instruction},
-    loader_instruction::LoaderInstruction,
+    instruction::{Instruction},
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer, Signature},
-    signers::Signers,
+    keccak::Hasher,
     transaction::Transaction,
-    system_program,
-    sysvar,
     system_instruction,
-    sysvar::{clock},
 };
-use serde_json::json;
 use std::{
     collections::HashMap,
     io::{Read},
     fs::File,
     env,
     str::FromStr,
-    process::exit,
+    process::{exit},
     sync::Arc,
-    thread::sleep,
-    time::{Duration},
-    convert::{TryFrom},
+    convert::{TryInto},
     fmt,
     fmt::{Debug, Display,},
 };
 
 use clap::{
-    crate_description, crate_name, crate_version, value_t_or_exit, App, AppSettings, Arg,
+    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
     ArgMatches, SubCommand,
 };
 
 use solana_program::{
     keccak::{hash,},
-    account_info::AccountInfo
 };
 
 use solana_clap_utils::{
@@ -65,42 +74,18 @@ use solana_clap_utils::{
 
 use solana_client::{
     rpc_client::RpcClient,
-    rpc_config::{RpcSendTransactionConfig, RpcConfirmedTransactionConfig},
-    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    tpu_client::{TpuClient, TpuClientConfig},
+    rpc_config::{RpcSendTransactionConfig},
+    client_error::Result as SolanaClientResult,
 };
-use solana_cli::{
-    checks::{check_account_for_fee},
-};
-use solana_cli_output::display::new_spinner_progress_bar;
-use solana_transaction_status::{
-    TransactionConfirmationStatus,
-    UiTransactionEncoding,
-    EncodedTransaction,
-    UiMessage,
-    UiInstruction,
-    EncodedConfirmedTransaction
-};
-
-use secp256k1::SecretKey;
 
 use rlp::RlpStream;
 
-use log::{debug, error, info};
-use crate::account_storage::SolanaAccountJSON;
-use evm_loader::{
-    executor_state::{
-        ExecutorState,
-        ExecutorSubstate,
-    },
-    executor::Machine,
-    solana_backend::AccountStorage,
-};
+use log::{debug, error};
+use logs::LogContext;
 
-const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
+use crate::errors::NeonCliError;
 
-type Error = Box<dyn std::error::Error>;
-type CommandResult = Result<(), Error>;
+type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
     rpc_client: Arc<RpcClient>,
@@ -110,6 +95,7 @@ pub struct Config {
     // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
     keypair: Option<Keypair>,
+    commitment: CommitmentConfig,
 }
 
 impl Debug for Config {
@@ -118,330 +104,18 @@ impl Debug for Config {
     }
 }
 
-fn command_emulate(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>, value: Option<U256>) -> CommandResult {
-    debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
-        config,
-        contract_id,
-        caller_id,
-        &hex::encode(data.clone().unwrap_or_default()),
-        value);
-
-    let storage = match &contract_id {
-        Some(program_id) =>  {
-            debug!("program_id to call: {:?}", *program_id);
-            EmulatorAccountStorage::new(config, *program_id, caller_id)
-        },
-        None => {
-            let solana_address = Pubkey::find_program_address(&[&caller_id.to_fixed_bytes()], &config.evm_loader).0;
-            let trx_count = get_ether_account_nonce(config, &solana_address)?;
-            let trx_count= trx_count.0;
-            let program_id = get_program_ether(&caller_id, trx_count);
-            debug!("program_id to deploy: {:?}", program_id);
-            EmulatorAccountStorage::new(config, program_id, caller_id)
-        }
-    };
-
-    let (exit_reason, result, applies_logs, used_gas) = {
-        let accounts : Vec<AccountInfo> = Vec::new();
-        let backend = SolanaBackend::new(&storage, Some(&accounts[..]));
-        // u64::MAX is too large, remix gives this error:
-        // Gas estimation errored with the following message (see below).
-        // Number can only safely store up to 53 bits
-        let gas_limit = 50_000_000;
-        let executor_state = ExecutorState::new(ExecutorSubstate::new(gas_limit), backend);
-        let mut executor = Machine::new(executor_state);
-        debug!("Executor initialized");
-
-        let (result, exit_reason) = match &contract_id {
-            Some(_) =>  {
-                debug!("call_begin(storage.origin()={:?}, storage.contract()={:?}, data={:?}, value={:?})",
-                    storage.origin(),
-                    storage.contract(),
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
-                executor.call_begin(storage.origin(),
-                                    storage.contract(),
-                                    data.unwrap_or_default(),
-                                    value.unwrap_or_default(),
-                                    gas_limit)?;
-                executor.execute()
-            },
-            None => {
-                debug!("create_begin(storage.origin()={:?}, data={:?}, value={:?})",
-                    storage.origin(),
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
-                executor.create_begin(storage.origin(),
-                                      data.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-                                      gas_limit)?;
-                executor.execute()
-            }
-        };
-        debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
-
-        let executor_state = executor.into_state();
-        let used_gas = executor_state.substate().metadata().gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas = executor_state.substate().metadata().gasometer().refunded_gas();
-        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
-
-        if exit_reason.is_succeed() {
-            debug!("Succeed execution");
-            let (_, (applies, logs, _transfer)) = executor_state.deconstruct();
-            (exit_reason, result, Some((applies, logs)), used_gas)
-        } else {
-            (exit_reason, result, None, used_gas)
-        }
-    };
-
-    debug!("Call done");
-    let status = match exit_reason {
-        ExitReason::Succeed(_) => {
-            let (applies, _logs) = applies_logs.unwrap();
-    
-            storage.apply(applies);
-
-            debug!("Applies done");
-            "succeed".to_string()
-        }
-        ExitReason::Error(_) => "error".to_string(),
-        ExitReason::Revert(_) => "revert".to_string(),
-        ExitReason::Fatal(_) => "fatal".to_string(),
-        ExitReason::StepLimitReached => unreachable!(),
-    };
-
-    info!("{}", &status);
-    info!("{}", &hex::encode(&result));
-
-    if !exit_reason.is_succeed() {
-        debug!("Not succeed execution");
-    }
-
-    let accounts: Vec<AccountJSON> = storage.get_used_accounts();
-
-    let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
-        .borrow()
-        .iter()
-        .cloned()
-        .map(SolanaAccountJSON::from)
-        .collect();
-
-    let js = json!({
-        "accounts": accounts,
-        "solana_accounts": solana_accounts,
-        "result": &hex::encode(&result),
-        "exit_status": status,
-        "used_gas": used_gas,
-    }).to_string();
-
-    println!("{}", js);
-
-    Ok(())
-}
-
-fn command_create_program_address (
-    config: &Config,
-    seed: &str,
-) {
-    let strings = seed.split_whitespace().collect::<Vec<_>>();
-    let mut seeds = vec![];
-    let mut seeds_vec = vec![];
-    for s in strings {
-        seeds_vec.push(hex::decode(s).unwrap());
-    }
-    for i in &seeds_vec {seeds.push(&i[..]);}
-    let (address,nonce) = Pubkey::find_program_address(&seeds, &config.evm_loader);
-    println!("{} {}", address, nonce);
-}
-
-fn command_create_ether_account (
-    config: &Config,
-    ether_address: &H160,
-    lamports: u64,
-    space: u64
-) -> CommandResult {
-    let (solana_address, nonce) = Pubkey::find_program_address(&[ether_address.as_bytes()], &config.evm_loader);
-    let token_address = spl_associated_token_account::get_associated_token_address(&solana_address, &evm_loader::token::token_mint::id());
-    debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
-
-    let instruction = Instruction::new_with_bincode(
-            config.evm_loader,
-            &EvmInstruction::CreateAccount {lamports, space, ether: *ether_address, nonce},
-            vec![
-                AccountMeta::new(config.signer.pubkey(), true),
-                AccountMeta::new(solana_address, false),
-                AccountMeta::new(token_address, false),
-                AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
-                AccountMeta::new_readonly(spl_token::id(), false),
-                AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-                AccountMeta::new_readonly(sysvar::rent::id(), false),
-            ]);
-
-    let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
-    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
-
-    check_account_for_fee(
-        &config.rpc_client,
-        &config.signer.pubkey(),
-        &fee_calculator,
-        &finalize_message)?;
-
-    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
-
-    finalize_tx.try_sign(&[&*config.signer], blockhash)?;
-    debug!("signed: {:x?}", finalize_tx);
-
-    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
-
-    println!("{}", json!({
-        "solana": solana_address.to_string(),
-        "token": token_address.to_string(),
-        "ether": hex::encode(ether_address),
-        "nonce": nonce,
-    }).to_string());
-
-    Ok(())
-}
-
-fn read_program_data(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let mut file = File::open(program_location).map_err(|err| {
-        format!("Unable to open program file: {}", err)
-    })?;
+fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
+    let mut file = File::open(program_location)?;
+    // let mut file = File::open(program_location).map_err(|err| {
+    //     format!("Unable to open program file '{}': {}", program_location, err)
+    // })?;
     let mut program_data = Vec::new();
-    file.read_to_end(&mut program_data).map_err(|err| {
-        format!("Unable to read program file: {}", err)
-    })?;
+    file.read_to_end(&mut program_data)?;
+    // file.read_to_end(&mut program_data).map_err(|err| {
+    //     format!("Unable to read program file '{}': {}", program_location, err)
+    // })?;
 
     Ok(program_data)
-}
-
-#[allow(clippy::too_many_lines)]
-fn send_and_confirm_transactions_with_spinner<T: Signers>(
-    rpc_client: &Arc<RpcClient>,
-    websocket_url: &str,
-    mut transactions: Vec<Transaction>,
-    signer_keys: &T,
-    commitment: CommitmentConfig,
-    mut last_valid_slot: Slot,
-) -> CommandResult {
-    let progress_bar = new_spinner_progress_bar();
-    let mut send_retries = 5;
-
-    progress_bar.set_message("Finding leader nodes...");
-    let tpu_client = TpuClient::new(
-        rpc_client.clone(),
-        websocket_url,
-        TpuClientConfig::default(),
-    )?;
-
-    loop {
-        // Send all transactions
-        let mut pending_transactions = HashMap::new();
-        let num_transactions = transactions.len();
-        for transaction in transactions {
-            if !tpu_client.send_transaction(&transaction) {
-                let _result = rpc_client
-                    .send_transaction_with_config(
-                        &transaction,
-                        RpcSendTransactionConfig {
-                            preflight_commitment: Some(commitment.commitment),
-                            ..RpcSendTransactionConfig::default()
-                        },
-                    )
-                    .ok();
-            }
-            pending_transactions.insert(transaction.signatures[0], transaction);
-            progress_bar.set_message(&format!(
-                "[{}/{}] Transactions sent",
-                pending_transactions.len(),
-                num_transactions
-            ));
-
-            // Throttle transactions to about 100 TPS
-            sleep(Duration::from_millis(10));
-        }
-
-        // Collect statuses for all the transactions, drop those that are confirmed
-        loop {
-            let mut slot = 0;
-            let pending_signatures = pending_transactions.keys().copied().collect::<Vec<_>>();
-            for pending_signatures_chunk in
-                pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
-            {
-                if let Ok(result) = rpc_client.get_signature_statuses(pending_signatures_chunk) {
-                    let statuses = result.value;
-                    for (signature, status) in
-                        pending_signatures_chunk.iter().zip(statuses.into_iter())
-                    {
-                        if let Some(status) = status {
-                            if let Some(confirmation_status) = &status.confirmation_status {
-                                if *confirmation_status != TransactionConfirmationStatus::Processed
-                                {
-                                    pending_transactions.remove(signature);
-                                }
-                            } else if status.confirmations.is_none()
-                                || status.confirmations.unwrap() > 1
-                            {
-                                pending_transactions.remove(signature);
-                            }
-                        }
-                    }
-                }
-
-                slot = rpc_client.get_slot()?;
-                progress_bar.set_message(&format!(
-                    "[{}/{}] Transactions confirmed. Retrying in {} slots",
-                    num_transactions - pending_transactions.len(),
-                    num_transactions,
-                    last_valid_slot.saturating_sub(slot)
-                ));
-            }
-
-            if pending_transactions.is_empty() {
-                return Ok(());
-            }
-
-            if slot > last_valid_slot {
-                break;
-            }
-
-            for transaction in pending_transactions.values() {
-                if !tpu_client.send_transaction(transaction) {
-                    let _result = rpc_client
-                        .send_transaction_with_config(
-                            transaction,
-                            RpcSendTransactionConfig {
-                                preflight_commitment: Some(commitment.commitment),
-                                ..RpcSendTransactionConfig::default()
-                            },
-                        )
-                        .ok();
-                }
-            }
-
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
-            }
-        }
-
-        if send_retries == 0 {
-            return Err("Transactions failed".into());
-        }
-        send_retries -= 1;
-
-        // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator, new_last_valid_slot) = rpc_client
-            .get_recent_blockhash_with_commitment(commitment)?
-            .value;
-        last_valid_slot = new_last_valid_slot;
-        transactions = vec![];
-        for (_, mut transaction) in pending_transactions {
-            transaction.try_sign(signer_keys, blockhash)?;
-            transactions.push(transaction);
-        }
-    }
 }
 
 #[must_use]
@@ -488,95 +162,9 @@ impl rlp::Encodable for UnsignedTransaction {
     }
 }
 
-fn make_deploy_ethereum_transaction(
-    trx_count: u64,
-    program_data: &[u8],
-    caller_private: &SecretKey,
-) -> Vec<u8> {
-    let rlp_data = {
-        let tx = UnsignedTransaction {
-            to: None,
-            nonce: trx_count,
-            gas_limit: 9_999_999.into(),
-            gas_price: 1.into(),
-            value: 0.into(),
-            data: program_data.to_owned(),
-            chain_id: 111.into(), // Will fixed in #61 issue
-        };
-
-        rlp::encode(&tx).to_vec()
-    };
-
-    let (sig, rec) = {
-        use secp256k1::{Message, sign};
-        let msg = Message::parse(&keccak256(rlp_data.as_slice()));
-        sign(&msg, caller_private)
-    };
-
-    let mut msg : Vec<u8> = Vec::new();
-    msg.extend(sig.serialize().iter().copied());
-    msg.push(rec.serialize());
-    msg.extend((rlp_data.len() as u64).to_le_bytes().iter().copied());
-    msg.extend(rlp_data);
-
-    msg
-}
-
-fn fill_holder_account(
-    config: &Config,
-    holder: &Pubkey, 
-    msg: &[u8],
-) -> Result<(), Error> {
-    let creator = &config.signer;
-    let signers = [&*config.signer];
-
-    // Write code to holder account
-    debug!("Write code");
-    let mut write_messages = vec![];
-    for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
-        let offset = u32::try_from(i*DATA_CHUNK_SIZE)?;
-        let instruction = Instruction::new_with_bincode(
-            config.evm_loader,
-            &LoaderInstruction::Write {offset, bytes: chunk.to_vec()},
-            vec![AccountMeta::new(*holder, false),
-                 AccountMeta::new(creator.pubkey(), true)]
-        );
-        let message = Message::new(&[instruction], Some(&creator.pubkey()));
-        write_messages.push(message);
-    }
-    debug!("Send write message");
-
-    // Send write message
-    {
-        let (blockhash, _, last_valid_slot) = config.rpc_client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
-            .value;
-
-        let mut write_transactions = vec![];
-        for message in write_messages {
-            let mut tx = Transaction::new_unsigned(message);
-            tx.try_sign(&signers, blockhash)?;
-            write_transactions.push(tx);
-        }
-
-        debug!("Writing program data");
-        send_and_confirm_transactions_with_spinner(
-            &config.rpc_client,
-            &config.websocket_url,
-            write_transactions,
-            &signers,
-            CommitmentConfig::confirmed(),
-            last_valid_slot,
-        ).map_err(|err| format!("Data writes to program account failed: {}", err))?;
-        debug!("Writing program data done");
-    }
-
-    Ok(())
-}
-
-//fn get_ethereum_caller_credentials(
-//    config: &Config,
-//) -> (SecretKey, H160, Pubkey, u8, Pubkey) {
+// fn get_ethereum_caller_credentials(
+//     config: &Config,
+// ) -> (SecretKey, H160, Pubkey, u8, Pubkey, Pubkey) {
 //     use secp256k1::PublicKey;
 //     let caller_private = {
 //         let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
@@ -586,38 +174,39 @@ fn fill_holder_account(
 //     };
 //     let caller_public = PublicKey::from_secret_key(&caller_private);
 //     let caller_ether: H160 = keccak256_h256(&caller_public.serialize()[1..]).into();
-//     let (caller_sol, caller_nonce) = Pubkey::find_program_address(&[&caller_ether.to_fixed_bytes()], &config.evm_loader);
-//    let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::token::token_mint::id());
+//     let (caller_sol, caller_nonce) = make_solana_program_address(&caller_ether, &config.evm_loader);
+//     let caller_token = spl_associated_token_account::get_associated_token_address(&caller_sol, &evm_loader::neon::token_mint::id());
+//     let caller_holder = create_block_token_account(config, &caller_ether, &caller_sol).unwrap();
 //     debug!("caller_sol = {}", caller_sol);
 //     debug!("caller_ether = {}", caller_ether);
-//    debug!("caller_token = {}", caller_token);
-//
-//    (caller_private, caller_ether, caller_sol, caller_nonce)
+//     debug!("caller_token = {}", caller_token);
+
+//     (caller_private, caller_ether, caller_sol, caller_nonce, caller_token, caller_holder)
 // }
 
 fn get_ether_account_nonce(
-    config: &Config, 
-    caller_sol: &Pubkey
-) -> Result<(u64, H160, Pubkey), Error> {
-    let data : Vec<u8>;
-    match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
-        Some(acc) =>   data = acc.data,
+    config: &Config,
+    caller_sol: &Pubkey,
+    token_mint: &Pubkey
+) -> Result<(u64, H160, Pubkey),NeonCliError> {
+    let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
+        Some(acc) => acc.data,
         None => return Ok((u64::default(), H160::default(), Pubkey::default()))
-    }
+    };
 
-    let trx_count : u64;
     debug!("get_ether_account_nonce data = {:?}", data);
     let account = match evm_loader::account_data::AccountData::unpack(&data) {
         Ok(acc_data) =>
             match acc_data {
             AccountData::Account(acc) => acc,
-            _ => return Err("Caller has incorrect type".into())
+            // _ => return Err("Caller has incorrect type".into())
+            _ => return Err(NeonCliError::AccountIncorrectType(acc_data))
         },
-        Err(_) => return Err("Caller unpack error".into())
+        Err(e) => return Err(NeonCliError::ProgramError(e))
     };
-    trx_count = account.trx_count;
+    let trx_count = account.trx_count;
     let caller_ether = account.ether;
-    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, &evm_loader::token::token_mint::id());
+    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, token_mint);
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
     debug!("Caller trx_count: {} ", trx_count);
@@ -637,93 +226,7 @@ fn get_program_ether(
     keccak256_h256(&stream.out()).into()
 }
 
-fn get_ethereum_contract_account_credentials(
-    config: &Config, 
-    caller_ether: &H160,
-    trx_count: u64,
-) -> (Pubkey, H160, u8, Pubkey, Pubkey, String) {
-    let creator = &config.signer;
-
-    let (program_id, program_ether, program_nonce) = {
-        let ether = get_program_ether(caller_ether, trx_count);
-        let seeds = [ether.as_bytes()];
-        let (address, nonce) = Pubkey::find_program_address(&seeds[..], &config.evm_loader);
-        (address, ether, nonce)
-    };
-    debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
-
-    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, &evm_loader::token::token_mint::id());
-
-    let (program_code, program_seed) = {
-        let seed = bs58::encode(&program_ether.to_fixed_bytes()).into_string();
-        debug!("Code account seed {} and len {}", &seed, &seed.len());
-        let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
-        (address, seed)
-    };
-    debug!("Create code account: {}", &program_code.to_string());
-
-    (program_id, program_ether, program_nonce, program_token, program_code, program_seed)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn create_ethereum_contract_accounts_in_solana(
-    config: &Config,
-    program_id: &Pubkey,
-    program_ether: &H160,
-    program_nonce: u8,
-    program_token: &Pubkey,
-    program_code: &Pubkey,
-    program_seed: &str,
-    program_code_len: usize,
-) -> Result<(), Error> {
-    let account_header_size = 1+Account::SIZE;
-    let contract_header_size = 1+Contract::SIZE;
-
-    let creator = &config.signer;
-    let program_code_acc_len = contract_header_size + program_code_len + 2*1024;
-
-    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(account_header_size)?;
-    let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_acc_len)?;
-
-    if let Some(_account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
-    {
-        return Err("Account already exist".to_string().into());
-        // debug!("Account already exist");
-    }
-
-    let instructions = vec![
-        system_instruction::create_account_with_seed(
-            &creator.pubkey(), 
-            program_code, 
-            &creator.pubkey(), 
-            program_seed, 
-            minimum_balance_for_code, 
-            program_code_acc_len as u64, 
-            &config.evm_loader
-        ),
-        Instruction::new_with_bincode(
-            config.evm_loader,
-            &(2_u32, minimum_balance_for_account, 0_u64, program_ether.as_fixed_bytes(), program_nonce),
-            vec![
-                AccountMeta::new(creator.pubkey(), true),
-                AccountMeta::new(*program_id, false),
-                AccountMeta::new(*program_token, false),
-                AccountMeta::new(*program_code, false),
-                AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(evm_loader::token::token_mint::id(), false),
-                AccountMeta::new_readonly(spl_token::id(), false),
-                AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-                AccountMeta::new_readonly(sysvar::rent::id(), false),
-            ]
-        )
-    ];
-
-    send_transaction(config, &instructions)?;
-
-    Ok(())
-}
-
-fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
+fn create_storage_account(config: &Config) -> SolanaClientResult<Pubkey> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let creator = &config.signer;
@@ -733,51 +236,35 @@ fn create_ctorage_accoiunt(config: &Config) -> Result<Pubkey, Error> {
     Ok(storage)
 }
 
-fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
-    let mut return_value : Option<Vec<u8>> = None;
-    if let EncodedTransaction::Json(transaction) = result.transaction.transaction {
-        if let UiMessage::Raw(message) = transaction.message {
-            let evm_loader_index = message.account_keys.iter().position(|x| *x == config.evm_loader.to_string());
-            if let Some(meta) = result.transaction.meta {
-                if let Some(inner_instructions) = meta.inner_instructions {
-                    for instruction in inner_instructions {
-                        if instruction.index == 0 {
-                            if let Some(UiInstruction::Compiled(compiled_instruction)) = instruction.instructions.iter().last() {
-                                if compiled_instruction.program_id_index as usize == evm_loader_index.unwrap() {
-                                    let decoded = bs58::decode(compiled_instruction.data.clone()).into_vec().unwrap();
-                                    if decoded[0] == 6 {
-                                        debug!("success");
-                                        return_value = Some(decoded[1..].to_vec());
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return_value
+fn get_collateral_pool_account_and_index(config: &Config, collateral_pool_base: &Pubkey) -> (Pubkey, u32) {
+    let collateral_pool_index = 2;
+    let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
+    let collateral_pool_account = Pubkey::create_with_seed(
+        collateral_pool_base,
+        &seed,
+        &config.evm_loader).unwrap();
+
+    (collateral_pool_account, collateral_pool_index)
 }
 
 fn create_account_with_seed(
-    config: &Config, 
-    funding: &Pubkey, 
-    base: &Pubkey, 
-    seed: &str, 
+    config: &Config,
+    funding: &Pubkey,
+    base: &Pubkey,
+    seed: &str,
     len: u64
-) -> Result<Pubkey, Error> {
+) -> SolanaClientResult<Pubkey> {
     let created_account = Pubkey::create_with_seed(base, seed, &config.evm_loader).unwrap();
 
     if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Account not found");
+        let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(len.try_into().unwrap())?;
         let create_acc_instruction = system_instruction::create_account_with_seed(
             funding,
             &created_account,
             base,
             seed,
-            10_u64.pow(9),
+            minimum_balance_for_account,
             len,
             &config.evm_loader
         );
@@ -790,9 +277,9 @@ fn create_account_with_seed(
 }
 
 fn send_transaction(
-    config: &Config, 
+    config: &Config,
     instructions: &[Instruction]
-) -> Result<Signature, Error> {
+) -> SolanaClientResult<Signature> {
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
@@ -801,179 +288,40 @@ fn send_transaction(
         .value;
     transaction.try_sign(&signers, blockhash)?;
 
-    let tx_sig = config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+    config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &transaction,
         CommitmentConfig::confirmed(),
         RpcSendTransactionConfig {
             preflight_commitment: Some(CommitmentLevel::Confirmed),
             ..RpcSendTransactionConfig::default()
         },
-    )?;
+    )
 
-    Ok(tx_sig)
+    // Ok(tx_sig)
 }
 
-fn command_deploy(
-    config: &Config,
-    program_location: &str,
-    caller_arg: Pubkey
-) -> CommandResult {
-    let creator = &config.signer;
-    let program_data = read_program_data(program_location)?;
-
-    // Create ethereum caller private key from sign of array by signer
-    // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
-
-    let caller_private_eth = {
-        let private_bytes : [u8; 64] = config.keypair.as_ref().unwrap().to_bytes();
-        let mut sign_arr: [u8;32] = Default::default();
-        sign_arr.clone_from_slice(&private_bytes[..32]);
-        SecretKey::parse(&sign_arr).unwrap()
-    };
-
-    // if caller_sol != caller_arg {
-    //     return Err("Could not acquire caller account private key".to_string().into());
-    // }
-
-    // Get caller nonce
-    let (trx_count, caller_ether, caller_token) = get_ether_account_nonce(config, &caller_arg)?;
-
-    let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
-        get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
-
-    // Check program account to see if partial initialization has occurred
-    create_ethereum_contract_accounts_in_solana(
-        config,
-        &program_id,
-        &program_ether,
-        program_nonce,
-        &program_token,
-        &program_code,
-        &program_seed,
-        program_data.len()
-    )?;
-
-    // Create transaction prepared for execution from account
-    let msg = make_deploy_ethereum_transaction(trx_count, &program_data, &caller_private_eth);
-
-    // Create holder account (if not exists)
-    let holder = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), "1236", 128*1024_u64)?;
-
-    fill_holder_account(config, &holder, &msg)?;
-
-    // Create storage account if not exists
-    let storage = create_ctorage_accoiunt(config)?;
-
-    let accounts = vec![AccountMeta::new(holder, false),
-                        AccountMeta::new(storage, false),
-                        AccountMeta::new(program_id, false),
-                        AccountMeta::new(program_token, false),
-                        AccountMeta::new(program_code, false),
-                        AccountMeta::new(caller_arg, false),
-			AccountMeta::new(caller_token, false),
-                        AccountMeta::new_readonly(config.evm_loader, false),
-                        AccountMeta::new(clock::id(), false),
-                        ];
-
-    // Send trx_from_account_data_instruction
-    {
-        debug!("trx_from_account_data_instruction");
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0b_u8, 0_u64), accounts.clone());
-        send_transaction(config, &[trx_from_account_data_instruction])?;
-    }
-
-    // Continue while no result
-    loop {
-        debug!("continue");
-        let continue_accounts = accounts[1..].to_vec();
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader, &(0x0a_u8, 400_u64), continue_accounts);
-        let signature = send_transaction(config, &[continue_instruction])?;
-
-        // Check if Continue returned some result 
-        let result = config.rpc_client.get_confirmed_transaction_with_config(
-            &signature, 
-            RpcConfirmedTransactionConfig {
-                commitment: Some(CommitmentConfig::confirmed()),
-                encoding: Some(UiTransactionEncoding::Json),
-            },
-        )?;
-
-        let return_value = parse_transaction_reciept(config, result);
-
-        if let Some(value) = return_value {
-            let (exit_code, data) = value.split_at(1);
-            debug!("exit code {}", exit_code[0]);
-            debug!("return data {}", &hex::encode(data));
-            break;
-        }
-    }
-
-    println!("{}", json!({
-        "programId": format!("{}", program_id),
-        "programToken": format!("{}", program_token),
-        "codeId": format!("{}", program_code),
-        "ethereum": format!("{:?}", program_ether),
-    }).to_string());
-    Ok(())
-}
-
-fn command_get_ether_account_data (
-    config: &Config,
-    ether_address: &H160,
-) {
-    match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
-        Some((acc, code_account)) => {
-            let solana_address =  Pubkey::find_program_address(&[&ether_address.to_fixed_bytes()], &config.evm_loader).0;
-            let account_data = AccountData::unpack(&acc.data).unwrap();
-            let account_data = AccountData::get_account(&account_data).unwrap();
-
-            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
-            println!("Solana address: {}", solana_address);
-    
-            println!("Account fields");
-            println!("    ether: {}", &account_data.ether);
-            println!("    nonce: {}", &account_data.nonce);
-            println!("    trx_count: {}", &account_data.trx_count);
-            println!("    code_account: {}", &account_data.code_account);
-            println!("    blocked: {}", &account_data.blocked.is_some());
-        
-            if let Some(code_account) = code_account {
-                let code_data = AccountData::unpack(&code_account.data).unwrap();
-                let header = AccountData::size(&code_data);
-                let code_data = AccountData::get_contract(&code_data).unwrap();
-
-                println!("Contract fields");
-                println!("    owner: {}", &code_data.owner);
-                println!("    code_size: {}", &code_data.code_size);
-                println!("    code as hex:");
-    
-                let code_size = code_data.code_size;
-                let mut offset = header;
-                while offset < ( code_size as usize + header) {
-                    let data_slice = &code_account.data.as_slice();
-                    let remains = if code_size as usize + header - offset > 80 {
-                        80
-                    } else {
-                        code_size as usize + header - offset
-                    };
-    
-                    println!("        {}", &hex::encode(&data_slice[offset+header..offset+header+remains]));
-                    offset += remains;
-                }
-            }
-
-
-        },
-        None => {
-            eprintln!("Account not found {}", &ether_address.to_string());
-        }
-    }
+/// Returns random nonce and the corresponding seed.
+fn generate_random_holder_seed() -> (u64, String) {
+    use rand::Rng as _;
+    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
+    // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    let bytes_count = std::mem::size_of_val(&id);
+    let bits_count = bytes_count * 8;
+    let holder_id_bit_length = bits_count - id.leading_zeros() as usize;
+    let significant_bytes_count = (holder_id_bit_length + 7) / 8;
+    let mut hasher = Hasher::default();
+    hasher.hash(b"holder");
+    hasher.hash(&id.to_be_bytes()[bytes_count-significant_bytes_count..]);
+    let output = hasher.result();
+    (id, hex::encode(output)[..32].into())
 }
 
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
-    } else {        
+    } else {
         in_str
     }
 }
@@ -1005,10 +353,24 @@ fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     })
 }
 
+// Return U256 for an argument
+fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
+    matches.value_of(name).map(|value| {
+        U256::from_str(make_clean_hex(value)).unwrap()
+    })
+}
+
 // Return an error if string cannot be parsed as a H160 address
 fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
     H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+// Return an error if string cannot be parsed as a U256 integer
+fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+{
+    U256::from_str(make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -1047,11 +409,22 @@ fn is_amount_u256<T>(amount: T) -> Result<(), String>
     }
 }
 
+macro_rules! neon_cli_pkg_version {
+    () => ( env!("CARGO_PKG_VERSION") )
+}
+macro_rules! neon_cli_revision {
+    () => ( env!("NEON_REVISION") )
+}
+macro_rules! version_string {
+    () => ( concat!("Neon-cli/v", neon_cli_pkg_version!(), "-", neon_cli_revision!()) )
+}
+
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
-        .version(crate_version!())
+        .version(version_string!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -1061,7 +434,7 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use");
-                
+
             #[allow(clippy::option_if_let_else)]
             if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
                 arg.default_value(config_file)
@@ -1118,6 +491,15 @@ fn main() {
                 .default_value("max")
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
+        .arg(
+            Arg::with_name("logging_ctx")
+                .short("L")
+                .long("logging_ctx")
+                .value_name("LOG_CONTEST")
+                .takes_value(true)
+                .global(true)
+                .help("Logging context"),
+        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
@@ -1157,6 +539,15 @@ fn main() {
                         .validator(is_amount_u256)
                         .help("Transaction value")
                 )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")
@@ -1187,6 +578,15 @@ fn main() {
                         .default_value("0")
                         .help("Length of data for new account"),
                 )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
             )
         .subcommand(
             SubCommand::with_name("create-program-address")
@@ -1212,12 +612,30 @@ fn main() {
                         .help("/path/to/program.o"),
                 )
                 .arg(
-                    Arg::with_name("caller")
-                        .value_name("CALLER")
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
                         .takes_value(true)
-                        .required(true)
+                        .global(true)
                         .validator(is_valid_pubkey)
-                        .help("Solana pubkey of the caller"),
+                        .help("Neon token public key")
+                )
+                .arg(
+                    Arg::with_name("collateral_pool_base")
+                        .long("collateral_pool_base")
+                        .value_name("COLLATERAL_POOL_BASE")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Collateral_pool_base public key")
+                )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
                 )
         )
         .subcommand(
@@ -1233,90 +651,163 @@ fn main() {
                         .help("Ethereum address"),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("cancel-trx")
+                .about("Cancel NEON transaction")
+                .arg(
+                    Arg::with_name("storage_account")
+                        .index(1)
+                        .value_name("STORAGE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_pubkey)
+                        .help("storage account for transaction"),
+                )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
+            )
+        .subcommand(
+            SubCommand::with_name("neon-elf-params")
+                .about("Get NEON values stored in elf")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(false)
+                        .help("/path/to/evm_loader.so"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("get-storage-at")
+                .about("Get Ethereum storage value at given index")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("index")
+                        .index(2)
+                        .value_name("index")
+                        .takes_value(true)
+                        .validator(is_valid_u256)
+                        .required(true),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("update-valids-table")
+                .about("Update Valids Table")
+                .arg(
+                    Arg::with_name("contract_id")
+                        .index(1)
+                        .value_name("contract_id")
+                        .takes_value(true)
+                        .validator(is_valid_h160)
+                        .required(true),
+                )
+        )
         .get_matches();
 
-        let verbosity = usize::try_from(app_matches.occurrences_of("verbose")).unwrap_or_else(|_| {
-            error!("Invalid message verbosity");
-            exit(1);
-        });
-        stderrlog::new()
-            .module(module_path!())
-            .verbosity(verbosity)
-            .init()
-            .unwrap();
+    let context: LogContext =
+        app_matches.value_of("logging_ctx")
+            .map(|ctx| LogContext::new(ctx.to_string()) )
+            .unwrap_or_default();
+    logs::init(context).unwrap();
 
-        let mut wallet_manager = None;
-        let config = {
-            let cli_config = app_matches.value_of("config_file").map_or_else(
-                solana_cli_config::Config::default, 
-                |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
-            );
+    let mut wallet_manager = None;
+    let config = {
+        let cli_config = app_matches.value_of("config_file").map_or_else(
+            solana_cli_config::Config::default,
+            |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
+        );
 
-            let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
+        let commitment = CommitmentConfig::from_str(app_matches.value_of("commitment").unwrap()).unwrap();
 
-            let json_rpc_url = normalize_to_url_if_moniker(
-                app_matches
-                    .value_of("json_rpc_url")
-                    .unwrap_or(&cli_config.json_rpc_url),
-            );
+        let json_rpc_url = normalize_to_url_if_moniker(
+            app_matches
+                .value_of("json_rpc_url")
+                .unwrap_or(&cli_config.json_rpc_url),
+        );
 
-            let evm_loader = pubkey_of(&app_matches, "evm_loader")
-                    .unwrap_or_else(|| {
-                        error!("Need specify evm_loader");
-                        exit(1);
-                    });
+        let evm_loader = 
+            if let Some(evm_loader) = pubkey_of(&app_matches, "evm_loader") {
+                evm_loader
+            } else {
+                let e = NeonCliError::EvmLoaderNotSpecified;
+                error!("{}", e);
+                exit(e.error_code() as i32);
+            };
 
-            let (signer, _fee_payer) = signer_from_path(
-                &app_matches,
-                app_matches
-                    .value_of("fee_payer")
-                    .unwrap_or(&cli_config.keypair_path),
-                "fee_payer",
-                &mut wallet_manager,
-            ).map_or_else(
-                |e| {
-                    error!("{}", e);
-                    exit(1);
-                },
-                |s| {
-                    let p = s.pubkey();
-                    (s, p)
-                }
-            );
-
-            let keypair = keypair_from_path(
-                &app_matches,
-                app_matches
-                    .value_of("fee_payer")
-                    .unwrap_or(&cli_config.keypair_path),
-                "fee_payer",
-                true,
-            ).ok();
-
-            Config {
-                rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
-                websocket_url: "".to_string(),
-                evm_loader,
-                // fee_payer,
-                signer,
-                keypair,
+        let (signer, _fee_payer) = signer_from_path(
+            &app_matches,
+            app_matches
+                .value_of("fee_payer")
+                .unwrap_or(&cli_config.keypair_path),
+            "fee_payer",
+            &mut wallet_manager,
+        ).map_or_else(
+            |e| {
+                error!("{}", e);
+                let e = NeonCliError::FeePayerNotSpecified;
+                error!("{}", e);
+                exit(e.error_code() as i32);
+            },
+            |s| {
+                let p = s.pubkey();
+                (s, p)
             }
-        };
+        );
 
-        let (sub_command, sub_matches) = app_matches.subcommand();
-        let result = match (sub_command, sub_matches) {
+        let keypair = keypair_from_path(
+            &app_matches,
+            app_matches
+                .value_of("fee_payer")
+                .unwrap_or(&cli_config.keypair_path),
+            "fee_payer",
+            true,
+        ).ok();
+
+        Config {
+            rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
+            websocket_url: "".to_string(),
+            evm_loader,
+            signer,
+            keypair,
+            commitment,
+        }
+    };
+
+    let (sub_command, sub_matches) = app_matches.subcommand();
+    let result: NeonCliResult =
+        match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
 
-                command_emulate(&config, contract, sender, data, value)
+                let token_mint = pubkey_of(arg_matches, "token_mint")
+                    .unwrap_or_else(|| {
+                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
+                    });
+                emulate::execute(&config, contract, sender, data, value, &token_mint)
             }
             ("create-program-address", Some(arg_matches)) => {
-                let seed = arg_matches.value_of("seed").unwrap().to_string();
+                let ether = h160_of(arg_matches, "seed").unwrap();
 
-                command_create_program_address(&config, &seed);
+                create_program_address::execute(&config, &ether);
 
                 Ok(())
             }
@@ -1325,29 +816,88 @@ fn main() {
                 let lamports = value_t_or_exit!(arg_matches, "lamports", u64);
                 let space = value_t_or_exit!(arg_matches, "space", u64);
 
-                command_create_ether_account(&config, &ether, lamports, space)
+                let token_mint = pubkey_of(arg_matches, "token_mint")
+                    .unwrap_or_else(|| {
+                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
+                    });
+
+
+                create_ether_account::execute(&config, &ether, lamports, space, &token_mint)
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-                let val = arg_matches.value_of("caller").unwrap().to_string();
-                let caller = Pubkey::from_str(&val).unwrap();
 
-                command_deploy(&config, &program_location, caller)
+                let mut elf_params : HashMap<String,String> = HashMap::new();
+
+                let token_mint = pubkey_of(arg_matches, "token_mint")
+                    .unwrap_or_else(|| {
+                        elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
+                    });
+
+                let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
+                    .unwrap_or_else(|| {
+                        if elf_params.is_empty(){
+                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        }
+                        Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
+                    });
+
+                let chain_id = value_of(arg_matches, "chain_id")
+                    .unwrap_or_else(|| {
+                        if elf_params.is_empty(){
+                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        }
+                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
+                    });
+                deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
 
-                command_get_ether_account_data(&config, &ether);
+                get_ether_account_data::execute(&config, &ether);
 
                 Ok(())
             }
+            ("cancel-trx", Some(arg_matches)) => {
+                let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
+
+                let token_mint = pubkey_of(arg_matches, "token_mint")
+                    .unwrap_or_else(|| {
+                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
+                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
+                    });
+                cancel_trx::execute(&config, &storage_account, &token_mint)
+            }
+            ("neon-elf-params", Some(arg_matches)) => {
+                let program_location = arg_matches.value_of("program_location");
+
+                get_neon_elf::execute(&config, program_location)
+            }
+            ("get-storage-at", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+                let index = u256_of(arg_matches, "index").unwrap();
+
+                get_storage_at::execute(&config, contract_id, &index)
+            }
+            ("update-valids-table", Some(arg_matches)) => {
+                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
+
+                update_valids_table::execute(&config, contract_id)
+            }
             _ => unreachable!(),
         };
+    
+    let exit_code: i32 =
         match result {
-            Ok(()) => exit(0),
-            Err(err) => {
-                error!("{}", err);
-                exit(1);
+            Ok(_)  => 0,
+            Err(e) => {
+                let error_code = e.error_code();
+                error!("NeonCli Error ({}): {}", error_code, e);
+                error_code as i32
             }
-        }
+        };
+    
+    exit(exit_code)
 }

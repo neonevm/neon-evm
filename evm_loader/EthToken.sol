@@ -6,6 +6,15 @@ contract EthToken {
         require(msg.sender.balance == balance);
     }
 
+    function checkUserBalance(address account, uint256 balance) public view {
+        require(account.balance == balance);
+    }
+
+    function transferTo(address account) public payable {
+       address payable target = payable(account);
+       target.transfer(msg.value);
+    }
+
     function checkContractBalance(uint256 balance) public view {
         require(address(this).balance == balance);
     }
@@ -15,5 +24,5 @@ contract EthToken {
         sender.transfer(amount);
     }
 
-    function nop() public { }
+    function nop() public payable { }
 }
