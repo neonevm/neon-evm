@@ -1,22 +1,23 @@
 #!/bin/bash
+COMPONENT="${2:-Undefined}"
+echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} Start creating test accounts"
 
 if [ -z "$SOLANA_URL" ]; then
-  echo "SOLANA_URL is not set"
+  echo "$(date "+%F %X.%3N") E $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} SOLANA_URL is not set"
   exit 1
 fi
 
 solana config set -u "$SOLANA_URL"
 
 if [ -z "$1" ]; then
-  echo "Error: number of accounts is required. Usage:"
-  echo "     create-test-accounts.sh <num_accounts>"
+  echo "$(date "+%F %X.%3N") E $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} Error: number of accounts is required. Usage: create-test-accounts.sh <num_accounts>"
   exit 2
 fi
 
 NUM_ACCOUNTS=$1
 
 for i in $(seq 1 $NUM_ACCOUNTS); do
-  echo "Creating test account-$i"
+  echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} Creating test account-$i"
   ID_FILE="$HOME/.config/solana/id"
   if [ "$i" -gt "1" ]; then
     ID_FILE="${ID_FILE}${i}.json"
@@ -24,15 +25,15 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
     ID_FILE="${ID_FILE}.json"
   fi
 
-  echo "ID file is $ID_FILE"
+  echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} ID file is $ID_FILE"
   if [ ! -f "$ID_FILE" ]; then
-    echo "Creating new wallet"
+    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} Creating new wallet"
     solana-keygen new --no-passphrase -o "$ID_FILE"
   fi
   ACCOUNT=$(solana address -k "$ID_FILE")
-  echo "New account $ACCOUNT"
+  echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} New account $ACCOUNT"
   if ! solana account "$ACCOUNT"; then
-    echo "airdropping..."
+    echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} airdropping..."
     solana airdrop 5000 "$ACCOUNT"
     # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
     BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
