@@ -144,7 +144,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         send_transaction(client, trx, self.acc)
 
         steps_executed = EVM_STEPS
-        gas_used = steps_executed * EVM_STEP_COST
+        gas_used = steps_executed * evm_step_cost(2)
         gas_fee = gas_used  #  * gas_price / 1_000_000_000
 
         caller_balance_post = getBalance(self.acc.public_key())

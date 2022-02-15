@@ -43,10 +43,11 @@ use crate::{
     token::{create_associated_token_account},
     operator::authorized_operator_check,
     system::create_pda_account,
-    utils::is_zero_initialized
+    utils::is_zero_initialized,
+    utils::evm_step_cost
 };
 use crate::solana_program::program_pack::Pack;
-use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE, EVM_STEP_COST};
+use crate::config::{EVM_BYTE_COST, EVM_STEPS, HOLDER_MSG_SIZE};
 
 type EvmResults = (ExitReason, Vec<u8>, Option<ApplyState>);
 type CallResult = Result<(Option<EvmResults>, u64), ProgramError>;
@@ -349,7 +350,8 @@ fn process_instruction<'a>(
                 operator_eth_info, user_eth_info,
                 system_info,
                 signature,
-                unsigned_msg_size
+                unsigned_msg_size,
+                true
             )?;
 
             Ok(())
@@ -396,7 +398,7 @@ fn process_instruction<'a>(
             if steps_executed < EVM_STEPS {
                 steps_executed = EVM_STEPS;
             }
-            let unpaid_gas = steps_executed * EVM_STEP_COST;
+            let unpaid_gas = steps_executed * evm_step_cost(2);
 
             applies_and_invokes(
                 program_id,
@@ -447,7 +449,8 @@ fn process_instruction<'a>(
                 operator_eth_info, user_eth_info,
                 system_info,
                 sign,
-                0
+                0,
+                false
             )?;
 
             Ok(())
@@ -568,7 +571,8 @@ fn process_instruction<'a>(
                             operator_eth_info, user_eth_info,
                             system_info,
                             sign,
-                            0
+                            0,
+                            true
                         )?;
                     }
                     else{
@@ -622,7 +626,8 @@ fn process_instruction<'a>(
                             operator_eth_info, user_eth_info,
                             system_info,
                             signature,
-                            unsigned_msg_size
+                            unsigned_msg_size,
+                            true
                         )?;
                     }
                     else{
@@ -910,7 +915,8 @@ fn do_begin<'a>(
     user_eth_info: &'a AccountInfo<'a>,
     system_info: &'a AccountInfo<'a>,
     trx_sign: &[u8],
-    holder_data_size: u64
+    holder_data_size: u64,
+    keccak_via_syscall: bool
 ) -> ProgramResult
 {
     if !operator_sol_info.is_signer {
@@ -953,7 +959,7 @@ fn do_begin<'a>(
         steps_executed = EVM_STEPS;
     }
     let holder_trx_count: u64 = holder_data_size / HOLDER_MSG_SIZE + u64::from(holder_data_size % HOLDER_MSG_SIZE != 0);
-    let unpaid_gas = (steps_executed + holder_trx_count * EVM_STEPS) * EVM_STEP_COST;
+    let unpaid_gas = (steps_executed + holder_trx_count * EVM_STEPS) * evm_step_cost(1 + u64::from(!keccak_via_syscall));
 
     token::user_pays_operator(
         user_eth_info,
@@ -1026,10 +1032,10 @@ fn do_continue_top_level<'a>(
             operator_sol_info)?;
 
         let unpaid_gas  = if steps_executed < EVM_STEPS {
-            EVM_STEPS * EVM_STEP_COST
+            EVM_STEPS * evm_step_cost(1)
         }
         else{
-            steps_executed * EVM_STEP_COST
+            steps_executed * evm_step_cost(1)
         };
 
         applies_and_invokes(
@@ -1049,7 +1055,7 @@ fn do_continue_top_level<'a>(
         storage.unblock_accounts_and_finalize(program_id, trx_accounts)?;
     }
     else{
-        let unpaid_gas = steps_executed * EVM_STEP_COST;
+        let unpaid_gas = steps_executed * evm_step_cost(1);
         // TODO: there are two different behaviour: OutOfGas in the not-finalized transaction and OutOfGasin the finalized transaction
         // It is requires only one behaviour
         token::user_pays_operator(

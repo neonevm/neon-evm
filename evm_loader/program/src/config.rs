@@ -305,8 +305,8 @@ pub const EVM_STEPS: u64  = 100;
 pub const HOLDER_MSG_SIZE: u64 = 1000;
 
 // TODO: replace 5000 to fee_calculator from sdk
-/// `amout of gas per 1 evm_step`
-pub const EVM_STEP_COST: u64 = (PAYMENT_TO_TREASURE + 5000) / EVM_STEPS + ((PAYMENT_TO_TREASURE + 5000) % EVM_STEPS != 0) as u64;
+/// `lamports per signature`
+pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
@@ -321,7 +321,7 @@ neon_elf_param!( NEON_EVM_BYTE_COST         , formatcp!("{:?}", EVM_BYTE_COST));
 neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
-neon_elf_param!( NEON_EVM_STEP_COST        , formatcp!("{:?}", EVM_STEP_COST));
+neon_elf_param!( NEON_LAMPORTS_PER_SIGNATURE, formatcp!("{:?}", LAMPORTS_PER_SIGNATURE));
 
 /// Chain ID
 #[must_use]

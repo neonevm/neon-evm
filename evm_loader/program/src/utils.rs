@@ -2,6 +2,11 @@
 
 use evm::{H256, U256};
 use solana_program::keccak::{hash, hashv};
+use crate::config::{
+    PAYMENT_TO_TREASURE,
+    LAMPORTS_PER_SIGNATURE,
+    EVM_STEPS
+};
 
 /// Get Keccak256 hash as `H256`
 #[must_use]
@@ -39,4 +44,11 @@ pub fn is_zero_initialized(data: &[u8]) -> bool {
     }
 
     true
+}
+
+/// amount of gas per evm-step
+#[must_use]
+pub fn evm_step_cost(signature_cnt: u64) -> u64 {
+    let operator_expences: u64 =  PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE * signature_cnt;
+    operator_expences / EVM_STEPS + u64::from(operator_expences % EVM_STEPS != 0)
 }

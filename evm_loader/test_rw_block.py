@@ -233,8 +233,8 @@ class RW_Locking_Test(unittest.TestCase):
 
         # evm_step_executed = 99
         allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-        begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue_gas = (10 + EVM_STEPS) * EVM_STEP_COST
+        begin_gas = EVM_STEPS * evm_step_cost(2)
+        continue_gas = (10 + EVM_STEPS) * evm_step_cost(1)
         allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST
         # gas = begin_gas + continue_gas + allocated_space_gas
         # gas = begin_gas + continue_gas

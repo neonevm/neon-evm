@@ -258,8 +258,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         evm_step_executed = 230
         begin_steps = 0
-        begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue_gas = 3 * EVM_STEPS * EVM_STEP_COST
+        begin_gas = EVM_STEPS * evm_step_cost(1)
+        continue_gas = 3 * EVM_STEPS * evm_step_cost(1)
         gas = begin_gas + continue_gas
 
         self.assertEqual(response['result']['meta']['err'], None)
@@ -314,8 +314,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         evm_step_executed = 230
         begin_steps = 0
-        begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue_gas = (step_count + EVM_STEPS) * EVM_STEP_COST
+        begin_gas = EVM_STEPS * evm_step_cost(1)
+        continue_gas = (step_count + EVM_STEPS) * evm_step_cost(1)
         gas = begin_gas + continue_gas
 
         self.assertEqual(response['result']['meta']['err'], None)
@@ -417,10 +417,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
 
         allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
-        begin_gas = EVM_STEPS * EVM_STEP_COST
-        continue1_gas = EVM_STEPS * EVM_STEP_COST
-        continue2_gas = EVM_STEPS * EVM_STEP_COST
-        continue3_gas = EVM_STEPS * EVM_STEP_COST  + allocated_space_caller2 * EVM_BYTE_COST
+        begin_gas = EVM_STEPS * evm_step_cost(1)
+        continue1_gas = EVM_STEPS * evm_step_cost(1)
+        continue2_gas = EVM_STEPS * evm_step_cost(1)
+        continue3_gas = EVM_STEPS * evm_step_cost(1)  + allocated_space_caller2 * EVM_BYTE_COST
         gas = begin_gas + continue1_gas + continue2_gas + continue3_gas
         # gas_price == 10**6
         fee1 = (begin_gas + continue1_gas)

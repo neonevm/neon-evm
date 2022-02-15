@@ -68,9 +68,7 @@ SPL_TOKEN_ACCOUNT_SIZE = 165
 # payment to treasure
 PAYMENT_TO_TREASURE = 5000
 # payment for solana signature verification
-PAYMENT_FOR_SIGNATURE = 5000
-# gas multipliergas multiplier
-EVM_STEP_COST = math.ceil((PAYMENT_FOR_SIGNATURE  + PAYMENT_TO_TREASURE) / EVM_STEPS)
+LAMPORTS_PER_SIGNATURE = 5000
 
 
 # DEFAULT_UNITS=500*1000
@@ -806,6 +804,12 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
+
+
+def evm_step_cost(signature_cnt):
+    operator_expences =  PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE * signature_cnt
+    return  math.ceil(operator_expences / EVM_STEPS)
+
 #
 #
 #
