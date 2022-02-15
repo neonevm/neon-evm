@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -euox pipefail
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
@@ -21,6 +21,8 @@ MAINTENANCE_FILES="
 ./deploy-evm.sh
 ./deploy-test.sh
 ./docker-compose-test.yml"
+
+cat ./neon-evm.changes
 
 echo "INFRA_REFLECT_FILE=INFRA_REFLECT_FILE"
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
