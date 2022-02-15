@@ -141,8 +141,9 @@ pub enum EvmInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   0. `[writable]` Ether account.
-    ///   1. `[writable]` NEON token account.
+    ///   0. `[writable, signer]` Signer account.
+    ///   1. `[writable]` Ether account to migrate.
+    ///   2. `[writable]` NEON token account.
     MigrateAccount,
 }
 
