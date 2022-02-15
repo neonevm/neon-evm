@@ -136,6 +136,13 @@ pub enum EvmInstruction {
     ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
     ///   5. `[]` SPL Token program id.
     Deposit,
+
+    /// Migrates account internal structure to v2.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   0. `[writable]` Ether account.
+    MigrateAccount,
 }
 
 impl EvmInstruction {
@@ -166,6 +173,7 @@ impl EvmInstruction {
             23 => Self::UpdateValidsTable,
             24 => Self::CreateAccountV02,
             25 => Self::Deposit,
+            26 => Self::MigrateAccount,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -178,6 +186,7 @@ pub mod account_delete_holder_storage;
 pub mod account_resize;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
+pub mod migrate_account;
 pub mod transaction_write_to_holder;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;

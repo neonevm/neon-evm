@@ -101,6 +101,9 @@ fn process_instruction<'a>(
         EvmInstruction::Deposit => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
+        EvmInstruction::MigrateAccount => {
+            instruction::migrate_account::process(program_id, accounts, instruction)
+        }
         EvmInstruction::UpdateValidsTable => {
             instruction::update_valids_table::process(program_id, accounts, instruction)
         }
