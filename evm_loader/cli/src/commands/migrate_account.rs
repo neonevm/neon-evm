@@ -12,12 +12,17 @@ use solana_cli::{
     checks::{check_account_for_fee},
 };
 
+use spl_associated_token_account::get_associated_token_address;
+
 use evm::{H160};
+
+use evm_loader::config::token_mint;
 
 use crate::{
     Config,
     NeonCliError,
     NeonCliResult,
+    make_solana_program_address,
 };
 
 /// Executes subcommand `migrate-account`.
@@ -26,7 +31,7 @@ pub fn execute(
     config: &Config,
     ether_address: &H160,
 ) -> NeonCliResult {
-    let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
+    let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
 
     let ether_account = config.rpc_client.get_account(&ether_pubkey)
         .map_err(|e| {
@@ -35,9 +40,7 @@ pub fn execute(
         })?;
     dbg!(ether_account);
 
-    let token_mint_id = evm_loader::config::token_mint::id();
-    let ether_token_pubkey =
-        spl_associated_token_account::get_associated_token_address(&ether_pubkey, &token_mint_id);
+    let ether_token_pubkey = get_associated_token_address(&ether_pubkey, &token_mint::id());
 
     let instructions = vec![
         migrate_account_instruction(
