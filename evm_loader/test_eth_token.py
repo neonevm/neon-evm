@@ -22,7 +22,7 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_event.py setUpClass")
+        print("\ntest_eth_token.py setUpClass")
 
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
