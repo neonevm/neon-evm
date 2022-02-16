@@ -21,6 +21,7 @@ use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
     pubkey::Pubkey,
+    sysvar::rent
 };
 
 use evm_loader::{
@@ -463,9 +464,20 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         trace!("Pool account: {:?}", pool_address);
 
+        solana_accounts.entry(rent::id()).or_insert_with(|| AccountMeta::new_readonly(rent::id(), false));
+
+        trace!("sysvarrent: {:?}", rent::id());
+
+        let assoc_token_prog_id = spl_associated_token_account::id();
+        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new_readonly(assoc_token_prog_id, false));
+
+        trace!("assoctokenprogid: {:?}", assoc_token_prog_id);
+
         for withdraw in withdrawals {
-            solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new(withdraw.dest, false));
+            solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new_readonly(withdraw.dest, false));
+            trace!("withdraw.dest: {:?}", withdraw.dest);
             solana_accounts.entry(withdraw.dest_neon).or_insert_with(|| AccountMeta::new(withdraw.dest_neon, false));
+            trace!("withdraw.dest_neon: {:?}", withdraw.dest_neon);
         }
     }
 

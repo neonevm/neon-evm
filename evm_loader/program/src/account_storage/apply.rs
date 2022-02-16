@@ -5,7 +5,7 @@ use evm::backend::Apply;
 use solana_program::{
     account_info::AccountInfo,
     program_error::ProgramError,
-    pubkey::Pubkey
+    pubkey::Pubkey,
 };
 use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
@@ -13,7 +13,7 @@ use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, W
 use crate::precompile_contracts::is_precompile_address;
 use solana_program::program::invoke_signed;
 use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
-
+use solana_program::sysvar::rent;
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn transfer_gas_payment(
@@ -304,8 +304,8 @@ impl<'a> ProgramAccountStorage<'a> {
 
             if dest_neon.data_is_empty() {
                 let create_acc_insrt = create_associated_token_account(operator.key,
-                                                                                 &withdraw.dest,
-                                                                                 &crate::config::token_mint::id());
+                                                                       &withdraw.dest,
+                                                                       &crate::config::token_mint::id());
 
                 let account_infos: &[AccountInfo] = &[
                     (**operator).clone(),
@@ -313,11 +313,14 @@ impl<'a> ProgramAccountStorage<'a> {
                     dest_neon.clone(),
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&crate::config::token_mint::id()].clone(),
+                    self.solana_accounts[&rent::id()].clone(),
+                    self.solana_accounts[&spl_associated_token_account::id()].clone()
                 ];
 
                 invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
             };
 
+            /*
             let transfer_instr = spl_token::instruction::transfer(
                 &spl_token::id(),
                 &pool_address,
@@ -336,6 +339,8 @@ impl<'a> ProgramAccountStorage<'a> {
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
+
+             */
         }
 
         Ok(())
