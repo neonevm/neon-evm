@@ -600,7 +600,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("deposit")
-                .about("Deposit neons to ether account")
+                .about("Deposit NEONs to ether account")
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
