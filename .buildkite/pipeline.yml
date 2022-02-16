@@ -17,7 +17,7 @@ steps:
   - label: ":docker: build proxy docker image"
     trigger: "neon-proxy"
     build:
-       branch: "7cadc4271e5bf07524506dbc29921b41768e06ea"
+       branch: "1e63bdc67472ac9c5586b37b572909dc9f40f0cc"
        env:
           EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
           EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
