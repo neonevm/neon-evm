@@ -12,7 +12,11 @@ use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
 use crate::account_data::ACCOUNT_SEED_VERSION;
 use crate::account_data::ACCOUNT_MAX_SIZE;
 use solana_program::{program_pack::Pack};
-use solana_program::rent::{DEFAULT_LAMPORTS_PER_BYTE_YEAR, DEFAULT_EXEMPTION_THRESHOLD};
+use solana_program::rent::{
+    DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+    DEFAULT_EXEMPTION_THRESHOLD,
+    ACCOUNT_STORAGE_OVERHEAD
+};
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
@@ -308,7 +312,6 @@ pub const HOLDER_MSG_SIZE: u64 = 1000;
 /// `lamports per signature`
 pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
-
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
 neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
@@ -322,6 +325,7 @@ neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
 neon_elf_param!( NEON_LAMPORTS_PER_SIGNATURE, formatcp!("{:?}", LAMPORTS_PER_SIGNATURE));
+neon_elf_param!( NEON_ACCOUNT_STORAGE_OVERHEAD, formatcp!("{:?}", ACCOUNT_STORAGE_OVERHEAD));
 
 /// Chain ID
 #[must_use]

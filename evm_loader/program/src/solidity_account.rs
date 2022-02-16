@@ -16,6 +16,7 @@ use solana_program::{
 use core::cell::RefCell;
 use std::rc::Rc;
 use std::convert::{TryInto, TryFrom};
+use solana_program::rent::ACCOUNT_STORAGE_OVERHEAD;
 
 /// Solidity Account info
 #[derive(Debug, Clone)]
@@ -275,15 +276,17 @@ impl<'a> SolidityAccount<'a> {
 
         let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
         let allocated_space = {
+            let overhead = usize::try_from(ACCOUNT_STORAGE_OVERHEAD*2).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
+
             let mut space =  if found_deploy {
-                contract_space
+                contract_space + overhead
             }
             else{
                 storage_increment as usize
             };
             if account_data.state == AccountState::Uninitialized{
                 account_data.state = AccountState::Initialized;
-                space += ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN;
+                space += ACCOUNT_MAX_SIZE + spl_token::state::Account::LEN + overhead * 2;
             }
             space
         };
