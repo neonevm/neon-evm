@@ -82,7 +82,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if !withdrawals.is_empty() {
-            self.apply_withdrawals(withdrawals, operator.key)?;
+            self.apply_withdrawals(withdrawals, operator)?;
         }
 
         if !applies.is_empty() {
@@ -278,29 +278,39 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>, operator: &Pubkey) -> Result<(), ProgramError> {
+    fn apply_withdrawals(&mut self, withdrawals: Vec<Withdraw>, operator: &Operator<'a>) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
 
+        debug_print!("operator: {:?}", operator.key);
+
         let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
+        debug_print!("deposit_authority {:?}", authority);
+
         let pool_address = get_associated_token_address(
             &authority,
             &crate::config::token_mint::id()
         );
 
+        debug_print!("deposit_pool_address {:?}", pool_address);
+
         let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
         for withdraw in withdrawals {
-            let destination = self.solana_accounts[&withdraw.dest_neon];
 
-            if destination.data_is_empty() {
-                let create_acc_insrt = create_associated_token_account(operator,
-                                                                                 destination.key,
+            debug_print!("destination {:?}", withdraw.dest);
+            debug_print!("dest_neon {:?}", withdraw.dest_neon);
+
+            let dest_neon = self.solana_accounts[&withdraw.dest_neon];
+
+            if dest_neon.data_is_empty() {
+                let create_acc_insrt = create_associated_token_account(operator.key,
+                                                                                 &withdraw.dest,
                                                                                  &crate::config::token_mint::id());
 
                 let account_infos: &[AccountInfo] = &[
-                    self.solana_accounts[operator].clone(),
+                    (**operator).clone(),
                     self.solana_accounts[&pool_address].clone(),
-                    destination.clone(),
+                    dest_neon.clone(),
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&crate::config::token_mint::id()].clone(),
                 ];
@@ -311,18 +321,18 @@ impl<'a> ProgramAccountStorage<'a> {
             let transfer_instr = spl_token::instruction::transfer(
                 &spl_token::id(),
                 &pool_address,
-                &destination.key,
+                &dest_neon.key,
                 &authority,
-                &[operator],
+                &[operator.key],
                 withdraw.amount.as_u64()
             )?;
 
             let account_infos: &[AccountInfo] = &[
+                (**operator).clone(),
                 self.solana_accounts[&pool_address].clone(),
-                destination.clone(),
+                dest_neon.clone(),
                 self.solana_accounts[&authority].clone(),
-                self.solana_accounts[&spl_token::id()].clone(),
-                self.solana_accounts[operator].clone(),
+                self.solana_accounts[&spl_token::id()].clone()
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;

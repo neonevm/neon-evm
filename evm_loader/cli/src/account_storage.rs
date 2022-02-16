@@ -447,19 +447,25 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
+        solana_accounts.entry(*token_mint).or_insert_with(|| AccountMeta::new_readonly(*token_mint, false));
+        trace!("Token program: {:?}", *token_mint);
+
         let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);
-        solana_accounts.insert(authority, AccountMeta::new_readonly(authority, false));
+        solana_accounts.entry(authority).or_insert_with(|| AccountMeta::new_readonly(authority, false));
+
+        trace!("Deposit account: {:?}", authority);
 
         let pool_address = get_associated_token_address(
             &authority,
             token_mint
         );
-        solana_accounts.insert(authority, AccountMeta::new(pool_address, false));
+        solana_accounts.entry(pool_address).or_insert_with(|| AccountMeta::new(pool_address, false));
 
-        solana_accounts.insert(spl_token::id(), AccountMeta::new_readonly(spl_token::id(), false));
+        trace!("Pool account: {:?}", pool_address);
 
         for withdraw in withdrawals {
-            solana_accounts.insert(withdraw.dest_neon, AccountMeta::new(withdraw.dest_neon, false));
+            solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new(withdraw.dest, false));
+            solana_accounts.entry(withdraw.dest_neon).or_insert_with(|| AccountMeta::new(withdraw.dest_neon, false));
         }
     }
 
