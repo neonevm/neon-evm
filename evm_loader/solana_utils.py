@@ -69,6 +69,8 @@ SPL_TOKEN_ACCOUNT_SIZE = 165
 PAYMENT_TO_TREASURE = 5000
 # payment for solana signature verification
 LAMPORTS_PER_SIGNATURE = 5000
+# account storage overhead for calculation of base rent
+ACCOUNT_STORAGE_OVERHEAD = 128
 
 
 # DEFAULT_UNITS=500*1000

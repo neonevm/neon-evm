@@ -276,7 +276,7 @@ impl<'a> SolidityAccount<'a> {
 
         let mut account_data = AccountData::get_mut_account(&mut self.account_data)?;
         let allocated_space = {
-            let overhead = usize::try_from(ACCOUNT_STORAGE_OVERHEAD*2).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
+            let overhead = usize::try_from(ACCOUNT_STORAGE_OVERHEAD).map_err(|e| E!(ProgramError::InvalidArgument; "e={:?}", e))?;
 
             let mut space =  if found_deploy {
                 contract_space + overhead

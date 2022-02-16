@@ -416,7 +416,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Caller_2 NEON-token balance on response_3:", neon_balance_on_response_3)
 
 
-        allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE
+        allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
         begin_gas = EVM_STEPS * evm_step_cost(1)
         continue1_gas = EVM_STEPS * evm_step_cost(1)
         continue2_gas = EVM_STEPS * evm_step_cost(1)
