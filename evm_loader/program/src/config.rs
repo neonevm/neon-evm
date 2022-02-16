@@ -19,6 +19,7 @@ cfg_if! {
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
                 "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "DSRVyWpSVLEcHih9CVND2aGNBZxNW5bt34GEaK4aDk5i",
             ]
         );
 
