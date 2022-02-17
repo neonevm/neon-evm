@@ -12,7 +12,7 @@ echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
 rm -rf ./neon-infra-inventories/
 git clone -b develop https://github.com/neonlabsorg/neon-infra-inventories.git
 cd ./neon-infra-inventories
-git checkout ${BUILDKITE_BRANCH} || echo "There is no branch with the same name. develop will be used."
+git checkout -b ${BUILDKITE_BRANCH} || echo "There is no branch with the same name. develop will be used."
 cd ..
 
 git ls-files -s $MAINTENANCE_FILES > "${INFRA_REFLECT_FILE}"".""${REVISION}"

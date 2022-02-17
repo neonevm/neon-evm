@@ -2,7 +2,6 @@ steps:
   - label: ":docker: build docker image"
     command:
       - ".buildkite/steps/build-image.sh"
-      - ".buildkite/steps/check-maintenance.sh"
       - ".buildkite/steps/upload-image.sh"
 
   - wait
