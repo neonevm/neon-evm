@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euox pipefail
+set -euo pipefail
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
@@ -13,7 +13,6 @@ if (("NON_ERR_INFO" > 0)); then
   echo "Please, use macros Err! and E! to add error info!">&2
   exit "$NON_ERR_INFO"
 fi
-
 
 echo "CI checks success"
 exit 0

@@ -14,9 +14,8 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
-ADD https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/neon-evm.changes /opt/evm_loader/
-ARG REVISION
 RUN cd program && /opt/evm_loader/ci_checks.sh
+ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
     cargo build --release && \
