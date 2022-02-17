@@ -26,6 +26,10 @@ steps:
 
   - wait
 
+  - label: ":check maintenance"
+    command:
+      - ".buildkite/steps/check-maintenance.sh"
+
   - label: ":floppy_disk: publish image"
     command: ".buildkite/steps/publish-image.sh"
     branches: "master develop ci-* v*.*.*"
