@@ -6,7 +6,7 @@ REVISION=$(git rev-parse HEAD)
 INFRA_REFLECT_FILE="neon-evm.changes"
 INFRA_REFLECT_REPO_PATH="https://github.com/neonlabsorg/neon-infra-inventories/blob/369-calculate-hashes/develop_changes/neon-evm.changes/"
 MAINTENANCE_FILES="
-./program/src/config.rs"
+./evm_loader/program/src/config.rs"
 
 echo "MAINTENANCE_FILES=$MAINTENANCE_FILES"
 rm -rf ./neon-infra-inventories/
