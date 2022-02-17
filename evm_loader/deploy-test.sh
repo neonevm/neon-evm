@@ -108,10 +108,10 @@ if ($no_acc == false); then
 fi
 
 echo "Deploy test..."
-if ($test_filename); then
-    python3 -m unittest discover -v -p $test_filename
-else
+if ($test_filename == false); then
     python3 -m unittest discover -v -p 'test*.py'
+else
+    python3 -m unittest discover -v -p $test_filename
 fi
 
 script_exit "Deploy test success"
