@@ -1,4 +1,7 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)] /// Todo: document
+//! # Neon EVM Executor
+//!
+//! Executor is a struct that hooks gasometer and the EVM core together.
+//! It also handles the call stacks in EVM.
 
 use std::convert::Infallible;
 use std::mem;
@@ -24,8 +27,7 @@ fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
     emit_exit!(error)
 }
 
-/// "All but one 64th" operation.
-/// See also EIP-150.
+/// "All but one 64th" operation. See also: EIP-150.
 const fn l64(gas: u64) -> u64 {
     gas - gas / 64
 }
@@ -57,6 +59,7 @@ enum RuntimeApply{
     Exit(ExitReason),
 }
 
+/// Stack-based executor.
 struct Executor<'a, B: AccountStorage> {
     state: ExecutorState<'a, B>,
 }
@@ -406,14 +409,19 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 }
 
+/// Represents reason of an Ethereum transaction.
+/// It can be creation of a smart contract or a call of it's function.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub enum CreateReason {
+    /// Call of a function of smart contract
     Call,
+    /// Create (deploy) a smart contract on specified address
     Create(H160),
 }
 
 type RuntimeInfo = (evm::Runtime, CreateReason);
 
+/// Represents a virtual machine.
 pub struct Machine<'a, B: AccountStorage> {
     executor: Executor<'a, B>,
     runtime: Vec<RuntimeInfo>,
@@ -421,16 +429,27 @@ pub struct Machine<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
+    /// Creates instance of the Machine.
     #[must_use]
     pub fn new(state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { state };
         Self{ executor, runtime: Vec::new(), steps_executed: 0 }
     }
 
+    /// Serializes and saves state of runtime and executor into a storage account.
+    ///
+    /// # Panics
+    ///
+    /// Panics if account is invalid or any serialization error occurs.
     pub fn save_into(&self, storage: &mut StorageAccount) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
+    /// Deserializes and restores state of runtime and executor from a storage account.
+    ///
+    /// # Panics
+    ///
+    /// Panics if account is invalid or any deserialization error occurs.
     #[must_use]
     pub fn restore(storage: &StorageAccount, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
@@ -441,6 +460,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Self{ executor, runtime, steps_executed: 0 }
     }
 
+    /// Begins a call of an Ethereum smart contract.
+    ///
+    /// # Errors
+    ///
+    /// May return following errors:
+    /// - `InvalidInstructionData` if any gasometer error is encountered
+    /// - `InsufficientFunds` if the caller lacks funds for the operation
     pub fn call_begin(&mut self,
         caller: H160,
         code_address: H160,
@@ -469,7 +495,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             .map_err(emit_exit)
             .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
 
-
         self.executor.state.inc_nonce(caller);
 
         self.executor.state.enter(gas_limit, false);
@@ -492,6 +517,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    /// Begins a creation (deployment) of an Ethereum smart contract.
+    ///
+    /// # Errors
+    ///
+    /// May return following errors:
+    /// - `InvalidInstructionData` if any gasometer error is encountered
+    /// - `InsufficientFunds` if the caller lacks funds for the operation
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
@@ -731,6 +763,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
     }
 
+    /// Executes current program with all available steps.
+    /// # Errors
+    /// Terminates execution if a step encounteres an error.
     pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
         loop {
             if let Err(result) = self.execute_n_steps(u64::max_value()) {
@@ -739,6 +774,16 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
     }
 
+    /// Executes up to `n` steps of current path of execution.
+    ///
+    /// # Errors
+    ///
+    /// Execution may return following exit reasons:
+    /// - `StepLimitReached` if reached a step limit
+    /// - `Succeed` if has succeeded
+    /// - `Error` if returns a normal EVM error
+    /// - `Revert` if encountered an explicit revert
+    /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
         let mut steps = 0_u64;
 
@@ -758,11 +803,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    /// Returns number of executed steps.
     #[must_use]
     pub fn get_steps_executed(&self) -> u64 {
         self.steps_executed
     }
 
+    /// Returns the state of the executor.
     #[must_use]
     pub fn into_state(self) -> ExecutorState<'a, B> {
         self.executor.state
