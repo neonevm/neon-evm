@@ -83,6 +83,7 @@ use log::{debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
+use crate::get_neon_elf::CachedElfParams;
 
 type NeonCliResult = Result<(),NeonCliError>;
 
@@ -799,19 +800,26 @@ fn main() {
     let result: NeonCliResult =
         match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
-                let elf_params = get_neon_elf::CachedElfParams::new(&config);
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                let chain_id = value_of(arg_matches, "chain_id")
-                    .unwrap_or_else(|| {
-                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
-                    });
+
+                // Read ELF params only if token_mint or chain_id is not set.
+                let mut token_mint = pubkey_of(arg_matches, "token_mint");
+                let mut chain_id = value_of(arg_matches, "chain_id");
+                if token_mint.is_none() || chain_id.is_none() {
+                    let cached_elf_params = CachedElfParams::new(&config);
+                    token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
+                        cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
+                    ).unwrap()));
+                    chain_id = chain_id.or_else(|| Some(u64::from_str(
+                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+                    ).unwrap()));
+                }
+                let token_mint = token_mint.unwrap();
+                let chain_id = chain_id.unwrap();
+
                 emulate::execute(&config, contract, sender, data, value, &token_mint, chain_id)
             }
             ("create-program-address", Some(arg_matches)) => {
