@@ -25,7 +25,7 @@ steps:
 
   - wait
 
-  - label: ":check maintenance"
+  - label: ":pact: check maintenance"
     command:
       - ".buildkite/steps/check-maintenance.sh"
 
