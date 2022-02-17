@@ -43,8 +43,6 @@ function script_exit() {
 # ARGS: $@ (optional): Arguments provided to the script
 # OUTS: Variables indicating command-line parameters and options 
 function parse_params() {
-    test_filename=""
-
     local param
     while [[ $# -gt 0 ]]; do
         param="$1"
@@ -72,7 +70,7 @@ function parse_params() {
     printf "Wait for solana:         %s\n" $([ $no_wait == false ] && echo "Yes" || echo "No")
     printf "Test accounts creation:  %s\n" $([ $no_acc == false ] && echo "Yes" || echo "No")
     printf "EVM ddeploy:             %s\n" $([ $no_deploy == false ] && echo "Yes" || echo "No")
-    printf "Custom test filename:    %s\n\n" $([ $test_filename ] && echo $test_filename || echo "No")
+    printf "Custom test filename:    %s\n\n" $([ $test_filename == false ] && echo "No" || echo $test_filename)
 }
 
 parse_params "$@"
