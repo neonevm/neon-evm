@@ -314,7 +314,8 @@ impl<'a> ProgramAccountStorage<'a> {
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&crate::config::token_mint::id()].clone(),
                     self.solana_accounts[&rent::id()].clone(),
-                    self.solana_accounts[&spl_associated_token_account::id()].clone()
+                    self.solana_accounts[&spl_associated_token_account::id()].clone(),
+                    self.solana_accounts[&withdraw.dest].clone()
                 ];
 
                 invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
