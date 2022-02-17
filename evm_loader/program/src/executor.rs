@@ -377,7 +377,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             address: code_address,
             value: transfer_value,
             data: &input,
-            gas_limit
+            _gas_limit
         });
         debug_print!("call_begin");
 

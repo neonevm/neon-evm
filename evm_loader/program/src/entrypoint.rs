@@ -1056,8 +1056,7 @@ fn do_continue_top_level<'a>(
     }
     else{
         let unpaid_gas = steps_executed * evm_step_cost(1);
-        // TODO: there are two different behaviour: OutOfGas in the not-finalized transaction and OutOfGasin the finalized transaction
-        // It is requires only one behaviour
+
         token::user_pays_operator(
             user_eth_info,
             operator_eth_info,
@@ -1220,35 +1219,24 @@ fn applies_and_invokes<'a>(
     };
 
     let unpaid_gas = unpaid_gas + allocated_space * EVM_BYTE_COST;
-    let reason : ExitReason;
-    match
-        token::user_pays_operator(
-            user_eth_info,
-            operator_eth_info,
-            accounts,
-            account_storage,
-            gas_limit,
-            gas_price,
-            paid_gas,
-            unpaid_gas,
-        ){
-        Err(err) => {
-            if err == EvmLoaderError::OutOfGas.into() {
-                reason = ExitReason::Error(ExitError::OutOfGas);
-            }
-            else{
-                return Err!(err);
-            }
-        },
-        Ok(()) => {reason = exit_reason;}
-    }
+
+    token::user_pays_operator(
+        user_eth_info,
+        operator_eth_info,
+        accounts,
+        account_storage,
+        gas_limit,
+        gas_price,
+        paid_gas,
+        unpaid_gas,
+    )?;
 
     if let Some(logs) = logs {
         for log in logs {
             invoke(&on_event(program_id, log), accounts)?;
         }
     }
-    invoke_on_return(program_id, accounts, reason, unpaid_gas + paid_gas, &result)?;
+    invoke_on_return(program_id, accounts, exit_reason, unpaid_gas + paid_gas, &result)?;
 
     Ok(())
 }
