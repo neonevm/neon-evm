@@ -110,8 +110,7 @@ async fn transfer<T: Transport>(
         "{} Sending transaction for transfer of token {}...",
         id, token_name
     );
-    let mut options = Options::default();
-    options.gas = Some(U256::from(10_000_000));
+    let  options =  web3::contract::Options {gas: Some(U256::from(10_000_000)), ..Default::default()};
     token
         .signed_call_with_confirmations(
             "transfer",
