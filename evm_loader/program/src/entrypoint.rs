@@ -21,10 +21,10 @@ use solana_program::{
     program_error::{ProgramError}, pubkey::Pubkey,
     program::{invoke},
     rent::Rent,
-    sysvar::Sysvar,
     keccak::Hasher,
     msg,
-    slot_hashes::SlotHashes,
+    sysvar::recent_blockhashes::RecentBlockhashes,
+    sysvar::{clock::Clock, Sysvar},
 };
 
 use crate::{
@@ -797,14 +797,16 @@ fn process_instruction<'a>(
         },
         EvmInstruction::GetSlotHashes => {
             let clock_hash_info = next_account_info(account_info_iter)?;
-            let slot_hashes = SlotHashes::from_account_info(&clock_hash_info)?;
-            for slot_hash in slot_hashes.slot_hashes() {
-                let (slot, hash) = slot_hash;
-                let ix = on_return(program_id, 0, *slot, &hash.to_bytes());
+            let slot_hashes = RecentBlockhashes::from_account_info(&clock_hash_info)?;
+            let clock = Clock::get().unwrap();
+            let mut slot = clock.slot.into();
+            for entry in slot_hashes.as_slice() {
+                let ix = on_return(program_id, 0, slot, &entry.blockhash.to_bytes());
                 invoke(
                     &ix,
                     accounts
                 )?;
+                slot -= 1;
             }
 
             Ok(())

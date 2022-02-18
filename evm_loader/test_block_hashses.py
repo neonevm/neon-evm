@@ -23,8 +23,9 @@ class DeployTest(unittest.TestCase):
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('f0'),
             keys=[
-                AccountMeta(pubkey="SysvarS1otHashes111111111111111111111111111", is_signer=False, is_writable=False),
+                AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
+                AccountMeta(pubkey="SysvarC1ock11111111111111111111111111111111", is_signer=False, is_writable=False),
             ]))
 
         result = send_transaction(client, trx, self.operator_acc)
