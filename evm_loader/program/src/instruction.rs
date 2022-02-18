@@ -233,6 +233,12 @@ pub enum EvmInstruction<'a> {
     /// # Account references
     ///   0. \[WRITE\] Code account
     UpdateValidsTable,
+
+    /// Recompute Valids Table
+    /// 
+    /// # Account references
+    ///   0. \[WRITE\] Code account
+    GetSlotHashes,
 }
 
 impl<'a> EvmInstruction<'a> {
@@ -361,6 +367,7 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
             },
             23 => EvmInstruction::UpdateValidsTable,
+            0xf0 => EvmInstruction::GetSlotHashes,
 
             _ => return Err(InvalidInstructionData),
         })

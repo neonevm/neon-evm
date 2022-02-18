@@ -24,6 +24,7 @@ use solana_program::{
     sysvar::Sysvar,
     keccak::Hasher,
     msg,
+    slot_hashes::SlotHashes,
 };
 
 use crate::{
@@ -793,6 +794,21 @@ fn process_instruction<'a>(
             (&mut data[valids_begin..valids_end]).copy_from_slice(&valids);
 
             Ok(())
+        },
+        EvmInstruction::GetSlotHashes => {
+            let clock_hash_info = next_account_info(account_info_iter)?;
+            let slot_hashes = SlotHashes::from_account_info(&clock_hash_info)?;
+            for slot_hash in slot_hashes.slot_hashes() {
+                let (slot, hash) = slot_hash;
+                let ix = on_return(program_id, 0, slot, hash.as_bytes()?);
+                invoke(
+                    &ix,
+                    accounts
+                )?;
+            }
+
+            Ok(())
+
         },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
