@@ -28,7 +28,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     };
 
     validate(&parsed_accounts)?;
-
     execute(&parsed_accounts)?;
 
     Ok(())
@@ -69,7 +68,7 @@ fn validate(accounts: &Accounts) -> ProgramResult {
     Ok(())
 }
 
-fn execute<'a>(accounts: &'a Accounts<'a>) -> ProgramResult {
+fn execute(accounts: &Accounts) -> ProgramResult {
     let v1 = &accounts.ethereum_account;
     let balance = accounts.token_balance_account.amount;
     let v2 = EthereumAccount::from_v1(v1, balance)?;
@@ -82,10 +81,10 @@ fn execute<'a>(accounts: &'a Accounts<'a>) -> ProgramResult {
     Ok(())
 }
 
-fn transfer_tokens_to_pool() {
+const fn transfer_tokens_to_pool() {
     //
 }
 
-fn delete_token_account() {
+const fn delete_token_account() {
     //
 }

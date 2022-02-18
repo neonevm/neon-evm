@@ -287,7 +287,7 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
 /// Conversion needed for migration of accounts from V1 to the current version.
 impl<'a> EthereumAccount<'a> {
     #[allow(deprecated)]
-    pub fn from_v1(v1: &'a EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
+    pub fn from_v1(v1: &EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
         let null = Pubkey::new(&[0_u8; 32]);
 
         let data = ether_account::Data {
