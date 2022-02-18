@@ -802,20 +802,19 @@ fn process_instruction<'a>(
             let mut start: usize = 8;
 
             let clock = Clock::get().unwrap();
-            let mut slot: u64 = clock.slot.into();
+            let mut slot: u64 = clock.slot - 1;
 
-            while start + 32 < holder_data.len().into() {
+            while start + 32 < holder_data.len() {
                 if count == 0 {
                     return Ok(());
                 }
-                msg!("slot={} blockhash={}", slot, &hex::encode(&holder_data[start..][..32]));
+                msg!("slot {} blockhash {}", slot, &hex::encode(&holder_data[start..][..32]));
                 start += 40;
                 slot -= 1;
                 count -= 1;
             }
 
             Ok(())
-
         },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };

@@ -4,9 +4,7 @@ from solana_utils import *
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 evm_loader_id = os.environ.get("EVM_LOADER")
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 
 class DeployTest(unittest.TestCase):
@@ -19,6 +17,7 @@ class DeployTest(unittest.TestCase):
 
 
     def get_blocks_from_neonevm(self, count):
+        slot_hash = {}
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             data=bytes.fromhex('f0') + count.to_bytes(4, byteorder='little'),
@@ -27,28 +26,29 @@ class DeployTest(unittest.TestCase):
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
                 AccountMeta(pubkey="SysvarC1ock11111111111111111111111111111111", is_signer=False, is_writable=False),
             ]))
-
         result = send_transaction(client, trx, self.operator_acc)
-        print(result)
+        for log in result["result"]["meta"]["logMessages"]:
+            log_words = log.split()
+            if len(log_words) == 6 and log_words[2] == 'slot' and log_words[4] == 'blockhash':
+                slot_hash[int(log_words[3])] = log_words[5]
+        return slot_hash
 
-    def _decode_return(self, log: bytes):
-        slot = int.from_bytes(log[2:10], 'little')
-        hash_val = log[10:].hex()
-        print(f"slot: {slot}; hash:{hash_val}")
 
     def get_blocks_from_solana(self):
+        slot_hash = {}
         current_slot = client.get_slot()["result"]
         for slot in range(current_slot):
             hash_val = base58.b58decode(client.get_confirmed_block(slot)['result']['blockhash']).hex()
-            print(f"slot: {slot}; hash:{hash_val}")
+            slot_hash[int(slot)] = hash_val
+        return slot_hash
 
     def test_01_block_hashes(self):
         print("test_01_block_hashes")
-        self.get_blocks_from_solana()
-        self.get_blocks_from_neonevm(1)
-        self.get_blocks_from_neonevm(10)
-        self.get_blocks_from_neonevm(100)
-        self.get_blocks_from_neonevm(1000)
+        solana_result = self.get_blocks_from_solana()
+        nonevm_result = self.get_blocks_from_neonevm(100)
+        for sol_slot, sol_hash in solana_result.items():
+            if sol_slot in nonevm_result:
+                self.assertEqual(sol_hash, nonevm_result[sol_slot])
 
 if __name__ == '__main__':
     unittest.main()
