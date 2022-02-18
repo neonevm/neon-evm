@@ -5,13 +5,21 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::config::CHAIN_ID;
+use cfg_if::cfg_if;
 use num_enum::TryFromPrimitive;
 
-/// Ethereum account version
-// Special case for alpha configuration (it is needed in order to separate the accounts created for
-// testing this version)
-pub const ACCOUNT_SEED_VERSION: u8 = if CHAIN_ID == 245_022_923 { 255_u8 } else { 1_u8 };
+cfg_if! {
+    if #[cfg(feature = "alpha")] {
+        /// Ethereum account version
+        // Special case for alpha configuration (it is needed in order to separate the accounts created for
+        // testing this version)
+        pub const ACCOUNT_SEED_VERSION: u8 = 255_u8;
+    } else {
+        /// Ethereum account version
+        pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
+    }
+}
+
 /// Ethereum account allocated data size
 pub const ACCOUNT_MAX_SIZE: usize = 256;
 
