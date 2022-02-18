@@ -115,7 +115,6 @@ async fn transfer<T: Transport>(
         .signed_call_with_confirmations(
             "transfer",
             (recipient, amount),
-            // Options::default(),
             options,
             0, // confirmations
             admin_key,
