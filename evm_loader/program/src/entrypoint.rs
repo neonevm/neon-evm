@@ -23,7 +23,7 @@ use solana_program::{
     rent::Rent,
     keccak::Hasher,
     msg,
-    sysvar::recent_blockhashes::RecentBlockhashes,
+    // sysvar::recent_blockhashes::RecentBlockhashes,
     sysvar::{clock::Clock, Sysvar},
 };
 
@@ -797,14 +797,19 @@ fn process_instruction<'a>(
         },
         EvmInstruction::GetSlotHashes {mut count} => {
             let clock_hash_info = next_account_info(account_info_iter)?;
-            let slot_hashes = RecentBlockhashes::from_account_info(&clock_hash_info)?;
+            let holder_data = clock_hash_info.data.borrow();
+
+            let mut start: usize = 8;
+
             let clock = Clock::get().unwrap();
             let mut slot: u64 = clock.slot.into();
-            for entry in slot_hashes.as_slice() {
+
+            while start + 32 < holder_data.len().into() {
                 if count == 0 {
                     return Ok(());
                 }
-                msg!("slot={} blockhash={}", slot, &hex::encode(&entry.blockhash.to_bytes()));
+                msg!("slot={} blockhash={}", slot, &hex::encode(&holder_data[start..][..32]));
+                start += 40;
                 slot -= 1;
                 count -= 1;
             }
