@@ -40,6 +40,8 @@ const TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STORAGE: u8 = 5;
 
 
+#[allow(deprecated)]
+pub type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1, ()>;
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, ()>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
 pub type Storage<'a> = AccountData<'a, storage::Data, ()>;
