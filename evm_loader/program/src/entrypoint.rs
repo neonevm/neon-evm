@@ -800,7 +800,7 @@ fn process_instruction<'a>(
             let slot_hashes = SlotHashes::from_account_info(&clock_hash_info)?;
             for slot_hash in slot_hashes.slot_hashes() {
                 let (slot, hash) = slot_hash;
-                let ix = on_return(program_id, 0, slot, hash.as_bytes()?);
+                let ix = on_return(program_id, 0, *slot, hash.to_bytes());
                 invoke(
                     &ix,
                     accounts
