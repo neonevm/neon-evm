@@ -1,6 +1,7 @@
+//! # Neon EVM Executor State
+//!
+//! Executor State is a struct that stores the state during execution.
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
-
-/// Todo: document
 
 use core::mem;
 use std::{
@@ -32,6 +33,7 @@ struct ExecutorAccount {
     pub reset: bool,
 }
 
+/// Represents additional data attached to an executor.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorMetadata {
     is_static: bool,
@@ -41,6 +43,7 @@ pub struct ExecutorMetadata {
 }
 
 impl ExecutorMetadata {
+    /// Creates new empty metadata with specified gas limit.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn new<B: AccountStorage>(backend: &B) -> Self {
@@ -68,11 +71,15 @@ impl ExecutorMetadata {
         Ok(())
     }
 
+    /// Records gas usage on discard (actually does nothing).
+    /// # Errors
+    /// Cannot return an error.
     #[allow(clippy::needless_pass_by_value, clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
+    /// Creates new instance of metadata when entering next frame of execution.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn spit_child(&self, is_static: bool) -> Self {
@@ -87,11 +94,13 @@ impl ExecutorMetadata {
         }
     }
 
+    /// Returns property `is_static`.
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
+    /// Returns current depth of frame of execution.
     #[must_use]
     pub const fn depth(&self) -> Option<usize> {
         self.depth
@@ -137,6 +146,7 @@ pub struct ERC20Approve {
     pub value: U256
 }
 
+/// Represents the state of executor abstracted away from a backend.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate {
     metadata: ExecutorMetadata,
@@ -159,6 +169,7 @@ pub struct ExecutorSubstate {
 pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
 
 impl ExecutorSubstate {
+    /// Creates new empty instance of `ExecutorSubstate`.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
     pub fn new<B: AccountStorage>(backend: &B) -> Self {
@@ -181,17 +192,20 @@ impl ExecutorSubstate {
         }
     }
 
+    /// Returns an immutable reference on executor metadata.
     #[must_use]
     pub const fn metadata(&self) -> &ExecutorMetadata {
         &self.metadata
     }
 
+    /// Returns the mutable reference on executor metadata.
     pub fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
         &mut self.metadata
     }
 
-    /// Deconstruct the executor, return state to be applied. Panic if the
-    /// executor is not in the top-level substate.
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     pub fn deconstruct<B: AccountStorage>(
         mut self,
@@ -258,6 +272,7 @@ impl ExecutorSubstate {
         (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
     }
 
+    /// Creates new instance of `ExecutorSubstate` when entering next execution of a call or create.
     pub fn enter(&mut self, is_static: bool) {
         let mut entering = Self {
             metadata: self.metadata.spit_child(is_static),
@@ -281,6 +296,11 @@ impl ExecutorSubstate {
         self.parent = Some(Box::new(entering));
     }
 
+    /// Commits the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence or if an address not found in known accounts.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot commit on root substate");
         mem::swap(&mut exited, self);
@@ -333,6 +353,11 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Reverts the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_revert(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -342,6 +367,11 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Discards the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_discard(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -358,21 +388,29 @@ impl ExecutorSubstate {
         }
     }
 
+    /// Returns copy of basic account information if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_nonce(&self, address: H160) -> Option<U256> {
         self.known_account(address).map(|acc| acc.nonce)
     }
 
+    /// Returns copy of code stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    /// Returns copy of `valids` bit array stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.valids.clone())
     }
 
+    /// Checks if an account is empty: does not contain balance, nonce and code.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(balance) = self.known_balance(&address) {
@@ -396,6 +434,9 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Returns value of record stored in a account if the `address` represents a known account.
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if a record with the key does not exist or the account is not known.
     #[must_use]
     pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
@@ -415,6 +456,8 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if the account is not in reset state or is not known.
     #[must_use]
     pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
@@ -430,6 +473,7 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Checks if an account has been deleted.
     #[must_use]
     pub fn deleted(&self, address: H160) -> bool {
         if self.deletes.contains(&address) {
@@ -467,6 +511,7 @@ impl ExecutorSubstate {
             .expect("New account was just inserted")
     }
 
+    /// Increments nonce of an account: increases it by 1.
     pub fn inc_nonce<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let account = self.account_mut(address, backend);
 
@@ -474,10 +519,12 @@ impl ExecutorSubstate {
         account.nonce = nonce;
     }
 
+    /// Adds or changes a record in the storage of given account.
     pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.storages.insert((address, key), value);
     }
 
+    /// Clears the storage of an account and marks the account as reset.
     pub fn reset_storage<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let mut removing = Vec::new();
 
@@ -494,6 +541,7 @@ impl ExecutorSubstate {
         self.account_mut(address, backend).reset = true;
     }
 
+    /// Adds an Ethereum event log record.
     pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
         self.logs.push(Log {
             address,
@@ -502,10 +550,12 @@ impl ExecutorSubstate {
         });
     }
 
+    /// Marks an account as deleted.
     pub fn set_deleted(&mut self, address: H160) {
         self.deletes.insert(address);
     }
 
+    /// Initializes a contract account with it's code and corresponding bit array of valid jumps.
     pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
@@ -536,6 +586,9 @@ impl ExecutorSubstate {
         )
     }
 
+    /// Adds a transfer to execute.
+    /// # Errors
+    /// May return `OutOfFund` if the source has no funds.
     pub fn transfer<B: AccountStorage>(
         &mut self,
         transfer: &Transfer,
@@ -560,11 +613,13 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Resets the balance of an account: sets it to 0.
     pub fn reset_balance(&self, address: H160) {
         let mut balances = self.balances.borrow_mut();
         balances.insert(address, U256::zero());
     }
 
+    /// Adds an account to list of known accounts if not yet added.
     pub fn touch<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let _unused = self.account_mut(address, backend);
     }
@@ -1075,11 +1130,15 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         Self { backend, substate }
     }
 
+    /// Returns an immutable reference on the executor substate.
     #[must_use]
     pub fn substate(&self) -> &ExecutorSubstate {
         &self.substate
     }
 
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     pub fn backend(&self) -> &'a B {
         self.backend
