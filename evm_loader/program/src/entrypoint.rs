@@ -799,7 +799,7 @@ fn process_instruction<'a>(
             let clock_hash_info = next_account_info(account_info_iter)?;
             let slot_hashes = RecentBlockhashes::from_account_info(&clock_hash_info)?;
             let clock = Clock::get().unwrap();
-            let mut slot = clock.slot.into();
+            let mut slot: u64 = clock.slot.into();
             for entry in slot_hashes.as_slice() {
                 if count == 0 {
                     return Ok(());
