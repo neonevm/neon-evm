@@ -60,7 +60,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         tx = {
             'to': contract_eth,
             'value': 0,
-            'gas': 9999999,
+            'gas': 999999999,
             'gasPrice': 1_000_000_000,
             'nonce': nonce,
             'data': abi.function_signature_to_4byte_selector('callSelfDestruct()'),
@@ -131,8 +131,8 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         (owner_contract, eth_contract, contract_code) = self.deploy_contract()
         self.token.transfer(ETH_TOKEN_MINT_ID, 100, get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
 
-        operator_token_balance = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
-        contract_token_balance = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+        operator_token_balance = int(self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID)) * 10**9)
+        contract_token_balance = int(self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID)) * 10**9)
 
         caller_balance_pre = getBalance(self.acc.public_key())
         contract_balance_pre = getBalance(owner_contract)
@@ -143,12 +143,16 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         send_transaction(client, trx, self.acc)
 
+        steps_executed = EVM_STEPS
+        gas_used = steps_executed * evm_step_cost(2)
+        gas_fee = gas_used  #  * gas_price / 1_000_000_000
+
         caller_balance_post = getBalance(self.acc.public_key())
         contract_balance_post = getBalance(owner_contract)
         code_balance_post = getBalance(contract_code)
 
-        operator_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID))
-        contract_token_balance_post = self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID))
+        operator_token_balance_post = int(self.token.balance(get_associated_token_address(PublicKey(self.caller), ETH_TOKEN_MINT_ID)) * 10**9)
+        contract_token_balance_post = int(self.token.balance(get_associated_token_address(PublicKey(owner_contract), ETH_TOKEN_MINT_ID)) * 10**9)
 
         # Check that lamports moved from code accounts to caller
         self.assertGreater(caller_balance_post, contract_balance_pre)
@@ -157,7 +161,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertEqual(code_balance_post, 0)
         self.assertEqual(code_balance_post, 0)
         self.assertEqual(contract_token_balance_post, 0)
-        self.assertAlmostEqual(operator_token_balance_post, contract_token_balance + operator_token_balance, 3)
+        self.assertEqual(operator_token_balance_post, contract_token_balance + operator_token_balance-gas_fee, 3)
 
         err = "Can't get information about"
         with self.assertRaisesRegex(Exception,err):

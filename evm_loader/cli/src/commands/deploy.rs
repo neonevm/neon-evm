@@ -211,7 +211,7 @@ fn make_deploy_ethereum_transaction(
         let tx = crate::UnsignedTransaction {
             to: None,
             nonce: trx_count,
-            gas_limit: 9_999_999.into(),
+            gas_limit: 999_999_999_999_u64.into(),
             gas_price: 0.into(),
             value: 0.into(),
             data: program_data.to_owned(),

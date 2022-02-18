@@ -151,7 +151,7 @@ class storage_states(unittest.TestCase):
 
     def get_call_parameters(self, input, acc, caller, caller_ether, nonce_increment=0):
         nonce = getTransactionCount(client, caller) + nonce_increment
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)
