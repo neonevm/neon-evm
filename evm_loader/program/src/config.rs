@@ -187,7 +187,7 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
 
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
