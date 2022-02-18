@@ -52,6 +52,7 @@ class DeployTest(unittest.TestCase):
     def test_01_block_hashes(self):
         print("test_01_block_hashes")
         self.get_blocks_from_solana()
+        self.get_blocks_from_neonevm(1)
         self.get_blocks_from_neonevm(10)
         self.get_blocks_from_neonevm(100)
         self.get_blocks_from_neonevm(1000)
