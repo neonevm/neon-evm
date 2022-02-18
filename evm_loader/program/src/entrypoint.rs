@@ -804,11 +804,7 @@ fn process_instruction<'a>(
                 if count == 0 {
                     return Ok(());
                 }
-                let ix = on_return(program_id, 0, slot, &entry.blockhash.to_bytes());
-                invoke(
-                    &ix,
-                    accounts
-                )?;
+                msg!("slot={} blockhash={}", slot, &hex::encode(&entry.blockhash.to_bytes()));
                 slot -= 1;
                 count -= 1;
             }
