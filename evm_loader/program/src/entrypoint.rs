@@ -796,7 +796,8 @@ fn process_instruction<'a>(
             Ok(())
         },
         EvmInstruction::GetSlotHashes => {
-            let slot_hashes = SlotHashes::get().unwrap();
+            let clock_hash_info = next_account_info(account_info_iter)?;
+            let slot_hashes = SlotHashes::from_account_info(&clock_hash_info)?;
             for slot_hash in slot_hashes.slot_hashes() {
                 let (slot, hash) = slot_hash;
                 let ix = on_return(program_id, 0, *slot, &hash.to_bytes());
