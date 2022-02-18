@@ -795,18 +795,22 @@ fn process_instruction<'a>(
 
             Ok(())
         },
-        EvmInstruction::GetSlotHashes => {
+        EvmInstruction::GetSlotHashes {mut count} => {
             let clock_hash_info = next_account_info(account_info_iter)?;
             let slot_hashes = RecentBlockhashes::from_account_info(&clock_hash_info)?;
             let clock = Clock::get().unwrap();
             let mut slot = clock.slot.into();
             for entry in slot_hashes.as_slice() {
+                if count == 0 {
+                    return Ok(());
+                }
                 let ix = on_return(program_id, 0, slot, &entry.blockhash.to_bytes());
                 invoke(
                     &ix,
                     accounts
                 )?;
                 slot -= 1;
+                count -= 1;
             }
 
             Ok(())

@@ -238,7 +238,10 @@ pub enum EvmInstruction<'a> {
     /// 
     /// # Account references
     ///   0. \[WRITE\] Code account
-    GetSlotHashes,
+    GetSlotHashes {
+        /// count
+        count: u32,
+    },
 }
 
 impl<'a> EvmInstruction<'a> {
@@ -367,7 +370,11 @@ impl<'a> EvmInstruction<'a> {
                 EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 {collateral_pool_index, step_count}
             },
             23 => EvmInstruction::UpdateValidsTable,
-            0xf0 => EvmInstruction::GetSlotHashes,
+            0xf0 => {
+                let (count, _rest) = rest.split_at(4);
+                let count = count.try_into().ok().map(u32::from_le_bytes).ok_or(InvalidInstructionData)?;
+                EvmInstruction::GetSlotHashes {count}
+            },
 
             _ => return Err(InvalidInstructionData),
         })

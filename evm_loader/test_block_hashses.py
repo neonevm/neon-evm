@@ -18,10 +18,10 @@ class DeployTest(unittest.TestCase):
         cls.operator_acc = operator_wallet.get_acc()
 
 
-    def get_blocks_from_neonevm(self):
+    def get_blocks_from_neonevm(self, count):
         trx = Transaction()
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-            data=bytes.fromhex('f0'),
+            data=bytes.fromhex('f0') + count.to_bytes(4, byteorder='little'),
             keys=[
                 AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),
                 AccountMeta(pubkey=evm_loader_id, is_signer=False, is_writable=False),
@@ -51,8 +51,10 @@ class DeployTest(unittest.TestCase):
 
     def test_01_block_hashes(self):
         print("test_01_block_hashes")
-        self.get_blocks_from_neonevm()
         self.get_blocks_from_solana()
+        self.get_blocks_from_neonevm(10)
+        self.get_blocks_from_neonevm(100)
+        self.get_blocks_from_neonevm(1000)
 
 if __name__ == '__main__':
     unittest.main()
