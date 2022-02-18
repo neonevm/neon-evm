@@ -1,13 +1,19 @@
 use std::cell::RefMut;
 use std::fmt::Debug;
-use std::mem::{ManuallyDrop};
+use std::mem::ManuallyDrop;
+use std::ops::{Deref, DerefMut};
+
 use solana_program::account_info::AccountInfo;
+use solana_program::msg;
 use solana_program::program_error::ProgramError;
+use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
-use std::ops::{Deref, DerefMut};
-use solana_program::msg;
-use solana_program::pubkey::Pubkey;
+
+pub use holder::Holder;
+pub use incinerator::Incinerator;
+pub use operator::Operator;
+pub use treasury::Treasury;
 
 mod treasury;
 mod operator;
@@ -20,11 +26,6 @@ pub mod storage;
 pub mod program;
 pub mod token;
 pub mod sysvar;
-
-pub use treasury::Treasury;
-pub use operator::Operator;
-pub use holder::Holder;
-pub use incinerator::Incinerator;
 
 pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
 
@@ -41,12 +42,12 @@ const TAG_FINALIZED_STORAGE: u8 = 5;
 
 
 #[allow(deprecated)]
-pub type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1, ()>;
-pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, ()>;
+pub type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1>;
+pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
-pub type Storage<'a> = AccountData<'a, storage::Data, ()>;
-pub type FinalizedStorage<'a> = AccountData<'a, storage::FinalizedData, ()>;
-pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data, ()>;
+pub type Storage<'a> = AccountData<'a, storage::Data>;
+pub type FinalizedStorage<'a> = AccountData<'a, storage::FinalizedData>;
+pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data>;
 
 
 pub trait AccountExtension<'a, T> {
@@ -253,7 +254,6 @@ where
     }
 }
 
-
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> {
     if info.owner != program_id {
         return Err!(ProgramError::InvalidAccountData; "Account {} - expected program owned", info.key);
@@ -282,4 +282,24 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
     data.fill(0);
 
     Ok(())
+}
+
+/// Conversion needed for migration of accounts from V1 to the current version.
+impl<'a> EthereumAccount<'a> {
+    #[allow(deprecated)]
+    pub fn from_v1(v1: &'a EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
+        let null = Pubkey::new(&[0_u8; 32]);
+
+        let data = ether_account::Data {
+            address: v1.data.ether,
+            bump_seed: v1.data.nonce,
+            trx_count: v1.data.trx_count,
+            balance: evm::U256::from(balance),
+            code_account: if v1.data.code_account == null { None } else { Some(v1.data.code_account) },
+            rw_blocked: v1.data.rw_blocked_acc.is_some(),
+            ro_blocked_count: v1.data.ro_blocked_cnt,
+        };
+
+        EthereumAccount::init(v1.info, data)
+    }
 }

@@ -1,4 +1,3 @@
-#[allow(unused)]
 use log::{error, info, debug};
 
 use solana_sdk::{

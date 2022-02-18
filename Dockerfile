@@ -19,9 +19,9 @@ ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
     cargo build --release && \
-    cargo build-bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
-    cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
-    cargo build-bpf --features no-logs
+    cargo build-bpf --features devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
+    cargo build-bpf --features testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-bpf
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
