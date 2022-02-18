@@ -29,14 +29,7 @@ class DeployTest(unittest.TestCase):
             ]))
 
         result = send_transaction(client, trx, self.operator_acc)
-        meta_ixs = result['meta']['innerInstructions']
-
-        for inner_ix in meta_ixs:
-            for event in inner_ix['instructions']:
-                log = base58.b58decode(event['data'])
-                evm_ix = int(log[0])
-                if evm_ix == 6:
-                    self._decode_return(log)
+        print(result)
 
     def _decode_return(self, log: bytes):
         slot = int.from_bytes(log[2:10], 'little')
