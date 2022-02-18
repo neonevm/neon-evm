@@ -23,7 +23,7 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_event.py setUpClass")
+        print("\ntest_eth_token.py setUpClass")
 
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
@@ -114,7 +114,7 @@ class EthTokenTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -148,10 +148,17 @@ class EthTokenTest(unittest.TestCase):
 
 
     def test_caller_balance(self):
-        expected_balance = self.token.balance(self.caller_token)
+        print("\ntest_caller_balance")
+        gas_used =  EVM_STEPS * evm_step_cost(2)  # gas for begin iteration
+        wei_scale = 10**9
+        initial_balance = int(self.token.balance(self.caller_token)* 10**9)
+        expected_balance_wei = (initial_balance - gas_used) * wei_scale # * gas_price/10**9
+        print("initial_balance (GAlan)", initial_balance)
+        print("gas_used", gas_used)
+        print("expected_balance_wei", expected_balance_wei)
 
         func_name = abi.function_signature_to_4byte_selector('checkCallerBalance(uint256)')
-        input = func_name + bytes.fromhex("%064x" % int(expected_balance * 10**18))
+        input = func_name + bytes.fromhex("%064x" % expected_balance_wei)
         result = self.call_partial_signed(input, 0)
 
         self.assertEqual(result['meta']['err'], None)
@@ -163,6 +170,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
     def test_contract_balance(self):
+        print("\ntest_contract_balance")
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
         expected_balance = self.token.balance(contract_token)
 
@@ -179,14 +187,16 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
 
     def test_transfer_and_call(self):
+        print("\ntest_transfer_and_call")
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
 
-        contract_balance_before = self.token.balance(contract_token)
-        caller_balance_before = self.token.balance(self.caller_token)
-        value = 10
+        contract_balance_before = int(self.token.balance(contract_token)* 10**9)
+        caller_balance_before = int(self.token.balance(self.caller_token)* 10**9)
 
+        value = 1
         func_name = abi.function_signature_to_4byte_selector('nop()')
-        result = self.call_partial_signed(func_name, value * (10**18))
+        result = self.call_partial_signed(func_name, value*(10**9))
+        print("result: ", result)
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -195,15 +205,16 @@ class EthTokenTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
+        gas_used = int().from_bytes(data[2:10],'little')
 
-        gas_used = Decimal(int().from_bytes(data[2:10],'little'))/Decimal(1_000_000_000)
-
-        contract_balance_after = self.token.balance(contract_token)
-        caller_balance_after = self.token.balance(self.caller_token)
+        contract_balance_after = int(self.token.balance(contract_token)* 10**9)
+        caller_balance_after = int(self.token.balance(self.caller_token)* 10**9)
+ 
         self.assertEqual(contract_balance_after, contract_balance_before + value)
         self.assertEqual(caller_balance_after, caller_balance_before - value - gas_used)
 
     def test_transfer_internal(self):
+        print("test_transfer_internal")
         contract_token = get_associated_token_address(PublicKey(self.reId), ETH_TOKEN_MINT_ID)
         self.token.transfer(ETH_TOKEN_MINT_ID, 500, contract_token)
 

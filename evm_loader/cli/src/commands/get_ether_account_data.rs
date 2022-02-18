@@ -1,7 +1,10 @@
 use evm::{H160};
 
 use evm_loader::{
-    account_data::AccountData,
+    account_data::{
+        AccountData,
+        AccountState,
+    },
 };
 
 use crate::{
@@ -21,6 +24,10 @@ pub fn execute (
             let (solana_address, _solana_nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
             let account_data = AccountData::unpack(&acc.data).unwrap();
             let account_data = AccountData::get_account(&account_data).unwrap();
+            let state = match &account_data.state{
+                AccountState::Uninitialized => "Uninitialized",
+                AccountState::Initialized => "Initialized"
+            };
 
             println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);
@@ -41,6 +48,7 @@ pub fn execute (
             );
             println!("    token_account: {}", &account_data.eth_token_account);
             println!("    token_amount: {}", &balance);
+            println!("    state: {}", state);
 
             if let Some(code_account) = code_account {
                 let code_data = AccountData::unpack(&code_account.data).unwrap();

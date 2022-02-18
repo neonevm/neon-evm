@@ -6,6 +6,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::config::CHAIN_ID;
+use num_enum::TryFromPrimitive;
 
 /// Ethereum account version
 // Special case for alpha configuration (it is needed in order to separate the accounts created for
@@ -30,7 +31,9 @@ pub struct Account {
     /// ETH token account
     pub eth_token_account: Pubkey,
     /// counter of the read-only locks
-    pub ro_blocked_cnt: u8
+    pub ro_blocked_cnt: u8,
+    /// The account's state
+    pub state: AccountState,
 }
 
 /// Ethereum contract data account
@@ -68,7 +71,7 @@ pub struct Storage {
     /// Number of payments
     pub number_of_payments: u64,
     /// ethereum transaction signature
-    pub sign: [u8; 65]
+    pub sign: [u8; 65],
 }
 
 /// Storage account data for the finalized transaction state
@@ -93,6 +96,22 @@ pub struct ERC20Allowance {
     pub mint: Pubkey,
     /// Amount
     pub value: U256
+}
+
+/// `EtherAccount states`
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
+pub enum AccountState {
+    /// Account is not yet initialized; the user did not pay for the creation of this account
+    Uninitialized,
+    /// Account is initialized; the user payed for the creation of this account
+    Initialized,
+}
+
+impl Default for AccountState {
+    fn default() -> Self {
+        Self::Uninitialized
+    }
 }
 
 /// Structured data stored in account data
@@ -328,7 +347,7 @@ impl AccountData {
 
 impl Account {
     /// Account struct serialized size
-    pub const SIZE: usize = 20+1+8+32+1+32+32+1;
+    pub const SIZE: usize = 20+1+8+32+1+32+32+1+1;
 
     /// Deserialize `Account` struct from input data
     #[must_use]
@@ -343,8 +362,9 @@ impl Account {
             is_rw_blocked,
             rw_blocked_by,
             eth,
-            ro_blocked_cnt
-        ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
+            ro_blocked_cnt,
+            state
+        ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1, 1];
 
         Self {
             ether: H160::from_slice(&*ether),
@@ -353,7 +373,8 @@ impl Account {
             code_account: Pubkey::new_from_array(*code_account),
             rw_blocked_acc: if is_rw_blocked[0] > 0 { Some(Pubkey::new_from_array(*rw_blocked_by)) } else { None },
             eth_token_account: Pubkey::new_from_array(*eth),
-            ro_blocked_cnt: ro_blocked_cnt[0]
+            ro_blocked_cnt: ro_blocked_cnt[0],
+            state: AccountState::try_from_primitive(state[0]).unwrap_or_default(),
         }
     }
 
@@ -369,8 +390,9 @@ impl Account {
             is_rw_blocked_dst,
             rw_blocked_by_dst,
             eth_dst,
-            ro_blocked_cnt_dst
-        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
+            ro_blocked_cnt_dst,
+            state
+        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1, 1];
 
         *ether_dst = acc.ether.to_fixed_bytes();
         nonce_dst[0] = acc.nonce;
@@ -385,6 +407,7 @@ impl Account {
         }
         eth_dst.copy_from_slice(acc.eth_token_account.as_ref());
         ro_blocked_cnt_dst[0] = acc.ro_blocked_cnt;
+        state[0] = acc.state as u8;
 
         Self::SIZE
     }

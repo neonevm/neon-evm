@@ -1,5 +1,8 @@
 //! CONFIG MODULE
 #![allow(clippy::use_self,clippy::nursery)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
 
 use const_format::formatcp;
 use cfg_if::cfg_if;
@@ -8,6 +11,12 @@ use evm::{ U256 };
 use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
 use crate::account_data::ACCOUNT_SEED_VERSION;
 use crate::account_data::ACCOUNT_MAX_SIZE;
+use solana_program::{program_pack::Pack};
+use solana_program::rent::{
+    DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+    DEFAULT_EXEMPTION_THRESHOLD,
+    ACCOUNT_STORAGE_OVERHEAD
+};
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
@@ -363,6 +372,16 @@ pub const PAYMENT_TO_TREASURE: u64 = 5000;
 pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
+/// `amount of gas per 1 byte of the solana space`
+pub const EVM_BYTE_COST: u64 = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 * DEFAULT_EXEMPTION_THRESHOLD) as u64;
+/// `number of evm steps per transaction`
+pub const EVM_STEPS: u64  = 100;
+/// `the message size that is used to holder-account filling`
+pub const HOLDER_MSG_SIZE: u64 = 1000;
+
+// TODO: replace 5000 to fee_calculator from sdk
+/// `lamports per signature`
+pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -373,6 +392,12 @@ neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREAS
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
+neon_elf_param!( NEON_EVM_BYTE_COST         , formatcp!("{:?}", EVM_BYTE_COST));
+neon_elf_param!( NEON_EVM_STEPS             , formatcp!("{:?}", EVM_STEPS));
+neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
+neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
+neon_elf_param!( NEON_LAMPORTS_PER_SIGNATURE, formatcp!("{:?}", LAMPORTS_PER_SIGNATURE));
+neon_elf_param!( NEON_ACCOUNT_STORAGE_OVERHEAD, formatcp!("{:?}", ACCOUNT_STORAGE_OVERHEAD));
 
 /// Chain ID
 #[must_use]
