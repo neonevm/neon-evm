@@ -12,7 +12,61 @@ use crate::account_data::ACCOUNT_MAX_SIZE;
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
-        const CHAIN_ID: u64 = 245022934;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245022934;
+
+        // NOTE: when expanding this list, add same addresses to the 
+        // alpha configuration as well
+        macros::pubkey_array!(
+            AUTHORIZED_OPERATOR_LIST,
+            [
+                "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "DSRVyWpSVLEcHih9CVND2aGNBZxNW5bt34GEaK4aDk5i",
+            ]
+        );
+
+        /// Token Mint ID
+        pub mod token_mint {
+            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+
+            declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
+            /// Ethereum account version
+            pub const DECIMALS: u8 = 9;
+
+            /// Number of base 10 digits to the right of the decimal place
+            #[must_use]
+            pub const fn decimals() -> u8 { DECIMALS }
+        }
+
+        /// Collateral pool base address
+        pub mod collateral_pool_base {
+            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+
+            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
+
+            /// `COLLATERAL_SEED_PREFIX`
+            pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 128;
+        }
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "1");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "1");
+        }
+
+    } else if #[cfg(feature = "alpha")] {
+
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245022923;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -47,7 +101,7 @@ cfg_if! {
             pub const PREFIX: &str = "collateral_seed_";
 
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 1;
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -62,7 +116,8 @@ cfg_if! {
 
     } else if #[cfg(feature = "testnet")] {
 
-        const CHAIN_ID: u64 = 245022940;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245022940;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -147,7 +202,8 @@ cfg_if! {
         
     } else if #[cfg(feature = "devnet")] {
 
-        const CHAIN_ID: u64 = 245022926;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245022926;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -238,7 +294,8 @@ cfg_if! {
         
     } else {
 
-        const CHAIN_ID: u64 = 111;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 111;
 
         macros::pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
