@@ -68,18 +68,13 @@ fn validate(accounts: &Accounts) -> ProgramResult {
 }
 
 fn execute(accounts: &Accounts) -> ProgramResult {
-    convert_ether_account(&accounts.ethereum_account,
-                          accounts.token_balance_account.amount)?;
+    EthereumAccount::convert_from_v1(
+        &accounts.ethereum_account,
+        accounts.token_balance_account.amount)?;
 
     transfer_tokens_to_pool()?;
 
     delete_token_account()
-}
-
-fn convert_ether_account(v1: &EthereumAccountV1, balance: u64) -> ProgramResult {
-    let v2 = EthereumAccount::from_v1(v1, balance)?;
-    dbg!(&v2);
-    Ok(())
 }
 
 #[allow(clippy::unnecessary_wraps)]

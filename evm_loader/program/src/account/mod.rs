@@ -314,7 +314,7 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
 #[deprecated]
 #[allow(deprecated)]
 impl<'a> EthereumAccount<'a> {
-    pub fn from_v1(v1: &EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
+    pub fn convert_from_v1(v1: &EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
         let null = Pubkey::new_from_array([0_u8; 32]);
 
         let data = ether_account::Data {
