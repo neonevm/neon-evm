@@ -40,9 +40,10 @@ const TAG_STORAGE: u8 = 30;
 const TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STORAGE: u8 = 5;
 
-
+#[deprecated]
 #[allow(deprecated)]
 pub type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1>;
+
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
 pub type Storage<'a> = AccountData<'a, storage::Data>;
@@ -147,6 +148,31 @@ where
         data.pack(&mut parts.data);
 
         parts.remaining.fill(0);
+        let extension = E::unpack(&data, parts.remaining)?;
+        let extension = ManuallyDrop::new(extension);
+
+        Ok(Self { dirty: false, data, extension, info })
+    }
+
+    #[deprecated]
+    pub fn reinit(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
+        if !info.is_writable {
+            return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", info.key);
+        }
+
+        let rent = Rent::get()?;
+        if !rent.is_exempt(info.lamports(), info.data_len()) {
+            return Err!(ProgramError::InvalidArgument; "Account {} - is not rent exempt", info.key);
+        }
+
+        let mut parts = split_account_data(info, T::SIZE)?;
+        if *parts.tag == TAG_EMPTY {
+            return Err!(ProgramError::UninitializedAccount; "Account {} - is not initialized", info.key);
+        }
+
+        *parts.tag = T::TAG;
+        data.pack(&mut parts.data);
+
         let extension = E::unpack(&data, parts.remaining)?;
         let extension = ManuallyDrop::new(extension);
 
@@ -285,10 +311,11 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
 }
 
 /// Conversion needed for migration of accounts from V1 to the current version.
+#[deprecated]
+#[allow(deprecated)]
 impl<'a> EthereumAccount<'a> {
-    #[allow(deprecated)]
     pub fn from_v1(v1: &EthereumAccountV1<'a>, balance: u64) -> Result<EthereumAccount<'a>, ProgramError> {
-        let null = Pubkey::new(&[0_u8; 32]);
+        let null = Pubkey::new_from_array([0_u8; 32]);
 
         let data = ether_account::Data {
             address: v1.data.ether,
@@ -300,6 +327,6 @@ impl<'a> EthereumAccount<'a> {
             ro_blocked_count: v1.data.ro_blocked_cnt,
         };
 
-        EthereumAccount::init(v1.info, data)
+        EthereumAccount::reinit(v1.info, data)
     }
 }

@@ -1,4 +1,3 @@
-//use crate::account::ether_account::{DataV1, Data};
 use crate::account::{token, EthereumAccountV1, EthereumAccount};
 use crate::config::token_mint;
 
@@ -69,22 +68,26 @@ fn validate(accounts: &Accounts) -> ProgramResult {
 }
 
 fn execute(accounts: &Accounts) -> ProgramResult {
-    let v1 = &accounts.ethereum_account;
-    let balance = accounts.token_balance_account.amount;
+    convert_ether_account(&accounts.ethereum_account,
+                          accounts.token_balance_account.amount)?;
+
+    transfer_tokens_to_pool()?;
+
+    delete_token_account()
+}
+
+fn convert_ether_account(v1: &EthereumAccountV1, balance: u64) -> ProgramResult {
     let v2 = EthereumAccount::from_v1(v1, balance)?;
     dbg!(&v2);
-
-    transfer_tokens_to_pool();
-
-    delete_token_account();
-
     Ok(())
 }
 
-const fn transfer_tokens_to_pool() {
-    //
+#[allow(clippy::unnecessary_wraps)]
+const fn transfer_tokens_to_pool() -> ProgramResult {
+    Ok(())
 }
 
-const fn delete_token_account() {
-    //
+#[allow(clippy::unnecessary_wraps)]
+const fn delete_token_account() -> ProgramResult {
+    Ok(())
 }

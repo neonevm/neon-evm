@@ -1,4 +1,4 @@
-use log::{error, info, debug};
+use log::{info, debug};
 
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -13,38 +13,28 @@ use solana_cli::{
 
 use spl_associated_token_account::get_associated_token_address;
 
-use evm::{H160};
-
 use evm_loader::config::token_mint;
 
 use crate::{
     Config,
-    NeonCliError,
     NeonCliResult,
-    make_solana_program_address,
 };
 
 /// Executes subcommand `migrate-account`.
 #[allow(clippy::unnecessary_wraps)]
 pub fn execute(
     config: &Config,
-    ether_address: &H160,
+    ether_pubkey: &Pubkey,
 ) -> NeonCliResult {
-    let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-
-    let ether_account = config.rpc_client.get_account(&ether_pubkey)
-        .map_err(|e| {
-            error!("{}", e);
-            NeonCliError::AccountNotFoundAtAddress(*ether_address)
-        })?;
+    let ether_account = config.rpc_client.get_account(ether_pubkey)?;
     dbg!(ether_account);
 
-    let ether_token_pubkey = get_associated_token_address(&ether_pubkey, &token_mint::id());
+    let ether_token_pubkey = get_associated_token_address(ether_pubkey, &token_mint::id());
 
     let instructions = vec![
         migrate_account_instruction(
             config,
-            ether_pubkey,
+            *ether_pubkey,
             ether_token_pubkey,
     )];
 
@@ -65,8 +55,7 @@ pub fn execute(
     config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
 
     info!("{}", serde_json::json!({
-        "ether address": hex::encode(ether_address),
-        "nonce": nonce,
+        "ether pubkey": ether_pubkey,
     }));
 
     Ok(())
