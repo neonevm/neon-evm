@@ -629,7 +629,7 @@ fn main() {
                         .value_name("ETHER_PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_pubkey)
                         .help("Solana address of Ethereum account"),
                 )
         )
