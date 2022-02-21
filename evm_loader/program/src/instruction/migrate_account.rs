@@ -1,4 +1,5 @@
 use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
+use crate::config::token_mint;
 
 use spl_associated_token_account::get_associated_token_address;
 
@@ -46,9 +47,10 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.authority.key, expected_address);
     }
 
+    /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
         accounts.authority.key,
-        &crate::config::token_mint::id()
+        &token_mint::id()
     );
     if accounts.token_pool_account.info.key != &expected_pool_address {
         return Err!(ProgramError::InvalidArgument;
@@ -62,19 +64,6 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             "Account {} - is blocked",
             accounts.ethereum_account.ether);
     }
-
-    /* Need this? get_associated_token_address is a costly function...
-    let expected_token_account = get_associated_token_address(
-        accounts.ethereum_account.info.key,
-        &token_mint::id()
-    );
-    if accounts.token_balance_account.info.key != &expected_token_account {
-        return Err!(ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token Account {} associated with Ethereum address {}",
-            accounts.token_balance_account.info.key,
-            expected_token_account,
-            accounts.ethereum_account.ether);
-    }*/
 
     Ok(bump_seed)
 }

@@ -31,21 +31,16 @@ pub fn execute(
     ether_address: &H160,
 ) -> NeonCliResult {
     let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
-
-    let ether_account = config.rpc_client.get_account(&ether_pubkey)
+    config.rpc_client.get_account(&ether_pubkey)
         .map_err(|e| {
             error!("{}", e);
             NeonCliError::AccountNotFoundAtAddress(*ether_address)
         })?;
-    dbg!(ether_account);
-
-    let ether_token_pubkey = get_associated_token_address(&ether_pubkey, &token_mint::id());
 
     let instructions = vec![
         migrate_account_instruction(
             config,
             ether_pubkey,
-            ether_token_pubkey,
     )];
 
     let finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
@@ -76,11 +71,10 @@ pub fn execute(
 fn migrate_account_instruction(
     config: &Config,
     ether_pubkey: Pubkey,
-    ether_token_pubkey: Pubkey,
 ) -> Instruction {
-    let token_mint_id = evm_loader::config::token_mint::id();
     let token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
-    let token_pool_pubkey = get_associated_token_address(&token_authority, &token_mint_id);
+    let token_pool_pubkey = get_associated_token_address(&token_authority, &token_mint::id());
+    let ether_token_pubkey = get_associated_token_address(&ether_pubkey, &token_mint::id());
 
     Instruction::new_with_bincode(
         config.evm_loader,

@@ -1,5 +1,8 @@
 use evm::U256;
+
 use crate::account::{program, token, EthereumAccount};
+use crate::config::token_mint;
+
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -7,6 +10,7 @@ use solana_program::{
     pubkey::Pubkey,
     msg
 };
+
 use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
 
@@ -42,9 +46,10 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.authority.key, expected_address);
     }
 
+    /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
         accounts.authority.key,
-        &crate::config::token_mint::id()
+        &token_mint::id()
     );
     if accounts.pool.info.key != &expected_pool_address {
         return Err!(ProgramError::InvalidArgument;
@@ -87,8 +92,8 @@ fn execute(accounts: &mut Accounts, bump_seed: u8) -> ProgramResult {
     }
 
 
-    assert!(crate::config::token_mint::decimals() <= 18);
-    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+    assert!(token_mint::decimals() <= 18);
+    let additional_decimals: u32 = (18 - token_mint::decimals()).into();
 
     let deposit = U256::from(amount) * U256::from(10_u64.pow(additional_decimals));
     accounts.ethereum_account.balance = accounts.ethereum_account.balance.checked_add(deposit)
