@@ -91,6 +91,7 @@ fn migrate_account_instruction(
             AccountMeta::new(ether_pubkey, false),
             AccountMeta::new(ether_token_pubkey, false),
             AccountMeta::new(token_pool_pubkey, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
     )
 }

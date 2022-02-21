@@ -1,4 +1,4 @@
-use crate::account::{token, EthereumAccountV1, EthereumAccount};
+use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
 use crate::config::token_mint;
 
 use solana_program::{
@@ -16,6 +16,7 @@ struct Accounts<'a> {
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
+    token_program: program::Token<'a>,
 }
 
 /// Processes the migration of an Ethereum account to current version.
@@ -27,6 +28,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
         token_balance_account: token::State::from_account(&accounts[2])?,
         token_pool_account: token::State::from_account(&accounts[3])?,
+        token_program: program::Token::from_account(&accounts[4])?,
     };
 
     validate(&parsed_accounts)?;
@@ -83,36 +85,26 @@ fn execute(accounts: &Accounts) -> ProgramResult {
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
-    transfer_tokens_to_pool(
-        accounts.token_balance_account.amount,
-        &[accounts.token_balance_account.info,
-          accounts.token_pool_account.info,
-          accounts.signer],
-    )?;
+    transfer_tokens_to_pool(accounts)?;
 
     delete_token_account()
 }
 
-fn transfer_tokens_to_pool(amount: u64,
-                           accounts: &[&AccountInfo]) -> ProgramResult {
-    let source_info = accounts[0];
-    let pool_info = accounts[1];
-    let signer_info = accounts[2];
-
+fn transfer_tokens_to_pool(accounts: &Accounts) -> ProgramResult {
     let instruction = spl_token::instruction::transfer(
-        &spl_token::id(),
-        source_info.key,
-        pool_info.key,
-        signer_info.key,
+        accounts.token_program.key,
+        accounts.token_balance_account.info.key,
+        accounts.token_pool_account.info.key,
+        accounts.signer.key,
         &[],
-        amount
+        accounts.token_balance_account.amount
     )?;
 
     let account_infos: &[AccountInfo] = &[
-        signer_info.clone(),
-        source_info.clone(),
-        pool_info.clone(),
-        //token_program.clone(),
+        accounts.token_balance_account.info.clone(),
+        accounts.token_pool_account.info.clone(),
+        accounts.signer.clone(),
+        accounts.token_program.clone(),
     ];
 
     invoke(&instruction, account_infos)?;

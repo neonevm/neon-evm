@@ -145,6 +145,7 @@ pub enum EvmInstruction {
     ///   1. `[writable]` Ether account to migrate.
     ///   2. `[writable]` NEON token account associated with the ether account.
     ///   3. `[writable]` NEON token pool account.
+    ///   4. `[]` SPL Token program id.
     MigrateAccount,
 }
 
