@@ -5,6 +5,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     program_error::ProgramError,
     pubkey::Pubkey,
+    msg
 };
 use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
@@ -19,7 +20,7 @@ struct Accounts<'a> {
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
-    solana_program::msg!("Instruction: Deposit");
+    msg!("Instruction: Deposit");
 
     let mut parsed_accounts = Accounts {
         source: token::State::from_account(&accounts[0])?,

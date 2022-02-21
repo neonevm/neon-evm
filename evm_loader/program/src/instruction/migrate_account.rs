@@ -9,7 +9,7 @@ use solana_program::{
     msg
 };
 
-use solana_program::program::invoke;
+use solana_program::program::invoke_signed;
 
 struct Accounts<'a> {
     signer: &'a AccountInfo<'a>,
@@ -32,7 +32,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     };
 
     validate(&parsed_accounts)?;
-    execute(&parsed_accounts)?;
+    execute(program_id, &parsed_accounts)?;
 
     Ok(())
 }
@@ -80,17 +80,20 @@ fn validate(accounts: &Accounts) -> ProgramResult {
     Ok(())
 }
 
-fn execute(accounts: &Accounts) -> ProgramResult {
+fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
-    transfer_tokens_to_pool(accounts)?;
+    transfer_tokens_to_pool(program_id, accounts)?;
 
     delete_token_account()
 }
 
-fn transfer_tokens_to_pool(accounts: &Accounts) -> ProgramResult {
+fn transfer_tokens_to_pool(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
+    let (_expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
+    let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
+
     let instruction = spl_token::instruction::transfer(
         accounts.token_program.key,
         accounts.token_balance_account.info.key,
@@ -107,7 +110,8 @@ fn transfer_tokens_to_pool(accounts: &Accounts) -> ProgramResult {
         accounts.token_program.clone(),
     ];
 
-    invoke(&instruction, account_infos)?;
+    invoke_signed(&instruction, account_infos, signers_seeds)?;
+
     Ok(())
 }
 
