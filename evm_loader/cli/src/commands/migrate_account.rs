@@ -31,6 +31,8 @@ pub fn execute(
     ether_address: &H160,
 ) -> NeonCliResult {
     let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
+
+    // Check existence of ether account
     config.rpc_client.get_account(&ether_pubkey)
         .map_err(|e| {
             error!("{}", e);
