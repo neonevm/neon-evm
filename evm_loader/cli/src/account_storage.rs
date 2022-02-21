@@ -469,7 +469,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         trace!("sysvarrent: {:?}", rent::id());
 
         let assoc_token_prog_id = spl_associated_token_account::id();
-        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new_readonly(assoc_token_prog_id, false));
+        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new(assoc_token_prog_id, false));
 
         trace!("assoctokenprogid: {:?}", assoc_token_prog_id);
 
