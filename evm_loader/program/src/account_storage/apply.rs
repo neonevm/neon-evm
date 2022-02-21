@@ -82,7 +82,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if !withdrawals.is_empty() {
-            self.apply_withdrawals(withdrawals, operator, system_program)?;
+            self.apply_withdrawals(withdrawals, operator)?;
         }
 
         if !applies.is_empty() {
@@ -280,8 +280,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
     fn apply_withdrawals(&mut self,
                          withdrawals: Vec<Withdraw>,
-                         operator: &Operator<'a>,
-                         system_program: &program::System<'a>) -> Result<(), ProgramError> {
+                         operator: &Operator<'a>) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
 
         let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
@@ -306,7 +305,6 @@ impl<'a> ProgramAccountStorage<'a> {
                     dest_neon.clone(),
                     self.solana_accounts[&withdraw.dest].clone(),
                     self.solana_accounts[&crate::config::token_mint::id()].clone(),
-                    (*system_program).clone(),
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&rent::id()].clone(),
                     self.solana_accounts[&spl_associated_token_account::id()].clone(),
@@ -325,7 +323,6 @@ impl<'a> ProgramAccountStorage<'a> {
             )?;
 
             let account_infos: &[AccountInfo] = &[
-                //(**operator).clone(),
                 self.solana_accounts[&pool_address].clone(),
                 dest_neon.clone(),
                 self.solana_accounts[&authority].clone(),

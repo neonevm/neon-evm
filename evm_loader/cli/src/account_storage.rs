@@ -462,7 +462,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         solana_accounts.entry(rent::id()).or_insert_with(|| AccountMeta::new_readonly(rent::id(), false));
 
         let assoc_token_prog_id = spl_associated_token_account::id();
-        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new(assoc_token_prog_id, false));
+        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new_readonly(assoc_token_prog_id, false));
 
         for withdraw in withdrawals {
             solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new_readonly(withdraw.dest, false));
