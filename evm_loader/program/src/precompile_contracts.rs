@@ -348,12 +348,18 @@ pub fn neon_token<'a, B: AccountStorage>(
         let destination = Pubkey::new_from_array(*destination);
 
         if amount_alan % GALAN != U256::from(0) {
+            if let Some(error) = revert_transfer(context, state) {
+                return Capture::Exit(error);
+            }
             let revert_message = b"neon_token: amount must be divisible by 1 billion".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
         let amount_galan: U256 = amount_alan / GALAN;
         if !state.withdraw(source, destination, amount_galan) {
+            if let Some(error) = revert_transfer(context, state) {
+                return Capture::Exit(error);
+            }
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
@@ -366,6 +372,21 @@ pub fn neon_token<'a, B: AccountStorage>(
 
     debug_print!("neon_token UNKNOWN");
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+}
+
+fn revert_transfer<'a, B: AccountStorage>(context: &evm::Context, state: &mut ExecutorState<'a, B>)
+    -> Option<(ExitReason, Vec<u8>)>{
+    let back_transfer = evm::Transfer {
+        source: context.address,
+        target: context.caller,
+        value: context.apparent_value
+    };
+    if state.transfer(&back_transfer).is_err() {
+        let revert_message = b"neon_token: failed to revert transfer".to_vec();
+        return Some((ExitReason::Fatal(evm::ExitFatal::UnhandledInterrupt), revert_message));
+    }
+
+    return None;
 }
 
 // QueryAccount method ids:
