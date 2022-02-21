@@ -17,7 +17,7 @@ struct Accounts<'a> {
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
-    authority: &'a AccountInfo<'a>,
+    authority_info: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
 }
 
@@ -29,7 +29,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[0])?,
         token_balance_account: token::State::from_account(&accounts[1])?,
         token_pool_account: token::State::from_account(&accounts[2])?,
-        authority: &accounts[3],
+        authority_info: &accounts[3],
         token_program: program::Token::from_account(&accounts[4])?,
     };
 
@@ -41,15 +41,15 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
-    if accounts.authority.key != &expected_address {
+    if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected PDA address {}",
-            accounts.authority.key, expected_address);
+            accounts.authority_info.key, expected_address);
     }
 
     /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
-        accounts.authority.key,
+        accounts.authority_info.key,
         &token_mint::id()
     );
     if accounts.token_pool_account.info.key != &expected_pool_address {
@@ -85,7 +85,7 @@ fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult 
         accounts.token_program.key,
         accounts.token_balance_account.info.key,
         accounts.token_pool_account.info.key,
-        accounts.authority.key,
+        accounts.authority_info.key,
         &[],
         accounts.token_balance_account.amount
     )?;
@@ -93,7 +93,7 @@ fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult 
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
         accounts.token_pool_account.info.clone(),
-        accounts.authority.clone(),
+        accounts.authority_info.clone(),
         accounts.token_program.clone(),
     ];
 

@@ -18,10 +18,9 @@ struct Accounts<'a> {
     source: token::State<'a>,
     pool: token::State<'a>,
     ethereum_account: EthereumAccount<'a>,
-    authority: &'a AccountInfo<'a>,
+    authority_info: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
 }
-
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
     msg!("Instruction: Deposit");
@@ -30,7 +29,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         source: token::State::from_account(&accounts[0])?,
         pool: token::State::from_account(&accounts[1])?,
         ethereum_account: EthereumAccount::from_account(program_id, &accounts[2])?,
-        authority: &accounts[3],
+        authority_info: &accounts[3],
         token_program: program::Token::from_account(&accounts[4])?,
     };
 
@@ -40,15 +39,15 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
-    if accounts.authority.key != &expected_address {
+    if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected PDA address {}",
-            accounts.authority.key, expected_address);
+            accounts.authority_info.key, expected_address);
     }
 
     /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
-        accounts.authority.key,
+        accounts.authority_info.key,
         &token_mint::id()
     );
     if accounts.pool.info.key != &expected_pool_address {
@@ -57,7 +56,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.pool.info.key, expected_pool_address);
     }
 
-    if !accounts.source.delegate.contains(accounts.authority.key) {
+    if !accounts.source.delegate.contains(accounts.authority_info.key) {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected tokens delegated to authority account",
             accounts.source.info.key);
@@ -76,7 +75,7 @@ fn execute(accounts: &mut Accounts, bump_seed: u8) -> ProgramResult {
             accounts.token_program.key,
             accounts.source.info.key,
             accounts.pool.info.key,
-            accounts.authority.key,
+            accounts.authority_info.key,
             &[],
             amount
         )?;
@@ -84,7 +83,7 @@ fn execute(accounts: &mut Accounts, bump_seed: u8) -> ProgramResult {
         let account_infos: &[AccountInfo] = &[
             accounts.source.info.clone(),
             accounts.pool.info.clone(),
-            accounts.authority.clone(),
+            accounts.authority_info.clone(),
             accounts.token_program.clone(),
         ];
 
