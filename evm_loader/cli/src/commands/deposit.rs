@@ -12,6 +12,8 @@ use solana_cli::{
     checks::{check_account_for_fee},
 };
 
+use spl_associated_token_account::get_associated_token_address;
+
 use evm::{H160};
 
 use crate::{
@@ -43,8 +45,7 @@ pub fn execute(
 
     let token_mint_id = evm_loader::config::token_mint::id();
 
-    let signer_token_pubkey =
-        spl_associated_token_account::get_associated_token_address(&config.signer.pubkey(), &token_mint_id);
+    let signer_token_pubkey = get_associated_token_address(&config.signer.pubkey(), &token_mint_id);
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
 
     instructions.push(spl_approve_instruction(
@@ -54,8 +55,7 @@ pub fn execute(
         amount,
     ));
 
-    let evm_pool_pubkey =
-        spl_associated_token_account::get_associated_token_address(&evm_token_authority, &token_mint_id);
+    let evm_pool_pubkey = get_associated_token_address(&evm_token_authority, &token_mint_id);
 
     instructions.push(deposit_instruction(
         config,
