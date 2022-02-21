@@ -449,12 +449,9 @@ impl<'a> EmulatorAccountStorage<'a> {
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
         solana_accounts.entry(*token_mint).or_insert_with(|| AccountMeta::new(*token_mint, false));
-        trace!("Token program: {:?}", *token_mint);
 
         let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);
         solana_accounts.entry(authority).or_insert_with(|| AccountMeta::new_readonly(authority, false));
-
-        trace!("Deposit account: {:?}", authority);
 
         let pool_address = get_associated_token_address(
             &authority,
@@ -462,22 +459,14 @@ impl<'a> EmulatorAccountStorage<'a> {
         );
         solana_accounts.entry(pool_address).or_insert_with(|| AccountMeta::new(pool_address, false));
 
-        trace!("Pool account: {:?}", pool_address);
-
         solana_accounts.entry(rent::id()).or_insert_with(|| AccountMeta::new_readonly(rent::id(), false));
-
-        trace!("sysvarrent: {:?}", rent::id());
 
         let assoc_token_prog_id = spl_associated_token_account::id();
         solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new(assoc_token_prog_id, false));
 
-        trace!("assoctokenprogid: {:?}", assoc_token_prog_id);
-
         for withdraw in withdrawals {
             solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new_readonly(withdraw.dest, false));
-            trace!("withdraw.dest: {:?}", withdraw.dest);
             solana_accounts.entry(withdraw.dest_neon).or_insert_with(|| AccountMeta::new(withdraw.dest_neon, false));
-            trace!("withdraw.dest_neon: {:?}", withdraw.dest_neon);
         }
     }
 

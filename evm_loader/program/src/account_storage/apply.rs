@@ -284,25 +284,16 @@ impl<'a> ProgramAccountStorage<'a> {
                          system_program: &program::System<'a>) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
 
-        debug_print!("operator: {:?}", operator.key);
-
         let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
-        debug_print!("deposit_authority {:?}", authority);
 
         let pool_address = get_associated_token_address(
             &authority,
             &crate::config::token_mint::id()
         );
 
-        debug_print!("deposit_pool_address {:?}", pool_address);
-
         let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
         for withdraw in withdrawals {
-
-            debug_print!("destination {:?}", withdraw.dest);
-            debug_print!("dest_neon {:?}", withdraw.dest_neon);
-
             let dest_neon = self.solana_accounts[&withdraw.dest_neon];
 
             if dest_neon.data_is_empty() {
