@@ -24,7 +24,7 @@ def process(pubkey, account):
 
     data = base64.b64decode(data[0])
     if len(data) < 21:
-        print("Non-Ethereum account: data size is too small")
+        print("Non-Ethereum account: data size is too small", len(data))
         return result
 
     tag = data[0]
@@ -36,6 +36,8 @@ def process(pubkey, account):
     elif tag == 10:
         print("Ethereum account V2:", address)
         result = (0, 1)
+    else:
+        print("Non-Ethereum account with tag", tag)
 
     return result
 
@@ -48,6 +50,7 @@ count = (0, 0)
 for account in response["result"]:
     r = process(account["pubkey"], account["account"])
     count = (count[0] + r[0], count[1] + r[1])
+
 print()
 print("Total Ethereum accounts V1:", count[0])
 print("Total Ethereum accounts V2:", count[1])

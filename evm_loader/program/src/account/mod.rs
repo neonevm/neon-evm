@@ -155,7 +155,7 @@ where
     }
 
     #[deprecated]
-    pub fn reinit(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
+    fn reinit(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
         if !info.is_writable {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", info.key);
         }

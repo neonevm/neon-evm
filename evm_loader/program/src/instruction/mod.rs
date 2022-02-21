@@ -131,7 +131,7 @@ pub enum EvmInstruction {
     /// Accounts expected by this instruction:
     ///
     ///   0. `[writable]` NEON source account.
-    ///   1. `[writable]` NEON bank (destination) account.
+    ///   1. `[writable]` NEON pool (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
     ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
     ///   5. `[]` SPL Token program id.

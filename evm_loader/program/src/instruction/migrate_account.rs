@@ -5,8 +5,11 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     program_error::ProgramError,
-    pubkey::Pubkey, msg
+    pubkey::Pubkey,
+    msg
 };
+
+use solana_program::program::invoke;
 
 use spl_associated_token_account::get_associated_token_address;
 
@@ -27,7 +30,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     };
 
     validate(&parsed_accounts)?;
-    execute(&parsed_accounts)?;
+    execute(program_id, &parsed_accounts)?;
 
     Ok(())
 }
@@ -67,18 +70,48 @@ fn validate(accounts: &Accounts) -> ProgramResult {
     Ok(())
 }
 
-fn execute(accounts: &Accounts) -> ProgramResult {
+fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
-    transfer_tokens_to_pool()?;
+    transfer_tokens_to_pool(
+        program_id,
+        accounts.token_balance_account.amount,
+        &[accounts.token_balance_account.info,
+          accounts.signer],
+    )?;
 
     delete_token_account()
 }
 
-#[allow(clippy::unnecessary_wraps)]
-const fn transfer_tokens_to_pool() -> ProgramResult {
+fn transfer_tokens_to_pool(program_id: &Pubkey,
+                           amount: u64,
+                           accounts: &[&AccountInfo]) -> ProgramResult {
+    let source_info = accounts[0];
+    let signer_info = accounts[1];
+    let token_mint_id = crate::config::token_mint::id();
+    let token_authority = Pubkey::find_program_address(&[b"Deposit"], program_id).0;
+    let pool_pubkey =
+        spl_associated_token_account::get_associated_token_address(&token_authority, &token_mint_id);
+
+    let instruction = spl_token::instruction::transfer(
+        &spl_token::id(),
+        source_info.key,
+        &pool_pubkey,
+        signer_info.key,
+        &[],
+        amount
+    )?;
+
+    let account_infos: &[AccountInfo] = &[
+        source_info.clone(),
+        //pool.clone(),
+        signer_info.clone(),
+        //token_program.clone(),
+    ];
+
+    invoke(&instruction, account_infos)?;
     Ok(())
 }
 
