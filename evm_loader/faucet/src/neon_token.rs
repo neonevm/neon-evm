@@ -18,7 +18,7 @@ pub struct Airdrop {
 }
 
 /// Processes the airdrop: sends needed transactions into Solana.
-pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
+pub async fn airdrop(id: &ReqId, params: Airdrop) -> Result<()> {
     info!("{} Processing NEON {:?}...", id, params);
 
     let limit = if !params.in_fractions {
