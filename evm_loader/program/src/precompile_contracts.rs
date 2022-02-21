@@ -355,8 +355,8 @@ pub fn neon_token<'a, B: AccountStorage>(
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        let amount_galan: U256 = amount_alan / GALAN;
-        if !state.withdraw(source, destination, amount_galan) {
+        let amount_giga_alan: U256 = amount_alan / GALAN;
+        if !state.withdraw(source, destination, amount_giga_alan) {
             if let Some(error) = revert_transfer(context, state) {
                 return Capture::Exit(error);
             }
