@@ -448,7 +448,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
         let mut solana_accounts = self.solana_accounts.borrow_mut();
 
-        solana_accounts.entry(*token_mint).or_insert_with(|| AccountMeta::new_readonly(*token_mint, false));
+        solana_accounts.entry(*token_mint).or_insert_with(|| AccountMeta::new(*token_mint, false));
         trace!("Token program: {:?}", *token_mint);
 
         let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);

@@ -317,6 +317,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 // withdraw(bytes32)           => 8e19899e
 //--------------------------------------------------
 const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
+const GALAN: u64 = 1_000_000_000;
 
 /// Call inner `neon_token`
 #[must_use]
@@ -340,13 +341,19 @@ pub fn neon_token<'a, B: AccountStorage>(
         }
 
         let source = context.address; // caller contract
-        let amount = context.apparent_value;
+        let amount_alan = context.apparent_value;
 
         // owner of the associated token account
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-        if !state.withdraw(source, destination, amount) {
+        if amount_alan % GALAN != U256::from(0) {
+            let revert_message = b"neon_token: amount must be divisible by 1 billion".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        let amount_galan: U256 = amount_alan / GALAN;
+        if !state.withdraw(source, destination, amount_galan) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }

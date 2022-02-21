@@ -315,7 +315,6 @@ impl<'a> ProgramAccountStorage<'a> {
                     dest_neon.clone(),
                     self.solana_accounts[&withdraw.dest].clone(),
                     self.solana_accounts[&crate::config::token_mint::id()].clone(),
-                    //self.solana_accounts[&pool_address].clone(),
                     (*system_program).clone(),
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&rent::id()].clone(),
@@ -325,18 +324,17 @@ impl<'a> ProgramAccountStorage<'a> {
                 invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
             };
 
-            /*
             let transfer_instr = spl_token::instruction::transfer(
                 &spl_token::id(),
                 &pool_address,
                 &dest_neon.key,
                 &authority,
-                &[operator.key],
+                &[],
                 withdraw.amount.as_u64()
             )?;
 
             let account_infos: &[AccountInfo] = &[
-                (**operator).clone(),
+                //(**operator).clone(),
                 self.solana_accounts[&pool_address].clone(),
                 dest_neon.clone(),
                 self.solana_accounts[&authority].clone(),
@@ -344,8 +342,6 @@ impl<'a> ProgramAccountStorage<'a> {
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
-
-             */
         }
 
         Ok(())
