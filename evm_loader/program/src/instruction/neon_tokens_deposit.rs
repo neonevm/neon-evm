@@ -37,7 +37,9 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority.key != &expected_address {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected PDA address {}", accounts.authority.key, expected_address);
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected PDA address {}",
+            accounts.authority.key, expected_address);
     }
 
     let expected_pool_address = get_associated_token_address(
@@ -45,19 +47,15 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
         &crate::config::token_mint::id()
     );
     if accounts.pool.info.key != &expected_pool_address {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected Neon Token Pool {}", accounts.pool.info.key, expected_pool_address);
-    }
-
-    if accounts.source.mint != crate::config::token_mint::id() {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected Neon Token account", accounts.source.info.key);
-    }
-
-    if accounts.pool.mint != crate::config::token_mint::id() {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected Neon Token account", accounts.pool.info.key);
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token Pool {}",
+            accounts.pool.info.key, expected_pool_address);
     }
 
     if !accounts.source.delegate.contains(accounts.authority.key) {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected tokens delegated to authority account", accounts.source.info.key);
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected tokens delegated to authority account",
+            accounts.source.info.key);
     }
 
     Ok(bump_seed)

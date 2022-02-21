@@ -1,5 +1,6 @@
 use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
-use crate::config::token_mint;
+
+use spl_associated_token_account::get_associated_token_address;
 
 use solana_program::{
     account_info::AccountInfo,
@@ -12,10 +13,10 @@ use solana_program::{
 use solana_program::program::invoke_signed;
 
 struct Accounts<'a> {
-    signer: &'a AccountInfo<'a>,
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
+    authority: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
 }
 
@@ -24,24 +25,35 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     msg!("Instruction: MigrateAccount");
 
     let parsed_accounts = Accounts {
-        signer: &accounts[0],
-        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
-        token_balance_account: token::State::from_account(&accounts[2])?,
-        token_pool_account: token::State::from_account(&accounts[3])?,
+        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[0])?,
+        token_balance_account: token::State::from_account(&accounts[1])?,
+        token_pool_account: token::State::from_account(&accounts[2])?,
+        authority: &accounts[3],
         token_program: program::Token::from_account(&accounts[4])?,
     };
 
-    validate(&parsed_accounts)?;
-    execute(program_id, &parsed_accounts)?;
+    let bump_seed = validate(program_id, &parsed_accounts)?;
+    execute(&parsed_accounts, bump_seed)?;
 
     Ok(())
 }
 
-fn validate(accounts: &Accounts) -> ProgramResult {
-    if !accounts.signer.is_signer {
+fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
+    let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
+    if accounts.authority.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
-            "Account {} - expected signer",
-            accounts.signer.key);
+            "Account {} - expected PDA address {}",
+            accounts.authority.key, expected_address);
+    }
+
+    let expected_pool_address = get_associated_token_address(
+        accounts.authority.key,
+        &crate::config::token_mint::id()
+    );
+    if accounts.token_pool_account.info.key != &expected_pool_address {
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token Pool {}",
+            accounts.token_pool_account.info.key, expected_pool_address);
     }
 
     if accounts.ethereum_account.rw_blocked_acc.is_some()
@@ -51,20 +63,7 @@ fn validate(accounts: &Accounts) -> ProgramResult {
             accounts.ethereum_account.ether);
     }
 
-    if accounts.token_balance_account.mint != token_mint::id() {
-        return Err!(ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token account",
-            accounts.token_balance_account.info.key);
-    }
-
-    if accounts.token_pool_account.mint != token_mint::id() {
-        return Err!(ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token account",
-            accounts.token_pool_account.info.key);
-    }
-
     /* Need this? get_associated_token_address is a costly function...
-    use spl_associated_token_account::get_associated_token_address;
     let expected_token_account = get_associated_token_address(
         accounts.ethereum_account.info.key,
         &token_mint::id()
@@ -77,28 +76,27 @@ fn validate(accounts: &Accounts) -> ProgramResult {
             accounts.ethereum_account.ether);
     }*/
 
-    Ok(())
+    Ok(bump_seed)
 }
 
-fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
+fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
-    transfer_tokens_to_pool(program_id, accounts)?;
+    transfer_tokens_to_pool(accounts, bump_seed)?;
 
     delete_token_account()
 }
 
-fn transfer_tokens_to_pool(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
-    let (_expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
+fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
     let instruction = spl_token::instruction::transfer(
         accounts.token_program.key,
         accounts.token_balance_account.info.key,
         accounts.token_pool_account.info.key,
-        accounts.signer.key,
+        accounts.authority.key,
         &[],
         accounts.token_balance_account.amount
     )?;
@@ -106,7 +104,7 @@ fn transfer_tokens_to_pool(program_id: &Pubkey, accounts: &Accounts) -> ProgramR
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
         accounts.token_pool_account.info.clone(),
-        accounts.signer.clone(),
+        accounts.authority.clone(),
         accounts.token_program.clone(),
     ];
 

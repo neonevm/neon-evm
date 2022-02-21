@@ -78,23 +78,18 @@ fn migrate_account_instruction(
     ether_pubkey: Pubkey,
     ether_token_pubkey: Pubkey,
 ) -> Instruction {
-    use std::str::FromStr as _;
-
     let token_mint_id = evm_loader::config::token_mint::id();
     let token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
     let token_pool_pubkey = get_associated_token_address(&token_authority, &token_mint_id);
-    dbg!(token_pool_pubkey);
-    let token_pool_pubkey = Pubkey::from_str("3oRkCALp2mqaaaRefbuaFZBXaevv8F2efHWgi7yLWUak").unwrap();
-    dbg!(token_pool_pubkey);
 
     Instruction::new_with_bincode(
         config.evm_loader,
         &(26_u8),
         vec![
-            AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new(ether_pubkey, false),
             AccountMeta::new(ether_token_pubkey, false),
             AccountMeta::new(token_pool_pubkey, false),
+            AccountMeta::new_readonly(token_authority, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
     )
