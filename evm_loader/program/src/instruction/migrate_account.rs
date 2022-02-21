@@ -11,12 +11,11 @@ use solana_program::{
 
 use solana_program::program::invoke;
 
-use spl_associated_token_account::get_associated_token_address;
-
 struct Accounts<'a> {
     signer: &'a AccountInfo<'a>,
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
+    token_pool_account: token::State<'a>,
 }
 
 /// Processes the migration of an Ethereum account to current version.
@@ -27,10 +26,11 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         signer: &accounts[0],
         ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
         token_balance_account: token::State::from_account(&accounts[2])?,
+        token_pool_account: token::State::from_account(&accounts[3])?,
     };
 
     validate(&parsed_accounts)?;
-    execute(program_id, &parsed_accounts)?;
+    execute(&parsed_accounts)?;
 
     Ok(())
 }
@@ -55,6 +55,14 @@ fn validate(accounts: &Accounts) -> ProgramResult {
             accounts.token_balance_account.info.key);
     }
 
+    if accounts.token_pool_account.mint != token_mint::id() {
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token account",
+            accounts.token_pool_account.info.key);
+    }
+
+    /* Need this? get_associated_token_address is a costly function...
+    use spl_associated_token_account::get_associated_token_address;
     let expected_token_account = get_associated_token_address(
         accounts.ethereum_account.info.key,
         &token_mint::id()
@@ -65,49 +73,45 @@ fn validate(accounts: &Accounts) -> ProgramResult {
             accounts.token_balance_account.info.key,
             expected_token_account,
             accounts.ethereum_account.ether);
-    }
+    }*/
 
     Ok(())
 }
 
-fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
+fn execute(accounts: &Accounts) -> ProgramResult {
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
     transfer_tokens_to_pool(
-        program_id,
         accounts.token_balance_account.amount,
         &[accounts.token_balance_account.info,
+          accounts.token_pool_account.info,
           accounts.signer],
     )?;
 
     delete_token_account()
 }
 
-fn transfer_tokens_to_pool(program_id: &Pubkey,
-                           amount: u64,
+fn transfer_tokens_to_pool(amount: u64,
                            accounts: &[&AccountInfo]) -> ProgramResult {
     let source_info = accounts[0];
-    let signer_info = accounts[1];
-    let token_mint_id = crate::config::token_mint::id();
-    let token_authority = Pubkey::find_program_address(&[b"Deposit"], program_id).0;
-    let pool_pubkey =
-        spl_associated_token_account::get_associated_token_address(&token_authority, &token_mint_id);
+    let pool_info = accounts[1];
+    let signer_info = accounts[2];
 
     let instruction = spl_token::instruction::transfer(
         &spl_token::id(),
         source_info.key,
-        &pool_pubkey,
+        pool_info.key,
         signer_info.key,
         &[],
         amount
     )?;
 
     let account_infos: &[AccountInfo] = &[
-        source_info.clone(),
-        //pool.clone(),
         signer_info.clone(),
+        source_info.clone(),
+        pool_info.clone(),
         //token_program.clone(),
     ];
 

@@ -78,6 +78,11 @@ fn migrate_account_instruction(
     ether_pubkey: Pubkey,
     ether_token_pubkey: Pubkey,
 ) -> Instruction {
+    let token_mint_id = evm_loader::config::token_mint::id();
+    let token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
+    let token_pool_pubkey =
+        spl_associated_token_account::get_associated_token_address(&token_authority, &token_mint_id);
+
     Instruction::new_with_bincode(
         config.evm_loader,
         &(26_u8),
@@ -85,6 +90,7 @@ fn migrate_account_instruction(
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new(ether_pubkey, false),
             AccountMeta::new(ether_token_pubkey, false),
+            AccountMeta::new(token_pool_pubkey, false),
         ],
     )
 }

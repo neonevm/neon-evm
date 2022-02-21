@@ -130,8 +130,8 @@ pub enum EvmInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   0. `[writable]` NEON source account.
-    ///   1. `[writable]` NEON pool (destination) account.
+    ///   0. `[writable]` NEON token source account.
+    ///   1. `[writable]` NEON token pool (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
     ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
     ///   5. `[]` SPL Token program id.
@@ -143,7 +143,8 @@ pub enum EvmInstruction {
     ///
     ///   0. `[writable, signer]` Signer account.
     ///   1. `[writable]` Ether account to migrate.
-    ///   2. `[writable]` NEON token account.
+    ///   2. `[writable]` NEON token account associated with the ether account.
+    ///   3. `[writable]` NEON token pool account.
     MigrateAccount,
 }
 
