@@ -59,7 +59,7 @@ pub fn do_begin<'a>(
 
 
     let (results, used_gas) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(trx.gas_limit.as_u64(), account_storage));
+        let executor_substate = Box::new(ExecutorSubstate::new(account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(caller, executor_state);
 
@@ -102,13 +102,15 @@ fn execute_steps(
 
     match executor.execute_n_steps(step_count) {
         Ok(_) => { // step limit
-            let used_gas = executor.gasometer().total_used_gas() / 2;
+            // let used_gas = executor.gasometer().total_used_gas() / 2;
+            let used_gas = U256::from(0_u64); // TODO
             executor.save_into(storage);
 
-            (None, U256::from(used_gas))
+            (None, used_gas)
         },
         Err((result, reason)) => { // transaction complete
-            let used_gas = executor.gasometer().used_gas();
+            // let used_gas = executor.gasometer().used_gas();
+            let used_gas = U256::from(0_u64); // TODO
 
             let apply_state = if reason.is_succeed() {
                 Some(executor.into_state().deconstruct())
@@ -116,7 +118,7 @@ fn execute_steps(
                 None
             };
 
-            (Some((result, reason, apply_state)), U256::from(used_gas))
+            (Some((result, reason, apply_state)), used_gas)
         }
     }
 }

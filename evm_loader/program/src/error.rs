@@ -22,6 +22,8 @@ pub enum EvmLoaderError {
     UnauthorizedOperator,
     #[error("Storage Account is finalized")]
     StorageAccountFinalized,
+    #[error("gas_limit exceeded")]
+    OutOfGas,
 }
 
 impl From<EvmLoaderError> for ProgramError {

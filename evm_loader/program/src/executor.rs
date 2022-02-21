@@ -1,9 +1,14 @@
+//! # Neon EVM Executor
+//!
+//! Executor is a struct that hooks gasometer and the EVM core together.
+//! It also handles the call stacks in EVM.
+
 use std::convert::Infallible;
 use std::mem;
 
 use evm::{
     Capture, ExitError, ExitFatal, ExitReason,
-    gasometer, H160, H256, Handler, Resolve, Valids, U256,
+    H160, H256, Handler, Resolve, Valids, U256,
 };
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
@@ -22,9 +27,6 @@ fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
-const fn l64(gas: u64) -> u64 {
-    gas - gas / 64
-}
 
 #[derive(Debug)]
 struct CallInterrupt {
@@ -32,7 +34,6 @@ struct CallInterrupt {
     transfer: Option<evm::Transfer>,
     code_address: H160,
     input: Vec<u8>,
-    gas_limit: u64,
     is_static: bool,
 }
 
@@ -42,7 +43,6 @@ struct CreateInterrupt {
     transfer: Option<evm::Transfer>,
     address: H160,
     init_code: Vec<u8>,
-    gas_limit: u64,
 }
 
 #[derive(Debug)]
@@ -53,6 +53,7 @@ enum RuntimeApply{
     Exit(ExitReason),
 }
 
+/// Stack-based executor.
 struct Executor<'a, B: AccountStorage> {
     origin: H160,
     state: ExecutorState<'a, B>,
@@ -121,7 +122,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::from(self.state.metadata().gasometer().gas()) // U256::one()
+        U256::one() //U256::from(self.state.metadata().gasometer().gas())
     }
 
     fn gas_price(&self) -> U256 {
@@ -219,9 +220,9 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        target_gas: Option<u64>,
+        _target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
-        debug_print!("create target_gas={:?}", target_gas);
+        debug_print!("create");
 
         if self.state.metadata().is_static() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), None, Vec::new()))
@@ -246,30 +247,9 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             scheme,
             value,
             init_code: &init_code,
-            target_gas,
+            _target_gas,
         });
 
-        let after_gas = if CONFIG.call_l64_after_gas {
-            if CONFIG.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), None, Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-
-        let gas_limit = core::cmp::min(target_gas, after_gas);
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), None, Vec::new()));
-        }
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
@@ -292,7 +272,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
 
         let transfer = Some(evm::Transfer { source: caller, target: address, value });
 
-        Capture::Trap(CreateInterrupt{context, transfer, address, init_code, gas_limit})
+        Capture::Trap(CreateInterrupt{context, transfer, address, init_code})
     }
 
     fn call(
@@ -300,7 +280,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        target_gas: Option<u64>,
+        _target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
@@ -308,12 +288,12 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             code_address,
             transfer: &transfer,
             input: &input,
-            target_gas,
+            _target_gas,
             is_static,
             context: &context,
         });
 
-        debug_print!("call target_gas={:?}", target_gas);
+        debug_print!("call");
 
         if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
@@ -330,77 +310,32 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        // These parameters should be true for call from another contract
-        let take_l64 = true;
-        let take_stipend = true;
-
-        let after_gas = if take_l64 && CONFIG.call_l64_after_gas {
-            if CONFIG.estimate {
-                let initial_after_gas = self.state.metadata().gasometer().gas();
-                let diff = initial_after_gas - l64(initial_after_gas);
-                if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(diff) {
-                    return Capture::Exit((e.into(), Vec::new()));
-                }
-                self.state.metadata().gasometer().gas()
-            } else {
-                l64(self.state.metadata().gasometer().gas())
-            }
-        } else {
-            self.state.metadata().gasometer().gas()
-        };
-
-        let target_gas = target_gas.unwrap_or(after_gas);
-        let mut gas_limit = core::cmp::min(target_gas, after_gas);
-
-        if let Err(e) = self.state.metadata_mut().gasometer_mut().record_cost(gas_limit) {
-            return Capture::Exit((e.into(), Vec::new()));
-        }
-
-        if let Some(transfer) = transfer.as_ref() {
-            if take_stipend && transfer.value != U256::zero() {
-                gas_limit = gas_limit.saturating_add(CONFIG.call_stipend);
-            }
-        }
-
-        Capture::Trap(CallInterrupt{context, transfer, code_address, input, gas_limit, is_static})
+        Capture::Trap(CallInterrupt{context, transfer, code_address, input, is_static})
     }
 
     fn pre_validate(
         &mut self,
-        context: &evm::Context,
-        opcode: evm::Opcode,
-        stack: &evm::Stack,
+        _context: &evm::Context,
+        _opcode: evm::Opcode,
+        _stack: &evm::Stack,
     ) -> Result<(), ExitError> {
-        if let Some(cost) = gasometer::static_opcode_cost(opcode) {
-            self.state
-                .metadata_mut()
-                .gasometer_mut()
-                .record_cost(cost)?;
-        } else {
-            let is_static = self.state.metadata().is_static();
-            let (gas_cost, memory_cost) = gasometer::dynamic_opcode_cost(
-                context.address,
-                opcode,
-                stack,
-                is_static,
-                self,
-            )?;
-
-            self.state.metadata_mut().gasometer_mut().record_dynamic_cost(gas_cost, memory_cost)?;
-        }
-
         Ok(())
     }
 }
 
+/// Represents reason of an Ethereum transaction.
+/// It can be creation of a smart contract or a call of it's function.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub enum CreateReason {
+    /// Call of a function of smart contract
     Call,
+    /// Create (deploy) a smart contract on specified address
     Create(H160),
 }
 
 type RuntimeInfo = (evm::Runtime, CreateReason);
 
+/// Represents a virtual machine.
 pub struct Machine<'a, B: AccountStorage> {
     executor: Executor<'a, B>,
     runtime: Vec<RuntimeInfo>,
@@ -408,16 +343,27 @@ pub struct Machine<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> Machine<'a, B> {
+    /// Creates instance of the Machine.
     #[must_use]
     pub fn new(origin: H160, state: ExecutorState<'a, B>) -> Self {
         let executor = Executor { origin, state };
         Self{ executor, runtime: Vec::new(), steps_executed: 0 }
     }
 
+    /// Serializes and saves state of runtime and executor into a storage account.
+    ///
+    /// # Panics
+    ///
+    /// Panics if account is invalid or any serialization error occurs.
     pub fn save_into(&self, storage: &mut crate::account::Storage) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
+    /// Deserializes and restores state of runtime and executor from a storage account.
+    ///
+    /// # Panics
+    ///
+    /// Panics if account is invalid or any deserialization error occurs.
     #[must_use]
     pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Self {
         let (runtime, substate) = storage.deserialize().unwrap();
@@ -429,38 +375,30 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Self{ executor, runtime, steps_executed: 0 }
     }
 
+    /// Begins a call of an Ethereum smart contract.
+    ///
+    /// # Errors
+    ///
+    /// May return following errors:
+    /// - `InsufficientFunds` if the caller lacks funds for the operation
     pub fn call_begin(&mut self,
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        gas_limit: u64,
+        _gas_limit: u64
     ) -> ProgramResult {
-        event!(TransactCall {
+	    event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
             data: &input,
-            gas_limit,
+            _gas_limit
         });
-        debug_print!("call_begin gas_limit={}", gas_limit);
-
-        let transaction_cost = gasometer::call_transaction_cost(&input);
-        self.executor.state.metadata_mut().gasometer_mut().record_transaction(transaction_cost)
-            .map_err(emit_exit)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-
-        let after_gas = self.executor.state.metadata().gasometer().gas();
-        let gas_limit = core::cmp::min(gas_limit, after_gas);
-
-        self.executor.state.metadata_mut().gasometer_mut().record_cost(gas_limit)
-            .map_err(emit_exit)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-
+        debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
-
-        self.executor.state.enter(gas_limit, false);
+        self.executor.state.enter(false);
         self.executor.state.touch(code_address);
 
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
@@ -479,36 +417,37 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    /// Begins a creation (deployment) of an Ethereum smart contract.
+    ///
+    /// # Errors
+    ///
+    /// May return following errors:
+    /// - `InsufficientFunds` if the caller lacks funds for the operation
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        gas_limit: u64,
+                        _gas_limit: u64,
     ) -> ProgramResult {
         event!(TransactCreate {
             caller,
             value: transfer_value,
             init_code: &code,
-            gas_limit,
+            _gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 
-        debug_print!("create_begin gas_limit={}", gas_limit);
-        let transaction_cost = gasometer::create_transaction_cost(&code);
-        self.executor.state.metadata_mut().gasometer_mut()
-            .record_transaction(transaction_cost)
-            .map_err(emit_exit)
-            .map_err(|e| E!(ProgramError::InvalidInstructionData; "ExitError={:?}", e))?;
-
+        debug_print!("create_begin");
+  
         let scheme = evm::CreateScheme::Legacy { caller };
 
-        match self.executor.create(caller, scheme, transfer_value, code, Some(gas_limit)) {
+        match self.executor.create(caller, scheme, transfer_value, code, None) {
             Capture::Exit((reason, addr, value)) => {
                 let (value, reason) = emit_exit!(value, reason);
                 return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", (reason, addr, value));
             },
             Capture::Trap(info) => {
-                self.executor.state.enter(info.gas_limit, false);
+                self.executor.state.enter(false);
 
                 self.executor.state.touch(info.address);
                 self.executor.state.reset_storage(info.address);
@@ -601,7 +540,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
-        self.executor.state.enter(interrupt.gas_limit, interrupt.is_static);
+        self.executor.state.enter(interrupt.is_static);
         self.executor.state.touch(interrupt.code_address);
 
         if let Some(transfer) = interrupt.transfer {
@@ -621,7 +560,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
     fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
         debug_print!("apply_create {:?}", interrupt);
-        self.executor.state.enter(interrupt.gas_limit, false);
+        self.executor.state.enter( false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);
         if CONFIG.create_increase_nonce {
@@ -718,6 +657,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
     }
 
+    /// Executes current program with all available steps.
+    /// # Errors
+    /// Terminates execution if a step encounteres an error.
     pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
         loop {
             if let Err(result) = self.execute_n_steps(u64::max_value()) {
@@ -726,6 +668,16 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
     }
 
+    /// Executes up to `n` steps of current path of execution.
+    ///
+    /// # Errors
+    ///
+    /// Execution may return following exit reasons:
+    /// - `StepLimitReached` if reached a step limit
+    /// - `Succeed` if has succeeded
+    /// - `Error` if returns a normal EVM error
+    /// - `Revert` if encountered an explicit revert
+    /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
         let mut steps = 0_u64;
 
@@ -745,14 +697,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    /// Returns number of executed steps.
     #[must_use]
     pub fn get_steps_executed(&self) -> u64 {
         self.steps_executed
-    }
-
-    #[must_use]
-    pub fn gasometer(&self) -> &gasometer::Gasometer {
-        self.executor.state.gasometer()
     }
 
     #[must_use]

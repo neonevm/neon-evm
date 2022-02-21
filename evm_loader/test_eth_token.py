@@ -22,7 +22,7 @@ ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 class EthTokenTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_event.py setUpClass")
+        print("\ntest_eth_token.py setUpClass")
 
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
@@ -107,7 +107,7 @@ class EthTokenTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 99999999, 'gasPrice': 0,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -175,6 +175,7 @@ class EthTokenTest(unittest.TestCase):
         caller_balance_before = getNeonBalance(client, self.caller)
         value = 10 * (10**18)
 
+        value = 1
         func_name = abi.function_signature_to_4byte_selector('nop()')
         result = self.call_partial_signed(func_name, value)
 
@@ -185,6 +186,7 @@ class EthTokenTest(unittest.TestCase):
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
+        gas_used = int().from_bytes(data[2:10],'little')
 
         contract_balance_after = getNeonBalance(client, self.reId)
         caller_balance_after = getNeonBalance(client, self.caller)

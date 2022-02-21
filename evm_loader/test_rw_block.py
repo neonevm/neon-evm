@@ -83,9 +83,14 @@ class RW_Locking_Test(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        # other wallet
-        wallet2 = OperatorAccount(operator2_keypair_path())
+
+        wallet2 = RandomAccount()
         cls.acc2 = wallet2.get_acc()
+        print("wallet2: ", wallet2.path)
+
+        # other wallet
+        # wallet2 = OperatorAccount(operator2_keypair_path())
+        # cls.acc2 = wallet2.get_acc()
 
         if getBalance(wallet2.get_acc().public_key()) == 0:
             tx = client.request_airdrop(wallet2.get_acc().public_key(), 1000000 * 10 ** 9, commitment=Confirmed)
@@ -173,7 +178,7 @@ class RW_Locking_Test(unittest.TestCase):
 
     def get_call_parameters(self, input, acc, caller, caller_ether):
         nonce = getTransactionCount(client, caller)
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 99999999, 'gasPrice': 0,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 9999999999, 'gasPrice': 0,
             'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)
@@ -203,6 +208,7 @@ class RW_Locking_Test(unittest.TestCase):
     # two transactions of the one contract are executed by two callers
     # @unittest.skip("a.i.")
     def test_01_caseReadOlnyBlocking(self):
+        print("\ntest_01_caseReadOlnyBlocking")
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
@@ -213,19 +219,27 @@ class RW_Locking_Test(unittest.TestCase):
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
-        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc2)
+        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc1)
 
         result = self.call_begin(storage1, 10, msg1, instruction1, False, self.acc1, self.caller1)
-        result = self.call_begin(storage2, 10, msg2, instruction2, False, self.acc2, self.caller2)
+        result = self.call_begin(storage2, 10, msg2, instruction2, False, self.acc1, self.caller2)
         result = self.call_continue(storage1, 10, False, self.acc1, self.caller1)
-        result = self.call_continue(storage2, 10, False, self.acc2, self.caller2)
+        result = self.call_continue(storage2, 10, False, self.acc1, self.caller2)
         result1 = self.call_continue(storage1, 1000, False, self.acc1, self.caller1)
-        result2 = self.call_continue(storage2, 1000, False, self.acc2, self.caller2)
+        result2 = self.call_continue(storage2, 1000, False, self.acc1, self.caller2)
 
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
-        for result in ([result1["result"], result2["result"]]):
+        # evm_step_executed = 99
+        allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
+        begin_gas = EVM_STEPS * evm_step_cost(2)
+        continue_gas = (10 + EVM_STEPS) * evm_step_cost(1)
+        allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST
+        # gas = begin_gas + continue_gas + allocated_space_gas
+        # gas = begin_gas + continue_gas
+
+        for (result, gas) in [(result1["result"],   begin_gas + continue_gas), (result2["result"], begin_gas + continue_gas + allocated_space_gas)]:
             print('result:', result)
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
@@ -234,7 +248,9 @@ class RW_Locking_Test(unittest.TestCase):
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-            self.assertEqual(int().from_bytes(data[2:10], 'little'), 21663) # used_gas
+            actual_gas = int().from_bytes(data[2:10], 'little')
+            print("actual_gas", actual_gas)
+            self.assertEqual(actual_gas, gas) # used_gas
             self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x2))
 
     # The first transaaction set lock on write to  contract account
@@ -242,6 +258,8 @@ class RW_Locking_Test(unittest.TestCase):
     # Then lock removed by Cancel operation
     # @unittest.skip("a.i.")
     def test_02_caseWriteBlocking(self):
+        print("\ntest_02_caseWriteBlocking")
+
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1))
 
@@ -252,12 +270,12 @@ class RW_Locking_Test(unittest.TestCase):
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex(), self.acc1)
-        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc2)
+        storage2 = self.create_storage_account(sign2[1:9].hex(), self.acc1)
 
         result = self.call_begin(storage1, 10, msg1, instruction1, True, self.acc1, self.caller1)
 
         try:
-            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.acc2, self.caller2)
+            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.acc1, self.caller2)
         except SendTransactionError as err:
             print("Ok")
 
@@ -281,6 +299,8 @@ class RW_Locking_Test(unittest.TestCase):
         raise("contract_eth not found in  the emulator output, ", self.reId_eth)
 
     def test_03_writable_flag_from_emulator(self):
+        print("\ntest_03_writable_flag_from_emulator")
+
         # 1. "writable" must be False. Storage is not changed
         print("reId_code", self.re_code)
 
@@ -344,6 +364,7 @@ class RW_Locking_Test(unittest.TestCase):
     #  the test must be run last, because it changes contract code account
     #  resizing is blocked  by locking of the account in other transaction.
     def test_04_resizing_with_account_lock(self):
+        print("\ntest_04_resizing_with_account_lock")
 
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint256)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1)) # update storage without account resizing
@@ -370,17 +391,17 @@ class RW_Locking_Test(unittest.TestCase):
                 code_size = info["code_size"] + 2048
                 seed_bin = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20))
                 seed = seed_bin.decode('utf8')
-                code_account_new = accountWithSeed(self.acc2.public_key(), seed, PublicKey(evm_loader_id))
+                code_account_new = accountWithSeed(self.acc1.public_key(), seed, PublicKey(evm_loader_id))
 
                 print("creating new code_account with increased size %s", code_account_new)
-                create_account_with_seed(client, self.acc2, self.acc2, seed, code_size);
+                create_account_with_seed(client, self.acc1, self.acc1, seed, code_size);
 
                 resize_instr = TransactionInstruction(
                     keys=[
                         AccountMeta(pubkey=PublicKey(info["account"]), is_signer=False, is_writable=True),
                         AccountMeta(pubkey=info["contract"], is_signer=False, is_writable=True),
                         AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
-                        AccountMeta(pubkey=self.acc2.public_key(), is_signer=True, is_writable=False)
+                        AccountMeta(pubkey=self.acc1.public_key(), is_signer=True, is_writable=False)
                     ],
                     program_id=evm_loader_id,
                     data=bytearray.fromhex("11") + bytes(seed_bin)  # 17- ResizeStorageAccount
@@ -390,7 +411,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertIsNotNone(resize_instr)
         # send resizing transaction
         with self.assertRaisesRegex(Exception, "invalid instruction data"):
-            send_transaction(client, Transaction().add(resize_instr), self.acc2)
+            send_transaction(client, Transaction().add(resize_instr), self.acc1)
 
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
@@ -406,7 +427,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertNotEqual(getBalance(self.re_code), 0)
 
         # try next attempt to resize storage account and check it
-        send_transaction(client, Transaction().add(resize_instr), self.acc2)
+        send_transaction(client, Transaction().add(resize_instr), self.acc1)
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 

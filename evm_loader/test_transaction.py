@@ -11,8 +11,8 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
 INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
 
-NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 0))
-NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 0))
+NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE', 5000))
+NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
 
 
 class Step(IntEnum):
@@ -88,7 +88,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         return {
             'to': self.eth_contract,
             'value': 0,
-            'gas': 9999999,
+            'gas': 9999999999,
             'gasPrice': 1_000_000_000,
             'nonce': nonce,
             'data': '3917b3df',
@@ -246,11 +246,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
 
+        begin_gas = EVM_STEPS * evm_step_cost(1)
+        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        gas = begin_gas + continue_gas
+
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
 
     # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
@@ -281,26 +285,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
-        step_count = 100
-        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
-        storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
-
-        trx = Transaction() \
-            .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d)
-
-        response = send_transaction(client, trx, self.acc)
-        print('response:', response)
-        self.assertEqual(response['result']['meta']['err'], None)
-        data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
-        self.assertEqual(data[0], 6)  # 6 means OnReturn,
-        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), 24301)  # used_gas
-
-    # @unittest.skip("a.i.")
-    def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -309,8 +293,36 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         trx = Transaction() \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
+            .add(neon_emv_instr_0d)
+            # .add(neon_emv_instr_0d)  # transaction too large
+
+        response = send_transaction(client, trx, self.acc)
+        print('response:', response)
+
+        evm_step_executed = 230
+        begin_steps = 0
+        begin_gas = EVM_STEPS * evm_step_cost(1)
+        continue_gas = (step_count + EVM_STEPS) * evm_step_cost(1)
+        gas = begin_gas + continue_gas
+
+        self.assertEqual(response['result']['meta']['err'], None)
+        data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
+        self.assertEqual(data[0], 6)  # 6 means OnReturn,
+        self.assertLess(data[1], 0xd0)  # less 0xd0 - success
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
+
+    # @unittest.skip("a.i.")
+    def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
+        step_count = 200
+        (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
+        storage = self.create_storage_account(sign[:8].hex())
+        neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
+
+        trx = Transaction() \
+            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
+            # .add(neon_emv_instr_0d)
         try:
             send_transaction(client, trx, self.acc)
         except Exception as err:
@@ -344,10 +356,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('the solana transaction is too large')
 
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
-        step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller_2)
+        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(EVM_STEPS, trx_data, storage, self.caller_2)
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
@@ -363,7 +374,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                   "completion")
             _ = self.loader.createEtherAccount(self.caller_ether_2)
             print('Transfer tokens to the user token account')
-            self.loader.airdropNeonTokens(self.caller_ether_2, 1)
+            self.loader.airdropNeonTokens(self.caller_ether_2, 100)
             print("Done\n")
 
         print('Account_2:', self.acc_2.public_key(), bytes(self.acc_2.public_key()).hex())
@@ -374,6 +385,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         print('Send several transactions "combined continue(0x0d)" - wait for the confirmation and make sure of a '
               'successful completion')
+
         response_0 = send_transaction(client, trx, self.acc)
         print('response_0:', response_0)
         neon_balance_on_response_0 = getNeonBalance(client, self.caller_2)
@@ -382,17 +394,23 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('response_1:', response_1)
         neon_balance_on_response_1 = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance on response_1:", neon_balance_on_response_1)
+
         response_2 = send_transaction(client, trx, self.acc)
         print('response_2:', response_2)
         neon_balance_on_response_2 = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
 
+        allocated_space_caller2 = ACCOUNT_MAX_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
+        continue1_gas = EVM_STEPS * evm_step_cost(1)
+        continue2_gas = EVM_STEPS * evm_step_cost(1)
+        continue3_gas = EVM_STEPS * evm_step_cost(1) + allocated_space_caller2 * EVM_BYTE_COST
+        gas = continue1_gas + continue2_gas + continue3_gas
+
         self.assertEqual(response_2['result']['meta']['err'], None)
         data = b58decode(response_2['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
         self.assertEqual(data[0], 6)  # 6 means OnReturn,
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
-        EXPECTED_USED_GAS = 24301
-        self.assertEqual(int().from_bytes(data[2:10], 'little'), EXPECTED_USED_GAS)  # used_gas
+        self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
         print('the ether transaction was completed after creating solana-eth-account by three 0x0d transactions')
 
         try:
@@ -405,11 +423,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
         neon_balance_on_5_th_transaction = getNeonBalance(client, self.caller_2)
+
+        print("neon_balance_on_response_1", neon_balance_on_response_0)
+        print("neon_balance_on_response_2", neon_balance_on_response_1)
+        print("neon_balance_on_response_3", neon_balance_on_response_2)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_0), 984 * 1_000_000_000)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_1), 1548 * 1_000_000_000)
-        self.assertEqual((neon_balance_on_start - neon_balance_on_response_2), EXPECTED_USED_GAS * 1_000_000_000)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_0 , continue1_gas)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_1, continue1_gas + continue2_gas)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_2, continue1_gas + continue2_gas + continue3_gas)
         self.assertEqual(neon_balance_on_response_2 - neon_balance_on_5_th_transaction, 0)
 
         print('Check Transfer to treasures on each iteration #345.')

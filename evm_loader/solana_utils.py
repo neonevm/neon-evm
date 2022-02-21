@@ -26,6 +26,7 @@ from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_fro
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 import base58
+import math
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
     "ether" / Bytes(20),
@@ -51,6 +52,24 @@ client = Client(solana_url)
 path_to_solana = 'solana'
 
 ACCOUNT_SEED_VERSION=b'\1'
+
+# amount of gas per 1 byte evm_storage
+EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
+# number of evm steps per transaction
+EVM_STEPS = 100
+# the message size that is used to holder-account filling
+HOLDER_MSG_SIZE = 1000
+# Ethereum account allocated data size
+ACCOUNT_MAX_SIZE = 256
+# spl-token account allocated data size
+SPL_TOKEN_ACCOUNT_SIZE = 165
+# payment to treasure
+PAYMENT_TO_TREASURE = 5000
+# payment for solana signature verification
+LAMPORTS_PER_SIGNATURE = 5000
+# account storage overhead for calculation of base rent
+ACCOUNT_STORAGE_OVERHEAD = 128
+
 
 # DEFAULT_UNITS=500*1000
 # DEFAULT_HEAP_FRAME=256*1024
@@ -738,6 +757,12 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
 
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
+
+
+def evm_step_cost(signature_cnt):
+    operator_expences =  PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE * signature_cnt
+    return  math.ceil(operator_expences / EVM_STEPS)
+
 #
 #
 #

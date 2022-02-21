@@ -73,6 +73,8 @@ pub struct AccountJSON {
     new: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
+    storage_increment: Option<u32>,
+    deploy: bool
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -101,24 +103,28 @@ struct SolanaAccount {
     writable: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
+    storage_increment: Option<u32>,
+    deploy: bool
 }
 
 struct SolanaNewAccount {
     key: Pubkey,
     writable: bool,
-    code_size: Option<usize>
+    code_size: Option<usize>,
+    deploy: bool
 }
 
 impl SolanaAccount {
     pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         trace!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
+        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None,
+            storage_increment: None, deploy: false}
     }
 }
 
 impl SolanaNewAccount {
     pub const fn new(key: Pubkey) -> Self {
-        Self{key, writable: false, code_size: None}
+        Self{key, writable: false, code_size: None, deploy: false}
     }
 }
 
@@ -259,9 +265,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                             info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                             storage.insert(key, value).unwrap();
                         }
+
                         storage.last_used() as usize
                     };
-
+                        
                     let mut accounts = self.accounts.borrow_mut();
                     let mut new_accounts = self.new_accounts.borrow_mut();
                     if let Some(ref mut acc) = accounts.get_mut(&address) {
@@ -458,7 +465,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: solana_address.to_string(),
                         contract: contract_address.map(|v| v.to_string()),
                         code_size: acc.code_size,
-                        code_size_current: acc.code_size_current
+                        code_size_current: acc.code_size_current,
+                        storage_increment: acc.storage_increment,
+                        deploy: acc.deploy
                 });
             }
         }
@@ -473,7 +482,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: acc.key.to_string(),
                         contract: None,
                         code_size: acc.code_size,
-                        code_size_current : None
+                        code_size_current : None,
+                        storage_increment: None,
+                        deploy: acc.deploy
                 });
             }
         }

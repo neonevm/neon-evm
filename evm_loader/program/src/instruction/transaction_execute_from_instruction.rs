@@ -77,7 +77,7 @@ fn execute<'a>(
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     let (exit_reason, return_value, apply_state, used_gas) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(trx.gas_limit.as_u64(), account_storage));
+        let executor_substate = Box::new(ExecutorSubstate::new(account_storage));
         let executor_state = ExecutorState::new(executor_substate, account_storage);
         let mut executor = Machine::new(caller_address, executor_state);
 
@@ -92,7 +92,8 @@ fn execute<'a>(
         let (result, exit_reason) = executor.execute();
         let executor_state = executor.into_state();
 
-        let used_gas = U256::from(executor_state.gasometer().used_gas());
+        // let used_gas = U256::from(executor_state.gasometer().used_gas());
+        let used_gas = U256::from(0_u64); // TODO
         assert!(used_gas <= trx.gas_limit);
 
         if exit_reason.is_succeed() {
