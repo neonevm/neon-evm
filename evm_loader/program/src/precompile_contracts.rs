@@ -386,7 +386,7 @@ fn revert_transfer<'a, B: AccountStorage>(context: &evm::Context, state: &mut Ex
         return Some((ExitReason::Fatal(evm::ExitFatal::UnhandledInterrupt), revert_message));
     }
 
-    return None;
+    None
 }
 
 // QueryAccount method ids:

@@ -318,7 +318,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let transfer_instr = spl_token::instruction::transfer(
                 &spl_token::id(),
                 &pool_address,
-                &dest_neon.key,
+                dest_neon.key,
                 &authority,
                 &[],
                 withdraw.amount.as_u64()
