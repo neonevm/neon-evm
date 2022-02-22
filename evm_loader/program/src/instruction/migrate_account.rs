@@ -6,7 +6,6 @@ use spl_associated_token_account::get_associated_token_address;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
-    instruction::{AccountMeta, Instruction},
     program_error::ProgramError,
     pubkey::Pubkey,
     msg
@@ -99,12 +98,14 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: approve_token_transfer");
 
-    let instruction = spl_approve_instruction(
+    let instruction = spl_token::instruction::approve(
+        accounts.token_program.key,
         accounts.token_balance_account.info.key,
         accounts.authority_info.key,
-        accounts.signer_info.key,
+        &accounts.token_balance_account.owner,
+        &[accounts.signer_info.key],
         accounts.token_balance_account.amount,
-    );
+    )?;
 
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
@@ -116,30 +117,6 @@ fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
     invoke(&instruction, account_infos)?;
 
     Ok(())
-}
-
-/// Returns instruction to approve transfer of NEON tokens.
-fn spl_approve_instruction(
-    source_pubkey: &Pubkey,
-    delegate_pubkey: &Pubkey,
-    signer_pubkey: &Pubkey,
-    amount: u64,
-) -> Instruction {
-    use spl_token::instruction::TokenInstruction;
-
-    let accounts = vec![
-        AccountMeta::new(*source_pubkey, false),
-        AccountMeta::new_readonly(*delegate_pubkey, false),
-        AccountMeta::new_readonly(*signer_pubkey, true),
-    ];
-
-    let data = TokenInstruction::Approve { amount }.pack();
-
-    Instruction {
-        program_id: spl_token::id(),
-        accounts,
-        data,
-    }
 }
 
 /// Transfers all funds from old balance account to the pool account.
