@@ -110,6 +110,7 @@ fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
         accounts.authority_info.clone(),
+        accounts.ethereum_account.info.clone(),
         accounts.signer_info.clone(),
         accounts.token_program.clone(),
     ];
