@@ -73,29 +73,27 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 /// Executes all actions.
 fn execute(accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: execute");
+    let amount = accounts.token_balance_account.amount;
 
     msg!("MigrateAccount: convert_from_v1");
     let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
-        accounts.token_balance_account.amount)?;
+        amount)?;
 
     msg!("MigrateAccount: approve");
     accounts.token_program.approve(
         &ethereum_account,
         accounts.token_balance_account.info,
         accounts.authority_info,
-        accounts.token_balance_account.amount,
-    )?;
+        amount)?;
 
     msg!("MigrateAccount: transfer");
     accounts.token_program.transfer(
         &ethereum_account,
         accounts.token_balance_account.info,
         accounts.token_pool_account.info,
-        accounts.token_balance_account.amount,
-    )?;
+        amount)?;
 
-    //delete_account(accounts.token_balance_account.info);
     unsafe {
         account::delete(accounts.token_balance_account.info,
                         &accounts.operator)?;
@@ -104,11 +102,3 @@ fn execute(accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: OK");
     Ok(())
 }
-
-// Permanently deletes all data in the account.
-//fn delete_account(account: &AccountInfo) {
-//    msg!("DELETE ACCOUNT {}", account.key);
-//    **account.lamports.borrow_mut() = 0;
-//    let mut data = account.data.borrow_mut();
-//    data.fill(0);
-//}
