@@ -1,6 +1,7 @@
 use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
 use crate::config::token_mint;
 
+use spl_token::instruction::AuthorityType;
 use spl_associated_token_account::get_associated_token_address;
 
 use solana_program::{
@@ -11,9 +12,10 @@ use solana_program::{
     msg
 };
 
-use solana_program::program::invoke_signed;
+use solana_program::program::{invoke, invoke_signed};
 
 struct Accounts<'a> {
+    signer_info: &'a AccountInfo<'a>,
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
@@ -26,11 +28,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     msg!("Instruction: MigrateAccount");
 
     let parsed_accounts = Accounts {
-        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[0])?,
-        token_balance_account: token::State::from_account(&accounts[1])?,
-        token_pool_account: token::State::from_account(&accounts[2])?,
-        authority_info: &accounts[3],
-        token_program: program::Token::from_account(&accounts[4])?,
+        signer_info: &accounts[0],
+        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
+        token_balance_account: token::State::from_account(&accounts[2])?,
+        token_pool_account: token::State::from_account(&accounts[3])?,
+        authority_info: &accounts[4],
+        token_program: program::Token::from_account(&accounts[5])?,
     };
 
     let bump_seed = validate(program_id, &parsed_accounts)?;
@@ -68,14 +71,37 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
     Ok(bump_seed)
 }
 
+/// Executes all actions.
 fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
+    set_authority_of_source_account(accounts)?;
     transfer_tokens_to_pool(accounts, bump_seed)?;
 
     delete_account(accounts.token_balance_account.info);
+
+    Ok(())
+}
+
+/// Sets authority of the source token account to EVM Loader's.
+fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
+    let instruction = spl_token::instruction::set_authority(
+        accounts.token_program.key,
+        accounts.token_balance_account.info.key,
+        Some(&accounts.token_pool_account.owner),
+        AuthorityType::AccountOwner,
+        &accounts.token_balance_account.owner,
+        &[accounts.signer_info.key]
+    )?;
+
+    let account_infos: &[AccountInfo] = &[
+        accounts.token_balance_account.info.clone(),
+        accounts.signer_info.clone(),
+    ];
+
+    invoke(&instruction, account_infos)?;
 
     Ok(())
 }
