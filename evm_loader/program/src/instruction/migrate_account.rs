@@ -44,6 +44,14 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 
 /// Checks incoming accounts.
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
+    msg!("MigrateAccount: validate");
+
+    if !accounts.signer_info.is_signer {
+        return Err!(ProgramError::InvalidArgument;
+            "Account {} - expected signer",
+            accounts.signer_info.key);
+    }
+
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
@@ -73,6 +81,8 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
 
 /// Executes all actions.
 fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
+    msg!("MigrateAccount: execute");
+
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
@@ -87,6 +97,8 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 
 /// Sets authority of the source token account to EVM Loader's.
 fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
+    msg!("MigrateAccount: set_authority_of_source_account");
+
     let instruction = spl_token::instruction::set_authority(
         accounts.token_program.key,
         accounts.token_balance_account.info.key,
@@ -108,10 +120,12 @@ fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
 
 /// Transfers all funds from old balance account to the pool account.
 fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
-    msg!("transfer tokens from {:?}", &accounts.token_balance_account.info);
-    msg!("from owner {:?}", &accounts.token_balance_account.owner);
-    msg!("transfer tokens to {:?}", &accounts.token_pool_account.info);
-    msg!("to owner {:?}", &accounts.token_pool_account.owner);
+    msg!("MigrateAccount: transfer_tokens_to_pool");
+
+    msg!("==== from address {:?}", &accounts.token_balance_account.info);
+    msg!("==== from owner {:?}", &accounts.token_balance_account.owner);
+    msg!("==== to address {:?}", &accounts.token_pool_account.info);
+    msg!("==== to owner {:?}", &accounts.token_pool_account.owner);
 
     let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
