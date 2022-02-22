@@ -83,7 +83,9 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 /// Transfers all funds from old balance account to the pool account.
 fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     msg!("transfer tokens from {:?}", &accounts.token_balance_account.info);
+    msg!("from owner {:?}", &accounts.token_balance_account.owner);
     msg!("transfer tokens to {:?}", &accounts.token_pool_account.info);
+    msg!("to owner {:?}", &accounts.token_pool_account.owner);
 
     let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
