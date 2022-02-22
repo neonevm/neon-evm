@@ -19,7 +19,7 @@ pub mod config;
 pub mod entrypoint;
 pub mod executor;
 pub mod executor_state;
-/// hamt impl
+pub mod gasometer;
 pub mod hamt;
 pub mod instruction;
 pub mod macrorules;

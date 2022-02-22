@@ -765,14 +765,6 @@ pub struct ExecutorState<'a, B: AccountStorage> {
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
-    pub fn gas_price(&self) -> U256 {
-        // TODO correct gas price
-        U256::zero()
-    }
-
-
-    #[must_use]
-    #[allow(clippy::unused_self)]
     pub fn block_hash(&self, _number: U256) -> H256 {
         H256::default()
     }

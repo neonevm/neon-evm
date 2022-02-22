@@ -270,4 +270,8 @@ impl<'a> Hamt<'a> {
         self.last_used
     }
 
+    #[must_use]
+    pub fn buffer_len(&self) -> usize {
+        self.data.len()
+    }
 }

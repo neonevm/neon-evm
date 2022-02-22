@@ -73,8 +73,6 @@ pub struct AccountJSON {
     new: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
-    storage_increment: Option<u32>,
-    deploy: bool
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -103,28 +101,24 @@ struct SolanaAccount {
     writable: bool,
     code_size: Option<usize>,
     code_size_current: Option<usize>,
-    storage_increment: Option<u32>,
-    deploy: bool
 }
 
 struct SolanaNewAccount {
     key: Pubkey,
     writable: bool,
     code_size: Option<usize>,
-    deploy: bool
 }
 
 impl SolanaAccount {
     pub fn new(account: Account, key: Pubkey, code_account: Option<Account>) -> Self {
         trace!("SolanaAccount::new");
-        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None,
-            storage_increment: None, deploy: false}
+        Self{account, key, writable: false, code_account, code_size: None, code_size_current : None}
     }
 }
 
 impl SolanaNewAccount {
     pub const fn new(key: Pubkey) -> Self {
-        Self{key, writable: false, code_size: None, deploy: false}
+        Self{key, writable: false, code_size: None}
     }
 }
 
@@ -466,8 +460,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                         contract: contract_address.map(|v| v.to_string()),
                         code_size: acc.code_size,
                         code_size_current: acc.code_size_current,
-                        storage_increment: acc.storage_increment,
-                        deploy: acc.deploy
                 });
             }
         }
@@ -483,8 +475,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                         contract: None,
                         code_size: acc.code_size,
                         code_size_current : None,
-                        storage_increment: None,
-                        deploy: acc.deploy
                 });
             }
         }
@@ -671,6 +661,25 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         } else {
             None
         }
+    }
+
+    fn solana_accounts_space(&self, address: &H160) -> (usize, usize) {
+        let account_space = {
+            self.ethereum_account_map_or(address, 0, |a| a.info.data_len())
+        };
+
+        let contract_space = {
+            self.ethereum_contract_map_or(address, 
+                0, 
+                |a| {
+                    EthereumContract::SIZE 
+                        + a.extension.code.len() 
+                        + a.extension.valids.len()
+                        + a.extension.storage.buffer_len()
+            })
+        };
+
+        (account_space, contract_space)
     }
 }
 

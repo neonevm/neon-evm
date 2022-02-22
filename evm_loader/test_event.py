@@ -178,12 +178,14 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
 
-        gas_05 = EVM_STEPS * evm_step_cost(2)
-        # evm_step_executed = 87
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = EVM_STEPS * evm_step_cost(1)
+        evm_step_executed = 87
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas ) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + trx_size_cost + (evm_step_executed * evm_step_cost())
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -202,11 +204,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -226,11 +230,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 125
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -258,11 +264,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 156
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -317,7 +325,8 @@ class EventTest(unittest.TestCase):
         print(result)
 
         evm_step_executed = 156
-        gas_used = evm_step_executed * evm_step_cost(2)
+        trx_size_cost = 5000
+        gas_used = trx_size_cost + (evm_step_executed * evm_step_cost())
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value

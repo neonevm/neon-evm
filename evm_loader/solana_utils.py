@@ -759,9 +759,9 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
         ])
 
 
-def evm_step_cost(signature_cnt):
-    operator_expences =  PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE * signature_cnt
-    return  math.ceil(operator_expences / EVM_STEPS)
+def evm_step_cost():
+    operator_expences = PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE
+    return math.floor(operator_expences / EVM_STEPS)
 
 #
 #

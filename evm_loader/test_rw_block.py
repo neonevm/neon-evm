@@ -231,15 +231,12 @@ class RW_Locking_Test(unittest.TestCase):
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
 
-        # evm_step_executed = 99
-        allocated_space_caller2 = ACCOUNT_MAX_SIZE + SPL_TOKEN_ACCOUNT_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = (10 + EVM_STEPS) * evm_step_cost(1)
-        allocated_space_gas = allocated_space_caller2 * EVM_BYTE_COST
-        # gas = begin_gas + continue_gas + allocated_space_gas
-        # gas = begin_gas + continue_gas
+        evm_step_executed = 99
+        trx_size_cost = 5000
+        iterative_overhead = 10_000
+        gas = iterative_overhead + trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        for (result, gas) in [(result1["result"],   begin_gas + continue_gas), (result2["result"], begin_gas + continue_gas + allocated_space_gas)]:
+        for result in [result1["result"], result2["result"]]:
             print('result:', result)
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)

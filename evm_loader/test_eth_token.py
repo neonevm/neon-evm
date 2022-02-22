@@ -107,7 +107,7 @@ class EthTokenTest(unittest.TestCase):
         return send_transaction(client, trx, self.acc)
 
     def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)

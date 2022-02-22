@@ -246,9 +246,11 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response_3:', response)
 
-        begin_gas = EVM_STEPS * evm_step_cost(1)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
-        gas = begin_gas + continue_gas
+
+        evm_step_executed = 230
+        trx_size_cost = 5000
+        iterative_overhead = 10_000
+        gas = iterative_overhead + trx_size_cost + (evm_step_executed * evm_step_cost())
 
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
@@ -284,7 +286,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
                 raise
 
     # @unittest.skip("a.i.")
-    def test_04_success_tx_send_iteratively_by_3_instructions_in_one_transaction(self):
+    def test_04_success_tx_send_iteratively_by_2_instructions_in_one_transaction(self):
         step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
         storage = self.create_storage_account(sign[:8].hex())
@@ -292,18 +294,15 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
         trx = Transaction() \
             .add(neon_emv_instr_0d) \
-            .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
-            # .add(neon_emv_instr_0d)  # transaction too large
 
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
 
         evm_step_executed = 230
-        begin_steps = 0
-        begin_gas = EVM_STEPS * evm_step_cost(1)
-        continue_gas = (step_count + EVM_STEPS) * evm_step_cost(1)
-        gas = begin_gas + continue_gas
+        trx_size_cost = 5000
+        iterative_overhead = 10_000
+        gas = iterative_overhead + trx_size_cost + (evm_step_executed * evm_step_cost())
 
         self.assertEqual(response['result']['meta']['err'], None)
         data = b58decode(response['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
@@ -400,11 +399,14 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_balance_on_response_2 = getNeonBalance(client, self.caller_2)
         print("Caller_2 NEON-token balance on response_2:", neon_balance_on_response_2)
 
-        allocated_space_caller2 = ACCOUNT_MAX_SIZE + ACCOUNT_STORAGE_OVERHEAD * 2
-        continue1_gas = EVM_STEPS * evm_step_cost(1)
-        continue2_gas = EVM_STEPS * evm_step_cost(1)
-        continue3_gas = EVM_STEPS * evm_step_cost(1) + allocated_space_caller2 * EVM_BYTE_COST
-        gas = continue1_gas + continue2_gas + continue3_gas
+        evm_step_executed = 230
+        trx_size_cost = 5000
+        iterative_overhead = 10_000
+        gas1 = iterative_overhead + trx_size_cost + (EVM_STEPS * evm_step_cost())
+        gas2 = EVM_STEPS * evm_step_cost()
+        gas3 = (evm_step_executed - EVM_STEPS - EVM_STEPS) * evm_step_cost()
+        gas = gas1 + gas2 + gas3
+
 
         self.assertEqual(response_2['result']['meta']['err'], None)
         data = b58decode(response_2['result']['meta']['innerInstructions'][-1]['instructions'][-1]['data'])
@@ -429,9 +431,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("neon_balance_on_response_3", neon_balance_on_response_2)
         print('Caller_2 NEON-token balance on sending 5-th transaction:', neon_balance_on_5_th_transaction)
 
-        self.assertEqual(neon_balance_on_start - neon_balance_on_response_0 , continue1_gas)
-        self.assertEqual(neon_balance_on_start - neon_balance_on_response_1, continue1_gas + continue2_gas)
-        self.assertEqual(neon_balance_on_start - neon_balance_on_response_2, continue1_gas + continue2_gas + continue3_gas)
+        gas_price = 10**9
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_0 , gas1 * gas_price)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_1, (gas1 + gas2) * gas_price)
+        self.assertEqual(neon_balance_on_start - neon_balance_on_response_2, (gas1 + gas2 + gas3) * gas_price)
         self.assertEqual(neon_balance_on_response_2 - neon_balance_on_5_th_transaction, 0)
 
         print('Check Transfer to treasures on each iteration #345.')

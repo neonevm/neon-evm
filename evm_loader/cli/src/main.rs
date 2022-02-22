@@ -3,6 +3,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
+mod syscall_stubs;
 
 mod errors;
 mod logs;
@@ -18,6 +19,7 @@ use crate::{
         create_program_address,
         create_ether_account,
         deploy,
+        deposit,
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
@@ -387,16 +389,17 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-fn is_amount_u256<T>(amount: T) -> Result<(), String>
+fn is_amount<T, U>(amount: U) -> Result<(), String>
     where
-        T: AsRef<str> + Display,
+        T: std::str::FromStr,
+        U: AsRef<str> + Display,
 {
-    if amount.as_ref().parse::<U256>().is_ok() {
+    if amount.as_ref().parse::<T>().is_ok() {
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse input amount as integer U256, provided: {}",
-            amount
+            "Unable to parse input amount as {}, provided: {}",
+            std::any::type_name::<T>(), amount
         ))
     }
 }
@@ -528,7 +531,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_amount_u256)
+                        .validator(is_amount::<U256, _>)
                         .help("Transaction value")
                 )
                 .arg(
@@ -593,6 +596,28 @@ fn main() {
                         .takes_value(true)
                         .required(false)
                         .help("Network chain_id"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("deposit")
+                .about("Deposit neons to ether account")
+                .arg(
+                    Arg::with_name("amount")
+                        .index(1)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_amount::<u64, _>)
+                        .help("Amount to deposit"),
+                )
+                .arg(
+                    Arg::with_name("ether")
+                        .index(2)
+                        .value_name("ETHER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
                 )
         )
         .subcommand(
@@ -785,6 +810,11 @@ fn main() {
                         u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
                     });
                 deploy::execute(&config, &program_location, &collateral_pool_base, chain_id)
+            }
+            ("deposit", Some(arg_matches)) => {
+                let amount = value_of(arg_matches, "amount").unwrap();
+                let ether = h160_of(arg_matches, "ether").unwrap();
+                deposit::execute(&config, amount, &ether)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();

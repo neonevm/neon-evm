@@ -3,10 +3,6 @@ use log::{debug, info};
 use evm::{H160, U256, ExitReason,};
 
 use evm_loader::{
-    executor_state::{
-        ExecutorState,
-        ExecutorSubstate,
-    },
     executor::Machine,
 };
 
@@ -19,6 +15,7 @@ use crate::{
     },
     Config,
     NeonCliResult,
+    syscall_stubs::Stubs,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -36,6 +33,9 @@ pub fn execute(
         &hex::encode(data.clone().unwrap_or_default()),
         value);
 
+    let syscall_stubs = Stubs::new(config)?;
+    solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
+
     let storage = EmulatorAccountStorage::new(config);
     
     let program_id = if let Some(program_id) = contract_id {
@@ -50,11 +50,9 @@ pub fn execute(
         program_id
     };
 
-    let (exit_reason, result, applies_logs,  steps_executed) = {
-        let gas_limit = 999_999_999_999_u64;
-        let executor_substate = Box::new(ExecutorSubstate::new(&storage));
-        let executor_state = ExecutorState::new(executor_substate, &storage);
-        let mut executor = Machine::new(caller_id, executor_state);
+    let (exit_reason, result, applies_logs,  steps_executed, used_gas) = {
+        let gas_limit = U256::from(999_999_999_999_u64);
+        let mut executor = Machine::new(caller_id, &storage)?;
         debug!("Executor initialized");
 
         let (result, exit_reason) = match &contract_id {
@@ -85,15 +83,17 @@ pub fn execute(
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
         debug!("{} steps executed", executor.get_steps_executed());
+        debug!("{} used gas", executor.used_gas());
 
         let steps_executed = executor.get_steps_executed();
+        let used_gas = executor.used_gas();
         let executor_state = executor.into_state();
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), steps_executed)
+            (exit_reason, result, Some(apply), steps_executed, used_gas)
         } else {
-            (exit_reason, result, None, steps_executed)
+            (exit_reason, result, None, steps_executed, used_gas)
         }
     };
 
@@ -148,6 +148,7 @@ pub fn execute(
         "exit_status": status,
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,
+        "used_gas": used_gas.as_u64(),
     }).to_string();
 
     println!("{}", js);
