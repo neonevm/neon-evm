@@ -102,7 +102,7 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 /// -- the account that's the new authority,
 /// -- the type of authority change,
 /// -- the current account authority,
-/// -- and finally the public key signing the CPI.
+/// -- and finally the public keys signing the CPI.
 fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: set_authority_of_source_account");
 
@@ -112,7 +112,7 @@ fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
         Some(&accounts.token_pool_account.owner),
         AuthorityType::AccountOwner,
         &accounts.token_balance_account.owner,
-        &[accounts.signer_info.key]
+        &[accounts.signer_info.key, &accounts.token_balance_account.owner]
     )?;
 
     msg!("==== instruction OK");
