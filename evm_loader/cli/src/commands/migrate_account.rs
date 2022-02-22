@@ -78,6 +78,10 @@ fn migrate_account_instruction(
     let token_pool_pubkey = get_associated_token_address(&token_authority, &token_mint::id());
     let ether_token_pubkey = get_associated_token_address(&ether_pubkey, &token_mint::id());
 
+    dbg!(token_authority);
+    dbg!(token_pool_pubkey);
+    dbg!(ether_token_pubkey);
+
     Instruction::new_with_bincode(
         config.evm_loader,
         &(26_u8),

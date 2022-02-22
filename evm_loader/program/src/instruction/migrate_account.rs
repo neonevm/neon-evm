@@ -21,7 +21,7 @@ struct Accounts<'a> {
     token_program: program::Token<'a>,
 }
 
-/// Processes the migration of an Ethereum account to current version.
+/// Processes the migration of an Ethereum account to the current version.
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
     msg!("Instruction: MigrateAccount");
 
@@ -39,8 +39,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     Ok(())
 }
 
+/// Checks incoming accounts.
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
-    /* Need this? find_program_address is a costly function */
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
@@ -48,7 +48,6 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.authority_info.key, expected_address);
     }
 
-    /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
         accounts.authority_info.key,
         &token_mint::id()
@@ -76,10 +75,16 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 
     transfer_tokens_to_pool(accounts, bump_seed)?;
 
-    delete_token_account()
+    delete_account(accounts.token_balance_account.info);
+
+    Ok(())
 }
 
+/// Transfers all funds from old balance account to the pool account.
 fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
+    msg!("transfer tokens from {:?}", &accounts.token_balance_account.info);
+    msg!("transfer tokens to {:?}", &accounts.token_pool_account.info);
+
     let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
 
     let instruction = spl_token::instruction::transfer(
@@ -103,7 +108,10 @@ fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult 
     Ok(())
 }
 
-#[allow(clippy::unnecessary_wraps)]
-const fn delete_token_account() -> ProgramResult {
-    Ok(())
+/// Permanently deletes all data in the account.
+fn delete_account(account: &AccountInfo) {
+    msg!("DELETE ACCOUNT {}", account.key);
+    **account.lamports.borrow_mut() = 0;
+    let mut data = account.data.borrow_mut();
+    data.fill(0);
 }

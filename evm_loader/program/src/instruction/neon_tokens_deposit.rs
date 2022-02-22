@@ -38,7 +38,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 }
 
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
-    /* Need this? find_program_address is a costly function */
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
@@ -46,7 +45,6 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.authority_info.key, expected_address);
     }
 
-    /* Need this? get_associated_token_address is a costly function */
     let expected_pool_address = get_associated_token_address(
         accounts.authority_info.key,
         &token_mint::id()
