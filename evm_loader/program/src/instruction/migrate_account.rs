@@ -1,4 +1,4 @@
-use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
+use crate::account::{self, program, token, EthereumAccountV1, EthereumAccount, Operator};
 use crate::config::token_mint;
 
 use spl_associated_token_account::get_associated_token_address;
@@ -12,6 +12,7 @@ use solana_program::{
 };
 
 struct Accounts<'a> {
+    operator: Operator<'a>,
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
@@ -24,24 +25,25 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     msg!("Instruction: MigrateAccount");
 
     let parsed_accounts = Accounts {
-        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[0])?,
-        token_balance_account: token::State::from_account(&accounts[1])?,
-        token_pool_account: token::State::from_account(&accounts[2])?,
-        authority_info: &accounts[3],
-        token_program: program::Token::from_account(&accounts[4])?,
+        operator: Operator::from_account(&accounts[0])?,
+        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
+        token_balance_account: token::State::from_account(&accounts[2])?,
+        token_pool_account: token::State::from_account(&accounts[3])?,
+        authority_info: &accounts[4],
+        token_program: program::Token::from_account(&accounts[5])?,
     };
 
-    let bump_seed = validate(program_id, &parsed_accounts)?;
-    execute(&parsed_accounts, bump_seed)?;
+    validate(program_id, &parsed_accounts)?;
+    execute(&parsed_accounts)?;
 
     Ok(())
 }
 
 /// Checks incoming accounts.
-fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
+fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: validate");
 
-    let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
+    let (expected_address, _) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected PDA address {}",
@@ -65,11 +67,11 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
             accounts.ethereum_account.ether);
     }
 
-    Ok(bump_seed)
+    Ok(())
 }
 
 /// Executes all actions.
-fn execute(accounts: &Accounts, _bump_seed: u8) -> ProgramResult {
+fn execute(accounts: &Accounts) -> ProgramResult {
     msg!("MigrateAccount: execute");
 
     msg!("MigrateAccount: convert_from_v1");
@@ -93,15 +95,20 @@ fn execute(accounts: &Accounts, _bump_seed: u8) -> ProgramResult {
         accounts.token_balance_account.amount,
     )?;
 
-    delete_account(accounts.token_balance_account.info);
+    //delete_account(accounts.token_balance_account.info);
+    unsafe {
+        account::delete(accounts.token_balance_account.info,
+                        &accounts.operator)?;
+    }
 
+    msg!("MigrateAccount: OK");
     Ok(())
 }
 
-/// Permanently deletes all data in the account.
-fn delete_account(account: &AccountInfo) {
-    msg!("DELETE ACCOUNT {}", account.key);
-    **account.lamports.borrow_mut() = 0;
-    let mut data = account.data.borrow_mut();
-    data.fill(0);
-}
+// Permanently deletes all data in the account.
+//fn delete_account(account: &AccountInfo) {
+//    msg!("DELETE ACCOUNT {}", account.key);
+//    **account.lamports.borrow_mut() = 0;
+//    let mut data = account.data.borrow_mut();
+//    data.fill(0);
+//}

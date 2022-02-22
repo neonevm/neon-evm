@@ -89,7 +89,6 @@ fn execute(accounts: &mut Accounts, bump_seed: u8) -> ProgramResult {
         invoke_signed(&instruction, account_infos, signers_seeds)?;
     }
 
-
     assert!(token_mint::decimals() <= 18);
     let additional_decimals: u32 = (18 - token_mint::decimals()).into();
 
