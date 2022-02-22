@@ -79,14 +79,15 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
 }
 
 /// Executes all actions.
-fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
+fn execute(accounts: &Accounts, _bump_seed: u8) -> ProgramResult {
     msg!("MigrateAccount: execute");
 
+    msg!("MigrateAccount: convert_from_v1");
     let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
 
-    //approve_token_transfer(accounts)?;
+    msg!("MigrateAccount: approve");
     accounts.token_program.approve(
         &ethereum_account,
         accounts.token_balance_account.info,
@@ -94,43 +95,23 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
         accounts.token_balance_account.amount,
     )?;
 
-    transfer_tokens_to_pool(accounts, bump_seed)?;
+    msg!("MigrateAccount: transfer_tokens_to_pool");
+    //transfer_tokens_to_pool(accounts, bump_seed)?;
+    accounts.token_program.transfer(
+        &ethereum_account,
+        accounts.token_balance_account.info,
+        accounts.token_pool_account.info,
+        accounts.token_balance_account.amount,
+    )?;
 
-    delete_account(accounts.token_balance_account.info);
+    //delete_account(accounts.token_balance_account.info);
 
     Ok(())
 }
 
-/// Approves transfer from the source account.
-//fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
-//    msg!("MigrateAccount: approve_token_transfer");
-//
-//    let instruction = spl_token::instruction::approve(
-//        accounts.token_program.key,
-//        accounts.token_balance_account.info.key,
-//        accounts.authority_info.key,
-//        &accounts.token_balance_account.owner,
-//        &[accounts.signer_info.key],
-//        accounts.token_balance_account.amount,
-//    )?;
-//
-//    let account_infos: &[AccountInfo] = &[
-//        accounts.token_balance_account.info.clone(),
-//        accounts.authority_info.clone(),
-//        accounts.ethereum_account.info.clone(),
-//        accounts.signer_info.clone(),
-//        accounts.token_program.clone(),
-//    ];
-//
-//    invoke(&instruction, account_infos)?;
-//
-//    Ok(())
-//}
-
 /// Transfers all funds from old balance account to the pool account.
+#[allow(unused)]
 fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
-    msg!("MigrateAccount: transfer_tokens_to_pool");
-
     msg!("==== from address {:?}", &accounts.token_balance_account.info);
     msg!("==== from owner {:?}", &accounts.token_balance_account.owner);
     msg!("==== to address {:?}", &accounts.token_pool_account.info);
@@ -160,6 +141,7 @@ fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult 
 }
 
 /// Permanently deletes all data in the account.
+#[allow(unused)]
 fn delete_account(account: &AccountInfo) {
     msg!("DELETE ACCOUNT {}", account.key);
     **account.lamports.borrow_mut() = 0;
