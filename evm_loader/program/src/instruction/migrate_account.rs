@@ -104,13 +104,14 @@ fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
         accounts.token_balance_account.info.key,
         Some(&accounts.token_pool_account.owner),
         AuthorityType::AccountOwner,
-        &accounts.token_balance_account.owner,
+        accounts.signer_info.key,
         &[accounts.signer_info.key]
     )?;
 
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
         accounts.signer_info.clone(),
+        accounts.token_program.clone(),
     ];
 
     invoke(&instruction, account_infos)?;
