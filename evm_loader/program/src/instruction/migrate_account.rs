@@ -1,12 +1,12 @@
 use crate::account::{program, token, EthereumAccountV1, EthereumAccount};
 use crate::config::token_mint;
 
-use spl_token::instruction::AuthorityType;
 use spl_associated_token_account::get_associated_token_address;
 
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
+    instruction::{AccountMeta, Instruction},
     program_error::ProgramError,
     pubkey::Pubkey,
     msg
@@ -83,7 +83,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
 fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     msg!("MigrateAccount: execute");
 
-    set_authority_of_source_account(accounts)?;
+    approve_token_transfer(accounts)?;
     transfer_tokens_to_pool(accounts, bump_seed)?;
 
     EthereumAccount::convert_from_v1(
@@ -95,42 +95,51 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     Ok(())
 }
 
-/// Sets authority of the source token account to EVM Loader's.
-/// We pass in:
-/// -- the token program id,
-/// -- the account whose authority we'd like to change,
-/// -- the account that's the new authority,
-/// -- the type of authority change,
-/// -- the current account authority,
-/// -- and finally the public keys signing the CPI.
-fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
-    msg!("MigrateAccount: set_authority_of_source_account");
+/// Approves transfer from the source account.
+fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
+    msg!("MigrateAccount: approve_token_transfer");
 
-    let instruction = spl_token::instruction::set_authority(
-        accounts.token_program.key,
+    let instruction = spl_approve_instruction(
         accounts.token_balance_account.info.key,
-        Some(&accounts.token_pool_account.owner),
-        AuthorityType::AccountOwner,
-        &accounts.token_balance_account.owner,
-        &[accounts.signer_info.key, &accounts.token_balance_account.owner]
-    )?;
-
-    msg!("==== instruction OK");
+        accounts.authority_info.key,
+        accounts.signer_info.key,
+        accounts.token_balance_account.amount,
+    );
 
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
-        accounts.ethereum_account.info.clone(),
+        accounts.authority_info.clone(),
         accounts.signer_info.clone(),
         accounts.token_program.clone(),
     ];
 
-    msg!("==== account_infos OK");
-
     invoke(&instruction, account_infos)?;
 
-    msg!("==== invoke OK");
-
     Ok(())
+}
+
+/// Returns instruction to approve transfer of NEON tokens.
+fn spl_approve_instruction(
+    source_pubkey: &Pubkey,
+    delegate_pubkey: &Pubkey,
+    signer_pubkey: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    use spl_token::instruction::TokenInstruction;
+
+    let accounts = vec![
+        AccountMeta::new(*source_pubkey, false),
+        AccountMeta::new_readonly(*delegate_pubkey, false),
+        AccountMeta::new_readonly(*signer_pubkey, true),
+    ];
+
+    let data = TokenInstruction::Approve { amount }.pack();
+
+    Instruction {
+        program_id: spl_token::id(),
+        accounts,
+        data,
+    }
 }
 
 /// Transfers all funds from old balance account to the pool account.
