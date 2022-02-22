@@ -83,12 +83,12 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
 fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     msg!("MigrateAccount: execute");
 
+    set_authority_of_source_account(accounts)?;
+    transfer_tokens_to_pool(accounts, bump_seed)?;
+
     EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
-
-    set_authority_of_source_account(accounts)?;
-    transfer_tokens_to_pool(accounts, bump_seed)?;
 
     delete_account(accounts.token_balance_account.info);
 
@@ -115,14 +115,20 @@ fn set_authority_of_source_account(accounts: &Accounts) -> ProgramResult {
         &[accounts.signer_info.key]
     )?;
 
+    msg!("==== instruction OK");
+
     let account_infos: &[AccountInfo] = &[
         accounts.token_balance_account.info.clone(),
-        accounts.token_pool_account.info.clone(),
+        accounts.ethereum_account.info.clone(),
         accounts.signer_info.clone(),
         accounts.token_program.clone(),
     ];
 
+    msg!("==== account_infos OK");
+
     invoke(&instruction, account_infos)?;
+
+    msg!("==== invoke OK");
 
     Ok(())
 }
