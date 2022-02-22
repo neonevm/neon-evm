@@ -11,10 +11,7 @@ use solana_program::{
     msg
 };
 
-use solana_program::program::{invoke_signed};
-
 struct Accounts<'a> {
-    signer_info: &'a AccountInfo<'a>,
     ethereum_account: EthereumAccountV1<'a>,
     token_balance_account: token::State<'a>,
     token_pool_account: token::State<'a>,
@@ -27,12 +24,11 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     msg!("Instruction: MigrateAccount");
 
     let parsed_accounts = Accounts {
-        signer_info: &accounts[0],
-        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
-        token_balance_account: token::State::from_account(&accounts[2])?,
-        token_pool_account: token::State::from_account(&accounts[3])?,
-        authority_info: &accounts[4],
-        token_program: program::Token::from_account(&accounts[5])?,
+        ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[0])?,
+        token_balance_account: token::State::from_account(&accounts[1])?,
+        token_pool_account: token::State::from_account(&accounts[2])?,
+        authority_info: &accounts[3],
+        token_program: program::Token::from_account(&accounts[4])?,
     };
 
     let bump_seed = validate(program_id, &parsed_accounts)?;
@@ -44,12 +40,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 /// Checks incoming accounts.
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError> {
     msg!("MigrateAccount: validate");
-
-    if !accounts.signer_info.is_signer {
-        return Err!(ProgramError::InvalidArgument;
-            "Account {} - expected signer",
-            accounts.signer_info.key);
-    }
 
     let (expected_address, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
@@ -95,8 +85,7 @@ fn execute(accounts: &Accounts, _bump_seed: u8) -> ProgramResult {
         accounts.token_balance_account.amount,
     )?;
 
-    msg!("MigrateAccount: transfer_tokens_to_pool");
-    //transfer_tokens_to_pool(accounts, bump_seed)?;
+    msg!("MigrateAccount: transfer");
     accounts.token_program.transfer(
         &ethereum_account,
         accounts.token_balance_account.info,
@@ -104,44 +93,12 @@ fn execute(accounts: &Accounts, _bump_seed: u8) -> ProgramResult {
         accounts.token_balance_account.amount,
     )?;
 
-    //delete_account(accounts.token_balance_account.info);
-
-    Ok(())
-}
-
-/// Transfers all funds from old balance account to the pool account.
-#[allow(unused)]
-fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
-    msg!("==== from address {:?}", &accounts.token_balance_account.info);
-    msg!("==== from owner {:?}", &accounts.token_balance_account.owner);
-    msg!("==== to address {:?}", &accounts.token_pool_account.info);
-    msg!("==== to owner {:?}", &accounts.token_pool_account.owner);
-
-    let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
-
-    let instruction = spl_token::instruction::transfer(
-        accounts.token_program.key,
-        accounts.token_balance_account.info.key,
-        accounts.token_pool_account.info.key,
-        accounts.authority_info.key,
-        &[],
-        accounts.token_balance_account.amount
-    )?;
-
-    let account_infos: &[AccountInfo] = &[
-        accounts.token_balance_account.info.clone(),
-        accounts.token_pool_account.info.clone(),
-        accounts.authority_info.clone(),
-        accounts.token_program.clone(),
-    ];
-
-    invoke_signed(&instruction, account_infos, signers_seeds)?;
+    delete_account(accounts.token_balance_account.info);
 
     Ok(())
 }
 
 /// Permanently deletes all data in the account.
-#[allow(unused)]
 fn delete_account(account: &AccountInfo) {
     msg!("DELETE ACCOUNT {}", account.key);
     **account.lamports.borrow_mut() = 0;
