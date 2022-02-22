@@ -11,7 +11,7 @@ use solana_program::{
     msg
 };
 
-use solana_program::program::{invoke, invoke_signed};
+use solana_program::program::{invoke_signed};
 
 struct Accounts<'a> {
     signer_info: &'a AccountInfo<'a>,
@@ -82,12 +82,19 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
 fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
     msg!("MigrateAccount: execute");
 
-    approve_token_transfer(accounts)?;
-    transfer_tokens_to_pool(accounts, bump_seed)?;
-
-    EthereumAccount::convert_from_v1(
+    let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         accounts.token_balance_account.amount)?;
+
+    //approve_token_transfer(accounts)?;
+    accounts.token_program.approve(
+        &ethereum_account,
+        accounts.token_balance_account.info,
+        accounts.authority_info,
+        accounts.token_balance_account.amount,
+    )?;
+
+    transfer_tokens_to_pool(accounts, bump_seed)?;
 
     delete_account(accounts.token_balance_account.info);
 
@@ -95,30 +102,30 @@ fn execute(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
 }
 
 /// Approves transfer from the source account.
-fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
-    msg!("MigrateAccount: approve_token_transfer");
-
-    let instruction = spl_token::instruction::approve(
-        accounts.token_program.key,
-        accounts.token_balance_account.info.key,
-        accounts.authority_info.key,
-        &accounts.token_balance_account.owner,
-        &[accounts.signer_info.key],
-        accounts.token_balance_account.amount,
-    )?;
-
-    let account_infos: &[AccountInfo] = &[
-        accounts.token_balance_account.info.clone(),
-        accounts.authority_info.clone(),
-        accounts.ethereum_account.info.clone(),
-        accounts.signer_info.clone(),
-        accounts.token_program.clone(),
-    ];
-
-    invoke(&instruction, account_infos)?;
-
-    Ok(())
-}
+//fn approve_token_transfer(accounts: &Accounts) -> ProgramResult {
+//    msg!("MigrateAccount: approve_token_transfer");
+//
+//    let instruction = spl_token::instruction::approve(
+//        accounts.token_program.key,
+//        accounts.token_balance_account.info.key,
+//        accounts.authority_info.key,
+//        &accounts.token_balance_account.owner,
+//        &[accounts.signer_info.key],
+//        accounts.token_balance_account.amount,
+//    )?;
+//
+//    let account_infos: &[AccountInfo] = &[
+//        accounts.token_balance_account.info.clone(),
+//        accounts.authority_info.clone(),
+//        accounts.ethereum_account.info.clone(),
+//        accounts.signer_info.clone(),
+//        accounts.token_program.clone(),
+//    ];
+//
+//    invoke(&instruction, account_infos)?;
+//
+//    Ok(())
+//}
 
 /// Transfers all funds from old balance account to the pool account.
 fn transfer_tokens_to_pool(accounts: &Accounts, bump_seed: u8) -> ProgramResult {
