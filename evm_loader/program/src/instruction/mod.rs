@@ -137,15 +137,16 @@ pub enum EvmInstruction {
     ///   5. `[]` SPL Token program id.
     Deposit,
 
-    /// Migrates account internal structure to v2.
+    /// Migrates Ethereum account's internal structure from v1 to current.
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   0. `[writable]` Ether account to migrate.
-    ///   1. `[writable]` NEON token account associated with the ether account.
-    ///   2. `[writable]` NEON token pool account.
-    ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
-    ///   4. `[]` SPL Token program id.
+    ///   0. `[writable]` Operator (to close associated token account).
+    ///   1. `[writable]` Ether account to migrate.
+    ///   2. `[writable]` NEON token account associated with the ether account.
+    ///   3. `[writable]` NEON token pool account.
+    ///   4. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
+    ///   5. `[]` SPL Token program id.
     MigrateAccount,
 }
 

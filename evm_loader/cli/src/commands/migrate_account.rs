@@ -82,7 +82,7 @@ fn migrate_account_instruction(
         config.evm_loader,
         &(26_u8),
         vec![
-            AccountMeta::new(config.signer.pubkey(), false),
+            AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new(ether_pubkey, false),
             AccountMeta::new(ether_token_pubkey, false),
             AccountMeta::new(token_pool_pubkey, false),

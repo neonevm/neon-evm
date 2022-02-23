@@ -1,4 +1,4 @@
-use crate::account::{self, program, token, EthereumAccountV1, EthereumAccount, Operator};
+use crate::account::{program, token, EthereumAccountV1, EthereumAccount, Operator};
 use crate::config::token_mint;
 
 use spl_associated_token_account::get_associated_token_address;
@@ -94,10 +94,11 @@ fn execute(accounts: &Accounts) -> ProgramResult {
         accounts.token_pool_account.info,
         amount)?;
 
-    unsafe {
-        account::delete(accounts.token_balance_account.info,
-                        &accounts.operator)?;
-    }
+    msg!("MigrateAccount: close token account");
+    accounts.token_program.close_account(
+        &ethereum_account,
+        accounts.token_balance_account.info,
+        &accounts.operator)?;
 
     msg!("MigrateAccount: OK");
     Ok(())
