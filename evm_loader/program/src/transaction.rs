@@ -90,6 +90,7 @@ pub struct UnsignedTransaction {
     pub value: U256,
     pub call_data: Vec<u8>,
     pub chain_id: U256,
+    pub rlp_len: usize,
 }
 
 impl UnsignedTransaction {
@@ -106,6 +107,9 @@ impl rlp::Decodable for UnsignedTransaction {
         if rlp.item_count()? != 9 {
             return Err(rlp::DecoderError::RlpIncorrectListLen);
         }
+
+        let info = rlp.payload_info()?;
+        let payload_size = info.header_len + info.value_len;
 
         let tx = Self {
             nonce: rlp.val_at(0)?,
@@ -126,6 +130,7 @@ impl rlp::Decodable for UnsignedTransaction {
             value: rlp.val_at(4)?,
             call_data: rlp.val_at(5)?,
             chain_id: rlp.val_at(6)?,
+            rlp_len: payload_size,
         };
 
         Ok(tx)

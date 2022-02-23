@@ -14,11 +14,14 @@ impl<'a> ProgramAccountStorage<'a> {
         &mut self,
         origin: H160,
         mut operator: EthereumAccount<'a>,
-        used_gas: U256,
-        gas_price: U256,
+        value: U256,
     ) -> Result<(), ProgramError> {
-        // Can overflow in malicious transaction
-        let value = used_gas.saturating_mul(gas_price);
+        let origin_balance = self.balance(&origin);
+        if origin_balance < value {
+            self.transfer_gas_payment(origin, operator, origin_balance)?;
+            return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds", origin);
+        }
+
 
         if self.ethereum_accounts.contains_key(&operator.address) {
             self.transfer_neon_tokens(origin, operator.address, value)?;

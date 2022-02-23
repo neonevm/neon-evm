@@ -19,9 +19,11 @@ ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
     cargo build --release && \
-    cargo build-bpf --features devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
-    cargo build-bpf --features testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
-    cargo build-bpf
+    cargo build-bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
+    cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-bpf --features no-logs,alpha && cp target/deploy/evm_loader.so target/deploy/evm_loader-alpha.so && \
+    cargo build-bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
+    cargo build-bpf --features no-logs
 
 # Download and build spl-token
 FROM builder AS spl-token-builder
@@ -74,7 +76,9 @@ COPY evm_loader/*.py \
     evm_loader/deploy-test.sh \
     evm_loader/neon_token_keypair.json \
     evm_loader/permission_allowance_token_keypair.json \
-    evm_loader/permission_denial_token_keypair.json /opt/
+    evm_loader/permission_denial_token_keypair.json \
+    evm_loader/utils/set_single_acct_permission.sh \
+    evm_loader/utils/set_many_accts_permission.sh /opt/
 
 COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
 COPY evm_loader/performance/contracts  /opt/

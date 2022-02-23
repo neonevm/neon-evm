@@ -27,7 +27,25 @@ pub mod program;
 pub mod token;
 pub mod sysvar;
 
+<<<<<<< HEAD
 pub const ACCOUNT_SEED_VERSION: u8 = 1_u8;
+=======
+pub use treasury::Treasury;
+pub use operator::Operator;
+pub use holder::Holder;
+pub use incinerator::Incinerator;
+
+
+/// Ethereum account version
+pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
+    // Special case for alpha configuration (it is needed in order to separate the accounts created for
+    // testing this version)
+    255_u8
+} else {
+    1_u8
+};
+
+>>>>>>> ci-308-account_v2
 
 pub const TAG_EMPTY: u8 = 0;
 #[deprecated]

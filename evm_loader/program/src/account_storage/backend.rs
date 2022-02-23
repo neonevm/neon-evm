@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use evm::{H160, H256, U256};
 use solana_program::pubkey::Pubkey;
-use crate::account::{ERC20Allowance, token};
+use crate::account::{ERC20Allowance, token, EthereumContract};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
@@ -104,5 +104,24 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             offset: data_offset,
             data: crate::query::clone_chunk(&account.data.borrow(), data_offset, data_len),
         })
+    }
+
+    fn solana_accounts_space(&self, address: &H160) -> (usize, usize) {
+        let account_space = {
+            self.ethereum_account(address)
+                .map_or(0, |a| a.info.data_len())
+        };
+
+        let contract_space = {
+            self.ethereum_contract(address)
+                .map_or(0, |a| {
+                    EthereumContract::SIZE
+                        + a.extension.code.len()
+                        + a.extension.valids.len()
+                        + a.extension.storage.buffer_len()
+                })
+        };
+
+        (account_space, contract_space)
     }
 }

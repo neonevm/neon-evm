@@ -7,7 +7,7 @@ use crate::account;
 use crate::account::{EthereumAccount, Operator, program, Storage, FinalizedStorage, Treasury};
 use crate::account_storage::{ProgramAccountStorage};
 use crate::executor::Machine;
-use crate::executor_state::{ApplyState, ExecutorState, ExecutorSubstate};
+use crate::executor_state::{ApplyState};
 use crate::storage_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, UnsignedTransaction};
 use crate::error::EvmLoaderError;
@@ -59,17 +59,28 @@ pub fn do_begin<'a>(
 
 
     let (results, used_gas) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(trx.gas_limit.as_u64(), account_storage));
-        let executor_state = ExecutorState::new(executor_substate, account_storage);
-        let mut executor = Machine::new(caller, executor_state);
+        let mut executor = Machine::new(caller, account_storage)?;
+        executor.gasometer_mut().record_iterative_overhead();
+        executor.gasometer_mut().record_transaction_size(&trx);
 
-        if let Some(code_address) = trx.to {
-            executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit.as_u64())?;
+        let begin_result = if let Some(code_address) = trx.to {
+            executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit)
         } else {
-            executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit.as_u64())?;
-        }
+            executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit)
+        };
 
-        execute_steps(executor, step_count, &mut storage)
+        match begin_result {
+            Ok(()) => {
+                execute_steps(executor, step_count, &mut storage)
+            }
+            Err(ProgramError::InsufficientFunds) => {
+                let result = vec![];
+                let exit_reason = ExitError::OutOfFund.into();
+
+                (Some((result, exit_reason, None)), executor.used_gas())
+            }
+            Err(e) => return Err(e)
+        }
     };
 
     finalize(accounts, storage, account_storage, results, used_gas)
@@ -84,7 +95,7 @@ pub fn do_continue<'a>(
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     let (results, used_gas) = {
-        let executor = Machine::restore(&storage, account_storage);
+        let executor = Machine::restore(&storage, account_storage)?;
         execute_steps(executor, step_count, &mut storage)
     };
 
@@ -102,13 +113,13 @@ fn execute_steps(
 
     match executor.execute_n_steps(step_count) {
         Ok(_) => { // step limit
-            let used_gas = executor.gasometer().total_used_gas() / 2;
+            let used_gas = executor.used_gas();
             executor.save_into(storage);
 
-            (None, U256::from(used_gas))
+            (None, used_gas)
         },
         Err((result, reason)) => { // transaction complete
-            let used_gas = executor.gasometer().used_gas();
+            let used_gas = executor.used_gas();
 
             let apply_state = if reason.is_succeed() {
                 Some(executor.into_state().deconstruct())
@@ -116,7 +127,7 @@ fn execute_steps(
                 None
             };
 
-            (Some((result, reason, apply_state)), U256::from(used_gas))
+            (Some((result, reason, apply_state)), used_gas)
         }
     }
 }
@@ -129,16 +140,17 @@ fn pay_gas_cost<'a>(
 ) -> ProgramResult {
     debug_print!("pay_gas_cost {}", used_gas);
 
-    let gas_for_iteration = used_gas.saturating_sub(storage.gas_used_and_paid);
+    // Can overflow in malicious transaction
+    let value = used_gas.saturating_mul(storage.gas_price);
+
     account_storage.transfer_gas_payment(
         storage.caller,
         operator_ether_account,
-        gas_for_iteration,
-        storage.gas_price,
+        value,
     )?;
 
-    storage.gas_used_and_paid += gas_for_iteration;
-    storage.number_of_payments += 1;
+    storage.gas_used_and_paid = storage.gas_used_and_paid.saturating_add(used_gas);
+    storage.number_of_payments = storage.number_of_payments.saturating_add(1);
 
     Ok(())
 }
@@ -152,6 +164,18 @@ fn finalize<'a>(
 ) -> ProgramResult {
     debug_print!("finalize");
 
+    // The only place where checked math is requiered.
+    // Saturating math should be used everywhere else for gas calculation
+    let total_used_gas = storage.gas_used_and_paid.checked_add(used_gas);
+
+    // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas
+    if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit))  {
+        let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
+        let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used_and_paid);
+
+        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas);
+    }
+
     let results = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
         Ok(()) => results,
         Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
@@ -161,9 +185,15 @@ fn finalize<'a>(
     if let Some((result, exit_reason, apply_state)) = results {
         if let Some(apply_state) = apply_state {
             account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
+        } else {
+            // Transaction ended with error, no state to apply
+            // Increment nonce here. Normally it is incremented inside apply_state_change
+            if let Some(caller) = account_storage.ethereum_account_mut(&storage.caller) {
+                caller.trx_count += 1;
+            }
         }
 
-        accounts.neon_program.on_return(exit_reason, used_gas, &result)?;
+        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;
 
         account_storage.block_accounts(false)?;
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;

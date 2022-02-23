@@ -2,13 +2,12 @@ use crate::account::{Operator, program, EthereumAccount, sysvar, Treasury};
 use crate::transaction::{check_ethereum_transaction, check_secp256k1_instruction, UnsignedTransaction};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
-use evm::{H160, U256};
+use evm::{H160};
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
 use crate::executor::Machine;
-use crate::executor_state::{ExecutorState, ExecutorSubstate};
 
 
 struct Accounts<'a> {
@@ -77,38 +76,65 @@ fn execute<'a>(
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     let (exit_reason, return_value, apply_state, used_gas) = {
-        let executor_substate = Box::new(ExecutorSubstate::new(trx.gas_limit.as_u64(), account_storage));
-        let executor_state = ExecutorState::new(executor_substate, account_storage);
-        let mut executor = Machine::new(caller_address, executor_state);
+        let mut executor = Machine::new(caller_address, account_storage)?;
+        executor.gasometer_mut().record_transaction_size(&trx);
 
         executor.call_begin(
             caller_address,
             trx.to.expect("This is function call or transfer"),
             trx.call_data,
             trx.value,
-            trx.gas_limit.as_u64(), // TODO Use U256 for gas_limit
+            trx.gas_limit,
         )?;
 
         let (result, exit_reason) = executor.execute();
-        let executor_state = executor.into_state();
 
-        let used_gas = U256::from(executor_state.gasometer().used_gas());
-        assert!(used_gas <= trx.gas_limit);
+        let steps_executed = executor.get_steps_executed();
+        executor.gasometer_mut().pad_evm_steps(steps_executed);
 
-        if exit_reason.is_succeed() {
-            let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), used_gas)
+        let used_gas = executor.used_gas();
+        if used_gas > trx.gas_limit {
+            (evm::ExitError::OutOfGas.into(), vec![], None, trx.gas_limit)
         } else {
-            (exit_reason, result, None, used_gas)
+            let apply = if exit_reason.is_succeed() {
+                let executor_state = executor.into_state();
+                Some(executor_state.deconstruct())
+            } else {
+                None
+            };
+
+            (exit_reason, result, apply, used_gas)
         }
     };
 
-    account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, used_gas, trx.gas_price)?;
+
+    let gas_cost = used_gas.saturating_mul(trx.gas_price);
+    let payment_result = account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost);
+    let (exit_reason, return_value, apply_state) = match payment_result {
+        Ok(()) => {
+            (exit_reason, return_value, apply_state)
+        },
+        Err(ProgramError::InsufficientFunds) => {
+            let exit_reason = evm::ExitError::OutOfFund.into();
+            let return_value = vec![];
+
+            (exit_reason, return_value, None)
+        },
+        Err(e) => return Err(e) 
+    };
+
 
     if let Some(apply_state) = apply_state {
         account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
+    } else {
+        // Transaction ended with error, no state to apply
+        // Increment nonce here. Normally it is incremented inside apply_state_change
+        if let Some(caller) = account_storage.ethereum_account_mut(&caller_address) {
+            caller.trx_count += 1;
+        }
     }
-    accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
 
+    accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
+    
     Ok(())
 }
