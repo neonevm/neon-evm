@@ -249,7 +249,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             scheme,
             value,
             init_code: &init_code,
-            _target_gas,
+            target_gas: _target_gas,
         });
 
 
@@ -290,7 +290,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             code_address,
             transfer: &transfer,
             input: &input,
-            _target_gas,
+            target_gas: _target_gas,
             is_static,
             context: &context,
         });
@@ -404,7 +404,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             address: code_address,
             value: transfer_value,
             data: &input,
-            _gas_limit
+            gas_limit: _gas_limit
         });
         debug_print!("call_begin");
 
@@ -446,7 +446,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             caller,
             value: transfer_value,
             init_code: &code,
-            _gas_limit,
+            gas_limit: _gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 
