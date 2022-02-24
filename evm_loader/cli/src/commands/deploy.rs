@@ -21,6 +21,7 @@ use solana_sdk::{
     system_program,
     sysvar,
     system_instruction,
+    compute_budget,
 };
 
 use solana_cli_output::display::new_spinner_progress_bar;
@@ -49,6 +50,10 @@ use evm_loader::{
         Account,
         Contract
     },
+    config::{
+        COMPUTE_BUDGET_UNITS,
+        COMPUTE_BUDGET_HEAP_FRAME,
+    }
 };
 
 use crate::{
@@ -116,6 +121,8 @@ fn create_ethereum_contract_accounts_in_solana(
     }
 
     let instructions = vec![
+        compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+        compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
         system_instruction::create_account_with_seed(
             &creator.pubkey(),
             program_code,
@@ -160,15 +167,21 @@ fn fill_holder_account(
     for (chunk, i) in msg.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let offset = u32::try_from(i*DATA_CHUNK_SIZE).unwrap();
 
-        let instruction = Instruction::new_with_bincode(
-            config.evm_loader,
-            /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
-            &(0x12_u8, holder_id, offset, chunk),
-            vec![AccountMeta::new(*holder, false),
-                 AccountMeta::new(creator.pubkey(), true)]
-        );
+        let instructions = vec![
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
+            Instruction::new_with_bincode(
+                config.evm_loader,
+                /* &EvmInstruction::WriteHolder {holder_id, offset, bytes: chunk}, */
+                &(0x12_u8, holder_id, offset, chunk),
+                vec![
+                    AccountMeta::new(*holder, false),
+                    AccountMeta::new(creator.pubkey(), true)
+                ]
+            )
+        ];
 
-        let message = Message::new(&[instruction], Some(&creator.pubkey()));
+        let message = Message::new(&instructions, Some(&creator.pubkey()));
         write_messages.push(message);
     }
     debug!("Send write message");
@@ -244,7 +257,7 @@ fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransactio
             if let Some(meta) = result.transaction.meta {
                 if let Some(inner_instructions) = meta.inner_instructions {
                     for instruction in inner_instructions {
-                        if instruction.index == 0 {
+                        if instruction.index == 2 {
                             if let Some(UiInstruction::Compiled(compiled_instruction)) = instruction.instructions.iter().last() {
                                 if compiled_instruction.program_id_index as usize == evm_loader_index.unwrap() {
                                     let decoded = bs58::decode(compiled_instruction.data.clone()).into_vec().unwrap();
@@ -433,7 +446,7 @@ pub fn execute(
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count, token_mint);
 
     // Check program account to see if partial initialization has occurred
-    let mut instrstruction = create_ethereum_contract_accounts_in_solana(
+    let mut instructions = create_ethereum_contract_accounts_in_solana(
         config,
         &program_id,
         &program_ether,
@@ -480,25 +493,34 @@ pub fn execute(
                         ];
 
     let mut holder_with_accounts = vec![AccountMeta::new(holder, false)];
-    holder_with_accounts.extend(accounts.clone());
+
     // Send trx_from_account_data_instruction
+    holder_with_accounts.extend(accounts.clone());
     {
-        debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_with_accounts);
-        let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
-                                                                              holder_with_accounts);
-        instrstruction.push(trx_from_account_data_instruction);
-        crate::send_transaction(config, &instrstruction)?;
+        instructions.push(
+            Instruction::new_with_bincode(
+                config.evm_loader,
+                &(0x16_u8, collateral_pool_index, 0_u64),
+                holder_with_accounts
+            )
+        );
+        debug!("Send trx_from_account_data_instruction: {:?}", instructions);
+        crate::send_transaction(config, &instructions)?;
     }
 
     // Continue while no result
     loop {
         let continue_accounts = accounts.clone();
         debug!("continue continue_accounts: {:?}", continue_accounts);
-        let continue_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                 &(0x14_u8, collateral_pool_index, 400_u64),
-                                                                 continue_accounts);
-        let signature = crate::send_transaction(config, &[continue_instruction])?;
+        let continue_instructions = vec![
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
+            Instruction::new_with_bincode(config.evm_loader,
+                &(0x14_u8, collateral_pool_index, 400_u64),
+                continue_accounts)
+        ];
+        debug!("Send continue: {:?}", continue_instructions);
+        let signature = crate::send_transaction(config, &continue_instructions)?;
 
         // Check if Continue returned some result
         let result = config.rpc_client.get_transaction_with_config(
@@ -508,6 +530,7 @@ pub fn execute(
                 encoding: Some(UiTransactionEncoding::Json),
             },
         )?;
+        debug!("Send continue result: {:?}", result);
 
         let return_value = parse_transaction_reciept(config, result);
 

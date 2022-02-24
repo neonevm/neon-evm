@@ -60,7 +60,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def test_call_by_some_caller(self):
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=self.loader.loader_id,
             data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
             keys=[
@@ -94,7 +94,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             confirm_transaction(client, tx['result'])
             balance = client.get_balance(acc.public_key())['result']['value']
             print("Done\n")
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=self.loader.loader_id,
             data=bytearray.fromhex("03") + self.collateral_pool_index_buf + bytearray.fromhex("3917b3df"),
             keys=[

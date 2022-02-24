@@ -125,27 +125,29 @@ class storage_states(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction, writable_code, acc, caller, add_meta=[]):
         print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_begin_0D(self, storage, steps, msg, instruction, writable_code, acc, caller, add_meta=[]):
         print("Begin, combined mode")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index + 1, len(msg), 13)))
         trx.add(self.sol_instr_13_partial_call_or_continue(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue_0D(self, storage, steps, msg, instruction, writable_code, acc, caller, add_meta=[]):
         print("Continue, combined mode")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_13_partial_call_or_continue(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
@@ -167,7 +169,7 @@ class storage_states(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), seed, 10 ** 9, 128 * 1024,
                                           PublicKey(evm_loader_id)))
             send_transaction(client, trx, acc)
@@ -212,7 +214,7 @@ class storage_states(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06')  # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -244,7 +246,7 @@ class storage_states(unittest.TestCase):
             self.call_continue_0D(storage, 1000, msg1, instruction1, False, self.acc, self.caller)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 2: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -263,7 +265,7 @@ class storage_states(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06')  # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -321,7 +323,7 @@ class storage_states(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06')  # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success

@@ -1,9 +1,7 @@
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
 import unittest
 from base58 import b58decode
 from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, ACCOUNT_LEN
 from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from eth_utils import abi
@@ -110,20 +108,21 @@ class EventTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
     def call_cancel(self, storage, nonce):
         print("Cancel")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_21_cancel(storage, nonce))
         return send_transaction(client, trx, self.acc)
 
@@ -142,8 +141,9 @@ class EventTest(unittest.TestCase):
     def call_signed(self, input):
         (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg), 5)))
         trx.add(self.sol_instr_05(from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
@@ -152,7 +152,7 @@ class EventTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 
@@ -190,7 +190,7 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -213,7 +213,7 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -238,7 +238,7 @@ class EventTest(unittest.TestCase):
                 print(result)
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
                 self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
@@ -271,7 +271,7 @@ class EventTest(unittest.TestCase):
 
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
                 # self.assertEqual(data[:1], b'\x07')
@@ -306,10 +306,11 @@ class EventTest(unittest.TestCase):
         assert (from_addr1 == self.caller_ether)
         assert (from_addr2 == self.caller_ether)
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1), 5)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+1, len(msg1), 5)))
         trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2), 5)))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index+3, len(msg2), 5)))
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
@@ -322,8 +323,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
 
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
-        self.assertEqual(result['meta']['innerInstructions'][1]['index'], 3)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index + 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][1]['index'], self.index + 3)  # second instruction
 
         # log sol_instr_05(from_addr1 + sign1 + msg1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)

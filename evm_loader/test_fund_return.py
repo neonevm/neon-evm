@@ -31,7 +31,7 @@ class FundReturnTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), seed, 10**9, 128*1024, PublicKey(EVM_LOADER)))
             send_transaction(client, trx, acc)
 
@@ -39,7 +39,7 @@ class FundReturnTest(unittest.TestCase):
 
 
     def call_refund_tx(self, del_key, acc, seed, signer):
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=EVM_LOADER,
             data=bytearray.fromhex("10") + bytes(seed, 'utf8'),

@@ -82,7 +82,7 @@ class DeployTest(unittest.TestCase):
         holder = PublicKey(sha256(bytes(self.operator_acc.public_key())+bytes(seed, 'utf8')+bytes(PublicKey(evm_loader_id))).digest())
         print("Holder", holder)
         if getBalance(holder) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.operator_acc.public_key(), self.operator_acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             result = send_transaction(client, trx, self.operator_acc)
             print(result)
@@ -121,8 +121,8 @@ class DeployTest(unittest.TestCase):
         receipts = []
         rest = msg
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
+            (part, rest) = (rest[:950], rest[950:])
+            trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(holder_id, offset, part),
                 keys=[
@@ -144,7 +144,7 @@ class DeployTest(unittest.TestCase):
 
     def create_contract_accounts(self, base, seed, contract_eth, contract_sol, contract_nonce, code_sol, code_size):
         # Create contract accounts
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(base, base, seed, 10**9, code_size, PublicKey(evm_loader_id)))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
             #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
@@ -233,7 +233,7 @@ class DeployTest(unittest.TestCase):
         balance = int(minimum_balance / 100)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.operator_acc.public_key(), self.operator_acc.public_key(), seed, balance, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.operator_acc)
 
@@ -243,14 +243,14 @@ class DeployTest(unittest.TestCase):
         storage = self.create_storage_account()
 
         print("Begin")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_22_partial_call(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
         result = send_transaction(client, trx, self.operator_acc)["result"]
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.sol_instr_20_continue(storage, 50, contract_sol, code_sol))
             print(trx.instructions[-1].keys)
             result = send_transaction(client, trx, self.operator_acc)["result"]
@@ -269,7 +269,7 @@ class DeployTest(unittest.TestCase):
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
             print(trx.instructions[-1].keys)
             result = send_transaction(client, trx, self.operator_acc)["result"]
@@ -311,7 +311,7 @@ class DeployTest(unittest.TestCase):
         storage = self.create_storage_account()
 
         print("Execute combined continue for a holder account (neon instruction 0x0e)")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
         print("Expecting Exception: Program failed to complete")

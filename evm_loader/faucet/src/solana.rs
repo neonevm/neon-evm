@@ -16,8 +16,10 @@ use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::{system_program, sysvar};
+use solana_sdk::compute_budget;
 
 use crate::{config, ethereum, id::ReqId};
+use evm_loader::config::{COMPUTE_BUDGET_UNITS, COMPUTE_BUDGET_HEAP_FRAME};
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
@@ -97,6 +99,8 @@ pub async fn transfer_token(
                 info!("{} Ether {:?}", id, ether_account.unwrap());
             } else {
                 info!("{} No ether account; will be created", id);
+                instructions.push(compute_budget::request_units(COMPUTE_BUDGET_UNITS));
+                instructions.push(compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
                 instructions.push(create_ether_account_instruction(
                     signer_account,
                     evm_loader_id,

@@ -7,10 +7,15 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_program,
     sysvar,
+    compute_budget,
 };
 
 use evm_loader::{
     account_data::AccountData,
+    config::{
+        COMPUTE_BUDGET_UNITS,
+        COMPUTE_BUDGET_HEAP_FRAME,
+    }
 };
 
 use crate::{
@@ -102,8 +107,16 @@ pub fn execute(
             info!("\t{:?}", meta);
         }
 
-        let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
-        crate::send_transaction(config, &[instruction])?;
+        let instructions = vec![
+            compute_budget::request_units(COMPUTE_BUDGET_UNITS),
+            compute_budget::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
+            Instruction::new_with_bincode(
+                config.evm_loader,
+                &(21_u8, trx_count),
+                accounts_meta
+            )
+        ];
+        crate::send_transaction(config, &instructions)?;
 
     } else {
         return Err(NeonCliError::AccountNotFound(*storage_account));

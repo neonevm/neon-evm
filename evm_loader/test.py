@@ -120,7 +120,7 @@ class EvmLoaderTests2(unittest.TestCase):
         balance = client.get_balance(balanceAccount)['result']['value']
         if 0 == balance:
             lamports = Token.get_min_balance_rent_for_exempt_for_account(client)
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.loader.createAccountWithSeed(self.acc, PublicKey(self.caller), seed, tokenId, lamports, 165))
             trx.add(TransactionInstruction(program_id=tokenId, data=bytes.fromhex('01'), keys=[
                     AccountMeta(pubkey=balanceAccount, is_signer=False, is_writable=True),
@@ -234,7 +234,7 @@ class EvmLoaderTests(unittest.TestCase):
 
     def test_call_getOwner(self):
         data = bytearray.fromhex("03893d20e8")
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=self.contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -244,7 +244,7 @@ class EvmLoaderTests(unittest.TestCase):
 
     def test_call_changeOwner(self):
         data = bytearray.fromhex("03a6f9dae10000000000000000000000005b38da6a701c568545dcfcb03fcb875f56beddc4")
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=self.contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),
@@ -257,7 +257,7 @@ class EvmLoaderTests(unittest.TestCase):
     def test_call(self):
         data = bytearray.fromhex("03893d20e8")
         #data = (1024*1024-1024).to_bytes(4, "little")
-        trx = Transaction().add(
+        trx = TransactionWithComputeBudget().add(
             TransactionInstruction(program_id=evm_loader, data=data, keys=[
                 AccountMeta(pubkey=self.contract, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=self.caller, is_signer=False, is_writable=True),

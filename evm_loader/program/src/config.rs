@@ -378,6 +378,10 @@ pub const EVM_BYTE_COST: u64 = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 * DEFAULT_
 pub const EVM_STEPS: u64  = 100;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 1000;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 
 // TODO: replace 5000 to fee_calculator from sdk
 /// `lamports per signature`
@@ -398,6 +402,8 @@ neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE)
 neon_elf_param!( NEON_SPL_TOKEN_ACCOUNT_SIZE, formatcp!("{:?}", spl_token::state::Account::LEN));
 neon_elf_param!( NEON_LAMPORTS_PER_SIGNATURE, formatcp!("{:?}", LAMPORTS_PER_SIGNATURE));
 neon_elf_param!( NEON_ACCOUNT_STORAGE_OVERHEAD, formatcp!("{:?}", ACCOUNT_STORAGE_OVERHEAD));
+neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
+neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 
 /// Chain ID
 #[must_use]
