@@ -26,6 +26,8 @@ use crate::{
     NeonCliResult,
 };
 
+use crate::{errors};
+
 #[allow(clippy::too_many_lines)]
 pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data: Option<Vec<u8>>,
                    value: Option<U256>, token_mint: &Pubkey) -> NeonCliResult {
@@ -72,7 +74,13 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     value.unwrap_or_default(),
                     gas_limit,
                     )?;
-                executor.execute()
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             },
             None => {
                 debug!("create_begin(storage.origin()={:?}, data={:?}, value={:?})",
@@ -85,7 +93,13 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     value.unwrap_or_default(),
                     gas_limit
                     )?;
-                executor.execute()
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             }
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
