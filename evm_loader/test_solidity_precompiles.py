@@ -127,7 +127,7 @@ class PrecompilesTests(unittest.TestCase):
         eth_tx = {
             'to': self.eth_contract,
             'value': 0,
-            'gas': 9999999,
+            'gas': 999999999,
             'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller),
             'data': call_data,
@@ -229,7 +229,7 @@ class PrecompilesTests(unittest.TestCase):
 
 
     def call_with_holder_account(self, input):
-        tx = {'to': self.eth_contract, 'value': 0, 'gas': 9999999, 'gasPrice': 0,
+        tx = {'to': self.eth_contract, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())

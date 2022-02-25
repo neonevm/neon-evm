@@ -3,6 +3,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
+mod syscall_stubs;
 
 mod errors;
 mod logs;

@@ -87,4 +87,7 @@ pub trait AccountStorage {
 
     /// Query account meta info
     fn query_account(&self, key: &Pubkey, data_offset: usize, data_len: usize) -> Option<crate::query::Value>;
+
+    /// Solana accounts data len
+    fn solana_accounts_space(&self, address: &H160) -> (usize, usize);
 }

@@ -1,13 +1,8 @@
-use std::convert::TryFrom;
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason,};
 
 use evm_loader::{
-    executor_state::{
-        ExecutorState,
-        ExecutorSubstate,
-    },
     executor::Machine,
 };
 
@@ -20,6 +15,7 @@ use crate::{
     },
     Config,
     NeonCliResult,
+    syscall_stubs::Stubs,
 };
 
 use solana_sdk::pubkey::Pubkey;
@@ -40,6 +36,9 @@ pub fn execute(
         &hex::encode(data.clone().unwrap_or_default()),
         value);
 
+    let syscall_stubs = Stubs::new(config)?;
+    solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
+
     let storage = EmulatorAccountStorage::new(config);
     
     let program_id = if let Some(program_id) = contract_id {
@@ -54,14 +53,9 @@ pub fn execute(
         program_id
     };
 
-    let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
-        // u64::MAX is too large, remix gives this error:
-        // Gas estimation errored with the following message (see below).
-        // Number can only safely store up to 53 bits
-        let gas_limit = 50_000_000;
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
-        let executor_state = ExecutorState::new(executor_substate, &storage);
-        let mut executor = Machine::new(caller_id, executor_state);
+    let (exit_reason, result, applies_logs,  steps_executed, used_gas) = {
+        let gas_limit = U256::from(999_999_999_999_u64);
+        let mut executor = Machine::new(caller_id, &storage)?;
         debug!("Executor initialized");
 
         let (result, exit_reason) = match &contract_id {
@@ -92,19 +86,17 @@ pub fn execute(
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
         debug!("{} steps executed", executor.get_steps_executed());
+        debug!("{} used gas", executor.used_gas());
 
         let steps_executed = executor.get_steps_executed();
+        let used_gas = executor.used_gas();
         let executor_state = executor.into_state();
-        let used_gas: u64 = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas: i64 = executor_state.gasometer().refunded_gas();
-        let needed_gas: u64 = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas).unwrap_or(0) } else { 0 });
-        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), needed_gas, steps_executed)
+            (exit_reason, result, Some(apply), steps_executed, used_gas)
         } else {
-            (exit_reason, result, None, needed_gas, steps_executed)
+            (exit_reason, result, None, steps_executed, used_gas)
         }
     };
 
@@ -165,8 +157,8 @@ pub fn execute(
         "result": &hex::encode(&result),
         "exit_status": status,
         "exit_reason": exit_reason,
-        "used_gas": used_gas,
         "steps_executed": steps_executed,
+        "used_gas": used_gas.as_u64(),
     }).to_string();
 
     println!("{}", js);

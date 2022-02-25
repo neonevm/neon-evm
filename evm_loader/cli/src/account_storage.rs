@@ -110,7 +110,7 @@ struct SolanaAccount {
 struct SolanaNewAccount {
     key: Pubkey,
     writable: bool,
-    code_size: Option<usize>
+    code_size: Option<usize>,
 }
 
 impl SolanaAccount {
@@ -263,9 +263,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                             info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
                             storage.insert(key, value).unwrap();
                         }
+
                         storage.last_used() as usize
                     };
-
+                        
                     let mut accounts = self.accounts.borrow_mut();
                     let mut new_accounts = self.new_accounts.borrow_mut();
                     if let Some(ref mut acc) = accounts.get_mut(&address) {
@@ -491,7 +492,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: solana_address.to_string(),
                         contract: contract_address.map(|v| v.to_string()),
                         code_size: acc.code_size,
-                        code_size_current: acc.code_size_current
+                        code_size_current: acc.code_size_current,
                 });
             }
         }
@@ -506,7 +507,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                         account: acc.key.to_string(),
                         contract: None,
                         code_size: acc.code_size,
-                        code_size_current : None
+                        code_size_current : None,
                 });
             }
         }
@@ -693,6 +694,25 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         } else {
             None
         }
+    }
+
+    fn solana_accounts_space(&self, address: &H160) -> (usize, usize) {
+        let account_space = {
+            self.ethereum_account_map_or(address, 0, |a| a.info.data_len())
+        };
+
+        let contract_space = {
+            self.ethereum_contract_map_or(address, 
+                0, 
+                |a| {
+                    EthereumContract::SIZE 
+                        + a.extension.code.len() 
+                        + a.extension.valids.len()
+                        + a.extension.storage.buffer_len()
+            })
+        };
+
+        (account_space, contract_space)
     }
 }
 
