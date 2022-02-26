@@ -1,15 +1,14 @@
-use crate::account::{program, token, EthereumAccountV1, EthereumAccount, Operator};
-use crate::config::token_mint;
-
-use spl_associated_token_account::get_associated_token_address;
-
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
+    msg,
     program_error::ProgramError,
-    pubkey::Pubkey,
-    msg
+    pubkey::Pubkey
 };
+use spl_associated_token_account::get_associated_token_address;
+
+use crate::account::{EthereumAccount, EthereumAccountV1, Operator, program, token};
+use crate::config::token_mint;
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -41,7 +40,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 
 /// Checks incoming accounts.
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
-    msg!("MigrateAccount: validate");
+    debug_print!("MigrateAccount: validate");
 
     let (expected_address, _) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
@@ -72,34 +71,34 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 
 /// Executes all actions.
 fn execute(accounts: &Accounts) -> ProgramResult {
-    msg!("MigrateAccount: execute");
+    debug_print!("MigrateAccount: execute");
     let amount = accounts.token_balance_account.amount;
 
-    msg!("MigrateAccount: convert_from_v1");
+    debug_print!("MigrateAccount: convert_from_v1");
     let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         amount)?;
 
-    msg!("MigrateAccount: approve");
-    accounts.token_program.approve(
-        &ethereum_account,
-        accounts.token_balance_account.info,
-        accounts.authority_info,
-        amount)?;
+//    debug_print!("MigrateAccount: approve");
+//    accounts.token_program.approve(
+//        &ethereum_account,
+//        accounts.token_balance_account.info,
+//        accounts.authority_info,
+//        amount)?;
 
-    msg!("MigrateAccount: transfer");
+    debug_print!("MigrateAccount: transfer");
     accounts.token_program.transfer(
         &ethereum_account,
         accounts.token_balance_account.info,
         accounts.token_pool_account.info,
         amount)?;
 
-    msg!("MigrateAccount: close token account");
+    debug_print!("MigrateAccount: close token account");
     accounts.token_program.close_account(
         &ethereum_account,
         accounts.token_balance_account.info,
         &accounts.operator)?;
 
-    msg!("MigrateAccount: OK");
+    debug_print!("MigrateAccount: OK");
     Ok(())
 }
