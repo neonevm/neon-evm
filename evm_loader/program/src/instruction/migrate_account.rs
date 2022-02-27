@@ -59,13 +59,6 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
             accounts.token_pool_account.info.key, expected_pool_address);
     }
 
-    if accounts.ethereum_account.rw_blocked_acc.is_some()
-        || accounts.ethereum_account.ro_blocked_cnt > 0 {
-        return Err!(ProgramError::InvalidInstructionData;
-            "Account {} - is blocked",
-            accounts.ethereum_account.ether);
-    }
-
     Ok(())
 }
 
@@ -78,13 +71,6 @@ fn execute(accounts: &Accounts) -> ProgramResult {
     let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
         amount)?;
-
-//    debug_print!("MigrateAccount: approve");
-//    accounts.token_program.approve(
-//        &ethereum_account,
-//        accounts.token_balance_account.info,
-//        accounts.authority_info,
-//        amount)?;
 
     debug_print!("MigrateAccount: transfer");
     accounts.token_program.transfer(
