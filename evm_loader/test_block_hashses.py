@@ -144,7 +144,7 @@ class PrecompilesTests(unittest.TestCase):
         return solana_trx
 
     def sol_instr_keccak(self, keccak_instruction):
-        return  TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
+        return  TransactionInstruction(program_id="SysvarRecentB1ockHashes11111111111111111111", data=keccak_instruction, keys=[
                     AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
                 ])
 
@@ -158,7 +158,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             trx_data,
-            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
@@ -175,7 +175,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_22_begin:', neon_evm_instr_22_begin)
         return neon_evm_instr_22_begin
@@ -191,7 +191,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue

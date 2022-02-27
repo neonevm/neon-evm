@@ -797,7 +797,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    #[allow(clippy::unused_self)]
     pub fn block_hash(&self, number: U256) -> H256 {
         self.backend.block_hash(number)
     }
