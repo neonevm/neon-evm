@@ -42,11 +42,26 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     debug_print!("MigrateAccount: validate");
 
+    msg!("ethereum_account.ether(): {}",
+        &accounts.ethereum_account.ether);
+    msg!("ethereum_account.eth_token_account(): {}",
+        &accounts.ethereum_account.eth_token_account);
+
+    if &accounts.ethereum_account.eth_token_account !=
+       accounts.token_balance_account.info.key {
+        return Err!(ProgramError::InvalidArgument;
+            "Ethereum account V1 {} should store balance in {} - got {}",
+            &accounts.ethereum_account.ether,
+            &accounts.ethereum_account.eth_token_account,
+            accounts.token_balance_account.info.key);
+    }
+
     let (expected_address, _) = Pubkey::find_program_address(&[b"Deposit"], program_id);
     if accounts.authority_info.key != &expected_address {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected PDA address {}",
-            accounts.authority_info.key, expected_address);
+            accounts.authority_info.key,
+            expected_address);
     }
 
     let expected_pool_address = get_associated_token_address(
@@ -56,7 +71,8 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     if accounts.token_pool_account.info.key != &expected_pool_address {
         return Err!(ProgramError::InvalidArgument;
             "Account {} - expected Neon Token Pool {}",
-            accounts.token_pool_account.info.key, expected_pool_address);
+            accounts.token_pool_account.info.key,
+            expected_pool_address);
     }
 
     Ok(())
