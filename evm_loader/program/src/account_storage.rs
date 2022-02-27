@@ -8,20 +8,20 @@ use crate::{
     precompile_contracts::is_precompile_address,
     system::create_pda_account
 };
-use evm::backend::Apply;
+use evm::{backend::Apply, H256};
 use evm::{H160,  U256};
 use solana_program::{
     account_info::{AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar},
+    sysvar::{clock::Clock, Sysvar, slot_hashes, recent_blockhashes},
     program::invoke_signed,
     entrypoint::ProgramResult,
     system_program,
 };
 use std::{
     collections::BTreeMap,
-    cell::RefCell
+    cell::RefCell, convert::TryInto
 };
 use crate::executor_state::{SplTransfer, ERC20Approve, SplApprove};
 use crate::account_data::ERC20Allowance;
@@ -392,6 +392,46 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn block_number(&self) -> U256 {
         let clock = Clock::get().unwrap();
         clock.slot.into()
+    }
+
+    fn block_hash(&self, number: U256) -> H256 {
+        if let Some(account) = self.solana_accounts.get(&recent_blockhashes::ID) {
+            let slot_hash_data = account.data.borrow();
+
+            let clock = Clock::get().unwrap();
+
+            if number >= clock.slot.into() {
+                return H256::default();
+            }
+
+            let offset: usize = (8 + (clock.slot - 1 - number.as_u64()) * 40).try_into().unwrap();
+
+            if offset + 32 > slot_hash_data.len() {
+                return H256::default();
+            }
+
+            H256::from_slice(&slot_hash_data[offset..][..32])
+        } else if let Some(account) = self.solana_accounts.get(&slot_hashes::ID) {
+            let slot_hash_data = account.data.borrow();
+
+            let mut lo: usize = 0;
+            let mut hi: usize = (slot_hash_data.len() - 8) / 40;
+        
+            while lo < hi {
+                let m: usize = (hi - lo) / 2 + lo;
+
+                let slot = u64::from_le_bytes(slot_hash_data[8+m*40..][..8].try_into().unwrap());
+
+                match number.as_u64() {
+                    d if d == slot => return H256::from_slice(&slot_hash_data[8+8+m*40..][..32]),
+                    d if d < slot => {hi = m;},
+                    _ => {lo = m+1;},
+                }
+            }
+            H256::default()
+        } else {
+            H256::default()
+        }
     }
 
     fn block_timestamp(&self) -> U256 {

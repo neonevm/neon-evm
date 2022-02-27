@@ -14,7 +14,7 @@ use std::{
 
 use log::{error, info, trace, warn};
 
-use evm::{H160, U256, Transfer};
+use evm::{H160, H256, U256, Transfer};
 use evm::backend::Apply;
 use serde::{Deserialize, Serialize};
 
@@ -635,6 +635,17 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn block_number(&self) -> U256 { self.block_number.into() }
+
+    fn block_hash(&self, number: U256) -> H256 { 
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+            trace!("Got blockhash");
+            trace!("blockhash {}", timestamp.blockhash);
+            H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().unwrap())
+        } else {
+            error!("Get blockhash error");
+            H256::default()
+        }
+     }
 
     fn block_timestamp(&self) -> U256 { self.block_timestamp.into() }
 

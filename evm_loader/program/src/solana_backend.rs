@@ -68,6 +68,8 @@ pub trait AccountStorage {
     fn balance(&self, address: &H160) -> U256;
     /// Get block number
     fn block_number(&self) -> U256;
+    /// Get block number
+	fn block_hash(&self, number: U256) -> H256;
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
 
