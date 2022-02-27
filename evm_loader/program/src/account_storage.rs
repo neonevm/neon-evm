@@ -17,7 +17,7 @@ use solana_program::{
     sysvar::{clock::Clock, Sysvar, slot_hashes, recent_blockhashes},
     program::invoke_signed,
     entrypoint::ProgramResult,
-    system_program,
+    system_program, msg,
 };
 use std::{
     collections::BTreeMap,
@@ -395,23 +395,28 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_hash(&self, number: U256) -> H256 {
+        msg!("get blockhash {}", number.as_u64());
         if let Some(account) = self.solana_accounts.get(&recent_blockhashes::ID) {
+            msg!("recent_blockhashes");
             let slot_hash_data = account.data.borrow();
 
             let clock = Clock::get().unwrap();
 
             if number >= clock.slot.into() {
+                msg!("number >= clock.slot.into()");
                 return H256::default();
             }
 
             let offset: usize = (8 + (clock.slot - 1 - number.as_u64()) * 40).try_into().unwrap();
 
             if offset + 32 > slot_hash_data.len() {
+                msg!("offset + 32 > slot_hash_data.len()");
                 return H256::default();
             }
 
             H256::from_slice(&slot_hash_data[offset..][..32])
         } else if let Some(account) = self.solana_accounts.get(&slot_hashes::ID) {
+            msg!("slot_hashes");
             let slot_hash_data = account.data.borrow();
 
             let mut lo: usize = 0;

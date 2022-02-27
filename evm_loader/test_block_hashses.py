@@ -158,7 +158,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             trx_data,
-            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
@@ -175,7 +175,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_22_begin:', neon_evm_instr_22_begin)
         return neon_evm_instr_22_begin
@@ -191,7 +191,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             step_count,
-            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
@@ -272,6 +272,7 @@ class PrecompilesTests(unittest.TestCase):
         current_slot = client.get_slot()["result"]
         for slot in range(current_slot):
             hash_val = base58.b58decode(client.get_confirmed_block(slot)['result']['blockhash']).hex()
+            print(f"slot: {slot} hash_val: {hash_val}")
             slot_hash[int(slot)] = hash_val
         return slot_hash
 
@@ -279,6 +280,11 @@ class PrecompilesTests(unittest.TestCase):
         print("test_01_block_hashes")
         solana_result = self.get_blocks_from_solana()
         for sol_slot, sol_hash in solana_result.items():
+            if sol_slot % 2 == 0:
+                self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
+            else:
+                self.block_hash_source = "SysvarS1otHistory11111111111111111111111111"
+
             result = self.send_transaction(self.make_getValues(sol_slot))
             print(f"sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
 
