@@ -144,7 +144,7 @@ class PrecompilesTests(unittest.TestCase):
         return solana_trx
 
     def sol_instr_keccak(self, keccak_instruction):
-        return  TransactionInstruction(program_id="SysvarRecentB1ockHashes11111111111111111111", data=keccak_instruction, keys=[
+        return  TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                     AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
                 ])
 
