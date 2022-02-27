@@ -290,6 +290,9 @@ class PrecompilesTests(unittest.TestCase):
 
     def test_02_block_hashes(self):
         print("test_02_block_hashes")
+        self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
+        result = self.send_transaction(self.make_getCurrentValues())
+        self.block_hash_source = "SysvarS1otHistory11111111111111111111111111"
         result = self.send_transaction(self.make_getCurrentValues())
         print(f"result: {result}")
 
