@@ -522,7 +522,8 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
                                     code_sol_acc,
                                     collateral_pool_index_buf,
                                     collateral_pool_address,
-                                    evm_instruction):
+                                    evm_instruction,
+                                    add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("05") + collateral_pool_index_buf + evm_instruction,
@@ -546,6 +547,9 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
@@ -688,7 +692,8 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
                                    code_sol_acc,
                                    collateral_pool_index_buf,
                                    collateral_pool_address,
-                                   step_count):
+                                   step_count,
+                                   add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("16") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
@@ -712,6 +717,9 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
@@ -723,7 +731,8 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
                                     storage_sol_acc,
                                     contract_sol_acc,
                                     code_sol_acc,
-                                    nonce):
+                                    nonce,
+                                    add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("15") + nonce.to_bytes(8, 'little'),
@@ -746,6 +755,9 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])
@@ -760,7 +772,8 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
                                                code_sol_acc,
                                                collateral_pool_index_buf,
                                                collateral_pool_address,
-                                               step_count):
+                                               step_count,
+                                               add_meta=[]):
     return TransactionInstruction(
         program_id=evm_loader_program_id,
         data=bytearray.fromhex("0E") + collateral_pool_index_buf + step_count.to_bytes(8, byteorder='little'),
@@ -784,6 +797,9 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+             ]
+             + add_meta +
+             [
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
         ])

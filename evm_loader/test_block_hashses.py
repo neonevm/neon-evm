@@ -157,7 +157,8 @@ class PrecompilesTests(unittest.TestCase):
             self.contract_code,
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
-            trx_data
+            trx_data,
+            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
@@ -173,7 +174,8 @@ class PrecompilesTests(unittest.TestCase):
             self.contract_code,
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
-            step_count
+            step_count,
+            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_22_begin:', neon_evm_instr_22_begin)
         return neon_evm_instr_22_begin
@@ -188,7 +190,8 @@ class PrecompilesTests(unittest.TestCase):
             self.contract_code,
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
-            step_count
+            step_count,
+            add_meta=[AccountMeta(pubkey="SysvarS1otHistory11111111111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
