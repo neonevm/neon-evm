@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 
+use evm::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::msg;
 use solana_program::program_error::ProgramError;
@@ -161,6 +162,31 @@ where
         Ok(Self { dirty: false, data, extension, info })
     }
 
+    #[deprecated]
+    fn reinit(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
+        if !info.is_writable {
+            return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", info.key);
+        }
+
+        let rent = Rent::get()?;
+        if !rent.is_exempt(info.lamports(), info.data_len()) {
+            return Err!(ProgramError::InvalidArgument; "Account {} - is not rent exempt", info.key);
+        }
+
+        let mut parts = split_account_data(info, T::SIZE)?;
+        if *parts.tag == TAG_EMPTY {
+            return Err!(ProgramError::UninitializedAccount; "Account {} - is not initialized", info.key);
+        }
+
+        *parts.tag = T::TAG;
+        data.pack(&mut parts.data);
+
+        let extension = E::unpack(&data, parts.remaining)?;
+        let extension = ManuallyDrop::new(extension);
+
+        Ok(Self { dirty: false, data, extension, info })
+    }
+
     pub fn reload_extension(&mut self) -> Result<(), ProgramError> {
         debug_print!("reload extension {:?}", &self.data);
 
@@ -292,8 +318,6 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
     Ok(())
 }
 
-use evm::U256;
-
 /// Conversion needed for migration of accounts from V1 to the current version.
 #[deprecated]
 #[allow(deprecated)]
@@ -311,6 +335,6 @@ impl<'a> EthereumAccount<'a> {
             ro_blocked_count: v1.data.ro_blocked_cnt,
         };
 
-        Self::init(v1.info, data)
+        Self::reinit(v1.info, data)
     }
 }
