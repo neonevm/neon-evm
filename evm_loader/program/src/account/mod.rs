@@ -162,31 +162,6 @@ where
         Ok(Self { dirty: false, data, extension, info })
     }
 
-    #[deprecated]
-    fn reinit(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
-        if !info.is_writable {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not writable", info.key);
-        }
-
-        let rent = Rent::get()?;
-        if !rent.is_exempt(info.lamports(), info.data_len()) {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not rent exempt", info.key);
-        }
-
-        let mut parts = split_account_data(info, T::SIZE)?;
-        if *parts.tag == TAG_EMPTY {
-            return Err!(ProgramError::UninitializedAccount; "Account {} - is not initialized", info.key);
-        }
-
-        *parts.tag = T::TAG;
-        data.pack(&mut parts.data);
-
-        let extension = E::unpack(&data, parts.remaining)?;
-        let extension = ManuallyDrop::new(extension);
-
-        Ok(Self { dirty: false, data, extension, info })
-    }
-
     pub fn reload_extension(&mut self) -> Result<(), ProgramError> {
         debug_print!("reload extension {:?}", &self.data);
 
@@ -335,6 +310,8 @@ impl<'a> EthereumAccount<'a> {
             ro_blocked_count: v1.data.ro_blocked_cnt,
         };
 
-        Self::reinit(v1.info, data)
+        let info = v1.info;
+        info.data.borrow_mut()[0] = TAG_EMPTY; // reinit
+        Self::init(info, data)
     }
 }
