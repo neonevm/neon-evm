@@ -21,7 +21,7 @@ use crate::config::token_mint;
 
 type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1>;
 
-fn convert_from_v1<'a>(v1: &EthereumAccountV1<'a>, balance: U256) -> Result<EthereumAccount<'a>, ProgramError> {
+fn convert_from_v1(v1: EthereumAccountV1, balance: U256) -> Result<EthereumAccount, ProgramError> {
     let null = Pubkey::new_from_array([0_u8; 32]);
 
     let data = ether_account::Data {
@@ -35,6 +35,8 @@ fn convert_from_v1<'a>(v1: &EthereumAccountV1<'a>, balance: U256) -> Result<Ethe
     };
 
     let info = v1.info;
+    drop(v1);
+
     info.data.borrow_mut()[0] = TAG_EMPTY; // reinit
     EthereumAccount::init(info, data)
 }
@@ -62,7 +64,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     };
 
     validate(program_id, &parsed_accounts)?;
-    execute(&parsed_accounts)?;
+    execute(parsed_accounts)?;
 
     Ok(())
 }
@@ -103,13 +105,13 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 }
 
 /// Executes all actions.
-fn execute(accounts: &Accounts) -> ProgramResult {
+fn execute(accounts: Accounts) -> ProgramResult {
     debug_print!("MigrateAccount: execute");
     let amount = accounts.token_balance_account.amount;
 
     debug_print!("MigrateAccount: convert_from_v1");
     let ethereum_account = convert_from_v1(
-        &accounts.ethereum_account,
+        accounts.ethereum_account,
         scale(amount)?)?;
 
     debug_print!("MigrateAccount: transfer");
