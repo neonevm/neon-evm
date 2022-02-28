@@ -1,3 +1,4 @@
+use evm::U256;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -7,8 +8,36 @@ use solana_program::{
 };
 use spl_associated_token_account::get_associated_token_address;
 
-use crate::account::{EthereumAccount, EthereumAccountV1, Operator, program, token};
+use crate::account::{
+    ether_account,
+    program,
+    token,
+    AccountData,
+    EthereumAccount,
+    Operator,
+    TAG_EMPTY,
+};
 use crate::config::token_mint;
+
+type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1>;
+
+fn convert_from_v1<'a>(v1: &EthereumAccountV1<'a>, balance: U256) -> Result<EthereumAccount<'a>, ProgramError> {
+    let null = Pubkey::new_from_array([0_u8; 32]);
+
+    let data = ether_account::Data {
+        address: v1.ether,
+        bump_seed: v1.nonce,
+        trx_count: v1.trx_count,
+        balance,
+        code_account: if v1.code_account == null { None } else { Some(v1.code_account) },
+        rw_blocked: v1.rw_blocked_acc.is_some(),
+        ro_blocked_count: v1.ro_blocked_cnt,
+    };
+
+    let info = v1.info;
+    info.data.borrow_mut()[0] = TAG_EMPTY; // reinit
+    EthereumAccount::init(info, data)
+}
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -79,7 +108,7 @@ fn execute(accounts: &Accounts) -> ProgramResult {
     let amount = accounts.token_balance_account.amount;
 
     debug_print!("MigrateAccount: convert_from_v1");
-    let ethereum_account = EthereumAccount::convert_from_v1(
+    let ethereum_account = convert_from_v1(
         &accounts.ethereum_account,
         scale(amount)?)?;
 
@@ -99,8 +128,6 @@ fn execute(accounts: &Accounts) -> ProgramResult {
     debug_print!("MigrateAccount: OK");
     Ok(())
 }
-
-use evm::U256;
 
 /// Recalculates amount from decimals 10^9 to 10^18.
 /// Neon token amount is SPL token. It's decimals is 10^9.

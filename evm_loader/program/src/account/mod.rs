@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 
-use evm::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::msg;
 use solana_program::program_error::ProgramError;
@@ -47,10 +46,6 @@ const _TAG_STORAGE_V1: u8 = 3;
 const TAG_STORAGE: u8 = 30;
 const TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STORAGE: u8 = 5;
-
-#[deprecated]
-#[allow(deprecated)]
-pub type EthereumAccountV1<'a> = AccountData<'a, ether_account::DataV1>;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
@@ -291,27 +286,4 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
     data.fill(0);
 
     Ok(())
-}
-
-/// Conversion needed for migration of accounts from V1 to the current version.
-#[deprecated]
-#[allow(deprecated)]
-impl<'a> EthereumAccount<'a> {
-    pub fn convert_from_v1(v1: &EthereumAccountV1<'a>, balance: U256) -> Result<Self, ProgramError> {
-        let null = Pubkey::new_from_array([0_u8; 32]);
-
-        let data = ether_account::Data {
-            address: v1.data.ether,
-            bump_seed: v1.data.nonce,
-            trx_count: v1.data.trx_count,
-            balance,
-            code_account: if v1.data.code_account == null { None } else { Some(v1.data.code_account) },
-            rw_blocked: v1.data.rw_blocked_acc.is_some(),
-            ro_blocked_count: v1.data.ro_blocked_cnt,
-        };
-
-        let info = v1.info;
-        info.data.borrow_mut()[0] = TAG_EMPTY; // reinit
-        Self::init(info, data)
-    }
 }
