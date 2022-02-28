@@ -42,11 +42,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
 fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     debug_print!("MigrateAccount: validate");
 
-    msg!("ethereum_account.ether(): {}",
-        &accounts.ethereum_account.ether);
-    msg!("ethereum_account.eth_token_account(): {}",
-        &accounts.ethereum_account.eth_token_account);
-
     if &accounts.ethereum_account.eth_token_account !=
        accounts.token_balance_account.info.key {
         return Err!(ProgramError::InvalidArgument;
@@ -86,7 +81,7 @@ fn execute(accounts: &Accounts) -> ProgramResult {
     debug_print!("MigrateAccount: convert_from_v1");
     let ethereum_account = EthereumAccount::convert_from_v1(
         &accounts.ethereum_account,
-        amount)?;
+        scale(amount)?)?;
 
     debug_print!("MigrateAccount: transfer");
     accounts.token_program.transfer(
@@ -103,4 +98,20 @@ fn execute(accounts: &Accounts) -> ProgramResult {
 
     debug_print!("MigrateAccount: OK");
     Ok(())
+}
+
+use evm::U256;
+
+/// Recalculates amount from decimals 10^9 to 10^18.
+/// Neon token amount is SPL token. It's decimals is 10^9.
+/// `EthereumAccount` stores balance with decimals 10^18.
+/// We need to convert amount to `U256` and multiply by 10^9
+/// before assigning it to `EthereumAccount::balance`.
+fn scale(amount: u64) -> Result<U256, ProgramError> {
+    assert!(token_mint::decimals() <= 18);
+    let additional_decimals: u32 = (18 - token_mint::decimals()).into();
+    U256::from(amount).checked_mul(U256::from(10_u64.pow(additional_decimals)))
+        .ok_or_else(|| E!(ProgramError::InvalidArgument;
+            "Amount {} scale overflow",
+            amount))
 }

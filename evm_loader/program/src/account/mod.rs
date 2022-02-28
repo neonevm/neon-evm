@@ -317,18 +317,20 @@ pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), P
     Ok(())
 }
 
+use evm::U256;
+
 /// Conversion needed for migration of accounts from V1 to the current version.
 #[deprecated]
 #[allow(deprecated)]
 impl<'a> EthereumAccount<'a> {
-    pub fn convert_from_v1(v1: &EthereumAccountV1<'a>, balance: u64) -> Result<Self, ProgramError> {
+    pub fn convert_from_v1(v1: &EthereumAccountV1<'a>, balance: U256) -> Result<Self, ProgramError> {
         let null = Pubkey::new_from_array([0_u8; 32]);
 
         let data = ether_account::Data {
             address: v1.data.ether,
             bump_seed: v1.data.nonce,
             trx_count: v1.data.trx_count,
-            balance: evm::U256::from(balance),
+            balance,
             code_account: if v1.data.code_account == null { None } else { Some(v1.data.code_account) },
             rw_blocked: v1.data.rw_blocked_acc.is_some(),
             ro_blocked_count: v1.data.ro_blocked_cnt,
