@@ -17,7 +17,7 @@ from solana.rpc.api import Client
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://solana:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER", "53DfF883gyixYNXnM7s5xhdeyV8mVk9T4i2hGV9vG9io")
 
-def do_migrate(address):
+def do_migrate(address: str) -> None:
     cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
                             "--url", SOLANA_URL, "--evm_loader", EVM_LOADER],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -25,7 +25,7 @@ def do_migrate(address):
         for line in out:
             print(line.strip())
 
-def process(account, command):
+def process(account: object, command: str) -> (int, int):
     result = (0, 0)
 
     data = account["data"]
