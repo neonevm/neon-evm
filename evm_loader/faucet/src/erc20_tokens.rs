@@ -39,7 +39,7 @@ pub async fn airdrop(id: ReqId, params: Airdrop) -> Result<()> {
     let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
 
-    if TOKENS.write().await.is_empty() {
+    if TOKENS.read().await.is_empty() {
         init(id.clone(), web3.eth().clone(), config::tokens()).await?;
     }
 
