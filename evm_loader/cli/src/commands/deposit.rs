@@ -12,16 +12,11 @@ use solana_cli::{
     checks::{check_account_for_fee},
 };
 
-use spl_associated_token_account::get_associated_token_address;
-
 use evm::{H160};
-
-use evm_loader::config::token_mint;
 
 use crate::{
     Config,
     NeonCliResult,
-    make_solana_program_address,
 };
 
 /// Executes subcommand `deposit`.
@@ -30,7 +25,7 @@ pub fn execute(
     amount: u64,
     ether_address: &H160,
 ) -> NeonCliResult {
-    let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
+    let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
 
     let mut instructions = Vec::with_capacity(3);
 
@@ -45,7 +40,10 @@ pub fn execute(
         ));
     }
 
-    let signer_token_pubkey = get_associated_token_address(&config.signer.pubkey(), &token_mint::id());
+    let token_mint_id = evm_loader::config::token_mint::id();
+
+    let signer_token_pubkey =
+        spl_associated_token_account::get_associated_token_address(&config.signer.pubkey(), &token_mint_id);
     let evm_token_authority = Pubkey::find_program_address(&[b"Deposit"], &config.evm_loader).0;
 
     instructions.push(spl_approve_instruction(
@@ -55,7 +53,8 @@ pub fn execute(
         amount,
     ));
 
-    let evm_pool_pubkey = get_associated_token_address(&evm_token_authority, &token_mint::id());
+    let evm_pool_pubkey =
+        spl_associated_token_account::get_associated_token_address(&evm_token_authority, &token_mint_id);
 
     instructions.push(deposit_instruction(
         config,
