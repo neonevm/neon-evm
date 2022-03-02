@@ -3,7 +3,6 @@ use log::{ debug, info, trace };
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
-    pubkey::Pubkey,
     transaction::Transaction,
 };
 
@@ -14,12 +13,14 @@ use solana_cli::{
 use evm::{H160};
 
 use evm_loader::{
-    account_data::AccountData,
+    account::{EthereumAccount},
 };
 
 use crate::{
     account_storage::{
         EmulatorAccountStorage,
+        make_solana_program_address,
+        account_info,
     },
     errors::NeonCliError,
     Config,
@@ -32,24 +33,20 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
 
     EmulatorAccountStorage::get_account_from_solana(config, &ether_address)
         .ok_or(NeonCliError::AccountNotFoundAtAddress(ether_address))
-        .and_then(|(account,_,_)| {
+        .and_then(|(mut account, _)| {
             info!("account: {:?}", account);
 
-            AccountData::unpack(&account.data)
+            let (key, _) = make_solana_program_address(&ether_address, &config.evm_loader);
+            let info = account_info(&key, &mut account);
+            EthereumAccount::from_account(&config.evm_loader, &info)
                 .map_err(NeonCliError::from)
-        })
-        .and_then(|account_data| {
-            info!("account data: {:?}", account_data);
-
-            account_data.get_account()
-                .map(|account|account.code_account)
-                .map_err(NeonCliError::from)
+                .map(|a| a.code_account)
         })
         .and_then(|code_account|
-            if code_account == Pubkey::new_from_array([0_u8; 32]) {
-                Err(NeonCliError::CodeAccountNotFound(ether_address))
-            } else {
+            if let Some(code_account) = code_account {
                 Ok(code_account)
+            } else {
+                Err(NeonCliError::CodeAccountNotFound(ether_address))
             }
         )
         .and_then(|code_account| {
@@ -58,7 +55,7 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
             let instruction: Instruction =
                 Instruction::new_with_bincode(
                     config.evm_loader,
-                    &(23),
+                    &(23_u8),
                     vec![AccountMeta::new(code_account, false)]
                 );
 

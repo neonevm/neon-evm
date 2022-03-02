@@ -22,8 +22,6 @@ pub enum EvmLoaderError {
     UnauthorizedOperator,
     #[error("Storage Account is finalized")]
     StorageAccountFinalized,
-    #[error("gas_limit exceeded")]
-    OutOfGas,
 }
 
 impl From<EvmLoaderError> for ProgramError {
@@ -39,6 +37,7 @@ impl<T> DecodeError<T> for EvmLoaderError {
 }
 
 /// Function for macro Err! to log an err.
+#[allow(unused)]
 pub fn err_fn_without_info<T:>(err: ProgramError, fl: &str, ln: u32) -> Result<T, ProgramError> {
     solana_program::msg!("{}:{:?}", fl, ln);
     Err(err)
@@ -67,6 +66,7 @@ macro_rules! Err {
 }
 
 /// Function for macro E! to log an err.
+#[allow(unused)]
 pub fn e_fn_without_info(e: ProgramError, fl: &str, ln: u32) -> ProgramError {
     solana_program::msg!("{}:{:?}", fl, ln);
     e

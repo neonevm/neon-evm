@@ -34,7 +34,7 @@ class EventTest(unittest.TestCase):
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
-        cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
+        # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, cls.caller_token)
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -129,7 +129,7 @@ class EventTest(unittest.TestCase):
 
     def get_call_parameters(self, input):
         nonce = getTransactionCount(client, self.caller)
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
             'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
         assert (from_addr == self.caller_ether)
@@ -178,12 +178,14 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
 
-        gas_05 = EVM_STEPS * evm_step_cost(2)
-        # evm_step_executed = 87
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = EVM_STEPS * evm_step_cost(1)
+        evm_step_executed = 87
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas ) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + trx_size_cost + (evm_step_executed * evm_step_cost())
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -202,11 +204,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 109
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -226,11 +230,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 125
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -258,11 +264,13 @@ class EventTest(unittest.TestCase):
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
 
         evm_step_executed = 156
-        gas_05 = evm_step_executed * evm_step_cost(2)
-        begin_gas = EVM_STEPS * evm_step_cost(2)
-        continue_gas = 2 * EVM_STEPS * evm_step_cost(1)
+        trx_size_cost = 5000
+        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
 
-        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, begin_gas+continue_gas) ]
+        iterative_overhead = 10_000
+        gas_iterative = iterative_overhead + gas_05
+
+        calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
             with self.subTest(call.__name__):
                 result = call(input)
@@ -296,9 +304,9 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
         input2 = (func_name + bytes.fromhex("%064x" % 0x3) + bytes.fromhex("%064x" % 0x4))
-        tx1 =  {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
+        tx1 =  {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller), 'data': input1, 'chainId': 111}
-        tx2 =  {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
+        tx2 =  {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller)+1, 'data': input2, 'chainId': 111}
 
         (from_addr1, sign1, msg1) = make_instruction_data_from_tx(tx1, self.acc.secret_key())
@@ -317,7 +325,8 @@ class EventTest(unittest.TestCase):
         print(result)
 
         evm_step_executed = 156
-        gas_used = evm_step_executed * evm_step_cost(2)
+        trx_size_cost = 5000
+        gas_used = trx_size_cost + (evm_step_executed * evm_step_cost())
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
@@ -384,7 +393,7 @@ class EventTest(unittest.TestCase):
             result = self.call_continue(storage, 10)
             print(result)
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("AccountV2 balance repair")
     def test_caseSuccessRunOtherTransactionAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
