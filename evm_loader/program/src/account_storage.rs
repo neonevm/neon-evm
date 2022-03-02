@@ -403,7 +403,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             let clock = Clock::get().unwrap();
 
             if number >= clock.slot.into() {
-                msg!("number >= clock.slot.into()");
+                msg!("number({}) >= clock.slot.into()({})", number, clock.slot);
                 return H256::default();
             }
 
