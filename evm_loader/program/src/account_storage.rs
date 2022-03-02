@@ -420,20 +420,40 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             msg!("slot_hashes");
             let slot_hash_data = account.data.borrow();
 
-            let mut lo: usize = 0;
-            let mut hi: usize = (slot_hash_data.len() - 8) / 40;
-        
-            while lo < hi {
-                let m: usize = (hi - lo) / 2 + lo;
+            let mut start: usize = 8;
 
-                let slot = u64::from_le_bytes(slot_hash_data[8+m*40..][..8].try_into().unwrap());
+            let clock = Clock::get().unwrap();
+            let mut slot: u64 = clock.slot - 1;
+            let mut count = 50;
 
-                match number.as_u64() {
-                    d if d == slot => return H256::from_slice(&slot_hash_data[8+8+m*40..][..32]),
-                    d if d < slot => {hi = m;},
-                    _ => {lo = m+1;},
+            while start + 32 < slot_hash_data.len() {
+                if count == 0 {
+                    return H256::default();
                 }
+                let slot = u64::from_le_bytes(slot_hash_data[start..][..8].try_into().unwrap());
+                msg!("slot {} blockhash {}", slot, &hex::encode(&slot_hash_data[start+8..][..32]));
+                if slot == number.as_u64() {
+                    return H256::from_slice(&slot_hash_data[start+8..][..32]);
+                }
+                start += 40;
+                slot -= 1;
+                count -= 1;
             }
+
+            // let mut lo: usize = 0;
+            // let mut hi: usize = (slot_hash_data.len() - 8) / 40;
+        
+            // while lo < hi {
+            //     let m: usize = (hi - lo) / 2 + lo;
+
+            //     let slot = u64::from_le_bytes(slot_hash_data[8+m*40..][..8].try_into().unwrap());
+
+            //     match number.as_u64() {
+            //         d if d == slot => return H256::from_slice(&slot_hash_data[8+8+m*40..][..32]),
+            //         d if d < slot => {hi = m;},
+            //         _ => {lo = m+1;},
+            //     }
+            // }
             H256::default()
         } else {
             msg!("Hashes account not found default");
