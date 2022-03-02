@@ -107,7 +107,7 @@ class PrecompilesTests(unittest.TestCase):
 
     def make_getValues(self, number: int):
         return abi.function_signature_to_4byte_selector('getValues(uint number)')\
-                + bytes.fromhex("%062x" % number)
+                + bytes.fromhex("%064x" % number)
 
     def get_blocks_from_solana(self):
         slot_hash = {}
@@ -125,18 +125,20 @@ class PrecompilesTests(unittest.TestCase):
             if i % 2 == 0:
                 self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
             else:
-                self.block_hash_source = "SysvarS1otHistory11111111111111111111111111"
+                self.block_hash_source = "SysvarS1otHashes111111111111111111111111111"
             sol_slot, sol_hash = random.choice(list(solana_result.items()))
+            print(self.make_getValues(sol_slot).hex())
             result = self.send_transaction(self.make_getValues(sol_slot))
-            print(f"sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
+            print(f"{self.block_hash_source} sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
 
     def test_02_block_hashes(self):
         print("test_02_block_hashes")
         self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
         result = self.send_transaction(self.make_getCurrentValues())
-        self.block_hash_source = "SysvarS1otHistory11111111111111111111111111"
+        print(f"{self.block_hash_source} result: {result}")
+        self.block_hash_source = "SysvarS1otHashes111111111111111111111111111"
         result = self.send_transaction(self.make_getCurrentValues())
-        print(f"result: {result}")
+        print(f"{self.block_hash_source} result: {result}")
 
 
 if __name__ == '__main__':
