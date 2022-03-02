@@ -433,7 +433,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
                 match number.as_u64() {
                     d if d == slot => return H256::from_slice(&slot_hash_data[8+8+m*40..][..32]),
-                    d if d < slot => {lo = m;},
+                    d if d > slot => {lo = m;},
                     _ => {hi = m+1;},
                 }
             }
