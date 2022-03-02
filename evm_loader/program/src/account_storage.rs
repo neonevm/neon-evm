@@ -435,6 +435,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             }
             H256::default()
         } else {
+            msg!("Hashes account not found default");
             H256::default()
         }
     }

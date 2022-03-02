@@ -5,7 +5,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID, ACCOUNT_LEN
 import unittest
 from eth_utils import abi
 from base58 import b58decode
-import re
+import random
 
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, JsonEncoder
 from solana_utils import *
@@ -54,71 +54,10 @@ class PrecompilesTests(unittest.TestCase):
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
     def send_transaction(self, data):
-        if len(data) > 512:
-            result = self.call_with_holder_account(data)
-            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
-        else:
-            trx = self.make_transactions(data)
-            result = send_transaction(client, trx, self.acc)
-            self.get_measurements(result)
-            result = result["result"]
-            return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
-
-    def extract_measurements_from_receipt(self, receipt):
-        log_messages = receipt['result']['meta']['logMessages']
-        transaction = receipt['result']['transaction']
-        accounts = transaction['message']['accountKeys']
-        instructions = []
-        for instr in transaction['message']['instructions']:
-            program = accounts[instr['programIdIndex']]
-            instructions.append({
-                'accs': [accounts[acc] for acc in instr['accounts']],
-                'program': accounts[instr['programIdIndex']],
-                'data': b58decode(instr['data']).hex()
-            })
-
-        pattern = re.compile('Program ([0-9A-Za-z]+) (.*)')
-        messages = []
-        for log in log_messages:
-            res = pattern.match(log)
-            if res:
-                (program, reason) = res.groups()
-                if reason == 'invoke [1]': messages.append({'program':program,'logs':[]})
-            messages[-1]['logs'].append(log)
-
-        for instr in instructions:
-            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
-            if messages[0]['program'] != instr['program']:
-                raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
-            instr['logs'] = messages.pop(0)['logs']
-            exit_result = re.match(r'Program %s (success)'%instr['program'], instr['logs'][-1])
-            if not exit_result: raise Exception("Can't get exit result")
-            instr['result'] = exit_result.group(1)
-
-            if instr['program'] == evm_loader_id:
-                memory_result = re.match(r'Program log: Total memory occupied: ([0-9]+)', instr['logs'][-3])
-                instruction_result = re.match(r'Program %s consumed ([0-9]+) of ([0-9]+) compute units'%instr['program'], instr['logs'][-2])
-                if not (memory_result and instruction_result):
-                    raise Exception("Can't parse measurements for evm_loader")
-                instr['measurements'] = {
-                        'instructions': instruction_result.group(1),
-                        'memory': memory_result.group(1)
-                    }
-
-        result = []
-        for instr in instructions:
-            if instr['program'] == evm_loader_id:
-                result.append({
-                        'program':instr['program'],
-                        'measurements':instr['measurements'],
-                        'result':instr['result'],
-                        'data':instr['data']
-                    })
-        return result
-
-    def get_measurements(self, result):
-        measurements = self.extract_measurements_from_receipt(result)
-        for m in measurements: print(json.dumps(m))
+        trx = self.make_transactions(data)
+        result = send_transaction(client, trx, self.acc)
+        result = result["result"]
+        return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
     def make_transactions(self, call_data):
         eth_tx = {
@@ -163,103 +102,6 @@ class PrecompilesTests(unittest.TestCase):
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
 
-    def sol_instr_22_partial_call_from_account(self, holder_account, storage_account, step_count):
-        neon_evm_instr_22_begin = create_neon_evm_instr_22_begin(
-            self.loader.loader_id,
-            self.caller,
-            self.acc.public_key(),
-            storage_account,
-            holder_account,
-            self.owner_contract,
-            self.contract_code,
-            self.collateral_pool_index_buf,
-            self.collateral_pool_address,
-            step_count,
-            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
-        )
-        print('neon_evm_instr_22_begin:', neon_evm_instr_22_begin)
-        return neon_evm_instr_22_begin
-
-    def sol_instr_20_continue(self, storage_account, step_count):
-        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
-            self.loader.loader_id,
-            self.caller,
-            self.acc.public_key(),
-            storage_account,
-            self.owner_contract,
-            self.contract_code,
-            self.collateral_pool_index_buf,
-            self.collateral_pool_address,
-            step_count,
-            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
-        )
-        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
-        return neon_evm_instr_20_continue
-
-    def create_account_with_seed(self, seed):
-        storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
-
-        if getBalance(storage) == 0:
-            trx = Transaction()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
-            client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="confirmed"))
-
-        return storage
-
-    def write_transaction_to_holder_account(self, holder, signature, message):
-        message = signature + len(message).to_bytes(8, byteorder="little") + message
-
-        offset = 0
-        receipts = []
-        rest = message
-        while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
-            trx.add(TransactionInstruction(program_id=evm_loader_id,
-                data=(bytes.fromhex('12') + holder_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
-                keys=[
-                    AccountMeta(pubkey=holder, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=self.acc.public_key(), is_signer=True, is_writable=False),
-                ]))
-            receipts.append(client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=True, preflight_commitment="confirmed"))["result"])
-            offset += len(part)
-
-        for rcpt in receipts:
-            confirm_transaction(client, rcpt)
-
-
-    def call_with_holder_account(self, input):
-        tx = {'to': self.eth_contract, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
-            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
-
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
-
-        holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, 'big')
-        holder_seed = keccak_256(b'holder'+holder_id_bytes).hexdigest()[:32]
-        holder = self.create_account_with_seed(holder_seed)
-        storage = self.create_account_with_seed(sign[:8].hex())
-
-        self.write_transaction_to_holder_account(holder, sign, msg)
-
-        trx = Transaction()
-        trx.add(self.sol_instr_22_partial_call_from_account(holder, storage, 0))
-        send_transaction(client, trx, self.acc)
-
-        while (True):
-            print("Continue")
-            trx = Transaction()
-            trx.add(self.sol_instr_20_continue(storage, 400))
-            result = send_transaction(client, trx, self.acc)
-
-            self.get_measurements(result)
-            result = result["result"]
-
-            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
-                if (data[0] == 6):
-                    return result
-
     def make_getCurrentValues(self):
         return abi.function_signature_to_4byte_selector('getCurrentValues()')
 
@@ -279,12 +121,12 @@ class PrecompilesTests(unittest.TestCase):
     def test_01_block_hashes(self):
         print("test_01_block_hashes")
         solana_result = self.get_blocks_from_solana()
-        for sol_slot, sol_hash in solana_result.items():
-            if sol_slot % 2 == 0:
+        for i in range(6):
+            if i % 2 == 0:
                 self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
             else:
                 self.block_hash_source = "SysvarS1otHistory11111111111111111111111111"
-
+            sol_slot, sol_hash = random.choice(list(solana_result.items()))
             result = self.send_transaction(self.make_getValues(sol_slot))
             print(f"sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
 
