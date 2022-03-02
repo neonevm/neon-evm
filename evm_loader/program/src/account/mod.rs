@@ -1,13 +1,19 @@
 use std::cell::RefMut;
 use std::fmt::Debug;
-use std::mem::{ManuallyDrop};
+use std::mem::ManuallyDrop;
+use std::ops::{Deref, DerefMut};
+
 use solana_program::account_info::AccountInfo;
+use solana_program::msg;
 use solana_program::program_error::ProgramError;
+use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
-use std::ops::{Deref, DerefMut};
-use solana_program::msg;
-use solana_program::pubkey::Pubkey;
+
+pub use holder::Holder;
+pub use incinerator::Incinerator;
+pub use operator::Operator;
+pub use treasury::Treasury;
 
 mod treasury;
 mod operator;
@@ -21,12 +27,6 @@ pub mod program;
 pub mod token;
 pub mod sysvar;
 
-pub use treasury::Treasury;
-pub use operator::Operator;
-pub use holder::Holder;
-pub use incinerator::Incinerator;
-
-
 /// Ethereum account version
 pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
     // Special case for alpha configuration (it is needed in order to separate the accounts created for
@@ -35,7 +35,6 @@ pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
 } else {
     1_u8
 };
-
 
 pub const TAG_EMPTY: u8 = 0;
 #[deprecated]
@@ -48,12 +47,11 @@ const TAG_STORAGE: u8 = 30;
 const TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STORAGE: u8 = 5;
 
-
-pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, ()>;
+pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
-pub type Storage<'a> = AccountData<'a, storage::Data, ()>;
-pub type FinalizedStorage<'a> = AccountData<'a, storage::FinalizedData, ()>;
-pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data, ()>;
+pub type Storage<'a> = AccountData<'a, storage::Data>;
+pub type FinalizedStorage<'a> = AccountData<'a, storage::FinalizedData>;
+pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data>;
 
 
 pub trait AccountExtension<'a, T> {
@@ -259,7 +257,6 @@ where
         self.data.pack(&mut parts.data);
     }
 }
-
 
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> {
     if info.owner != program_id {

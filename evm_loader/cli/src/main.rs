@@ -20,6 +20,7 @@ use crate::{
         create_ether_account,
         deploy,
         deposit,
+        migrate_account,
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
@@ -600,7 +601,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("deposit")
-                .about("Deposit neons to ether account")
+                .about("Deposit NEONs to ether account")
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
@@ -613,6 +614,19 @@ fn main() {
                 .arg(
                     Arg::with_name("ether")
                         .index(2)
+                        .value_name("ETHER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("migrate-account")
+                .about("Migrates account internal structure to v2")
+                .arg(
+                    Arg::with_name("ether")
+                        .index(1)
                         .value_name("ETHER")
                         .takes_value(true)
                         .required(true)
@@ -815,6 +829,10 @@ fn main() {
                 let amount = value_of(arg_matches, "amount").unwrap();
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 deposit::execute(&config, amount, &ether)
+            }
+            ("migrate-account", Some(arg_matches)) => {
+                let ether = h160_of(arg_matches, "ether").unwrap();
+                migrate_account::execute(&config, &ether)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();

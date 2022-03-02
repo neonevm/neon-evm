@@ -15,7 +15,7 @@ pub struct DataV1 {
     pub nonce: u8,
     /// Ethereum account nonce
     pub trx_count: u64,
-    /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
+    /// Address of solana account that stores code data (for contract accounts) or Pubkey([0_u8; 32]) if none
     pub code_account: Pubkey,
     /// Public key of storage account, associated with the transaction that locked this account for writing
     pub rw_blocked_acc: Option<Pubkey>,
@@ -36,7 +36,7 @@ pub struct Data {
     pub trx_count: u64,
     /// Neon token balance
     pub balance: U256,
-    /// Address of solana account that stores code data (for contract accounts) of Pubkey([0_u8; 32]) if none
+    /// Address of solana account that stores code data (for contract accounts)
     pub code_account: Option<Pubkey>,
     /// Read-write lock
     pub rw_blocked: bool,
