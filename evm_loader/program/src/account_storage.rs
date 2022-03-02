@@ -422,9 +422,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
             let mut lo: usize = (slot_hash_data.len() - 8) / 40;
             let mut hi: usize = 0;
-        
+
             while hi < lo {
                 let m: usize = (lo - hi) / 2 + hi;
+
+                msg!("m {} lo {} hi {}", m, lo, hi);
 
                 let slot = u64::from_le_bytes(slot_hash_data[8+m*40..][..8].try_into().unwrap());
                 msg!("slot {} blockhash {}", slot, &hex::encode(&slot_hash_data[8+8+m*40..][..32]));
