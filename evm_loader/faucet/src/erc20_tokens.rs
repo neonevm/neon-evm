@@ -40,7 +40,7 @@ pub async fn airdrop(id: &ReqId, params: Airdrop) -> Result<()> {
     let web3 = web3::Web3::new(http);
 
     if TOKENS.read().await.is_empty() {
-        init(id.clone(), web3.eth().clone(), config::tokens()).await?;
+        init(id, web3.eth().clone(), config::tokens()).await?;
     }
 
     let recipient = ethereum::address_from_str(&params.wallet)?;
