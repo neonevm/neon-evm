@@ -154,11 +154,12 @@ impl<'a> ProgramAccountStorage<'a> {
         &mut self, values: A,
         operator: &AccountInfo<'a>,
         _delete_empty: bool
-    ) -> Result<(), ProgramError>
+    ) -> Result<u64, ProgramError>
     where
         A: IntoIterator<Item = Apply<I>>,
         I: IntoIterator<Item = (U256, U256)>,
     {
+        let mut allocated_space: u64 = 0;
         for apply in values {
             match apply {
                 Apply::Modify {address, nonce, code_and_valids, storage, reset_storage} => {
@@ -169,7 +170,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     let index = self.get_solidity_account_index(&address);
                     let account = &mut self.solidity_accounts[index];
                     let account_info = self.solana_accounts[account.get_solana_address()];
-                    account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
+                    allocated_space +=  account.update(account_info, address, nonce, &code_and_valids, storage, reset_storage)?;
                 },
                 Apply::Delete { address } => {
                     debug_print!("Going to delete address = {:?}.", address);
@@ -196,7 +197,7 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        Ok(())
+        Ok(allocated_space)
     }
 
     /// Apply value token transfers

@@ -340,7 +340,7 @@ class EventTest(unittest.TestCase):
             confirm_transaction(http_client, rcpt)
 
     def call_partial_signed(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9_999_999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999_999_999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -363,7 +363,7 @@ class EventTest(unittest.TestCase):
                     return result
 
     def call_with_holder_account(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -387,7 +387,7 @@ class EventTest(unittest.TestCase):
                     return result
 
     def call_with_holder_account_by_0x0e(self, input, contract_eth, contract, code):
-        tx = {'to': contract_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': contract_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(http_client, self.caller), 'data': input, 'chainId': 111}
 
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
@@ -427,7 +427,7 @@ class EventTest(unittest.TestCase):
             )
             res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="root"))["result"]
 
-    # @unittest.skip("a.i.")
+    @unittest.skip("a.i.")
     def test_01_callFoo(self):
         print('\ntest_01_callFoo')
 
@@ -436,6 +436,8 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
         result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        print("test_01_callFoo result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
@@ -474,7 +476,7 @@ class EventTest(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_02_ecrecover(self):
         print('\ntest_02_ecrecover')
-        tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 9999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
               'nonce': getTransactionCount(client, self.caller), 'data': bytes().fromhex("001122"), 'chainId': 111}
 
         signed_tx = w3.eth.account.sign_transaction(tx, self.acc.secret_key())
@@ -493,6 +495,8 @@ class EventTest(unittest.TestCase):
         contract_nonce_pre = getTransactionCount(http_client, self.reId_caller)
         # result = self.call_signed(input=data, contract=self.reId_caller)
         result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        print("test02_ecrecover result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 6) # TODO: why not 3?
@@ -551,6 +555,7 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('creator()')
         print("Expecting Exception: Program failed to complete")
         with self.assertRaisesRegex(Exception, 'Program failed to complete'):
+        # with self.assertRaisesRegex(Exception, 'insufficient account keys for instruction'):
             response = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
             print('response:', response)
         neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
@@ -575,7 +580,7 @@ class EventTest(unittest.TestCase):
 
         print('Call creator() with holder account:')
         result = self.call_with_holder_account_by_0x0e(input=func_name, contract_eth=self.reId_create_caller_eth, contract=self.reId_create_caller, code=self.reId_create_caller_code)
-        print('result:', result)
+        print('test_03_create2_opcode_by_0x0e_without_accounts result:', result)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_create_caller)
         # Nonce increased on create other contract from contract
@@ -660,7 +665,8 @@ class EventTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
         result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
-
+        print("test_05_nested_revert result")
+        print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)  # TODO: why not 1?

@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use log::{debug, info};
 
 use solana_sdk::{
@@ -52,12 +51,9 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
         }
     };
 
-    let (exit_reason, result, applies_logs, used_gas, steps_executed) = {
-        // u64::MAX is too large, remix gives this error:
-        // Gas estimation errored with the following message (see below).
-        // Number can only safely store up to 53 bits
-        let gas_limit = 50_000_000;
-        let executor_substate = Box::new(ExecutorSubstate::new(gas_limit, &storage));
+    let (exit_reason, result, applies_logs,  steps_executed) = {
+        let gas_limit = 999_999_999_999_u64;
+        let executor_substate = Box::new(ExecutorSubstate::new(&storage));
         let executor_state = ExecutorState::new(executor_substate, &storage);
         let mut executor = Machine::new(executor_state);
         debug!("Executor initialized");
@@ -69,11 +65,13 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     storage.contract(),
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.call_begin(storage.origin(),
-                                    storage.contract(),
-                                    data.unwrap_or_default(),
-                                    value.unwrap_or_default(),
-                                    gas_limit)?;
+                executor.call_begin(
+                    storage.origin(),
+                    storage.contract(),
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit,
+                    )?;
                 executor.execute()
             },
             None => {
@@ -81,10 +79,12 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
                     storage.origin(),
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.create_begin(storage.origin(),
-                                      data.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-                                      gas_limit)?;
+                executor.create_begin(
+                    storage.origin(),
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit
+                    )?;
                 executor.execute()
             }
         };
@@ -93,16 +93,12 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
 
         let steps_executed = executor.get_steps_executed();
         let executor_state = executor.into_state();
-        let used_gas: u64 = executor_state.gasometer().used_gas() + 1; // "+ 1" because of https://github.com/neonlabsorg/neon-evm/issues/144
-        let refunded_gas: i64 = executor_state.gasometer().refunded_gas();
-        let needed_gas: u64 = used_gas + (if refunded_gas > 0 { u64::try_from(refunded_gas).unwrap_or(0) } else { 0 });
-        debug!("used_gas={:?} refunded_gas={:?}", used_gas, refunded_gas);
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
             let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), needed_gas, steps_executed)
+            (exit_reason, result, Some(apply), steps_executed)
         } else {
-            (exit_reason, result, None, needed_gas, steps_executed)
+            (exit_reason, result, None, steps_executed)
         }
     };
 
@@ -156,7 +152,6 @@ pub fn execute(config: &Config, contract_id: Option<H160>, caller_id: H160, data
         "result": &hex::encode(&result),
         "exit_status": status,
         "exit_reason": exit_reason,
-        "used_gas": used_gas,
         "steps_executed": steps_executed,
     }).to_string();
 

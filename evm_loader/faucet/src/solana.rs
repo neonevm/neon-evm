@@ -40,7 +40,7 @@ pub fn convert_whole_to_fractions(amount: u64) -> Result<u64> {
         .checked_pow(decimals as u32)
         .ok_or_else(|| eyre!("Overflow 10^{}", decimals))?;
     amount
-        .checked_mul(factor as u64)
+        .checked_mul(factor)
         .ok_or_else(|| eyre!("Overflow {}*{}", amount, factor))
 }
 

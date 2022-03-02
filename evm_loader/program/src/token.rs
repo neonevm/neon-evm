@@ -4,7 +4,8 @@ use crate::{
     solidity_account::SolidityAccount,
     storage_account::StorageAccount,
     account_storage::ProgramAccountStorage,
-    config::token_mint
+    config::token_mint,
+    error::EvmLoaderError,
 };
 use evm::{U256};
 use solana_program::{
@@ -233,18 +234,25 @@ pub fn transfer_neon_token(
 ///
 /// Could return:
 /// `ProgramError::InvalidArgument`
+#[allow(clippy::too_many_arguments)]
 pub fn user_pays_operator<'a>(
-    gas_price: u64,
-    gas_to_be_paid: u64,
     user_token_account: &'a AccountInfo<'a>,
     operator_token_account: &'a AccountInfo<'a>,
     accounts: &'a [AccountInfo<'a>],
     account_storage: &ProgramAccountStorage,
+    gas_limit: u64,
+    gas_price: u64,
+    paid_gas: u64,
+    unpaid_gas: u64,
 ) -> Result<(), ProgramError> {
+
+    if paid_gas + unpaid_gas > gas_limit {
+        return Err!(EvmLoaderError::OutOfGas.into());
+    }
 
     let gas_price_wei = U256::from(gas_price);
 
-    let fee = U256::from(gas_to_be_paid)
+    let fee = U256::from(unpaid_gas)
         .checked_mul(gas_price_wei)
         .ok_or_else(|| E!(ProgramError::InvalidArgument))?;
 
@@ -259,43 +267,6 @@ pub fn user_pays_operator<'a>(
     Ok(())
 }
 
-/// A neon-evm user pays an operator
-///
-/// # Errors
-///
-/// Could return:
-/// `ProgramError::InvalidArgument`
-#[allow(clippy::too_many_arguments)]
-pub fn user_pays_operator_for_iteration<'a>(
-    gas_price: u64,
-    gas_to_be_paid: u64,
-    user_token_account: &'a AccountInfo<'a>,
-    operator_token_account: &'a AccountInfo<'a>,
-    accounts: &'a [AccountInfo<'a>],
-    account_storage: &ProgramAccountStorage,
-    storage: &mut StorageAccount,
-) -> Result<(), ProgramError> {
-
-    let (gas_used_and_paid, _number_of_payments) = storage.get_payments_info()?;
-
-    debug_print!("gas_used_and_paid = {:?}; gas_to_be_paid={:?} by an iteration N = {:?}",
-        gas_used_and_paid, gas_to_be_paid, /*_number_of_payments+*/1);
-
-    let gas_to_be_paid = gas_to_be_paid.saturating_sub(gas_used_and_paid);
-
-    user_pays_operator(
-        gas_price,
-        gas_to_be_paid,
-        user_token_account,
-        operator_token_account,
-        accounts,
-        account_storage,
-    )?;
-
-    let gas_has_been_paid = gas_to_be_paid;
-    debug_print!("user_pays_operator gas_has_been_paid = {:?}", gas_has_been_paid);
-    storage.add_gas_has_been_paid(gas_has_been_paid)
-}
 
 /// Check that neon-evm user has enough funds to pay for gas
 ///
