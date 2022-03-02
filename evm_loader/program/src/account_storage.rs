@@ -421,9 +421,6 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             let slot_hash_data = account.data.borrow();
 
             let mut start: usize = 8;
-
-            let clock = Clock::get().unwrap();
-            let mut slot: u64 = clock.slot - 1;
             let mut count = 50;
 
             while start + 32 < slot_hash_data.len() {
@@ -436,7 +433,6 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     return H256::from_slice(&slot_hash_data[start+8..][..32]);
                 }
                 start += 40;
-                slot -= 1;
                 count -= 1;
             }
 
