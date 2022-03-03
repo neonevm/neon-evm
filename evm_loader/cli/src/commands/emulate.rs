@@ -140,10 +140,13 @@ pub fn execute(
         .map(TokenAccountJSON::from)
         .collect();
 
+    let used_block_hash: bool = storage.get_block_hash_usage();
+
     let js = serde_json::json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": token_accounts,
+        "used_block_hash_history": used_block_hash,
         "result": &hex::encode(&result),
         "exit_status": status,
         "exit_reason": exit_reason,

@@ -131,6 +131,7 @@ pub struct EmulatorAccountStorage<'a> {
     config: &'a Config,
     block_number: u64,
     block_timestamp: i64,
+    used_block_hash: RefCell<bool>,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
@@ -164,6 +165,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             config,
             block_number: slot,
             block_timestamp: timestamp,
+            used_block_hash: RefCell::from(false),
         }
     }
 
@@ -524,6 +526,10 @@ impl<'a> EmulatorAccountStorage<'a> {
             default
         }
     }
+
+    pub fn get_block_hash_usage(&self) -> bool {
+        *self.used_block_hash.borrow()
+    }
 }
 
 pub fn make_solana_program_address(
@@ -545,6 +551,18 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 {
         self.block_timestamp.into()
+    }
+
+    fn block_hash(&self, number: U256) -> H256 { 
+        info!("Get block hash {}", number);
+        let mut used_block_hash = self.used_block_hash.borrow_mut();
+        *used_block_hash = true;
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+            H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().unwrap())
+        } else {
+            warn!("Got error trying to get block hash");
+            H256::default()
+        }
     }
 
     fn exists(&self, address: &H160) -> bool {

@@ -46,6 +46,8 @@ pub trait AccountStorage {
     fn block_number(&self) -> U256;
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
+    /// Get block hash
+    fn block_hash(&self, number: U256) -> H256;
 
     /// Check if ethereum account exists
     fn exists(&self, address: &H160) -> bool;
