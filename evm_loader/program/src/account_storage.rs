@@ -14,7 +14,7 @@ use solana_program::{
     account_info::{AccountInfo},
     pubkey::Pubkey,
     program_error::ProgramError,
-    sysvar::{clock::Clock, Sysvar, slot_hashes, recent_blockhashes},
+    sysvar::{clock::Clock, Sysvar, recent_blockhashes},
     program::invoke_signed,
     entrypoint::ProgramResult,
     system_program, msg,
@@ -411,38 +411,15 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             let offset: usize = (8 + (clock.slot - 1 - number.as_u64()) * 40).try_into().unwrap();
 
             if offset + 32 > slot_hash_data.len() {
-                msg!("offset + 32 > slot_hash_data.len()");
+                msg!("offset({}) + 32 > slot_hash_data.len()({})", offset, slot_hash_data.len());
                 return H256::default();
             }
 
-            H256::from_slice(&slot_hash_data[offset..][..32])
-        } else if let Some(account) = self.solana_accounts.get(&slot_hashes::ID) {
-            msg!("slot_hashes");
-            let slot_hash_data = account.data.borrow();
+            return H256::from_slice(&slot_hash_data[offset..][..32]);
+        } 
 
-            let mut lo: usize = (slot_hash_data.len() - 8) / 40;
-            let mut hi: usize = 0;
-
-            while hi < lo {
-                let m: usize = (lo - hi) / 2 + hi;
-
-                msg!("m {} lo {} hi {}", m, lo, hi);
-
-                let slot = u64::from_le_bytes(slot_hash_data[8+m*40..][..8].try_into().unwrap());
-                msg!("slot {} blockhash {}", slot, &hex::encode(&slot_hash_data[8+8+m*40..][..32]));
-
-                match number.as_u64() {
-                    d if d == slot => return H256::from_slice(&slot_hash_data[8+8+m*40..][..32]),
-                    d if d > slot => {lo = m;},
-                    _ => {hi = m+1;},
-                }
-            }
-
-            H256::default()
-        } else {
-            msg!("Hashes account not found default");
-            H256::default()
-        }
+        msg!("Hashes account not found defaulting");
+        H256::default()
     }
 
     fn block_timestamp(&self) -> U256 {

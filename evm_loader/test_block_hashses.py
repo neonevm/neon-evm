@@ -59,7 +59,7 @@ class PrecompilesTests(unittest.TestCase):
         result = result["result"]
         return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
-    def make_transactions(self, call_data):
+    def make_transactions(self, call_data) -> Transaction:
         eth_tx = {
             'to': self.eth_contract,
             'value': 0,
@@ -97,7 +97,7 @@ class PrecompilesTests(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             trx_data,
-            add_meta=[AccountMeta(pubkey=self.block_hash_source, is_signer=False, is_writable=False),]
+            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
         )
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
@@ -118,24 +118,16 @@ class PrecompilesTests(unittest.TestCase):
             slot_hash[int(slot)] = hash_val
         return slot_hash
 
-    def test_01_block_hashes(self):
-        print("test_01_block_hashes")
+    def test_01_get_block_hashes(self):
+        print("test_01_get_block_hashes")
         solana_result = self.get_blocks_from_solana()
-        for i in range(6):
-            if i % 2 == 0:
-                self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
-            else:
-                self.block_hash_source = "SysvarS1otHashes111111111111111111111111111"
+        for _ in range(3):
             sol_slot, sol_hash = random.choice(list(solana_result.items()))
             result = self.send_transaction(self.make_getValues(sol_slot))
-            print(f"{self.block_hash_source} sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
+            print(f"sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
 
-    def test_02_block_hashes(self):
-        print("test_02_block_hashes")
-        self.block_hash_source = "SysvarRecentB1ockHashes11111111111111111111"
-        result = self.send_transaction(self.make_getCurrentValues())
-        print(f"{self.block_hash_source} result: {result}")
-        self.block_hash_source = "SysvarS1otHashes111111111111111111111111111"
+    def test_02_get_current_block_hashes(self):
+        print("test_02_get_current_block_hashes")
         result = self.send_transaction(self.make_getCurrentValues())
         print(f"{self.block_hash_source} result: {result}")
 
