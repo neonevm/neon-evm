@@ -80,10 +80,10 @@ impl<'a> Storage<'a> {
     ) -> Result<Self, ProgramError> {
         let account_tag = crate::account::tag(program_id, info)?;
         if account_tag == FinalizedStorage::TAG {
-            return Err!(EvmLoaderError::StorageAccountFinalized.into());
+            return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
         }
         if account_tag == crate::account::TAG_EMPTY {
-            return Err!(EvmLoaderError::StorageAccountUninitialized.into());
+            return Err!(EvmLoaderError::StorageAccountUninitialized.into(); "Account {} - Storage Uninitialized", info.key);
         }
 
         let mut storage = Storage::from_account(program_id, info)?;
