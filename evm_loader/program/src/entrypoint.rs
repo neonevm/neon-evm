@@ -83,7 +83,7 @@ fn process_instruction<'a>(
     instruction_data: &[u8],
 ) -> ProgramResult {
     let (tag, instruction) = instruction_data.split_first()
-        .ok_or_else(|| E!(ProgramError::InvalidInstructionData))?;
+        .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Invalid instruction - {:?}", instruction_data))?;
 
     let result = match EvmInstruction::parse(tag)? {
         EvmInstruction::CreateAccountV02 => {
