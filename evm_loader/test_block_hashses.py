@@ -14,7 +14,7 @@ evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 holder_id = 0
 
-class PrecompilesTests(unittest.TestCase):
+class BlockHashesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_block_hashses.py setUpClass")
@@ -32,7 +32,7 @@ class PrecompilesTests(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
@@ -62,11 +62,11 @@ class PrecompilesTests(unittest.TestCase):
         eth_tx = {
             'to': self.eth_contract,
             'value': 0,
-            'gas': 9999999,
-            'gasPrice': 1_000_000_000,
+            'gas': 999999999,
+            'gasPrice': 0,
             'nonce': getTransactionCount(client, self.caller),
             'data': call_data,
-            'chainId': 111,
+            'chainId': 111
         }
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
