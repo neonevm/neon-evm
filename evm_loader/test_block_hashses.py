@@ -67,7 +67,7 @@ class PrecompilesTests(unittest.TestCase):
             'gasPrice': 1_000_000_000,
             'nonce': getTransactionCount(client, self.caller),
             'data': call_data,
-            'chainId': 111
+            'chainId': 111,
         }
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
@@ -83,7 +83,7 @@ class PrecompilesTests(unittest.TestCase):
         return solana_trx
 
     def sol_instr_keccak(self, keccak_instruction):
-        return  TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
+        return TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
                     AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
                 ])
 
@@ -112,24 +112,30 @@ class PrecompilesTests(unittest.TestCase):
     def get_blocks_from_solana(self):
         slot_hash = {}
         current_slot = client.get_slot()["result"]
-        for slot in range(current_slot):
+        for slot in range(max(current_slot - 100, 0), current_slot):
             hash_val = base58.b58decode(client.get_confirmed_block(slot)['result']['blockhash']).hex()
-            print(f"slot: {slot} hash_val: {hash_val}")
             slot_hash[int(slot)] = hash_val
         return slot_hash
 
     def test_01_get_block_hashes(self):
+        '''
+        Recent blockhashes store history of last 150 blocks
+        '''
         print("test_01_get_block_hashes")
         solana_result = self.get_blocks_from_solana()
         for _ in range(3):
             sol_slot, sol_hash = random.choice(list(solana_result.items()))
             result = self.send_transaction(self.make_getValues(sol_slot))
-            print(f"sol_slot: {sol_slot} sol_hash: {sol_hash} result: {result}")
+            self.assertEqual(sol_hash, result)
 
     def test_02_get_current_block_hashes(self):
+        '''
+        Solana doesn't have current block hash at execution state, so it will return default hash
+        '''
         print("test_02_get_current_block_hashes")
+        ZERO_HASH = '0000000000000000000000000000000000000000000000000000000000000000'
         result = self.send_transaction(self.make_getCurrentValues())
-        print(f"{self.block_hash_source} result: {result}")
+        self.assertEqual(result, ZERO_HASH)
 
 
 if __name__ == '__main__':

@@ -500,7 +500,7 @@ def getAccountData(client, account, expected_length):
     return data
 
 
-def getTransactionCount(client, sol_account):
+def getTransactionCount(client, sol_account) -> int:
     info = getAccountData(client, sol_account, ACCOUNT_INFO_LAYOUT.sizeof())
     acc_info = AccountInfo.frombytes(info)
     res = int.from_bytes(acc_info.trx_count, 'little')
