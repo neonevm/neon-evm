@@ -18,6 +18,15 @@ use solana_sdk::transaction::Transaction;
 
 use crate::{config, ethereum, id::ReqId};
 
+/// Ethereum account version
+const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
+    // Special case for alpha configuration (it is needed in order to separate the accounts created for
+    // testing this version)
+    255_u8
+} else {
+    1_u8
+};
+
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
 }
@@ -159,10 +168,7 @@ fn ether_address_to_solana_pubkey(
     program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[
-            &[evm_loader::account::ACCOUNT_SEED_VERSION],
-            ether_address.as_bytes(),
-        ],
+        &[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()],
         program_id,
     )
 }
