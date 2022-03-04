@@ -205,10 +205,10 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 109
         trx_size_cost = 5000
-        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
+        gas_05 = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
         iterative_overhead = 10_000
-        gas_iterative = iterative_overhead + gas_05
+        gas_iterative = iterative_overhead + (trx_size_cost + evm_step_executed * evm_step_cost())
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
@@ -231,10 +231,10 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 125
         trx_size_cost = 5000
-        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
+        gas_05 = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
         iterative_overhead = 10_000
-        gas_iterative = iterative_overhead + gas_05
+        gas_iterative = iterative_overhead + (trx_size_cost + evm_step_executed * evm_step_cost())
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
@@ -265,10 +265,10 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 156
         trx_size_cost = 5000
-        gas_05 = trx_size_cost + (evm_step_executed * evm_step_cost())
+        gas_05 = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
         iterative_overhead = 10_000
-        gas_iterative = iterative_overhead + gas_05
+        gas_iterative = iterative_overhead + (trx_size_cost + evm_step_executed * evm_step_cost())
 
         calls = [ (self.call_signed, 1, gas_05), (self.call_partial_signed, 0, gas_iterative) ]
         for (call, index, gas) in calls:
@@ -326,7 +326,7 @@ class EventTest(unittest.TestCase):
 
         evm_step_executed = 156
         trx_size_cost = 5000
-        gas_used = trx_size_cost + (evm_step_executed * evm_step_cost())
+        gas_used = trx_size_cost + (max(evm_step_executed, EVM_STEPS) * evm_step_cost())
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value

@@ -355,9 +355,10 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print('the solana transaction is too large')
 
     def test_07_combined_continue_gets_before_the_creation_of_accounts(self):
+        evm_steps = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc_2.secret_key(), self.caller_2, self.caller_ether_2, 0)
         storage = self.create_storage_account(sign[:8].hex())
-        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(EVM_STEPS, trx_data, storage, self.caller_2)
+        neon_emv_instr_0d_2 = self.neon_emv_instr_0D(evm_steps, trx_data, storage, self.caller_2)
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
         trx = Transaction() \
@@ -402,9 +403,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         evm_step_executed = 230
         trx_size_cost = 5000
         iterative_overhead = 10_000
-        gas1 = iterative_overhead + trx_size_cost + (EVM_STEPS * evm_step_cost())
-        gas2 = EVM_STEPS * evm_step_cost()
-        gas3 = (evm_step_executed - EVM_STEPS - EVM_STEPS) * evm_step_cost()
+        gas1 = iterative_overhead + trx_size_cost + (evm_steps * evm_step_cost())
+        gas2 = evm_steps * evm_step_cost()
+        gas3 = (evm_step_executed - evm_steps - evm_steps) * evm_step_cost()
         gas = gas1 + gas2 + gas3
 
 
