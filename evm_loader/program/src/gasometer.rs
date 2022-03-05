@@ -13,7 +13,7 @@ use crate::{
     transaction::UnsignedTransaction, 
     account::{EthereumAccount}
 };
-
+use solana_program::{program_pack::Pack};
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -123,6 +123,29 @@ impl Gasometer {
         }
 
         let account_rent = self.rent.minimum_balance(EthereumAccount::SIZE);
+
+        self.gas = self.gas
+            .saturating_add(account_rent)
+            .saturating_add(CREATE_ACCOUNT_TRX_COST);
+    }
+
+    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256)
+    where
+        B: AccountStorage
+    {
+        if value.is_zero() {
+            return;
+        }
+
+        let account_is_empty =
+            state.balance(target).is_zero() &&
+            state.nonce(target).is_zero();
+
+        if !account_is_empty {
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
 
         self.gas = self.gas
             .saturating_add(account_rent)
