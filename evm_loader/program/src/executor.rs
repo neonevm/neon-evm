@@ -166,7 +166,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
 
     fn exists(&self, address: H160) -> bool {
         if is_precompile_address(&address) {
-            debug_print!("Call to precompile address");
             return true;
         }
         
