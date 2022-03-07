@@ -1,12 +1,22 @@
 //! Faucet config module.
 
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::str::FromStr as _;
 use std::sync::RwLock;
 
 use serde::{Deserialize, Serialize};
+
 use tracing::warn;
 
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::account_utils::StateMut;
+use solana_sdk::bpf_loader;
+use solana_sdk::bpf_loader_deprecated;
+use solana_sdk::bpf_loader_upgradeable::{self, UpgradeableLoaderState};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::keypair::Keypair;
 
 use crate::{ethereum, id};
@@ -41,6 +51,24 @@ pub enum Error {
 
     #[error("Failed to parse keypair")]
     ParseKeypair(#[from] ed25519_dalek::SignatureError),
+
+    #[error("Invalid pubkey '{0}'")]
+    InvalidPubkey(String),
+
+    #[error("Account not found '{0}'")]
+    AccountNotFound(Pubkey),
+
+    #[error("Associated PDA '{0}' not found for program '{1}'")]
+    AssociatedPdaNotFound(Pubkey, Pubkey),
+
+    #[error("Associated PDA '{0}' is not valid for program '{1}'")]
+    InvalidAssociatedPda(Pubkey, Pubkey),
+
+    #[error("Account is not upgradeable '{0}'")]
+    AccountIsNotUpgradeable(Pubkey),
+
+    #[error("Account is not BPF '{0}'")]
+    AccountIsNotBpf(Pubkey),
 }
 
 /// Represents the config result type.
@@ -57,12 +85,14 @@ const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const FAUCET_SOLANA_ENABLE: &str = "FAUCET_SOLANA_ENABLE";
 const SOLANA_URL: &str = "SOLANA_URL";
 const EVM_LOADER: &str = "EVM_LOADER";
+const NEON_SEED_VERSION: &str = "NEON_SEED_VERSION";
 const NEON_TOKEN_MINT: &str = "NEON_TOKEN_MINT";
 const NEON_TOKEN_MINT_DECIMALS: &str = "NEON_TOKEN_MINT_DECIMALS";
 const NEON_OPERATOR_KEYFILE: &str = "NEON_OPERATOR_KEYFILE";
 const NEON_ETH_MAX_AMOUNT: &str = "NEON_ETH_MAX_AMOUNT";
 const NEON_LOG: &str = "NEON_LOG";
 const RUST_LOG: &str = "RUST_LOG";
+
 static ENV: &[&str] = &[
     FAUCET_RPC_BIND,
     FAUCET_RPC_PORT,
@@ -75,8 +105,6 @@ static ENV: &[&str] = &[
     FAUCET_SOLANA_ENABLE,
     SOLANA_URL,
     EVM_LOADER,
-    NEON_TOKEN_MINT,
-    NEON_TOKEN_MINT_DECIMALS,
     NEON_OPERATOR_KEYFILE,
     NEON_ETH_MAX_AMOUNT,
     NEON_LOG,
@@ -102,7 +130,7 @@ pub fn show_env() {
     }
 }
 
-/// Loads the config from a file and applies defined environment variables.
+/// Loads the config from a file and applies defined neon params and environment variables.
 pub fn load(file: &Path) -> Result<()> {
     if file.exists() {
         CONFIG.write().unwrap().load(file)?;
@@ -130,10 +158,6 @@ pub fn load(file: &Path) -> Result<()> {
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
-                NEON_TOKEN_MINT => CONFIG.write().unwrap().solana.token_mint = val,
-                NEON_TOKEN_MINT_DECIMALS => {
-                    CONFIG.write().unwrap().solana.token_mint_decimals = val.parse::<u8>()?
-                }
                 NEON_OPERATOR_KEYFILE => {
                     CONFIG.write().unwrap().solana.operator_keyfile = val.into()
                 }
@@ -214,6 +238,11 @@ pub fn solana_url() -> String {
 /// Gets the `solana.evm_loader` address value.
 pub fn solana_evm_loader() -> String {
     CONFIG.read().unwrap().solana.evm_loader.clone()
+}
+
+/// Gets the `solana.account_seed_version` value.
+pub fn solana_account_seed_version() -> u8 {
+    CONFIG.read().unwrap().solana.account_seed_version
 }
 
 /// Gets the `solana.token_mint` address value.
@@ -344,8 +373,9 @@ struct Solana {
     enable: bool,
     url: String,
     evm_loader: String,
-    token_mint: String,
-    token_mint_decimals: u8,
+    account_seed_version: u8, // from neon params
+    token_mint: String,       // from neon params
+    token_mint_decimals: u8,  // from neon params
     operator_keyfile: PathBuf,
     max_amount: u64,
 }
@@ -380,24 +410,22 @@ impl std::fmt::Display for Solana {
         }
         write!(
             f,
+            "solana.account_seed_version = {}",
+            self.account_seed_version
+        )?;
+        writeln!(f)?;
+        write!(
+            f,
             "solana.token_mint = {:?}",
             obfuscate_string(&self.token_mint)
         )?;
-        if env::var(NEON_TOKEN_MINT).is_ok() {
-            writeln!(f, " (overridden by {})", NEON_TOKEN_MINT)?;
-        } else {
-            writeln!(f)?;
-        }
+        writeln!(f)?;
         write!(
             f,
             "solana.token_mint_decimals = {}",
             self.token_mint_decimals
         )?;
-        if env::var(NEON_TOKEN_MINT_DECIMALS).is_ok() {
-            writeln!(f, " (overridden by {})", NEON_TOKEN_MINT_DECIMALS)?;
-        } else {
-            writeln!(f)?;
-        }
+        writeln!(f)?;
         write!(f, "solana.operator_keyfile = {:?}", self.operator_keyfile)?;
         if env::var(NEON_OPERATOR_KEYFILE).is_ok() {
             writeln!(f, " (overridden by {})", NEON_OPERATOR_KEYFILE)?;
@@ -643,4 +671,92 @@ fn test_trim_first_and_last_chars() {
     assert_eq!(s, "B");
     let s = trim_first_and_last_chars("语言处理");
     assert_eq!(s, "言处");
+}
+
+/// Reads NEON parameters from the EVM Loader account.
+pub fn load_neon_params(client: &RpcClient) -> Result<()> {
+    for (param_name, val) in &read_neon_parameters_from_account(client)? {
+        match param_name.as_ref() {
+            NEON_SEED_VERSION => {
+                CONFIG.write().unwrap().solana.account_seed_version = val.parse::<u8>()?
+            }
+            NEON_TOKEN_MINT => CONFIG.write().unwrap().solana.token_mint = val.into(),
+            NEON_TOKEN_MINT_DECIMALS => {
+                CONFIG.write().unwrap().solana.token_mint_decimals = val.parse::<u8>()?
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn read_neon_parameters_from_account(client: &RpcClient) -> Result<HashMap<String, String>> {
+    let evm_loader_id = Pubkey::from_str(&solana_evm_loader())
+        .map_err(|_| Error::InvalidPubkey(solana_evm_loader()))?;
+
+    let account = client
+        .get_account(&evm_loader_id)
+        .map_err(|_| Error::AccountNotFound(evm_loader_id))?;
+
+    if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
+        Ok(read_elf_parameters(&account.data))
+    } else if account.owner == bpf_loader_upgradeable::id() {
+        if let Ok(UpgradeableLoaderState::Program {
+            programdata_address,
+        }) = account.state()
+        {
+            let programdata_account = client
+                .get_account(&programdata_address)
+                .map_err(|_| Error::AssociatedPdaNotFound(programdata_address, evm_loader_id))?;
+
+            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
+                let offset = UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                let program_data = &programdata_account.data[offset..];
+                Ok(read_elf_parameters(program_data))
+            } else {
+                Err(Error::InvalidAssociatedPda(
+                    programdata_address,
+                    evm_loader_id,
+                ))
+            }
+        } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+            let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+            let program_data = &account.data[offset..];
+            Ok(read_elf_parameters(program_data))
+        } else {
+            Err(Error::AccountIsNotUpgradeable(evm_loader_id))
+        }
+    } else {
+        Err(Error::AccountIsNotBpf(evm_loader_id))
+    }
+}
+
+fn read_elf_parameters(account_data: &[u8]) -> HashMap<String, String> {
+    let mut result = HashMap::new();
+    let elf = goblin::elf::Elf::parse(account_data).expect("Unable to parse ELF file");
+
+    elf.dynsyms.iter().for_each(|sym| {
+        let name = String::from(&elf.dynstrtab[sym.st_name]);
+        if name.starts_with("NEON") {
+            let end = account_data.len();
+            let from: usize = usize::try_from(sym.st_value)
+                .unwrap_or_else(|_| panic!("Unable to cast usize from u64:{:?}", sym.st_value));
+            let to: usize = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to cast usize from u64:{:?}. Error: {}",
+                    sym.st_value + sym.st_size,
+                    err
+                )
+            });
+            if to < end && from < end {
+                let buf = &account_data[from..to];
+                let value = std::str::from_utf8(buf).unwrap();
+                result.insert(name, String::from(value));
+            } else {
+                panic!("{} is out of bounds", name);
+            }
+        }
+    });
+
+    result
 }

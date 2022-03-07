@@ -102,6 +102,7 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
 
     if config::solana_enabled() {
         solana::init_client(config::solana_url());
+        config::load_neon_params(&solana::get_client())?;
     }
 
     if config::web3_enabled() || config::solana_enabled() {

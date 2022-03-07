@@ -18,15 +18,6 @@ use solana_sdk::transaction::Transaction;
 
 use crate::{config, ethereum, id::ReqId};
 
-/// Ethereum account version
-const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
-    // Special case for alpha configuration (it is needed in order to separate the accounts created for
-    // testing this version)
-    255_u8
-} else {
-    1_u8
-};
-
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
 }
@@ -39,6 +30,11 @@ pub fn init_client(url: String) {
             CommitmentConfig::confirmed(),
         ))
     });
+}
+
+/// Returns instance of RpcClient.
+pub fn get_client() -> Arc<RpcClient> {
+    CLIENT.lock().unwrap().0.clone()
 }
 
 /// Converts amount of tokens from whole value to fractions (usually 10E-9).
@@ -113,16 +109,10 @@ pub async fn deposit_token(
 
         info!("{} spl_token id = {}", id, spl_token::id());
         info!("{} signer_token_pubkey = {}", id, signer_token_pubkey);
-        info!("{} token_mint_id = {}", id, token_mint_id);
         info!("{} evm_pool_pubkey = {}", id, evm_pool_pubkey);
         info!("{} evm_token_authority = {}", id, evm_token_authority);
         info!("{} signer_pubkey = {}", id, signer_pubkey);
         info!("{} amount = {}", id, amount);
-        info!(
-            "{} token_decimals = {}",
-            id,
-            config::solana_token_mint_decimals()
-        );
 
         instructions.push(spl_approve_instruction(
             spl_token::id(),
@@ -168,7 +158,10 @@ fn ether_address_to_solana_pubkey(
     program_id: &Pubkey,
 ) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[&[ACCOUNT_SEED_VERSION], ether_address.as_bytes()],
+        &[
+            &[config::solana_account_seed_version()],
+            ether_address.as_bytes(),
+        ],
         program_id,
     )
 }
@@ -245,9 +238,4 @@ impl Default for Client {
     fn default() -> Client {
         Client(Arc::new(RpcClient::new(String::default())))
     }
-}
-
-/// Returns instance of RpcClient.
-fn get_client() -> Arc<RpcClient> {
-    CLIENT.lock().unwrap().0.clone()
 }

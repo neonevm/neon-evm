@@ -78,8 +78,6 @@ The configuration file should be in TOML format.
 | **solana**.url | Solana network endpoint
 | **solana**.operator_keyfile | Solana keyfile to support operations
 | **solana**.evm_loader | Address of the EVM Loader program
-| **solana**.token_mint | Address of the NEON token mint account
-| **solana**.token_mint_decimals | Fixed point number precision parameter
 | **solana**.max_amount | Largest amount of NEONs to distribute with a single request
 |-
 
@@ -102,8 +100,6 @@ max_amount = 1000
 enable = true
 url = "http://localhost:8899"
 evm_loader = "EvmLoaderId11111111111111111111111111111111"
-token_mint = "TokenMintId11111111111111111111111111111111"
-token_mint_decimals = 9
 operator_keyfile = "operator_id.json"
 max_amount = 10
 ```
@@ -131,8 +127,6 @@ Environment variables, if present, override portions of the configuration.
 | FAUCET_SOLANA_ENABLE | **solana**.enable | `true`
 | SOLANA_URL | **solana**.url | `http://localhost:8899`
 | EVM_LOADER | **solana**.evm_loader | `EvmLoaderId11111111111111111111111111111111`
-| NEON_TOKEN_MINT | **solana**.token_mint | `TokenMintId11111111111111111111111111111111`
-| NEON_TOKEN_MINT_DECIMALS | **solana**.token_mint_decimals | `9`
 | NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `operator_id.json`
 | NEON_ETH_MAX_AMOUNT | **solana**.max_amount | `10`
 | NEON_LOG | | `json`
