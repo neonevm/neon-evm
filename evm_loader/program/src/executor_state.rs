@@ -153,7 +153,7 @@ pub struct Withdraw {
     pub source: H160,
     pub dest: Pubkey,
     pub dest_neon: Pubkey,
-    pub amount: U256,
+    pub amount: u64,
 }
 
 /// Represents the state of executor abstracted away from a backend.
@@ -690,7 +690,7 @@ impl ExecutorSubstate {
 
         let new_source_balance = {
             let balance = self.balance(&withdraw.source, backend);
-            balance.checked_sub(withdraw.amount).ok_or(ExitError::OutOfFund)?
+            balance.checked_sub(U256::from(withdraw.amount)).ok_or(ExitError::OutOfFund)?
         };
 
         let mut balances = self.balances.borrow_mut();
@@ -1141,7 +1141,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: U256) -> bool {
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, amount: u64) -> bool {
         let dest_neon_acct = get_associated_token_address(
             &destination,
             &crate::config::token_mint::id()

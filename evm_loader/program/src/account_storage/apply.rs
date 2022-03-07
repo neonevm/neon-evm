@@ -301,7 +301,7 @@ impl<'a> ProgramAccountStorage<'a> {
         for withdraw in withdrawals {
             let dest_neon = self.solana_accounts[&withdraw.dest_neon];
 
-            let source_balance = self.balance(&withdraw.source).checked_sub(withdraw.amount)
+            let source_balance = self.balance(&withdraw.source).checked_sub(U256::from(withdraw.amount))
                 .ok_or_else(|| E!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, balance = {}", withdraw.source, self.balance(&withdraw.source)))?;
 
             if dest_neon.data_is_empty() {
@@ -328,7 +328,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 dest_neon.key,
                 &authority,
                 &[],
-                withdraw.amount.as_u64()
+                withdraw.amount
             )?;
 
             let account_infos: &[AccountInfo] = &[

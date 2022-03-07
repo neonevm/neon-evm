@@ -326,12 +326,17 @@ pub fn neon_token<'a, B: AccountStorage>(
             .apparent_value
             .div_mod(U256::from(min_amount));
 
-        if remainder != U256::from(0) {
+        if transfer_amount > U256::from(u64::MAX) {
+            let revert_message = b"neon_token: transfer amount exceeds maximum".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        if remainder.as_u64() != 0 {
             let revert_message = b"neon_token: amount must be divisible by 1 billion".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        if !state.withdraw(source, destination, transfer_amount) {
+        if !state.withdraw(source, destination, transfer_amount.as_u64()) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
