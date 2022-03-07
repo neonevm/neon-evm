@@ -6,6 +6,7 @@ contract NeonToken {
 
     function withdraw(bytes32 spender) public payable returns (bool) {
         (bool success, bytes memory returnData) = NeonPrecompiled.delegatecall(abi.encodeWithSignature("withdraw(bytes32)", spender));
+        assert(success, string(returnData));
         return success;
     }
 }

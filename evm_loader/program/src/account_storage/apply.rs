@@ -281,9 +281,11 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn apply_withdrawals(&mut self,
-                         withdrawals: Vec<Withdraw>,
-                         operator: &Operator<'a>) -> Result<(), ProgramError> {
+    fn apply_withdrawals(
+        &mut self,
+        withdrawals: Vec<Withdraw>,
+        operator: &Operator<'a>,
+    ) -> Result<(), ProgramError> {
         debug_print!("apply_withdrawals {:?}", withdrawals);
 
         let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
@@ -297,6 +299,9 @@ impl<'a> ProgramAccountStorage<'a> {
 
         for withdraw in withdrawals {
             let dest_neon = self.solana_accounts[&withdraw.dest_neon];
+
+            let source_balance = self.balance(&withdraw.source).checked_sub(withdraw.amount)
+                .ok_or_else(|| E!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, balance = {}", withdraw.source, self.balance(&withdraw.source)))?;
 
             if dest_neon.data_is_empty() {
                 let create_acc_insrt = create_associated_token_account(operator.key,
@@ -333,6 +338,10 @@ impl<'a> ProgramAccountStorage<'a> {
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
+
+            self.ethereum_account_mut(&withdraw.source)
+                .unwrap() // checked before
+                .balance = source_balance;
         }
 
         Ok(())
