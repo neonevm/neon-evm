@@ -56,7 +56,7 @@ ACCOUNT_SEED_VERSION=b'\1'
 # amount of gas per 1 byte evm_storage
 EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
-EVM_STEPS = 100
+EVM_STEPS = 500
 # the message size that is used to holder-account filling
 HOLDER_MSG_SIZE = 1000
 # Ethereum account allocated data size

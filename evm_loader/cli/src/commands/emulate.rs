@@ -18,6 +18,8 @@ use crate::{
     syscall_stubs::Stubs,
 };
 
+use crate::{errors};
+
 #[allow(clippy::too_many_lines)]
 pub fn execute(
     config: &Config, 
@@ -62,12 +64,19 @@ pub fn execute(
                     program_id,
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
+
                 executor.call_begin(caller_id,
-                                    program_id,
-                                    data.unwrap_or_default(),
-                                    value.unwrap_or_default(),
-                                    gas_limit)?;
-                executor.execute()
+                    program_id,
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit)?;
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             },
             None => {
                 debug!("create_begin(caller_id={:?}, data={:?}, value={:?})",
@@ -75,10 +84,16 @@ pub fn execute(
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
                 executor.create_begin(caller_id,
-                                      data.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-                                      gas_limit)?;
-                executor.execute()
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit)?;
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             }
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
