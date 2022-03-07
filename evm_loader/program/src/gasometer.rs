@@ -11,9 +11,9 @@ use crate::{
     account_storage::AccountStorage,
     executor_state::ExecutorState,
     transaction::UnsignedTransaction, 
-    account::{EthereumAccount}
+    account::{EthereumAccount, ERC20Allowance}
 };
-use solana_program::{program_pack::Pack};
+use solana_program::{program_pack::Pack, pubkey::Pubkey};
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -129,7 +129,7 @@ impl Gasometer {
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 
-    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256)
+    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256, token_mint: &Pubkey, context: &evm::Context)
     where
         B: AccountStorage
     {
@@ -137,15 +137,36 @@ impl Gasometer {
             return;
         }
 
-        let account_is_empty =
-            state.balance(target).is_zero() &&
-            state.nonce(target).is_zero();
+        let balance = state.erc20_balance_of(*token_mint, context, target);
 
-        if !account_is_empty {
+        if !balance.is_zero() {
             return;
         }
 
         let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
+
+        self.gas = self.gas
+            .saturating_add(account_rent)
+            .saturating_add(CREATE_ACCOUNT_TRX_COST);
+    }
+
+    pub fn record_approve<B>(&mut self, state: &ExecutorState<B>, mint: Pubkey, context: &evm::Context, spender: H160, value: U256)
+        where
+            B: AccountStorage
+    {
+        if value.is_zero() {
+            return;
+        }
+
+        let owner = context.caller;
+
+        let allowance = state.erc20_allowance(mint, context, owner, spender);
+
+        if !allowance.is_zero(){
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(ERC20Allowance::SIZE);
 
         self.gas = self.gas
             .saturating_add(account_rent)

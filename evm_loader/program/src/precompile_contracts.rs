@@ -179,7 +179,8 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
-            gasometer.record_spl_transfer(state, address, value);
+
+            gasometer.record_spl_transfer(state, address, value, &token_mint, context);
 
             let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
@@ -206,8 +207,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let source = H160::from_slice(source);
             let target = H160::from_slice(target);
             let value = U256::from_big_endian_fast(value);
-            gasometer.record_spl_transfer(state, source, value);
-            gasometer.record_spl_transfer(state, target, value);
+            gasometer.record_spl_transfer(state, target, value, &token_mint, context);
 
             let status = state.erc20_transfer_from(token_mint, context,source, target, value);
             if !status {
@@ -233,7 +233,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let spender = H160::from_slice(spender);
             let value = U256::from_big_endian_fast(value);
-            gasometer.record_spl_transfer(state, spender, value);
+            gasometer.record_approve(state, token_mint, context, spender, value);
 
             state.erc20_approve(token_mint, context, spender, value);
 
