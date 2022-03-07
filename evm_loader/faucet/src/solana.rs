@@ -32,6 +32,12 @@ pub fn init_client(url: String) {
     });
 }
 
+pub async fn is_alive() -> bool {
+    let ok =
+        tokio::task::spawn_blocking(|| -> bool { get_client().get_block_height().is_ok() }).await;
+    ok.unwrap_or(false)
+}
+
 /// Returns instance of RpcClient.
 pub fn get_client() -> Arc<RpcClient> {
     CLIENT.lock().unwrap().0.clone()

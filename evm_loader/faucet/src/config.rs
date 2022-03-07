@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -130,7 +130,7 @@ pub fn show_env() {
     }
 }
 
-/// Loads the config from a file and applies defined neon params and environment variables.
+/// Loads the config from a file and applies defined environment variables.
 pub fn load(file: &Path) -> Result<()> {
     if file.exists() {
         CONFIG.write().unwrap().load(file)?;
@@ -408,24 +408,6 @@ impl std::fmt::Display for Solana {
         } else {
             writeln!(f)?;
         }
-        write!(
-            f,
-            "solana.account_seed_version = {}",
-            self.account_seed_version
-        )?;
-        writeln!(f)?;
-        write!(
-            f,
-            "solana.token_mint = {:?}",
-            obfuscate_string(&self.token_mint)
-        )?;
-        writeln!(f)?;
-        write!(
-            f,
-            "solana.token_mint_decimals = {}",
-            self.token_mint_decimals
-        )?;
-        writeln!(f)?;
         write!(f, "solana.operator_keyfile = {:?}", self.operator_keyfile)?;
         if env::var(NEON_OPERATOR_KEYFILE).is_ok() {
             writeln!(f, " (overridden by {})", NEON_OPERATOR_KEYFILE)?;
@@ -674,8 +656,14 @@ fn test_trim_first_and_last_chars() {
 }
 
 /// Reads NEON parameters from the EVM Loader account.
-pub fn load_neon_params(client: &RpcClient) -> Result<()> {
-    for (param_name, val) in &read_neon_parameters_from_account(client)? {
+pub async fn load_neon_params(client: Arc<RpcClient>) -> Result<()> {
+    let params = tokio::task::spawn_blocking(move || -> Result<HashMap<String, String>> {
+        read_neon_parameters_from_account(client)
+    })
+    .await
+    .expect("Solana does not respond")?;
+
+    for (param_name, val) in &params {
         match param_name.as_ref() {
             NEON_SEED_VERSION => {
                 CONFIG.write().unwrap().solana.account_seed_version = val.parse::<u8>()?
@@ -687,10 +675,12 @@ pub fn load_neon_params(client: &RpcClient) -> Result<()> {
             _ => {}
         }
     }
+
     Ok(())
 }
 
-fn read_neon_parameters_from_account(client: &RpcClient) -> Result<HashMap<String, String>> {
+#[allow(unused)]
+fn read_neon_parameters_from_account(client: Arc<RpcClient>) -> Result<HashMap<String, String>> {
     let evm_loader_id = Pubkey::from_str(&solana_evm_loader())
         .map_err(|_| Error::InvalidPubkey(solana_evm_loader()))?;
 
