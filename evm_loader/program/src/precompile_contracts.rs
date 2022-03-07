@@ -292,7 +292,6 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 //--------------------------------------------------
 const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
 const ETH_DECIMALS: u32 = 18;
-const GIGA: u64 = 1_000_000_000;
 
 /// Call inner `neon_token`
 #[must_use]
@@ -317,27 +316,22 @@ pub fn neon_token<'a, B: AccountStorage>(
         }
 
         let source = context.address; // caller contract
-        let amount_alan = context.apparent_value;
 
         // owner of the associated token account
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-        let (amount_alan, remainder) = amount_alan.div_mod(U256::from(min_amount));
+        let (transfer_amount, remainder) =
+            context
+            .apparent_value
+            .div_mod(U256::from(min_amount));
 
         if remainder != U256::from(0) {
-            //if let Some(error) = revert_transfer(context, state) {
-            //    return Capture::Exit(error);
-            //}
             let revert_message = b"neon_token: amount must be divisible by 1 billion".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        let amount_giga_alan: U256 = amount_alan / GIGA;
-        if !state.withdraw(source, destination, amount_giga_alan) {
-            //if let Some(error) = revert_transfer(context, state) {
-            //    return Capture::Exit(error);
-            //}
+        if !state.withdraw(source, destination, transfer_amount) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
@@ -351,21 +345,6 @@ pub fn neon_token<'a, B: AccountStorage>(
     debug_print!("neon_token UNKNOWN");
     Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
 }
-
-//fn revert_transfer<'a, B: AccountStorage>(context: &evm::Context, state: &mut ExecutorState<'a, B>)
-//    -> Option<(ExitReason, Vec<u8>)>{
-//    let back_transfer = evm::Transfer {
-//        source: context.address,
-//        target: context.caller,
-//        value: context.apparent_value
-//    };
-//    if state.transfer(&back_transfer).is_err() {
-//        let revert_message = b"neon_token: failed to revert transfer".to_vec();
-//        return Some((ExitReason::Fatal(evm::ExitFatal::UnhandledInterrupt), revert_message));
-//    }
-//
-//    None
-//}
 
 // QueryAccount method ids:
 //-------------------------------------------
