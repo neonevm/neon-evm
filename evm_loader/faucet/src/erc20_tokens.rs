@@ -5,7 +5,7 @@ use eyre::{eyre, Result};
 use tracing::{error, info};
 
 use secp256k1::SecretKey;
-use std::sync::RwLock;
+use futures_locks::RwLock;
 use web3::api::Eth;
 use web3::contract::{Contract, Options};
 use web3::signing::Key;
@@ -39,7 +39,7 @@ pub async fn airdrop(id: &ReqId, params: Airdrop) -> Result<()> {
     let http = web3::transports::Http::new(&config::web3_rpc_url())?;
     let web3 = web3::Web3::new(http);
 
-    if TOKENS.write().unwrap().is_empty() {
+    if TOKENS.read().await.is_empty() {
         init(id, web3.eth().clone(), config::tokens()).await?;
     }
 
@@ -47,7 +47,7 @@ pub async fn airdrop(id: &ReqId, params: Airdrop) -> Result<()> {
     let amount = U256::from(params.amount);
 
     for token in &config::tokens() {
-        let factor = U256::from(multiplication_factor(token)?);
+        let factor = U256::from(multiplication_factor(token).await?);
         let internal_amount = amount
             .checked_mul(factor)
             .ok_or_else(|| eyre!("Overflow {} * {}", amount, factor))?;
@@ -76,7 +76,7 @@ async fn init<T: Transport>(id: &ReqId, eth: Eth<T>, addresses: Vec<String>) -> 
 
     for token_address in addresses {
         let a = ethereum::address_from_str(&token_address)?;
-        TOKENS.write().unwrap().insert(
+        TOKENS.write().await.insert(
             token_address,
             Token::new(get_decimals(id, eth.clone(), a).await?),
         );
@@ -152,11 +152,11 @@ async fn get_decimals<T: Transport>(
 }
 
 /// Returns multiplication factor to convert whole token value to fractions.
-fn multiplication_factor(token_address: &str) -> Result<u64> {
+async fn multiplication_factor(token_address: &str) -> Result<u64> {
     let decimals = {
         TOKENS
             .read()
-            .unwrap()
+            .await
             .get(token_address)
             .ok_or_else(|| eyre!("Token info in cache not found: {}", token_address))?
             .decimals

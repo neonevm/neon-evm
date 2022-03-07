@@ -130,12 +130,24 @@ pub enum EvmInstruction {
     ///
     /// Accounts expected by this instruction:
     ///
-    ///   0. `[writable]` NEON source account.
-    ///   1. `[writable]` NEON bank (destination) account.
+    ///   0. `[writable]` NEON token source account.
+    ///   1. `[writable]` NEON token pool (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
     ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
     ///   5. `[]` SPL Token program id.
     Deposit,
+
+    /// Migrates Ethereum account's internal structure from v1 to current.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   0. `[writable]` Operator (to close associated token account).
+    ///   1. `[writable]` Ether account to migrate.
+    ///   2. `[writable]` NEON token account associated with the ether account.
+    ///   3. `[writable]` NEON token pool account.
+    ///   4. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
+    ///   5. `[]` SPL Token program id.
+    MigrateAccount,
 }
 
 impl EvmInstruction {
@@ -166,6 +178,7 @@ impl EvmInstruction {
             23 => Self::UpdateValidsTable,
             24 => Self::CreateAccountV02,
             25 => Self::Deposit,
+            26 => Self::MigrateAccount,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -178,6 +191,7 @@ pub mod account_delete_holder_storage;
 pub mod account_resize;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
+pub mod migrate_account;
 pub mod transaction_write_to_holder;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;

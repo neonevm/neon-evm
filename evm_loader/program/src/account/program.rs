@@ -306,6 +306,34 @@ impl<'a> Token<'a> {
 
         invoke_signed(&instruction, accounts, &[seeds])
     }
+
+    pub fn close_account(
+        &self,
+        authority: &EthereumAccount<'a>,
+        account: &AccountInfo<'a>,
+        destination: &AccountInfo<'a>,
+    ) -> Result<(), ProgramError> {
+        let instruction = spl_token::instruction::close_account(
+            &spl_token::id(),
+            account.key,
+            destination.key,
+            authority.info.key,
+            &[]
+        )?;
+        let accounts = &[
+            destination.clone(),
+            account.clone(),
+            authority.info.clone(),
+            self.info.clone(),
+        ];
+        let seeds: &[&[u8]] = &[
+            &[ACCOUNT_SEED_VERSION],
+            authority.address.as_bytes(),
+            &[authority.bump_seed]
+        ];
+
+        invoke_signed(&instruction, accounts, &[seeds])
+    }
 }
 
 impl<'a> Deref for Token<'a> {
