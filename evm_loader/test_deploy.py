@@ -23,19 +23,9 @@ from construct import Bytes, Int8ul, Int64ul, Struct as cStruct
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
 
 CREATE_ACCOUNT_LAYOUT = cStruct(
-    "lamports" / Int64ul,
-    "space" / Int64ul,
     "ether" / Bytes(20),
     "nonce" / Int8ul
 )
-
-def create_account_layout(lamports, space, ether, nonce):
-    return bytes.fromhex("02000000")+CREATE_ACCOUNT_LAYOUT.build(dict(
-        lamports=lamports,
-        space=space,
-        ether=ether,
-        nonce=nonce
-    ))
 
 def write_holder_layout(nonce, offset, data):
     return (bytes.fromhex('12') +
@@ -64,7 +54,7 @@ class DeployTest(unittest.TestCase):
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
             _ = cls.loader.createEtherAccount(cls.caller_ether)
-            cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+            # cls.token.transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
             print("Done\n")
 
         print('Account:', cls.user_acc.public_key(), bytes(cls.user_acc.public_key()).hex())
@@ -107,7 +97,7 @@ class DeployTest(unittest.TestCase):
             'to': None,
             'value': 0,
             'gas': 999999999,
-            'gasPrice': 1_000_000_000,
+            'gasPrice': 0,
             'nonce': trx_count,
             'data': content,
             'chainId': 111
@@ -147,22 +137,12 @@ class DeployTest(unittest.TestCase):
         trx = Transaction()
         trx.add(createAccountWithSeed(base, base, seed, 10**9, code_size, PublicKey(evm_loader_id)))
         trx.add(TransactionInstruction(program_id=evm_loader_id,
-            #data=create_account_layout(10**9, len(msg)+2048, contract_eth, contract_nonce),
-            data=bytes.fromhex('02000000')+CREATE_ACCOUNT_LAYOUT.build(dict(
-                lamports=10**9,
-                space=0,
-                ether=contract_eth,
-                nonce=contract_nonce)),
+            data=bytes.fromhex('18')+CREATE_ACCOUNT_LAYOUT.build(dict(ether=contract_eth, nonce=contract_nonce)),
             keys=[
                 AccountMeta(pubkey=self.operator_acc.public_key(), is_signer=True, is_writable=False),
-                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=get_associated_token_address(PublicKey(contract_sol), ETH_TOKEN_MINT_ID), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=system, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ETH_TOKEN_MINT_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=ASSOCIATED_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=rentid, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=contract_sol, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=code_sol, is_signer=False, is_writable=True),
             ]))
 
         result = send_transaction(client, trx, self.operator_acc)["result"]
@@ -230,11 +210,10 @@ class DeployTest(unittest.TestCase):
 
         minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
         print("Minimum balance required for account {}".format(minimum_balance))
-        balance = int(minimum_balance / 100)
 
         if getBalance(storage) == 0:
             trx = Transaction()
-            trx.add(createAccountWithSeed(self.operator_acc.public_key(), self.operator_acc.public_key(), seed, balance, 128*1024, PublicKey(evm_loader_id)))
+            trx.add(createAccountWithSeed(self.operator_acc.public_key(), self.operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.operator_acc)
 
         return storage
@@ -314,8 +293,8 @@ class DeployTest(unittest.TestCase):
         trx = Transaction()
         trx.add(self.sol_instr_14_partial_call_or_continue(storage, 50, holder, contract_sol, code_sol))
         print(trx.instructions[-1].keys)
-        print("Expecting Exception: Program failed to complete")
-        with self.assertRaisesRegex(Exception, 'Program failed to complete'):
+        print("Expecting Exception: invalid program argument")
+        with self.assertRaisesRegex(Exception, 'invalid program argument'):
             response = send_transaction(client, trx, self.operator_acc)
             print('response:', response)
 

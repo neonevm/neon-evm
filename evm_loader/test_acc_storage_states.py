@@ -38,7 +38,7 @@ class storage_states(unittest.TestCase):
             _ = cls.loader.createEtherAccount(cls.caller_ether)
             print("Done\n")
 
-        SplToken(solana_url).transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
+        # SplToken(solana_url).transfer(ETH_TOKEN_MINT_ID, 201, get_associated_token_address(PublicKey(cls.caller), ETH_TOKEN_MINT_ID))
 
         print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
         print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
@@ -151,7 +151,7 @@ class storage_states(unittest.TestCase):
 
     def get_call_parameters(self, input, acc, caller, caller_ether, nonce_increment=0):
         nonce = getTransactionCount(client, caller) + nonce_increment
-        tx = {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 1_000_000_000,
+        tx = {'to': self.reId_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
               'nonce': nonce, 'data': input, 'chainId': 111}
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
         assert (from_addr == caller_ether)

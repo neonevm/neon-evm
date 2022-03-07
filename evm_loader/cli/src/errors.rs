@@ -16,9 +16,6 @@ use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
 use solana_cli::cli::CliError as SolanaCliError;
 use thiserror::Error;
 
-use evm_loader::{
-    account_data::AccountData,
-};
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
@@ -79,10 +76,10 @@ pub enum NeonCliError {
     InvalidStorageAccountOwner(Pubkey),
     /// Storage account required
     #[error("Storage account required. {0:?}")]
-    StorageAccountRequired(AccountData),
+    StorageAccountRequired(Account),
     /// Account incorrect type
     #[error("Account incorrect type. {0:?}")]
-    AccountIncorrectType(AccountData),
+    AccountIncorrectType(Account),
     /// Account data too small
     #[error("Account data too small. account_data.len()={0:?} < end={1:?}")]
     AccountDataTooSmall(usize,usize),
