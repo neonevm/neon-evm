@@ -2,10 +2,14 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use evm::{H160, U256};
 use evm::backend::Apply;
-use solana_program::program_error::ProgramError;
+use solana_program::{
+    account_info::AccountInfo,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+};
 use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
-use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer};
+use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
 use crate::precompile_contracts::is_precompile_address;
 use solana_program::program::invoke_signed;
 use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
