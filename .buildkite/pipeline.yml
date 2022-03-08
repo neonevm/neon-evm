@@ -13,15 +13,15 @@ steps:
     agents:
       queue: "testing"
 
-  - wait
-
-  - label: ":cop::skin-tone-2: deploy check"
-    command: ".buildkite/steps/deploy-test.sh"
-    timeout: 60
-    agents:
-      queue: "testing"
-    artifact_paths:
-      - "solana.log"
+#  - wait
+#
+#  - label: ":cop::skin-tone-2: deploy check"
+#    command: ".buildkite/steps/deploy-test.sh"
+#    timeout: 60
+#    agents:
+#      queue: "testing"
+#    artifact_paths:
+#      - "solana.log"
 
   - wait
 
