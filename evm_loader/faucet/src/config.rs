@@ -1,7 +1,7 @@
 //! Faucet config module.
 
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::TryFrom as _;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
