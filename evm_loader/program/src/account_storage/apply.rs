@@ -301,9 +301,6 @@ impl<'a> ProgramAccountStorage<'a> {
         for withdraw in withdrawals {
             let dest_neon = self.solana_accounts[&withdraw.dest_neon];
 
-            let source_balance = self.balance(&withdraw.source).checked_sub(U256::from(withdraw.amount))
-                .ok_or_else(|| E!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, balance = {}", withdraw.source, self.balance(&withdraw.source)))?;
-
             if dest_neon.data_is_empty() {
                 let create_acc_insrt = create_associated_token_account(operator.key,
                                                                        &withdraw.dest,
@@ -328,7 +325,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 dest_neon.key,
                 &authority,
                 &[],
-                withdraw.amount
+                withdraw.spl_amount
             )?;
 
             let account_infos: &[AccountInfo] = &[
@@ -339,6 +336,9 @@ impl<'a> ProgramAccountStorage<'a> {
             ];
 
             invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
+
+            let source_balance = self.balance(&withdraw.source).checked_sub(withdraw.neon_amount)
+                .ok_or_else(|| E!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, balance = {}", withdraw.source, self.balance(&withdraw.source)))?;
 
             self.ethereum_account_mut(&withdraw.source)
                 .unwrap() // checked before

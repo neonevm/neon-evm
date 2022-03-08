@@ -291,7 +291,6 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 // withdraw(bytes32)           => 8e19899e
 //--------------------------------------------------
 const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
-const ETH_DECIMALS: u32 = 18;
 
 /// Call inner `neon_token`
 #[must_use]
@@ -307,7 +306,7 @@ pub fn neon_token<'a, B: AccountStorage>(
 
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
-    let min_amount: u64 = u64::pow(10, ETH_DECIMALS - u32::from(token_mint::decimals()));
+    let min_amount: u64 = u64::pow(10, u32::from(token_mint::decimals()));
 
     if method_id == NEON_TOKEN_METHOD_WITHDRAW_ID  {
         if state.metadata().is_static() {
@@ -321,12 +320,12 @@ pub fn neon_token<'a, B: AccountStorage>(
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-        let (transfer_amount, remainder) =
+        let (spl_amount, remainder) =
             context
             .apparent_value
             .div_mod(U256::from(min_amount));
 
-        if transfer_amount > U256::from(u64::MAX) {
+        if spl_amount > U256::from(u64::MAX) {
             let revert_message = b"neon_token: transfer amount exceeds maximum".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
@@ -336,7 +335,7 @@ pub fn neon_token<'a, B: AccountStorage>(
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        if !state.withdraw(source, destination, transfer_amount.as_u64()) {
+        if !state.withdraw(source, destination, context.apparent_value, spl_amount.as_u64()) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
