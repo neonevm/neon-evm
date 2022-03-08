@@ -28,10 +28,11 @@ pub fn init_client(url: String) {
         CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new_with_commitment(
             url,
             CommitmentConfig::confirmed(),
-        ))
+        ));
     });
 }
 
+/// Checks connection with Solana.
 pub async fn is_alive() -> bool {
     let ok =
         tokio::task::spawn_blocking(|| -> bool { get_client().get_block_height().is_ok() }).await;

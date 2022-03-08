@@ -15,8 +15,8 @@ mod server;
 mod solana;
 mod version;
 
-use eyre::{eyre, Result};
-use tracing::{error, info};
+use eyre::Result;
+use tracing::info;
 
 #[actix_web::main]
 async fn main() -> Result<()> {
@@ -102,11 +102,6 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
 
     if config::solana_enabled() {
         solana::init_client(config::solana_url());
-        if !solana::is_alive().await {
-            error!("Solana does not respond");
-            return Err(eyre!("Solana does not respond"));
-        }
-        config::load_neon_params(solana::get_client()).await?;
     }
 
     if config::web3_enabled() || config::solana_enabled() {
