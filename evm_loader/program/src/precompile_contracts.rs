@@ -66,7 +66,7 @@ pub fn call_precompile<'a, B: AccountStorage>(
         return Some(query_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_NEON_TOKEN {
-        return Some(neon_token(input, context, state));
+        return Some(neon_token(input, context, state, gasometer));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover(input));
@@ -304,7 +304,8 @@ const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
 pub fn neon_token<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
-    state: &mut ExecutorState<'a, B>
+    state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
@@ -340,6 +341,8 @@ pub fn neon_token<'a, B: AccountStorage>(
             let revert_message = format!("neon_token: amount must be divisible by {}", min_amount).as_bytes().to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
+
+        gasometer.record_withdraw(state, &destination, spl_amount.as_u64());
 
         if !state.withdraw(source, destination, context.apparent_value, spl_amount.as_u64()) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();

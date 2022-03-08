@@ -14,6 +14,8 @@ use crate::{
     account::{EthereumAccount, ERC20Allowance}
 };
 use solana_program::{program_pack::Pack, pubkey::Pubkey};
+use spl_associated_token_account::get_associated_token_address;
+
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -172,4 +174,33 @@ impl Gasometer {
             .saturating_add(account_rent)
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
+
+    pub fn record_withdraw<B>(&mut self, state: &ExecutorState<B>, dest: &Pubkey, value: u64)
+        where
+            B: AccountStorage
+    {
+         // TODO: apply_withdrawals doesn't contain this check. Should this comment?
+        if value == 0 {
+            return;
+        }
+
+        let dest_neon_acc = get_associated_token_address(
+            dest,
+            &crate::config::token_mint::id()
+        );
+
+
+        let balance = state.substate().spl_balance(&dest_neon_acc, state.backend());
+
+        if balance != 0 {
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
+
+        self.gas = self.gas
+            .saturating_add(account_rent);
+         // .saturating_add(CREATE_ACCOUNT_TRX_COST);  // TODO: check it
+    }
+
 }
