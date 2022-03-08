@@ -13,6 +13,7 @@ use crate::{
     executor_state::ExecutorState,
     account_storage::AccountStorage,
     utils::keccak256_digest,
+    gasometer::Gasometer,
 };
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
@@ -53,9 +54,10 @@ pub fn call_precompile<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input, context, state));
+        return Some(erc20_wrapper(input, context, state, gasometer));
     }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
@@ -118,7 +120,8 @@ const ERC20_METHOD_APPROVE_SOLANA_ID: &[u8; 4] = &[0x93, 0xe2, 0x93, 0x46];
 pub fn erc20_wrapper<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
-    state: &mut ExecutorState<'a, B>
+    state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
@@ -171,12 +174,13 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
                 let revert_message = b"ERC20 transfer is not allowed in static context".to_vec();
                 return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
             }
-
             let arguments = array_ref![rest, 0, 64];
             let (_, address, value) = array_refs!(arguments, 12, 20, 32);
 
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
+
+            gasometer.record_spl_transfer(state, address, value, &token_mint, context);
 
             let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
@@ -203,6 +207,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let source = H160::from_slice(source);
             let target = H160::from_slice(target);
             let value = U256::from_big_endian_fast(value);
+            gasometer.record_spl_transfer(state, target, value, &token_mint, context);
 
             let status = state.erc20_transfer_from(token_mint, context,source, target, value);
             if !status {
@@ -228,6 +233,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let spender = H160::from_slice(spender);
             let value = U256::from_big_endian_fast(value);
+            gasometer.record_approve(state, token_mint, context, spender, value);
 
             state.erc20_approve(token_mint, context, spender, value);
 

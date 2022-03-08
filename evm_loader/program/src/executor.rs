@@ -304,7 +304,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
         }
 
-        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
+        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state, &mut self.gasometer);
         if let Some(Capture::Exit(exit_value)) = precompile_result {
             return Capture::Exit(exit_value);
         }

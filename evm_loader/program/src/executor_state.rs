@@ -1054,7 +1054,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn erc20_allowance(&mut self, mint: Pubkey, context: &evm::Context, owner: H160, spender: H160) -> U256
+    pub fn erc20_allowance(&self, mint: Pubkey, context: &evm::Context, owner: H160, spender: H160) -> U256
     {
         let contract = context.address;
 
