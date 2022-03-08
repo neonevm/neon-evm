@@ -76,6 +76,7 @@ The configuration file should be in TOML format.
 | **web3**.max_amount | Largest amount of ERC20 tokens to distribute with a single request
 | **solana**.enable | Flag to on/off the entire **solana** section
 | **solana**.url | Solana network endpoint
+| **solana**.commitment | Solana client commitment level
 | **solana**.operator_keyfile | Solana keyfile to support operations
 | **solana**.evm_loader | Address of the EVM Loader program
 | **solana**.max_amount | Largest amount of NEONs to distribute with a single request
@@ -99,6 +100,7 @@ max_amount = 1000
 [solana]
 enable = true
 url = "http://localhost:8899"
+commitment = "processed"
 evm_loader = "EvmLoaderId11111111111111111111111111111111"
 operator_keyfile = "operator_id.json"
 max_amount = 10
@@ -126,6 +128,7 @@ Environment variables, if present, override portions of the configuration.
 | NEON_ERC20_MAX_AMOUNT | **web3**.max_amount | `1000`
 | FAUCET_SOLANA_ENABLE | **solana**.enable | `true`
 | SOLANA_URL | **solana**.url | `http://localhost:8899`
+| SOLANA_COMMITMENT | **solana**.commitment | `processed`
 | EVM_LOADER | **solana**.evm_loader | `EvmLoaderId11111111111111111111111111111111`
 | NEON_OPERATOR_KEYFILE | **solana**.operator_keyfile | `operator_id.json`
 | NEON_ETH_MAX_AMOUNT | **solana**.max_amount | `10`

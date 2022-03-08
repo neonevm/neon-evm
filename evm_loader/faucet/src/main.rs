@@ -101,7 +101,7 @@ async fn run(config_file: &Path, workers: usize) -> Result<()> {
     config::load(config_file)?;
 
     if config::solana_enabled() {
-        solana::init_client(config::solana_url());
+        solana::init_client();
     }
 
     if config::web3_enabled() || config::solana_enabled() {

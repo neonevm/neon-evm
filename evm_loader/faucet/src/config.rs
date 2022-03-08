@@ -9,13 +9,14 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
-use tracing::warn;
+use tracing::{error, warn};
 
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::account_utils::StateMut;
 use solana_sdk::bpf_loader;
 use solana_sdk::bpf_loader_deprecated;
 use solana_sdk::bpf_loader_upgradeable::{self, UpgradeableLoaderState};
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::keypair::Keypair;
 
@@ -84,6 +85,7 @@ const NEON_ERC20_TOKENS: &str = "NEON_ERC20_TOKENS";
 const NEON_ERC20_MAX_AMOUNT: &str = "NEON_ERC20_MAX_AMOUNT";
 const FAUCET_SOLANA_ENABLE: &str = "FAUCET_SOLANA_ENABLE";
 const SOLANA_URL: &str = "SOLANA_URL";
+const SOLANA_COMMITMENT: &str = "SOLANA_COMMITMENT";
 const EVM_LOADER: &str = "EVM_LOADER";
 const NEON_SEED_VERSION: &str = "NEON_SEED_VERSION";
 const NEON_TOKEN_MINT: &str = "NEON_TOKEN_MINT";
@@ -104,6 +106,7 @@ static ENV: &[&str] = &[
     NEON_ERC20_MAX_AMOUNT,
     FAUCET_SOLANA_ENABLE,
     SOLANA_URL,
+    SOLANA_COMMITMENT,
     EVM_LOADER,
     NEON_OPERATOR_KEYFILE,
     NEON_ETH_MAX_AMOUNT,
@@ -157,6 +160,7 @@ pub fn load(file: &Path) -> Result<()> {
                     CONFIG.write().unwrap().solana.enable = val.parse::<bool>()?
                 }
                 SOLANA_URL => CONFIG.write().unwrap().solana.url = val,
+                SOLANA_COMMITMENT => CONFIG.write().unwrap().solana.commitment = val,
                 EVM_LOADER => CONFIG.write().unwrap().solana.evm_loader = val,
                 NEON_OPERATOR_KEYFILE => {
                     CONFIG.write().unwrap().solana.operator_keyfile = val.into()
@@ -233,6 +237,22 @@ pub fn solana_enabled() -> bool {
 /// Gets the `solana.url` value.
 pub fn solana_url() -> String {
     CONFIG.read().unwrap().solana.url.clone()
+}
+
+/// Gets the `solana.commitment` value.
+pub fn solana_commitment() -> CommitmentConfig {
+    let commitment = &CONFIG.read().unwrap().solana.commitment;
+    match commitment.as_ref() {
+        "processed" => CommitmentConfig::processed(),
+        "confirmed" => CommitmentConfig::confirmed(),
+        "finalized" => CommitmentConfig::finalized(),
+        _ => {
+            error!("Unexpected commitment level '{}'", commitment);
+            error!("Allowed levels: 'processed', 'confirmed' or 'finalized'");
+            warn!("The default level 'finalized' will be used");
+            CommitmentConfig::default()
+        }
+    }
 }
 
 /// Gets the `solana.evm_loader` address value.
@@ -372,6 +392,7 @@ impl std::fmt::Display for Web3 {
 struct Solana {
     enable: bool,
     url: String,
+    commitment: String,
     evm_loader: String,
     account_seed_version: u8, // from neon params
     token_mint: String,       // from neon params
@@ -395,6 +416,12 @@ impl std::fmt::Display for Solana {
         write!(f, "solana.url = \"{}\"", self.url)?;
         if env::var(SOLANA_URL).is_ok() {
             writeln!(f, " (overridden by {})", SOLANA_URL)?;
+        } else {
+            writeln!(f)?;
+        }
+        write!(f, "solana.commitment = \"{}\"", self.commitment)?;
+        if env::var(SOLANA_COMMITMENT).is_ok() {
+            writeln!(f, " (overridden by {})", SOLANA_COMMITMENT)?;
         } else {
             writeln!(f)?;
         }

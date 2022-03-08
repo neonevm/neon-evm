@@ -7,7 +7,6 @@ use eyre::{eyre, Result, WrapErr};
 use tracing::info;
 
 use solana_client::rpc_client::RpcClient;
-use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
@@ -23,12 +22,12 @@ lazy_static::lazy_static! {
 }
 
 /// Creates the signleton instance of RpcClient.
-pub fn init_client(url: String) {
+pub fn init_client() {
     tokio::task::spawn_blocking(|| {
         CLIENT.lock().unwrap().0 = Arc::new(RpcClient::new_with_commitment(
-            url,
-            CommitmentConfig::confirmed(),
-        ));
+            config::solana_url(),
+            config::solana_commitment(),
+        ))
     });
 }
 
