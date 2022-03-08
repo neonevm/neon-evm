@@ -23,6 +23,8 @@ use crate::{
     utils::keccak256_h256
 };
 
+use spl_associated_token_account::get_associated_token_address;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
     pub nonce: U256,
@@ -146,6 +148,15 @@ pub struct ERC20Approve {
     pub value: U256
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Withdraw {
+    pub source: H160,
+    pub dest: Pubkey,
+    pub dest_neon: Pubkey,
+    pub neon_amount: U256,
+    pub spl_amount: u64
+}
+
 /// Represents the state of executor abstracted away from a backend.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate {
@@ -161,12 +172,13 @@ pub struct ExecutorSubstate {
     spl_supply: RefCell<BTreeMap<Pubkey, u64>>,
     spl_transfers: Vec<SplTransfer>,
     spl_approves: Vec<SplApprove>,
+    withdrawals: Vec<Withdraw>,
     erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
     deletes: BTreeSet<H160>,
     query_account_cache: query::AccountCache,
 }
 
-pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
+pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<Withdraw>, Vec<ERC20Approve>);
 
 impl ExecutorSubstate {
     /// Creates new empty instance of `ExecutorSubstate`.
@@ -186,6 +198,7 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
+            withdrawals: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
@@ -269,7 +282,7 @@ impl ExecutorSubstate {
             erc20_approves.push(approve);
         }
 
-        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
+        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, self.withdrawals, erc20_approves)
     }
 
     /// Creates new instance of `ExecutorSubstate` when entering next execution of a call or create.
@@ -287,6 +300,7 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
+            withdrawals: Vec::new(),
             erc20_allowances: BTreeMap::new(),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
@@ -315,6 +329,8 @@ impl ExecutorSubstate {
         self.spl_supply.borrow_mut().append(&mut exited.spl_supply.borrow_mut());
         self.spl_transfers.append(&mut exited.spl_transfers);
         self.spl_approves.append(&mut exited.spl_approves);
+
+        self.withdrawals.append(&mut exited.withdrawals);
 
         self.erc20_allowances.append(&mut exited.erc20_allowances);
 
@@ -666,6 +682,21 @@ impl ExecutorSubstate {
         spl_balances.insert(transfer.target_token, new_target_balance);
 
         self.spl_transfers.push(transfer);
+
+        Ok(())
+    }
+
+    fn withdraw<B: AccountStorage>(&mut self, withdraw: Withdraw, backend: &B) -> Result<(), ExitError> {
+        debug_print!("withdraw: {:?}", withdraw);
+
+        let new_source_balance = {
+            let balance = self.balance(&withdraw.source, backend);
+            balance.checked_sub(withdraw.neon_amount).ok_or(ExitError::OutOfFund)?
+        };
+
+        let mut balances = self.balances.borrow_mut();
+        balances.insert(withdraw.source, new_source_balance);
+        self.withdrawals.push(withdraw);
 
         Ok(())
     }
@@ -1108,6 +1139,28 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     pub fn query_solana_account(&self) -> &query::AccountCache {
         &self.substate.query_account_cache
+    }
+
+    #[must_use]
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, neon_amount: U256, spl_amount: u64) -> bool {
+        let dest_neon_acct = get_associated_token_address(
+            &destination,
+            &crate::config::token_mint::id()
+        );
+
+        let withdraw = Withdraw{
+            source,
+            dest: destination,
+            dest_neon: dest_neon_acct,
+            neon_amount,
+            spl_amount
+        };
+
+        if self.substate.withdraw(withdraw, self.backend).is_err() {
+            return false;
+        };
+
+        true
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {

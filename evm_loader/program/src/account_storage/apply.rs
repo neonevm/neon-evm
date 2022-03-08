@@ -2,11 +2,18 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use evm::{H160, U256};
 use evm::backend::Apply;
-use solana_program::program_error::ProgramError;
+use solana_program::{
+    account_info::AccountInfo,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+};
 use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
-use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer};
+use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
 use crate::precompile_contracts::is_precompile_address;
+use solana_program::program::invoke_signed;
+use spl_associated_token_account::{create_associated_token_account, get_associated_token_address};
+use solana_program::sysvar::rent;
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -56,6 +63,7 @@ impl<'a> ProgramAccountStorage<'a> {
             transfers,
             spl_transfers,
             spl_approves,
+            withdrawals,
             erc20_approves,
         ) = state;
 
@@ -75,6 +83,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
         if !erc20_approves.is_empty() {
             self.apply_erc20_approves( operator, system_program, erc20_approves)?;
+        }
+
+        if !withdrawals.is_empty() {
+            self.apply_withdrawals(withdrawals, operator)?;
         }
 
         if !applies.is_empty() {
@@ -265,6 +277,72 @@ impl<'a> ProgramAccountStorage<'a> {
             let delegate = self.solana_accounts[&approve.spender];
 
             token_program.approve(authority, source, delegate, approve.value)?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_withdrawals(
+        &mut self,
+        withdrawals: Vec<Withdraw>,
+        operator: &Operator<'a>,
+    ) -> Result<(), ProgramError> {
+        debug_print!("apply_withdrawals {:?}", withdrawals);
+
+        let (authority, bump_seed) = Pubkey::find_program_address(&[b"Deposit"], self.program_id);
+
+        let pool_address = get_associated_token_address(
+            &authority,
+            &crate::config::token_mint::id()
+        );
+
+        let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
+
+        for withdraw in withdrawals {
+            let dest_neon = self.solana_accounts[&withdraw.dest_neon];
+
+            if dest_neon.data_is_empty() {
+                let create_acc_insrt = create_associated_token_account(operator.key,
+                                                                       &withdraw.dest,
+                                                                       &crate::config::token_mint::id());
+
+                let account_infos: &[AccountInfo] = &[
+                    (**operator).clone(),
+                    dest_neon.clone(),
+                    self.solana_accounts[&withdraw.dest].clone(),
+                    self.solana_accounts[&crate::config::token_mint::id()].clone(),
+                    self.solana_accounts[&spl_token::id()].clone(),
+                    self.solana_accounts[&rent::id()].clone(),
+                    self.solana_accounts[&spl_associated_token_account::id()].clone(),
+                ];
+
+                invoke_signed(&create_acc_insrt, account_infos, signers_seeds)?;
+            };
+
+            let transfer_instr = spl_token::instruction::transfer(
+                &spl_token::id(),
+                &pool_address,
+                dest_neon.key,
+                &authority,
+                &[],
+                withdraw.spl_amount
+            )?;
+
+            let account_infos: &[AccountInfo] = &[
+                self.solana_accounts[&pool_address].clone(),
+                dest_neon.clone(),
+                self.solana_accounts[&authority].clone(),
+                self.solana_accounts[&spl_token::id()].clone()
+            ];
+
+            invoke_signed(&transfer_instr, account_infos, signers_seeds)?;
+
+            let source_balance = self.balance(&withdraw.source).checked_sub(withdraw.neon_amount)
+                .ok_or_else(|| E!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, balance = {}", withdraw.source, self.balance(&withdraw.source)))?;
+
+            self.ethereum_account_mut(&withdraw.source)
+                .unwrap() // checked before
+                .balance = source_balance;
         }
 
         Ok(())

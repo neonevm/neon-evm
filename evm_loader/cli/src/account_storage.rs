@@ -21,6 +21,7 @@ use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
     pubkey::Pubkey,
+    sysvar::rent
 };
 
 use evm_loader::{
@@ -30,10 +31,13 @@ use evm_loader::{
     precompile_contracts::is_precompile_address,
     hamt::Hamt,
 };
+use evm_loader::executor_state::Withdraw;
 
 use crate::Config;
 use crate::NeonCliResult;
 use crate::NeonCliError;
+
+use spl_associated_token_account::{get_associated_token_address};
 
 #[derive(Debug, Clone)]
 pub struct TokenAccount {
@@ -435,6 +439,35 @@ impl<'a> EmulatorAccountStorage<'a> {
             );
 
             solana_accounts.insert(address, AccountMeta::new(address, false));
+        }
+    }
+
+    pub fn apply_withdrawals(&self, withdrawals: Vec<Withdraw>, token_mint: &Pubkey) {
+        if withdrawals.is_empty() {
+            return;
+        }
+
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+
+        solana_accounts.entry(*token_mint).or_insert_with(|| AccountMeta::new_readonly(*token_mint, false));
+
+        let (authority, _) = Pubkey::find_program_address(&[b"Deposit"], &self.config.evm_loader);
+        solana_accounts.entry(authority).or_insert_with(|| AccountMeta::new_readonly(authority, false));
+
+        let pool_address = get_associated_token_address(
+            &authority,
+            token_mint
+        );
+        solana_accounts.insert(pool_address, AccountMeta::new(pool_address, false));
+
+        solana_accounts.entry(rent::id()).or_insert_with(|| AccountMeta::new_readonly(rent::id(), false));
+
+        let assoc_token_prog_id = spl_associated_token_account::id();
+        solana_accounts.entry(assoc_token_prog_id).or_insert_with(|| AccountMeta::new_readonly(assoc_token_prog_id, false));
+
+        for withdraw in withdrawals {
+            solana_accounts.entry(withdraw.dest).or_insert_with(|| AccountMeta::new_readonly(withdraw.dest, false));
+            solana_accounts.insert(withdraw.dest_neon, AccountMeta::new(withdraw.dest_neon, false));
         }
     }
 
