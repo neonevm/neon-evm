@@ -3552,30 +3552,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sender"
-version = "0.6.0-dev"
-dependencies = [
- "bincode",
- "bs58 0.4.0",
- "clap",
- "evm",
- "evm-loader",
- "hex",
- "serde",
- "serde_json",
- "solana-clap-utils",
- "solana-cli",
- "solana-cli-config",
- "solana-cli-output",
- "solana-client",
- "solana-program",
- "solana-sdk",
- "solana-transaction-status",
- "spl-associated-token-account",
- "spl-token",
-]
-
-[[package]]
 name = "serde"
 version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
