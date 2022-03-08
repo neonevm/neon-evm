@@ -65,7 +65,6 @@ COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/sol
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/faucet /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/sender /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
@@ -80,8 +79,6 @@ COPY evm_loader/*.py \
     evm_loader/utils/set_single_acct_permission.sh \
     evm_loader/utils/set_many_accts_permission.sh /opt/
 
-COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
-COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json

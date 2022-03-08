@@ -784,12 +784,12 @@ fn main() {
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
 
-                let _token_mint = pubkey_of(arg_matches, "token_mint")
+                let token_mint = pubkey_of(arg_matches, "token_mint")
                     .unwrap_or_else(|| {
                         let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
                         Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
                     });
-                emulate::execute(&config, contract, sender, data, value)
+                emulate::execute(&config, contract, sender, data, value, &token_mint)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "seed").unwrap();

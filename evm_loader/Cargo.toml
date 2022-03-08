@@ -3,7 +3,6 @@ members = [
     'cli',
     'faucet',
     'program',
-    'performance/sender'
 ]
 exclude = [
     'rust-evm'
