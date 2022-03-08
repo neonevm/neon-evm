@@ -331,7 +331,7 @@ pub fn neon_token<'a, B: AccountStorage>(
         }
 
         if remainder.as_u64() != 0 {
-            let revert_message = b"neon_token: amount must be divisible by 1 billion".to_vec();
+            let revert_message = format!("neon_token: amount must be divisible by {}", min_amount).as_bytes().to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
