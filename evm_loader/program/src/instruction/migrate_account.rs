@@ -55,7 +55,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
     msg!("Instruction: MigrateAccount");
 
     let parsed_accounts = Accounts {
-        operator: Operator::from_account(&accounts[0])?,
+        operator: unsafe { Operator::from_account_not_whitelisted(&accounts[0]) }?,
         ethereum_account: EthereumAccountV1::from_account(program_id, &accounts[1])?,
         token_balance_account: token::State::from_account(&accounts[2])?,
         token_pool_account: token::State::from_account(&accounts[3])?,
