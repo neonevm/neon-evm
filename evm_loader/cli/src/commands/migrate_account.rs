@@ -1,6 +1,7 @@
 use log::{error, info, debug};
 
 use solana_sdk::{
+    commitment_config::{CommitmentConfig},
     instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::Pubkey,
@@ -59,7 +60,10 @@ pub fn execute(
     finalize_tx.try_sign(&[&*config.signer], blockhash)?;
     debug!("signed: {:x?}", finalize_tx);
 
-    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+    config.rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(
+        &finalize_tx,
+        CommitmentConfig::confirmed(),
+    )?;
 
     info!("{}", serde_json::json!({
         "ether address": hex::encode(ether_address),
