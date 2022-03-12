@@ -3,7 +3,7 @@ version: "2.1"
 services:
   solana:
     container_name: solana
-    image: neonlabsorg/solana:v1.8.12-testnet
+    image: neonlabsorg/solana:v1.9.11-testnet
     environment:
       - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
     hostname: solana
