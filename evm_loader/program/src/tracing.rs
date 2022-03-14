@@ -72,7 +72,7 @@ pub enum Event<'a> {
         /// Input data provided to the call
         data: &'a [u8],
         /// Gas Limit
-        gas_limit: u64,
+        gas_limit: U256,
     },
     /// Transactional Create event
     TransactCreate {
@@ -83,7 +83,7 @@ pub enum Event<'a> {
         /// Init code
         init_code: &'a [u8],
         /// Gas limit
-        gas_limit: u64,
+        gas_limit: U256,
         /// Address of the created account
         address: H160,
     },
@@ -98,7 +98,7 @@ pub enum Event<'a> {
         /// Salt
         salt: H256,
         /// Gas limit
-        gas_limit: u64,
+        gas_limit: U256,
         /// Address of the created account
         address: H160,
     },

@@ -19,7 +19,6 @@ use solana_sdk::{
     transaction::Transaction,
     signers::Signers,
     system_program,
-    sysvar,
     system_instruction,
 };
 
@@ -45,9 +44,8 @@ use solana_client::{
 use evm::{H160};
 
 use evm_loader::{
-    account_data::{
-        Account,
-        Contract
+    account::{
+        EthereumContract,
     },
 };
 
@@ -64,8 +62,7 @@ fn get_ethereum_contract_account_credentials(
     config: &Config,
     caller_ether: &H160,
     trx_count: u64,
-    token_mint: &Pubkey
-) -> (Pubkey, H160, u8, Pubkey, Pubkey, String) {
+) -> (Pubkey, H160, u8, Pubkey, String) {
     let creator = &config.signer;
 
     let (program_id, program_ether, program_nonce) = {
@@ -74,8 +71,6 @@ fn get_ethereum_contract_account_credentials(
         (address, ether, nonce)
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
-
-    let program_token = spl_associated_token_account::get_associated_token_address(&program_id, token_mint);
 
     let (program_code, program_seed) = {
         let seed: &[u8] = &[ &[crate::ACCOUNT_SEED_VERSION], program_ether.as_bytes() ].concat();
@@ -86,28 +81,21 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create code account: {}", &program_code.to_string());
 
-    (program_id, program_ether, program_nonce, program_token, program_code, program_seed)
+    (program_id, program_ether, program_nonce, program_code, program_seed)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn create_ethereum_contract_accounts_in_solana(
     config: &Config,
     program_id: &Pubkey,
     program_ether: &H160,
     program_nonce: u8,
-    program_token: &Pubkey,
     program_code: &Pubkey,
     program_seed: &str,
     program_code_len: usize,
-    token_mint: &Pubkey
 ) -> Result<Vec<Instruction>, NeonCliError> {
-    let account_header_size = 1+Account::SIZE;
-    let contract_header_size = 1+Contract::SIZE;
-
     let creator = &config.signer;
-    let program_code_acc_len = contract_header_size + program_code_len + 2*1024;
 
-    let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(account_header_size)?;
+    let program_code_acc_len = EthereumContract::SIZE + program_code_len + 2*1024;
     let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_acc_len)?;
 
     if let Some(account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
@@ -127,17 +115,12 @@ fn create_ethereum_contract_accounts_in_solana(
         ),
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(2_u32, minimum_balance_for_account, 0_u64, program_ether.as_fixed_bytes(), program_nonce),
+            &(24_u8, program_ether.as_fixed_bytes(), program_nonce),
             vec![
                 AccountMeta::new(creator.pubkey(), true),
-                AccountMeta::new(*program_id, false),
-                AccountMeta::new(*program_token, false),
-                AccountMeta::new(*program_code, false),
                 AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(*token_mint, false),
-                AccountMeta::new_readonly(spl_token::id(), false),
-                AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-                AccountMeta::new_readonly(sysvar::rent::id(), false),
+                AccountMeta::new(*program_id, false),
+                AccountMeta::new(*program_code, false),
             ]
         )
     ];
@@ -211,7 +194,7 @@ fn make_deploy_ethereum_transaction(
         let tx = crate::UnsignedTransaction {
             to: None,
             nonce: trx_count,
-            gas_limit: 9_999_999.into(),
+            gas_limit: 999_999_999_999_u64.into(),
             gas_price: 0.into(),
             value: 0.into(),
             data: program_data.to_owned(),
@@ -396,13 +379,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 pub fn execute(
     config: &Config,
     program_location: &str,
-    token_mint: &Pubkey,
     collateral_pool_base: &Pubkey,
     chain_id: u64
 ) -> NeonCliResult {
     let creator = &config.signer;
     let program_data = crate::read_program_data(program_location)?;
-    let operator_token = spl_associated_token_account::get_associated_token_address(&creator.pubkey(), token_mint);
 
     // Create ethereum caller private key from sign of array by signer
     // let (caller_private, caller_ether, caller_sol, _caller_nonce) = get_ethereum_caller_credentials(config);
@@ -421,16 +402,16 @@ pub fn execute(
 
     if config.rpc_client.get_account_with_commitment(&caller_sol, CommitmentConfig::confirmed())?.value.is_none() {
         debug!("Caller account not found");
-        crate::commands::create_ether_account::execute(config, &caller_ether, 10_u64.pow(9), 0, token_mint)?;
+        crate::commands::create_ether_account::execute(config, &caller_ether)?;
     } else {
         debug!(" Caller account found");
     }
 
     // Get caller nonce
-    let (trx_count, caller_ether, caller_token) = crate::get_ether_account_nonce(config, &caller_sol, token_mint)?;
+    let (trx_count, caller_ether) = crate::get_ether_account_nonce(config, &caller_sol)?;
 
-    let (program_id, program_ether, program_nonce, program_token, program_code, program_seed) =
-        get_ethereum_contract_account_credentials(config, &caller_ether, trx_count, token_mint);
+    let (program_id, program_ether, program_nonce, program_code, program_seed) =
+        get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
     let mut instrstruction = create_ethereum_contract_accounts_in_solana(
@@ -438,11 +419,9 @@ pub fn execute(
         &program_id,
         &program_ether,
         program_nonce,
-        &program_token,
         &program_code,
         &program_seed,
         program_data.len(),
-        token_mint
     )?;
 
     // Create transaction prepared for execution from account
@@ -460,24 +439,18 @@ pub fn execute(
     let (collateral_pool_acc, collateral_pool_index) = crate::get_collateral_pool_account_and_index(config, collateral_pool_base);
 
     let accounts = vec![
-                        AccountMeta::new(storage, false),
+        AccountMeta::new(storage, false),
 
-                        AccountMeta::new(creator.pubkey(), true),
-                        AccountMeta::new(collateral_pool_acc, false),
-                        AccountMeta::new(operator_token, false),
-                        AccountMeta::new(caller_token, false),
-                        AccountMeta::new(system_program::id(), false),
+        AccountMeta::new(creator.pubkey(), true),
+        AccountMeta::new(collateral_pool_acc, false),
+        AccountMeta::new(caller_sol, false), // pay gas to yourself
+        AccountMeta::new_readonly(system_program::id(), false),
+        AccountMeta::new_readonly(config.evm_loader, false),
 
-                        AccountMeta::new(program_id, false),
-                        AccountMeta::new(program_token, false),
-                        AccountMeta::new(program_code, false),
-                        AccountMeta::new(caller_sol, false),
-                        AccountMeta::new(caller_token, false),
-
-                        AccountMeta::new_readonly(config.evm_loader, false),
-                        AccountMeta::new_readonly(*token_mint, false),
-                        AccountMeta::new_readonly(spl_token::id(), false),
-                        ];
+        AccountMeta::new(program_id, false),
+        AccountMeta::new(program_code, false),
+        AccountMeta::new(caller_sol, false),
+    ];
 
     let mut holder_with_accounts = vec![AccountMeta::new(holder, false)];
     holder_with_accounts.extend(accounts.clone());
@@ -488,6 +461,7 @@ pub fn execute(
                                                                               &(0x16_u8, collateral_pool_index, 0_u64),
                                                                               holder_with_accounts);
         instrstruction.push(trx_from_account_data_instruction);
+        debug!("instrstruction: {:?}", instrstruction);
         crate::send_transaction(config, &instrstruction)?;
     }
 
@@ -521,7 +495,6 @@ pub fn execute(
 
     println!("{}", serde_json::json!({
         "programId": format!("{}", program_id),
-        "programToken": format!("{}", program_token),
         "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
     }));

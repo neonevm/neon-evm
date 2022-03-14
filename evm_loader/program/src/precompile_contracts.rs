@@ -1,6 +1,7 @@
 //! `EVMLoader` precompile contracts
 
 use std::convert::{Infallible, TryInto};
+use crate::config::token_mint;
 
 use arrayref::{array_ref, array_refs};
 use evm::{Capture, ExitReason, H160, U256};
@@ -11,12 +12,14 @@ use solana_program::{
 
 use crate::{
     executor_state::ExecutorState,
-    solana_backend::AccountStorage,
+    account_storage::AccountStorage,
     utils::keccak256_digest,
+    gasometer::Gasometer,
 };
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+const SYSTEM_ACCOUNT_NEON_TOKEN: H160 =        H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -27,39 +30,13 @@ const SYSTEM_ACCOUNT_BN256_SCALAR_MUL: H160 =  H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 const SYSTEM_ACCOUNT_BN256_PAIRING: H160 =     H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x08]);
 const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09]);
 
-const GAS_COST_ECRECOVER: u64 = 3000;
-const GAS_COST_SHA256_BASE: u64 = 60;
-const GAS_COST_SHA256_PER_WORD: u64 = 12;
-const GAS_COST_RIPEMD160_BASE: u64 = 600;
-const GAS_COST_RIPEMD160_PER_WORD: u64 = 120;
-const GAS_COST_IDENTITY_BASE: u64 = 15;
-const GAS_COST_IDENTITY_PER_WORD: u64 = 3;
-const GAS_COST_BLAKE2F_PER_ROUND: u64 = 1;
-
-// const GAS_COST_BN256_ADD_BYZANTIUM: u64 = 500;
-// const GAS_COST_BN256_ADD_ISTANBUL: u64 = 150;
-// const GAS_COST_BN256_SCALARMUL_BYZANTIUM : u64 = 40000;
-// const GAS_COST_BN256_SCALARMUL_ISTANBUL: u64 = 6000;
-// const GAS_COST_BN256_PAIRING_BASE_BYZANTIUM: u64 = 100000;
-// const GAS_COST_BN256_PAIRING_BASE_ISTANBUL: u64 = 45000;
-// const GAS_COST_BN256_PAIRING_PER_POINT_BYZANTIUM: u64 = 80000;
-// const GAS_COST_BN256_PAIRING_PER_POINT_ISTANBUL: u64 = 34000;
-
-// const GAS_COST_BLS12381_G1ADD: u64 = 600;
-// const GAS_COST_BLS12381_G1MUL: u64 = 12000;
-// const GAS_COST_BLS12381_G2ADD: u64 = 4500;
-// const GAS_COST_BLS12381_G2MUL: u64 = 55000;
-// const GAS_COST_BLS12381_PAIRING_BASE: u64 = 115000;
-// const GAS_COST_BLS12381_PAIRING_PER_PAIR: u64 = 23000;
-// const GAS_COST_BLS12381_MAPG1: u64 = 5500;
-// const GAS_COST_BLS12381_MAPG2: u64 = 110000;
-
 
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
            *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
         || *address == SYSTEM_ACCOUNT_QUERY
+        || *address == SYSTEM_ACCOUNT_NEON_TOKEN
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -80,24 +57,28 @@ pub fn call_precompile<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
     state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper(input, context, state));
+        return Some(erc20_wrapper(input, context, state, gasometer));
     }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account(input, state));
     }
+    if address == SYSTEM_ACCOUNT_NEON_TOKEN {
+        return Some(neon_token(input, context, state, gasometer));
+    }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
-        return Some(ecrecover(input, state));
+        return Some(ecrecover(input));
     }
     if address == SYSTEM_ACCOUNT_SHA_256 {
-        return Some(sha256(input, state));
+        return Some(sha256(input));
     }
     if address == SYSTEM_ACCOUNT_RIPEMD160 {
-        return Some(ripemd160(input, state));
+        return Some(ripemd160(input));
     }
     if address == SYSTEM_ACCOUNT_DATACOPY {
-        return Some(datacopy(input, state));
+        return Some(datacopy(input));
     }
     if address == SYSTEM_ACCOUNT_BIGMODEXP {
         return Some(big_mod_exp(input, state));
@@ -112,7 +93,7 @@ pub fn call_precompile<'a, B: AccountStorage>(
         return Some(bn256_pairing(input, state));
     }
     if address == SYSTEM_ACCOUNT_BLAKE2F {
-        return Some(blake2_f(input, state));
+        return Some(blake2_f(input));
     }
 
     None
@@ -145,7 +126,8 @@ const ERC20_METHOD_APPROVE_SOLANA_ID: &[u8; 4] = &[0x93, 0xe2, 0x93, 0x46];
 pub fn erc20_wrapper<'a, B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
-    state: &mut ExecutorState<'a, B>
+    state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
@@ -198,12 +180,13 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
                 let revert_message = b"ERC20 transfer is not allowed in static context".to_vec();
                 return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
             }
-
             let arguments = array_ref![rest, 0, 64];
             let (_, address, value) = array_refs!(arguments, 12, 20, 32);
 
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
+
+            gasometer.record_spl_transfer(state, address, &token_mint, context);
 
             let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
@@ -230,6 +213,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let source = H160::from_slice(source);
             let target = H160::from_slice(target);
             let value = U256::from_big_endian_fast(value);
+            gasometer.record_spl_transfer(state, target, &token_mint, context);
 
             let status = state.erc20_transfer_from(token_mint, context,source, target, value);
             if !status {
@@ -255,6 +239,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let spender = H160::from_slice(spender);
             let value = U256::from_big_endian_fast(value);
+            gasometer.record_approve(state, token_mint, context, spender);
 
             state.erc20_approve(token_mint, context, spender, value);
 
@@ -305,6 +290,73 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
         }
     }
+}
+
+// Neon token method ids:
+//--------------------------------------------------
+// withdraw(bytes32)           => 8e19899e
+//--------------------------------------------------
+const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
+
+/// Call inner `neon_token`
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn neon_token<'a, B: AccountStorage>(
+    input: &[u8],
+    context: &evm::Context,
+    state: &mut ExecutorState<'a, B>,
+    gasometer: &mut Gasometer
+)
+    -> Capture<(ExitReason, Vec<u8>), Infallible>
+{
+    debug_print!("neon_token({})", hex::encode(&input));
+
+    let (method_id, rest) = input.split_at(4);
+    let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
+    let min_amount: u64 = u64::pow(10, u32::from(token_mint::decimals()));
+
+    if method_id == NEON_TOKEN_METHOD_WITHDRAW_ID  {
+        if state.metadata().is_static() {
+            let revert_message = b"neon_token: withdraw is not allowed in static context".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        let source = context.address; // caller contract
+
+        // owner of the associated token account
+        let destination = array_ref![rest, 0, 32];
+        let destination = Pubkey::new_from_array(*destination);
+
+        let (spl_amount, remainder) =
+            context
+            .apparent_value
+            .div_mod(U256::from(min_amount));
+
+        if spl_amount > U256::from(u64::MAX) {
+            let revert_message = b"neon_token: transfer amount exceeds maximum".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        if remainder.as_u64() != 0 {
+            let revert_message = format!("neon_token: amount must be divisible by {}", min_amount).as_bytes().to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        gasometer.record_withdraw(state, &destination);
+
+        if !state.withdraw(source, destination, context.apparent_value, spl_amount.as_u64()) {
+            let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
+            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
+        }
+
+        let mut output = vec![0_u8; 32];
+        output[31] = 1; // return true
+
+        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output));
+    };
+
+    debug_print!("neon_token UNKNOWN");
+    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
 }
 
 // QueryAccount method ids:
@@ -468,17 +520,11 @@ pub fn query_account<'a, B: AccountStorage>(
 
 /// Call inner `ecrecover`
 #[must_use]
-pub fn ecrecover<'a, B: AccountStorage>(
-    input: &[u8],
-    state: &mut ExecutorState<'a, B>
+pub fn ecrecover(
+    input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("ecrecover");
     debug_print!("input: {}", &hex::encode(&input));
-
-    let gasometer = state.gasometer_mut();
-    if let Err(error) = gasometer.record_cost(GAS_COST_ECRECOVER) {
-        return Capture::Exit((ExitReason::Error(error), Vec::new()));
-    }
 
     if input.len() != 128 {
         return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]));
@@ -509,19 +555,11 @@ pub fn ecrecover<'a, B: AccountStorage>(
 
 /// Call inner `sha256`
 #[must_use]
-pub fn sha256<'a, B: AccountStorage>(
+pub fn sha256(
     input: &[u8],
-    state: &mut ExecutorState<'a, B>
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use solana_program::hash::hash as sha256_digest;
     debug_print!("sha256");
-
-    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
-    let gas_cost = GAS_COST_SHA256_BASE + (number_of_words * GAS_COST_SHA256_PER_WORD);
-    let gasometer = state.gasometer_mut();
-    if let Err(error) = gasometer.record_cost(gas_cost) {
-        return Capture::Exit((ExitReason::Error(error), Vec::new()));
-    }
 
     let hash = sha256_digest(input);
 
@@ -535,19 +573,11 @@ pub fn sha256<'a, B: AccountStorage>(
 
 /// Call inner `ripemd160`
 #[must_use]
-pub fn ripemd160<'a, B: AccountStorage>(
-    input: &[u8],
-    state: &mut ExecutorState<'a, B>
+pub fn ripemd160(
+    input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     use ripemd160::{Digest, Ripemd160};
     debug_print!("ripemd160");
-
-    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
-    let gas_cost = GAS_COST_RIPEMD160_BASE + (number_of_words * GAS_COST_RIPEMD160_PER_WORD);
-    let gasometer = state.gasometer_mut();
-    if let Err(error) = gasometer.record_cost(gas_cost) {
-        return Capture::Exit((ExitReason::Error(error), Vec::new()));
-    }
 
     let mut hasher = Ripemd160::new();
     // process input message
@@ -567,19 +597,11 @@ pub fn ripemd160<'a, B: AccountStorage>(
 
 /// Call inner datacopy
 #[must_use]
-pub fn datacopy<'a, B: AccountStorage>(
-    input: &[u8],
-    state: &mut ExecutorState<'a, B>
+pub fn datacopy(
+    input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("datacopy");
     debug_print!("input: {}", &hex::encode(&input));
-
-    let number_of_words: u64 = ((input.len() as u64) + 31) / 32;
-    let gas_cost = GAS_COST_IDENTITY_BASE + (number_of_words * GAS_COST_IDENTITY_PER_WORD);
-    let gasometer = state.gasometer_mut();
-    if let Err(error) = gasometer.record_cost(gas_cost) {
-        return Capture::Exit((ExitReason::Error(error), Vec::new()));
-    }
 
     Capture::Exit((
         ExitReason::Succeed(evm::ExitSucceed::Returned),
@@ -923,9 +945,8 @@ pub fn bn256_pairing<'a, B: AccountStorage>(
 /// Call inner `blake2F`
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn blake2_f<'a, B: AccountStorage>(
-    input: &[u8],
-    state: &mut ExecutorState<'a, B>
+pub fn blake2_f(
+    input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     const BLAKE2_F_ARG_LEN: usize = 213;
     debug_print!("blake2F");
@@ -1000,13 +1021,6 @@ pub fn blake2_f<'a, B: AccountStorage>(
     let (rounds_buf, input) = input.split_at(4);
     rounds_arr.copy_from_slice(rounds_buf);
     let rounds: u32 = u32::from_be_bytes(rounds_arr);
-
-    let gas_cost = GAS_COST_BLAKE2F_PER_ROUND * u64::from(rounds);
-    let gasometer = state.gasometer_mut();
-    if let Err(error) = gasometer.record_cost(gas_cost) {
-        return Capture::Exit((ExitReason::Error(error), Vec::new()));
-    }
-
 
     // we use from_le_bytes below to effectively swap byte order to LE if architecture is BE
 

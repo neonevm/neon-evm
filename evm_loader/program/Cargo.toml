@@ -12,6 +12,7 @@ edition = "2018"
 exclude = ["js/**"]
 
 [features]
+alpha = []
 mainnet = []
 testnet = []
 devnet = []
