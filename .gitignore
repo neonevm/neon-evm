@@ -1,5 +1,4 @@
 target
-.env
 .vscode
 bin
 config.json
