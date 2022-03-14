@@ -1,7 +1,6 @@
 //! # Neon EVM Executor State
 //!
 //! Executor State is a struct that stores the state during execution.
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
 use core::mem;
 use std::{
