@@ -1,9 +1,9 @@
 steps:
 
-  - label: ":docker: build docker image"
-    command:
-      - ".buildkite/steps/build-image.sh"
-      - ".buildkite/steps/upload-image.sh"
+#  - label: ":docker: build docker image"
+#    command:
+#      - ".buildkite/steps/build-image.sh"
+#      - ".buildkite/steps/upload-image.sh"
 
   - label: "Define full_test_suite meta if there is non draft pull request"
     if: build.pull_request.base_branch == "develop" && !build.pull_request.draft
