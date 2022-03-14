@@ -131,16 +131,11 @@ impl Gasometer {
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 
-    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256, token_mint: &Pubkey, context: &evm::Context)
+    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, token_mint: &Pubkey, context: &evm::Context)
     where
         B: AccountStorage
     {
-        if value.is_zero() {
-            return;
-        }
-
         let balance = state.erc20_balance_of(*token_mint, context, target);
-
         if !balance.is_zero() {
             return;
         }
@@ -152,38 +147,26 @@ impl Gasometer {
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 
-    pub fn record_approve<B>(&mut self, state: &ExecutorState<B>, mint: Pubkey, context: &evm::Context, spender: H160, value: U256)
+    pub fn record_approve<B>(&mut self, state: &ExecutorState<B>, mint: Pubkey, context: &evm::Context, spender: H160)
         where
             B: AccountStorage
     {
-        if value.is_zero() {
-            return;
-        }
-
         let owner = context.caller;
 
         let allowance = state.erc20_allowance(mint, context, owner, spender);
-
-        if !allowance.is_zero(){
+        if !allowance.is_zero() {
             return;
         }
 
         let account_rent = self.rent.minimum_balance(ERC20Allowance::SIZE);
 
-        self.gas = self.gas
-            .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST);
+        self.gas = self.gas.saturating_add(account_rent);
     }
 
-    pub fn record_withdraw<B>(&mut self, state: &ExecutorState<B>, dest: &Pubkey, value: u64)
+    pub fn record_withdraw<B>(&mut self, state: &ExecutorState<B>, dest: &Pubkey)
         where
             B: AccountStorage
     {
-         // TODO: apply_withdrawals doesn't contain this check. Should this comment?
-        if value == 0 {
-            return;
-        }
-
         let dest_neon_acc = get_associated_token_address(
             dest,
             &crate::config::token_mint::id()
@@ -191,16 +174,13 @@ impl Gasometer {
 
 
         let balance = state.substate().spl_balance(&dest_neon_acc, state.backend());
-
         if balance != 0 {
             return;
         }
 
         let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
 
-        self.gas = self.gas
-            .saturating_add(account_rent);
-         // .saturating_add(CREATE_ACCOUNT_TRX_COST);  // TODO: check it
+        self.gas = self.gas.saturating_add(account_rent);
     }
 
 }

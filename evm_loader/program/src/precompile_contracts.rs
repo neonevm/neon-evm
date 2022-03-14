@@ -186,7 +186,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let address = H160::from_slice(address);
             let value = U256::from_big_endian_fast(value);
 
-            gasometer.record_spl_transfer(state, address, value, &token_mint, context);
+            gasometer.record_spl_transfer(state, address, &token_mint, context);
 
             let status = state.erc20_transfer(token_mint, context, address, value);
             if !status {
@@ -213,7 +213,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
             let source = H160::from_slice(source);
             let target = H160::from_slice(target);
             let value = U256::from_big_endian_fast(value);
-            gasometer.record_spl_transfer(state, target, value, &token_mint, context);
+            gasometer.record_spl_transfer(state, target, &token_mint, context);
 
             let status = state.erc20_transfer_from(token_mint, context,source, target, value);
             if !status {
@@ -239,7 +239,7 @@ pub fn erc20_wrapper<'a, B: AccountStorage>(
 
             let spender = H160::from_slice(spender);
             let value = U256::from_big_endian_fast(value);
-            gasometer.record_approve(state, token_mint, context, spender, value);
+            gasometer.record_approve(state, token_mint, context, spender);
 
             state.erc20_approve(token_mint, context, spender, value);
 
@@ -342,7 +342,7 @@ pub fn neon_token<'a, B: AccountStorage>(
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        gasometer.record_withdraw(state, &destination, spl_amount.as_u64());
+        gasometer.record_withdraw(state, &destination);
 
         if !state.withdraw(source, destination, context.apparent_value, spl_amount.as_u64()) {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
