@@ -4,8 +4,9 @@ services:
   set_single_acct_permission:
     container_name: set_single_acct_permission
     image: neonlabsorg/evm_loader:${REVISION:-latest}
+    network_mode: host
     env_file:
-      - ./config/${CONFIG_NAME}/.env
+      - ./config/${CONFIG_NAME}/env
     environment:
       OPERATION: ${OPERATION}
       ACCOUNT_TYPE: ${ACCOUNT_TYPE}
@@ -20,8 +21,9 @@ services:
   set_many_accts_permission:
     container_name: set_many_accts_permission
     image: neonlabsorg/evm_loader:${REVISION:-latest}
+    network_mode: host
     env_file:
-      - ./config/${CONFIG_NAME}/.env
+      - ./config/${CONFIG_NAME}/env
     environment:
       OPERATION: ${OPERATION}
       ACCOUNT_TYPE: ${ACCOUNT_TYPE}

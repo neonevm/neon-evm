@@ -48,7 +48,7 @@ NOTE: All operations are performed from evm_loader/utils directory
 ### Coniguration
 Environment configuration must be placed in subdirectory in ./config. Name of subdirectory is the name of configuration.
 Configuration MUST contain at least 2 files:
-- .env file with environment variables: SOLANA_URL, EVM_LOADER (address of evm_loader contract)
+- **env** file with environment variables: SOLANA_URL, EVM_LOADER (address of evm_loader contract)
 - mint_authority_keypair.json - correct private key of mint authority for permission tokens on selected network and evm_loader
 
 **NOTE:** Also, file address_list is required to be placed in the same directory if 'many' option will be used (see below).
