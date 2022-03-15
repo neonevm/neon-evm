@@ -163,8 +163,8 @@ pub fn check_ethereum_transaction(
         return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender_account.trx_count, transaction.nonce);
     }
 
-    if crate::config::chain_id() != transaction.chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::config::chain_id());
+    if U256::from(crate::config::CHAIN_ID) != transaction.chain_id {
+        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::config::CHAIN_ID);
     }
 
     let contract_address: H160 = transaction.to.unwrap_or_else(|| {
