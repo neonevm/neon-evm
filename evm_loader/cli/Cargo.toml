@@ -12,13 +12,13 @@ bincode = "1.3.1"
 clap = "2.33.3"
 evm-loader = { path = "../program", default_features = false }
 evm = { path = "../rust-evm", version = "0.18.0", default_features = false }
-solana-sdk = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-client = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-clap-utils = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-cli-config = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-cli = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-cli-output = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
-solana-transaction-status = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11" }
+solana-sdk = "=1.9.12"
+solana-client = "=1.9.12"
+solana-clap-utils = "=1.9.12"
+solana-cli-config = "=1.9.12"
+solana-cli = "=1.9.12"
+solana-cli-output = "=1.9.12"
+solana-transaction-status = "=1.9.12"
 spl-token = { version = "3.2", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0", default_features = false, features = ["no-entrypoint"] }
 bs58 = "0.4.0"
@@ -28,11 +28,11 @@ arrayref = "0.3.6"
 serde = "1.0.112"
 serde_json = "1.0.66"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
-libsecp256k1 = { version = "0.5.0", default-features = false }
+libsecp256k1 = { version = "0.5.0", default-features = false, features = ["static-context", "hmac"] }
 log = "0.4.11"
 fern = "0.6"
 rlp = "0.5"
-solana-program = { git = "ssh://git@github.com/solana-labs/solana.git", tag = "v1.9.11", default_features = false }
+solana-program = { version="=1.9.12", default_features = false }
 rand = "0.8"
 ethereum-types = "0.11.0"
 base64 = { version = "0.13.0" }

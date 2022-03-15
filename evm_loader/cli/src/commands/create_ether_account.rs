@@ -37,12 +37,11 @@ pub fn execute (
             ]);
 
     let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
-    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+    let blockhash = config.rpc_client.get_latest_blockhash()?;
 
     check_account_for_fee(
         &config.rpc_client,
         &config.signer.pubkey(),
-        &fee_calculator,
         &finalize_message)?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);

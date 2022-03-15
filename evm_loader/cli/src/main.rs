@@ -278,9 +278,8 @@ fn send_transaction(
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
-    let (blockhash, _, _last_valid_slot) = config.rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
-        .value;
+    let (blockhash, _last_valid_slot) = config.rpc_client
+        .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
     transaction.try_sign(&signers, blockhash)?;
 
     config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(

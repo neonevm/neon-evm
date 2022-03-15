@@ -158,9 +158,8 @@ fn fill_holder_account(
 
     // Send write message
     {
-        let (blockhash, _, last_valid_slot) = config.rpc_client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
-            .value;
+        let (blockhash, last_valid_slot) = config.rpc_client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
 
         let mut write_transactions = vec![];
         for message in write_messages {
@@ -283,7 +282,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     .ok();
             }
             pending_transactions.insert(transaction.signatures[0], transaction);
-            progress_bar.set_message(&format!(
+            progress_bar.set_message(format!(
                 "[{}/{}] Transactions sent",
                 pending_transactions.len(),
                 num_transactions
@@ -321,7 +320,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 }
 
                 slot = rpc_client.get_slot()?;
-                progress_bar.set_message(&format!(
+                progress_bar.set_message(format!(
                     "[{}/{}] Transactions confirmed. Retrying in {} slots",
                     num_transactions - pending_transactions.len(),
                     num_transactions,
@@ -363,9 +362,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator, new_last_valid_slot) = rpc_client
-            .get_recent_blockhash_with_commitment(commitment)?
-            .value;
+        let (blockhash, new_last_valid_slot) = rpc_client
+            .get_latest_blockhash_with_commitment(commitment)?;
         last_valid_slot = new_last_valid_slot;
         transactions = vec![];
         for (_, mut transaction) in pending_transactions {

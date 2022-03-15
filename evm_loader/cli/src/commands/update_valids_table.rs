@@ -61,14 +61,12 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
 
             let finalize_message = Message::new(&[instruction], Some(&config.signer.pubkey()));
 
-            config.rpc_client.get_recent_blockhash()
-                .map(|(blockhash,fee_calculator)|(finalize_message,blockhash,fee_calculator))
+            config.rpc_client.get_latest_blockhash()
+                .map(|blockhash|(finalize_message,blockhash))
                 .map_err(NeonCliError::from)
         })
-        .and_then(|(finalize_message,blockhash,fee_calculator)| {
-            info!("fee_calculator: {:?}", fee_calculator);
-
-            check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &fee_calculator, &finalize_message)
+        .and_then(|(finalize_message,blockhash)| {
+            check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &finalize_message)
                 .map(|_|(finalize_message,blockhash))
                 .map_err(NeonCliError::from)
         })
