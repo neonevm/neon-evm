@@ -64,8 +64,9 @@ pub fn execute(
         evm_token_authority,
     ));
 
-    let finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
+    let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
     let blockhash = config.rpc_client.get_latest_blockhash()?;
+    finalize_message.recent_blockhash = blockhash;
 
     check_account_for_fee(
         &config.rpc_client,
