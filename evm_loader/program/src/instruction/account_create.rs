@@ -59,10 +59,6 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160, bump_seed:
         if *contract.key != expected_code_address {
             return Err!(ProgramError::InvalidArgument; "Account {} - expected create_with_seed {}", contract.key, expected_code_address);
         }
-
-        if !crate::utils::is_zero_initialized(&contract.data.borrow()) {
-            return Err!(ProgramError::InvalidArgument; "Account {} - is not zero initialized", contract.key);
-        }
     }
 
     Ok(())
