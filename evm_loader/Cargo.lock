@@ -1397,7 +1397,7 @@ dependencies = [
 
 [[package]]
 name = "evm-loader"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1411,7 +1411,6 @@ dependencies = [
  "hex",
  "impl-serde 0.1.1",
  "log",
- "macros",
  "num-derive",
  "num-traits",
  "num_enum",
@@ -1480,7 +1479,7 @@ checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
 name = "faucet"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -2351,16 +2350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macros"
-version = "0.1.0"
-dependencies = [
- "bs58 0.4.0",
- "proc-macro2 1.0.27",
- "quote 1.0.9",
- "syn 1.0.73",
-]
-
-[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2491,7 +2480,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "arrayref",
  "base64 0.13.0",
