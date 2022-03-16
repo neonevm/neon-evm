@@ -3,7 +3,7 @@
 
 [package]
 name = "evm-loader"
-version = "0.6.0-dev"
+version = "0.7.0"
 description = "Ethereum VM loader"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana-program-library"
