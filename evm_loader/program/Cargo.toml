@@ -24,7 +24,7 @@ default = ["custom-heap"]
 tracing = [ "environmental" ]
 
 [dependencies]
-solana-program = { version="=1.9.12", default_features = false }
+solana-program = { version = "=1.9.12", default_features = false }
 spl-token = { version = "3.1.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.2", default_features = false, features = ["no-entrypoint"] }
 #num-bigint = "0.4"
