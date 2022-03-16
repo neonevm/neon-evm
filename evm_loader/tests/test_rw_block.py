@@ -11,7 +11,7 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
@@ -206,7 +206,6 @@ class RW_Locking_Test(unittest.TestCase):
 
     # the contract account is locked by the read-only lock
     # two transactions of the one contract are executed by two callers
-    # @unittest.skip("a.i.")
     def test_01_caseReadOlnyBlocking(self):
         print("\ntest_01_caseReadOlnyBlocking")
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
@@ -253,7 +252,6 @@ class RW_Locking_Test(unittest.TestCase):
     # The first transaaction set lock on write to  contract account
     # The second transaction try to set lock on write and  => the error occurs.
     # Then lock removed by Cancel operation
-    # @unittest.skip("a.i.")
     def test_02_caseWriteBlocking(self):
         print("\ntest_02_caseWriteBlocking")
 

@@ -10,7 +10,7 @@ import re
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx, JsonEncoder
 from solana_utils import *
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 holder_id = 0
@@ -53,7 +53,7 @@ class PrecompilesTests(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-        with open(CONTRACTS_DIR+"precompiles_testdata.json") as json_data:
+        with open(CONTRACTS_DIR+"test_solidity_precompiles.json") as json_data:
             cls.test_data = json.load(json_data)
 
     def send_transaction(self, data):

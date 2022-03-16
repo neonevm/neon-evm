@@ -5,7 +5,7 @@ from base58 import b58decode
 from enum import IntEnum
 from solana_utils import *
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
@@ -219,7 +219,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.assertEqual(deposit_balance_change, 0 - NEON_PAYMENT_TO_DEPOSIT)
             self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
 
-    # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
         trx = Transaction() \
@@ -229,7 +228,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
 
-    # @unittest.skip("a.i.")
     def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -258,7 +256,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
 
-    # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -285,7 +282,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
 
-    # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_2_instructions_in_one_transaction(self):
         step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -310,7 +306,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
 
-    # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 200
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -332,7 +327,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
 
-    # @unittest.skip("a.i.")
     def test_06_failure_tx_send_iteratively_transaction_too_large(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -453,85 +447,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.check_transfers_between_operator_deposit_and_collateral_pool(response_2, operator_sol_acc,
                                                                           deposit_sol_acc, collateral_pool_sol_acc,
                                                                           step=Step.Complete)
-
-
-# def test_fail_on_no_signature(self):
-    #     tx_1 = {
-    #         'to': self.eth_contract,
-    #         'value': 0,
-    #         'gas': 1,
-    #         'gasPrice': 1,
-    #         'nonce': 0,
-    #         'data': '3917b3df',
-    #         'chainId': 1
-    #     }
-
-    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
-
-    #     (caller, caller_nonce) = self.loader.ether2programAddress(from_addr)
-    #     print(" ether: " + from_addr.hex())
-    #     print("solana: " + caller)
-    #     print(" nonce: " + str(caller_nonce))
-
-    #     if getBalance(caller) == 0:
-    #         print("Create caller account...")
-    #         caller_created = self.loader.createEtherAccount(from_addr)
-    #         print("Done\n")
-
-    #     trx = Transaction().add(
-    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
-    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-    #             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
-    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),  
-    #             AccountMeta(pubkey=PublicKey("SysvarC1ock11111111111111111111111111111111"), is_signer=False, is_writable=False),              
-    #         ]))
-    #     result = client.send_transaction(trx, self.acc.get_acc())
-
-    # def test_check_wo_checks(self):
-    #     tx_1 = {
-    #         'to': self.eth_contract,
-    #         'value': 0,
-    #         'gas': 0,
-    #         'gasPrice': 0,
-    #         'nonce': 0,
-    #         'data': '3917b3df',
-    #         'chainId': 1
-    #     }
-
-    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_1, self.acc.get_acc().secret_key())
-
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
-
-    #     trx = Transaction().add(
-    #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-    #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
-    #         ])).add(
-    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
-    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-    #         ]))
-    #     result = client.send_transaction(trx, self.acc.get_acc())
-
-    # def test_raw_tx_wo_checks(self):  
-    #     tx_2 = "0xf86180808094535d33341d2ddcc6411701b1cf7634535f1e8d1680843917b3df26a013a4d8875dfc46a489c2641af798ec566d57852b94743b234517b73e239a5a22a07586d01a8a1125be7108ee6580c225a622c9baa0938f4d08abe78556c8674d58"
-
-    #     (from_addr, sign, msg) =  make_instruction_data_from_tx(tx_2)
-
-    #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
-
-    #     trx = Transaction().add(
-    #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-    #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
-    #         ])).add(
-    #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("05") + from_addr + sign + msg, keys=[
-    #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
-    #             AccountMeta(pubkey=self.acc.get_acc().public_key(), is_signer=True, is_writable=False),
-    #             AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
-    #         ]))
-    #     result = client.send_transaction(trx, self.acc.get_acc())
 
 
 if __name__ == '__main__':
