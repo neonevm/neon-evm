@@ -63,8 +63,9 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, seed: &str) -> ProgramResu
         return Err!(ProgramError::InvalidArgument; "Account {} - expected program owned", new_code_account.key);
     }
 
-    if !crate::utils::is_zero_initialized(&new_code_account.try_borrow_data()?) {
-        return Err!(ProgramError::InvalidArgument; "Account {} - expected zero initialized", new_code_account.key);
+    let tag = crate::account::tag(program_id, new_code_account)?;
+    if tag != crate::account::TAG_EMPTY {
+        return Err!(ProgramError::InvalidArgument; "Account {} - expected tag empty", new_code_account.key);
     }
 
     let rent = Rent::get()?;
