@@ -13,7 +13,7 @@ from web3 import Web3
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
@@ -397,7 +397,6 @@ class EventTest(unittest.TestCase):
             )
             res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="processed"))["result"]
 
-    @unittest.skip("a.i.")
     def test_01_callFoo(self):
         print('\ntest_01_callFoo')
 
@@ -443,7 +442,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
     def test_02_ecrecover(self):
         print('\ntest_02_ecrecover')
         tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
@@ -509,7 +507,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
 
-    # @unittest.skip("a.i.")
     def test_03_create2_opcode_by_0x0e_without_accounts(self):
         print('\ntest_03_create2_opcode_by_0x0e_without_accounts')
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -583,7 +580,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    @unittest.skip("a.i.")
+    @unittest.skip("broken, need to use salt in create2 opcode")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
@@ -628,7 +625,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
     def test_05_nested_revert(self):
         print('\ntest_05_nested_revert')
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
