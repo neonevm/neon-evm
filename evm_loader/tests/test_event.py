@@ -10,7 +10,7 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
@@ -173,7 +173,6 @@ class EventTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
-    # @unittest.skip("a.i.")
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
@@ -198,7 +197,6 @@ class EventTest(unittest.TestCase):
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
 
-    # @unittest.skip("a.i.")
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -224,7 +222,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
 
-    # @unittest.skip("a.i.")
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -258,7 +255,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
 
-    # @unittest.skip("a.i.")
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -299,7 +295,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
 
-    # @unittest.skip("a.i.")
     def test_events_of_different_instructions(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -374,7 +369,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas_used) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
-    # @unittest.skip("a.i.")
     def test_caseFailAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
@@ -417,7 +411,6 @@ class EventTest(unittest.TestCase):
 
         self.call_partial_signed(input)
 
-    # @unittest.skip("a.i.")
     def test_caseFailOnBlockedWithOtherStorageIterative(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
@@ -437,7 +430,6 @@ class EventTest(unittest.TestCase):
 
         result = self.call_cancel(storage, nonce)
 
-    # @unittest.skip("a.i.")
     def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
