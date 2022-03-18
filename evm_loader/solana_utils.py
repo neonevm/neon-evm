@@ -72,6 +72,7 @@ ACCOUNT_STORAGE_OVERHEAD = 128
 
 DEFAULT_UNITS=500*1000
 DEFAULT_HEAP_FRAME=256*1024
+DEFAULT_ADDITIONAL_FEE=0
 
 
 class SplToken:
@@ -315,7 +316,7 @@ class EvmLoader:
         pool_account_exists = client.get_account_info(pool_token_account, commitment="processed")["result"]["value"] is not None
         print("Pool Account Exists: ", pool_account_exists)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if not pool_account_exists:
             trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
 
@@ -407,7 +408,7 @@ class EvmLoader:
 
         base = self.acc.get_acc().public_key()
         data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if code_acc is None:
             trx.add(TransactionInstruction(
                 program_id=self.loader_id,
@@ -765,11 +766,11 @@ def evm_step_cost():
 
 class ComputeBudget():
     @staticmethod
-    def requestUnits(units):
+    def requestUnits(units, additional_fee):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
             keys=[],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little")
+            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
         )
 
     @staticmethod
@@ -780,8 +781,8 @@ class ComputeBudget():
             data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
         )
 
-def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, additional_fee=DEFAULT_ADDITIONAL_FEE, heapFrame=DEFAULT_HEAP_FRAME, **args):
     trx = Transaction(**args)
-    if units: trx.add(ComputeBudget.requestUnits(units))
+    if units: trx.add(ComputeBudget.requestUnits(units, additional_fee))
     if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
     return trx

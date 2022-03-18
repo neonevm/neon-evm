@@ -79,7 +79,7 @@ class EvmLoaderTests2(unittest.TestCase):
         self.assertEqual(result[0:12], bytes(12))
         self.assertEqual(result[12:], solana2ether("6ghLBF2LZAooDnmUMVm8tdNK6jhcAQhtbQiC7TgVnQ2r"))
 
-        with self.assertRaisesRegex(Exception, "Error processing Instruction 0: invalid instruction data"):
+        with self.assertRaisesRegex(Exception, "Error processing Instruction 2: invalid instruction data"):
             # Can't change owner because contract was deployed by another account
             result = loader.call(ownerId, caller_program, self.acc, bytearray.fromhex("03a6f9dae1")+bytes(12)+caller_ether)
 
