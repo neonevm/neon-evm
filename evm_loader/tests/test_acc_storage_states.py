@@ -8,7 +8,7 @@ from eth_utils import abi
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 

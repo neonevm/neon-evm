@@ -7,7 +7,7 @@ from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 

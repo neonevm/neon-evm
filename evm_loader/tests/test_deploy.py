@@ -10,7 +10,7 @@ from random import randrange
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
@@ -262,21 +262,18 @@ class DeployTest(unittest.TestCase):
                         client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"])
                     return result
 
-    # @unittest.skip("a.i.")
     def test_01_executeTrxFromAccountDataIterative(self):
         (holder, contract_eth, contract_sol, code_sol) = self.executeTrxFromAccountData()
 
         result = self.call_partial_signed_and_continues(holder, contract_sol, code_sol)
         print("result", result)
 
-    # @unittest.skip("a.i.")
     def test_02_executeTrxFromAccountDataIterativeOrContinue(self):
         (holder, contract_eth, contract_sol, code_sol) = self.executeTrxFromAccountData()
 
         result = self.call_instr_14_several_times(holder, contract_sol, code_sol)
         print("result", result)
 
-    # @unittest.skip("a.i.")
     def test_03_deploy_by_existing_user_with_no_contract_accounts(self):
         print("Create a holder account with the deploying transaction")
         (holder, base, seed, contract_eth, contract_sol, contract_nonce, code_sol, code_size)\

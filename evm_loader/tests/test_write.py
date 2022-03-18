@@ -89,14 +89,12 @@ class Test_Write(unittest.TestCase):
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
         return client.send_transaction(tx, signer, opts=opts)['id']
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
         id = self.write_to_account(self.signer, self.signer, holder_id, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_fails_wrong_seed(self):
         print()
         try:
@@ -112,7 +110,6 @@ class Test_Write(unittest.TestCase):
             print('err:', str(err))
             raise
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_fails_wrong_operator(self):
         print()
         try:

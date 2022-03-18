@@ -454,7 +454,7 @@ class AccountInfo(NamedTuple):
     code_account: PublicKey
 
     @staticmethod
-    def frombytes(data):
+    def frombytes(data: bytes):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
         return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 

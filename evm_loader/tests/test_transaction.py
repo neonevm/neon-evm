@@ -6,7 +6,7 @@ from enum import IntEnum
 from solana_utils import *
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 INVALID_NONCE = 'Invalid Ethereum transaction nonce'
@@ -220,7 +220,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.assertEqual(deposit_balance_change, 0 - NEON_PAYMENT_TO_DEPOSIT)
             self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
 
-    # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
         trx = TransactionWithComputeBudget() \
@@ -230,7 +229,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         response = send_transaction(client, trx, self.acc)
         print('response:', response)
 
-    # @unittest.skip("a.i.")
     def test_02_success_tx_send_iteratively_in_3_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -259,7 +257,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
 
-    # @unittest.skip("a.i.")
     def test_03_failure_tx_send_iteratively_in_4_solana_transactions_sequentially(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -286,7 +283,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
 
-    # @unittest.skip("a.i.")
     def test_04_success_tx_send_iteratively_by_2_instructions_in_one_transaction(self):
         step_count = 150
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -311,7 +307,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         self.assertLess(data[1], 0xd0)  # less 0xd0 - success
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas)  # used_gas
 
-    # @unittest.skip("a.i.")
     def test_05_failure_tx_send_iteratively_by_4_instructions_in_one_transaction(self):
         step_count = 200
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
@@ -333,7 +328,6 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             else:
                 raise
 
-    # @unittest.skip("a.i.")
     def test_06_failure_tx_send_iteratively_transaction_too_large(self):
         step_count = 100
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(13, self.acc.secret_key(), self.caller, self.caller_ether)
