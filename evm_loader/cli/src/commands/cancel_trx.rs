@@ -4,10 +4,16 @@ use solana_sdk::{
     incinerator,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
+    compute_budget::ComputeBudgetInstruction,
 };
 
 use evm_loader::{
     account::Storage,
+    config::{
+        COMPUTE_BUDGET_UNITS,
+        COMPUTE_BUDGET_HEAP_FRAME,
+        REQUEST_UNITS_ADDITIONAL_FEE,
+    }
 };
 
 use crate::{
@@ -51,8 +57,17 @@ pub fn execute(
         info!("\t{:?}", meta);
     }
 
-    let instruction = Instruction::new_with_bincode(config.evm_loader, &(21_u8, trx_count), accounts_meta);
-    crate::send_transaction(config, &[instruction])?;
+    let cancel_with_nonce_instruction = Instruction::new_with_bincode(
+        config.evm_loader, &(21_u8, trx_count), accounts_meta
+    );
+
+    let instructions = vec![
+        ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
+        cancel_with_nonce_instruction
+    ];
+
+    crate::send_transaction(config, &instructions)?;
 
     Ok(())
 }
