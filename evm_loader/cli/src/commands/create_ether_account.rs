@@ -43,7 +43,8 @@ pub fn execute (
     check_account_for_fee(
         &config.rpc_client,
         &config.signer.pubkey(),
-        &finalize_message)?;
+        &finalize_message
+    )?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 
