@@ -4,6 +4,7 @@ import solana
 from base58 import b58decode
 from enum import IntEnum
 from solana_utils import *
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 
 CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
@@ -77,7 +78,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10 ** 9, 128 * 1024,
                                           PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
@@ -100,7 +101,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             trx_cnt = getTransactionCount(client, caller)
         tx = self.get_tx(trx_cnt)
         (from_addr, sign, msg) = make_instruction_data_from_tx(tx, secret_key)
-        keccak_instruction_data = make_keccak_instruction_data(1, len(msg), data_start)
+        keccak_instruction_data = make_keccak_instruction_data(3, len(msg), data_start)
         trx_data = caller_ether + sign + msg
 
         keccak_instruction = TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111",
@@ -222,7 +223,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     # @unittest.skip("a.i.")
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(keccak_instruction) \
             .add(self.neon_emv_instr_05(trx_data, self.caller))
 
@@ -236,7 +237,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -265,7 +266,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d)
 
         response = send_transaction(client, trx, self.acc)
@@ -279,7 +280,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 2: custom program error: 0x4"):
                 print ("Exception was expected, OK")
                 pass
             else:
@@ -292,7 +293,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
 
@@ -317,7 +318,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d)
@@ -339,7 +340,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         storage = self.create_storage_account(sign[:8].hex())
         neon_emv_instr_0d = self.neon_emv_instr_0D(step_count, trx_data, storage, self.caller)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
             .add(neon_emv_instr_0d) \
@@ -361,7 +362,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         neon_emv_instr_0d_2 = self.neon_emv_instr_0D(evm_steps, trx_data, storage, self.caller_2)
         print('neon_emv_instr_0d_2: ', neon_emv_instr_0d_2)
 
-        trx = Transaction() \
+        trx = TransactionWithComputeBudget() \
             .add(neon_emv_instr_0d_2)
 
         print('Send a transaction "combined continue(0x0d)" before creating an account - wait for the confirmation '
@@ -420,7 +421,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             send_transaction(client, trx, self.acc)
         except Exception as err:
             if str(err).startswith(
-                    "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4"):
+                    "Transaction simulation failed: Error processing Instruction 2: custom program error: 0x4"):
                 print("Exception was expected, OK")
                 pass
             else:
@@ -479,7 +480,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #         caller_created = self.loader.createEtherAccount(from_addr)
     #         print("Done\n")
 
-    #     trx = Transaction().add(
+    #     trx = TransactionWithComputeBudget().add(
     #         TransactionInstruction(program_id=self.evm_loader, data=bytearray.fromhex("a1") + from_addr + sign + msg, keys=[
     #             AccountMeta(pubkey=self.owner_contract, is_signer=False, is_writable=True),
     #             AccountMeta(pubkey=caller, is_signer=False, is_writable=True),
@@ -504,7 +505,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
-    #     trx = Transaction().add(
+    #     trx = TransactionWithComputeBudget().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
     #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
     #         ])).add(
@@ -522,7 +523,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
 
     #     keccak_instruction = make_keccak_instruction_data(1, len(msg), 1)
 
-    #     trx = Transaction().add(
+    #     trx = TransactionWithComputeBudget().add(
     #         TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
     #             AccountMeta(pubkey=PublicKey("KeccakSecp256k11111111111111111111111111111"), is_signer=False, is_writable=False),
     #         ])).add(

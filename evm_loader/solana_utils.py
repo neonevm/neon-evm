@@ -41,7 +41,7 @@ keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
-#COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
+COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -70,9 +70,8 @@ LAMPORTS_PER_SIGNATURE = 5000
 # account storage overhead for calculation of base rent
 ACCOUNT_STORAGE_OVERHEAD = 128
 
-
-# DEFAULT_UNITS=500*1000
-# DEFAULT_HEAP_FRAME=256*1024
+DEFAULT_UNITS=500*1000
+DEFAULT_HEAP_FRAME=256*1024
 
 
 class SplToken:
@@ -763,31 +762,26 @@ def evm_step_cost():
     operator_expences = PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE
     return math.floor(operator_expences / EVM_STEPS)
 
-#
-#
-#
-# class ComputeBudget():
-#     @staticmethod
-#     def requestUnits(units):
-#         return TransactionInstruction(
-#             program_id=COMPUTE_BUDGET_ID,
-#             keys=[],
-#             data=bytes.fromhex("00") + units.to_bytes(4, "little")
-#         )
-#
-#     @staticmethod
-#     def requestHeapFrame(heapFrame):
-#         return TransactionInstruction(
-#             program_id=COMPUTE_BUDGET_ID,
-#             keys=[],
-#             data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
-#         )
-#
-#s
-# def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
-#     trx = Transaction(**args)
-#     if units: trx.add(ComputeBudget.requestUnits(units))
-#     if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
-#     return trx
-#
-#
+
+class ComputeBudget():
+    @staticmethod
+    def requestUnits(units):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("00") + units.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def requestHeapFrame(heapFrame):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
+        )
+
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
+    trx = Transaction(**args)
+    if units: trx.add(ComputeBudget.requestUnits(units))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    return trx

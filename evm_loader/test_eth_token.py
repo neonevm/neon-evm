@@ -95,14 +95,15 @@ class EthTokenTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction, additional_accounts = []):
         print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps, additional_accounts = []):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps, additional_accounts))
         return send_transaction(client, trx, self.acc)
 
@@ -119,7 +120,7 @@ class EthTokenTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 
@@ -150,7 +151,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
@@ -165,7 +166,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
@@ -182,7 +183,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
@@ -206,7 +207,7 @@ class EthTokenTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped
@@ -229,7 +230,7 @@ class EthTokenTest(unittest.TestCase):
 
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
         self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
         self.assertEqual(data[1], 0x11)  #  0x11 - stoped

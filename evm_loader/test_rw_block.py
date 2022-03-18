@@ -31,7 +31,7 @@ def create_account_with_seed(client, funding, base, seed, storage_size):
         minimum_balance = client.get_minimum_balance_for_rent_exemption(storage_size, commitment=Confirmed)["result"]
         print("Minimum balance required for account {}".format(minimum_balance))
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(funding.public_key(), base.public_key(), seed, minimum_balance, storage_size, PublicKey(evm_loader_id)))
         send_transaction(client, trx, funding)
 
@@ -165,14 +165,16 @@ class RW_Locking_Test(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller, add_meta=[]):
         print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
+        self.index = len(trx.instructions)
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
@@ -193,7 +195,7 @@ class RW_Locking_Test(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(acc.public_key(), acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, acc)
 
@@ -241,7 +243,7 @@ class RW_Locking_Test(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
@@ -277,12 +279,12 @@ class RW_Locking_Test(unittest.TestCase):
             print("Ok")
 
             # removing the rw-lock
-            trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
+            trx = TransactionWithComputeBudget().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
             response = send_transaction(client, trx, self.acc1)
             return
 
         # removing the rw-lock
-        trx = Transaction().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
+        trx = TransactionWithComputeBudget().add(self.neon_emv_instr_cancel_21(self.acc1, self.caller1, storage1, nonce1))
         response = send_transaction(client, trx, self.acc1)
         raise("error, account was not block")
 
@@ -408,7 +410,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertIsNotNone(resize_instr)
         # send resizing transaction
         with self.assertRaisesRegex(Exception, "invalid instruction data"):
-            send_transaction(client, Transaction().add(resize_instr), self.acc1)
+            send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc1)
 
         # get info about resizing account
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
@@ -424,7 +426,7 @@ class RW_Locking_Test(unittest.TestCase):
         self.assertNotEqual(getBalance(self.re_code), 0)
 
         # try next attempt to resize storage account and check it
-        send_transaction(client, Transaction().add(resize_instr), self.acc1)
+        send_transaction(client, TransactionWithComputeBudget().add(resize_instr), self.acc1)
         info = getAccountData(client, self.reId, ACCOUNT_INFO_LAYOUT.sizeof())
         info_data = AccountInfo.frombytes(info)
 
