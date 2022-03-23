@@ -1,11 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "REVISION=${BUILDKITE_COMMIT}"
+echo "Neon EVM revision=${BUILDKITE_COMMIT}"
 
 set ${SOLANA_REVISION:=v1.9.12-testnet}
 
-# Refreshing neonlabsorg/solana:latest image is required to run .buildkite/steps/build-image.sh locally
 docker pull neonlabsorg/solana:${SOLANA_REVISION}
 echo "SOLANA_REVISION=$SOLANA_REVISION"
 
