@@ -89,7 +89,7 @@ pub struct UnsignedTransaction {
     pub to: Option<H160>,
     pub value: U256,
     pub call_data: Vec<u8>,
-    pub chain_id: U256,
+    pub chain_id: Option<U256>,
     pub rlp_len: usize,
 }
 
@@ -104,8 +104,10 @@ impl UnsignedTransaction {
 
 impl rlp::Decodable for UnsignedTransaction {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
-        if rlp.item_count()? != 9 {
-            return Err(rlp::DecoderError::RlpIncorrectListLen);
+        let field_count = rlp.item_count()?;
+        match field_count {
+            6 | 9 => (),
+            _ => return Err(rlp::DecoderError::RlpIncorrectListLen),
         }
 
         let info = rlp.payload_info()?;
@@ -129,7 +131,13 @@ impl rlp::Decodable for UnsignedTransaction {
             },
             value: rlp.val_at(4)?,
             call_data: rlp.val_at(5)?,
-            chain_id: rlp.val_at(6)?,
+            chain_id: if field_count == 6 {
+                None
+            } else {
+                // Although v size is not limited by the specification, we don't expect it
+                // to be higher, so make the code simpler:
+                Some(rlp.val_at(6)?)
+            },
             rlp_len: payload_size,
         };
 
@@ -163,8 +171,10 @@ pub fn check_ethereum_transaction(
         return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender_account.trx_count, transaction.nonce);
     }
 
-    if crate::config::chain_id() != transaction.chain_id {
-        return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", transaction.chain_id, crate::config::chain_id());
+    if let Some(ref chain_id) = transaction.chain_id {
+        if &U256::from(crate::config::CHAIN_ID) != chain_id {
+            return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::config::CHAIN_ID);
+        }
     }
 
     let contract_address: H160 = transaction.to.unwrap_or_else(|| {

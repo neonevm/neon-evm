@@ -141,7 +141,7 @@ pub async fn deposit_token(
         info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
         info!("{} Getting recent blockhash...", id);
-        let (blockhash, _) = client.get_recent_blockhash()?;
+        let blockhash = client.get_latest_blockhash()?;
         info!("{} Signing transaction...", id);
         tx.try_sign(&[&signer], blockhash)?;
         info!("{} Sending and confirming transaction...", id);

@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION=v1.8.12-testnet
+ARG SOLANA_REVISION=v1.9.12-testnet
 # Install BPF SDK
 FROM solanalabs/rust:latest AS builder
 RUN rustup toolchain install nightly
@@ -39,8 +39,8 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/*.sol /opt/
-COPY evm_loader/precompiles_testdata.json /opt/
+COPY evm_loader/tests/*.sol /opt/
+COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
@@ -57,8 +57,8 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
-COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
-RUN pip3 install -r /tmp/test_requirements.txt
+COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
+RUN pip3 install -r /tmp/requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
@@ -69,6 +69,7 @@ COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
+    evm_loader/tests/*.py \
     evm_loader/wait-for-solana.sh \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \

@@ -45,14 +45,26 @@ Failed account ids will be collected in output file with name <address_list_file
 docker, docker-compose installed. It is recommended to use latest versions
 NOTE: All operations are performed from evm_loader/utils directory
 
-### Setup
-docker-compose.yml file contains two services: set_single_acct_permission, set_many_accts_permission each responsible for running corresponding script described above. One should change environment variables (section 'environment') and pathes to keypair/id-list files (section 'volumes') according to his needs. Some variables are not supposed to be edited it is marked by comment.
+### Coniguration
+Environment configuration must be placed in subdirectory in ./config. Name of subdirectory is the name of configuration.
+Configuration MUST contain at least 2 files:
+- **env** file with environment variables: SOLANA_URL, EVM_LOADER (address of evm_loader contract)
+- mint_authority_keypair.json - correct private key of mint authority for permission tokens on selected network and evm_loader
 
-### Running commands
-Setting up permissions for a single client/contract:
-  > docker-compose up set_single_acct_permission
-  
-Setting up permissions for several clients/contracts:
-  > docker-compose up set_many_accts_permission
+**NOTE:** Also, file address_list is required to be placed in the same directory if 'many' option will be used (see below).
+This file must contain list of client/contract account addresses written each one on a next line (without any punktuation marks)
+
+### Run
+To setup permissions one must execute command of the form:
+> ./set_permissions.sh CONFIG_NAME single|many ACCOUNT_TYPE OPERATION [NEON_ETH_ADDR]
+
+- CONFIG_NAME - name of the configuration - must correspond to subdirectory in ./config"
+- single|many - reserved word (either 'single' or 'many') determining how many accounts will be affected
+- ACCOUNT_TYPE - either 'contract' or 'client'
+- OPERATION - either 'allow' or 'deny'
+- NEON_ETH_ADDR - ONLY FOR CASE WHEN 'single' set to second argument - ETH-like address of account
+
+File address_list.err will be created under ./config/<CONFIG_NAME>/. This file will contain addresses of the failed accounts
+written each one on a next line (without any punktuation marks)
   
 

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// NeonLabs Contracts (evm_loader/QueryAccount.sol)
 
 pragma solidity >=0.7.0;
 
