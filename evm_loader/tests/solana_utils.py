@@ -58,7 +58,7 @@ EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
 EVM_STEPS = 500
 # the message size that is used to holder-account filling
-HOLDER_MSG_SIZE = 1000
+HOLDER_MSG_SIZE = 950
 # Ethereum account allocated data size
 ACCOUNT_MAX_SIZE = 256
 # spl-token account allocated data size
