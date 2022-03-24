@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use solana_program::{
     instruction::AccountMeta,
+    sysvar::recent_blockhashes,
 };
 
 use solana_sdk::{
@@ -135,7 +136,6 @@ pub struct EmulatorAccountStorage<'a> {
     config: &'a Config,
     block_number: u64,
     block_timestamp: i64,
-    used_block_hash: RefCell<bool>,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
@@ -169,7 +169,6 @@ impl<'a> EmulatorAccountStorage<'a> {
             config,
             block_number: slot,
             block_timestamp: timestamp,
-            used_block_hash: RefCell::from(false),
         }
     }
 
@@ -559,10 +558,6 @@ impl<'a> EmulatorAccountStorage<'a> {
             default
         }
     }
-
-    pub fn get_block_hash_usage(&self) -> bool {
-        *self.used_block_hash.borrow()
-    }
 }
 
 pub fn make_solana_program_address(
@@ -588,8 +583,13 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_hash(&self, number: U256) -> H256 { 
         info!("Get block hash {}", number);
-        let mut used_block_hash = self.used_block_hash.borrow_mut();
-        *used_block_hash = true;
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        solana_accounts.insert(recent_blockhashes::ID, AccountMeta::new(recent_blockhashes::ID, false));
+
+        if self.block_number <= number.as_u64() {
+            return H256::default();
+        }
+
         if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
             H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().unwrap())
         } else {

@@ -9,7 +9,7 @@ import random
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 holder_id = 0
@@ -17,7 +17,7 @@ holder_id = 0
 class BlockHashesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print("\ntest_block_hashses.py setUpClass")
+        print("\ntest_block_hashes.py setUpClass")
 
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
@@ -52,13 +52,13 @@ class BlockHashesTest(unittest.TestCase):
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
 
-    def send_transaction(self, data):
-        trx = self.make_transactions(data)
+    def send_transaction(self, data, no_sys_acc = False):
+        trx = self.make_transactions(data, no_sys_acc)
         result = send_transaction(client, trx, self.acc)
         result = result["result"]
         return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
-    def make_transactions(self, call_data) -> Transaction:
+    def make_transactions(self, call_data, no_sys_acc) -> Transaction:
         eth_tx = {
             'to': self.eth_contract,
             'value': 0,
@@ -76,7 +76,7 @@ class BlockHashesTest(unittest.TestCase):
         solana_trx = Transaction().add(
                 self.sol_instr_keccak(keccak_instruction) 
             ).add( 
-                self.sol_instr_call(trx_data) 
+                self.sol_instr_call(trx_data, no_sys_acc) 
             )
 
         return solana_trx
@@ -86,7 +86,8 @@ class BlockHashesTest(unittest.TestCase):
                     AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
                 ])
 
-    def sol_instr_call(self, trx_data):
+    def sol_instr_call(self, trx_data, no_sys_acc):
+        blockhash_sysvar_accountmeta = AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False)
         neon_evm_instr_05_single = create_neon_evm_instr_05_single(
             self.loader.loader_id,
             self.caller,
@@ -96,7 +97,7 @@ class BlockHashesTest(unittest.TestCase):
             self.collateral_pool_index_buf,
             self.collateral_pool_address,
             trx_data,
-            add_meta=[AccountMeta(pubkey="SysvarRecentB1ockHashes11111111111111111111", is_signer=False, is_writable=False),]
+            add_meta=[blockhash_sysvar_accountmeta,] if not no_sys_acc else []
         )
         print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
@@ -107,6 +108,12 @@ class BlockHashesTest(unittest.TestCase):
     def make_getValues(self, number: int):
         return abi.function_signature_to_4byte_selector('getValues(uint256)')\
                 + bytes.fromhex("%064x" % number)
+
+    def emulate_call(self, call_data):
+        cmd = "{} {} {} {}".format(self.caller_ether.hex(), self.eth_contract.hex(), call_data.hex(), "")
+        output = neon_cli().emulate(evm_loader_id, cmd)
+        result = json.loads(output)
+        return result
 
     def get_blocks_from_solana(self):
         '''
@@ -127,8 +134,10 @@ class BlockHashesTest(unittest.TestCase):
         solana_result = self.get_blocks_from_solana()
         for _ in range(3):
             sol_slot, sol_hash = random.choice(list(solana_result.items()))
-            result = self.send_transaction(self.make_getValues(sol_slot))
-            self.assertEqual(sol_hash, result)
+            result_hash = self.send_transaction(self.make_getValues(sol_slot))
+            emulate_hash = self.emulate_call(self.make_getValues(sol_slot))['result']
+            self.assertEqual(sol_hash, result_hash)
+            self.assertEqual(sol_hash, emulate_hash)
 
     def test_02_get_current_block_hashes(self):
         '''
@@ -136,8 +145,17 @@ class BlockHashesTest(unittest.TestCase):
         '''
         print("test_02_get_current_block_hashes")
         DEFAULT_ZERO_HASH = '0000000000000000000000000000000000000000000000000000000000000000'
-        result = self.send_transaction(self.make_getCurrentValues())
-        self.assertEqual(result, DEFAULT_ZERO_HASH)
+        result_hash = self.send_transaction(self.make_getCurrentValues())
+        emulate_hash = self.emulate_call(self.make_getCurrentValues())['result']
+        self.assertEqual(result_hash, DEFAULT_ZERO_HASH)
+        self.assertEqual(emulate_hash, DEFAULT_ZERO_HASH)
+
+    def test_03_fail_on_no_sysvar_account(self):
+        '''
+        Solana doesn't have current block hash at execution state, so it will return default hash
+        '''
+        print("test_03_fail_on_no_sysvar_account")
+        self.send_transaction(self.make_getCurrentValues(), True)
 
 
 if __name__ == '__main__':
