@@ -791,11 +791,7 @@ impl ExecutorSubstate {
 
     fn known_block_hash(&self, number: U256) -> Option<H256> {
         let block_hashes = self.block_hashes.borrow();
-
-        match block_hashes.get(&number) {
-            Some(balance) => Some(*balance),
-            None => None
-        }
+        block_hashes.get(&number).map(|balance| *balance)
     }
 
     #[must_use]
