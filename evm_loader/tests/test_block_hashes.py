@@ -152,10 +152,12 @@ class BlockHashesTest(unittest.TestCase):
 
     def test_03_fail_on_no_sysvar_account(self):
         '''
-        Solana doesn't have current block hash at execution state, so it will return default hash
+        Must fail if no sysvar blockhashes account provided
         '''
         print("test_03_fail_on_no_sysvar_account")
-        self.send_transaction(self.make_getCurrentValues(), True)
+        err = "Program failed to complete"
+        with self.assertRaisesRegex(Exception,err):
+            self.send_transaction(self.make_getCurrentValues(), True)
 
 
 if __name__ == '__main__':

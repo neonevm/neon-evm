@@ -33,7 +33,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             }
             return H256::from_slice(&slot_hash_data[offset..][..32]);
         }
-        H256::default()
+        panic!("Trying to get blockhash info without providing sysvar account: {}", recent_blockhashes::ID);
     }
 
     fn exists(&self, address: &H160) -> bool {
