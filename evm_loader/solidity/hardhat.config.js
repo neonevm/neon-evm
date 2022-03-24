@@ -1,11 +1,11 @@
 require("@nomiclabs/hardhat-waffle");
 
-const neon_token_deployer = '0x4deacb079b4714c38f39508aa8900039f2721ed8686835d43347ba9267da767b';
+const neon_token_deployer = '0x42679bb84732ca108204abdd4841a716ba43593cba16a61f3289c0842e2f5e42';
 
 module.exports = {
   solidity: "0.8.4",
   networks: {
-    ci_neon_token: {
+    ci: {
       url: 'http://proxy:9090/solana',
       accounts: [neon_token_deployer],
       network_id: 111,
@@ -17,7 +17,7 @@ module.exports = {
       timeout: 1000000,
       isFork: true
     },
-    devnet_neon_token: {
+    devnet: {
       url: 'https://proxy.devnet.neonlabs.org/solana',
       accounts: [neon_token_deployer],
       network_id: 245022926,
@@ -29,7 +29,7 @@ module.exports = {
       timeout: 1000000,
       isFork: true
     },
-    testnet_neon_token: {
+    testnet: {
       url: 'https://proxy.testnet.neonlabs.org/solana',
       accounts: [neon_token_deployer],
       network_id: 245022940,
