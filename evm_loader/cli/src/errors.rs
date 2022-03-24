@@ -107,9 +107,12 @@ pub enum NeonCliError {
     /// Transaction failed
     #[error("Transaction failed.")]
     TransactionFailed,
+    /// too many steps
+    #[error("Too many steps")]
+    TooManySteps,
     /// Unknown Error.
     #[error("Unknown error.")]
-    UnknownError,
+    UnknownError
 }
 
 impl NeonCliError {
@@ -144,6 +147,7 @@ impl NeonCliError {
             NeonCliError::InvalidAssociatedPda(_,_)         => 242, // => 4042,
             NeonCliError::InvalidVerbosityMessage           => 243, // => 4100,
             NeonCliError::TransactionFailed                 => 244, // => 4200,
+            NeonCliError::TooManySteps                      => 245,
             NeonCliError::UnknownError                      => 249, // => 4900,
         }
     }

@@ -18,13 +18,17 @@ use crate::{
     syscall_stubs::Stubs,
 };
 
+use solana_sdk::pubkey::Pubkey;
+use crate::{errors};
+
 #[allow(clippy::too_many_lines)]
 pub fn execute(
     config: &Config, 
     contract_id: Option<H160>, 
     caller_id: H160, 
     data: Option<Vec<u8>>,
-    value: Option<U256>
+    value: Option<U256>,
+    token_mint: &Pubkey
 ) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -62,12 +66,19 @@ pub fn execute(
                     program_id,
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
+
                 executor.call_begin(caller_id,
-                                    program_id,
-                                    data.unwrap_or_default(),
-                                    value.unwrap_or_default(),
-                                    gas_limit)?;
-                executor.execute()
+                    program_id,
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit)?;
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             },
             None => {
                 debug!("create_begin(caller_id={:?}, data={:?}, value={:?})",
@@ -75,10 +86,16 @@ pub fn execute(
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
                 executor.create_begin(caller_id,
-                                      data.unwrap_or_default(),
-                                      value.unwrap_or_default(),
-                                      gas_limit)?;
-                executor.execute()
+                    data.unwrap_or_default(),
+                    value.unwrap_or_default(),
+                    gas_limit)?;
+                match executor.execute_n_steps(100_000){
+                    Ok(()) => {
+                        info!("too many steps");
+                        return Err(errors::NeonCliError::TooManySteps)
+                    },
+                    Err(result) => result
+                }
             }
         };
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
@@ -100,13 +117,20 @@ pub fn execute(
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies, _logs, transfers, spl_transfers, spl_approves, erc20_approves) = applies_logs.unwrap();
+            let (applies,
+                _logs,
+                transfers,
+                spl_transfers,
+                spl_approves,
+                withdrawals,
+                erc20_approves) = applies_logs.unwrap();
 
             storage.apply(applies)?;
             storage.apply_transfers(transfers);
             storage.apply_spl_approves(spl_approves);
             storage.apply_spl_transfers(spl_transfers);
             storage.apply_erc20_approves(erc20_approves);
+            storage.apply_withdrawals(withdrawals, token_mint);
 
             debug!("Applies done");
             "succeed".to_string()

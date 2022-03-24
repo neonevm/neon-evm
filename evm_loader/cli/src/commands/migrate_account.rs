@@ -1,6 +1,7 @@
 use log::{error, info, debug};
 
 use solana_sdk::{
+    commitment_config::{CommitmentConfig},
     instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::Pubkey,
@@ -45,21 +46,25 @@ pub fn execute(
             ether_pubkey,
     )];
 
-    let finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
-    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+    let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
+    let blockhash = config.rpc_client.get_latest_blockhash()?;
+    finalize_message.recent_blockhash = blockhash;
 
     check_account_for_fee(
         &config.rpc_client,
         &config.signer.pubkey(),
-        &fee_calculator,
-        &finalize_message)?;
+        &finalize_message
+    )?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 
     finalize_tx.try_sign(&[&*config.signer], blockhash)?;
     debug!("signed: {:x?}", finalize_tx);
 
-    config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
+    config.rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(
+        &finalize_tx,
+        CommitmentConfig::confirmed(),
+    )?;
 
     info!("{}", serde_json::json!({
         "ether address": hex::encode(ether_address),

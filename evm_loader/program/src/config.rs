@@ -1,14 +1,10 @@
 //! CONFIG MODULE
-#![allow(clippy::use_self,clippy::nursery)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::useless_transmute)]
 
 use const_format::formatcp;
 use cfg_if::cfg_if;
 
-use evm::{ U256 };
-use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+use crate::config_macro::{ neon_elf_param, declare_param_id, pubkey_array };
 use crate::account::ACCOUNT_SEED_VERSION;
 
 cfg_if! {
@@ -19,7 +15,7 @@ cfg_if! {
 
         // NOTE: when expanding this list, add same addresses to the 
         // alpha configuration as well
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
@@ -31,7 +27,7 @@ cfg_if! {
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
             /// Ethereum account version
@@ -44,7 +40,7 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
 
@@ -57,7 +53,7 @@ cfg_if! {
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
@@ -70,7 +66,7 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245022923;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
@@ -82,7 +78,7 @@ cfg_if! {
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
             /// Ethereum account version
@@ -95,7 +91,7 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
 
@@ -108,7 +104,7 @@ cfg_if! {
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
@@ -121,7 +117,7 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245022940;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -183,7 +179,7 @@ cfg_if! {
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g");
             /// Ethereum account version
@@ -196,7 +192,7 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
 
@@ -209,7 +205,7 @@ cfg_if! {
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
@@ -222,7 +218,7 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245022926;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -290,7 +286,7 @@ cfg_if! {
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g");
             /// Ethereum account version
@@ -303,7 +299,7 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
 
@@ -316,7 +312,7 @@ cfg_if! {
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
@@ -329,7 +325,7 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 111;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
@@ -353,7 +349,7 @@ cfg_if! {
     
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
             /// Ethereum account version
@@ -366,7 +362,7 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
@@ -379,7 +375,7 @@ cfg_if! {
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
@@ -408,10 +404,3 @@ neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOS
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
-
-/// Chain ID
-#[must_use]
-pub fn chain_id() -> U256 {
-    U256::from(CHAIN_ID)
- }
-

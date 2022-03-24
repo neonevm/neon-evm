@@ -11,8 +11,10 @@ use crate::{
     account_storage::AccountStorage,
     executor_state::ExecutorState,
     transaction::UnsignedTransaction, 
-    account::{EthereumAccount}
+    account::{EthereumAccount, ERC20Allowance}
 };
+use solana_program::{program_pack::Pack, pubkey::Pubkey};
+use spl_associated_token_account::get_associated_token_address;
 
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
@@ -21,7 +23,7 @@ const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
 
-const EVM_STEPS_MIN: u64 = 100;
+const EVM_STEPS_MIN: u64 = 500;
 const EVM_STEP_COST: u64 = (LAMPORTS_PER_SIGNATURE / EVM_STEPS_MIN) + (PAYMENT_TO_TREASURE / EVM_STEPS_MIN);
 const STORAGE_ENTRY_BYTES: usize = 100; // ~90, round up to 100.
 
@@ -128,4 +130,57 @@ impl Gasometer {
             .saturating_add(account_rent)
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
+
+    pub fn record_spl_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, token_mint: &Pubkey, context: &evm::Context)
+    where
+        B: AccountStorage
+    {
+        let balance = state.erc20_balance_of(*token_mint, context, target);
+        if !balance.is_zero() {
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
+
+        self.gas = self.gas
+            .saturating_add(account_rent)
+            .saturating_add(CREATE_ACCOUNT_TRX_COST);
+    }
+
+    pub fn record_approve<B>(&mut self, state: &ExecutorState<B>, mint: Pubkey, context: &evm::Context, spender: H160)
+        where
+            B: AccountStorage
+    {
+        let owner = context.caller;
+
+        let allowance = state.erc20_allowance(mint, context, owner, spender);
+        if !allowance.is_zero() {
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(ERC20Allowance::SIZE);
+
+        self.gas = self.gas.saturating_add(account_rent);
+    }
+
+    pub fn record_withdraw<B>(&mut self, state: &ExecutorState<B>, dest: &Pubkey)
+        where
+            B: AccountStorage
+    {
+        let dest_neon_acc = get_associated_token_address(
+            dest,
+            &crate::config::token_mint::id()
+        );
+
+
+        let balance = state.substate().spl_balance(&dest_neon_acc, state.backend());
+        if balance != 0 {
+            return;
+        }
+
+        let account_rent = self.rent.minimum_balance(spl_token::state::Account::LEN);
+
+        self.gas = self.gas.saturating_add(account_rent);
+    }
+
 }
