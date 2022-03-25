@@ -10,8 +10,7 @@ case "${option}" in
 esac
 done
 
-REVISION=$(git rev-parse HEAD)
-EVM_LOADER_IMAGE=neonlabsorg/evm_loader:${IMAGETAG:-$REVISION}
+EVM_LOADER_IMAGE=neonlabsorg/evm_loader:${IMAGETAG:-${BUILDKITE_COMMIT}}
 
 echo "Currently runned Docker-containers"
 docker ps -a
