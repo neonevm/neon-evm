@@ -59,12 +59,14 @@ class PrecompilesTests(unittest.TestCase):
     def send_transaction(self, data):
         if len(data) > 512:
             result = self.call_with_holder_account(data)
+            print('result:', result)
             return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
         else:
             trx = self.make_transactions(data)
             result = send_transaction(client, trx, self.acc)
             self.get_measurements(result)
             result = result["result"]
+            print('result:', result)
             return b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])[8+2:].hex()
 
     def extract_measurements_from_receipt(self, receipt):
@@ -90,7 +92,8 @@ class PrecompilesTests(unittest.TestCase):
             messages[-1]['logs'].append(log)
 
         for instr in instructions:
-            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',): continue
+            if instr['program'] in ('KeccakSecp256k11111111111111111111111111111',
+                                    'ComputeBudget111111111111111111111111111111',): continue
             if messages[0]['program'] != instr['program']:
                 raise Exception('Invalid program in log messages: expect %s, actual %s' % (messages[0]['program'], instr['program']))
             instr['logs'] = messages.pop(0)['logs']
@@ -134,11 +137,12 @@ class PrecompilesTests(unittest.TestCase):
             'chainId': 111
         }
 
+        trx = TransactionWithComputeBudget()
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
+        keccak_instruction = make_keccak_instruction_data(len(trx.instructions) + 1, len(msg), 5)
         
-        solana_trx = Transaction().add(
+        solana_trx = trx.add(
                 self.sol_instr_keccak(keccak_instruction) 
             ).add( 
                 self.sol_instr_call(trx_data) 
@@ -200,7 +204,7 @@ class PrecompilesTests(unittest.TestCase):
         storage = accountWithSeed(self.acc.public_key(), seed, PublicKey(evm_loader_id))
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="confirmed"))
 
@@ -213,8 +217,8 @@ class PrecompilesTests(unittest.TestCase):
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
+            (part, rest) = (rest[:950], rest[950:])
+            trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=(bytes.fromhex('12') + holder_id.to_bytes(8, byteorder="little") + offset.to_bytes(4, byteorder="little") + len(part).to_bytes(8, byteorder="little") + part),
                 keys=[
@@ -242,13 +246,13 @@ class PrecompilesTests(unittest.TestCase):
 
         self.write_transaction_to_holder_account(holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_22_partial_call_from_account(holder, storage, 0))
         send_transaction(client, trx, self.acc)
 
         while (True):
             print("Continue")
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(self.sol_instr_20_continue(storage, 400))
             result = send_transaction(client, trx, self.acc)
 
