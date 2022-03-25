@@ -166,15 +166,15 @@ class RW_Locking_Test(unittest.TestCase):
     def call_begin(self, storage, steps, msg, instruction,  writable_code, acc, caller, add_meta=[]):
         print("Begin")
         trx = TransactionWithComputeBudget()
-        self.index = len(trx.instructions)
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.index + 1, len(msg), 13)))
+        self.first_instruction_index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.first_instruction_index + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
     def call_continue(self, storage, steps, writable_code, acc, caller, add_meta=[]):
         print("Continue")
         trx = TransactionWithComputeBudget()
-        self.index = len(trx.instructions)
+        self.first_instruction_index = len(trx.instructions)
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(client, trx, acc)
 
@@ -242,7 +242,7 @@ class RW_Locking_Test(unittest.TestCase):
             self.assertEqual(result['meta']['err'], None)
             self.assertEqual(len(result['meta']['innerInstructions']), 1)
             # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
-            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.index)  # second instruction
+            self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)  # second instruction
             data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
             self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
             self.assertLess(data[1], 0xd0)  # less 0xd0 - success
