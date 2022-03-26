@@ -87,6 +87,7 @@ use log::{debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
+use crate::get_neon_elf::CachedElfParams;
 
 type NeonCliResult = Result<(),NeonCliError>;
 
@@ -794,7 +795,7 @@ fn main() {
                 let mut token_mint = pubkey_of(arg_matches, "token_mint");
                 let mut chain_id = value_of(arg_matches, "chain_id");
                 if token_mint.is_none() || chain_id.is_none() {
-                    let cached_elf_params = get_neon_elf::CachedElfParams::new(&config);
+                    let cached_elf_params = CachedElfParams::new(&config);
                     token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
                         cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
                     ).unwrap()));
@@ -823,7 +824,7 @@ fn main() {
                 let mut collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base");
                 let mut chain_id = value_of(arg_matches, "chain_id");
                 if collateral_pool_base.is_none() || chain_id.is_none() {
-                    let cached_elf_params = get_neon_elf::CachedElfParams::new(&config);
+                    let cached_elf_params = CachedElfParams::new(&config);
                     collateral_pool_base = collateral_pool_base.or_else(|| Some(Pubkey::from_str(
                         cached_elf_params.get("NEON_POOL_BASE").unwrap()
                     ).unwrap()));
