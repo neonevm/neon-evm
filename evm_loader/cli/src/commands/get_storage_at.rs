@@ -1,20 +1,16 @@
-use std::{
-    cell::RefCell,
-    rc::Rc
-};
-
 use log::{ trace };
+
+use solana_sdk::{ pubkey::Pubkey };
 
 use evm::{H160, U256};
 
 use evm_loader::{
-    account_data::AccountData,
-    solidity_account::SolidityAccount,
+    account::{EthereumContract},
 };
 
 use crate::{
     account_storage::{
-        make_solana_program_address,
+        account_info,
         EmulatorAccountStorage,
     },
     errors::NeonCliError,
@@ -29,20 +25,18 @@ pub fn execute(
 ) -> NeonCliResult {
     trace!("Enter execution for address {:?}", ether_address);
     match EmulatorAccountStorage::get_account_from_solana(config, &ether_address) {
-        Some((acc, _balance, code_account)) => {
-            let account_data = AccountData::unpack(&acc.data)?;
-            let mut code_data = match code_account.as_ref() {
-                Some(code) => code.data.clone(),
-                None => return Err(NeonCliError::CodeAccountRequired(ether_address)),
-            };
-            let contract_data = AccountData::unpack(&code_data)?;
-            let (solana_address, _solana_nonce) = make_solana_program_address(&ether_address, &config.evm_loader);
-            let code_data: std::rc::Rc<std::cell::RefCell<&mut [u8]>> = Rc::new(RefCell::new(&mut code_data));
-            let solidity_account = SolidityAccount::new(&solana_address, account_data,
-                                                        Some((contract_data, code_data)));
-            let value = solidity_account.get_storage(index);
-            print!("{:#x}", value);
-            Ok(())
+        Some((_acc, code_account)) => {
+            if let Some(mut code_account) = code_account {
+                let code_key = Pubkey::default();
+                let code_info = account_info(&code_key, &mut code_account);
+
+                let contract = EthereumContract::from_account(&config.evm_loader, &code_info)?;
+                let value = contract.extension.storage.find(*index).unwrap_or_default();
+                print!("{:#x}", value);
+                Ok(())
+            } else {
+                Err(NeonCliError::CodeAccountRequired(ether_address))
+            }
         },
         None => {
             Err(NeonCliError::AccountNotFoundAtAddress(ether_address))

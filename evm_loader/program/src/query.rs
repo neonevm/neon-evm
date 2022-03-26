@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use solana_program::{clock::Epoch, pubkey::Pubkey};
 
-use crate::solana_backend::AccountStorageInfo;
 
 const KB: usize = 1024;
 pub const MAX_CHUNK_LEN: usize = 8 * KB;
@@ -28,16 +27,10 @@ pub struct AccountCache {
     cache: BTreeMap<Pubkey, Value>,
 }
 
-impl Drop for AccountCache {
-    fn drop(&mut self) {
-        debug_print!("drop AccountCache");
-    }
-}
-
 impl AccountCache {
     /// Creates new instance of the cache object.
+    #[must_use]
     pub fn new() -> Self {
-        debug_print!("new AccountCache");
         Self {
             cache: BTreeMap::new(),
         }
@@ -95,37 +88,27 @@ impl AccountCache {
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Value {
-    owner: Pubkey,
-    length: usize,
-    lamports: u64,
-    executable: bool,
-    rent_epoch: Epoch,
-    offset: usize,
-    data: Option<Vec<u8>>,
+    pub owner: Pubkey,
+    pub length: usize,
+    pub lamports: u64,
+    pub executable: bool,
+    pub rent_epoch: Epoch,
+    pub offset: usize,
+    #[serde(with = "serde_bytes")]
+    pub data: Option<Vec<u8>>,
 }
 
 impl Value {
-    /// Constructs a cache entry value from corresponding account info.
-    pub fn from(info: &AccountStorageInfo, offset: usize, length: usize) -> Self {
-        Self {
-            owner: *info.owner,
-            length: info.data.borrow().len(),
-            lamports: info.lamports,
-            executable: info.executable,
-            rent_epoch: info.rent_epoch,
-            offset,
-            data: clone_chunk(&info.data.borrow(), offset, length),
-        }
-    }
-
     /// Checks if account got data. Dataless accounts make no sense in the cache.
+    #[must_use]
     pub const fn has_data(&self) -> bool {
         self.data.is_some()
     }
 }
 
 /// Creates vector from a slice checking the range validity.
-fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
+#[must_use]
+pub fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
     let right = offset.saturating_add(length);
     if offset >= data.len() || right > data.len() {
         None

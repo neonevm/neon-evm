@@ -3,6 +3,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 mod account_storage;
+mod syscall_stubs;
 
 mod errors;
 mod logs;
@@ -11,12 +12,15 @@ mod commands;
 use crate::{
     account_storage::{
         make_solana_program_address,
+        account_info,
     },
     commands::{
         emulate,
         create_program_address,
         create_ether_account,
         deploy,
+        deposit,
+        migrate_account,
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
@@ -26,9 +30,9 @@ use crate::{
 };
 
 use evm_loader::{
-    account_data::{
+    account::{
         ACCOUNT_SEED_VERSION,
-        AccountData,
+        EthereumAccount,
     },
     config::{  collateral_pool_base },
 };
@@ -45,7 +49,6 @@ use solana_sdk::{
     system_instruction,
 };
 use std::{
-    collections::HashMap,
     io::{Read},
     fs::File,
     env,
@@ -58,7 +61,7 @@ use std::{
 };
 
 use clap::{
-    crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg,
+    crate_description, crate_name, App, AppSettings, Arg,
     ArgMatches, SubCommand,
 };
 
@@ -187,32 +190,23 @@ impl rlp::Encodable for UnsignedTransaction {
 fn get_ether_account_nonce(
     config: &Config,
     caller_sol: &Pubkey,
-    token_mint: &Pubkey
-) -> Result<(u64, H160, Pubkey),NeonCliError> {
-    let data = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value{
-        Some(acc) => acc.data,
-        None => return Ok((u64::default(), H160::default(), Pubkey::default()))
+) -> Result<(u64, H160), NeonCliError> {
+    let mut acc = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value {
+        Some(acc) => acc,
+        None => return Ok((u64::default(), H160::default()))
     };
 
-    debug!("get_ether_account_nonce data = {:?}", data);
-    let account = match evm_loader::account_data::AccountData::unpack(&data) {
-        Ok(acc_data) =>
-            match acc_data {
-            AccountData::Account(acc) => acc,
-            // _ => return Err("Caller has incorrect type".into())
-            _ => return Err(NeonCliError::AccountIncorrectType(acc_data))
-        },
-        Err(e) => return Err(NeonCliError::ProgramError(e))
-    };
+    debug!("get_ether_account_nonce account = {:?}", acc);
+
+    let info = account_info(caller_sol, &mut acc);
+    let account = EthereumAccount::from_account(&config.evm_loader, &info).map_err(NeonCliError::ProgramError)?;
     let trx_count = account.trx_count;
-    let caller_ether = account.ether;
-    let caller_token = spl_associated_token_account::get_associated_token_address(caller_sol, token_mint);
+    let caller_ether = account.address;
 
     debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
     debug!("Caller trx_count: {} ", trx_count);
-    debug!("caller_token = {}", caller_token);
 
-    Ok((trx_count, caller_ether, caller_token))
+    Ok((trx_count, caller_ether))
 }
 
 fn get_program_ether(
@@ -283,9 +277,8 @@ fn send_transaction(
     let message = Message::new(instructions, Some(&config.signer.pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
     let signers = [&*config.signer];
-    let (blockhash, _, _last_valid_slot) = config.rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())?
-        .value;
+    let (blockhash, _last_valid_slot) = config.rpc_client
+        .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
     transaction.try_sign(&signers, blockhash)?;
 
     config.rpc_client.send_and_confirm_transaction_with_spinner_and_config(
@@ -395,16 +388,17 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-fn is_amount_u256<T>(amount: T) -> Result<(), String>
+fn is_amount<T, U>(amount: U) -> Result<(), String>
     where
-        T: AsRef<str> + Display,
+        T: std::str::FromStr,
+        U: AsRef<str> + Display,
 {
-    if amount.as_ref().parse::<U256>().is_ok() {
+    if amount.as_ref().parse::<T>().is_ok() {
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse input amount as integer U256, provided: {}",
-            amount
+            "Unable to parse input amount as {}, provided: {}",
+            std::any::type_name::<T>(), amount
         ))
     }
 }
@@ -488,7 +482,7 @@ fn main() {
                 .value_name("COMMITMENT_LEVEL")
                 .hide_possible_values(true)
                 .global(true)
-                .default_value("max")
+                .default_value("finalized")
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
         .arg(
@@ -536,7 +530,7 @@ fn main() {
                         .takes_value(true)
                         .index(4)
                         .required(false)
-                        .validator(is_amount_u256)
+                        .validator(is_amount::<U256, _>)
                         .help("Transaction value")
                 )
                 .arg(
@@ -569,32 +563,6 @@ fn main() {
                         .validator(is_valid_h160)
                         .help("Ethereum address"),
                 )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .value_name("lamports")
-                        .takes_value(true)
-                        .default_value("0")
-                        .required(false)
-                )
-                .arg(
-                    Arg::with_name("space")
-                        .long("space")
-                        .value_name("space")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("0")
-                        .help("Length of data for new account"),
-                )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
-                )
             )
         .subcommand(
             SubCommand::with_name("create-program-address")
@@ -620,15 +588,6 @@ fn main() {
                         .help("/path/to/program.o"),
                 )
                 .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Neon token public key")
-                )
-                .arg(
                     Arg::with_name("collateral_pool_base")
                         .long("collateral_pool_base")
                         .value_name("COLLATERAL_POOL_BASE")
@@ -644,6 +603,41 @@ fn main() {
                         .takes_value(true)
                         .required(false)
                         .help("Network chain_id"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("deposit")
+                .about("Deposit NEONs to ether account")
+                .arg(
+                    Arg::with_name("amount")
+                        .index(1)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_amount::<u64, _>)
+                        .help("Amount to deposit"),
+                )
+                .arg(
+                    Arg::with_name("ether")
+                        .index(2)
+                        .value_name("ETHER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("migrate-account")
+                .about("Migrates account internal structure to v2")
+                .arg(
+                    Arg::with_name("ether")
+                        .index(1)
+                        .value_name("ETHER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("Ethereum address"),
                 )
         )
         .subcommand(
@@ -670,15 +664,6 @@ fn main() {
                         .required(true)
                         .validator(is_valid_pubkey)
                         .help("storage account for transaction"),
-                )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
                 )
             )
         .subcommand(
@@ -800,19 +785,26 @@ fn main() {
     let result: NeonCliResult =
         match (sub_command, sub_matches) {
             ("emulate", Some(arg_matches)) => {
-                let elf_params = get_neon_elf::CachedElfParams::new(&config);
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                let chain_id = value_of(arg_matches, "chain_id")
-                    .unwrap_or_else(|| {
-                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
-                    });
+
+                // Read ELF params only if token_mint or chain_id is not set.
+                let mut token_mint = pubkey_of(arg_matches, "token_mint");
+                let mut chain_id = value_of(arg_matches, "chain_id");
+                if token_mint.is_none() || chain_id.is_none() {
+                    let cached_elf_params = get_neon_elf::CachedElfParams::new(&config);
+                    token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
+                        cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
+                    ).unwrap()));
+                    chain_id = chain_id.or_else(|| Some(u64::from_str(
+                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+                    ).unwrap()));
+                }
+                let token_mint = token_mint.unwrap();
+                let chain_id = chain_id.unwrap();
+
                 emulate::execute(&config, contract, sender, data, value, &token_mint, chain_id)
             }
             ("create-program-address", Some(arg_matches)) => {
@@ -822,31 +814,36 @@ fn main() {
             }
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
-                let lamports = value_t_or_exit!(arg_matches, "lamports", u64);
-                let space = value_t_or_exit!(arg_matches, "space", u64);
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                create_ether_account::execute(&config, &ether, lamports, space, &token_mint)
+                create_ether_account::execute(&config, &ether)
             }
             ("deploy", Some(arg_matches)) => {
-                let elf_params = get_neon_elf::CachedElfParams::new(&config);
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
-                    .unwrap_or_else(|| {
-                        Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
-                    });
-                let chain_id = value_of(arg_matches, "chain_id")
-                    .unwrap_or_else(|| {
-                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
-                    });
-                deploy::execute(&config, &program_location, &token_mint, &collateral_pool_base, chain_id)
+
+                // Read ELF params only if collateral_pool_base or chain_id is not set.
+                let mut collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base");
+                let mut chain_id = value_of(arg_matches, "chain_id");
+                if collateral_pool_base.is_none() || chain_id.is_none() {
+                    let cached_elf_params = get_neon_elf::CachedElfParams::new(&config);
+                    collateral_pool_base = collateral_pool_base.or_else(|| Some(Pubkey::from_str(
+                        cached_elf_params.get("NEON_POOL_BASE").unwrap()
+                    ).unwrap()));
+                    chain_id = chain_id.or_else(|| Some(u64::from_str(
+                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+                    ).unwrap()));
+                }
+                let collateral_pool_base = collateral_pool_base.unwrap();
+                let chain_id = chain_id.unwrap();
+
+                deploy::execute(&config, &program_location, &collateral_pool_base, chain_id)
+            }
+            ("deposit", Some(arg_matches)) => {
+                let amount = value_of(arg_matches, "amount").unwrap();
+                let ether = h160_of(arg_matches, "ether").unwrap();
+                deposit::execute(&config, amount, &ether)
+            }
+            ("migrate-account", Some(arg_matches)) => {
+                let ether = h160_of(arg_matches, "ether").unwrap();
+                migrate_account::execute(&config, &ether)
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
@@ -855,12 +852,7 @@ fn main() {
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                cancel_trx::execute(&config, &storage_account, &token_mint)
+                cancel_trx::execute(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");

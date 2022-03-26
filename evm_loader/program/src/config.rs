@@ -1,32 +1,36 @@
 //! CONFIG MODULE
-#![allow(clippy::use_self,clippy::nursery)]
+#![allow(clippy::useless_transmute)]
 
 use const_format::formatcp;
 use cfg_if::cfg_if;
+use evm::U256;
 
-use evm::{ U256 };
-use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
-use crate::account_data::ACCOUNT_SEED_VERSION;
-use crate::account_data::ACCOUNT_MAX_SIZE;
+use crate::config_macro::{ neon_elf_param, declare_param_id, pubkey_array };
+use crate::account::ACCOUNT_SEED_VERSION;
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
-        const CHAIN_ID: u64 = 245022934;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245_022_934;
 
-        macros::pubkey_array!(
+        // NOTE: when expanding this list, add same addresses to the 
+        // alpha configuration as well
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
+                "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
                 "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "DSRVyWpSVLEcHih9CVND2aGNBZxNW5bt34GEaK4aDk5i",
             ]
         );
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
-            declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+            declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
             /// Ethereum account version
             pub const DECIMALS: u8 = 9;
 
@@ -37,17 +41,71 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
-            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
+            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "1");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "1");
+        }
+
+    } else if #[cfg(feature = "alpha")] {
+
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245_022_923;
+
+        pubkey_array!(
+            AUTHORIZED_OPERATOR_LIST,
+            [
+                "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
+                "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
+                "Gw3Xiwve6HdvpJeQguhwT23cpK9nRjSy1NpNYCFY4XU9",
+                "DSRVyWpSVLEcHih9CVND2aGNBZxNW5bt34GEaK4aDk5i",
+            ]
+        );
+
+        /// Token Mint ID
+        pub mod token_mint {
+            use super::declare_param_id;
+
+            declare_param_id!(NEON_TOKEN_MINT, "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44");
+            /// Ethereum account version
+            pub const DECIMALS: u8 = 9;
+
+            /// Number of base 10 digits to the right of the decimal place
+            #[must_use]
+            pub const fn decimals() -> u8 { DECIMALS }
+        }
+
+        /// Collateral pool base address
+        pub mod collateral_pool_base {
+            use super::declare_param_id;
+
+            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
+
+            /// `COLLATERAL_SEED_PREFIX`
+            pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 128;
+        }
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag");
@@ -57,9 +115,10 @@ cfg_if! {
 
     } else if #[cfg(feature = "testnet")] {
 
-        const CHAIN_ID: u64 = 245022940;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245_022_940;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -101,12 +160,27 @@ cfg_if! {
                 "ATNYDjFne7E41K2gWq6WhkkXMVm8sVyvYgDuXpUn6XGa",
                 "53wqLPWxMqTtrF9JzJyJMzzjou5ELYbHzizkReE9ReN1",
                 "E3Y1hJpMv2wddU1SxTLKz5R5S4P4ZgeZ6Mo4e8Uurqsy",
+                "Cpm5i9G1gLCDe9qm2y8coQquyGBQHfu8NgiC3JJnTeev",
+                "813PRjWaqP2ZnirmLNgTL4xyC6yG5WoNEf8sihYnXSHU",
+                "4sC1XfzkkKT67AKs2zwWJy7VEXcECger4an4s2F16JrK",
+                "AjfMR1YetbbxYVpdR8uw9hR1pipFydnQy9qHDEM5cjRK",
+                "2tZkAVEqYwtPDQrdSkbHUmXcD6UuSaWw7RBUSjVXi1s4",
+                "HzzP7Gc5nKqKpro6Wj99ZDPAwyzGmwdXaQqzJ38XqFtf",
+                "84qEuwNomqeC7wZZorLQFNj3XdPEycyaNXhVF6A4ThCw",
+                "9KWDzP7m7FDhY6uTFNMfuSofLEeH3yiq1Zm9vvkNrp4E",
+                "7nTeGU8UTtDgwj82qFGfp3Ug2ovnrD8Svwn4uygzwtVZ",
+                "G4WHF5RvK346SWioD9jUk2aotsNjdXRoKwecUXac8Lcr",
+                "5G5XRrtNhGEam6Dso4eynUctG6pSHBcyADGaWDPMZUZo",
+                "8a7Yg3gqMARoH8Dp5K4QTETrfHHgzfqcprbjxaT9WwjT",
+                "AcbET6BaNixJJSbVsSTMHqNbtmD29QcdmG8xDFDZhmAQ",
+                "ETXp6z3GQuksC7fVbwr3dP7HC6KhDang2BqpwS5yEq4S",
+                "72SengeGQD7XSdSXi6XnjvQwYpceWKqS2HmPKsvr3m3x",
             ]
         );
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g");
             /// Ethereum account version
@@ -119,17 +193,20 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
@@ -139,9 +216,10 @@ cfg_if! {
         
     } else if #[cfg(feature = "devnet")] {
 
-        const CHAIN_ID: u64 = 245022926;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 245_022_926;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -189,12 +267,27 @@ cfg_if! {
                 "ATNYDjFne7E41K2gWq6WhkkXMVm8sVyvYgDuXpUn6XGa",
                 "53wqLPWxMqTtrF9JzJyJMzzjou5ELYbHzizkReE9ReN1",
                 "E3Y1hJpMv2wddU1SxTLKz5R5S4P4ZgeZ6Mo4e8Uurqsy",
+                "Cpm5i9G1gLCDe9qm2y8coQquyGBQHfu8NgiC3JJnTeev",
+                "813PRjWaqP2ZnirmLNgTL4xyC6yG5WoNEf8sihYnXSHU",
+                "4sC1XfzkkKT67AKs2zwWJy7VEXcECger4an4s2F16JrK",
+                "AjfMR1YetbbxYVpdR8uw9hR1pipFydnQy9qHDEM5cjRK",
+                "2tZkAVEqYwtPDQrdSkbHUmXcD6UuSaWw7RBUSjVXi1s4",
+                "HzzP7Gc5nKqKpro6Wj99ZDPAwyzGmwdXaQqzJ38XqFtf",
+                "84qEuwNomqeC7wZZorLQFNj3XdPEycyaNXhVF6A4ThCw",
+                "9KWDzP7m7FDhY6uTFNMfuSofLEeH3yiq1Zm9vvkNrp4E",
+                "7nTeGU8UTtDgwj82qFGfp3Ug2ovnrD8Svwn4uygzwtVZ",
+                "G4WHF5RvK346SWioD9jUk2aotsNjdXRoKwecUXac8Lcr",
+                "5G5XRrtNhGEam6Dso4eynUctG6pSHBcyADGaWDPMZUZo",
+                "8a7Yg3gqMARoH8Dp5K4QTETrfHHgzfqcprbjxaT9WwjT",
+                "AcbET6BaNixJJSbVsSTMHqNbtmD29QcdmG8xDFDZhmAQ",
+                "ETXp6z3GQuksC7fVbwr3dP7HC6KhDang2BqpwS5yEq4S",
+                "72SengeGQD7XSdSXi6XnjvQwYpceWKqS2HmPKsvr3m3x",
             ]
         );
 
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g");
             /// Ethereum account version
@@ -207,17 +300,20 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
@@ -227,9 +323,10 @@ cfg_if! {
         
     } else {
 
-        const CHAIN_ID: u64 = 111;
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 111;
 
-        macros::pubkey_array!(
+        pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
             [
                 "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
@@ -253,7 +350,7 @@ cfg_if! {
     
         /// Token Mint ID
         pub mod token_mint {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
             /// Ethereum account version
@@ -266,17 +363,20 @@ cfg_if! {
 
         /// Collateral pool base address
         pub mod collateral_pool_base {
-            use crate::macrorules::{ str_as_bytes_len, neon_elf_param, declare_param_id };
+            use super::declare_param_id;
 
             declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
-           use crate::macrorules::{ str_as_bytes_len, neon_elf_param };
+            use super::neon_elf_param;
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
@@ -292,19 +392,30 @@ pub const PAYMENT_TO_TREASURE: u64 = 5000;
 pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
+/// `the message size that is used to holder-account filling`
+pub const HOLDER_MSG_SIZE: u64 = 950;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
+/// Additional fee for `request units` instruction
+pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
+
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
 neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));
-neon_elf_param!( NEON_ACCOUNT_MAX_SIZE      , formatcp!("{:?}", ACCOUNT_MAX_SIZE));
 neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECIMALS));
 neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
+neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
+neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
+neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
+neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 
 /// Chain ID
 #[must_use]
 pub fn chain_id() -> U256 {
     U256::from(CHAIN_ID)
- }
-
+}

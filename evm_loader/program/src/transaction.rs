@@ -1,4 +1,3 @@
-#![allow(missing_docs)] /// Todo: document
 use evm::{H160, U256};
 use serde::{Deserialize, Serialize};
 use solana_program::{ 
@@ -7,9 +6,10 @@ use solana_program::{
     entrypoint::{ ProgramResult },
     program_error::{ProgramError},
     secp256k1_program,
-    secp256k1_recover::{Secp256k1RecoverError, secp256k1_recover},
+    secp256k1_recover::{secp256k1_recover},
 };
 use std::convert::{Into, TryFrom};
+use crate::account_storage::ProgramAccountStorage;
 use crate::utils::{keccak256_digest};
 
 #[derive(Default, Serialize, Deserialize, Debug)]
@@ -23,7 +23,7 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-#[allow(unused)]
+#[must_use]
 pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_start: u16) -> Vec<u8> {
     const NUMBER_OF_SIGNATURES: u8 = 1;
     const ETH_SIZE: u16 = 20;
@@ -51,7 +51,6 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
     instruction_data
 }
 
-#[allow(unused)]
 pub fn check_secp256k1_instruction(sysvar_info: &AccountInfo, message_len: usize, data_offset: u16) -> ProgramResult
 {
     if !solana_program::sysvar::instructions::check_id(sysvar_info.key) {
@@ -90,14 +89,29 @@ pub struct UnsignedTransaction {
     pub to: Option<H160>,
     pub value: U256,
     pub call_data: Vec<u8>,
-    pub chain_id: U256,
+    pub chain_id: Option<U256>,
+    pub rlp_len: usize,
+}
+
+impl UnsignedTransaction {
+    pub fn from_rlp(unsigned_msg: &[u8]) -> Result<Self, ProgramError> {
+        let trx = rlp::decode(unsigned_msg)
+            .map_err(|e| E!(ProgramError::InvalidInstructionData; "RLP DecoderError={}", e))?;
+
+        Ok(trx)
+    }
 }
 
 impl rlp::Decodable for UnsignedTransaction {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
-        if rlp.item_count()? != 9 {
-            return Err(rlp::DecoderError::RlpIncorrectListLen);
+        let field_count = rlp.item_count()?;
+        match field_count {
+            6 | 9 => (),
+            _ => return Err(rlp::DecoderError::RlpIncorrectListLen),
         }
+
+        let info = rlp.payload_info()?;
+        let payload_size = info.header_len + info.value_len;
 
         let tx = Self {
             nonce: rlp.val_at(0)?,
@@ -117,21 +131,64 @@ impl rlp::Decodable for UnsignedTransaction {
             },
             value: rlp.val_at(4)?,
             call_data: rlp.val_at(5)?,
-            chain_id: rlp.val_at(6)?,
+            chain_id: if field_count == 6 {
+                None
+            } else {
+                // Although v size is not limited by the specification, we don't expect it
+                // to be higher, so make the code simpler:
+                Some(rlp.val_at(6)?)
+            },
+            rlp_len: payload_size,
         };
 
         Ok(tx)
     }
 }
 
-#[allow(unused)]
-pub fn verify_tx_signature(signature: &[u8], unsigned_trx: &[u8]) -> Result<H160, Secp256k1RecoverError> {
+
+pub fn verify_tx_signature(signature: &[u8; 65], unsigned_trx: &[u8]) -> Result<H160, ProgramError> {
     let digest = keccak256_digest(unsigned_trx);
 
-    let public_key = secp256k1_recover(&digest, signature[64], &signature[0..64])?;
+    let public_key = secp256k1_recover(&digest, signature[64], &signature[0..64])
+        .map_err(|e| E!(ProgramError::MissingRequiredSignature; "Secp256k1 Error={:?}", e))?;
 
     let address = keccak256_digest(&public_key.to_bytes());
     let address = H160::from_slice(&address[12..32]);
 
     Ok(address)
+}
+
+pub fn check_ethereum_transaction(
+    account_storage: &ProgramAccountStorage,
+    recovered_address: &H160,
+    transaction: &UnsignedTransaction
+) -> ProgramResult
+{
+    let sender_account = account_storage.ethereum_account(recovered_address)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - sender must be initialized account", recovered_address))?;
+
+    if sender_account.trx_count != transaction.nonce {
+        return Err!(ProgramError::InvalidArgument; "Invalid Ethereum transaction nonce: acc {}, trx {}", sender_account.trx_count, transaction.nonce);
+    }
+
+    if let Some(ref chain_id) = transaction.chain_id {
+        if &U256::from(crate::config::CHAIN_ID) != chain_id {
+            return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::config::CHAIN_ID);
+        }
+    }
+
+    let contract_address: H160 = transaction.to.unwrap_or_else(|| {
+        let mut stream = rlp::RlpStream::new_list(2);
+        stream.append(recovered_address);
+        stream.append(&U256::from(transaction.nonce));
+        crate::utils::keccak256_h256(&stream.out()).into()
+    });
+    let contract_account = account_storage.ethereum_account(&contract_address)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", contract_address))?;
+
+    if !transaction.call_data.is_empty() && contract_account.code_account.is_none() {
+        return Err!(ProgramError::InvalidArgument; "Account {} - target must be contract account", contract_address);
+    }
+
+    Ok(())
 }
