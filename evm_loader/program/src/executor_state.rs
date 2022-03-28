@@ -698,7 +698,7 @@ impl ExecutorSubstate {
             balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
         };
 
-        let dest_neon = withdraw.dest_neon.clone();
+        let dest_neon = withdraw.dest_neon;
 
         let mut balances = self.balances.borrow_mut();
         balances.insert(withdraw.source, new_source_balance);
