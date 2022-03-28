@@ -698,12 +698,14 @@ impl ExecutorSubstate {
             balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
         };
 
+        let dest_neon = withdraw.dest_neon.clone();
+
         let mut balances = self.balances.borrow_mut();
         balances.insert(withdraw.source, new_source_balance);
         self.withdrawals.push(withdraw);
 
         let mut spl_balances = self.spl_balances.borrow_mut();
-        spl_balances.insert(withdraw.dest_neon.clone(), new_target_balance);
+        spl_balances.insert(dest_neon, new_target_balance);
 
         Ok(())
     }
