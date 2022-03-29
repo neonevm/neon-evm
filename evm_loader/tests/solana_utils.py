@@ -41,7 +41,7 @@ keccakprog = "KeccakSecp256k11111111111111111111111111111"
 rentid = "SysvarRent111111111111111111111111111111111"
 incinerator = "1nc1nerator11111111111111111111111111111111"
 collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
-#COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
+COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 EVM_LOADER = os.environ.get("EVM_LOADER")
@@ -58,7 +58,7 @@ EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
 EVM_STEPS = 500
 # the message size that is used to holder-account filling
-HOLDER_MSG_SIZE = 1000
+HOLDER_MSG_SIZE = 950
 # Ethereum account allocated data size
 ACCOUNT_MAX_SIZE = 256
 # spl-token account allocated data size
@@ -70,9 +70,9 @@ LAMPORTS_PER_SIGNATURE = 5000
 # account storage overhead for calculation of base rent
 ACCOUNT_STORAGE_OVERHEAD = 128
 
-
-# DEFAULT_UNITS=500*1000
-# DEFAULT_HEAP_FRAME=256*1024
+DEFAULT_UNITS=500*1000
+DEFAULT_HEAP_FRAME=256*1024
+DEFAULT_ADDITIONAL_FEE=0
 
 
 class SplToken:
@@ -316,7 +316,7 @@ class EvmLoader:
         pool_account_exists = client.get_account_info(pool_token_account, commitment="processed")["result"]["value"] is not None
         print("Pool Account Exists: ", pool_account_exists)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if not pool_account_exists:
             trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
 
@@ -408,7 +408,7 @@ class EvmLoader:
 
         base = self.acc.get_acc().public_key()
         data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         if code_acc is None:
             trx.add(TransactionInstruction(
                 program_id=self.loader_id,
@@ -763,31 +763,26 @@ def evm_step_cost():
     operator_expences = PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE
     return math.floor(operator_expences / EVM_STEPS)
 
-#
-#
-#
-# class ComputeBudget():
-#     @staticmethod
-#     def requestUnits(units):
-#         return TransactionInstruction(
-#             program_id=COMPUTE_BUDGET_ID,
-#             keys=[],
-#             data=bytes.fromhex("00") + units.to_bytes(4, "little")
-#         )
-#
-#     @staticmethod
-#     def requestHeapFrame(heapFrame):
-#         return TransactionInstruction(
-#             program_id=COMPUTE_BUDGET_ID,
-#             keys=[],
-#             data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
-#         )
-#
-#s
-# def TransactionWithComputeBudget(units=DEFAULT_UNITS, heapFrame=DEFAULT_HEAP_FRAME, **args):
-#     trx = Transaction(**args)
-#     if units: trx.add(ComputeBudget.requestUnits(units))
-#     if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
-#     return trx
-#
-#
+
+class ComputeBudget():
+    @staticmethod
+    def requestUnits(units, additional_fee):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
+        )
+
+    @staticmethod
+    def requestHeapFrame(heapFrame):
+        return TransactionInstruction(
+            program_id=COMPUTE_BUDGET_ID,
+            keys=[],
+            data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
+        )
+
+def TransactionWithComputeBudget(units=DEFAULT_UNITS, additional_fee=DEFAULT_ADDITIONAL_FEE, heapFrame=DEFAULT_HEAP_FRAME, **args):
+    trx = Transaction(**args)
+    if units: trx.add(ComputeBudget.requestUnits(units, additional_fee))
+    if heapFrame: trx.add(ComputeBudget.requestHeapFrame(heapFrame))
+    return trx

@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION=v1.8.12-testnet
+ARG SOLANA_REVISION=v1.9.12-testnet-with_trx_cap
 # Install BPF SDK
 FROM solanalabs/rust:latest AS builder
 RUN rustup toolchain install nightly

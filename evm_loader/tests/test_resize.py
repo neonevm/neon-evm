@@ -40,7 +40,7 @@ class ResizeTest(unittest.TestCase):
             ]
         )
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(create_with_seed)
         trx.add(resize)
 

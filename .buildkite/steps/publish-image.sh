@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-REVISION=$(git rev-parse HEAD)
-
 docker images
 
 docker login -u=$DHUBU -p=$DHUBP
@@ -15,7 +13,7 @@ else
     TAG=${BUILDKITE_BRANCH}
 fi
 
-docker pull neonlabsorg/evm_loader:${REVISION}
-docker tag neonlabsorg/evm_loader:${REVISION} neonlabsorg/evm_loader:${TAG}
+docker pull neonlabsorg/evm_loader:${BUILDKITE_COMMIT}
+docker tag neonlabsorg/evm_loader:${BUILDKITE_COMMIT} neonlabsorg/evm_loader:${TAG}
 docker push neonlabsorg/evm_loader:${TAG}
 

@@ -6,6 +6,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
     system_program,
+    compute_budget::ComputeBudgetInstruction,
 };
 
 use solana_cli::{
@@ -13,6 +14,12 @@ use solana_cli::{
 };
 
 use evm::{H160};
+
+use evm_loader::config::{
+    COMPUTE_BUDGET_UNITS,
+    COMPUTE_BUDGET_HEAP_FRAME,
+    REQUEST_UNITS_ADDITIONAL_FEE,
+};
 
 use crate::{
     Config,
@@ -27,7 +34,10 @@ pub fn execute(
 ) -> NeonCliResult {
     let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
 
-    let mut instructions = Vec::with_capacity(3);
+    let mut instructions = Vec::with_capacity(5);
+
+    instructions.push(ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE));
+    instructions.push(ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
 
     let ether_account = config.rpc_client.get_account(&ether_pubkey);
     if ether_account.is_err() {
@@ -64,14 +74,15 @@ pub fn execute(
         evm_token_authority,
     ));
 
-    let finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
-    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+    let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
+    let blockhash = config.rpc_client.get_latest_blockhash()?;
+    finalize_message.recent_blockhash = blockhash;
 
     check_account_for_fee(
         &config.rpc_client,
         &config.signer.pubkey(),
-        &fee_calculator,
-        &finalize_message)?;
+        &finalize_message
+    )?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 

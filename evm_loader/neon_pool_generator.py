@@ -17,7 +17,7 @@ if pool_account_exists:
     print("Pool account already exists")
     exit(0)
 
-trx = Transaction()
+trx = TransactionWithComputeBudget()
 trx.add(create_associated_token_account(signer.public_key(), authority_account, mint))
 result = send_transaction(client, trx, signer)
 print(result)
