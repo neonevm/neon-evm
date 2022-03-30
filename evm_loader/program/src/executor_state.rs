@@ -693,9 +693,19 @@ impl ExecutorSubstate {
             balance.checked_sub(withdraw.neon_amount).ok_or(ExitError::OutOfFund)?
         };
 
+        let new_target_balance = {
+            let balance = self.spl_balance(&withdraw.dest_neon, backend);
+            balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
+        };
+
+        let dest_neon = withdraw.dest_neon;
+
         let mut balances = self.balances.borrow_mut();
         balances.insert(withdraw.source, new_source_balance);
         self.withdrawals.push(withdraw);
+
+        let mut spl_balances = self.spl_balances.borrow_mut();
+        spl_balances.insert(dest_neon, new_target_balance);
 
         Ok(())
     }
