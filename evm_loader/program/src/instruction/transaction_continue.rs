@@ -6,6 +6,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult,
     pubkey::Pubkey,
 };
+use crate::config::chain_id;
 
 
 
@@ -32,7 +33,9 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        crate::config::token_mint::id())?;
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
 
     super::transaction::do_continue(step_count, accounts, storage, &mut account_storage)
 }

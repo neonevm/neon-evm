@@ -49,7 +49,6 @@ use solana_sdk::{
     system_instruction,
 };
 use std::{
-    collections::HashMap,
     io::{Read},
     fs::File,
     env,
@@ -88,6 +87,7 @@ use log::{debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
+use crate::get_neon_elf::CachedElfParams;
 
 type NeonCliResult = Result<(),NeonCliError>;
 
@@ -543,6 +543,14 @@ fn main() {
                         .validator(is_valid_pubkey)
                         .help("Pubkey for token_mint")
                 )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
+                )
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")
@@ -783,45 +791,50 @@ fn main() {
                 let data = hexdata_of(arg_matches, "data");
                 let value = value_of(arg_matches, "value");
 
-                let token_mint = pubkey_of(arg_matches, "token_mint")
-                    .unwrap_or_else(|| {
-                        let elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        Pubkey::from_str(elf_params.get("NEON_TOKEN_MINT").unwrap()).unwrap()
-                    });
-                emulate::execute(&config, contract, sender, data, value, &token_mint)
+                // Read ELF params only if token_mint or chain_id is not set.
+                let mut token_mint = pubkey_of(arg_matches, "token_mint");
+                let mut chain_id = value_of(arg_matches, "chain_id");
+                if token_mint.is_none() || chain_id.is_none() {
+                    let cached_elf_params = CachedElfParams::new(&config);
+                    token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
+                        cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
+                    ).unwrap()));
+                    chain_id = chain_id.or_else(|| Some(u64::from_str(
+                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+                    ).unwrap()));
+                }
+                let token_mint = token_mint.unwrap();
+                let chain_id = chain_id.unwrap();
+
+                emulate::execute(&config, contract, sender, data, value, &token_mint, chain_id)
             }
             ("create-program-address", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "seed").unwrap();
-
                 create_program_address::execute(&config, &ether);
-
                 Ok(())
             }
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
-
                 create_ether_account::execute(&config, &ether)
             }
             ("deploy", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location").unwrap().to_string();
 
-                let mut elf_params : HashMap<String,String> = HashMap::new();
+                // Read ELF params only if collateral_pool_base or chain_id is not set.
+                let mut collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base");
+                let mut chain_id = value_of(arg_matches, "chain_id");
+                if collateral_pool_base.is_none() || chain_id.is_none() {
+                    let cached_elf_params = CachedElfParams::new(&config);
+                    collateral_pool_base = collateral_pool_base.or_else(|| Some(Pubkey::from_str(
+                        cached_elf_params.get("NEON_POOL_BASE").unwrap()
+                    ).unwrap()));
+                    chain_id = chain_id.or_else(|| Some(u64::from_str(
+                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+                    ).unwrap()));
+                }
+                let collateral_pool_base = collateral_pool_base.unwrap();
+                let chain_id = chain_id.unwrap();
 
-                let collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base")
-                    .unwrap_or_else(|| {
-                        if elf_params.is_empty(){
-                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        }
-                        Pubkey::from_str(elf_params.get("NEON_POOL_BASE").unwrap()).unwrap()
-                    });
-
-                let chain_id = value_of(arg_matches, "chain_id")
-                    .unwrap_or_else(|| {
-                        if elf_params.is_empty(){
-                            elf_params = get_neon_elf::read_elf_parameters_from_account(&config).unwrap();
-                        }
-                        u64::from_str(elf_params.get("NEON_CHAIN_ID").unwrap()).unwrap()
-                    });
                 deploy::execute(&config, &program_location, &collateral_pool_base, chain_id)
             }
             ("deposit", Some(arg_matches)) => {
@@ -835,30 +848,24 @@ fn main() {
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
-
                 get_ether_account_data::execute(&config, &ether);
-
                 Ok(())
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
-
                 cancel_trx::execute(&config, &storage_account)
             }
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");
-
                 get_neon_elf::execute(&config, program_location)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
-
                 get_storage_at::execute(&config, contract_id, &index)
             }
             ("update-valids-table", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
-
                 update_valids_table::execute(&config, contract_id)
             }
             _ => unreachable!(),

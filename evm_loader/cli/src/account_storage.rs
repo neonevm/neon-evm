@@ -136,10 +136,11 @@ pub struct EmulatorAccountStorage<'a> {
     block_number: u64,
     block_timestamp: i64,
     token_mint: Pubkey,
+    chain_id: u64,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, token_mint: Pubkey) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, token_mint: Pubkey, chain_id: u64) -> EmulatorAccountStorage {
         trace!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {
@@ -170,6 +171,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             block_number: slot,
             block_timestamp: timestamp,
             token_mint,
+            chain_id,
         }
     }
 
@@ -706,17 +708,21 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         };
 
         let contract_space = {
-            self.ethereum_contract_map_or(address, 
-                0, 
+            self.ethereum_contract_map_or(address,
+                0,
                 |a| {
-                    EthereumContract::SIZE 
-                        + a.extension.code.len() 
+                    EthereumContract::SIZE
+                        + a.extension.code.len()
                         + a.extension.valids.len()
                         + a.extension.storage.buffer_len()
             })
         };
 
         (account_space, contract_space)
+    }
+
+    fn chain_id(&self) -> u64 {
+        self.chain_id
     }
 }
 

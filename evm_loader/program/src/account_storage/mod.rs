@@ -35,6 +35,8 @@ pub struct ProgramAccountStorage<'a> {
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, Account<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
+
+    chain_id: u64,
 }
 
 /// Account storage
@@ -50,6 +52,8 @@ pub trait AccountStorage {
     fn block_number(&self) -> U256;
     /// Get block timestamp
     fn block_timestamp(&self) -> U256;
+    /// Get chain id
+    fn chain_id(&self) -> u64;
 
     /// Check if ethereum account exists
     fn exists(&self, address: &H160) -> bool;

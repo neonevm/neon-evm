@@ -83,6 +83,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
+
     def test_command_create_ether_account(self):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -94,6 +95,7 @@ class NeonCliTest(unittest.TestCase):
         )
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
+
 
     def test_command_create_program_address(self):
         '''
@@ -108,6 +110,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
+
     def test_command_deploy(self):
         '''
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -117,6 +120,7 @@ class NeonCliTest(unittest.TestCase):
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
+
 
     def test_command_emulate(self):
         '''
@@ -139,6 +143,7 @@ class NeonCliTest(unittest.TestCase):
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
+
 
     def test_command_neon_elf_params(self):
         '''
