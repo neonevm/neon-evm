@@ -97,15 +97,15 @@ class NeonCliTest(unittest.TestCase):
 
     def test_command_emulate(self):
         '''
-        neon-cli create-program-address <SEED_STRING> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        seed_string = ''.join([
-            ''.join([random.choice(string.ascii_lowercase)
-                     for y in range(5)]) + ' ' for x in range(24)
-        ]).strip()
+        sender = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_address()
+        contract = ""
         output = neon_cli().call(
-            f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
+            f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+
 
 
 if __name__ == '__main__':
