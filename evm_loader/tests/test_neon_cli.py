@@ -81,6 +81,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_create_ether_account(self):
         '''
@@ -92,6 +93,7 @@ class NeonCliTest(unittest.TestCase):
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_create_program_address(self):
         '''
@@ -104,6 +106,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_deploy(self):
         '''
@@ -113,6 +116,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_emulate(self):
         '''
@@ -123,6 +127,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_migrate_account(self):
         '''
@@ -133,6 +138,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_neon_elf_params(self):
         '''
@@ -142,6 +148,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
     def test_command_update_valids_table(self):
         '''
@@ -151,6 +158,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+        self.assertIn('ok', output)
 
 
 if __name__ == '__main__':
