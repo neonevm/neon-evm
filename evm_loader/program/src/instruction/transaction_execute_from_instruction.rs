@@ -45,7 +45,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     check_secp256k1_instruction(accounts.sysvar_instructions.info, unsigned_msg.len(), 5_u16)?;
 
     let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts, chain_id().as_u64())?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
 
 
     validate(&accounts, &account_storage, &trx, &caller_address)?;

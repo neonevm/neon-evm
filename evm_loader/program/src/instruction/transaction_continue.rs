@@ -30,7 +30,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
 
     let storage = Storage::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts, chain_id().as_u64())?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
 
     super::transaction::do_continue(step_count, accounts, storage, &mut account_storage)
 }

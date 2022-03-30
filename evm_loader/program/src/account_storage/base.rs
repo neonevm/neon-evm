@@ -13,7 +13,7 @@ use crate::account_storage::{Account, ProgramAccountStorage};
 
 
 impl<'a> ProgramAccountStorage<'a> {
-    pub fn new(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], chain_id: u64) -> Result<Self, ProgramError> {
+    pub fn new(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], token_mint: Pubkey, chain_id: u64) -> Result<Self, ProgramError> {
         debug_print!("ProgramAccountStorage::new");
 
         let mut solana_accounts = BTreeMap::new();
@@ -57,6 +57,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
 
         Ok(Self{
+            token_mint,
             program_id,
             clock: Clock::get()?,
             token_program,

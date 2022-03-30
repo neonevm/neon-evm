@@ -36,7 +36,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         remaining_accounts: &accounts[7..]
     };
 
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts, chain_id().as_u64())?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
 
 
     if is_new_transaction(program_id, storage_info, signature, &caller)? {

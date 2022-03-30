@@ -41,8 +41,8 @@ pub fn execute(
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, chain_id);
-    
+    let storage = EmulatorAccountStorage::new(config, *token_mint, chain_id);
+
     let program_id = if let Some(program_id) = contract_id {
         debug!("program_id to call: {}", program_id);
         program_id
