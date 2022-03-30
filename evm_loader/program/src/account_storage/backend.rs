@@ -5,6 +5,8 @@ use crate::account::{ERC20Allowance, token, EthereumContract};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
+    fn token_mint(&self) -> &Pubkey { self.token_mint }
+
     fn program_id(&self) -> &Pubkey {
         self.program_id
     }
