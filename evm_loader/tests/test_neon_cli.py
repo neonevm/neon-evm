@@ -6,7 +6,6 @@ import string
 from solana_utils import *
 
 evm_loader_id = os.environ.get("EVM_LOADER")
-
 '''
 USAGE:
     neon-cli [FLAGS] [OPTIONS] <SUBCOMMAND>
@@ -40,46 +39,74 @@ SUBCOMMANDS:
     update-valids-table       Update Valids Table
 '''
 
+
 class NeonCliTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
 
     def test_command_deposit(self):
-        ether_account = eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
+        ether_account = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_address()
         balance_re = re.compile(r"^.*balance:\s+(\d+).*$", flags=re.DOTALL)
         # Place deposit to empty account
-        neon_cli().call("deposit 10 {} --evm_loader {}".format(ether_account, evm_loader_id))
+        neon_cli().call("deposit 10 {} --evm_loader {}".format(
+            ether_account, evm_loader_id))
         # Get account's balance after
-        output = neon_cli().call("get-ether-account-data {} --evm_loader {}".format(ether_account, evm_loader_id))
+        output = neon_cli().call(
+            "get-ether-account-data {} --evm_loader {}".format(
+                ether_account, evm_loader_id))
         balance = balance_re.match(output)
         self.assertIsNotNone(balance)
         balance = balance.group(1)
         self.assertEqual(balance, '10000000000')
         # Second deposit (to existing account)
-        neon_cli().call("deposit 10 {} --evm_loader {}".format(ether_account, evm_loader_id))
+        neon_cli().call("deposit 10 {} --evm_loader {}".format(
+            ether_account, evm_loader_id))
         # Get account's balance after
-        output = neon_cli().call("get-ether-account-data {} --evm_loader {}".format(ether_account, evm_loader_id))
+        output = neon_cli().call(
+            "get-ether-account-data {} --evm_loader {}".format(
+                ether_account, evm_loader_id))
         balance = balance_re.match(output)
         self.assertIsNotNone(balance)
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
-        
+
     def test_command_create_ether_account(self):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        ether_account = eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
-        output = neon_cli().call(f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+        ether_account = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_address()
+        output = neon_cli().call(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
         self.assertIsNotNone(output)
-        
+
     def test_command_create_program_address(self):
         '''
         neon-cli create-program-address <SEED_STRING> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        seed_string = ''.join([''.join([random.choice(string.ascii_lowercase) for y in range(5)]) + ' ' for x in range(24)]).strip()
-        output = neon_cli().call(f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
+        seed_string = ''.join([
+            ''.join([random.choice(string.ascii_lowercase)
+                     for y in range(5)]) + ' ' for x in range(24)
+        ]).strip()
+        output = neon_cli().call(
+            f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-    
+
+    def test_command_emulate(self):
+        '''
+        neon-cli create-program-address <SEED_STRING> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        seed_string = ''.join([
+            ''.join([random.choice(string.ascii_lowercase)
+                     for y in range(5)]) + ' ' for x in range(24)
+        ]).strip()
+        output = neon_cli().call(
+            f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+
+
 if __name__ == '__main__':
     unittest.main()
