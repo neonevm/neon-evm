@@ -126,4 +126,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
         (account_space, contract_space)
     }
+
+    fn chain_id(&self) -> u64 {
+        self.chain_id
+    }
 }

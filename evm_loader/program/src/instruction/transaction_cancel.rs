@@ -6,6 +6,7 @@ use solana_program::{
 };
 use crate::account_storage::ProgramAccountStorage;
 use crate::storage_account::Deposit;
+use crate::config::chain_id;
 
 struct Accounts<'a> {
     storage: Storage<'a>,
@@ -45,7 +46,9 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        crate::config::token_mint::id())?;
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller)
         .expect("Caller account present in the transaction");
 
