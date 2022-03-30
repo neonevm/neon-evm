@@ -8,6 +8,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::Accounts;
+use crate::config::token_mint;
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
@@ -38,7 +39,10 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
 
     let storage = Storage::new(program_id, storage_info, &accounts, caller, &trx, signature)?;
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts)?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        &token_mint::id())?;
 
     super::transaction::do_begin(step_count, accounts, storage, &mut account_storage, trx, caller)
 }
