@@ -8,7 +8,6 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::executor::Machine;
-use crate::config::token_mint;
 
 
 struct Accounts<'a> {
@@ -48,7 +47,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        &token_mint::id())?;
+        crate::config::token_mint::id().clone())?;
 
 
     validate(&accounts, &account_storage, &trx, &caller_address)?;

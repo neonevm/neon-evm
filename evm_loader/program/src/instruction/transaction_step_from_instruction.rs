@@ -8,7 +8,6 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::instruction::transaction::{Accounts, is_new_transaction, do_begin, do_continue};
-use crate::config::token_mint;
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
@@ -39,7 +38,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        &token_mint::id())?;
+        crate::config::token_mint::id().clone())?;
 
 
     if is_new_transaction(program_id, storage_info, signature, &caller)? {

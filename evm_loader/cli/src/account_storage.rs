@@ -135,11 +135,11 @@ pub struct EmulatorAccountStorage<'a> {
     config: &'a Config,
     block_number: u64,
     block_timestamp: i64,
-    token_mint: &'a Pubkey,
+    token_mint: Pubkey,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config, token_mint: &'a Pubkey) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, token_mint: Pubkey) -> EmulatorAccountStorage {
         trace!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {

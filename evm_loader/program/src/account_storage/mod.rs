@@ -27,7 +27,7 @@ impl<'a> Account<'a> {
 }
 
 pub struct ProgramAccountStorage<'a> {
-    token_mint: &'a Pubkey,
+    token_mint: Pubkey,
     program_id: &'a Pubkey,
     clock: Clock,
     token_program: Option<program::Token<'a>>,
