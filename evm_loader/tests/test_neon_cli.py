@@ -72,6 +72,17 @@ class NeonCliTest(unittest.TestCase):
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
 
+    def test_command_cancel_trx(self):
+        '''
+        neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        storage_account = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_address()
+        output = neon_cli().call(
+            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}"
+        )
+        self.assertIsNotNone(output)
+
     def test_command_create_ether_account(self):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -95,6 +106,15 @@ class NeonCliTest(unittest.TestCase):
             f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
 
+    def test_command_deploy(self):
+        '''
+        neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        program_filepath = ""
+        output = neon_cli().call(
+            f"deploy {program_filepath} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+
     def test_command_emulate(self):
         '''
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -106,7 +126,34 @@ class NeonCliTest(unittest.TestCase):
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
 
+    def test_command_migrate_account(self):
+        '''
+        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        ether_account = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_address()
+        output = neon_cli().call(
+            f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
 
+
+    def test_command_neon_elf_params(self):
+        '''
+        neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        contract_id = ""
+        output = neon_cli().call(
+            f"neon-elf-params --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+
+    def test_command_update_valids_table(self):
+        '''
+        neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        contract_id = ""
+        output = neon_cli().call(
+            f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
 
 if __name__ == '__main__':
     unittest.main()
