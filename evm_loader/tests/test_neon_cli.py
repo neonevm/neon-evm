@@ -79,8 +79,7 @@ class NeonCliTest(unittest.TestCase):
         storage_account = eth_keys.PrivateKey(
             os.urandom(32)).public_key.to_address()
         output = neon_cli().call(
-            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}"
-        )
+            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
 
     def test_command_create_ether_account(self):
@@ -119,8 +118,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        sender = eth_keys.PrivateKey(
-            os.urandom(32)).public_key.to_address()
+        sender = eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
         contract = ""
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -135,7 +133,6 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-
 
     def test_command_neon_elf_params(self):
         '''
@@ -154,6 +151,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
+
 
 if __name__ == '__main__':
     unittest.main()
