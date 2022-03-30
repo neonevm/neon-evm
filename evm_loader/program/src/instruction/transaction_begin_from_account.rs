@@ -38,7 +38,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        crate::config::token_mint::id().clone())?;
+        crate::config::token_mint::id())?;
 
     super::transaction::do_begin(step_count, accounts, storage, &mut account_storage, trx, caller)
 }

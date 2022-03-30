@@ -45,7 +45,7 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,
-        crate::config::token_mint::id().clone())?;
+        crate::config::token_mint::id())?;
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller)
         .expect("Caller account present in the transaction");
 
