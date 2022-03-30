@@ -38,7 +38,10 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
 
     let storage = Storage::new(program_id, storage_info, &accounts, caller, &trx, signature)?;
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts)?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        crate::config::token_mint::id())?;
 
     super::transaction::do_begin(step_count, accounts, storage, &mut account_storage, trx, caller)
 }

@@ -27,6 +27,7 @@ impl<'a> Account<'a> {
 }
 
 pub struct ProgramAccountStorage<'a> {
+    token_mint: Pubkey,
     program_id: &'a Pubkey,
     clock: Clock,
     token_program: Option<program::Token<'a>>,
@@ -39,6 +40,9 @@ pub struct ProgramAccountStorage<'a> {
 /// Account storage
 /// Trait to access account info
 pub trait AccountStorage {
+    /// Get `NEON` token mint
+    fn token_mint(&self) -> &Pubkey;
+
     /// Get `NeonEVM` program id
     fn program_id(&self) -> &Pubkey;
 
