@@ -118,16 +118,12 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        # self.assertIn('ok', output)
         self.print_output(output)
 
     def test_command_emulate(self):
         '''
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        # sender = self.generate_address()
-        # neon_cli().call(
-        #     f"create-ether-account {sender} --evm_loader {evm_loader_id}")
         sender = self.create_new_account()
         contract = self.generate_address()
         output = neon_cli().call(
@@ -151,9 +147,6 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        # contract_id = self.generate_address()
-        # neon_cli().call(
-        #     f"create-ether-account {contract_id} --evm_loader {evm_loader_id}")
         contract_id = self.create_new_account()
         index = 1
         output = neon_cli().call(
@@ -166,7 +159,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli help
         '''
         output = neon_cli().call(
-            f"help --evm_loader {evm_loader_id}")
+            f"help deploy --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.print_output(output)
 
