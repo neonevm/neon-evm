@@ -59,6 +59,10 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
         return Err!(ProgramError::InvalidArgument; "Account {} - expected tokens delegated to authority account", accounts.source.info.key);
     }
 
+    if accounts.ethereum_account.code_account.is_some() {
+        return Err!(ProgramError::InvalidArgument; "Account {} - expected not contract account", accounts.ethereum_account.info.key);
+    }
+
     Ok(bump_seed)
 }
 
