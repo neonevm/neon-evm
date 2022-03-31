@@ -92,8 +92,8 @@ class NeonCliTest(unittest.TestCase):
         )
         self.assertIsNotNone(output)
         expected_line = f""""ether":"{ether_account[2:]}","""
-        # self.assertIn(expected_line, output,
-        #               "There is no address in the output")
+        self.assertIn(expected_line, output,
+                      "There is no address in the output")
         self.print_output(output)
 
     def test_command_create_program_address(self):
@@ -132,7 +132,40 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        # self.assertIn('ok', output)
+        self.print_output(output)
+
+    def test_command_get_ether_account_data(self):
+        '''
+        neon-cli get-ether-account-data <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        ether_account = self.generate_address()
+        neon_cli().call(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+        output = neon_cli().call(
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        self.print_output(output)
+
+    def test_command_get_storage_at(self):
+        '''
+        neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        contract_id = self.generate_address()
+        neon_cli().call(
+            f"create-ether-account {contract_id} --evm_loader {evm_loader_id}")
+        index = 1
+        output = neon_cli().call(
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        self.print_output(output)
+
+    def test_command_help(self):
+        '''
+        neon-cli help
+        '''
+        output = neon_cli().call(
+            f"help --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
         self.print_output(output)
 
     def test_command_migrate_account(self):
