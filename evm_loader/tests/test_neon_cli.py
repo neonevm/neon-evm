@@ -173,5 +173,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('neon-cli', output)
 
+
 if __name__ == '__main__':
     unittest.main()
