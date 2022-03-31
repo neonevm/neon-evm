@@ -115,7 +115,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         program_filepath = "./neon-cli"
-        output = neon_cli().call_and_get_return_code(
+        output = neon_cli().call(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         # self.assertIn('ok', output)
