@@ -83,7 +83,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
-
     def test_command_create_ether_account(self):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -94,8 +93,8 @@ class NeonCliTest(unittest.TestCase):
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assertIn('ok', output)
-
+        expected_line = f""""ether":"{ether_account[2:]}","""
+        self.assertIn(expected_line, output)
 
     def test_command_create_program_address(self):
         '''
@@ -110,7 +109,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
-
     def test_command_deploy(self):
         '''
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -120,7 +118,6 @@ class NeonCliTest(unittest.TestCase):
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
-
 
     def test_command_emulate(self):
         '''
@@ -144,7 +141,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
-
     def test_command_neon_elf_params(self):
         '''
         neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -165,6 +161,14 @@ class NeonCliTest(unittest.TestCase):
         self.assertIn('ok', output)
         
         
+    def test_command_version(self):
+        '''
+        neon-cli -V
+        '''
+        output = neon_cli().call(f"-V")
+        self.assertIsNotNone(output)
+        self.assertIn('neon-cli', output)
+
     def test_command_version(self):
         '''
         neon-cli -V
