@@ -76,8 +76,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        storage_account = eth_keys.PrivateKey(
-            os.urandom(32)).public_key.to_address()
+        storage_account = self.generate_address()
         output = neon_cli().call(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -87,8 +86,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        ether_account = eth_keys.PrivateKey(
-            os.urandom(32)).public_key.to_address()
+        ether_account = self.generate_address()
         output = neon_cli().call(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
@@ -100,12 +98,9 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli create-program-address <SEED_STRING> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        seed_string = ''.join([
-            ''.join([random.choice(string.ascii_lowercase)
-                     for y in range(5)]) + ' ' for x in range(24)
-        ]).strip()
+        seed_string = self.generate_address()
         output = neon_cli().call(
-            f"create-ether-account {seed_string} --evm_loader {evm_loader_id}")
+            f"create-program-address {seed_string} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
@@ -123,7 +118,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        sender = eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
+        sender = self.generate_address()
         contract = ""
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -134,8 +129,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        ether_account = eth_keys.PrivateKey(
-            os.urandom(32)).public_key.to_address()
+        ether_account = self.generate_address()
         output = neon_cli().call(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -168,6 +162,8 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('neon-cli', output)
 
+    def generate_address(self)->str:
+        return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
 
 if __name__ == '__main__':
     unittest.main()
