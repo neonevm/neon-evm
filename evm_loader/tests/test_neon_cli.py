@@ -192,9 +192,10 @@ class NeonCliTest(unittest.TestCase):
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
 
-    def print_output(self, output:str):
+    def print_output(self, output: str):
         print("<<<<<<<<<<<<<<<< output >>>>>>>>>>>>>>>>>")
         print(output)
+
 
 if __name__ == '__main__':
     unittest.main()
