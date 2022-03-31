@@ -3,13 +3,10 @@
 
 [package]
 name = "evm-loader"
-version = "0.7.1"
+version = "0.7.2"
 description = "Ethereum VM loader"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana-program-library"
-license = "Apache-2.0"
+authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
-exclude = ["js/**"]
 
 [features]
 alpha = []
