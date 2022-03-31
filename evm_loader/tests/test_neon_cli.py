@@ -106,7 +106,7 @@ class NeonCliTest(unittest.TestCase):
             f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assertTrue(bool(output_re.search().match(output)),
+        self.assertTrue(bool(output_re.search(output)),
                         "The output structure is not 'address nonce'")
         self.print_output(output)
 
@@ -158,7 +158,7 @@ class NeonCliTest(unittest.TestCase):
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertTrue(
-            bool(output_re.search().match(output)),
+            bool(output_re.search(output)),
             "The output structure is not 'NEON_CHAIN_ID=numeric_value'")
         self.print_output(output)
 
@@ -183,7 +183,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('neon-cli', output, "There is no 'neon-cli' in version")
         self.assertTrue(
-            bool(output_re.search().match(output)),
+            bool(output_re.search(output)),
             "The output structure is not 'neon-cli Neon-cli/vNNN-alphanumeric'"
         )
         self.print_output(output)
