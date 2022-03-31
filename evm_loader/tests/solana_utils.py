@@ -212,15 +212,6 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
-    def call_and_get_return_code(self, arguments) -> int:
-        cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
-        try:
-            return subprocess.Popen(cmd, shell=True, universal_newlines=True).returncode
-        except subprocess.CalledProcessError as err:
-            import sys
-            print("ERR: neon-cli error {}".format(err))
-            raise
-
     def emulate(self, loader_id, arguments):
         cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
                                                                                            loader_id,
