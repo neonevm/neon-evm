@@ -125,9 +125,10 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        sender = self.generate_address()
-        neon_cli().call(
-            f"create-ether-account {sender} --evm_loader {evm_loader_id}")
+        # sender = self.generate_address()
+        # neon_cli().call(
+        #     f"create-ether-account {sender} --evm_loader {evm_loader_id}")
+        sender = self.create_new_account()
         contract = self.generate_address()
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -150,9 +151,10 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        contract_id = self.generate_address()
-        neon_cli().call(
-            f"create-ether-account {contract_id} --evm_loader {evm_loader_id}")
+        # contract_id = self.generate_address()
+        # neon_cli().call(
+        #     f"create-ether-account {contract_id} --evm_loader {evm_loader_id}")
+        contract_id = self.create_new_account()
         index = 1
         output = neon_cli().call(
             f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}")
@@ -223,6 +225,12 @@ class NeonCliTest(unittest.TestCase):
 
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
+    
+    def create_new_account(self) -> str:
+        ether_account = self.generate_address()
+        neon_cli().call(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+        return ether_account
 
     def print_output(self, output: str):
         print("<<<<<<<<<<<<<<<< output >>>>>>>>>>>>>>>>>")
