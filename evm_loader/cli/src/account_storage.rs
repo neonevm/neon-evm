@@ -270,6 +270,10 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         storage.last_used() as usize
                     };
+
+                    if nonce > U256::from(u64::MAX) {
+                        return Err(NeonCliError::TrxCountOverflow);
+                    }
                         
                     let mut accounts = self.accounts.borrow_mut();
                     let mut new_accounts = self.new_accounts.borrow_mut();
@@ -307,7 +311,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             acc.code_size_current = Some(code_account_data.len());
                             acc.code_size = Some(hamt_begin + hamt_size(&code_account_data, hamt_begin));
 
-                            let trx_count: u64 = (nonce % U256::from(u64::MAX)).as_u64();
+                            let trx_count: u64 = nonce.as_u64();
                             if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
                                 acc.writable = true;
                             }
