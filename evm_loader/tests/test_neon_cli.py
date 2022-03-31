@@ -93,7 +93,8 @@ class NeonCliTest(unittest.TestCase):
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assertIn('ok', output)
+        expected_line = f""""ether":"{ether_account[2:]}","""
+        self.assertIn(expected_line, output)
 
     def test_command_create_program_address(self):
         '''
