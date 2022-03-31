@@ -92,7 +92,8 @@ class NeonCliTest(unittest.TestCase):
         )
         self.assertIsNotNone(output)
         expected_line = f""""ether":"{ether_account[2:]}","""
-        self.assertIn(expected_line, output, "There is no address in the output")
+        self.assertIn(expected_line, output,
+                      "There is no address in the output")
 
     def test_command_create_program_address(self):
         '''
@@ -104,7 +105,9 @@ class NeonCliTest(unittest.TestCase):
             f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assertEqual(output_re.match(output).groups(), 1, "The output structure is not 'address nonce'")
+        self.assertEqual(
+            output_re.match(output).groups(), 1,
+            "The output structure is not 'address nonce'")
 
     # def test_command_deploy(self):
     #     '''
@@ -121,7 +124,8 @@ class NeonCliTest(unittest.TestCase):
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         sender = self.generate_address()
-        neon_cli().call(f"create-ether-account {sender} --evm_loader {evm_loader_id}")
+        neon_cli().call(
+            f"create-ether-account {sender} --evm_loader {evm_loader_id}")
         contract = self.generate_address()
         output = neon_cli().call(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -133,7 +137,9 @@ class NeonCliTest(unittest.TestCase):
         neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         ether_account = self.generate_address()
-        neon_cli().call(f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+        neon_cli().call(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
         output = neon_cli().call(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -147,7 +153,9 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assertEqual(output_re.match(output).groups(), 1, "The output structure is not 'NEON_CHAIN_ID=numeric_value'")
+        self.assertEqual(
+            output_re.match(output).groups(), 1,
+            "The output structure is not 'NEON_CHAIN_ID=numeric_value'")
 
     def test_command_update_valids_table(self):
         '''
@@ -163,11 +171,15 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli -V
         '''
-        output_re = re.compile(r"^neon-cli Neon-cli/v[\d\.]+[\w-]+", flags=re.DOTALL)
+        output_re = re.compile(r"^neon-cli Neon-cli/v[\d\.]+[\w-]+",
+                               flags=re.DOTALL)
         output = neon_cli().call(f"-V")
         self.assertIsNotNone(output)
         self.assertIn('neon-cli', output, "There is no 'neon-cli' in version")
-        self.assertEqual(output_re.match(output).groups(), 1, "The output structure is not 'neon-cli Neon-cli/vNNN-alphanumeric'")
+        self.assertEqual(
+            output_re.match(output).groups(), 1,
+            "The output structure is not 'neon-cli Neon-cli/vNNN-alphanumeric'"
+        )
 
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
