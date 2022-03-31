@@ -137,9 +137,11 @@ class NeonCliTest(unittest.TestCase):
         '''
         ether_account = self.generate_address()
         neon_cli().call(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
         output = neon_cli().call(
-            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}")
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+        )
         self.assertIsNotNone(output)
         self.print_output(output)
 
@@ -150,7 +152,8 @@ class NeonCliTest(unittest.TestCase):
         contract_id = self.create_new_account(evm_loader_id)
         index = 0
         output = neon_cli().call(
-            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}")
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+        )
         self.assertIsNotNone(output)
         self.print_output(output)
 
@@ -217,11 +220,12 @@ class NeonCliTest(unittest.TestCase):
 
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
-    
-    def create_new_account(self,evm_loader_id) -> str:
+
+    def create_new_account(self, evm_loader_id) -> str:
         ether_account = self.generate_address()
         neon_cli().call(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}")
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
         return ether_account
 
     def print_output(self, output: str):
