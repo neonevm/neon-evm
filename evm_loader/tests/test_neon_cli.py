@@ -100,7 +100,8 @@ class NeonCliTest(unittest.TestCase):
         '''
         seed_string = self.generate_address()
         output = neon_cli().call(
-            f"create-program-address {seed_string} --evm_loader {evm_loader_id}")
+            f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
+        )
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
 
@@ -162,8 +163,9 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assertIn('neon-cli', output)
 
-    def generate_address(self)->str:
+    def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
+
 
 if __name__ == '__main__':
     unittest.main()
