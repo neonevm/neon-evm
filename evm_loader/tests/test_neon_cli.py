@@ -117,7 +117,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         program_filepath = "./neon-cli"
         output = neon_cli().call(
-            f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
+            f"deploy {program_filepath} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
         # self.assertIn('ok', output)
