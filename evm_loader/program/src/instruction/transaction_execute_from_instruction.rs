@@ -136,7 +136,8 @@ fn execute<'a>(
         // Transaction ended with error, no state to apply
         // Increment nonce here. Normally it is incremented inside apply_state_change
         if let Some(caller) = account_storage.ethereum_account_mut(&caller_address) {
-            caller.trx_count += 1;
+            caller.trx_count = caller.trx_count.checked_add(1)
+                .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", caller.address))?;
         }
     }
 

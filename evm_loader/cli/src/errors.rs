@@ -110,6 +110,9 @@ pub enum NeonCliError {
     /// too many steps
     #[error("Too many steps")]
     TooManySteps,
+    // Account nonce exceeds u64::max
+    #[error("Transaction count overflow")]
+    TrxCountOverflow,
     /// Unknown Error.
     #[error("Unknown error.")]
     UnknownError
@@ -148,6 +151,7 @@ impl NeonCliError {
             NeonCliError::InvalidVerbosityMessage           => 243, // => 4100,
             NeonCliError::TransactionFailed                 => 244, // => 4200,
             NeonCliError::TooManySteps                      => 245,
+            NeonCliError::TrxCountOverflow                  => 246,
             NeonCliError::UnknownError                      => 249, // => 4900,
         }
     }
