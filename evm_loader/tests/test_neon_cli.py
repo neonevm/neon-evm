@@ -149,7 +149,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        output_re = re.compile(r"^NEON_CHAIN_ID\=\d+)$", flags=re.DOTALL)
+        output_re = re.compile(r"^(NEON_CHAIN_ID\=\d+)$", flags=re.DOTALL)
         output = neon_cli().call(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
