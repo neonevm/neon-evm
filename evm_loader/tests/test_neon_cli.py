@@ -76,7 +76,8 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        storage_account = self.generate_address()
+        # storage_account = self.generate_address()
+        storage_account = self.create_new_account(evm_loader_id)
         output = neon_cli().call(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
