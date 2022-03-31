@@ -6,6 +6,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     transaction::Transaction,
+    compute_budget::ComputeBudgetInstruction,
 };
 
 use solana_cli::{
@@ -16,7 +17,12 @@ use spl_associated_token_account::get_associated_token_address;
 
 use evm::{H160};
 
-use evm_loader::config::token_mint;
+use evm_loader::config::{
+    token_mint,
+    COMPUTE_BUDGET_UNITS,
+    COMPUTE_BUDGET_HEAP_FRAME,
+    REQUEST_UNITS_ADDITIONAL_FEE,
+};
 
 use crate::{
     Config,
@@ -41,19 +47,22 @@ pub fn execute(
         })?;
 
     let instructions = vec![
+        ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
         migrate_account_instruction(
             config,
             ether_pubkey,
     )];
 
-    let finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
-    let (blockhash, fee_calculator) = config.rpc_client.get_recent_blockhash()?;
+    let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
+    let blockhash = config.rpc_client.get_latest_blockhash()?;
+    finalize_message.recent_blockhash = blockhash;
 
     check_account_for_fee(
         &config.rpc_client,
         &config.signer.pubkey(),
-        &fee_calculator,
-        &finalize_message)?;
+        &finalize_message
+    )?;
 
     let mut finalize_tx = Transaction::new_unsigned(finalize_message);
 

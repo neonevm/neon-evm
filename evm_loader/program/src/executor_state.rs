@@ -693,9 +693,19 @@ impl ExecutorSubstate {
             balance.checked_sub(withdraw.neon_amount).ok_or(ExitError::OutOfFund)?
         };
 
+        let new_target_balance = {
+            let balance = self.spl_balance(&withdraw.dest_neon, backend);
+            balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
+        };
+
+        let dest_neon = withdraw.dest_neon;
+
         let mut balances = self.balances.borrow_mut();
         balances.insert(withdraw.source, new_source_balance);
         self.withdrawals.push(withdraw);
+
+        let mut spl_balances = self.spl_balances.borrow_mut();
+        spl_balances.insert(dest_neon, new_target_balance);
 
         Ok(())
     }
@@ -830,7 +840,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        U256::from(crate::config::CHAIN_ID)
+        U256::from(self.backend.chain_id())
     }
 
     #[must_use]
@@ -1144,7 +1154,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn withdraw(&mut self, source: H160, destination: Pubkey, neon_amount: U256, spl_amount: u64) -> bool {
         let dest_neon_acct = get_associated_token_address(
             &destination,
-            &crate::config::token_mint::id()
+            self.backend.token_mint()
         );
 
         let withdraw = Withdraw{

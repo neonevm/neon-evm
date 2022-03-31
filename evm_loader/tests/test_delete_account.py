@@ -7,7 +7,7 @@ from spl.token.instructions import get_associated_token_address
 from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 from solana_utils import *
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
 
@@ -110,12 +110,13 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # Check that contact accounts marked invalid on deletion and couldn't be used in same block
         (owner_contract, eth_contract, contract_code) = self.deploy_contract()
 
+        trx = TransactionWithComputeBudget()
         init_nonce = getTransactionCount(client, self.caller)
-        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 1)
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, len(trx.instructions) + 1)
         init_nonce += 1
-        (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, 3)
+        (keccak_tx_2, call_tx_2) = self.make_transactions(eth_contract, owner_contract, contract_code, init_nonce, len(trx.instructions) + 3)
 
-        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
+        trx.add( keccak_tx_1 ).add( call_tx_1 ).add( keccak_tx_2 ).add( call_tx_2 )
 
         err = "Program failed to complete"
         with self.assertRaisesRegex(Exception,err):
@@ -134,8 +135,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         contract_balance_pre = getBalance(owner_contract)
         code_balance_pre = getBalance(contract_code)
 
-        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, 1)
-        trx = Transaction().add( keccak_tx_1 ).add( call_tx_1 )
+        trx = TransactionWithComputeBudget()
+        (keccak_tx_1, call_tx_1) = self.make_transactions(eth_contract, owner_contract, contract_code, None, len(trx.instructions) + 1)
+        trx.add( keccak_tx_1 ).add( call_tx_1 )
 
         send_transaction(client, trx, self.acc)
 

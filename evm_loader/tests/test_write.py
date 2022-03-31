@@ -73,14 +73,14 @@ class Test_Write(unittest.TestCase):
         self.account_address = accountWithSeed(self.signer.public_key(), seed, PublicKey(evm_loader_id))
         if getBalance(self.account_address) == 0:
             print('Creating account...')
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.signer.public_key(), self.signer.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             client.send_transaction(trx, self.signer, opts=TxOpts(skip_confirmation=False, preflight_commitment='confirmed'))
         print('Account to write:', self.account_address)
         print('Balance of account:', getBalance(self.account_address))
 
     def write_to_account(self, operator, signer, nonce, data):
-        tx = Transaction()
+        tx = TransactionWithComputeBudget()
         metas = [AccountMeta(pubkey=self.account_address, is_signer=False, is_writable=True),
                  AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=False)]
         tx.add(TransactionInstruction(program_id=evm_loader_id,
@@ -89,14 +89,12 @@ class Test_Write(unittest.TestCase):
         opts = TxOpts(skip_confirmation=True, preflight_commitment='confirmed')
         return client.send_transaction(tx, signer, opts=opts)['id']
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_is_ok(self):
         print()
         id = self.write_to_account(self.signer, self.signer, holder_id, test_data)
         print('id:', id)
         self.assertGreater(id, 0)
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_fails_wrong_seed(self):
         print()
         try:
@@ -105,14 +103,13 @@ class Test_Write(unittest.TestCase):
             self.write_to_account(self.signer, self.signer, wrong_holder_id, test_data)
             self.assertTrue(False)
         except SendTransactionError as err:
-            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 0: invalid program argument')
+            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 2: invalid program argument')
             print('!!!! This error is expected')
         except Exception as err:
             print('type(err):', type(err))
             print('err:', str(err))
             raise
 
-    # @unittest.skip("a.i.")
     def test_instruction_write_fails_wrong_operator(self):
         print()
         try:
@@ -120,7 +117,7 @@ class Test_Write(unittest.TestCase):
             self.write_to_account(self.attacker, self.attacker, holder_id, test_data)
             self.assertTrue(False)
         except SendTransactionError as err:
-            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 0: custom program error: 0x3')
+            self.assertEqual(str(err), 'Transaction simulation failed: Error processing Instruction 2: custom program error: 0x3')
             print('!!!! This error is expected')
         except Exception as err:
             print('type(err):', type(err))

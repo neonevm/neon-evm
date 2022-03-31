@@ -1,8 +1,17 @@
 steps:
+
   - label: ":docker: build docker image"
     command:
       - ".buildkite/steps/build-image.sh"
       - ".buildkite/steps/upload-image.sh"
+
+  - label: "Define full_test_suite meta if there is non draft pull request"
+    if: build.pull_request.base_branch == "develop" && !build.pull_request.draft
+    commands:
+      - echo Define the meta-data `full_test_suite` variable as true
+      - buildkite-agent meta-data set "full_test_suite" "true"
+    agents:
+      queue: "testing"
 
   - wait
 
@@ -13,15 +22,12 @@ steps:
       queue: "testing"
     artifact_paths:
       - "solana.log"
+  - wait
 
-  - label: ":docker: build proxy docker image"
-    trigger: "neon-proxy"
-    build:
-      branch: "${PROXY_BRANCH:-v0.7.x}"
-      env:
-          EVM_LOADER_REVISION: "${BUILDKITE_COMMIT}"
-          EVM_LOADER_BRANCH: "${EVM_LOADER_BRANCH}"
-          SOLANA_REVISION: "v1.8.12-testnet"
+  - label: ":docker: Up dynamic proxy-model pipeline"
+    env:
+      PROXY_BRANCH: ${PROXY_BRANCH:-v0.7.x}
+    command: ./.buildkite/steps/trigger-proxy-step.sh | buildkite-agent pipeline upload
 
   - wait
 

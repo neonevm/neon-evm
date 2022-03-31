@@ -13,7 +13,7 @@ from web3 import Web3
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 http_client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 # CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "")
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 evm_loader_id = os.environ.get("EVM_LOADER")
@@ -39,7 +39,7 @@ def create_holder_account(operator_acc):
     account_address = accountWithSeed(operator_acc.public_key(), seed, PublicKey(evm_loader_id))
     if get_recent_account_balance(account_address) == 0:
         minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
         send_transaction(client, trx, operator_acc)
     return account_address
@@ -50,7 +50,7 @@ def create_storage_account(operator_acc, seed):
     print("Storage", storage)
     minimum_balance = client.get_minimum_balance_for_rent_exemption(128*1024, commitment=Confirmed)["result"]
     if get_recent_account_balance(storage) == 0:
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(createAccountWithSeed(operator_acc.public_key(), operator_acc.public_key(), seed, minimum_balance, 128*1024, PublicKey(evm_loader_id)))
         send_transaction(client, trx, operator_acc)
     return storage
@@ -295,8 +295,8 @@ class EventTest(unittest.TestCase):
         receipts = []
         rest = message
         while len(rest):
-            (part, rest) = (rest[:1000], rest[1000:])
-            trx = Transaction()
+            (part, rest) = (rest[:950], rest[950:])
+            trx = TransactionWithComputeBudget()
             trx.add(TransactionInstruction(program_id=evm_loader_id,
                 data=write_holder_layout(holder_id, offset, part),
                 keys=[
@@ -317,14 +317,14 @@ class EventTest(unittest.TestCase):
         assert (from_addr == self.caller_ether)
         instruction = from_addr + sign + msg
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(len(trx.instructions) + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(self.storage, 0, instruction, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while True:
             print("Continue")
-            trx = Transaction().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
+            trx = TransactionWithComputeBudget().add(self.sol_instr_20_continue(self.storage, 400, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']:
@@ -341,14 +341,16 @@ class EventTest(unittest.TestCase):
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
         trx.add(self.sol_instr_22_partial_call_from_account(self.holder, self.storage, 0, contract, code))
         send_transaction(http_client, trx, self.acc)
 
         while (True):
             print("Continue")
-            trx = Transaction()
-            trx.add(self.sol_instr_20_continue(self.storage, 200, contract, code))
+            trx = TransactionWithComputeBudget()
+            self.first_instruction_index = len(trx.instructions)
+            trx.add(self.sol_instr_20_continue(self.storage, 100, contract, code))
             result = send_transaction(http_client, trx, self.acc)["result"]
 
             if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][-1]['instructions']):
@@ -365,7 +367,8 @@ class EventTest(unittest.TestCase):
 
         self.write_transaction_to_holder_account(self.holder, sign, msg)
 
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
         trx.add(self.sol_instr_14_combined_call_continue_from_account(self.holder, self.storage, 200, contract, code))
 
         while (True):
@@ -379,7 +382,8 @@ class EventTest(unittest.TestCase):
 
     def create_code_account_if_zero_balance(self, seed, code_account_address):
         if get_recent_account_balance(code_account_address) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
+            self.first_instruction_index = len(trx.instructions)
             trx.add(
                 createAccountWithSeed(self.acc.public_key(),
                                       self.acc.public_key(),
@@ -391,13 +395,13 @@ class EventTest(unittest.TestCase):
 
     def create_code_owner_account_if_zero_balance(self, code_owner_account_address, code_owner_account_eth_address, code_account_address):
         if get_recent_account_balance(code_owner_account_address) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
+            self.first_instruction_index = len(trx.instructions)
             trx.add(
                 self.loader.createEtherAccountTrx(code_owner_account_eth_address, code_account_address)[0]
             )
             res = http_client.send_transaction(trx, self.acc, opts=TxOpts(skip_confirmation=False, preflight_commitment="processed"))["result"]
 
-    @unittest.skip("a.i.")
     def test_01_callFoo(self):
         print('\ntest_01_callFoo')
 
@@ -405,13 +409,13 @@ class EventTest(unittest.TestCase):
 
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_reciever_eth.hex()))
-        result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
         print("test_01_callFoo result")
         print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
         # Nonce unchanged when contract calls other contract
@@ -443,7 +447,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
     def test_02_ecrecover(self):
         print('\ntest_02_ecrecover')
         tx = {'to': self.reId_caller_eth, 'value': 0, 'gas': 999999999, 'gasPrice': 0,
@@ -470,7 +473,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 6) # TODO: why not 3?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)
 
         contract_nonce_post = getTransactionCount(http_client, self.reId_caller)
         # Nonce unchanged when call contract
@@ -509,7 +512,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[125:157], bytes.fromhex("%062x" %0x0 + "20"))
         self.assertEqual(data[157:189], bytes.fromhex("%062x" %0x0 + "01"))
 
-    # @unittest.skip("a.i.")
     def test_03_create2_opcode_by_0x0e_without_accounts(self):
         print('\ntest_03_create2_opcode_by_0x0e_without_accounts')
         print('Check zero balance of code account:', self.reId_create_receiver_code_account)
@@ -558,7 +560,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
@@ -583,7 +585,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    @unittest.skip("a.i.")
+    @unittest.skip("broken, need to use salt in create2 opcode")
     def test_04_create2_opcode(self):
         print('\ntest_04_create2_opcode')
         print('Create code account:', self.reId_create_receiver_code_account)
@@ -603,7 +605,7 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 5) # TODO: why not 2?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)
 
         # emit Foo(caller, amount, message)
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
@@ -628,18 +630,17 @@ class EventTest(unittest.TestCase):
         self.assertEqual(data[29:61], abi.event_signature_to_log_topic('Result_foo(uint256)'))
         self.assertEqual(data[61:93], bytes.fromhex("%062x" %0x0 + hex(124)[2:]))
 
-    # @unittest.skip("a.i.")
     def test_05_nested_revert(self):
         print('\ntest_05_nested_revert')
         func_name = abi.function_signature_to_4byte_selector('callFoo(address)')
         data = (func_name + bytes.fromhex("%024x" % 0x0 + self.reId_revert_eth.hex()))
-        result = self.call_partial_signed(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
+        result = self.call_with_holder_account(input=data, contract_eth=self.reId_caller_eth, contract=self.reId_caller, code=self.reId_caller_code)
         print("test_05_nested_revert result")
         print(result)
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 4)  # TODO: why not 1?
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 0)
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index)
 
         #  emit Result(success, data);
         data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])

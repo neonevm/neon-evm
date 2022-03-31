@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.5.12;
+pragma solidity >=0.7.0;
        
     
 contract Create_Receiver {
@@ -19,7 +19,11 @@ contract Create_Caller {
         uint256 salt = 0;
         assembly {
             addr := create2(0, add(bytecode, 32), mload(bytecode), salt)
+            if iszero(extcodesize(addr)) {
+                revert(0, 0)
+            }
         }
+
         uint result = Create_Receiver(addr).foo("call foo", 123);
         emit Result_foo(result);
     }

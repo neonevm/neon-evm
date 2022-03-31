@@ -10,7 +10,7 @@ from eth_utils import abi
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/")
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
 evm_loader_id = os.environ.get("EVM_LOADER")
 
 ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
@@ -110,20 +110,21 @@ class EventTest(unittest.TestCase):
 
     def call_begin(self, storage, steps, msg, instruction):
         print("Begin")
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 13)))
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.first_instruction_index + 1, len(msg), 13)))
         trx.add(self.sol_instr_19_partial_call(storage, steps, instruction))
         return send_transaction(client, trx, self.acc)
 
     def call_continue(self, storage, steps):
         print("Continue")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_20_continue(storage, steps))
         return send_transaction(client, trx, self.acc)
 
     def call_cancel(self, storage, nonce):
         print("Cancel")
-        trx = Transaction()
+        trx = TransactionWithComputeBudget()
         trx.add(self.sol_instr_21_cancel(storage, nonce))
         return send_transaction(client, trx, self.acc)
 
@@ -142,8 +143,9 @@ class EventTest(unittest.TestCase):
     def call_signed(self, input):
         (from_addr, sign, msg, nonce) = self.get_call_parameters(input)
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg), 5)))
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.first_instruction_index + 1, len(msg), 5)))
         trx.add(self.sol_instr_05(from_addr + sign + msg))
         return send_transaction(client, trx, self.acc)["result"]
 
@@ -152,7 +154,7 @@ class EventTest(unittest.TestCase):
         print("Storage", storage)
 
         if getBalance(storage) == 0:
-            trx = Transaction()
+            trx = TransactionWithComputeBudget()
             trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 
@@ -173,7 +175,6 @@ class EventTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
-    # @unittest.skip("a.i.")
     def test_addNoReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addNoReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2) )
@@ -192,13 +193,12 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[0], 6)  # 6 means OnReturn,
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
 
-    # @unittest.skip("a.i.")
     def test_addReturn(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -217,14 +217,13 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index + index)  # second instruction
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
                 self.assertEqual(data[:1], b'\x06') # 6 means OnReturn
                 self.assertLess(data[1], 0xd0)  # less 0xd0 - success
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:], bytes().fromhex("%064x" % 0x3))
 
-    # @unittest.skip("a.i.")
     def test_addReturnEvent(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEvent(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -244,7 +243,7 @@ class EventTest(unittest.TestCase):
                 print(result)
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 2)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-2]['data'])
                 self.assertEqual(data[:1], b'\x07')  # 7 means OnEvent
@@ -258,7 +257,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 3)) # sum
 
-    # @unittest.skip("a.i.")
     def test_addReturnEventTwice(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -279,7 +277,7 @@ class EventTest(unittest.TestCase):
 
                 self.assertEqual(result['meta']['err'], None)
                 self.assertEqual(len(result['meta']['innerInstructions']), 1)
-                self.assertEqual(result['meta']['innerInstructions'][0]['index'], index)  # second instruction
+                self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index + index)  # second instruction
                 # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
                 data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-3]['data'])
                 # self.assertEqual(data[:1], b'\x07')
@@ -299,7 +297,6 @@ class EventTest(unittest.TestCase):
                 self.assertEqual(int().from_bytes(data[2:10], 'little'), gas) # used_gas
                 self.assertEqual(data[10:42], bytes().fromhex('%064x' % 5)) # sum
 
-    # @unittest.skip("a.i.")
     def test_events_of_different_instructions(self):
         func_name = abi.function_signature_to_4byte_selector('addReturnEventTwice(uint8,uint8)')
         input1 = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x2))
@@ -314,10 +311,11 @@ class EventTest(unittest.TestCase):
         assert (from_addr1 == self.caller_ether)
         assert (from_addr2 == self.caller_ether)
 
-        trx = Transaction()
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(1, len(msg1), 5)))
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.first_instruction_index + 1, len(msg1), 5)))
         trx.add(self.sol_instr_05(from_addr1 + sign1 + msg1))
-        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(3, len(msg2), 5)))
+        trx.add(self.sol_instr_keccak(make_keccak_instruction_data(self.first_instruction_index + 3, len(msg2), 5)))
         trx.add(self.sol_instr_05(from_addr2 + sign2 + msg2))
 
         result = send_transaction(client, trx, self.acc)["result"]
@@ -331,8 +329,8 @@ class EventTest(unittest.TestCase):
         self.assertEqual(result['meta']['err'], None)
         self.assertEqual(len(result['meta']['innerInstructions']), 2) # two transaction-instructions contain events and return_value
 
-        self.assertEqual(result['meta']['innerInstructions'][0]['index'], 1)  # second instruction
-        self.assertEqual(result['meta']['innerInstructions'][1]['index'], 3)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][0]['index'], self.first_instruction_index + 1)  # second instruction
+        self.assertEqual(result['meta']['innerInstructions'][1]['index'], self.first_instruction_index + 3)  # second instruction
 
         # log sol_instr_05(from_addr1 + sign1 + msg1)
         # self.assertEqual(len(result['meta']['innerInstructions'][0]['instructions']), 3)
@@ -374,7 +372,6 @@ class EventTest(unittest.TestCase):
         self.assertEqual(int().from_bytes(data[2:10], 'little'), gas_used) # used_gas
         self.assertEqual(data[10:42], bytes().fromhex('%064x' % 0xb)) # sum
 
-    # @unittest.skip("a.i.")
     def test_caseFailAfterCancel(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
@@ -417,7 +414,6 @@ class EventTest(unittest.TestCase):
 
         self.call_partial_signed(input)
 
-    # @unittest.skip("a.i.")
     def test_caseFailOnBlockedWithOtherStorageIterative(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
@@ -437,7 +433,6 @@ class EventTest(unittest.TestCase):
 
         result = self.call_cancel(storage, nonce)
 
-    # @unittest.skip("a.i.")
     def test_caseFailOnBlockedWithOtherStorageNonIterative(self):
         func_name = abi.function_signature_to_4byte_selector('addReturn(uint8,uint8)')
         input = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))

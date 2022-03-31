@@ -15,8 +15,15 @@ use solana_sdk::signature::Signer as _;
 use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 
 use crate::{config, ethereum, id::ReqId};
+
+use evm_loader::config::{
+    COMPUTE_BUDGET_UNITS,
+    COMPUTE_BUDGET_HEAP_FRAME,
+    REQUEST_UNITS_ADDITIONAL_FEE,
+};
 
 lazy_static::lazy_static! {
     static ref CLIENT: Mutex<Client> = Mutex::new(Client::default());
@@ -81,7 +88,10 @@ pub async fn deposit_token(
     let id = id.to_owned();
     tokio::task::spawn_blocking(move || -> Result<()> {
         let client = get_client();
-        let mut instructions = Vec::with_capacity(3);
+        let mut instructions = Vec::with_capacity(5);
+
+        instructions.push(ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE));
+        instructions.push(ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
 
         let ether_account = client.get_account(&ether_pubkey);
         if ether_account.is_err() {
@@ -141,7 +151,7 @@ pub async fn deposit_token(
         info!("{} Creating transaction...", id);
         let mut tx = Transaction::new_unsigned(message);
         info!("{} Getting recent blockhash...", id);
-        let (blockhash, _) = client.get_recent_blockhash()?;
+        let blockhash = client.get_latest_blockhash()?;
         info!("{} Signing transaction...", id);
         tx.try_sign(&[&signer], blockhash)?;
         info!("{} Sending and confirming transaction...", id);
