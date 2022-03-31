@@ -57,7 +57,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             "get-ether-account-data {} --evm_loader {}".format(
                 ether_account, evm_loader_id))
-        balance = balance_re.match(output)
+        balance = balance_re.match(output.stdout)
         self.assertIsNotNone(balance)
         balance = balance.group(1)
         self.assertEqual(balance, '10000000000')
@@ -68,7 +68,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(
             "get-ether-account-data {} --evm_loader {}".format(
                 ether_account, evm_loader_id))
-        balance = balance_re.match(output)
+        balance = balance_re.match(output.stdout)
         self.assertIsNotNone(balance)
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
@@ -96,7 +96,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
         expected_line = f""""ether":"{ether_account[2:]}","""
-        self.assertIn(expected_line, output,
+        self.assertIn(expected_line, output.stdout,
                       "There is no address in the output")
         self.print_output(output)
 
@@ -111,7 +111,7 @@ class NeonCliTest(unittest.TestCase):
         )
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        self.assertTrue(bool(output_re.search(output)),
+        self.assertTrue(bool(output_re.search(output.stdout)),
                         "The output structure is not 'address nonce'")
         self.print_output(output)
 
@@ -170,7 +170,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli help
         '''
-        output = neon_cli().call(f"help")
+        output = neon_cli().call(f"help create-ether-account --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
         self.print_output(output)
@@ -199,7 +199,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
         self.assertTrue(
-            bool(output_re.search(output)),
+            bool(output_re.search(output.stdout)),
             "The output structure is not 'NEON_CHAIN_ID=numeric_value'")
         self.print_output(output)
 
@@ -223,9 +223,9 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call(f"-V")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        self.assertIn('neon-cli', output, "There is no 'neon-cli' in version")
+        self.assertIn('neon-cli', output.stdout, "There is no 'neon-cli' in version")
         self.assertTrue(
-            bool(output_re.search(output)),
+            bool(output_re.search(output.stdout)),
             "The output structure is not 'neon-cli Neon-cli/vNNN-alphanumeric'"
         )
         self.print_output(output)
