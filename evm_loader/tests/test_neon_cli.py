@@ -149,7 +149,6 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        contract_id = ""
         output = neon_cli().call(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -164,7 +163,15 @@ class NeonCliTest(unittest.TestCase):
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertIn('ok', output)
-
+        
+        
+    def test_command_version(self):
+        '''
+        neon-cli -V
+        '''
+        output = neon_cli().call(f"-V")
+        self.assertIsNotNone(output)
+        self.assertIn('neon-cli', output)
 
 if __name__ == '__main__':
     unittest.main()
