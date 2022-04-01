@@ -3,6 +3,7 @@ import unittest
 import random
 import re
 import string
+from evm_loader.tests.test_acc_storage_states import CONTRACTS_DIR
 
 from solana_utils import *
 
@@ -170,9 +171,11 @@ class NeonCliTest(unittest.TestCase):
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         contract_id = self.create_new_account(evm_loader_id)
+        program_id, bytes_result, code_id = EvmLoader().deployChecked(
+            CONTRACTS_DIR + "EthToken.binary", None, None)
         index = 0
         output = neon_cli().call_v2(
-            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+            f"get-storage-at {program_id} {index} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 101)
