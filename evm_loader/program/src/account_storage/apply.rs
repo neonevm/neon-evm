@@ -156,7 +156,11 @@ impl<'a> ProgramAccountStorage<'a> {
                 .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
             assert!(trx_count > U256::from(account.trx_count));
-            account.trx_count = (trx_count % U256::from(u64::MAX)).as_u64();
+            if trx_count > U256::from(u64::MAX) {
+                return Err!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", address);
+            }
+
+            account.trx_count = trx_count.as_u64();
         }
 
         if let Some((code, valids)) = code_and_valids {
