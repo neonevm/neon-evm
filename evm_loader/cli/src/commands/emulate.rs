@@ -28,7 +28,8 @@ pub fn execute(
     caller_id: H160, 
     data: Option<Vec<u8>>,
     value: Option<U256>,
-    token_mint: &Pubkey
+    token_mint: &Pubkey,
+    chain_id: u64,
 ) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -40,8 +41,8 @@ pub fn execute(
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config);
-    
+    let storage = EmulatorAccountStorage::new(config, *token_mint, chain_id);
+
     let program_id = if let Some(program_id) = contract_id {
         debug!("program_id to call: {}", program_id);
         program_id
