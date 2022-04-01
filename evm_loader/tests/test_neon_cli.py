@@ -90,8 +90,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         ether_account = self.generate_address()
-        output_re = re.compile(r"(\"ether\"\:\"{}\")$".format(
-            ether_account[2:]),
+        output_re = re.compile(r"\"ether\"\:\"{}\"".format(ether_account[2:]),
                                flags=re.DOTALL)
         output = neon_cli().call_v2(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
