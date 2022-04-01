@@ -73,25 +73,26 @@ class NeonCliTest(unittest.TestCase):
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
 
-    # def test_command_cancel_trx(self):
-    #     '''
-    #     neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     '''
-    #     # storage_account = self.generate_address()
-    #     storage_account = self.create_new_account(evm_loader_id)
-    #     output = neon_cli().call_v2(
-    #         f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
-    #     self.assertIsNotNone(output)
-    #     self.assert_exit_code(output)
-    #     # self.print_output(output)
+    def test_command_cancel_trx(self):
+        '''
+        neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        storage_account = self.create_new_account(evm_loader_id)
+        output = neon_cli().call_v2(
+            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        self.assert_exit_code(output)
+        #
+        self.print_output(output.stdout)
 
     def test_command_create_ether_account(self):
         '''
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         ether_account = self.generate_address()
-        output_re = re.compile(r"\"ether\"\:\"{}\"".format(ether_account[2:]),
-                               flags=re.DOTALL)
+        output_re = re.compile(
+            "\"ether\"\:\"\w+\"",  # .format(ether_account[2:]),
+            flags=re.DOTALL)
         output = neon_cli().call_v2(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
@@ -174,7 +175,7 @@ class NeonCliTest(unittest.TestCase):
             f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+        self.assertEqual(output.returncode, 101)
         #
         self.print_output(output.stdout)
 
@@ -199,7 +200,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_v2(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+        self.assertEqual(output.returncode, 113)
         #
         self.print_output(output.stdout)
 
@@ -226,7 +227,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_v2(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+        self.assertEqual(output.returncode, 207)
         #
         self.print_output(output.stdout)
 
