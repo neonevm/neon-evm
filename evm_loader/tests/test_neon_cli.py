@@ -106,7 +106,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         output_re = re.compile(r"^(\w+\s+\d{1,3})$", flags=re.DOTALL)
         seed_string = self.generate_address()
-        output = neon_cli().call_v2(
+        output = neon_cli().call(
             f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
@@ -200,7 +200,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
         output_re = re.compile(r"^([\w]+\=\d+)$", flags=re.DOTALL)
-        output = neon_cli().call_v2(
+        output = neon_cli().call(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
@@ -227,7 +227,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         output_re = re.compile(r"^neon-cli Neon-cli/v[\d\.]+[\w-]+",
                                flags=re.DOTALL)
-        output = neon_cli().call_v2(f"-V")
+        output = neon_cli().call(f"-V")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
         self.assertIn('neon-cli', output.stdout,
