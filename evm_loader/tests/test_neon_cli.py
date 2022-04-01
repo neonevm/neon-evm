@@ -165,18 +165,19 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    # def test_command_get_storage_at(self):
-    #     '''
-    #     neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     '''
-    #     contract_id = self.create_new_account(evm_loader_id)
-    #     index = 0
-    #     output = neon_cli().call_v2(
-    #         f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
-    #     )
-    #     self.assertIsNotNone(output)
-    #     self.assert_exit_code(output)
-    #     # self.print_output(output)
+    def test_command_get_storage_at(self):
+        '''
+        neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        contract_id = self.create_new_account(evm_loader_id)
+        index = 0
+        output = neon_cli().call_v2(
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+        )
+        self.assertIsNotNone(output)
+        self.assert_exit_code(output)
+        #
+        self.print_output(output.stdout)
 
     def test_command_help(self):
         '''
@@ -185,21 +186,23 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_without_url(f"help create-ether-account")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        self.print_output(output.stdout)
+        #
+        # self.print_output(output.stdout)
 
-    # def test_command_migrate_account(self):
-    #     '''
-    #     neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     '''
-    #     ether_account = self.generate_address()
-    #     neon_cli().call_v2(
-    #         f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
-    #     )
-    #     output = neon_cli().call_v2(
-    #         f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
-    #     self.assertIsNotNone(output)
-    #     self.assert_exit_code(output)
-    #     # self.print_output(output)
+    def test_command_migrate_account(self):
+        '''
+        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        ether_account = self.generate_address()
+        neon_cli().call_v2(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
+        output = neon_cli().call_v2(
+            f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        self.assert_exit_code(output)
+        #
+        self.print_output(output.stdout)
 
     def test_command_neon_elf_params(self):
         '''
@@ -216,16 +219,17 @@ class NeonCliTest(unittest.TestCase):
         #
         self.print_output(output.stdout)
 
-    # def test_command_update_valids_table(self):
-    #     '''
-    #     neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     '''
-    #     contract_id = self.generate_address()
-    #     output = neon_cli().call_v2(
-    #         f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
-    #     self.assertIsNotNone(output)
-    #     self.assert_exit_code(output)
-    #     # self.print_output(output)
+    def test_command_update_valids_table(self):
+        '''
+        neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        '''
+        contract_id = self.generate_address()
+        output = neon_cli().call_v2(
+            f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        self.assert_exit_code(output)
+        #
+        self.print_output(output.stdout)
 
     def test_command_version(self):
         '''
