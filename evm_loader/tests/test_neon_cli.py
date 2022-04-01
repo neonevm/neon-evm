@@ -5,7 +5,7 @@ import string
 import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
-from solana_utils import *
+# from solana_utils import *
 from solana_utils import neon_cli, EvmLoader
 from test_acc_storage_states import CONTRACTS_DIR
 
@@ -93,22 +93,11 @@ class NeonCliTest(unittest.TestCase):
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         ether_account = self.generate_address()
-        # output_re = re.compile(
-        #     "\"ether\"\:\"\w+\"",  # .format(ether_account[2:]),
-        #     flags=re.DOTALL)
         output = neon_cli().call_v2(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        # expected_line = f""""ether":"{ether_account[2:]}","""
-        # self.assertIn(expected_line, output.stdout,
-        #               "There is no address in the output")
-        # self.assertTrue(
-        #     bool(output_re.search(output.stdout)),
-        #     f"""The output structure is not '"ethers":"{ether_account[2:]}"'"""
-        # )
-        self.print_output(output.stdout)
 
     def test_command_create_program_address(self):
         """
@@ -123,7 +112,6 @@ class NeonCliTest(unittest.TestCase):
         self.assert_exit_code(output)
         self.assertTrue(bool(output_re.search(output.stdout)),
                         "The output structure is not 'address nonce'")
-        self.print_output(output.stdout)
 
     '''
     2022-04-01 07:45:08.671 E main.rs:879 300 
@@ -132,7 +120,7 @@ class NeonCliTest(unittest.TestCase):
     kind: RpcError(RpcResponseError { code: -32600, message: "Invalid request", data: Empty }) }
     '''
 
-    @unittest.skip("Invalid request")
+    # @unittest.skip("Invalid request")
     def test_command_deploy(self):
         """
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -142,6 +130,8 @@ class NeonCliTest(unittest.TestCase):
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
+        #
+        self.print_output(output.stdout)
 
     def test_command_emulate(self):
         """
@@ -191,8 +181,6 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_without_url(f"help create-ether-account")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        #
-        # self.print_output(output.stdout)
 
     def test_command_migrate_account(self):
         """
@@ -221,8 +209,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertTrue(
             bool(output_re.search(output.stdout)),
             "The output structure is not 'NEON_PARAM=numeric_value'")
-        #
-        self.print_output(output.stdout)
 
     def test_command_update_valids_table(self):
         """
@@ -251,7 +237,6 @@ class NeonCliTest(unittest.TestCase):
             bool(output_re.search(output.stdout)),
             "The output structure is not 'neon-cli Neon-cli/vNNN-alphanumeric'"
         )
-        self.print_output(output.stdout)
 
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
