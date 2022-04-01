@@ -104,7 +104,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli create-program-address <SEED_STRING> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         '''
-        output_re = re.compile(r"^(\w+\s+\d{1,3})$", flags=re.DOTALL)
+        # output_re = re.compile(r"^(\w+\s+\d{1,3})$", flags=re.DOTALL)
         seed_string = self.generate_address()
         output = neon_cli().call(
             f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
@@ -175,8 +175,7 @@ class NeonCliTest(unittest.TestCase):
         '''
         neon-cli help
         '''
-        output = neon_cli().call_v2(
-            f"help create-ether-account --evm_loader {evm_loader_id}")
+        output = neon_cli().call_without_url(f"help create-ether-account")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
         self.print_output(output.stdout)

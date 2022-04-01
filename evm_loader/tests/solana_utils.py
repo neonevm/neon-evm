@@ -221,6 +221,15 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
+    def call_without_url(self, arguments):
+        cmd = f"neon-cli {arguments}"
+        try:
+            return subprocess.run(cmd, shell=True, universal_newlines=True, text=True)
+        except subprocess.CalledProcessError as err:
+            import sys
+            print("ERR: neon-cli error {}".format(err))
+            raise
+
     def emulate(self, loader_id, arguments):
         cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
                                                                                            loader_id,
