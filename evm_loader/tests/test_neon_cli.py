@@ -77,39 +77,39 @@ class NeonCliTest(unittest.TestCase):
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
 
-    def test_command_cancel_trx(self):
-        '''
-        neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        '''
-        storage_account = self.create_new_account(evm_loader_id)
-        output = neon_cli().call_v2(
-            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        self.assert_exit_code(output)
-        #
-        self.print_output(output.stdout)
+    # def test_command_cancel_trx(self):
+    #     '''
+    #     neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     '''
+    #     storage_account = self.create_new_account(evm_loader_id)
+    #     output = neon_cli().call_v2(
+    #         f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     self.assert_exit_code(output)
+    #     #
+    #     self.print_output(output.stdout)
 
-    def test_command_create_ether_account(self):
-        '''
-        neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        '''
-        ether_account = self.generate_address()
-        output_re = re.compile(
-            "\"ether\"\:\"\w+\"",  # .format(ether_account[2:]),
-            flags=re.DOTALL)
-        output = neon_cli().call_v2(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
-        )
-        self.assertIsNotNone(output)
-        self.assert_exit_code(output)
-        # expected_line = f""""ether":"{ether_account[2:]}","""
-        # self.assertIn(expected_line, output.stdout,
-        #               "There is no address in the output")
-        self.assertTrue(
-            bool(output_re.search(output.stdout)),
-            f"""The output structure is not '"ethers":"{ether_account[2:]}"'"""
-        )
-        self.print_output(output.stdout)
+    # def test_command_create_ether_account(self):
+    #     '''
+    #     neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     '''
+    #     ether_account = self.generate_address()
+    #     output_re = re.compile(
+    #         "\"ether\"\:\"\w+\"",  # .format(ether_account[2:]),
+    #         flags=re.DOTALL)
+    #     output = neon_cli().call_v2(
+    #         f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+    #     )
+    #     self.assertIsNotNone(output)
+    #     self.assert_exit_code(output)
+    #     # expected_line = f""""ether":"{ether_account[2:]}","""
+    #     # self.assertIn(expected_line, output.stdout,
+    #     #               "There is no address in the output")
+    #     self.assertTrue(
+    #         bool(output_re.search(output.stdout)),
+    #         f"""The output structure is not '"ethers":"{ether_account[2:]}"'"""
+    #     )
+    #     self.print_output(output.stdout)
 
     def test_command_create_program_address(self):
         '''
