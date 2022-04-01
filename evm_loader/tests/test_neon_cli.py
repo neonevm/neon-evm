@@ -1,11 +1,14 @@
-from subprocess import CompletedProcess
-import unittest
+import os
 import random
 import re
 import string
+import unittest
+from subprocess import CompletedProcess
+from eth_keys import keys as eth_keys
+from evm_loader.tests.solana_utils import EvmLoader, neon_cli
 from evm_loader.tests.test_acc_storage_states import CONTRACTS_DIR
 
-from solana_utils import *
+# from solana_utils import *
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 '''
