@@ -129,7 +129,7 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_v2(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+        self.assertEqual(output.returncode, 113)
         #
         self.print_output(output.stdout)
 
