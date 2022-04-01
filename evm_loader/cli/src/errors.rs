@@ -59,9 +59,6 @@ pub enum NeonCliError {
     /// Account already exists
     #[error("Account already exists. {0:?}")]
     AccountAlreadyExists(Account),
-    /// Account is uninitialized.
-    #[error("Uninitialized account.  account={0:?}, code_account={1:?}")]
-    AccountUninitialized(Pubkey,Pubkey),
     /// Account is already initialized.
     #[error("Account is already initialized.  account={0:?}, code_account={1:?}")]
     AccountAlreadyInitialized(Pubkey,Pubkey),
@@ -135,7 +132,6 @@ impl NeonCliError {
             NeonCliError::CodeAccountRequired(_)            => 208, // => 4008,
             NeonCliError::IncorrectAccount(_)               => 209, // => 4009,
             NeonCliError::AccountAlreadyExists(_)           => 210, // => 4010,
-            NeonCliError::AccountUninitialized(_,_)         => 212, // => 4012,
             NeonCliError::AccountAlreadyInitialized(_,_)    => 213, // => 4013,
             NeonCliError::ContractAccountExpected(_)        => 215, // => 4015,
             NeonCliError::DeploymentToExistingAccount(_)    => 221, // => 4021,
