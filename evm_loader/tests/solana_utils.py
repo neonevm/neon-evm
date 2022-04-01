@@ -226,7 +226,9 @@ class neon_cli:
     def call_without_url(self, arguments):
         cmd = f"neon-cli {arguments}"
         try:
-            return subprocess.run(cmd, shell=True, universal_newlines=True, text=True)
+            return subprocess.run(
+                cmd, shell=True, capture_output=True, universal_newlines=True, text=True
+            )
         except subprocess.CalledProcessError as err:
             import sys
             print("ERR: neon-cli error {}".format(err))
