@@ -1,10 +1,13 @@
+ARG SOLANA_REVISION=v1.9.12-testnet-with_trx_cap
 # Install BPF SDK
-FROM solanalabs/rust:1.53.0 AS builder
-RUN rustup component add clippy
+FROM solanalabs/rust:latest AS builder
+RUN rustup toolchain install nightly
+RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.7.9/install)" && \
-    /root/.local/share/solana/install/releases/1.7.9/solana-release/bin/sdk/bpf/scripts/install.sh
+RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
+    /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 
 # Build evm_loader
 # Note: create stub Cargo.toml to speedup build
@@ -14,10 +17,12 @@ WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo clippy && \
+RUN cargo +nightly clippy && \
     cargo build --release && \
     cargo build-bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-bpf --features no-logs,alpha && cp target/deploy/evm_loader.so target/deploy/evm_loader-alpha.so && \
+    cargo build-bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
     cargo build-bpf --features no-logs
 
 # Download and build spl-token
@@ -34,8 +39,8 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/*.sol /opt/
-COPY evm_loader/precompiles_testdata.json /opt/
+COPY evm_loader/tests/*.sol /opt/
+COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
@@ -43,7 +48,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM neonlabsorg/solana:v1.7.9-testnet AS solana
+FROM neonlabsorg/solana:${SOLANA_REVISION} AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
@@ -52,32 +57,29 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
-COPY evm_loader/test_requirements.txt solana-py.patch /tmp/
-RUN pip3 install -r /tmp/test_requirements.txt
+COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
+RUN pip3 install -r /tmp/requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/faucet /opt/
-COPY --from=evm-loader-builder /opt/evm_loader/target/release/sender /opt/
 COPY --from=spl-token-builder /opt/spl-token /opt/
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
+    evm_loader/tests/*.py \
     evm_loader/wait-for-solana.sh \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
-    evm_loader/neon_token_keypair.json /opt/
+    evm_loader/neon_token_keypair.json \
+    evm_loader/permission_allowance_token_keypair.json \
+    evm_loader/permission_denial_token_keypair.json \
+    evm_loader/utils/set_single_acct_permission.sh \
+    evm_loader/utils/set_many_accts_permission.sh /opt/
 
-# Next 2 strings are for backward compatibility with proxy-model.py
-# Can be deleted after issue https://github.com/neonlabsorg/proxy-model.py/issues/249 resolved
-COPY evm_loader/neon_token_keypair.json /opt/test_token_keypair
-COPY evm_loader/evm_loader-keypair.json /opt/test_token_owner
-
-COPY evm_loader/performance/run.py evm_loader/performance/run.sh evm_loader/performance/deploy-evmloader.sh  /opt/
-COPY evm_loader/performance/contracts  /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json

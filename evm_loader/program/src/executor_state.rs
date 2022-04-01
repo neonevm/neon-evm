@@ -1,6 +1,6 @@
-#![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
-
-/// Todo: document
+//! # Neon EVM Executor State
+//!
+//! Executor State is a struct that stores the state during execution.
 
 use core::mem;
 use std::{
@@ -13,12 +13,16 @@ use std::{
 
 use evm::{ExitError, H160, H256, Transfer, U256, Valids};
 use evm::backend::{Apply, Log};
-use evm::gasometer::Gasometer;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 
-use crate::solana_backend::AccountStorage;
-use crate::utils::keccak256_h256;
+use crate::{
+    query,
+    account_storage::AccountStorage,
+    utils::keccak256_h256
+};
+
+use spl_associated_token_account::get_associated_token_address;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ExecutorAccount {
@@ -30,9 +34,9 @@ struct ExecutorAccount {
     pub reset: bool,
 }
 
+/// Represents additional data attached to an executor.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorMetadata {
-    gasometer: Gasometer,
     is_static: bool,
     depth: Option<usize>,
     block_number: U256,
@@ -40,11 +44,11 @@ pub struct ExecutorMetadata {
 }
 
 impl ExecutorMetadata {
+    /// Creates new empty metadata with specified gas limit.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new<B: AccountStorage>(gas_limit: u64, backend: &B) -> Self {
+    pub fn new<B: AccountStorage>(backend: &B) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit),
             is_static: false,
             depth: None,
             block_number: backend.block_number(),
@@ -52,12 +56,8 @@ impl ExecutorMetadata {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_commit(&mut self, other: Self) -> Result<(), ExitError> {
-	    self.gasometer.record_stipend(other.gasometer.gas())?;
-        self.gasometer
-            .record_refund(other.gasometer.refunded_gas())?;
-
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
+    pub fn swallow_commit(&mut self, _other: Self) -> Result<(), ExitError> {
     	// The following fragment deleted in the mainstream code:
         // if let Some(runtime) = self.runtime.borrow_mut().as_ref() {
         //     let return_value = other.borrow().runtime().unwrap().machine().return_value();
@@ -67,23 +67,24 @@ impl ExecutorMetadata {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn swallow_revert(&mut self, other: Self) -> Result<(), ExitError> {
-        self.gasometer.record_stipend(other.gasometer.gas())?;
-
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
+    pub fn swallow_revert(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
+    /// Records gas usage on discard (actually does nothing).
+    /// # Errors
+    /// Cannot return an error.
     #[allow(clippy::needless_pass_by_value, clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn swallow_discard(&mut self, _other: Self) -> Result<(), ExitError> {
         Ok(())
     }
 
+    /// Creates new instance of metadata when entering next frame of execution.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn spit_child(&self, gas_limit: u64, is_static: bool) -> Self {
+    pub fn spit_child(&self, is_static: bool) -> Self {
         Self {
-            gasometer: Gasometer::new(gas_limit),
             is_static: is_static || self.is_static,
             depth: match self.depth {
                 None => Some(0),
@@ -94,21 +95,13 @@ impl ExecutorMetadata {
         }
     }
 
-    #[must_use]
-    pub const fn gasometer(&self) -> &Gasometer {
-        &self.gasometer
-    }
-
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.gasometer
-    }
-
-    #[allow(dead_code)]
+    /// Returns property `is_static`.
     #[must_use]
     pub const fn is_static(&self) -> bool {
         self.is_static
     }
 
+    /// Returns current depth of frame of execution.
     #[must_use]
     pub const fn depth(&self) -> Option<usize> {
         self.depth
@@ -154,6 +147,16 @@ pub struct ERC20Approve {
     pub value: U256
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Withdraw {
+    pub source: H160,
+    pub dest: Pubkey,
+    pub dest_neon: Pubkey,
+    pub neon_amount: U256,
+    pub spl_amount: u64
+}
+
+/// Represents the state of executor abstracted away from a backend.
 #[derive(Serialize, Deserialize)]
 pub struct ExecutorSubstate {
     metadata: ExecutorMetadata,
@@ -168,18 +171,21 @@ pub struct ExecutorSubstate {
     spl_supply: RefCell<BTreeMap<Pubkey, u64>>,
     spl_transfers: Vec<SplTransfer>,
     spl_approves: Vec<SplApprove>,
-    erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
+    withdrawals: Vec<Withdraw>,
+    erc20_allowances: RefCell<BTreeMap<(H160, H160, H160, Pubkey), U256>>,
     deletes: BTreeSet<H160>,
+    query_account_cache: query::AccountCache,
 }
 
-pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<ERC20Approve>);
+pub type ApplyState = (Vec::<Apply<BTreeMap<U256, U256>>>, Vec<Log>, Vec<Transfer>, Vec<SplTransfer>, Vec<SplApprove>, Vec<Withdraw>, Vec<ERC20Approve>);
 
 impl ExecutorSubstate {
+    /// Creates new empty instance of `ExecutorSubstate`.
     #[allow(clippy::missing_const_for_fn)]
     #[must_use]
-    pub fn new<B: AccountStorage>(gas_limit: u64, backend: &B) -> Self {
+    pub fn new<B: AccountStorage>(backend: &B) -> Self {
         Self {
-            metadata: ExecutorMetadata::new(gas_limit, backend),
+            metadata: ExecutorMetadata::new(backend),
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
@@ -191,22 +197,27 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
-            erc20_allowances: BTreeMap::new(),
+            withdrawals: Vec::new(),
+            erc20_allowances: RefCell::new(BTreeMap::new()),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         }
     }
 
+    /// Returns an immutable reference on executor metadata.
     #[must_use]
     pub const fn metadata(&self) -> &ExecutorMetadata {
         &self.metadata
     }
 
+    /// Returns the mutable reference on executor metadata.
     pub fn metadata_mut(&mut self) -> &mut ExecutorMetadata {
         &mut self.metadata
     }
 
-    /// Deconstruct the executor, return state to be applied. Panic if the
-    /// executor is not in the top-level substate.
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     pub fn deconstruct<B: AccountStorage>(
         mut self,
@@ -264,18 +275,20 @@ impl ExecutorSubstate {
             applies.push(Apply::Delete { address });
         }
 
-        let mut erc20_approves = Vec::with_capacity(self.erc20_allowances.len());
-        for ((owner, spender, contract, mint), value) in self.erc20_allowances {
+        let erc20_allowances = self.erc20_allowances.take();
+        let mut erc20_approves = Vec::with_capacity(erc20_allowances.len());
+        for ((owner, spender, contract, mint), value) in erc20_allowances {
             let approve = ERC20Approve { owner, spender, contract, mint, value };
             erc20_approves.push(approve);
         }
 
-        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, erc20_approves)
+        (applies, self.logs, self.transfers, self.spl_transfers, self.spl_approves, self.withdrawals, erc20_approves)
     }
 
-    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
+    /// Creates new instance of `ExecutorSubstate` when entering next execution of a call or create.
+    pub fn enter(&mut self, is_static: bool) {
         let mut entering = Self {
-            metadata: self.metadata.spit_child(gas_limit, is_static),
+            metadata: self.metadata.spit_child(is_static),
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
@@ -287,14 +300,21 @@ impl ExecutorSubstate {
             spl_supply: RefCell::new(BTreeMap::new()),
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
-            erc20_allowances: BTreeMap::new(),
+            withdrawals: Vec::new(),
+            erc20_allowances: RefCell::new(BTreeMap::new()),
             deletes: BTreeSet::new(),
+            query_account_cache: query::AccountCache::new(),
         };
         mem::swap(&mut entering, self);
 
         self.parent = Some(Box::new(entering));
     }
 
+    /// Commits the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence or if an address not found in known accounts.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot commit on root substate");
         mem::swap(&mut exited, self);
@@ -310,7 +330,9 @@ impl ExecutorSubstate {
         self.spl_transfers.append(&mut exited.spl_transfers);
         self.spl_approves.append(&mut exited.spl_approves);
 
-        self.erc20_allowances.append(&mut exited.erc20_allowances);
+        self.withdrawals.append(&mut exited.withdrawals);
+
+        self.erc20_allowances.borrow_mut().append(&mut exited.erc20_allowances.borrow_mut());
 
         let mut resets = BTreeSet::new();
         for (address, account) in &exited.accounts {
@@ -347,6 +369,11 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Reverts the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_revert(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -356,6 +383,11 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Discards the state on exit of call or creation.
+    /// # Panics
+    /// Panics on incorrect exit sequence.
+    /// # Errors
+    /// May return one of `ExitError` variants.
     pub fn exit_discard(&mut self) -> Result<(), ExitError> {
         let mut exited = *self.parent.take().expect("Cannot discard on root substate");
         mem::swap(&mut exited, self);
@@ -372,21 +404,29 @@ impl ExecutorSubstate {
         }
     }
 
+    /// Returns copy of basic account information if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_nonce(&self, address: H160) -> Option<U256> {
         self.known_account(address).map(|acc| acc.nonce)
     }
 
+    /// Returns copy of code stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_code(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.code.clone())
     }
 
+    /// Returns copy of `valids` bit array stored in account if the `address` represents a known account.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_valids(&self, address: H160) -> Option<Vec<u8>> {
         self.known_account(address).and_then(|acc| acc.valids.clone())
     }
 
+    /// Checks if an account is empty: does not contain balance, nonce and code.
+    /// Returns `None` if the account is not known.
     #[must_use]
     pub fn known_empty(&self, address: H160) -> Option<bool> {
         if let Some(balance) = self.known_balance(&address) {
@@ -410,6 +450,9 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Returns value of record stored in a account if the `address` represents a known account.
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if a record with the key does not exist or the account is not known.
     #[must_use]
     pub fn known_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(value) = self.storages.get(&(address, key)) {
@@ -429,6 +472,8 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Returns zero if the account is in reset state (empty storage).
+    /// Returns `None` if the account is not in reset state or is not known.
     #[must_use]
     pub fn known_original_storage(&self, address: H160, key: U256) -> Option<U256> {
         if let Some(account) = self.accounts.get(&address) {
@@ -444,6 +489,7 @@ impl ExecutorSubstate {
         None
     }
 
+    /// Checks if an account has been deleted.
     #[must_use]
     pub fn deleted(&self, address: H160) -> bool {
         if self.deletes.contains(&address) {
@@ -481,6 +527,7 @@ impl ExecutorSubstate {
             .expect("New account was just inserted")
     }
 
+    /// Increments nonce of an account: increases it by 1.
     pub fn inc_nonce<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let account = self.account_mut(address, backend);
 
@@ -488,10 +535,12 @@ impl ExecutorSubstate {
         account.nonce = nonce;
     }
 
+    /// Adds or changes a record in the storage of given account.
     pub fn set_storage(&mut self, address: H160, key: U256, value: U256) {
         self.storages.insert((address, key), value);
     }
 
+    /// Clears the storage of an account and marks the account as reset.
     pub fn reset_storage<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let mut removing = Vec::new();
 
@@ -508,6 +557,7 @@ impl ExecutorSubstate {
         self.account_mut(address, backend).reset = true;
     }
 
+    /// Adds an Ethereum event log record.
     pub fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) {
         self.logs.push(Log {
             address,
@@ -516,10 +566,12 @@ impl ExecutorSubstate {
         });
     }
 
+    /// Marks an account as deleted.
     pub fn set_deleted(&mut self, address: H160) {
         self.deletes.insert(address);
     }
 
+    /// Initializes a contract account with it's code and corresponding bit array of valid jumps.
     pub fn set_code<B: AccountStorage>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
         self.account_mut(address, backend).valids = Some(Valids::compute(&code));
         self.account_mut(address, backend).code = Some(code);
@@ -550,6 +602,9 @@ impl ExecutorSubstate {
         )
     }
 
+    /// Adds a transfer to execute.
+    /// # Errors
+    /// May return `OutOfFund` if the source has no funds.
     pub fn transfer<B: AccountStorage>(
         &mut self,
         transfer: &Transfer,
@@ -574,11 +629,13 @@ impl ExecutorSubstate {
         Ok(())
     }
 
+    /// Resets the balance of an account: sets it to 0.
     pub fn reset_balance(&self, address: H160) {
         let mut balances = self.balances.borrow_mut();
         balances.insert(address, U256::zero());
     }
 
+    /// Adds an account to list of known accounts if not yet added.
     pub fn touch<B: AccountStorage>(&mut self, address: H160, backend: &B) {
         let _unused = self.account_mut(address, backend);
     }
@@ -625,6 +682,31 @@ impl ExecutorSubstate {
         spl_balances.insert(transfer.target_token, new_target_balance);
 
         self.spl_transfers.push(transfer);
+
+        Ok(())
+    }
+
+    fn withdraw<B: AccountStorage>(&mut self, withdraw: Withdraw, backend: &B) -> Result<(), ExitError> {
+        debug_print!("withdraw: {:?}", withdraw);
+
+        let new_source_balance = {
+            let balance = self.balance(&withdraw.source, backend);
+            balance.checked_sub(withdraw.neon_amount).ok_or(ExitError::OutOfFund)?
+        };
+
+        let new_target_balance = {
+            let balance = self.spl_balance(&withdraw.dest_neon, backend);
+            balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
+        };
+
+        let dest_neon = withdraw.dest_neon;
+
+        let mut balances = self.balances.borrow_mut();
+        balances.insert(withdraw.source, new_source_balance);
+        self.withdrawals.push(withdraw);
+
+        let mut spl_balances = self.spl_balances.borrow_mut();
+        spl_balances.insert(dest_neon, new_target_balance);
 
         Ok(())
     }
@@ -681,38 +763,34 @@ impl ExecutorSubstate {
         )
     }
 
-    fn known_erc20_allowance(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey) -> Option<&U256> {
-        match self.erc20_allowances.get(&(owner, spender, contract, mint)) {
-            Some(allowance) => Some(allowance),
+    fn known_erc20_allowance(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey) -> Option<U256> {
+        let erc20_allowances = self.erc20_allowances.borrow();
+        match erc20_allowances.get(&(owner, spender, contract, mint)) {
+            Some(&allowance) => Some(allowance),
             None => self.parent.as_ref().and_then(|parent| parent.known_erc20_allowance(owner, spender, contract, mint))
         }
     }
 
     #[must_use]
     pub fn erc20_allowance<B: AccountStorage>(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey, backend: &B) -> U256 {
-        self.known_erc20_allowance(owner, spender, contract, mint)
-            .copied()
-            .unwrap_or_else(|| backend.get_erc20_allowance(&owner, &spender, &contract, &mint))
-    }
+        let value = self.known_erc20_allowance(owner, spender, contract, mint);
 
-    #[must_use]
-    pub fn erc20_allowance_mut<B: AccountStorage>(&mut self, owner: H160, spender: H160, contract: H160, mint: Pubkey, backend: &B) -> &mut U256 {
-        let key = (owner, spender, contract, mint);
+        value.map_or_else(
+            || {
+                let allowance = backend.get_erc20_allowance(&owner, &spender, &contract, &mint);
 
-        #[allow(clippy::map_entry)]
-        if !self.erc20_allowances.contains_key(&key) {
-            let allowance = self.erc20_allowance(owner, spender, contract, mint, backend);
-            self.erc20_allowances.insert(key, allowance);
-        }
+                let key = (owner, spender, contract, mint);
+                self.erc20_allowances.borrow_mut().insert(key, allowance);
 
-        self.erc20_allowances
-            .get_mut(&key)
-            .expect("New allowance was just inserted")
+                allowance
+            },
+            |value| value
+        )
     }
 
     fn erc20_approve(&mut self, approve: &ERC20Approve) {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
-        self.erc20_allowances.insert(key, approve.value);
+        self.erc20_allowances.borrow_mut().insert(key, approve.value);
     }
 }
 
@@ -722,18 +800,6 @@ pub struct ExecutorState<'a, B: AccountStorage> {
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
-    #[must_use]
-    #[allow(clippy::unused_self)]
-    pub fn gas_price(&self) -> U256 {
-        // TODO correct gas price
-        U256::zero()
-    }
-
-    #[must_use]
-    pub fn origin(&self) -> H160 {
-        self.backend.origin()
-    }
-
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn block_hash(&self, _number: U256) -> H256 {
@@ -771,7 +837,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        crate::config::chain_id()
+        U256::from(self.backend.chain_id())
     }
 
     #[must_use]
@@ -834,8 +900,8 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.substate.metadata_mut()
     }
 
-    pub fn enter(&mut self, gas_limit: u64, is_static: bool) {
-        self.substate.enter(gas_limit, is_static);
+    pub fn enter(&mut self, is_static: bool) {
+        self.substate.enter(is_static);
     }
 
     pub fn exit_commit(&mut self) -> Result<(), ExitError> {
@@ -988,11 +1054,13 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let contract = context.address;
 
         {
-            let allowance = self.substate.erc20_allowance_mut(source, context.caller, contract, mint, self.backend);
-            if *allowance < value {
+            let allowance = self.substate.erc20_allowance(source, context.caller, contract, mint, self.backend);
+            if allowance < value {
                 return false;
             }
-            *allowance -= value;
+
+            let approve = ERC20Approve { owner: source, spender: context.caller, contract, mint, value: allowance - value };
+            self.substate.erc20_approve(&approve);
         }
 
         self.erc20_transfer_impl(mint, contract, source, target, value)
@@ -1025,7 +1093,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
-    pub fn erc20_allowance(&mut self, mint: Pubkey, context: &evm::Context, owner: H160, spender: H160) -> U256
+    pub fn erc20_allowance(&self, mint: Pubkey, context: &evm::Context, owner: H160, spender: H160) -> U256
     {
         let contract = context.address;
 
@@ -1058,91 +1126,64 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.erc20_emit_approval_solana_event(context.address, owner, spender, value);
     }
 
-    #[must_use]
-    pub fn query_solana_account_owner(&self, address: Pubkey) -> Option<Pubkey> {
-        let (found, owner) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, Pubkey::default()),
-            |info| (true, *info.owner),
-        );
-        if found { Some(owner) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_length(&self, address: Pubkey) -> Option<usize> {
-        let (found, length) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, usize::default()),
-            |info| (true, info.data.borrow().len()),
-        );
-        if found { Some(length) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_lamports(&self, address: Pubkey) -> Option<u64> {
-        let (found, lamports) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.lamports),
-        );
-        if found { Some(lamports) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_executable(&self, address: Pubkey) -> Option<bool> {
-        let (found, executable) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, bool::default()),
-            |info| (true, info.executable),
-        );
-        if found { Some(executable) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_rent_epoch(&self, address: Pubkey) -> Option<u64> {
-        let (found, rent_epoch) = self.backend.apply_to_solana_account(
-            &address,
-            || (false, u64::default()),
-            |info| (true, info.rent_epoch),
-        );
-        if found { Some(rent_epoch) } else { None }
-    }
-
-    #[must_use]
-    pub fn query_solana_account_data(&self, address: Pubkey, offset: usize, length: usize) -> Option<Vec<u8>> {
-        fn clone_chunk(data: &[u8], offset: usize, length: usize) -> Option<Vec<u8>> {
-            if offset >= data.len() || offset + length > data.len() {
-                None
-            } else {
-                Some(data[offset..offset + length].to_owned())
+    pub fn cache_solana_account(&mut self, address: Pubkey, offset: usize, length: usize) -> query::Result<()> {
+        if length == 0 || length > query::MAX_CHUNK_LEN {
+            return Err(query::Error::InvalidArgument);
+        }
+        let value = self.backend.query_account(&address, offset, length);
+        match value {
+            None => Err(query::Error::AccountNotFound),
+            Some(value) => {
+                if value.has_data() {
+                    self.substate.query_account_cache.put(address, value);
+                    Ok(())
+                } else {
+                    Err(query::Error::InvalidArgument)
+                }
             }
         }
-        self.backend.apply_to_solana_account(
-            &address,
-            || None,
-            |info| clone_chunk(&info.data.borrow(), offset, length)
-        )
     }
 
     #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.substate.metadata.gasometer
+    pub fn query_solana_account(&self) -> &query::AccountCache {
+        &self.substate.query_account_cache
     }
 
     #[must_use]
-    pub fn gasometer(&self) -> &Gasometer {
-        self.substate.metadata().gasometer()
+    pub fn withdraw(&mut self, source: H160, destination: Pubkey, neon_amount: U256, spl_amount: u64) -> bool {
+        let dest_neon_acct = get_associated_token_address(
+            &destination,
+            self.backend.token_mint()
+        );
+
+        let withdraw = Withdraw{
+            source,
+            dest: destination,
+            dest_neon: dest_neon_acct,
+            neon_amount,
+            spl_amount
+        };
+
+        if self.substate.withdraw(withdraw, self.backend).is_err() {
+            return false;
+        };
+
+        true
     }
 
     pub fn new(substate: Box<ExecutorSubstate>, backend: &'a B) -> Self {
         Self { backend, substate }
     }
 
+    /// Returns an immutable reference on the executor substate.
     #[must_use]
     pub fn substate(&self) -> &ExecutorSubstate {
         &self.substate
     }
 
+    /// Deconstructs the executor, returns state to be applied.
+    /// # Panics
+    /// Panics if the executor is not in the top-level substate.
     #[must_use]
     pub fn backend(&self) -> &'a B {
         self.backend
