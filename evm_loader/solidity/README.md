@@ -17,11 +17,11 @@ Run from current directory
 ## NeonToken
 
 Run command:
-> npx hardhat run --network <network_name> scripts/deploy-neon.js
+> npx hardhat run --network <network_name> scripts/deploy.js
 
 Select network_name from one of the following:
-- ci_neon_token
-- devnet_neon_token
-- testnet_neon_token
+- ci
+- devnet
+- testnet
 
 depending on where you want to use the contract. The idea is that contract should have the same address on all the networks so that it should be deloyed from the same deployer with the same nonces on all networks 
