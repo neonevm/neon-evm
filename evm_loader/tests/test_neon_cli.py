@@ -7,38 +7,6 @@ from solana_utils import neon_cli, EvmLoader
 from test_acc_storage_states import CONTRACTS_DIR
 
 evm_loader_id = os.environ.get("EVM_LOADER")
-'''
-USAGE:
-    neon-cli [FLAGS] [OPTIONS] <SUBCOMMAND>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v, --verbose    Increase message verbosity
-
-OPTIONS:
-        --commitment <COMMITMENT_LEVEL>    Return information at the selected commitment level [possible values:
-                                           processed, confirmed, finalized] [default: finalized]
-    -C, --config <PATH>                    Configuration file to use [default:
-                                           /home/neonuser/.config/solana/cli/config.yml]
-        --evm_loader <EVM_LOADER>          Pubkey for evm_loader contract
-    -u, --url <URL>                        URL for Solana node [default: http://localhost:8899]
-    -L, --logging_ctx <LOG_CONTEST>        Logging context
-
-SUBCOMMANDS:
-    cancel-trx                Cancel NEON transaction
-    create-ether-account      Create ethereum account
-    create-program-address    Generate a program address
-    deploy                    Deploy a program
-    deposit                   Deposit NEONs to ether account
-    emulate                   Emulate execution of Ethereum transaction
-    get-ether-account-data    Get values stored in associated with given address account data
-    get-storage-at            Get Ethereum storage value at given index
-    help                      Prints this message or the help of the given subcommand(s)
-    migrate-account           Migrates account internal structure to v2
-    neon-elf-params           Get NEON values stored in elf
-    update-valids-table       Update Valids Table
-'''
 
 
 class NeonCliTest(unittest.TestCase):
@@ -78,7 +46,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         storage_account = self.create_new_account(evm_loader_id)
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 1)
@@ -88,7 +56,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli create-ether-account <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         ether_account = self.generate_address()
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
@@ -100,7 +68,7 @@ class NeonCliTest(unittest.TestCase):
         """
         output_re = re.compile(r"^(\w+\s+\d{1,3})$", flags=re.DOTALL)
         seed_string = self.generate_address()
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"create-program-address {seed_string} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
@@ -108,13 +76,12 @@ class NeonCliTest(unittest.TestCase):
         self.assertTrue(bool(output_re.search(output.stdout)),
                         "The output structure is not 'address nonce'")
 
-    # @unittest.skip("Invalid request")
     def test_command_deploy(self):
         """
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         program_filepath = "./neon-cli"
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 113)
@@ -125,7 +92,7 @@ class NeonCliTest(unittest.TestCase):
         """
         sender = self.create_new_account(evm_loader_id)
         contract = self.generate_address()
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
@@ -135,10 +102,10 @@ class NeonCliTest(unittest.TestCase):
         neon-cli get-ether-account-data <ether> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         ether_account = self.generate_address()
-        neon_cli().call_v2(
+        neon_cli().call_run(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
@@ -152,7 +119,7 @@ class NeonCliTest(unittest.TestCase):
         # program_id, bytes_result, code_id = EvmLoader().deployChecked(
         #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
         index = 0
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
@@ -171,10 +138,10 @@ class NeonCliTest(unittest.TestCase):
         neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         ether_account = self.generate_address()
-        neon_cli().call_v2(
+        neon_cli().call_run(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 113)
@@ -184,7 +151,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli neon-elf-params --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         output_re = re.compile(r"([\w]+\=\d+)", flags=re.DOTALL)
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"neon-elf-params --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
@@ -197,7 +164,7 @@ class NeonCliTest(unittest.TestCase):
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         contract_id = self.create_new_account(evm_loader_id)
-        output = neon_cli().call_v2(
+        output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 207)
@@ -223,7 +190,7 @@ class NeonCliTest(unittest.TestCase):
 
     def create_new_account(self, evm_loader_id) -> str:
         ether_account = self.generate_address()
-        neon_cli().call_v2(
+        neon_cli().call_run(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         )
         return ether_account

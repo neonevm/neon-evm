@@ -212,14 +212,13 @@ class neon_cli:
             print("ERR: neon-cli error {}".format(err))
             raise
 
-    def call_v2(self, arguments):
+    def call_run(self, arguments):
         cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
         try:
             return subprocess.run(
                 cmd, shell=True, capture_output=True, universal_newlines=True, text=True
             )
         except subprocess.CalledProcessError as err:
-            import sys
             print("ERR: neon-cli error {}".format(err))
             raise
 
@@ -230,7 +229,6 @@ class neon_cli:
                 cmd, shell=True, capture_output=True, universal_newlines=True, text=True
             )
         except subprocess.CalledProcessError as err:
-            import sys
             print("ERR: neon-cli error {}".format(err))
             raise
 
