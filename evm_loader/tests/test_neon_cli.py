@@ -85,8 +85,6 @@ class NeonCliTest(unittest.TestCase):
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 1)
-        #
-        self.print_output(output.stdout)
 
     def test_command_create_ether_account(self):
         """
@@ -113,13 +111,6 @@ class NeonCliTest(unittest.TestCase):
         self.assertTrue(bool(output_re.search(output.stdout)),
                         "The output structure is not 'address nonce'")
 
-    '''
-    2022-04-01 07:45:08.671 E main.rs:879 300 
-    Emulator:Undefined  NeonCli Error (113): Solana client error. 
-    ClientError { request: Some(GetMinimumBalanceForRentExemption), 
-    kind: RpcError(RpcResponseError { code: -32600, message: "Invalid request", data: Empty }) }
-    '''
-
     # @unittest.skip("Invalid request")
     def test_command_deploy(self):
         """
@@ -130,8 +121,6 @@ class NeonCliTest(unittest.TestCase):
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 113)
-        #
-        self.print_output(output.stdout)
 
     def test_command_emulate(self):
         """
@@ -163,16 +152,14 @@ class NeonCliTest(unittest.TestCase):
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         contract_id = self.create_new_account(evm_loader_id)
-        program_id, bytes_result, code_id = EvmLoader().deployChecked(
-            CONTRACTS_DIR + "EthToken.binary", contract_id, None)
+        # program_id, bytes_result, code_id = EvmLoader().deployChecked(
+        #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
         index = 0
         output = neon_cli().call_v2(
-            f"get-storage-at {program_id} {index} --evm_loader {evm_loader_id}"
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 101)
-        #
-        self.print_output(output.stdout)
 
     def test_command_help(self):
         """
@@ -194,8 +181,6 @@ class NeonCliTest(unittest.TestCase):
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 113)
-        #
-        self.print_output(output.stdout)
 
     def test_command_neon_elf_params(self):
         """
@@ -219,8 +204,6 @@ class NeonCliTest(unittest.TestCase):
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         self.assertEqual(output.returncode, 207)
-        #
-        self.print_output(output.stdout)
 
     def test_command_version(self):
         """
@@ -250,10 +233,6 @@ class NeonCliTest(unittest.TestCase):
 
     def assert_exit_code(self, result: CompletedProcess):
         self.assertEqual(result.returncode, 0, "Return code is not 0")
-
-    def print_output(self, output: str):
-        print("<<<<<<<<<<<<<<<< output >>>>>>>>>>>>>>>>>")
-        print(output)
 
 
 if __name__ == '__main__':
