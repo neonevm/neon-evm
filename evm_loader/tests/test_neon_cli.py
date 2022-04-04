@@ -1,11 +1,8 @@
 import os
-import random
 import re
-import string
 import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
-# from solana_utils import *
 from solana_utils import neon_cli, EvmLoader
 from test_acc_storage_states import CONTRACTS_DIR
 
