@@ -6,6 +6,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     transaction::Transaction,
+    compute_budget::ComputeBudgetInstruction,
 };
 
 use solana_cli::{
@@ -16,7 +17,12 @@ use spl_associated_token_account::get_associated_token_address;
 
 use evm::{H160};
 
-use evm_loader::config::token_mint;
+use evm_loader::config::{
+    token_mint,
+    COMPUTE_BUDGET_UNITS,
+    COMPUTE_BUDGET_HEAP_FRAME,
+    REQUEST_UNITS_ADDITIONAL_FEE,
+};
 
 use crate::{
     Config,
@@ -41,6 +47,8 @@ pub fn execute(
         })?;
 
     let instructions = vec![
+        ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
         migrate_account_instruction(
             config,
             ether_pubkey,
