@@ -8,12 +8,28 @@ from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccou
 from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
 
+import solana
+from base58 import b58decode
+from enum import IntEnum
+from solana_utils import *
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+evm_loader_id = os.environ.get("EVM_LOADER")
+INVALID_NONCE = 'Invalid Ethereum transaction nonce'
+INCORRECT_PROGRAM_ID = 'Incorrect Program Id'
+
+NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE',
+                                              5000))
+NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
+
 # from base58 import b58decode
 # from spl.token.instructions import get_associated_token_address
 # from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
 # from eth_utils import abi
 
-evm_loader_id = os.environ.get("EVM_LOADER")
+# evm_loader_id = os.environ.get("EVM_LOADER")
 
 
 class NeonCliTest(TestCase):
@@ -21,6 +37,74 @@ class NeonCliTest(TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
+
+        cls.token = SplToken(solana_url)
+        wallet = OperatorAccount(operator1_keypair_path())
+        cls.loader = EvmLoader(wallet, evm_loader_id)
+        cls.acc = wallet.get_acc()
+
+        # Create ethereum account for user account
+        cls.caller_ether = eth_keys.PrivateKey(
+            cls.acc.secret_key()).public_key.to_canonical_address()
+        (cls.caller,
+         cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_token = get_associated_token_address(
+            PublicKey(cls.caller), ETH_TOKEN_MINT_ID)
+
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
+            _ = cls.loader.createEtherAccount(cls.caller_ether)
+            cls.loader.airdropNeonTokens(cls.caller_ether, 201)
+            print("Done\n")
+
+        print('Account:', cls.acc.public_key(),
+              bytes(cls.acc.public_key()).hex())
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->",
+              cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
+        (cls.owner_contract, cls.eth_contract,
+         cls.contract_code) = cls.loader.deployChecked(
+             CONTRACTS_DIR + 'helloWorld.binary', cls.caller, cls.caller_ether)
+
+        print("contract id: ", cls.owner_contract, cls.eth_contract)
+        print("code id: ", cls.contract_code)
+
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(
+            collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(
+            4, 'little')
+
+        wallet_2 = RandomAccount()
+        cls.acc_2 = wallet_2.get_acc()
+        print("wallet_2: ", wallet_2.path)
+
+        if getBalance(cls.acc_2.public_key()) == 0:
+            tx = client.request_airdrop(cls.acc_2.public_key(), 10 * 10**9)
+            confirm_transaction(client, tx['result'])
+
+        # Create ethereum account for user 2 account
+        cls.caller_ether_2 = eth_keys.PrivateKey(
+            cls.acc_2.secret_key()).public_key.to_canonical_address()
+        (cls.caller_2,
+         cls.caller_nonce_2) = cls.loader.ether2program(cls.caller_ether_2)
+
+    def create_storage_account(self, seed):
+        storage = PublicKey(
+            sha256(
+                bytes(self.acc.public_key()) + bytes(seed, 'utf8') +
+                bytes(PublicKey(evm_loader_id))).digest())
+        print("Storage", storage)
+
+        if getBalance(storage) == 0:
+            trx = TransactionWithComputeBudget()
+            trx.add(
+                createAccountWithSeed(self.acc.public_key(),
+                                      self.acc.public_key(), seed, 10**9,
+                                      128 * 1024, PublicKey(evm_loader_id)))
+            send_transaction(client, trx, self.acc)
+
+        return storage
 
     def test_command_deposit(self):
         ether_account = eth_keys.PrivateKey(
@@ -136,29 +220,7 @@ class NeonCliTest(TestCase):
         """
         # contract_id = self.create_new_account(evm_loader_id)
 
-        # token = SplToken(solana_url)
-        wallet = OperatorAccount(operator1_keypair_path())
-        loader = EvmLoader(wallet, evm_loader_id)
-        acc = wallet.get_acc()
-
-        # Create ethereum account for user account
-        caller_ether = eth_keys.PrivateKey(
-            acc.secret_key()).public_key.to_canonical_address()
-        (caller, caller_nonce) = loader.ether2program(caller_ether)
-        # caller_token = get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
-
-        if getBalance(caller) == 0:
-            print("Create caller account...")
-            _ = loader.createEtherAccount(caller_ether)
-            loader.airdropNeonTokens(caller_ether, 201)
-            print("Done\n")
-
-        print('Account:', acc.public_key(), bytes(acc.public_key()).hex())
-        print("Caller:", caller_ether.hex(), caller_nonce, "->", caller,
-              "({})".format(bytes(PublicKey(caller)).hex()))
-
-        (owner_contract, eth_contract, contract_code) = loader.deployChecked(
-            CONTRACTS_DIR + 'helloWorld.binary', caller, caller_ether)
+        contract_id = self.eth_contract
         # program_id, bytes_result, code_id = EvmLoader().deployChecked(
         #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
         index = 0
