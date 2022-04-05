@@ -4,7 +4,7 @@ from subprocess import CompletedProcess
 from unittest import TestCase
 from eth_keys import keys as eth_keys
 # from evm_loader.tests.solana_utils import OperatorAccount, WalletAccount, operator1_keypair_path
-from evm_loader.tests.solana_utils import WalletAccount
+from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccount, getBalance, operator1_keypair_path
 from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
 
@@ -49,24 +49,24 @@ class NeonCliTest(TestCase):
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
 
-    def test_command_cancel_trx(self):
-        """
-        neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        # account = self.create_new_account(evm_loader_id)
-        # wallet = OperatorAccount(operator1_keypair_path())
-        # account = wallet.get_acc()
-        account = WalletAccount()
-        storage_account = PublicKey(
-            sha256(
-                bytes(account.public_key()) +
-                bytes(account[:8].hex(), 'utf8') +
-                bytes(PublicKey(evm_loader_id))).digest())
-        output = neon_cli().call_run(
-            f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        # self.assertEqual(output.returncode, 1)
-        self.assert_exit_code(output)
+    # def test_command_cancel_trx(self):
+    #     """
+    #     neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     # account = self.create_new_account(evm_loader_id)
+    #     # wallet = OperatorAccount(operator1_keypair_path())
+    #     # account = wallet.get_acc()
+    #     account = WalletAccount()
+    #     storage_account = PublicKey(
+    #         sha256(
+    #             bytes(account.public_key()) +
+    #             bytes(account[:8].hex(), 'utf8') +
+    #             bytes(PublicKey(evm_loader_id))).digest())
+    #     output = neon_cli().call_run(
+    #         f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     # self.assertEqual(output.returncode, 1)
+    #     self.assert_exit_code(output)
 
     def test_command_create_ether_account(self):
         """
@@ -130,20 +130,44 @@ class NeonCliTest(TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    # def test_command_get_storage_at(self):
-    #     """
-    #     neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     """
-    #     contract_id = self.create_new_account(evm_loader_id)
-    #     # program_id, bytes_result, code_id = EvmLoader().deployChecked(
-    #     #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
-    #     index = 0
-    #     output = neon_cli().call_run(
-    #         f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
-    #     )
-    #     self.assertIsNotNone(output)
-    #     # self.assertEqual(output.returncode, 101)
-    #     self.assert_exit_code(output)
+    def test_command_get_storage_at(self):
+        """
+        neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        """
+        # contract_id = self.create_new_account(evm_loader_id)
+
+        # token = SplToken(solana_url)
+        wallet = OperatorAccount(operator1_keypair_path())
+        loader = EvmLoader(wallet, evm_loader_id)
+        acc = wallet.get_acc()
+
+        # Create ethereum account for user account
+        caller_ether = eth_keys.PrivateKey(
+            acc.secret_key()).public_key.to_canonical_address()
+        (caller, caller_nonce) = loader.ether2program(caller_ether)
+        # caller_token = get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
+
+        if getBalance(caller) == 0:
+            print("Create caller account...")
+            _ = loader.createEtherAccount(caller_ether)
+            loader.airdropNeonTokens(caller_ether, 201)
+            print("Done\n")
+
+        print('Account:', acc.public_key(), bytes(acc.public_key()).hex())
+        print("Caller:", caller_ether.hex(), caller_nonce, "->", caller,
+              "({})".format(bytes(PublicKey(caller)).hex()))
+
+        (owner_contract, eth_contract, contract_code) = loader.deployChecked(
+            CONTRACTS_DIR + 'helloWorld.binary', caller, caller_ether)
+        # program_id, bytes_result, code_id = EvmLoader().deployChecked(
+        #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
+        index = 0
+        output = neon_cli().call_run(
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+        )
+        self.assertIsNotNone(output)
+        # self.assertEqual(output.returncode, 101)
+        self.assert_exit_code(output)
 
     def test_command_help(self):
         """
