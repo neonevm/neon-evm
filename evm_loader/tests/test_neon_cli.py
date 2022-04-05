@@ -3,6 +3,7 @@ import re
 import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
+from evm_loader.tests.solana_utils import EVM_LOADER_SO
 from solana_utils import neon_cli, EvmLoader
 from test_acc_storage_states import CONTRACTS_DIR
 
@@ -49,7 +50,8 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_run(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assertEqual(output.returncode, 1)
+        # self.assertEqual(output.returncode, 1)
+        self.assert_exit_code(output)
 
     def test_command_create_ether_account(self):
         """
@@ -80,11 +82,13 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        program_filepath = "./neon-cli"
+        program_filepath = EVM_LOADER_SO
         output = neon_cli().call_run(
             f"deploy {program_filepath} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assertEqual(output.returncode, 113)
+        # Solana Client Error
+        # self.assertEqual(output.returncode, 113)
+        self.assert_exit_code(output)
 
     def test_command_emulate(self):
         """
@@ -123,7 +127,8 @@ class NeonCliTest(unittest.TestCase):
             f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
         )
         self.assertIsNotNone(output)
-        self.assertEqual(output.returncode, 101)
+        # self.assertEqual(output.returncode, 101)
+        self.assert_exit_code(output)
 
     def test_command_help(self):
         """
@@ -144,7 +149,9 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_run(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assertEqual(output.returncode, 113)
+        # Solana Client Error
+        # self.assertEqual(output.returncode, 113)
+        self.assert_exit_code(output)
 
     def test_command_neon_elf_params(self):
         """
@@ -167,7 +174,9 @@ class NeonCliTest(unittest.TestCase):
         output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
-        self.assertEqual(output.returncode, 207)
+        # Code account not found
+        # self.assertEqual(output.returncode, 207)
+        self.assert_exit_code(output)
 
     def test_command_version(self):
         """
