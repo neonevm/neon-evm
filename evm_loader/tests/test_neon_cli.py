@@ -3,6 +3,7 @@ import re
 from subprocess import CompletedProcess
 from unittest import TestCase
 from eth_keys import keys as eth_keys
+from evm_loader.tests.solana_utils import OperatorAccount, operator1_keypair_path
 # from evm_loader.tests.solana_utils import EVM_LOADER_SO
 from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
@@ -52,7 +53,9 @@ class NeonCliTest(TestCase):
         """
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        account = self.create_new_account(evm_loader_id)
+        # account = self.create_new_account(evm_loader_id)
+        wallet = OperatorAccount(operator1_keypair_path())
+        account = wallet.get_acc()
         storage_account = PublicKey(
             sha256(
                 bytes(account.public_key()) +
@@ -126,20 +129,20 @@ class NeonCliTest(TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    def test_command_get_storage_at(self):
-        """
-        neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        contract_id = self.create_new_account(evm_loader_id)
-        # program_id, bytes_result, code_id = EvmLoader().deployChecked(
-        #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
-        index = 0
-        output = neon_cli().call_run(
-            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
-        )
-        self.assertIsNotNone(output)
-        # self.assertEqual(output.returncode, 101)
-        self.assert_exit_code(output)
+    # def test_command_get_storage_at(self):
+    #     """
+    #     neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     contract_id = self.create_new_account(evm_loader_id)
+    #     # program_id, bytes_result, code_id = EvmLoader().deployChecked(
+    #     #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
+    #     index = 0
+    #     output = neon_cli().call_run(
+    #         f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+    #     )
+    #     self.assertIsNotNone(output)
+    #     # self.assertEqual(output.returncode, 101)
+    #     self.assert_exit_code(output)
 
     def test_command_help(self):
         """
@@ -149,20 +152,20 @@ class NeonCliTest(TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    def test_command_migrate_account(self):
-        """
-        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        ether_account = self.generate_address()
-        neon_cli().call_run(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
-        )
-        output = neon_cli().call_run(
-            f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        # Solana Client Error
-        # self.assertEqual(output.returncode, 113)
-        self.assert_exit_code(output)
+    # def test_command_migrate_account(self):
+    #     """
+    #     neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     ether_account = self.generate_address()
+    #     neon_cli().call_run(
+    #         f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+    #     )
+    #     output = neon_cli().call_run(
+    #         f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     # Solana Client Error
+    #     # self.assertEqual(output.returncode, 113)
+    #     self.assert_exit_code(output)
 
     def test_command_neon_elf_params(self):
         """
@@ -177,17 +180,17 @@ class NeonCliTest(TestCase):
             bool(output_re.search(output.stdout)),
             "The output structure is not 'NEON_PARAM=numeric_value'")
 
-    def test_command_update_valids_table(self):
-        """
-        neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        contract_id = self.create_new_account(evm_loader_id)
-        output = neon_cli().call_run(
-            f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        # Code account not found
-        # self.assertEqual(output.returncode, 207)
-        self.assert_exit_code(output)
+    # def test_command_update_valids_table(self):
+    #     """
+    #     neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     contract_id = self.create_new_account(evm_loader_id)
+    #     output = neon_cli().call_run(
+    #         f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     # Code account not found
+    #     # self.assertEqual(output.returncode, 207)
+    #     self.assert_exit_code(output)
 
     def test_command_version(self):
         """
