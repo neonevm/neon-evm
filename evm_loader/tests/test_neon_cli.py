@@ -1,16 +1,22 @@
 import os
 import re
-import unittest
 from subprocess import CompletedProcess
+from unittest import TestCase
 from eth_keys import keys as eth_keys
-from evm_loader.tests.solana_utils import EVM_LOADER_SO
-from solana_utils import neon_cli, EvmLoader
+# from evm_loader.tests.solana_utils import EVM_LOADER_SO
+from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
+
+# from base58 import b58decode
+# from spl.token.instructions import get_associated_token_address
+# from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+# from eth_utils import abi
 
 evm_loader_id = os.environ.get("EVM_LOADER")
 
 
-class NeonCliTest(unittest.TestCase):
+class NeonCliTest(TestCase):
+
     @classmethod
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
@@ -46,7 +52,12 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        storage_account = self.create_new_account(evm_loader_id)
+        account = self.create_new_account(evm_loader_id)
+        storage_account = PublicKey(
+            sha256(
+                bytes(account.public_key()) +
+                bytes(account[:8].hex(), 'utf8') +
+                bytes(PublicKey(evm_loader_id))).digest())
         output = neon_cli().call_run(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -78,17 +89,17 @@ class NeonCliTest(unittest.TestCase):
         self.assertTrue(bool(output_re.search(output.stdout)),
                         "The output structure is not 'address nonce'")
 
-    def test_command_deploy(self):
-        """
-        neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        program_filepath = EVM_LOADER_SO
-        output = neon_cli().call_run(
-            f"deploy {program_filepath} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        # Solana Client Error
-        # self.assertEqual(output.returncode, 113)
-        self.assert_exit_code(output)
+    # def test_command_deploy(self):
+    #     """
+    #     neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     program_filepath = EVM_LOADER_SO
+    #     output = neon_cli().call_run(
+    #         f"deploy {program_filepath} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     # Solana Client Error
+    #     # self.assertEqual(output.returncode, 113)
+    #     self.assert_exit_code(output)
 
     def test_command_emulate(self):
         """
