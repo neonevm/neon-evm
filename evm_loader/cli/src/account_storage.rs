@@ -297,10 +297,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 (EthereumContract::SIZE, code.len(), valids.len())
                             }
                             else{
-                                if contract.code_size == 0 {
-                                    return Err(NeonCliError::AccountUninitialized(acc.key, code_key));
-                                }
-
                                 let code_size = contract.code_size as usize;
                                 let valids_size = (code_size / 8) + 1;
                                 (EthereumContract::SIZE, code_size, valids_size)
