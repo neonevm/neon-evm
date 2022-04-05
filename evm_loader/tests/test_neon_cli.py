@@ -3,8 +3,8 @@ import re
 from subprocess import CompletedProcess
 from unittest import TestCase
 from eth_keys import keys as eth_keys
-from evm_loader.tests.solana_utils import OperatorAccount, operator1_keypair_path
-# from evm_loader.tests.solana_utils import EVM_LOADER_SO
+# from evm_loader.tests.solana_utils import OperatorAccount, WalletAccount, operator1_keypair_path
+from evm_loader.tests.solana_utils import WalletAccount
 from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
 
@@ -54,8 +54,9 @@ class NeonCliTest(TestCase):
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         # account = self.create_new_account(evm_loader_id)
-        wallet = OperatorAccount(operator1_keypair_path())
-        account = wallet.get_acc()
+        # wallet = OperatorAccount(operator1_keypair_path())
+        # account = wallet.get_acc()
+        account = WalletAccount()
         storage_account = PublicKey(
             sha256(
                 bytes(account.public_key()) +
