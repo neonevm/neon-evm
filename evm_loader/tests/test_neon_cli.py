@@ -5,7 +5,7 @@ from unittest import TestCase
 from eth_keys import keys as eth_keys
 # from evm_loader.tests.solana_utils import OperatorAccount, WalletAccount, operator1_keypair_path
 from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccount, getBalance, operator1_keypair_path
-from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
+# from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
 
 import solana

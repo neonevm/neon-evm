@@ -220,6 +220,23 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
             self.assertEqual(deposit_balance_change, 0 - NEON_PAYMENT_TO_DEPOSIT)
             self.assertEqual(collateral_pool_balance_change, NEON_PAYMENT_TO_TREASURE)
 
+    def test_command1_get_storage_at(self):
+        """
+        neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        """
+        # contract_id = self.create_new_account(evm_loader_id)
+
+        contract_id = self.eth_contract
+        # program_id, bytes_result, code_id = EvmLoader().deployChecked(
+        #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
+        index = 0
+        output = neon_cli().call_run(
+            f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
+        )
+        self.assertIsNotNone(output)
+        # self.assertEqual(output.returncode, 101)
+        self.assert_exit_code(output)
+
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
         trx = TransactionWithComputeBudget() \
