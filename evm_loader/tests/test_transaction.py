@@ -235,10 +235,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         )
         self.assertIsNotNone(output)
         # self.assertEqual(output.returncode, 101)
-        self.assert_exit_code(output)
-
-    def assert_exit_code(self, result: CompletedProcess):
-        self.assertEqual(result.returncode, 0, "Return code is not 0")
+        self.assertEqual(output.returncode, 0, "Return code is not 0")
 
     def test_01_success_tx_send(self):
         (keccak_instruction, trx_data, sign) = self.get_keccak_instruction_and_trx_data(5, self.acc.secret_key(), self.caller, self.caller_ether)
