@@ -739,7 +739,7 @@ pub fn bn256_pairing<'a, B: AccountStorage>(
         Ok(result) => result,
         Err(err) => {
             debug_print!("bn256Pairing error: {}", err);
-            return Capture::Exit((ExitReason::Error(evm::ExitError::SysCallError), vec![0; ALT_BN128_PAIRING_OUTPUT_LEN]))
+            return return_buf(buf.to_vec())
         }
     };
     debug_print!("{}", &hex::encode(&result));
