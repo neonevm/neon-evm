@@ -237,7 +237,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
     #     # self.assertEqual(output.returncode, 101)
     #     self.assertEqual(output.returncode, 0, "Return code is not 0")
 
-    def test_command_cancel_trx(self):
+    def test_00command1_cancel_trx(self):
         """
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
@@ -257,7 +257,7 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         # self.assertEqual(output.returncode, 1)
         self.assertEqual(output.returncode, 0, "Return code is not 0")
 
-    def test_command_deploy(self):
+    def test_00command1_deploy(self):
         """
         neon-cli deploy <PROGRAM_FILEPATH> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
