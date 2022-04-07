@@ -60,7 +60,6 @@ class NeonCliTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
-
         '''
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
@@ -119,8 +118,10 @@ class NeonCliTest(unittest.TestCase):
         cls.acc = wallet.get_acc()
 
         # Create ethereum account for user account
-        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
-        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
+        cls.caller_ether = eth_keys.PrivateKey(
+            cls.acc.secret_key()).public_key.to_canonical_address()
+        (cls.caller,
+         cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
         if getBalance(cls.caller) == 0:
             print("Create caller account...")
@@ -129,25 +130,28 @@ class NeonCliTest(unittest.TestCase):
 
         cls.loader.airdropNeonTokens(cls.caller_ether, 201)
 
-        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
-        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
-              "({})".format(bytes(PublicKey(cls.caller)).hex()))
+        print('Account:', cls.acc.public_key(),
+              bytes(cls.acc.public_key()).hex())
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->",
+              cls.caller, "({})".format(bytes(PublicKey(cls.caller)).hex()))
 
         (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(
-            CONTRACTS_DIR+"EthToken.binary", cls.caller, cls.caller_ether)
-        print ('contract', cls.reId)
-        print ('contract_eth', cls.reId_eth.hex())
-        print ('contract_code', cls.re_code)
+            CONTRACTS_DIR + "EthToken.binary", cls.caller, cls.caller_ether)
+        print('contract', cls.reId)
+        print('contract_eth', cls.reId_eth.hex())
+        print('contract_code', cls.re_code)
 
         collateral_pool_index = 2
         #
         print("00001")
         #
-        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_address = create_collateral_pool_address(
+            collateral_pool_index)
         #
         print("00002")
         #
-        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(
+            4, 'little')
         #
         print("00003")
         #
@@ -158,38 +162,81 @@ class NeonCliTest(unittest.TestCase):
         print("00004")
         #
 
+    def call_begin(self,
+                   storage,
+                   steps,
+                   msg,
+                   instruction,
+                   additional_accounts=[]):
+        print("Begin")
+        trx = TransactionWithComputeBudget()
+        self.first_instruction_index = len(trx.instructions)
+        trx.add(
+            self.sol_instr_keccak(
+                make_keccak_instruction_data(self.first_instruction_index + 1,
+                                             len(msg), 13)))
+        trx.add(
+            self.sol_instr_19_partial_call(storage, steps, instruction,
+                                           additional_accounts))
+        return send_transaction(client, trx, self.acc)
+
+    def call_continue(self, storage, steps, additional_accounts=[]):
+        print("Continue")
+        trx = TransactionWithComputeBudget()
+        trx.add(self.sol_instr_20_continue(storage, steps,
+                                           additional_accounts))
+        return send_transaction(client, trx, self.acc)
+
+    def get_call_parameters(self, input, value):
+        tx = {
+            'to': self.reId_eth,
+            'value': value,
+            'gas': 999999999,
+            'gasPrice': 0,
+            'nonce': getTransactionCount(client, self.caller),
+            'data': input,
+            'chainId': 111
+        }
+        (from_addr, sign,
+         msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+        assert (from_addr == self.caller_ether)
+
+        return (from_addr, sign, msg)
+
     def create_storage_account(self, seed):
-        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
+        storage = PublicKey(
+            sha256(
+                bytes(self.acc.public_key()) + bytes(seed, 'utf8') +
+                bytes(PublicKey(evm_loader_id))).digest())
         print("Storage", storage)
 
         if getBalance(storage) == 0:
             trx = TransactionWithComputeBudget()
-            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
+            trx.add(
+                createAccountWithSeed(self.acc.public_key(),
+                                      self.acc.public_key(), seed, 10**9,
+                                      128 * 1024, PublicKey(evm_loader_id)))
             send_transaction(client, trx, self.acc)
 
         return storage
 
-    def call_partial_signed(self, input, value, additional_accounts = []):
-        (from_addr, sign,  msg) = self.get_call_parameters(input, value)
+    def call_partial_signed(self, input, value, additional_accounts=[]):
+        (from_addr, sign, msg) = self.get_call_parameters(input, value)
         instruction = from_addr + sign + msg
 
-        result = self.call_begin(self.storage, 0, msg, instruction, additional_accounts)
+        result = self.call_begin(self.storage, 0, msg, instruction,
+                                 additional_accounts)
 
         while (True):
-            result = self.call_continue(self.storage, 400, additional_accounts)["result"]
+            result = self.call_continue(self.storage, 400,
+                                        additional_accounts)["result"]
 
-            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
-                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+            if (result['meta']['innerInstructions'] and
+                    result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]
+                                 ['instructions'][-1]['data'])
                 if (data[0] == 6):
                     return result
-
-    def get_call_parameters(self, input, value):
-        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 0,
-            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
-        assert (from_addr == self.caller_ether)
-
-        return (from_addr, sign, msg)
 
     # def create_storage_account(self, seed):
     #     storage = PublicKey(
@@ -258,21 +305,31 @@ class NeonCliTest(unittest.TestCase):
     '''
 
     def test_command_cancel_transfer_to_empty(self):
-        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        empty_account: bytes = eth_keys.PrivateKey(
+            os.urandom(32)).public_key.to_canonical_address()
         (empty_solana_address, _) = self.loader.ether2program(empty_account)
 
-        func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
+        func_name = abi.function_signature_to_4byte_selector(
+            'transferTo(address)')
         input_data = func_name + bytes(12) + empty_account
 
         # with self.assertRaisesRegex(Exception, 'invalid program argument'):
         #     self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
-        
+
         #
-        self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
+        self.call_partial_signed(
+            input_data,
+            1 * 10**18,
+            additional_accounts=[
+                AccountMeta(pubkey=PublicKey(empty_solana_address),
+                            is_signer=False,
+                            is_writable=False)
+            ])
         #
 
         #[error("Solana program error. {0:?}")]
-        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(
+            evm_loader_id, self.storage))
 
     def test_command_create_ether_account(self):
         """
