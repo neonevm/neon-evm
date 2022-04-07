@@ -242,8 +242,8 @@ class NeonCliTest(unittest.TestCase):
         func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
         input_data = func_name + bytes(12) + empty_account
 
-        with self.assertRaisesRegex(Exception, 'invalid program argument'):
-            self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
+        # with self.assertRaisesRegex(Exception, 'invalid program argument'):
+        #     self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
 
         neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
