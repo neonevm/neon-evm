@@ -158,6 +158,17 @@ class NeonCliTest(unittest.TestCase):
         print("00004")
         #
 
+    def create_storage_account(self, seed):
+        storage = PublicKey(sha256(bytes(self.acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(evm_loader_id))).digest())
+        print("Storage", storage)
+
+        if getBalance(storage) == 0:
+            trx = TransactionWithComputeBudget()
+            trx.add(createAccountWithSeed(self.acc.public_key(), self.acc.public_key(), seed, 10**9, 128*1024, PublicKey(evm_loader_id)))
+            send_transaction(client, trx, self.acc)
+
+        return storage
+
     # def create_storage_account(self, seed):
     #     storage = PublicKey(
     #         sha256(
