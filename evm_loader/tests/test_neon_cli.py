@@ -169,6 +169,20 @@ class NeonCliTest(unittest.TestCase):
 
         return storage
 
+    def call_partial_signed(self, input, value, additional_accounts = []):
+        (from_addr, sign,  msg) = self.get_call_parameters(input, value)
+        instruction = from_addr + sign + msg
+
+        result = self.call_begin(self.storage, 0, msg, instruction, additional_accounts)
+
+        while (True):
+            result = self.call_continue(self.storage, 400, additional_accounts)["result"]
+
+            if (result['meta']['innerInstructions'] and result['meta']['innerInstructions'][0]['instructions']):
+                data = b58decode(result['meta']['innerInstructions'][0]['instructions'][-1]['data'])
+                if (data[0] == 6):
+                    return result
+
     # def create_storage_account(self, seed):
     #     storage = PublicKey(
     #         sha256(
