@@ -31,6 +31,29 @@ NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
 
 # evm_loader_id = os.environ.get("EVM_LOADER")
 
+##################
+# test_eth_token.py
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solana.rpc.types import TxOpts
+import unittest
+from base58 import b58decode
+from solana_utils import *
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from spl.token.instructions import get_associated_token_address
+from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
+from eth_utils import abi
+from decimal import Decimal
+
+solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
+client = Client(solana_url)
+CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR", "evm_loader/tests")
+evm_loader_id = os.environ.get("EVM_LOADER")
+sysinstruct = "Sysvar1nstructions1111111111111111111111111"
+keccakprog = "KeccakSecp256k11111111111111111111111111111"
+sysvarclock = "SysvarC1ock11111111111111111111111111111111"
+
+ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
+
 
 class NeonCliTest(unittest.TestCase):
 
@@ -152,6 +175,18 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         # self.assertEqual(output.returncode, 1)
         self.assert_exit_code(output)
+
+    def test_command_cancel_transfer_to_empty(self):
+        empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
+        (empty_solana_address, _) = self.loader.ether2program(empty_account)
+
+        func_name = abi.function_signature_to_4byte_selector('transferTo(address)')
+        input_data = func_name + bytes(12) + empty_account
+
+        with self.assertRaisesRegex(Exception, 'invalid program argument'):
+            self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
+
+        neon_cli().call("cancel-trx --evm_loader {} {}".format(evm_loader_id, self.storage))
 
     def test_command_create_ether_account(self):
         """
