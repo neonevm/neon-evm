@@ -353,14 +353,14 @@ class NeonCliTest(unittest.TestCase):
         #     self.call_partial_signed(input_data, 1 * 10**18, additional_accounts=[AccountMeta(pubkey=PublicKey(empty_solana_address), is_signer=False, is_writable=False)])
 
         #
-        self.call_partial_signed(
-            input_data,
-            1 * 10**18,
-            additional_accounts=[
-                AccountMeta(pubkey=PublicKey(empty_solana_address),
-                            is_signer=False,
-                            is_writable=False)
-            ])
+        # self.call_partial_signed(
+        #     input_data,
+        #     1 * 10**18,
+        #     additional_accounts=[
+        #         AccountMeta(pubkey=PublicKey(empty_solana_address),
+        #                     is_signer=False,
+        #                     is_writable=False)
+        #     ])
         #
 
         #[error("Solana program error. {0:?}")]
