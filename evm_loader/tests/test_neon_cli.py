@@ -140,10 +140,23 @@ class NeonCliTest(unittest.TestCase):
         print ('contract_code', cls.re_code)
 
         collateral_pool_index = 2
+        #
+        print("00001")
+        #
         cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        #
+        print("00002")
+        #
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+        #
+        print("00003")
+        #
 
-        cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
+        # cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
+        cls.storage = cls.create_storage_account(cls, 'NeonCliTest')
+        #
+        print("00004")
+        #
 
     # def create_storage_account(self, seed):
     #     storage = PublicKey(
