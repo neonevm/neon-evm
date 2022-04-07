@@ -8,6 +8,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::executor::Machine;
+use crate::config::chain_id;
 
 
 struct Accounts<'a> {
@@ -44,7 +45,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     check_secp256k1_instruction(accounts.sysvar_instructions.info, unsigned_msg.len(), 5_u16)?;
 
     let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
-    let mut account_storage = ProgramAccountStorage::new(program_id, accounts.remaining_accounts)?;
+    let mut account_storage = ProgramAccountStorage::new(
+        program_id,
+        accounts.remaining_accounts,
+        crate::config::token_mint::id(),
+        chain_id().as_u64(),
+    )?;
 
 
     validate(&accounts, &account_storage, &trx, &caller_address)?;
@@ -130,7 +136,8 @@ fn execute<'a>(
         // Transaction ended with error, no state to apply
         // Increment nonce here. Normally it is incremented inside apply_state_change
         if let Some(caller) = account_storage.ethereum_account_mut(&caller_address) {
-            caller.trx_count += 1;
+            caller.trx_count = caller.trx_count.checked_add(1)
+                .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", caller.address))?;
         }
     }
 

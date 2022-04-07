@@ -173,7 +173,7 @@ pub struct ExecutorSubstate {
     spl_transfers: Vec<SplTransfer>,
     spl_approves: Vec<SplApprove>,
     withdrawals: Vec<Withdraw>,
-    erc20_allowances: BTreeMap<(H160, H160, H160, Pubkey), U256>,
+    erc20_allowances: RefCell<BTreeMap<(H160, H160, H160, Pubkey), U256>>,
     deletes: BTreeSet<H160>,
     query_account_cache: query::AccountCache,
 }
@@ -200,7 +200,7 @@ impl ExecutorSubstate {
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
             withdrawals: Vec::new(),
-            erc20_allowances: BTreeMap::new(),
+            erc20_allowances: RefCell::new(BTreeMap::new()),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
         }
@@ -277,8 +277,9 @@ impl ExecutorSubstate {
             applies.push(Apply::Delete { address });
         }
 
-        let mut erc20_approves = Vec::with_capacity(self.erc20_allowances.len());
-        for ((owner, spender, contract, mint), value) in self.erc20_allowances {
+        let erc20_allowances = self.erc20_allowances.take();
+        let mut erc20_approves = Vec::with_capacity(erc20_allowances.len());
+        for ((owner, spender, contract, mint), value) in erc20_allowances {
             let approve = ERC20Approve { owner, spender, contract, mint, value };
             erc20_approves.push(approve);
         }
@@ -303,7 +304,7 @@ impl ExecutorSubstate {
             spl_transfers: Vec::new(),
             spl_approves: Vec::new(),
             withdrawals: Vec::new(),
-            erc20_allowances: BTreeMap::new(),
+            erc20_allowances: RefCell::new(BTreeMap::new()),
             deletes: BTreeSet::new(),
             query_account_cache: query::AccountCache::new(),
         };
@@ -334,7 +335,7 @@ impl ExecutorSubstate {
 
         self.withdrawals.append(&mut exited.withdrawals);
 
-        self.erc20_allowances.append(&mut exited.erc20_allowances);
+        self.erc20_allowances.borrow_mut().append(&mut exited.erc20_allowances.borrow_mut());
 
         let mut resets = BTreeSet::new();
         for (address, account) in &exited.accounts {
@@ -696,9 +697,19 @@ impl ExecutorSubstate {
             balance.checked_sub(withdraw.neon_amount).ok_or(ExitError::OutOfFund)?
         };
 
+        let new_target_balance = {
+            let balance = self.spl_balance(&withdraw.dest_neon, backend);
+            balance.checked_add(withdraw.spl_amount).ok_or(ExitError::InvalidRange)?
+        };
+
+        let dest_neon = withdraw.dest_neon;
+
         let mut balances = self.balances.borrow_mut();
         balances.insert(withdraw.source, new_source_balance);
         self.withdrawals.push(withdraw);
+
+        let mut spl_balances = self.spl_balances.borrow_mut();
+        spl_balances.insert(dest_neon, new_target_balance);
 
         Ok(())
     }
@@ -755,38 +766,34 @@ impl ExecutorSubstate {
         )
     }
 
-    fn known_erc20_allowance(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey) -> Option<&U256> {
-        match self.erc20_allowances.get(&(owner, spender, contract, mint)) {
-            Some(allowance) => Some(allowance),
+    fn known_erc20_allowance(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey) -> Option<U256> {
+        let erc20_allowances = self.erc20_allowances.borrow();
+        match erc20_allowances.get(&(owner, spender, contract, mint)) {
+            Some(&allowance) => Some(allowance),
             None => self.parent.as_ref().and_then(|parent| parent.known_erc20_allowance(owner, spender, contract, mint))
         }
     }
 
     #[must_use]
     pub fn erc20_allowance<B: AccountStorage>(&self, owner: H160, spender: H160, contract: H160, mint: Pubkey, backend: &B) -> U256 {
-        self.known_erc20_allowance(owner, spender, contract, mint)
-            .copied()
-            .unwrap_or_else(|| backend.get_erc20_allowance(&owner, &spender, &contract, &mint))
-    }
+        let value = self.known_erc20_allowance(owner, spender, contract, mint);
 
-    #[must_use]
-    pub fn erc20_allowance_mut<B: AccountStorage>(&mut self, owner: H160, spender: H160, contract: H160, mint: Pubkey, backend: &B) -> &mut U256 {
-        let key = (owner, spender, contract, mint);
+        value.map_or_else(
+            || {
+                let allowance = backend.get_erc20_allowance(&owner, &spender, &contract, &mint);
 
-        #[allow(clippy::map_entry)]
-        if !self.erc20_allowances.contains_key(&key) {
-            let allowance = self.erc20_allowance(owner, spender, contract, mint, backend);
-            self.erc20_allowances.insert(key, allowance);
-        }
+                let key = (owner, spender, contract, mint);
+                self.erc20_allowances.borrow_mut().insert(key, allowance);
 
-        self.erc20_allowances
-            .get_mut(&key)
-            .expect("New allowance was just inserted")
+                allowance
+            },
+            |value| value
+        )
     }
 
     fn erc20_approve(&mut self, approve: &ERC20Approve) {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
-        self.erc20_allowances.insert(key, approve.value);
+        self.erc20_allowances.borrow_mut().insert(key, approve.value);
     }
 
     fn known_block_hash(&self, number: U256) -> Option<H256> {
@@ -853,7 +860,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
     pub fn chain_id(&self) -> U256 {
-        U256::from(crate::config::CHAIN_ID)
+        U256::from(self.backend.chain_id())
     }
 
     #[must_use]
@@ -1070,11 +1077,13 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let contract = context.address;
 
         {
-            let allowance = self.substate.erc20_allowance_mut(source, context.caller, contract, mint, self.backend);
-            if *allowance < value {
+            let allowance = self.substate.erc20_allowance(source, context.caller, contract, mint, self.backend);
+            if allowance < value {
                 return false;
             }
-            *allowance -= value;
+
+            let approve = ERC20Approve { owner: source, spender: context.caller, contract, mint, value: allowance - value };
+            self.substate.erc20_approve(&approve);
         }
 
         self.erc20_transfer_impl(mint, contract, source, target, value)
@@ -1167,7 +1176,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn withdraw(&mut self, source: H160, destination: Pubkey, neon_amount: U256, spl_amount: u64) -> bool {
         let dest_neon_acct = get_associated_token_address(
             &destination,
-            &crate::config::token_mint::id()
+            self.backend.token_mint()
         );
 
         let withdraw = Withdraw{

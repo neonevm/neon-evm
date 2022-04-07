@@ -3,6 +3,7 @@
 
 use const_format::formatcp;
 use cfg_if::cfg_if;
+use evm::U256;
 
 use crate::config_macro::{ neon_elf_param, declare_param_id, pubkey_array };
 use crate::account::ACCOUNT_SEED_VERSION;
@@ -11,7 +12,7 @@ cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
         /// Supported CHAIN_ID value for transactions
-        pub const CHAIN_ID: u64 = 245022934;
+        pub const CHAIN_ID: u64 = 245_022_934;
 
         // NOTE: when expanding this list, add same addresses to the 
         // alpha configuration as well
@@ -64,7 +65,7 @@ cfg_if! {
     } else if #[cfg(feature = "alpha")] {
 
         /// Supported CHAIN_ID value for transactions
-        pub const CHAIN_ID: u64 = 245022923;
+        pub const CHAIN_ID: u64 = 245_022_923;
 
         pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -115,7 +116,7 @@ cfg_if! {
     } else if #[cfg(feature = "testnet")] {
 
         /// Supported CHAIN_ID value for transactions
-        pub const CHAIN_ID: u64 = 245022940;
+        pub const CHAIN_ID: u64 = 245_022_940;
 
         pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -216,7 +217,7 @@ cfg_if! {
     } else if #[cfg(feature = "devnet")] {
 
         /// Supported CHAIN_ID value for transactions
-        pub const CHAIN_ID: u64 = 245022926;
+        pub const CHAIN_ID: u64 = 245_022_926;
 
         pubkey_array!(
             AUTHORIZED_OPERATOR_LIST,
@@ -344,6 +345,21 @@ cfg_if! {
                 "GwUnjJs6i7TKGjy71PvFpGN7yu9xqA8Cs1oyV4zSVPvq",
                 "EdSEh9UxXjbrrHLrH5manpxfXi7HxzkAMDAotPC5DggQ",
                 "9s7umnvnGqT1nvrCgzvBwWFyaaYABj64LxiBpjAayLiv",
+		"2Ma3MxGpKmk2KPbp631bNhm2NcSMU6oxFgtj2FfzkiBF",
+		"2v3dnQQaBALRmaQ1Jr7GbCVagTqEBKHPZ65b4nAmdDmN",
+		"47dYMgKdKxRGuGBpjH58eGuj1n4FXC6v4QTcpCSaVC2c",
+		"5dyQQATyk4yga4f4m8BCrUF1jdfGQ1mShV4ezFLxyCqW",
+		"7C6iuRYzEJEwe878X2TeMDoCHPEw85ZhaxapNEBuqwL9",
+		"82YcsM5eN83trdhdShGUF4crAC4CGgFJ7EWd2vnGiSsb",
+		"A3CEBvqJPPgHPARxzUQUafHXC4iU6x4iZzNudJ1Tks4z",
+		"AezpxgT4Qbo1pB9cLgBzzET7V2t7yK2ZrJrhDTCwxac9",
+		"CXJy6dzL8kAazo5jhBf8MuW17nJ8dW23EfzPmqTJ6P5H",
+		"DPRfsB8HQrJZM5g3B74rqZSmvtJn41PavhKBjmCRb45R",
+		"EbkUFw2EQkG85ua4sQy54Y6c988j7zkSAjkD6gRUTA3u",
+		"F4nLmDy62mhYiY4gGmRXDYpdFM4mLrm9t5YLpqTDMBz5",
+		"GHGLwKXzo2fAtLAVNJisP7wNyCRWBcmHEzCD36UcutW1",
+		"GZ3vKajaDjxFkiczL4g6as3qhMg7tdMgrMrpuApGWF8D",
+		"eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
             ]
         );
     
@@ -392,7 +408,13 @@ pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
 /// `the message size that is used to holder-account filling`
-pub const HOLDER_MSG_SIZE: u64 = 1000;
+pub const HOLDER_MSG_SIZE: u64 = 950;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
+/// `OPERATOR_PRIORITY_SLOTS`
+pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
+/// Additional fee for `request units` instruction
+pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
 
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
@@ -404,3 +426,13 @@ neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOS
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
 neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
+neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
+neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
+neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
+
+/// Chain ID
+#[must_use]
+pub fn chain_id() -> U256 {
+    U256::from(CHAIN_ID)
+}
+

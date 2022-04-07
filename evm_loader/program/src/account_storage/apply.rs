@@ -156,7 +156,11 @@ impl<'a> ProgramAccountStorage<'a> {
                 .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
             assert!(trx_count > U256::from(account.trx_count));
-            account.trx_count = (trx_count % U256::from(u64::MAX)).as_u64();
+            if trx_count > U256::from(u64::MAX) {
+                return Err!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", address);
+            }
+
+            account.trx_count = trx_count.as_u64();
         }
 
         if let Some((code, valids)) = code_and_valids {
@@ -293,7 +297,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let pool_address = get_associated_token_address(
             &authority,
-            &crate::config::token_mint::id()
+            self.token_mint()
         );
 
         let signers_seeds: &[&[&[u8]]] = &[&[b"Deposit", &[bump_seed]]];
@@ -304,13 +308,13 @@ impl<'a> ProgramAccountStorage<'a> {
             if dest_neon.data_is_empty() {
                 let create_acc_insrt = create_associated_token_account(operator.key,
                                                                        &withdraw.dest,
-                                                                       &crate::config::token_mint::id());
+                                                                       self.token_mint());
 
                 let account_infos: &[AccountInfo] = &[
                     (**operator).clone(),
                     dest_neon.clone(),
                     self.solana_accounts[&withdraw.dest].clone(),
-                    self.solana_accounts[&crate::config::token_mint::id()].clone(),
+                    self.solana_accounts[self.token_mint()].clone(),
                     self.solana_accounts[&spl_token::id()].clone(),
                     self.solana_accounts[&rent::id()].clone(),
                     self.solana_accounts[&spl_associated_token_account::id()].clone(),

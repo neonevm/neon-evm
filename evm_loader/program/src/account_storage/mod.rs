@@ -27,6 +27,7 @@ impl<'a> Account<'a> {
 }
 
 pub struct ProgramAccountStorage<'a> {
+    token_mint: Pubkey,
     program_id: &'a Pubkey,
     clock: Clock,
     token_program: Option<program::Token<'a>>,
@@ -34,11 +35,16 @@ pub struct ProgramAccountStorage<'a> {
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, Account<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
+
+    chain_id: u64,
 }
 
 /// Account storage
 /// Trait to access account info
 pub trait AccountStorage {
+    /// Get `NEON` token mint
+    fn token_mint(&self) -> &Pubkey;
+
     /// Get `NeonEVM` program id
     fn program_id(&self) -> &Pubkey;
 
@@ -48,6 +54,8 @@ pub trait AccountStorage {
     fn block_timestamp(&self) -> U256;
     /// Get block hash
     fn block_hash(&self, number: U256) -> H256;
+    /// Get chain id
+    fn chain_id(&self) -> u64;
 
     /// Check if ethereum account exists
     fn exists(&self, address: &H160) -> bool;

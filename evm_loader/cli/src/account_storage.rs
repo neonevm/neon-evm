@@ -136,10 +136,12 @@ pub struct EmulatorAccountStorage<'a> {
     config: &'a Config,
     block_number: u64,
     block_timestamp: i64,
+    token_mint: Pubkey,
+    chain_id: u64,
 }
 
 impl<'a> EmulatorAccountStorage<'a> {
-    pub fn new(config: &'a Config) -> EmulatorAccountStorage {
+    pub fn new(config: &'a Config, token_mint: Pubkey, chain_id: u64) -> EmulatorAccountStorage {
         trace!("backend::new");
 
         let slot = if let Ok(slot) = config.rpc_client.get_slot() {
@@ -169,6 +171,8 @@ impl<'a> EmulatorAccountStorage<'a> {
             config,
             block_number: slot,
             block_timestamp: timestamp,
+            token_mint,
+            chain_id,
         }
     }
 
@@ -267,6 +271,10 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         storage.last_used() as usize
                     };
+
+                    if nonce > U256::from(u64::MAX) {
+                        return Err(NeonCliError::TrxCountOverflow);
+                    }
                         
                     let mut accounts = self.accounts.borrow_mut();
                     let mut new_accounts = self.new_accounts.borrow_mut();
@@ -290,10 +298,6 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 (EthereumContract::SIZE, code.len(), valids.len())
                             }
                             else{
-                                if contract.code_size == 0 {
-                                    return Err(NeonCliError::AccountUninitialized(acc.key, code_key));
-                                }
-
                                 let code_size = contract.code_size as usize;
                                 let valids_size = (code_size / 8) + 1;
                                 (EthereumContract::SIZE, code_size, valids_size)
@@ -304,7 +308,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                             acc.code_size_current = Some(code_account_data.len());
                             acc.code_size = Some(hamt_begin + hamt_size(&code_account_data, hamt_begin));
 
-                            let trx_count: u64 = (nonce % U256::from(u64::MAX)).as_u64();
+                            let trx_count: u64 = nonce.as_u64();
                             if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
                                 acc.writable = true;
                             }
@@ -569,6 +573,8 @@ pub fn make_solana_program_address(
 
 
 impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
+    fn token_mint(&self) -> &Pubkey { &self.token_mint }
+
     fn program_id(&self) -> &Pubkey {
         &self.config.evm_loader
     }
@@ -720,17 +726,21 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         };
 
         let contract_space = {
-            self.ethereum_contract_map_or(address, 
-                0, 
+            self.ethereum_contract_map_or(address,
+                0,
                 |a| {
-                    EthereumContract::SIZE 
-                        + a.extension.code.len() 
+                    EthereumContract::SIZE
+                        + a.extension.code.len()
                         + a.extension.valids.len()
                         + a.extension.storage.buffer_len()
             })
         };
 
         (account_space, contract_space)
+    }
+
+    fn chain_id(&self) -> u64 {
+        self.chain_id
     }
 }
 
