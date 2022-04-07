@@ -16,5 +16,4 @@ evm_loader/rust-evm/core/target
 evm_loader/rust-evm/gasometer/target
 evm_loader/rust-evm/runtime/target
 evm_loader/rust-evm/src/target
-evm_loader/faucet/target
 evm_loader/target
