@@ -250,7 +250,9 @@ class EvmLoaderTestsNewAccount(unittest.TestCase):
         #         bytes(account.public_key()) +
         #         bytes(account[:8].hex(), 'utf8') +
         #         bytes(PublicKey(evm_loader_id))).digest())
-        storage_account = self.create_storage_account(self.acc[:8].hex())
+        
+        # storage_account = self.create_storage_account(self.acc[:8].hex())
+        storage_account = self.create_storage_account(self.acc.secret_key()[:8].hex())
         output = neon_cli().call_run(
             f"cancel-trx {storage_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
