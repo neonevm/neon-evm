@@ -1,7 +1,6 @@
 [workspace]
 members = [
     'cli',
-    'faucet',
     'program',
 ]
 exclude = [
