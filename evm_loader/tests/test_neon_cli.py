@@ -183,6 +183,14 @@ class NeonCliTest(unittest.TestCase):
                 if (data[0] == 6):
                     return result
 
+    def get_call_parameters(self, input, value):
+        tx = {'to': self.reId_eth, 'value': value, 'gas': 999999999, 'gasPrice': 0,
+            'nonce': getTransactionCount(client, self.caller), 'data': input, 'chainId': 111}
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, self.acc.secret_key())
+        assert (from_addr == self.caller_ether)
+
+        return (from_addr, sign, msg)
+
     # def create_storage_account(self, seed):
     #     storage = PublicKey(
     #         sha256(
