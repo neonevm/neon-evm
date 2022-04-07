@@ -142,25 +142,61 @@ class NeonCliTest(unittest.TestCase):
         print('contract_code', cls.re_code)
 
         collateral_pool_index = 2
-        #
-        print("00001")
-        #
         cls.collateral_pool_address = create_collateral_pool_address(
             collateral_pool_index)
-        #
-        print("00002")
-        #
         cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(
             4, 'little')
-        #
-        print("00003")
-        #
 
-        # cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
-        cls.storage = cls.create_storage_account(cls, 'NeonCliTest')
-        #
-        print("00004")
-        #
+        cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
+
+    def sol_instr_19_partial_call(self,
+                                  storage_account,
+                                  step_count,
+                                  evm_instruction,
+                                  additional_accounts=[]):
+        neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
+            step_count,
+            evm_instruction,
+            add_meta=additional_accounts)
+        print('neon_evm_instr_19_partial_call:',
+              neon_evm_instr_19_partial_call)
+        return neon_evm_instr_19_partial_call
+
+    def sol_instr_20_continue(self,
+                              storage_account,
+                              step_count,
+                              additional_accounts=[]):
+        neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
+            self.loader.loader_id,
+            self.caller,
+            self.acc.public_key(),
+            storage_account,
+            self.reId,
+            self.re_code,
+            self.collateral_pool_index_buf,
+            self.collateral_pool_address,
+            step_count,
+            add_meta=additional_accounts)
+        print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
+        return neon_evm_instr_20_continue
+
+    def sol_instr_keccak(self, keccak_instruction):
+        return TransactionInstruction(program_id=keccakprog,
+                                      data=keccak_instruction,
+                                      keys=[
+                                          AccountMeta(
+                                              pubkey=PublicKey(keccakprog),
+                                              is_signer=False,
+                                              is_writable=False),
+                                      ])
 
     def call_begin(self,
                    storage,
