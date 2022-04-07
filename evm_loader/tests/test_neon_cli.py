@@ -4,7 +4,7 @@ import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
 # from evm_loader.tests.solana_utils import OperatorAccount, WalletAccount, operator1_keypair_path
-from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccount, getBalance, operator1_keypair_path
+# from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccount, getBalance, operator1_keypair_path
 # from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
 from test_acc_storage_states import CONTRACTS_DIR
 
@@ -61,6 +61,7 @@ class NeonCliTest(unittest.TestCase):
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
 
+        '''
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -111,23 +112,55 @@ class NeonCliTest(unittest.TestCase):
             cls.acc_2.secret_key()).public_key.to_canonical_address()
         (cls.caller_2,
          cls.caller_nonce_2) = cls.loader.ether2program(cls.caller_ether_2)
+        '''
+        cls.token = SplToken(solana_url)
+        wallet = OperatorAccount(operator1_keypair_path())
+        cls.loader = EvmLoader(wallet, evm_loader_id)
+        cls.acc = wallet.get_acc()
 
-    def create_storage_account(self, seed):
-        storage = PublicKey(
-            sha256(
-                bytes(self.acc.public_key()) + bytes(seed, 'utf8') +
-                bytes(PublicKey(evm_loader_id))).digest())
-        print("Storage", storage)
+        # Create ethereum account for user account
+        cls.caller_ether = eth_keys.PrivateKey(cls.acc.secret_key()).public_key.to_canonical_address()
+        (cls.caller, cls.caller_nonce) = cls.loader.ether2program(cls.caller_ether)
 
-        if getBalance(storage) == 0:
-            trx = TransactionWithComputeBudget()
-            trx.add(
-                createAccountWithSeed(self.acc.public_key(),
-                                      self.acc.public_key(), seed, 10**9,
-                                      128 * 1024, PublicKey(evm_loader_id)))
-            send_transaction(client, trx, self.acc)
+        if getBalance(cls.caller) == 0:
+            print("Create caller account...")
+            _ = cls.loader.createEtherAccount(cls.caller_ether)
+            print("Done\n")
 
-        return storage
+        cls.loader.airdropNeonTokens(cls.caller_ether, 201)
+
+        print('Account:', cls.acc.public_key(), bytes(cls.acc.public_key()).hex())
+        print("Caller:", cls.caller_ether.hex(), cls.caller_nonce, "->", cls.caller,
+              "({})".format(bytes(PublicKey(cls.caller)).hex()))
+
+        (cls.reId, cls.reId_eth, cls.re_code) = cls.loader.deployChecked(
+            CONTRACTS_DIR+"EthToken.binary", cls.caller, cls.caller_ether)
+        print ('contract', cls.reId)
+        print ('contract_eth', cls.reId_eth.hex())
+        print ('contract_code', cls.re_code)
+
+        collateral_pool_index = 2
+        cls.collateral_pool_address = create_collateral_pool_address(collateral_pool_index)
+        cls.collateral_pool_index_buf = collateral_pool_index.to_bytes(4, 'little')
+
+        cls.storage = cls.create_storage_account(cls, 'EthTokenTest')
+
+    # def create_storage_account(self, seed):
+    #     storage = PublicKey(
+    #         sha256(
+    #             bytes(self.acc.public_key()) + bytes(seed, 'utf8') +
+    #             bytes(PublicKey(evm_loader_id))).digest())
+    #     print("Storage", storage)
+
+    #     if getBalance(storage) == 0:
+    #         trx = TransactionWithComputeBudget()
+    #         trx.add(
+    #             createAccountWithSeed(self.acc.public_key(),
+    #                                   self.acc.public_key(), seed, 10**9,
+    #                                   128 * 1024, PublicKey(evm_loader_id)))
+    #         send_transaction(client, trx, self.acc)
+
+    #     return storage
 
     def test_command_deposit(self):
         ether_account = eth_keys.PrivateKey(
@@ -156,6 +189,7 @@ class NeonCliTest(unittest.TestCase):
         balance = balance.group(1)
         self.assertEqual(balance, '20000000000')
 
+    '''
     def test_command_cancel_trx(self):
         """
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -175,6 +209,7 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         # self.assertEqual(output.returncode, 1)
         self.assert_exit_code(output)
+    '''
 
     def test_command_cancel_transfer_to_empty(self):
         empty_account: bytes = eth_keys.PrivateKey(os.urandom(32)).public_key.to_canonical_address()
