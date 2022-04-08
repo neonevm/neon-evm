@@ -72,7 +72,8 @@ class BlockHashesTest(unittest.TestCase):
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
 
-        solana_trx = TransactionWithComputeBudget().add(
+        solana_trx = TransactionWithComputeBudget()
+        solana_trx.add(
                 self.sol_instr_keccak(make_keccak_instruction_data(len(solana_trx.instructions) + 1, len(msg), 5)) 
             ).add( 
                 self.sol_instr_call(trx_data, no_sys_acc) 
