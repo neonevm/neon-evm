@@ -45,7 +45,7 @@ class BlockHashesTest(unittest.TestCase):
                 cls.caller,
                 cls.caller_ether
             )
-        print("contract id: ", cls.owner_contract, cls.eth_contract)
+        print("contract id: ", cls.owner_contract, cls.eth_contract.hex())
         print("code id: ", cls.contract_code)
 
         collateral_pool_index = 2
@@ -71,10 +71,9 @@ class BlockHashesTest(unittest.TestCase):
 
         (_from_addr, sign, msg) = make_instruction_data_from_tx(eth_tx, self.acc.secret_key())
         trx_data = self.caller_ether + sign + msg
-        keccak_instruction = make_keccak_instruction_data(1, len(msg), 5)
 
-        solana_trx = Transaction().add(
-                self.sol_instr_keccak(keccak_instruction) 
+        solana_trx = TransactionWithComputeBudget().add(
+                self.sol_instr_keccak(make_keccak_instruction_data(len(solana_trx.instructions) + 1, len(msg), 5)) 
             ).add( 
                 self.sol_instr_call(trx_data, no_sys_acc) 
             )
@@ -82,8 +81,8 @@ class BlockHashesTest(unittest.TestCase):
         return solana_trx
 
     def sol_instr_keccak(self, keccak_instruction):
-        return TransactionInstruction(program_id="KeccakSecp256k11111111111111111111111111111", data=keccak_instruction, keys=[
-                    AccountMeta(pubkey=self.caller, is_signer=False, is_writable=False),
+        return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
+                    AccountMeta(pubkey=keccakprog, is_signer=False, is_writable=False),
                 ])
 
     def sol_instr_call(self, trx_data, no_sys_acc):
@@ -99,7 +98,6 @@ class BlockHashesTest(unittest.TestCase):
             trx_data,
             add_meta=[blockhash_sysvar_accountmeta,] if not no_sys_acc else []
         )
-        print('neon_evm_instr_05_single:', neon_evm_instr_05_single)
         return neon_evm_instr_05_single
 
     def make_getCurrentValues(self):
