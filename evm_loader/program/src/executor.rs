@@ -219,13 +219,14 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     fn create(
         &mut self,
         caller: H160,
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         debug_print!("create");
 
@@ -252,7 +253,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             scheme,
             value,
             init_code: &init_code,
-            _target_gas,
+            target_gas,
         });
 
 
@@ -280,12 +281,13 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         Capture::Trap(CreateInterrupt{context, transfer, address, init_code})
     }
 
+    #[allow(unused_variables)]
     fn call(
         &mut self,
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
@@ -293,7 +295,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             code_address,
             transfer: &transfer,
             input: &input,
-            _target_gas,
+            target_gas,
             is_static,
             context: &context,
         });
@@ -385,19 +387,20 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     ///
     /// May return following errors:
     /// - `InsufficientFunds` if the caller lacks funds for the operation
+    #[allow(unused_variables)]
     pub fn call_begin(&mut self,
         caller: H160,
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        _gas_limit: U256
+        gas_limit: U256
     ) -> ProgramResult {
 	    event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
             data: &input,
-            _gas_limit
+            gas_limit
         });
         debug_print!("call_begin");
 
@@ -429,17 +432,18 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     ///
     /// May return following errors:
     /// - `InsufficientFunds` if the caller lacks funds for the operation
+    #[allow(unused_variables)]
     pub fn create_begin(&mut self,
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        _gas_limit: U256,
+                        gas_limit: U256,
     ) -> ProgramResult {
         event!(TransactCreate {
             caller,
             value: transfer_value,
             init_code: &code,
-            _gas_limit,
+            gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 
