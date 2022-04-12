@@ -415,7 +415,8 @@ pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
 pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 /// Additional fee for `request units` instruction
 pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
-
+/// Gas limit multiplier for transactions without chain id
+pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 10;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -429,6 +430,7 @@ neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE)
 neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
 neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
+neon_elf_param!( NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, formatcp!("{:?}", GAS_LIMIT_MULTIPLIER_NO_CHAINID));
 
 /// Chain ID
 #[must_use]
