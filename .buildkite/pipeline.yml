@@ -8,7 +8,7 @@ steps:
   - label: "Define full_test_suite meta if there is non draft pull request"
     if: build.pull_request.base_branch == "develop" && !build.pull_request.draft
     commands:
-      - echo Define the meta-data `full_test_suite` variable as true
+      - echo Define the meta-data "full_test_suite" variable as true
       - buildkite-agent meta-data set "full_test_suite" "true"
     agents:
       queue: "testing"
