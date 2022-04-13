@@ -474,7 +474,7 @@ class NeonCliTest(unittest.TestCase):
         
     def test_command_migrate_account_alternative(self):
         ether_account = self.generate_address()
-        do_migrate(ether_account,evm_loader_id)
+        self.do_migrate(ether_account,evm_loader_id)
 
     def test_command_neon_elf_params(self):
         """
