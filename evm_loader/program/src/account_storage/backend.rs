@@ -1,6 +1,9 @@
 use std::convert::TryInto;
 use evm::{H160, H256, U256};
-use solana_program::pubkey::Pubkey;
+use solana_program::{
+    pubkey::Pubkey,
+    sysvar::recent_blockhashes
+};
 use crate::account::{ERC20Allowance, token, EthereumContract};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
@@ -17,6 +20,22 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 {
         self.clock.unix_timestamp.into()
+    }
+
+    fn block_hash(&self, number: U256) -> H256 {
+        if let Some(account) = self.solana_accounts.get(&recent_blockhashes::ID) {
+            let slot_hash_data = account.data.borrow();
+            let clock_slot = self.clock.slot;
+            if number >= clock_slot.into() {
+                return H256::default();
+            }
+            let offset: usize = (8 + (clock_slot - 1 - number.as_u64()) * 40).try_into().unwrap();
+            if offset + 32 > slot_hash_data.len() {
+                return H256::default();
+            }
+            return H256::from_slice(&slot_hash_data[offset..][..32]);
+        }
+        panic!("Trying to get blockhash info without providing sysvar account: {}", recent_blockhashes::ID);
     }
 
     fn exists(&self, address: &H160) -> bool {

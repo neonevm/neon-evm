@@ -35,6 +35,7 @@ impl BumpAllocator {
     #[inline]
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
+    #[allow(clippy::pedantic)]
     pub fn occupied() -> usize {
         const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
         const TOP_ADDRESS: usize = HEAP_START_ADDRESS as usize + HEAP_LENGTH;
@@ -46,6 +47,7 @@ impl BumpAllocator {
 
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
     #[inline]
+    #[allow(clippy::pedantic)]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         const POS_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
         const TOP_ADDRESS: usize = HEAP_START_ADDRESS as usize + HEAP_LENGTH;
@@ -130,6 +132,9 @@ fn process_instruction<'a>(
         },
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
+        },
+        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
+            instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         },
         EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
