@@ -64,7 +64,7 @@ class NeonCliTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print("\ntest_neon_cli.py setUpClass")
-        '''
+
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -115,7 +115,9 @@ class NeonCliTest(unittest.TestCase):
             cls.acc_2.secret_key()).public_key.to_canonical_address()
         (cls.caller_2,
          cls.caller_nonce_2) = cls.loader.ether2program(cls.caller_ether_2)
-        '''
+
+        ############################################
+
         cls.token = SplToken(solana_url)
         wallet = OperatorAccount(operator1_keypair_path())
         cls.loader = EvmLoader(wallet, evm_loader_id)
@@ -412,7 +414,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        sender = self.create_new_account(evm_loader_id)
+        sender = self.create_new_account() #evm_loader_id)
         contract = self.generate_address()
         output = neon_cli().call_run(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -475,7 +477,7 @@ class NeonCliTest(unittest.TestCase):
         
     def test_command_migrate_account_alternative(self):
         ether_account = self.generate_address()
-        self.do_migrate(ether_account,evm_loader_id)
+        self.do_migrate(ether_account) #,evm_loader_id)
 
     def test_command_neon_elf_params(self):
         """
@@ -494,7 +496,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        contract_id = self.create_new_account(evm_loader_id)
+        contract_id = self.create_new_account() #evm_loader_id)
         output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -521,7 +523,8 @@ class NeonCliTest(unittest.TestCase):
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
 
-    def create_new_account(self, evm_loader_id) -> str:
+    # def create_new_account(self, evm_loader_id) -> str
+    def create_new_account(self) -> str:
         ether_account = self.generate_address()
         neon_cli().call_run(
             f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
@@ -531,7 +534,8 @@ class NeonCliTest(unittest.TestCase):
     def assert_exit_code(self, result: CompletedProcess):
         self.assertEqual(result.returncode, 0, "Return code is not 0")
 
-    def do_migrate(self,address: str, evm_loader_id) -> None:
+    # def do_migrate(self,address: str, evm_loader_id) -> None:
+    def do_migrate(self, address: str) -> None:
         # cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
         #                         "--url", SOLANA_URL, "--evm_loader", EVM_LOADER],
         #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
