@@ -1,6 +1,45 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const { base58_to_binary } = require('base58-js')
+const { exec } = require("child_process");
+
+const solana_url = process.env.SOLANA_URL;
+const spl_token_authority = process.env.SPL_TOKEN_AUTHORITY;
+
+function createSplToken(spl_token) {
+  console.log(`Creating SPL token ${spl_token.symbol}...`);
+  let token_keyfile = `./ci-tokens/${spl_token.symbol}.json`;
+  if (!fs.existsSync(token_keyfile)) {
+    console.log(`Keyfile ${token_keyfile} not found`);
+    return false;
+  }
+
+  let result = true;
+  exec(`solana address -k "${token_keyfile}"`,
+      (error, stdout, _) => {
+    if (error) {
+      result = false;
+    } else {
+      spl_token.spl_address = stdout;
+    }
+  });
+
+  if (!result) {
+    console.log(`Failed to calculate SPL token address from file ${token_keyfile}`);
+    return result;
+  }
+
+  exec(`spl-token --url ${solana_url} create-token --owner ${spl_token_authority} -- "${token_keyfile}"`,
+      (error, _, _) => {
+    if (error) {
+      console.log(`Failed to create SPL token ${spl_token.symbol}`);
+      result = false;
+    }
+    console.log(`SPL token ${spl_token.symbol} created: ${spl_token.spl_address}`);
+  })
+
+  return result;
+}
 
 async function deployNeon() {
   const Neon = await hre.ethers.getContractFactory("NeonToken");
@@ -31,6 +70,10 @@ async function deployERC20(token_list_file) {
 
     for (let spl_token of token_list.tokens) {
       if (chainId != spl_token.chainId) {
+        continue;
+      }
+
+      if (!createSplToken(spl_token)) {
         continue;
       }
 
