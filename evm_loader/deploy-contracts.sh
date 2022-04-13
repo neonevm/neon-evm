@@ -18,10 +18,11 @@ neon-cli --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" create-ether-account "$D
 echo "Depositing NEONs to deployer $DEPLOYER_PUBLIC_KEY"
 export ETH_TOKEN_MINT=$(solana address -k /opt/neon_token_keypair.json)
 ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
+solana --url "$SOLANA_URL" airdrop 1000 "$ACCOUNT"
 TOKEN_ACCOUNT=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
 spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
 spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT
-neon-cli --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBLIC_KEY"
+neon-cli --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
 echo "Compiling and deploying contracts"
 cd /opt/contracts/
