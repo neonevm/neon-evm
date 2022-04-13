@@ -30,7 +30,7 @@ function createSplToken(spl_token) {
   }
 
   exec(`spl-token --url ${solana_url} create-token --owner ${spl_token_authority} -- "${token_keyfile}"`,
-      (error, _, _) => {
+      (error, stdout, stderr) => {
     if (error) {
       console.log(`Failed to create SPL token ${spl_token.symbol}`);
       result = false;
