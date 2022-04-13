@@ -265,7 +265,18 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                         let mut storage = Hamt::new(hamt_data).unwrap();
                         for (key, value) in storage_iter {
+                            info!("Storage write {} {}", address, key);
                             info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
+
+                            let mut key_bytes = [0_u8; 32];
+                            key.to_big_endian(&mut key_bytes);
+
+                            let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"Storage", address.as_bytes(), &key_bytes];
+                            let (account, _) = Pubkey::find_program_address(seeds, self.program_id());
+
+                            let mut solana_accounts = self.solana_accounts.borrow_mut();
+                            solana_accounts.insert(account, AccountMeta::new(account, false));
+
                             storage.insert(key, value).unwrap();
                         }
 
@@ -647,6 +658,19 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
+        info!("Storage read {} {}", address, index);
+
+        {
+            let mut key_bytes = [0_u8; 32];
+            index.to_big_endian(&mut key_bytes);
+    
+            let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"Storage", address.as_bytes(), &key_bytes];
+            let (account, _) = Pubkey::find_program_address(seeds, self.program_id());
+
+            let mut solana_accounts = self.solana_accounts.borrow_mut();
+            solana_accounts.entry(account).or_insert_with(|| AccountMeta::new_readonly(account, false));
+        }
+
         self.ethereum_contract_map_or(address,
             None,
             |c| c.extension.storage.find(*index)
