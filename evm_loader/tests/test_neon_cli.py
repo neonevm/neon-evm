@@ -539,7 +539,7 @@ class NeonCliTest(unittest.TestCase):
 
     # def do_migrate(self,address: str, evm_loader_id) -> None:
     def do_migrate(self, address: str) -> None:
-        cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
+        cli = subprocess.Popen(["neon-cli", "migrate-account", address,
                                 "--url", SOLANA_URL, "--evm_loader", evm_loader_id],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         # output = neon_cli().call_run(
