@@ -547,6 +547,8 @@ class NeonCliTest(unittest.TestCase):
         # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
         #     for line in out:
         #         print(line.strip())
+        res = cli.communicate()[0]
+        print(res)
 
         # self.assert_exit_code(output)
         assert cli.returncode == 0, "Return code is not 0"
