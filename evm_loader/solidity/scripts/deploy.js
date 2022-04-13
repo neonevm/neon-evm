@@ -100,6 +100,9 @@ async function deployERC20(token_list_file) {
 }
 
 async function main() {
+  const [deployer] = await ethers.getSigners();
+  console.log("Deploying contracts with the account:", deployer.address);
+
   await deployNeon();
   await deployQueryAccount();
   await deployERC20('./tokenlist.json');

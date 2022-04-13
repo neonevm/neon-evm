@@ -30,4 +30,5 @@ neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBL
 echo "Compiling and deploying contracts"
 cd /opt/contracts/
 npx hardhat compile
+sleep 20
 npx hardhat run --network ci /opt/contracts/scripts/deploy.js
