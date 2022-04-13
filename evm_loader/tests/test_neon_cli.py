@@ -3,6 +3,9 @@ import re
 import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
+
+# from evm_loader.utils.neon-accounts import do_migrate
+
 # from evm_loader.tests.solana_utils import OperatorAccount, WalletAccount, operator1_keypair_path
 # from evm_loader.tests.solana_utils import OperatorAccount, SplToken, WalletAccount, getBalance, operator1_keypair_path
 # from solana_utils import neon_cli, EvmLoader, PublicKey, sha256
@@ -454,20 +457,24 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    # def test_command_migrate_account(self):
-    #     """
-    #     neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     """
-    #     ether_account = self.generate_address()
-    #     neon_cli().call_run(
-    #         f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
-    #     )
-    #     output = neon_cli().call_run(
-    #         f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
-    #     self.assertIsNotNone(output)
-    #     # Solana Client Error
-    #     # self.assertEqual(output.returncode, 113)
-    #     self.assert_exit_code(output)
+    def test_command_migrate_account(self):
+        """
+        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        """
+        ether_account = self.generate_address()
+        neon_cli().call_run(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
+        output = neon_cli().call_run(
+            f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        # Solana Client Error
+        # self.assertEqual(output.returncode, 113)
+        self.assert_exit_code(output)
+        
+    def test_command_migrate_account_alternative(self):
+        ether_account = self.generate_address()
+        do_migrate(ether_account,evm_loader_id)
 
     def test_command_neon_elf_params(self):
         """
@@ -482,17 +489,17 @@ class NeonCliTest(unittest.TestCase):
             bool(output_re.search(output.stdout)),
             "The output structure is not 'NEON_PARAM=numeric_value'")
 
-    # def test_command_update_valids_table(self):
-    #     """
-    #     neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-    #     """
-    #     contract_id = self.create_new_account(evm_loader_id)
-    #     output = neon_cli().call_run(
-    #         f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
-    #     self.assertIsNotNone(output)
-    #     # Code account not found
-    #     # self.assertEqual(output.returncode, 207)
-    #     self.assert_exit_code(output)
+    def test_command_update_valids_table(self):
+        """
+        neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+        """
+        contract_id = self.create_new_account(evm_loader_id)
+        output = neon_cli().call_run(
+            f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
+        self.assertIsNotNone(output)
+        # Code account not found
+        # self.assertEqual(output.returncode, 207)
+        self.assert_exit_code(output)
 
     def test_command_version(self):
         """
@@ -523,6 +530,15 @@ class NeonCliTest(unittest.TestCase):
     def assert_exit_code(self, result: CompletedProcess):
         self.assertEqual(result.returncode, 0, "Return code is not 0")
 
+    def do_migrate(self,address: str, evm_loader_id) -> None:
+        # cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
+        #                         "--url", SOLANA_URL, "--evm_loader", EVM_LOADER],
+        #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cli = neon_cli().call_run(
+            f"migrate-account {address} --evm_loader {evm_loader_id}")
+        with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
+            for line in out:
+                print(line.strip())
 
 if __name__ == '__main__':
     unittest.main()
