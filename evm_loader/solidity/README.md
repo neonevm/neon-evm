@@ -14,7 +14,8 @@ Run from current directory
 
 # Deployment
 
-## NeonToken
+Define environment variable DEPLOYER_PRIVATE_KEY:
+> export DEPLOYER_PRIVATE_KEY='0x4deac.....67b'
 
 Run command:
 > npx hardhat run --network <network_name> scripts/deploy.js
