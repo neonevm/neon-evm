@@ -506,7 +506,7 @@ pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 /// Additional fee for `request units` instruction
 pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
 /// Gas limit multiplier for transactions without chain id
-pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 10;
+pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 100;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
