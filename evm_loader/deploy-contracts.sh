@@ -14,9 +14,16 @@ export EVM_LOADER=$(solana address -k /opt/evm_loader-keypair.json)
 echo "EVM address: $EVM_LOADER"
 echo "Creating deployer account $DEPLOYER_PUBLIC_KEY"
 neon-cli --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" create-ether-account "$DEPLOYER_PUBLIC_KEY"
-echo "Depositing tokens to deployer $DEPLOYER_PUBLIC_KEY"
+
+echo "Depositing NEONs to deployer $DEPLOYER_PUBLIC_KEY"
+export ETH_TOKEN_MINT=$(solana address -k /opt/neon_token_keypair.json)
+ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
+TOKEN_ACCOUNT=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
+spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
+spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT
 neon-cli --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBLIC_KEY"
 
+echo "Compiling and deploying contracts"
 cd /opt/contracts/
 npx hardhat compile
 npx hardhat run --network ci /opt/contracts/scripts/deploy.js
