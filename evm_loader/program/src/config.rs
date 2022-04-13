@@ -175,6 +175,51 @@ cfg_if! {
                 "AcbET6BaNixJJSbVsSTMHqNbtmD29QcdmG8xDFDZhmAQ",
                 "ETXp6z3GQuksC7fVbwr3dP7HC6KhDang2BqpwS5yEq4S",
                 "72SengeGQD7XSdSXi6XnjvQwYpceWKqS2HmPKsvr3m3x",
+                "6vYNpJXQywhEjapfXSm2GbuFGUjtRamntEn6YT3fUFJw",
+                "j8Y4abKyAUhhvekN89c7EkYKVmUo5WPuVU3rgaJYivW",
+                "9A7nYK1iBQyAcF1Hw1aRwcH3qR8pgGvM9VQ7hM9ii7DU",
+                "1W6Z2oWehbpAK4AHvtEhXbqPQPyZpTKT74SMS4hGd39",
+                "4RQdLBbbsv3mYTgAzxZLfq7gBNbY94mskVNE5nJzWEDG",
+                "E7gcSAYWsFyKj7V1Rfqw4LazaPXQTabGThVNkVNuWM1m",
+                "DR1UDBVEgMTaGwWjaQNzmtMATaucwmBbmCYQkoZ23bXx",
+                "FrKZBETKPK2EUbyvSpdt61vDCGeUCuvoQdUd6GahZaoP",
+                "FRvykJX7e7wZWy5E7yM1gcHHQZGUvk5hesM772KcKxyD",
+                "DwJsWQQSBFcquyoUGKuCy12YAbf6xDQrct88ovTLbUts",
+                "AAaNPfMcYswFCLuKhzs7ViAgQpvRcTJKP3MC5SraQVrV",
+                "7edn5oDfjYBEXmp4vie3ywff1icG53dudrfenwpvCzQR",
+                "5nEkR86At3fqKPNmvtPiwsgtricuhUknSdztoGuXgwCP",
+                "H4eZrs754K3Dbrs23pWaKHpoYNNGdaKqBRmVKY5mhEmH",
+                "8Dy9Nqtaj4kcHUWaXfKcpxuqJgvK85RefJXfKH331oF1",
+                "9CNiUPsG3N7HApEgCdf29jhP1DCPRWhbwX8W8KAYGg3N",
+                "35ZZAHPv15YVYRayYp79D4byy4bhrGEGm3QZVox69iaZ",
+                "5dXnBiSUmidcYvsjL4QcX9MrPANSQ9NmhknCRoKNLmEw",
+                "6zc5dTjN2Bur8j9t2Py8HV79R2dnEFBNegzSjFjgZNVL",
+                "38iUn8t1wi5NBLtkndeTbKAmDN3DUzGSovZchJwAfk5a",
+                "6EdzJ4WAYt5bbPFp62CEs6WzDRxiVYouGs2tVDKoyikJ",
+                "7taK2nEXhZxxYA5sPrRKcEDZppztVyMEYeUnmNjoHyho",
+                "FGRpARj8VNjK8wpsY2pDpmYmemjmoAPUPFqWpFYw9Z5",
+                "CtK57wnaahbnj4kHcRTqK3GqHUm2u3fgoWWeQoWgKLuc",
+                "4Cp4tbVspRVTdicH5L9ofbsDENbYGjV9nS1kVmBZJZi6",
+                "Hkyk6XoFgSX8pccS4SzsAgroCPg7hhqSDPGZS9N3ib7t",
+                "5mWoAtX7Ge2Sk4aoyLXHhayGemQAnkugJjU65teC1nCF",
+                "7r387NaDsWai3JWoRMA7oboNpJdJsqp9ZrHmBFDoAdVs",
+                "Gds34TkCQK6Cn5UY6Ua63FLA4zHJVL2QnkpzytECsR8Y",
+                "4bpTD1CjhPj6k6JUiRhFtvGRAprPEaQzMpwnvhdgNhco",
+                "4aDDAQoHH7EqRdKx3WChJE2X46bYoQu1omyga1AbSK4C",
+                "6UwcFs1XYr9t3Rb8Us577HnD8VFP7Y27SqycCmHe3hdZ",
+                "6KqN7yRn3e1VQsN8T4daSjGw8VWA1itfWtMcaVCtViwA",
+                "3Kc7GwRzz6gE9CyvkR5M9pJDegCewKSf97aqhNLwj1T1",
+                "2P3yYwJtvcDPG1FkjMa2ZRx5CcfU4BE1eBLxbA4RjwaH",
+                "35vZqRVJwzETutp9qfrQSVAbfdEdCaTTeNMWFHmTcU9k",
+                "6C4fqJfP4mBPVQGYGeswi6NMpguHB1Z3V6CB6swNAgQ8",
+                "GGpZz5Pgk5ZK3MewVmsgN3K3q8ELV1S6G9EqGCp9Fusk",
+                "5aNR2vRnkeRbRaJ5m6u65ozJkcbKUF3CuAWAd7wcc4VL",
+                "39ZW3JfejGmKPWMt5mCHDrdXbr2Zqa693PTSw8CF6Hiv",
+                "6N639L8KEYtXzuK6S2s3igQEpWV9NPRmMUH27EuanoRC",
+                "4SgQqMMeqkfRxF7XosHZPavhMsQChKbKFgdA5gbqKK69",
+                "2pwajL5zgaypeLW3iwqgg8Q34k8cbF6FuH7hbviQGHsn",
+                "Bwcf3tPB7ARgq6jYH1mCA8na14azGThNNP9U9yBuNaNK",
+                "3bdkShjGK9BdSsmzvFqJ4KYMXEEYSiHppXRm8CAKRLRG",
             ]
         );
 
@@ -282,6 +327,51 @@ cfg_if! {
                 "AcbET6BaNixJJSbVsSTMHqNbtmD29QcdmG8xDFDZhmAQ",
                 "ETXp6z3GQuksC7fVbwr3dP7HC6KhDang2BqpwS5yEq4S",
                 "72SengeGQD7XSdSXi6XnjvQwYpceWKqS2HmPKsvr3m3x",
+                "6vYNpJXQywhEjapfXSm2GbuFGUjtRamntEn6YT3fUFJw",
+                "j8Y4abKyAUhhvekN89c7EkYKVmUo5WPuVU3rgaJYivW",
+                "9A7nYK1iBQyAcF1Hw1aRwcH3qR8pgGvM9VQ7hM9ii7DU",
+                "1W6Z2oWehbpAK4AHvtEhXbqPQPyZpTKT74SMS4hGd39",
+                "4RQdLBbbsv3mYTgAzxZLfq7gBNbY94mskVNE5nJzWEDG",
+                "E7gcSAYWsFyKj7V1Rfqw4LazaPXQTabGThVNkVNuWM1m",
+                "DR1UDBVEgMTaGwWjaQNzmtMATaucwmBbmCYQkoZ23bXx",
+                "FrKZBETKPK2EUbyvSpdt61vDCGeUCuvoQdUd6GahZaoP",
+                "FRvykJX7e7wZWy5E7yM1gcHHQZGUvk5hesM772KcKxyD",
+                "DwJsWQQSBFcquyoUGKuCy12YAbf6xDQrct88ovTLbUts",
+                "AAaNPfMcYswFCLuKhzs7ViAgQpvRcTJKP3MC5SraQVrV",
+                "7edn5oDfjYBEXmp4vie3ywff1icG53dudrfenwpvCzQR",
+                "5nEkR86At3fqKPNmvtPiwsgtricuhUknSdztoGuXgwCP",
+                "H4eZrs754K3Dbrs23pWaKHpoYNNGdaKqBRmVKY5mhEmH",
+                "8Dy9Nqtaj4kcHUWaXfKcpxuqJgvK85RefJXfKH331oF1",
+                "9CNiUPsG3N7HApEgCdf29jhP1DCPRWhbwX8W8KAYGg3N",
+                "35ZZAHPv15YVYRayYp79D4byy4bhrGEGm3QZVox69iaZ",
+                "5dXnBiSUmidcYvsjL4QcX9MrPANSQ9NmhknCRoKNLmEw",
+                "6zc5dTjN2Bur8j9t2Py8HV79R2dnEFBNegzSjFjgZNVL",
+                "38iUn8t1wi5NBLtkndeTbKAmDN3DUzGSovZchJwAfk5a",
+                "6EdzJ4WAYt5bbPFp62CEs6WzDRxiVYouGs2tVDKoyikJ",
+                "7taK2nEXhZxxYA5sPrRKcEDZppztVyMEYeUnmNjoHyho",
+                "FGRpARj8VNjK8wpsY2pDpmYmemjmoAPUPFqWpFYw9Z5",
+                "CtK57wnaahbnj4kHcRTqK3GqHUm2u3fgoWWeQoWgKLuc",
+                "4Cp4tbVspRVTdicH5L9ofbsDENbYGjV9nS1kVmBZJZi6",
+                "Hkyk6XoFgSX8pccS4SzsAgroCPg7hhqSDPGZS9N3ib7t",
+                "5mWoAtX7Ge2Sk4aoyLXHhayGemQAnkugJjU65teC1nCF",
+                "7r387NaDsWai3JWoRMA7oboNpJdJsqp9ZrHmBFDoAdVs",
+                "Gds34TkCQK6Cn5UY6Ua63FLA4zHJVL2QnkpzytECsR8Y",
+                "4bpTD1CjhPj6k6JUiRhFtvGRAprPEaQzMpwnvhdgNhco",
+                "4aDDAQoHH7EqRdKx3WChJE2X46bYoQu1omyga1AbSK4C",
+                "6UwcFs1XYr9t3Rb8Us577HnD8VFP7Y27SqycCmHe3hdZ",
+                "6KqN7yRn3e1VQsN8T4daSjGw8VWA1itfWtMcaVCtViwA",
+                "3Kc7GwRzz6gE9CyvkR5M9pJDegCewKSf97aqhNLwj1T1",
+                "2P3yYwJtvcDPG1FkjMa2ZRx5CcfU4BE1eBLxbA4RjwaH",
+                "35vZqRVJwzETutp9qfrQSVAbfdEdCaTTeNMWFHmTcU9k",
+                "6C4fqJfP4mBPVQGYGeswi6NMpguHB1Z3V6CB6swNAgQ8",
+                "GGpZz5Pgk5ZK3MewVmsgN3K3q8ELV1S6G9EqGCp9Fusk",
+                "5aNR2vRnkeRbRaJ5m6u65ozJkcbKUF3CuAWAd7wcc4VL",
+                "39ZW3JfejGmKPWMt5mCHDrdXbr2Zqa693PTSw8CF6Hiv",
+                "6N639L8KEYtXzuK6S2s3igQEpWV9NPRmMUH27EuanoRC",
+                "4SgQqMMeqkfRxF7XosHZPavhMsQChKbKFgdA5gbqKK69",
+                "2pwajL5zgaypeLW3iwqgg8Q34k8cbF6FuH7hbviQGHsn",
+                "Bwcf3tPB7ARgq6jYH1mCA8na14azGThNNP9U9yBuNaNK",
+                "3bdkShjGK9BdSsmzvFqJ4KYMXEEYSiHppXRm8CAKRLRG",
             ]
         );
 
@@ -345,6 +435,21 @@ cfg_if! {
                 "GwUnjJs6i7TKGjy71PvFpGN7yu9xqA8Cs1oyV4zSVPvq",
                 "EdSEh9UxXjbrrHLrH5manpxfXi7HxzkAMDAotPC5DggQ",
                 "9s7umnvnGqT1nvrCgzvBwWFyaaYABj64LxiBpjAayLiv",
+		"2Ma3MxGpKmk2KPbp631bNhm2NcSMU6oxFgtj2FfzkiBF",
+		"2v3dnQQaBALRmaQ1Jr7GbCVagTqEBKHPZ65b4nAmdDmN",
+		"47dYMgKdKxRGuGBpjH58eGuj1n4FXC6v4QTcpCSaVC2c",
+		"5dyQQATyk4yga4f4m8BCrUF1jdfGQ1mShV4ezFLxyCqW",
+		"7C6iuRYzEJEwe878X2TeMDoCHPEw85ZhaxapNEBuqwL9",
+		"82YcsM5eN83trdhdShGUF4crAC4CGgFJ7EWd2vnGiSsb",
+		"A3CEBvqJPPgHPARxzUQUafHXC4iU6x4iZzNudJ1Tks4z",
+		"AezpxgT4Qbo1pB9cLgBzzET7V2t7yK2ZrJrhDTCwxac9",
+		"CXJy6dzL8kAazo5jhBf8MuW17nJ8dW23EfzPmqTJ6P5H",
+		"DPRfsB8HQrJZM5g3B74rqZSmvtJn41PavhKBjmCRb45R",
+		"EbkUFw2EQkG85ua4sQy54Y6c988j7zkSAjkD6gRUTA3u",
+		"F4nLmDy62mhYiY4gGmRXDYpdFM4mLrm9t5YLpqTDMBz5",
+		"GHGLwKXzo2fAtLAVNJisP7wNyCRWBcmHEzCD36UcutW1",
+		"GZ3vKajaDjxFkiczL4g6as3qhMg7tdMgrMrpuApGWF8D",
+		"eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
             ]
         );
     
@@ -400,7 +505,8 @@ pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
 pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 /// Additional fee for `request units` instruction
 pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
-
+/// Gas limit multiplier for transactions without chain id
+pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 10;
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
@@ -414,6 +520,7 @@ neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE)
 neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
 neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
+neon_elf_param!( NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, formatcp!("{:?}", GAS_LIMIT_MULTIPLIER_NO_CHAINID));
 
 /// Chain ID
 #[must_use]
