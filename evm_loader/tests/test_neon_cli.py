@@ -535,11 +535,12 @@ class NeonCliTest(unittest.TestCase):
         # cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
         #                         "--url", SOLANA_URL, "--evm_loader", EVM_LOADER],
         #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        cli = neon_cli().call_run(
+        output = neon_cli().call_run(
             f"migrate-account {address} --evm_loader {evm_loader_id}")
-        with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
-            for line in out:
-                print(line.strip())
+        # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
+        #     for line in out:
+        #         print(line.strip())
+        self.assert_exit_code(output)
 
 if __name__ == '__main__':
     unittest.main()
