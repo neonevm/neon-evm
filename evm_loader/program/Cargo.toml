@@ -3,8 +3,8 @@
 
 [package]
 name = "evm-loader"
-version = "0.7.4"
-description = "Neon VM loader"
+version = "0.7.5"
+description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
