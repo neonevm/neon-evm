@@ -28,6 +28,9 @@ NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE',
                                               5000))
 NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
 
+
+SOLANA_URL = os.environ.get("SOLANA_URL", "http://solana:8899")
+
 # from base58 import b58decode
 # from spl.token.instructions import get_associated_token_address
 # from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
@@ -536,15 +539,17 @@ class NeonCliTest(unittest.TestCase):
 
     # def do_migrate(self,address: str, evm_loader_id) -> None:
     def do_migrate(self, address: str) -> None:
-        # cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
-        #                         "--url", SOLANA_URL, "--evm_loader", EVM_LOADER],
-        #                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        output = neon_cli().call_run(
-            f"migrate-account {address} --evm_loader {evm_loader_id}")
+        cli = subprocess.Popen(["neon-cli-v2", "migrate-account", address,
+                                "--url", SOLANA_URL, "--evm_loader", evm_loader_id],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        # output = neon_cli().call_run(
+        #     f"migrate-account {address} --evm_loader {evm_loader_id}")
         # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
         #     for line in out:
         #         print(line.strip())
-        self.assert_exit_code(output)
+
+        # self.assert_exit_code(output)
+        assert cli.returncode == 0, "Return code is not 0"
 
 if __name__ == '__main__':
     unittest.main()
