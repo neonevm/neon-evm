@@ -23,9 +23,9 @@ ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
 echo "Solana account $ACCOUNT"
 TOKEN_ACCOUNT=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
 echo "Token accout $TOKEN_ACCOUNT"
-spl-token mint $ETH_TOKEN_MINT 1000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
-spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT
-neon-cli --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
+spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
+echo "Balance of $ACCOUNT is: $(spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT) NEONs"
+neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
 echo "Compiling and deploying contracts"
 cd /opt/contracts/

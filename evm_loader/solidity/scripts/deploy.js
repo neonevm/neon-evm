@@ -10,8 +10,8 @@ function createSplToken(spl_token) {
   console.log(`Creating SPL token ${spl_token.symbol}...`);
   let token_keyfile = `./ci-tokens/${spl_token.symbol}.json`;
   if (!fs.existsSync(token_keyfile)) {
-    console.log(`Keyfile ${token_keyfile} not found`);
-    return false;
+    console.log(`Keyfile ${token_keyfile} not found. Will skip token creation.`);
+    return true;
   }
 
   let result = true;
