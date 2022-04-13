@@ -148,6 +148,9 @@ pub enum EvmInstruction {
     ///   4. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
     ///   5. `[]` SPL Token program id.
     MigrateAccount,
+
+    /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
+    ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
 }
 
 impl EvmInstruction {
@@ -179,6 +182,7 @@ impl EvmInstruction {
             24 => Self::CreateAccountV02,
             25 => Self::Deposit,
             26 => Self::MigrateAccount,
+            27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -200,5 +204,6 @@ pub mod transaction_begin_from_account;
 pub mod transaction_continue;
 pub mod transaction_step_from_instruction;
 pub mod transaction_step_from_account;
+pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;

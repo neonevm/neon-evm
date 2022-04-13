@@ -163,6 +163,7 @@ pub struct ExecutorSubstate {
     parent: Option<Box<ExecutorSubstate>>,
     logs: Vec<Log>,
     transfers: Vec<Transfer>,
+    block_hashes: RefCell<BTreeMap<U256, H256>>,
     accounts: BTreeMap<H160, ExecutorAccount>,
     balances: RefCell<BTreeMap<H160, U256>>,
     storages: BTreeMap<(H160, U256), U256>,
@@ -189,6 +190,7 @@ impl ExecutorSubstate {
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
+            block_hashes: RefCell::new(BTreeMap::new()),
             accounts: BTreeMap::new(),
             balances: RefCell::new(BTreeMap::new()),
             storages: BTreeMap::new(),
@@ -292,6 +294,7 @@ impl ExecutorSubstate {
             parent: None,
             logs: Vec::new(),
             transfers: Vec::new(),
+            block_hashes: RefCell::new(BTreeMap::new()),
             accounts: BTreeMap::new(),
             balances: RefCell::new(BTreeMap::new()),
             storages: BTreeMap::new(),
@@ -792,6 +795,26 @@ impl ExecutorSubstate {
         let key = (approve.owner, approve.spender, approve.contract, approve.mint);
         self.erc20_allowances.borrow_mut().insert(key, approve.value);
     }
+
+    fn known_block_hash(&self, number: U256) -> Option<H256> {
+        let block_hashes = self.block_hashes.borrow();
+        block_hashes.get(&number).copied()
+    }
+
+    #[must_use]
+    pub fn block_hash<B: AccountStorage>(&self, number: U256, backend: &B) -> H256 {
+        let value = self.known_block_hash(number);
+
+        value.map_or_else(
+            || {
+                let block_hash = backend.block_hash(number);
+                self.block_hashes.borrow_mut().insert(number, block_hash);
+
+                block_hash
+            },
+            |value| value
+        )
+    }
 }
 
 pub struct ExecutorState<'a, B: AccountStorage> {
@@ -802,8 +825,8 @@ pub struct ExecutorState<'a, B: AccountStorage> {
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     #[must_use]
     #[allow(clippy::unused_self)]
-    pub fn block_hash(&self, _number: U256) -> H256 {
-        H256::default()
+    pub fn block_hash(&self, number: U256) -> H256 {
+        self.substate.block_hash(number, self.backend)
     }
 
     #[must_use]
