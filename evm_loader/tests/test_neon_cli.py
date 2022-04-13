@@ -1,3 +1,9 @@
+from decimal import Decimal
+from eth_utils import abi
+from spl.token.instructions import get_associated_token_address
+from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+from solana.rpc.types import TxOpts
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 import io
 import os
 import re
@@ -40,16 +46,6 @@ SOLANA_URL = os.environ.get("SOLANA_URL", "http://solana:8899")
 
 ##################
 # test_eth_token.py
-from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solana.rpc.types import TxOpts
-import unittest
-from base58 import b58decode
-from solana_utils import *
-from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-from spl.token.instructions import get_associated_token_address
-from eth_tx_utils import make_keccak_instruction_data, make_instruction_data_from_tx
-from eth_utils import abi
-from decimal import Decimal
 
 solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
 client = Client(solana_url)
@@ -417,7 +413,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        sender = self.create_new_account() #evm_loader_id)
+        sender = self.create_new_account()  # evm_loader_id)
         contract = self.generate_address()
         output = neon_cli().call_run(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -467,20 +463,25 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        ether_account = self.generate_address()
-        neon_cli().call_run(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
-        )
+        # ether_account = self.generate_address()
+        # neon_cli().call_run(
+        #     f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        # )
+        ether_account = self.create_new_account()
         output = neon_cli().call_run(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
         # Solana Client Error
         # self.assertEqual(output.returncode, 113)
         self.assert_exit_code(output)
-        
+
     def test_command_migrate_account_alternative(self):
-        ether_account = self.generate_address()
-        self.do_migrate(ether_account) #,evm_loader_id)
+        # ether_account = self.generate_address()
+        ether_account = self.create_new_account()
+        neon_cli().call_run(
+            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        )
+        self.do_migrate(ether_account)  # ,evm_loader_id)
 
     def test_command_neon_elf_params(self):
         """
@@ -499,7 +500,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        contract_id = self.create_new_account() #evm_loader_id)
+        contract_id = self.create_new_account()  # evm_loader_id)
         output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -551,7 +552,8 @@ class NeonCliTest(unittest.TestCase):
         print(res)
 
         # self.assert_exit_code(output)
-        assert cli.returncode == 0, "Return code is not 0"
+        assert cli.returncode == 0, f"Return code is not 0, it's {cli.returncode}"
+
 
 if __name__ == '__main__':
     unittest.main()
