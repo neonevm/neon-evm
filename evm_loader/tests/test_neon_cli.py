@@ -34,7 +34,6 @@ NEON_PAYMENT_TO_TREASURE = int(os.environ.get('NEON_PAYMENT_TO_TREASURE',
                                               5000))
 NEON_PAYMENT_TO_DEPOSIT = int(os.environ.get('NEON_PAYMENT_TO_DEPOSIT', 5000))
 
-
 SOLANA_URL = os.environ.get("SOLANA_URL", "http://solana:8899")
 
 # from base58 import b58decode
@@ -328,7 +327,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli cancel-trx <STORAGE_ACCOUNT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        # account = self.create_new_account(evm_loader_id)
+        # account = self.create_new_account()
         # wallet = OperatorAccount(operator1_keypair_path())
         # account = wallet.get_acc()
         # account = WalletAccount()
@@ -413,7 +412,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli emulate <SENDER> <CONTRACT> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        sender = self.create_new_account()  # evm_loader_id)
+        sender = self.create_new_account()
         contract = self.generate_address()
         output = neon_cli().call_run(
             f"emulate {sender} {contract} --evm_loader {evm_loader_id}")
@@ -438,7 +437,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        # contract_id = self.create_new_account(evm_loader_id)
+        # contract_id = self.create_new_account()
 
         contract_id = self.eth_contract
         # program_id, bytes_result, code_id = EvmLoader().deployChecked(
@@ -486,15 +485,14 @@ class NeonCliTest(unittest.TestCase):
         # neon_cli().call_run(
         #     f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         # )
-        
-        #
+
         #
         neon_cli().call_run(
             f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
         )
         #
         #
-        self.do_migrate(ether_account)  # ,evm_loader_id)
+        self.do_migrate(ether_account)
 
     def test_command_neon_elf_params(self):
         """
@@ -513,7 +511,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        contract_id = self.create_new_account()  # evm_loader_id)
+        contract_id = self.create_new_account()
         output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -540,7 +538,6 @@ class NeonCliTest(unittest.TestCase):
     def generate_address(self) -> str:
         return eth_keys.PrivateKey(os.urandom(32)).public_key.to_address()
 
-    # def create_new_account(self, evm_loader_id) -> str
     def create_new_account(self) -> str:
         ether_account = self.generate_address()
         neon_cli().call_run(
@@ -551,11 +548,13 @@ class NeonCliTest(unittest.TestCase):
     def assert_exit_code(self, result: CompletedProcess):
         self.assertEqual(result.returncode, 0, "Return code is not 0")
 
-    # def do_migrate(self,address: str, evm_loader_id) -> None:
     def do_migrate(self, address: str) -> None:
-        cli = subprocess.Popen(["neon-cli", "migrate-account", address,
-                                "--url", SOLANA_URL, "--evm_loader", evm_loader_id],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cli = subprocess.Popen([
+            "neon-cli", "migrate-account", address, "--url", SOLANA_URL,
+            "--evm_loader", evm_loader_id
+        ],
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT)
         # output = neon_cli().call_run(
         #     f"migrate-account {address} --evm_loader {evm_loader_id}")
         # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
