@@ -468,6 +468,11 @@ class NeonCliTest(unittest.TestCase):
         #     f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
         # )
         ether_account = self.create_new_account()
+        #
+        neon_cli().call_run(
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+        )
+        #
         output = neon_cli().call_run(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
@@ -478,9 +483,17 @@ class NeonCliTest(unittest.TestCase):
     def test_command_migrate_account_alternative(self):
         # ether_account = self.generate_address()
         ether_account = self.create_new_account()
+        # neon_cli().call_run(
+        #     f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+        # )
+        
+        #
+        #
         neon_cli().call_run(
-            f"create-ether-account {ether_account} --evm_loader {evm_loader_id}"
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
         )
+        #
+        #
         self.do_migrate(ether_account)  # ,evm_loader_id)
 
     def test_command_neon_elf_params(self):
