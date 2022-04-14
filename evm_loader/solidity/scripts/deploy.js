@@ -22,7 +22,7 @@ function createSplToken(spl_token) {
       result = false;
     } else {
       console.log(`SPL token address is ${stdout}`)
-      spl_token.spl_address = stdout.trim();
+      spl_token.address_spl = stdout.trim();
     }
   });
 
@@ -37,7 +37,7 @@ function createSplToken(spl_token) {
       console.log(`Failed to create SPL token ${spl_token.symbol}: ${error}`);
       result = false;
     } else {
-      console.log(`SPL token ${spl_token.symbol} created: ${spl_token.spl_address}`);
+      console.log(`SPL token ${spl_token.symbol} created: ${spl_token.address_spl}`);
     }
   });
 
