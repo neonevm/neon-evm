@@ -13,7 +13,8 @@
    "decimals": 6,
    "name": "USDT",
    "symbol": "USDT",
-   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDT.svg"
+   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDT.svg",
+   "spl_address": "B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
   },
   {
    "chainId": 111,
@@ -22,7 +23,8 @@
    "decimals": 9,
    "name": "Dai Stablecoin (Wormhole)",
    "symbol": "wDAI",
-   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_DAI.svg"
+   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_DAI.svg",
+   "spl_address": "H495YUVLBYU2kvt9iuaKsNGxTWqjPx8cghvkJiYmiywN"
   },
   {
    "chainId": 111,
@@ -31,7 +33,8 @@
    "decimals": 6,
    "name": "USDC",
    "symbol": "USDC",
-   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg"
+   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/asset_USDC.svg",
+   "spl_address": "axw2c9Li75Uu186nKimpJfScfnDzQMHTgX33rQHNAnn"
   },
   {
    "chainId": 111,
@@ -40,7 +43,8 @@
    "decimals": 6,
    "name": "Wrapped Ethereum (Sollet)",
    "symbol": "ETH",
-   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/ctoken_eth.svg"
+   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/ctoken_eth.svg",
+   "spl_address": "EsY9vWiUW6DeKGZeGb6BFpHYTXfQC9z73zRyq8chcCXN"
   },
   {
    "chainId": 111,
@@ -49,7 +53,8 @@
    "decimals": 8,
    "name": "Wrapped BTC (Wormhole)",
    "symbol": "wWBTC",
-   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/ctoken_wbtc.svg"
+   "logoURI": "https://raw.githubusercontent.com/compound-finance/token-list/master/assets/ctoken_wbtc.svg",
+   "spl_address": "Bcc5pA7rE2YkKKfk4jj9MwJb9fRtELCk2teKZzYWFgud"
   },
   {
    "chainId": 111,
@@ -57,7 +62,8 @@
    "address": "0x51F74c4f148044699113C74A74A64212b0812bE9",
    "decimals": 6,
    "name": "Wrapped Aave",
-   "symbol": "AAVE"
+   "symbol": "AAVE",
+   "spl_address": "Dsoj9idxF4izCgBNFaCv1Y6tF9waGv4Du7DZuEhWSocD"
   },
   {
    "chainId": 111,
@@ -65,7 +71,8 @@
    "address": "0xAA7e47363fD7edF3f33d189CE8228d5b4784A369",
    "decimals": 9,
    "name": "Curve DAO Token (Wormhole)",
-   "symbol": "wCRV"
+   "symbol": "wCRV",
+   "spl_address": "A6zwPk4dnWujFepodXvA3xfP5NvDuaJzf6uDsPfuKyGd"
   },
   {
    "chainId": 111,
@@ -73,7 +80,8 @@
    "address": "0x54398E7B3Eb6bFE94492E9E246373592ff67E9F8",
    "decimals": 6,
    "name": "Wrapped SUSHI (Sollet)",
-   "symbol": "SUSHI"
+   "symbol": "SUSHI",
+   "spl_address": "4zenNf8JzLidj8DuS1VDDdzbfCR4kRhj9WFYftu5wpPU"
   },
   {
    "chainId": 111,
@@ -81,7 +89,8 @@
    "address": "0x3a172bb45B378E60542DD121f77FC0358046934A",
    "decimals": 9,
    "name": "Balancer (Wormhole)",
-   "symbol": "wBAL"
+   "symbol": "wBAL",
+   "spl_address": "6FiZig1gxFaA3qCLSGKfv5Dh6JtBRE8Rt7VfKNcgE93X"
   },
   {
    "chainId": 111,

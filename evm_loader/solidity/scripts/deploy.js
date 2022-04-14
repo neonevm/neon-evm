@@ -22,7 +22,7 @@ function createSplToken(spl_token) {
       result = false;
     } else {
       console.log(`SPL token address is ${stdout}`)
-      spl_token.spl_address = stdout;
+      spl_token.spl_address = stdout.trim();
     }
   });
 
