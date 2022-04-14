@@ -7,19 +7,21 @@ const solana_url = process.env.SOLANA_URL;
 const spl_token_authority = process.env.SPL_TOKEN_AUTHORITY;
 
 function createSplToken(spl_token) {
-  console.log(`Creating SPL token ${spl_token.symbol}...`);
+  console.log(`\n\n\nCreating SPL token ${spl_token.symbol}...`);
   let token_keyfile = `./ci-tokens/${spl_token.symbol}.json`;
   if (!fs.existsSync(token_keyfile)) {
     console.log(`Keyfile ${token_keyfile} not found. Will skip token creation.`);
     return true;
   }
+  console.log(`Token keyfile is ${token_keyfile}`);
 
   let result = true;
   exec(`solana address -k "${token_keyfile}"`,
-      (error, stdout, _) => {
+      (error, stdout, stderr) => {
     if (error) {
       result = false;
     } else {
+      console.log(`SPL token address is ${stdout}`)
       spl_token.spl_address = stdout;
     }
   });
@@ -32,11 +34,12 @@ function createSplToken(spl_token) {
   exec(`spl-token --url ${solana_url} create-token --owner ${spl_token_authority} -- "${token_keyfile}"`,
       (error, stdout, stderr) => {
     if (error) {
-      console.log(`Failed to create SPL token ${spl_token.symbol}`);
+      console.log(`Failed to create SPL token ${spl_token.symbol}: ${error}`);
       result = false;
+    } else {
+      console.log(`SPL token ${spl_token.symbol} created: ${spl_token.spl_address}`);
     }
-    console.log(`SPL token ${spl_token.symbol} created: ${spl_token.spl_address}`);
-  })
+  });
 
   return result;
 }
@@ -77,7 +80,7 @@ async function deployERC20(token_list_file) {
         continue;
       }
 
-      console.log(`Deploying wrapper for SPL token ${spl_token.address_spl}: ${spl_token.name} (${spl_token.symbol})`);
+      console.log(`Deploying wrapper for SPL token ${spl_token.name} (${spl_token.symbol})`);
       const new_wrapper = await NeonERC20Wrapper.deploy(
           spl_token.name,
           spl_token.symbol,
