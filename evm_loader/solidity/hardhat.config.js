@@ -1,6 +1,6 @@
 require("@nomiclabs/hardhat-waffle");
 
-const neon_token_deployer = '0x4deacb079b4714c38f39508aa8900039f2721ed8686835d43347ba9267da767b';
+const neon_token_deployer = process.env.DEPLOYER_PRIVATE_KEY;
 
 module.exports = {
   solidity: "0.8.4",
