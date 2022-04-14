@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const { base58_to_binary } = require('base58-js')
-const { exec } = require("child_process");
+const { execSync } = require("child_process");
 
 const solana_url = process.env.SOLANA_URL;
 const spl_token_authority = process.env.SPL_TOKEN_AUTHORITY;
@@ -15,33 +15,17 @@ function createSplToken(spl_token) {
   }
   console.log(`Token keyfile is ${token_keyfile}`);
 
-  let result = true;
-  exec(`solana address -k "${token_keyfile}"`,
-      (error, stdout, stderr) => {
-    if (error) {
-      result = false;
-    } else {
-      console.log(`SPL token address is ${stdout}`)
-      spl_token.address_spl = stdout.trim();
-    }
-  });
+  try {
+    spl_token.address_spl = String(execSync(`solana address -k "${token_keyfile}"`)).trim();
+    console.log(`SPL token address is ${spl_token.address_spl}`)
 
-  if (!result) {
-    console.log(`Failed to calculate SPL token address from file ${token_keyfile}`);
-    return result;
+    stdout = execSync(`spl-token --url ${solana_url} create-token --owner ${spl_token_authority} -- "${token_keyfile}"`);
+    console.log(`SPL token ${spl_token.symbol} created: ${spl_token.address_spl}`);
+    return true;
+  } catch (e) {
+    console.log(`Failed to create SPL token ${spl_token.symbol}: ${e}`);
+    return false;
   }
-
-  exec(`spl-token --url ${solana_url} create-token --owner ${spl_token_authority} -- "${token_keyfile}"`,
-      (error, stdout, stderr) => {
-    if (error) {
-      console.log(`Failed to create SPL token ${spl_token.symbol}: ${error}`);
-      result = false;
-    } else {
-      console.log(`SPL token ${spl_token.symbol} created: ${spl_token.address_spl}`);
-    }
-  });
-
-  return result;
 }
 
 async function deployNeon() {
