@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, program};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, EthereumStorage, program};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
@@ -35,6 +35,9 @@ pub struct ProgramAccountStorage<'a> {
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, Account<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
+
+    storage_accounts: RefCell<BTreeMap<(H160, U256), EthereumStorage<'a>>>,
+    empty_storage_accounts: RefCell<BTreeMap<(H160, U256), &'a AccountInfo<'a>>>,
 
     chain_id: u64,
 }
@@ -72,6 +75,14 @@ pub trait AccountStorage {
     fn code(&self, address: &H160) -> Vec<u8>;
     /// Get valids data
     fn valids(&self, address: &H160) -> Vec<u8>;
+    /// Get storage account address and bump seed
+    fn get_storage_address(&self, address: &H160, index: &U256) -> (Pubkey, u8) {
+        let mut index_bytes = [0_u8; 32];
+        index.to_little_endian(&mut index_bytes);
+
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &index_bytes];
+        Pubkey::find_program_address(seeds, self.program_id())
+    }
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256;
 

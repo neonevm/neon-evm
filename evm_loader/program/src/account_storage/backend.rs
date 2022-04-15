@@ -4,7 +4,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{ERC20Allowance, token, EthereumContract};
+use crate::account::{ERC20Allowance, token, EthereumContract, EthereumStorage};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
@@ -79,10 +79,35 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        self.ethereum_contract(address)
-            .map(|c| &c.extension.storage)
-            .and_then(|hamt| hamt.find(*index))
-            .unwrap_or_else(U256::zero)
+        let key = (*address, *index);
+
+        let mut storage_accounts = self.storage_accounts.borrow_mut();
+        if let Some(account) = storage_accounts.get(&key) {
+            return account.value;
+        }
+
+        let mut empty_storage_accounts = self.empty_storage_accounts.borrow_mut();
+        if empty_storage_accounts.contains_key(&key) {
+            return U256::zero();
+        }
+
+        let (solana_address, _) = self.get_storage_address(address, index);
+        let account = self.solana_accounts[&solana_address];
+
+        if account.owner == self.program_id() {
+            let storage = EthereumStorage::from_account(self.program_id(), account)
+                .expect("Expect ethereum storage account");
+            let value = storage.value;
+            storage_accounts.insert(key, storage);
+            return value;
+        }
+
+        if solana_program::system_program::check_id(account.owner) {
+            empty_storage_accounts.insert(key, account);
+            return U256::zero();
+        }
+
+        panic!("Not found storage account for {} {}", address, index);
     }
 
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
@@ -139,7 +164,6 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     EthereumContract::SIZE
                         + a.extension.code.len()
                         + a.extension.valids.len()
-                        + a.extension.storage.buffer_len()
                 })
         };
 

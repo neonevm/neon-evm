@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    cell::RefMut,
     collections::HashMap,
     rc::Rc,
     convert::TryInto,
@@ -30,7 +29,6 @@ use evm_loader::{
     account_storage::{AccountStorage},
     executor_state::{ERC20Approve, SplApprove, SplTransfer},
     precompile_contracts::is_precompile_address,
-    hamt::Hamt,
 };
 use evm_loader::executor_state::Withdraw;
 
@@ -256,21 +254,14 @@ impl<'a> EmulatorAccountStorage<'a> {
                     let mut storage_iter = storage.into_iter().peekable();
                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
-                    let hamt_size = |code_data : &[u8], hamt_begin : usize| ->usize {
-                        let buffer = RefCell::new(vec![0_u8; 10_485_760]);
-                        let mut buffer_ref = buffer.borrow_mut();
-                        buffer_ref[0..code_data.len()].copy_from_slice(code_data);
+                    let mut solana_accounts = self.solana_accounts.borrow_mut();
+                    for (index, value) in storage_iter {
+                        info!("Storage value: {} - {} = {}", address, index, value);
 
-                        let (_, hamt_data) = RefMut::map_split(buffer_ref, |b| b.split_at_mut(hamt_begin));
+                        let (solana_address, _) = self.get_storage_address(&address, &index);
+                        solana_accounts.insert(solana_address, AccountMeta::new(solana_address, false));
 
-                        let mut storage = Hamt::new(hamt_data).unwrap();
-                        for (key, value) in storage_iter {
-                            info!("Storage value: {} = {}", &key.to_string(), &value.to_string());
-                            storage.insert(key, value).unwrap();
-                        }
-
-                        storage.last_used() as usize
-                    };
+                    }
 
                     if nonce > U256::from(u64::MAX) {
                         return Err(NeonCliError::TrxCountOverflow);
@@ -303,10 +294,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 (EthereumContract::SIZE, code_size, valids_size)
                             };
 
-                            let hamt_begin = code_begin + code_size + valids_size;
-
                             acc.code_size_current = Some(code_account_data.len());
-                            acc.code_size = Some(hamt_begin + hamt_size(&code_account_data, hamt_begin));
+                            acc.code_size = Some(code_begin + code_size + valids_size);
 
                             let trx_count: u64 = nonce.as_u64();
                             if reset_storage || exist_items || code_and_valids.is_some() || acc_desc.trx_count != trx_count {
@@ -318,8 +307,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                                 return Err(NeonCliError::DeploymentToExistingAccount(address));
                             }
 
-                            let hamt_begin = EthereumContract::SIZE + code.len() + valids.len();
-                            acc.code_size = Some(hamt_begin + hamt_size(&[0_u8; 0], hamt_begin));
+                            acc.code_size = Some(EthereumContract::SIZE + code.len() + valids.len());
                             acc.code_size_current = Some(0);
                             acc.writable = true;
                         }
@@ -333,8 +321,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                     }
                     else if let Some(acc) = new_accounts.get_mut(&address) {
                         if let Some((code, valids)) = &code_and_valids {
-                            let hamt_begin = EthereumContract::SIZE + code.len() + valids.len();
-                            acc.code_size = Some(hamt_begin + hamt_size(&[0_u8; 0], hamt_begin));
+                            acc.code_size = Some(EthereumContract::SIZE + code.len() + valids.len());
                         }
                         else if reset_storage || exist_items {
                             return Err(NeonCliError::ContractAccountExpected(address));
@@ -647,10 +634,13 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        self.ethereum_contract_map_or(address,
-            None,
-            |c| c.extension.storage.find(*index)
-        ).unwrap_or_else(U256::zero)
+        let (solana_address, _) = self.get_storage_address(address, index);
+        {
+            let mut solana_accounts = self.solana_accounts.borrow_mut();
+            solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
+        }
+
+        crate::commands::get_storage_at::value(self.config, *address, index)
     }
 
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
@@ -732,7 +722,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                     EthereumContract::SIZE
                         + a.extension.code.len()
                         + a.extension.valids.len()
-                        + a.extension.storage.buffer_len()
             })
         };
 

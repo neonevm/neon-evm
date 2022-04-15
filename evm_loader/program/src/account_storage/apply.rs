@@ -7,7 +7,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, Operator, program};
+use crate::account::{ACCOUNT_SEED_VERSION, ERC20Allowance, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
 use crate::executor_state::{ApplyState, ERC20Approve, SplApprove, SplTransfer, Withdraw};
 use crate::precompile_contracts::is_precompile_address;
@@ -90,7 +90,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if !applies.is_empty() {
-            self.apply_contract_results(applies, operator)?;
+            self.apply_contract_results(applies, operator, system_program)?;
         }
 
         debug_print!("Applies done");
@@ -135,7 +135,7 @@ impl<'a> ProgramAccountStorage<'a> {
             contract.reload_extension()?;
             contract.extension.code.copy_from_slice(code);
             contract.extension.valids.copy_from_slice(valids);
-            contract.extension.storage.clear();
+            // contract.extension.storage.clear();
         } else {
             return Err!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address);
         }
@@ -143,13 +143,56 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn update_account(
+    fn update_storage(
+        &mut self,
+        address: H160,
+        index: U256,
+        value: U256,
+        operator: &Operator<'a>,
+        system_program: &program::System<'a>,
+    ) -> Result<(), ProgramError> {
+        let key = (address, index);
+
+        let mut storage_accounts = self.storage_accounts.borrow_mut();
+        if let Some(storage) = storage_accounts.get_mut(&key) {
+            storage.value = value;
+            return Ok(())
+        }
+
+
+        let (solana_address, bump_seed) = self.get_storage_address(&address, &index);
+
+        let mut index_bytes = [0_u8; 32];
+        index.to_little_endian(&mut index_bytes);
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &index_bytes, &[bump_seed]];
+
+
+        let account = self.solana_accounts[&solana_address];
+        if account.owner == self.program_id() {
+            let mut storage = EthereumStorage::from_account(self.program_id(), account)?;
+            storage.value = value;
+
+            storage_accounts.insert(key, storage);
+            return Ok(());
+        }
+
+        system_program.create_pda_account(
+            self.program_id, 
+            operator, 
+            account, 
+            seeds, 
+            EthereumStorage::SIZE
+        )?;
+
+        EthereumStorage::init(account, crate::account::ether_storage::Data { value })?;
+
+        Ok(())
+    }
+
+    fn update_account_trx_count(
         &mut self,
         address: H160,
         trx_count: U256,
-        code_and_valids: Option<(Vec<u8>, Vec<u8>)>,
-        storage: BTreeMap<U256, U256>,
-        reset_storage: bool
     ) -> Result<(), ProgramError> {
         if self.nonce(&address) != trx_count {
             let account = self.ethereum_account_mut(&address)
@@ -163,20 +206,27 @@ impl<'a> ProgramAccountStorage<'a> {
             account.trx_count = trx_count.as_u64();
         }
 
-        if let Some((code, valids)) = code_and_valids {
-            self.deploy_contract(address, &code, &valids)?;
-        }
+        Ok(())
+    }
 
+    fn update_account_storage(
+        &mut self,
+        address: H160,
+        storage: BTreeMap<U256, U256>,
+        reset_storage: bool,
+        operator: &Operator<'a>,
+        system_program: &program::System<'a>,
+    ) -> Result<(), ProgramError> {
         if reset_storage | !storage.is_empty() {
-            let contract = self.ethereum_contract_mut(&address)
-                .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not contract", address))?;
+            // let contract = self.ethereum_contract_mut(&address)
+            //     .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not contract", address))?;
 
-            if reset_storage {
-                contract.extension.storage.clear();
-            }
+            // if reset_storage {
+            //     contract.extension.storage.clear();
+            // }
 
-            for (key, value) in storage {
-                contract.extension.storage.insert(key, value)?;
+            for (index, value) in storage {
+                self.update_storage(address, index, value, operator, system_program)?;
             }
         }
 
@@ -187,6 +237,7 @@ impl<'a> ProgramAccountStorage<'a> {
         &mut self,
         values: Vec<Apply<BTreeMap<U256, U256>>>,
         operator: &Operator<'a>,
+        system_program: &program::System<'a>,
     ) -> Result<(), ProgramError> {
         debug_print!("apply_contract_results");
 
@@ -197,7 +248,13 @@ impl<'a> ProgramAccountStorage<'a> {
                         continue;
                     }
 
-                    self.update_account(address, nonce, code_and_valids, storage, reset_storage)?;
+                    self.update_account_trx_count(address, nonce)?;
+
+                    if let Some((code, valids)) = code_and_valids {
+                        self.deploy_contract(address, &code, &valids)?;
+                    }
+
+                    self.update_account_storage(address, storage, reset_storage, operator, system_program)?;
                 },
                 Apply::Delete { address } => {
                     self.delete_account(address, operator)?;
