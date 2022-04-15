@@ -18,7 +18,7 @@ pub fn value(
     ether_address: H160,
     index: &U256
 ) -> U256 {
-    trace!("Enter execution for address {:?}", ether_address);
+    trace!("Get Storage At {:?} - {}", ether_address, index);
 
     let mut index_bytes = [0_u8; 32];
     index.to_little_endian(&mut index_bytes);
