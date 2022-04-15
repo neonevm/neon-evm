@@ -363,12 +363,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// # Panics
     ///
     /// Panics if account is invalid or any serialization error occurs.
-    pub fn save_into(&self, storage: &mut crate::account::Storage) {
+    pub fn save_into(&self, storage: &mut crate::account::State) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
     /// Deserializes and restores state of runtime and executor from a storage account.
-    pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Result<Self, ProgramError> {
+    pub fn restore(storage: &crate::account::State, backend: &'a B) -> Result<Self, ProgramError> {
         let (runtime, substate) = storage.deserialize()?;
         let gasometer = Gasometer::new()?;
 
