@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use solana_program::{
     instruction::AccountMeta,
+    sysvar::recent_blockhashes,
 };
 
 use solana_sdk::{
@@ -584,6 +585,23 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn block_timestamp(&self) -> U256 {
         self.block_timestamp.into()
+    }
+
+    fn block_hash(&self, number: U256) -> H256 { 
+        info!("Get block hash {}", number);
+        let mut solana_accounts = self.solana_accounts.borrow_mut();
+        solana_accounts.insert(recent_blockhashes::ID, AccountMeta::new(recent_blockhashes::ID, false));
+
+        if self.block_number <= number.as_u64() {
+            return H256::default();
+        }
+
+        if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
+            H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().unwrap())
+        } else {
+            warn!("Got error trying to get block hash");
+            H256::default()
+        }
     }
 
     fn exists(&self, address: &H160) -> bool {
