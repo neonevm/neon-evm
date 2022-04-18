@@ -81,6 +81,7 @@ pub struct Data {
 pub struct Extension<'a> {
     pub code: RefMut<'a, [u8]>,
     pub valids: RefMut<'a, [u8]>,
+    pub storage: RefMut<'a, [u8]>,
 }
 
 impl<'a> AccountExtension<'a, Data> for Extension<'a> {
@@ -89,9 +90,9 @@ impl<'a> AccountExtension<'a, Data> for Extension<'a> {
         let valids_size = (code_size / 8) + 1;
 
         let (code, rest) = RefMut::map_split(remaining, |r| r.split_at_mut(code_size));
-        let (valids, _restr) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
+        let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
 
-        Ok(Self { code, valids })
+        Ok(Self { code, valids, storage })
     }
 }
 

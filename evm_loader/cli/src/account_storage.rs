@@ -257,10 +257,12 @@ impl<'a> EmulatorAccountStorage<'a> {
                     let mut solana_accounts = self.solana_accounts.borrow_mut();
                     for (index, value) in storage_iter {
                         info!("Storage value: {} - {} = {}", address, index, value);
+                        if index < U256::from(64_u64) {
+                            continue;
+                        }
 
                         let (solana_address, _) = self.get_storage_address(&address, &index);
                         solana_accounts.insert(solana_address, AccountMeta::new(solana_address, false));
-
                     }
 
                     if nonce > U256::from(u64::MAX) {
@@ -634,10 +636,12 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        let (solana_address, _) = self.get_storage_address(address, index);
-        {
-            let mut solana_accounts = self.solana_accounts.borrow_mut();
-            solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
+        if *index > U256::from(64_u32) {
+            let (solana_address, _) = self.get_storage_address(address, index);
+            {
+                let mut solana_accounts = self.solana_accounts.borrow_mut();
+                solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
+            }
         }
 
         crate::commands::get_storage_at::value(self.config, *address, index)

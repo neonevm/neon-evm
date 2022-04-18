@@ -79,6 +79,18 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
+        if *index < U256::from(64_u32) {
+            let index: usize = index.as_usize() * 32;
+            return self.ethereum_contract(address)
+                .map(|c| 
+                    &c.extension.storage
+                )
+                .map_or_else(
+                    U256::zero,
+                    |s| U256::from_little_endian(&s[index..index+32])
+                )
+        }
+
         let key = (*address, *index);
 
         let mut storage_accounts = self.storage_accounts.borrow_mut();

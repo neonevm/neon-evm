@@ -143,7 +143,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn update_storage(
+    fn update_storage_infinite(
         &mut self,
         address: H160,
         index: U256,
@@ -189,6 +189,43 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
+
+    fn update_account_storage(
+        &mut self,
+        address: H160,
+        mut storage: BTreeMap<U256, U256>,
+        reset_storage: bool,
+        operator: &Operator<'a>,
+        system_program: &program::System<'a>,
+    ) -> Result<(), ProgramError> {
+        if reset_storage | !storage.is_empty() {
+
+            // if reset_storage {
+            //     contract.extension.storage.clear();
+            // }
+            
+            let infinite_storage = storage.split_off(&U256::from(64_u64));
+
+            {
+                let contract = self.ethereum_contract_mut(&address)
+                    .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not contract", address))?;
+
+                for (index, value) in storage {
+                    let index: usize = index.as_usize() * 32;
+                    value.to_little_endian(&mut contract.extension.storage[index..index+32]);
+                }
+            }
+
+
+            for (index, value) in infinite_storage {
+                self.update_storage_infinite(address, index, value, operator, system_program)?;
+            }
+
+        }
+
+        Ok(())
+    }
+
     fn update_account_trx_count(
         &mut self,
         address: H160,
@@ -204,30 +241,6 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             account.trx_count = trx_count.as_u64();
-        }
-
-        Ok(())
-    }
-
-    fn update_account_storage(
-        &mut self,
-        address: H160,
-        storage: BTreeMap<U256, U256>,
-        reset_storage: bool,
-        operator: &Operator<'a>,
-        system_program: &program::System<'a>,
-    ) -> Result<(), ProgramError> {
-        if reset_storage | !storage.is_empty() {
-            // let contract = self.ethereum_contract_mut(&address)
-            //     .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not contract", address))?;
-
-            // if reset_storage {
-            //     contract.extension.storage.clear();
-            // }
-
-            for (index, value) in storage {
-                self.update_storage(address, index, value, operator, system_program)?;
-            }
         }
 
         Ok(())
