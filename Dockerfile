@@ -61,6 +61,14 @@ COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+RUN apt update & apt install -y nodejs
+RUN npm install -g npm@8.6.0
+COPY /evm_loader/solidity/ /opt/contracts/
+WORKDIR /opt/contracts
+RUN npm install
+WORKDIR /opt
+
 COPY --from=solana /opt/solana/bin/solana /opt/solana/bin/solana-keygen /opt/solana/bin/solana-faucet /opt/solana/bin/
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
@@ -77,7 +85,9 @@ COPY evm_loader/*.py \
     evm_loader/permission_allowance_token_keypair.json \
     evm_loader/permission_denial_token_keypair.json \
     evm_loader/utils/set_single_acct_permission.sh \
-    evm_loader/utils/set_many_accts_permission.sh /opt/
+    evm_loader/utils/set_many_accts_permission.sh \
+    evm_loader/deploy-contracts.sh \
+    evm_loader/get_deployer_address.py /opt/
 
 COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
