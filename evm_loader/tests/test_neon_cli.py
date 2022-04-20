@@ -463,12 +463,14 @@ class NeonCliTest(unittest.TestCase):
         neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
         ether_account = self.create_new_account()
-        
+
         # checking the account
-        output = neon_cli().call_run(f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}")
+        output = neon_cli().call_run(
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+        )
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
-        
+
         # running migrate-account
         output = neon_cli().call_run(
             f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
@@ -484,8 +486,12 @@ class NeonCliTest(unittest.TestCase):
         ether_account = self.create_new_account()
 
         # running migrate-account
-        neon_cli().call_run(f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}")
-        
+        output = neon_cli().call_run(
+            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+        )
+        self.assertIsNotNone(output)
+        self.assert_exit_code(output)
+
         # running migrate-account
         self.do_migrate(ether_account)
 
