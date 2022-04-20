@@ -125,6 +125,6 @@ impl Packable for Data {
         let (owner, code_size, generation) = mut_array_refs![data, 32, 4, 4];
         owner.copy_from_slice(self.owner.as_ref());
         *code_size = self.code_size.to_le_bytes();
-        *generation = self.generation.to_be_bytes();
+        *generation = self.generation.to_le_bytes();
     }
 }
