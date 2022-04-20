@@ -513,7 +513,7 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        contract_id = self.create_new_account()
+        contract_id = self.eth_contract
         output = neon_cli().call_run(
             f"update-valids-table {contract_id} --evm_loader {evm_loader_id}")
         self.assertIsNotNone(output)
