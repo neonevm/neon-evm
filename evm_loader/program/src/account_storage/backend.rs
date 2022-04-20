@@ -88,10 +88,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
             return self.ethereum_contract(address)
-                .map(|c| &c.extension.storage)
-                .map_or_else(U256::zero,
-                    |s| U256::from_big_endian(&s[index..index+32])
-                );
+                .map(|c| &c.extension.storage[index..index+32])
+                .map_or_else(U256::zero, U256::from_big_endian);
         }
 
         let (solana_address, _) = self.get_storage_address(address, index);

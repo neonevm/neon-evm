@@ -25,10 +25,11 @@ use solana_sdk::{
 };
 
 use evm_loader::{
-    account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, ERC20Allowance, token},
+    account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, EthereumStorage, ERC20Allowance, token},
     account_storage::{AccountStorage},
     executor_state::{ERC20Approve, SplApprove, SplTransfer},
     precompile_contracts::is_precompile_address,
+    config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
 };
 use evm_loader::executor_state::Withdraw;
 
@@ -254,6 +255,11 @@ impl<'a> EmulatorAccountStorage<'a> {
                     let mut storage_iter = storage.into_iter().peekable();
                     let exist_items: bool = matches!(storage_iter.peek(), Some(_));
 
+                    let mut generation = self.generation(&address);
+                    if reset_storage {
+                        generation += 1;
+                    }
+
                     let mut solana_accounts = self.solana_accounts.borrow_mut();
                     for (index, value) in storage_iter {
                         info!("Storage value: {} - {} = {}", address, index, value);
@@ -261,7 +267,12 @@ impl<'a> EmulatorAccountStorage<'a> {
                             continue;
                         }
 
-                        let (solana_address, _) = self.get_storage_address(&address, &index);
+                        let mut index_bytes = [0_u8; 32];
+                        index.to_little_endian(&mut index_bytes);
+                
+                        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation.to_le_bytes(), &index_bytes];
+                        let (solana_address, _) = Pubkey::find_program_address(seeds, self.program_id());
+
                         solana_accounts.insert(solana_address, AccountMeta::new(solana_address, false));
                     }
 
@@ -283,14 +294,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                             let code_info = account_info(&code_key, code_account);
                             let contract = EthereumContract::from_account(&self.config.evm_loader, &code_info)?;
 
-                            let (code_begin, code_size, valids_size) = if let Some((code, valids)) = &code_and_valids {
-                                if contract.code_size != 0 {
-                                    return Err(NeonCliError::AccountAlreadyInitialized(acc.key, code_key));
-                                }
-                                
+                            let (code_begin, code_size, valids_size) = if let Some((code, valids)) = &code_and_valids {                               
                                 (EthereumContract::SIZE, code.len(), valids.len())
                             }
-                            else{
+                            else {
                                 let code_size = contract.code_size as usize;
                                 let valids_size = (code_size / 8) + 1;
                                 (EthereumContract::SIZE, code_size, valids_size)
@@ -643,15 +650,37 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        if *index > U256::from(64_u32) {
-            let (solana_address, _) = self.get_storage_address(address, index);
-            {
-                let mut solana_accounts = self.solana_accounts.borrow_mut();
-                solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
-            }
-        }
+        let value = self.ethereum_contract_map_or(address, 
+            U256::zero(), 
+            |c| {
+                if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+                    let index: usize = index.as_usize() * 32;
+                    U256::from_big_endian(&c.extension.storage[index..index+32])
+                } else {
+                    let (solana_address, _) = self.get_storage_address(address, index);
 
-        crate::commands::get_storage_at::value(self.config, *address, index)
+                    let mut solana_accounts = self.solana_accounts.borrow_mut();
+                    solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
+
+                
+                    if let Ok(mut account) = self.config.rpc_client.get_account(&solana_address) {
+                        if solana_sdk::system_program::check_id(&account.owner) {
+                            U256::zero()
+                        } else {
+                            let account_info = account_info(&solana_address, &mut account);
+                            let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
+                            storage.value
+                        }
+                    } else {
+                        U256::zero()
+                    }
+                }
+            }
+        );
+
+        info!("Storage read {:?} -> {} = {}", address, index, value);
+
+        value
     }
 
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
