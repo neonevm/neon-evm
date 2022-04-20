@@ -545,7 +545,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
-        debug_print!("apply_call {:?}", interrupt);
+        debug_print!("apply_call");
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
@@ -569,7 +569,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
-        debug_print!("apply_create {:?}", interrupt);
+        debug_print!("apply_create");
         self.executor.state.enter( false);
         self.executor.state.touch(interrupt.address);
         self.executor.state.reset_storage(interrupt.address);

@@ -248,7 +248,7 @@ where
             return;
         }
 
-        debug_print!("Save into solana account {:?}", self.data);
+        debug_print!("Save into solana account");
         assert!(self.info.is_writable);
 
         let mut parts = split_account_data(self.info, T::SIZE)

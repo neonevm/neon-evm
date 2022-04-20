@@ -34,7 +34,7 @@ for i in $(seq 1 $NUM_ACCOUNTS); do
   echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} New account $ACCOUNT"
   if ! solana account "$ACCOUNT"; then
     echo "$(date "+%F %X.%3N") I $(basename "$0"):${LINENO} $$ ${COMPONENT}:CreateTestAcc {} airdropping..."
-    solana airdrop 5000 "$ACCOUNT"
+    solana airdrop 10000 "$ACCOUNT"
     # check that balance >= 10 otherwise airdroping by 1 SOL up to 10
     BALANCE=$(solana balance "$ACCOUNT" | tr '.' '\t'| tr '[:space:]' '\t' | cut -f1)
     while [ "$BALANCE" -lt 10 ]; do
