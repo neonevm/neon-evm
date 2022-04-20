@@ -635,6 +635,13 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         )
     }
 
+    fn generation(&self, address: &H160) -> u32 {
+        self.ethereum_contract_map_or(address, 
+            0_u32, 
+            |c| c.generation
+        )
+    }
+
     fn storage(&self, address: &H160, index: &U256) -> U256 {
         if *index > U256::from(64_u32) {
             let (solana_address, _) = self.get_storage_address(address, index);
@@ -726,6 +733,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                     EthereumContract::SIZE
                         + a.extension.code.len()
                         + a.extension.valids.len()
+                        + a.extension.storage.len()
             })
         };
 

@@ -28,7 +28,7 @@ pub fn value(
             let contract = EthereumContract::from_account(&config.evm_loader, &code_info).unwrap();
 
             let index: usize = index.as_usize() * 32;
-            U256::from_little_endian(&contract.extension.storage[index..index+32])
+            U256::from_big_endian(&contract.extension.storage[index..index+32])
         } else {
             U256::zero()
         }

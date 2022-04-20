@@ -6,6 +6,7 @@ use solana_program::{
 };
 use crate::account::{ERC20Allowance, token, EthereumContract, EthereumStorage};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn token_mint(&self) -> &Pubkey { &self.token_mint }
@@ -78,48 +79,35 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             .map_or_else(Vec::new, |valids| valids.to_vec())
     }
 
+    fn generation(&self, address: &H160) -> u32 {
+        self.ethereum_contract(address)
+            .map_or(0_u32, |c| c.generation)
+    }
+
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        if *index < U256::from(64_u32) {
+        if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
             return self.ethereum_contract(address)
-                .map(|c| 
-                    &c.extension.storage
-                )
-                .map_or_else(
-                    U256::zero,
-                    |s| U256::from_little_endian(&s[index..index+32])
-                )
-        }
-
-        let key = (*address, *index);
-
-        let mut storage_accounts = self.storage_accounts.borrow_mut();
-        if let Some(account) = storage_accounts.get(&key) {
-            return account.value;
-        }
-
-        let mut empty_storage_accounts = self.empty_storage_accounts.borrow_mut();
-        if empty_storage_accounts.contains_key(&key) {
-            return U256::zero();
+                .map(|c| &c.extension.storage)
+                .map_or_else(U256::zero,
+                    |s| U256::from_big_endian(&s[index..index+32])
+                );
         }
 
         let (solana_address, _) = self.get_storage_address(address, index);
-        let account = self.solana_accounts[&solana_address];
+        let account = self.solana_accounts.get(&solana_address)
+            .unwrap_or_else(|| panic!("Account {} - storage account not found", solana_address));
 
-        if account.owner == self.program_id() {
-            let storage = EthereumStorage::from_account(self.program_id(), account)
-                .expect("Expect ethereum storage account");
-            let value = storage.value;
-            storage_accounts.insert(key, storage);
-            return value;
+        if account.owner == self.program_id {
+            let storage = EthereumStorage::from_account(self.program_id, account).unwrap();
+            return storage.value
         }
 
         if solana_program::system_program::check_id(account.owner) {
-            empty_storage_accounts.insert(key, account);
-            return U256::zero();
+            return U256::zero()
         }
 
-        panic!("Not found storage account for {} {}", address, index);
+        panic!("Account {} - expected system or program owned", solana_address);
     }
 
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {

@@ -64,8 +64,6 @@ impl<'a> ProgramAccountStorage<'a> {
             solana_accounts,
             ethereum_accounts,
             empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
-            storage_accounts: RefCell::new(BTreeMap::new()),
-            empty_storage_accounts: RefCell::new(BTreeMap::new()),
             chain_id,
         })
     }

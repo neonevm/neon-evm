@@ -74,6 +74,8 @@ pub struct Data {
     pub owner: Pubkey,
     /// Contract code size
     pub code_size: u32,
+    /// Contract generation, increment on suicide
+    pub generation: u32
 }
 
 
@@ -100,18 +102,19 @@ impl Packable for Data {
     /// Contract struct tag
     const TAG: u8 = super::TAG_CONTRACT;
     /// Contract struct serialized size
-    const SIZE: usize = 32 + 4;
+    const SIZE: usize = 32 + 4 + 4;
 
     /// Deserialize `Contract` struct from input data
     #[must_use]
     fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![input, 0, Data::SIZE];
-        let (owner, code_size) = array_refs![data, 32, 4];
+        let (owner, code_size, generation) = array_refs![data, 32, 4, 4];
 
         Self {
             owner: Pubkey::new_from_array(*owner),
             code_size: u32::from_le_bytes(*code_size),
+            generation: u32::from_le_bytes(*generation),
         }
     }
 
@@ -119,8 +122,9 @@ impl Packable for Data {
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
-        let (owner_dst, code_size_dst) = mut_array_refs![data, 32, 4];
-        owner_dst.copy_from_slice(self.owner.as_ref());
-        *code_size_dst = self.code_size.to_le_bytes();
+        let (owner, code_size, generation) = mut_array_refs![data, 32, 4, 4];
+        owner.copy_from_slice(self.owner.as_ref());
+        *code_size = self.code_size.to_le_bytes();
+        *generation = self.generation.to_be_bytes();
     }
 }

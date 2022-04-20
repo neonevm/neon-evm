@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, EthereumStorage, program};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, program};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
@@ -16,16 +16,6 @@ enum Account<'a> {
     Contract(EthereumAccount<'a>, EthereumContract<'a>),
 }
 
-impl<'a> Account<'a> {
-    #[allow(clippy::missing_const_for_fn)] // constant functions cannot evaluate destructors
-    pub fn deconstruct(self) -> (EthereumAccount<'a>, Option<EthereumContract<'a>>) {
-        match self {
-            Account::User(account) => (account, None),
-            Account::Contract(account, contract) => (account, Some(contract)),
-        }
-    }
-}
-
 pub struct ProgramAccountStorage<'a> {
     token_mint: Pubkey,
     program_id: &'a Pubkey,
@@ -35,9 +25,6 @@ pub struct ProgramAccountStorage<'a> {
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, Account<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
-
-    storage_accounts: RefCell<BTreeMap<(H160, U256), EthereumStorage<'a>>>,
-    empty_storage_accounts: RefCell<BTreeMap<(H160, U256), &'a AccountInfo<'a>>>,
 
     chain_id: u64,
 }
@@ -75,12 +62,16 @@ pub trait AccountStorage {
     fn code(&self, address: &H160) -> Vec<u8>;
     /// Get valids data
     fn valids(&self, address: &H160) -> Vec<u8>;
+    /// Get contract generation
+    fn generation(&self, address: &H160) -> u32;
     /// Get storage account address and bump seed
     fn get_storage_address(&self, address: &H160, index: &U256) -> (Pubkey, u8) {
+        let generation_bytes = self.generation(address).to_le_bytes();
+
         let mut index_bytes = [0_u8; 32];
         index.to_little_endian(&mut index_bytes);
 
-        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &index_bytes];
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes];
         Pubkey::find_program_address(seeds, self.program_id())
     }
     /// Get data from storage
