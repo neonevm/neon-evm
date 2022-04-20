@@ -273,6 +273,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                         let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation.to_le_bytes(), &index_bytes];
                         let (solana_address, _) = Pubkey::find_program_address(seeds, self.program_id());
 
+                        info!("write storage solana address {:?} - {:?}", address, solana_address);
+
                         solana_accounts.insert(solana_address, AccountMeta::new(solana_address, false));
                     }
 
@@ -643,10 +645,13 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn generation(&self, address: &H160) -> u32 {
-        self.ethereum_contract_map_or(address, 
+        let value = self.ethereum_contract_map_or(address, 
             0_u32, 
             |c| c.generation
-        )
+        );
+
+        info!("contract generation {:?} - {:?}", address, value);
+        value
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
@@ -658,6 +663,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             )
         } else {
             let (solana_address, _) = self.get_storage_address(address, index);
+            info!("read storage solana address {:?} - {:?}", address, solana_address);
 
             let mut solana_accounts = self.solana_accounts.borrow_mut();
             solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
@@ -665,6 +671,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         
             if let Ok(mut account) = self.config.rpc_client.get_account(&solana_address) {
                 if solana_sdk::system_program::check_id(&account.owner) {
+                    info!("read storage system owned");
                     U256::zero()
                 } else {
                     let account_info = account_info(&solana_address, &mut account);
@@ -672,6 +679,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                     storage.value
                 }
             } else {
+                info!("read storage get_account error");
                 U256::zero()
             }
         };
