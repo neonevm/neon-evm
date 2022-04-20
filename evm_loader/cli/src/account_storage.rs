@@ -650,33 +650,31 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        let value = self.ethereum_contract_map_or(address, 
-            U256::zero(), 
-            |c| {
-                if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
-                    let index: usize = index.as_usize() * 32;
-                    U256::from_big_endian(&c.extension.storage[index..index+32])
+        let value = if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+            let index: usize = index.as_usize() * 32;
+            self.ethereum_contract_map_or(address,
+                U256::zero(),
+                |c| U256::from_big_endian(&c.extension.storage[index..index+32])
+            )
+        } else {
+            let (solana_address, _) = self.get_storage_address(address, index);
+
+            let mut solana_accounts = self.solana_accounts.borrow_mut();
+            solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
+
+        
+            if let Ok(mut account) = self.config.rpc_client.get_account(&solana_address) {
+                if solana_sdk::system_program::check_id(&account.owner) {
+                    U256::zero()
                 } else {
-                    let (solana_address, _) = self.get_storage_address(address, index);
-
-                    let mut solana_accounts = self.solana_accounts.borrow_mut();
-                    solana_accounts.entry(solana_address).or_insert_with(|| AccountMeta::new_readonly(solana_address, false));
-
-                
-                    if let Ok(mut account) = self.config.rpc_client.get_account(&solana_address) {
-                        if solana_sdk::system_program::check_id(&account.owner) {
-                            U256::zero()
-                        } else {
-                            let account_info = account_info(&solana_address, &mut account);
-                            let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
-                            storage.value
-                        }
-                    } else {
-                        U256::zero()
-                    }
+                    let account_info = account_info(&solana_address, &mut account);
+                    let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
+                    storage.value
                 }
+            } else {
+                U256::zero()
             }
-        );
+        };
 
         info!("Storage read {:?} -> {} = {}", address, index, value);
 
