@@ -1,13 +1,13 @@
+import io
+import os
+import re
+import unittest
 from decimal import Decimal
 from eth_utils import abi
 from spl.token.instructions import get_associated_token_address
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-import io
-import os
-import re
-import unittest
 from subprocess import CompletedProcess
 from eth_keys import keys as eth_keys
 
@@ -508,6 +508,7 @@ class NeonCliTest(unittest.TestCase):
             bool(output_re.search(output.stdout)),
             "The output structure is not 'NEON_PARAM=numeric_value'")
 
+
     def test_command_update_valids_table(self):
         """
         neon-cli update-valids-table <contract_id> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
@@ -562,6 +563,7 @@ class NeonCliTest(unittest.TestCase):
         #     for line in out:
         #         print(line.strip())
         res = cli.communicate()[0]
+        print("//// account-migrate results ////")
         print(res)
 
         # self.assert_exit_code(output)
