@@ -16,7 +16,13 @@ fn process_instruction(
 ) -> ProgramResult {
     let instruction = Instruction {
         program_id: *accounts[0].key,
-        accounts: accounts[1..].iter().map(|acc| AccountMeta::new(*acc.key, acc.is_signer)).collect(),
+        accounts: accounts[1..].iter().map(|acc| 
+            if acc.is_writable {
+                AccountMeta::new(*acc.key, acc.is_signer)
+            } else {
+                AccountMeta::new_readonly(*acc.key, acc.is_signer)
+            }
+        ).collect(),
         data: instruction_data.to_vec()
     };
     invoke(
