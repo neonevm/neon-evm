@@ -1,5 +1,12 @@
 #!/bin/bash
 
+if [ -z "$SOLANA_URL" ]; then
+  echo "SOLANA_URL is not set"
+  exit 1
+fi
+
+solana config set -u "$SOLANA_URL"
+
 export TEST_PROGRAM=$(solana address -k proxy_program-keypair.json)
 
 echo "Deploying proxy_program at address $TEST_PROGRAM..."
