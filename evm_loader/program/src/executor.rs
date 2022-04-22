@@ -225,7 +225,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         debug_print!("create");
 
@@ -245,14 +245,14 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
 
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
-
+        let _ = target_gas;
         event!(Create {
             caller,
             address,
             scheme,
             value,
             init_code: &init_code,
-            _target_gas,
+            target_gas,
         });
 
 
@@ -285,15 +285,16 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        _target_gas: Option<u64>,
+        target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
+        let _ = target_gas;
         event!(Call {
             code_address,
             transfer: &transfer,
             input: &input,
-            _target_gas,
+            target_gas,
             is_static,
             context: &context,
         });
@@ -390,14 +391,15 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        _gas_limit: U256
+        gas_limit: U256
     ) -> ProgramResult {
-	    event!(TransactCall {
+	    let _ = gas_limit;
+        event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
             data: &input,
-            _gas_limit
+            gas_limit
         });
         debug_print!("call_begin");
 
@@ -433,13 +435,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        _gas_limit: U256,
+                        gas_limit: U256,
     ) -> ProgramResult {
+        let _ = gas_limit;
         event!(TransactCreate {
             caller,
             value: transfer_value,
             init_code: &code,
-            _gas_limit,
+            gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 
