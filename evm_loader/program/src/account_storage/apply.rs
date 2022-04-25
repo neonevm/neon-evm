@@ -159,10 +159,10 @@ impl<'a> ProgramAccountStorage<'a> {
             .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", solana_address))?;
 
         if account.owner == self.program_id {
-            let mut storage = EthereumStorage::from_account(self.program_id, account)?;
             if value.is_zero() {
-                unsafe { storage.suicide(operator) }?;
+                unsafe { crate::account::delete(account, operator) }?;
             } else {
+                let mut storage = EthereumStorage::from_account(self.program_id, account)?;
                 storage.value = value;
             }
 
