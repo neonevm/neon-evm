@@ -162,6 +162,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     EthereumContract::SIZE
                         + a.extension.code.len()
                         + a.extension.valids.len()
+                        + a.extension.storage.len()
                 })
         };
 

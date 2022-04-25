@@ -185,7 +185,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             return Err(ExitError::StaticModeViolation);
         }
 
-        self.gasometer.record_storage_write(&self.state, address, index);
+        self.gasometer.record_storage_write(&self.state, address, index, value);
 
         self.state.set_storage(address, index, value);
         Ok(())

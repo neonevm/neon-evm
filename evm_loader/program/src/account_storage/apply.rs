@@ -160,12 +160,20 @@ impl<'a> ProgramAccountStorage<'a> {
 
         if account.owner == self.program_id {
             let mut storage = EthereumStorage::from_account(self.program_id, account)?;
-            storage.value = value;
+            if value.is_zero() {
+                unsafe { storage.suicide(operator) }?;
+            } else {
+                storage.value = value;
+            }
 
-            return Ok(())
+            return Ok(());
         }
 
         if solana_program::system_program::check_id(account.owner) {
+            if value.is_zero() {
+                return Ok(());
+            }
+
             let generation_bytes = self.generation(&address).to_le_bytes();
 
             let mut index_bytes = [0_u8; 32];

@@ -77,11 +77,15 @@ impl Gasometer {
         self.record_evm_steps(EVM_STEPS_MIN - steps);
     }
 
-    pub fn record_storage_write<B>(&mut self, state: &ExecutorState<B>, address: H160, key: U256)
+    pub fn record_storage_write<B>(&mut self, state: &ExecutorState<B>, address: H160, key: U256, value: U256)
     where
         B: AccountStorage
     {
         if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+            return;
+        }
+
+        if value.is_zero() {
             return;
         }
 
