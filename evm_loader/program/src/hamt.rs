@@ -274,4 +274,197 @@ impl<'a> Hamt<'a> {
     pub fn buffer_len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn iter(&'a self) -> HamtIterator<'a> {
+        HamtIterator::new(self)
+    }
+}
+
+#[derive(Debug)]
+struct StackFrame {
+    ptr_pos: u32,
+    tags: u32,
+    index: u32,
+    count: u32,
+    current_key: U256,
+}
+
+pub struct HamtIterator<'a> {
+    hamt: &'a Hamt<'a>,
+    stack: Vec<StackFrame>,
+}
+
+impl<'a> HamtIterator<'a> {
+    fn new(hamt: &'a Hamt<'a>) -> Self {
+        Self {
+            hamt,
+            stack: vec![
+                StackFrame {
+                    ptr_pos: 31 * size_of::<u32>() as u32,
+                    tags: 0xFFFFFFFF,
+                    index: 0,
+                    count: 32,
+                    current_key: U256::zero(),
+                },
+            ],
+        }
+    }
+
+    fn find_nth_one(mut value: u32, n: u32) -> u32 {
+        for _ in 0..n {
+            value &= value - 1;
+        }
+
+        value.trailing_zeros()
+    }
+}
+
+impl<'a> Iterator for HamtIterator<'a> {
+    type Item = (U256, U256);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(
+            StackFrame {
+                mut ptr_pos,
+                mut tags,
+                mut index,
+                mut count,
+                mut current_key,
+            }
+        ) = self.stack.pop() {
+            while index < count {
+                index += 1;
+                match self.hamt.get_item(ptr_pos + index * size_of::<u32>() as u32) {
+                    ItemType::Empty => (),
+
+                    ItemType::Item { pos } => {
+                        // TODO: Can be optimized:
+                        let tag = Self::find_nth_one(tags, index - 1);
+                        let mut key = current_key | (U256::from(tag) << (self.stack.len() * 5));
+                        key = key | (self.hamt.restore_value(pos) << ((self.stack.len() + 1) * 5));
+                        let value = self.hamt.restore_value(pos + size_of::<U256>() as u32);
+
+                        self.stack.push(StackFrame {
+                            ptr_pos,
+                            tags,
+                            index,
+                            count,
+                            current_key,
+                        });
+
+                        return Some((key, value));
+                    },
+
+                    ItemType::Array { pos } => {
+                        self.stack.push(StackFrame {
+                            ptr_pos,
+                            tags,
+                            index,
+                            count,
+                            current_key,
+                        });
+                        // TODO: Can be optimized:
+                        let tag = Self::find_nth_one(tags, index - 1);
+                        current_key = current_key | (U256::from(tag) << ((self.stack.len() - 1) * 5));
+                        ptr_pos = pos;
+                        tags = self.hamt.restore_u32(pos);
+                        index = 0;
+                        count = tags.count_ones();
+                    },
+                }
+            }
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{RefCell, RefMut};
+    use std::collections::HashMap;
+
+    use evm::U256;
+    use solana_program::program_error::ProgramError;
+
+    use crate::hamt::{Hamt, HamtIterator};
+
+    #[test]
+    fn test_find_nth_one() {
+        assert_eq!(HamtIterator::find_nth_one(0, 0), 32);
+        assert_eq!(HamtIterator::find_nth_one(0b1, 0), 0);
+        assert_eq!(HamtIterator::find_nth_one(0b10, 0), 1);
+        assert_eq!(HamtIterator::find_nth_one(0b11, 0), 0);
+        assert_eq!(HamtIterator::find_nth_one(0b11, 1), 1);
+        assert_eq!(HamtIterator::find_nth_one(0b10, 1), 32);
+        assert_eq!(HamtIterator::find_nth_one(0b100000, 0), 5);
+        assert_eq!(HamtIterator::find_nth_one(0b00100000, 0), 5);
+        assert_eq!(HamtIterator::find_nth_one(0b10100000, 0), 5);
+        assert_eq!(HamtIterator::find_nth_one(0b10100000, 1), 7);
+        assert_eq!(HamtIterator::find_nth_one(0b101011100, 3), 6);
+        assert_eq!(HamtIterator::find_nth_one(0xFFFFFFFF, 31), 31);
+    }
+
+    #[test]
+    fn test_hamt_iterator() -> Result<(), ProgramError> {
+        test_hamt_iterator_internal(vec![])?;
+        test_hamt_iterator_internal(vec![(U256::zero(), U256::zero())])?;
+        test_hamt_iterator_internal(vec![
+            (U256::zero(), U256::zero()),
+            (U256::from(1), U256::from(2)),
+        ])?;
+        test_hamt_iterator_internal(vec![
+            (U256::zero(), U256::zero()),
+            (U256::from(1), U256::from(2)),
+            (U256::from(12), U256::from(22)),
+            (U256::from(123456), U256::from(22334455)),
+            (U256::from(576), U256::from(576)),
+        ])?;
+
+        let mut items = vec![
+            (U256::zero(), U256::zero()),
+            (
+                U256::from("1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF"),
+                U256::from("ABCDEF0987654321ABCDEF0987654321ABCDEF0987654321ABCDEF0987654321"),
+            ),
+            (
+                U256::from("1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEE"),
+                U256::from("ABCDEF0987654321ABCDEF0987654321ABCDEF0987654321ABCDEF0987654322"),
+            ),
+            (U256::from(123456), U256::from(22334455)),
+            (U256::from(13432), U256::from(23252)),
+            (U256::from(2342341), U256::from(111221)),
+            (U256::from(23242441), U256::from(111221234)),
+            (U256::from(797891), U256::from(2778)),
+            (U256::from(13453453), U256::from(456456452)),
+        ];
+
+        for i in 1..1024 {
+            items.push((U256::from(i), U256::from(i * 3)));
+        }
+
+        test_hamt_iterator_internal(items)?;
+
+        Ok(())
+    }
+
+    fn test_hamt_iterator_internal(items: Vec<(U256, U256)>) -> Result<(), ProgramError> {
+        let buffer = RefCell::new(vec![0u8; 10_000_000]);
+        let hamt_data = RefMut::map(buffer.borrow_mut(), |v| &mut v[..]);
+        let mut hamt = Hamt::new(hamt_data)?;
+
+        for (key, value) in items.iter() {
+            hamt.insert(key.clone(), value.clone())?;
+        }
+
+        let count = hamt.iter().count();
+        let restored: HashMap<U256, U256> = hamt.iter().collect();
+
+        assert_eq!(restored.len(), items.len());
+        assert_eq!(count, items.len());
+        for (key, value) in items.iter() {
+            assert_eq!(restored.get(key), Some(value));
+        }
+
+        Ok(())
+    }
 }
