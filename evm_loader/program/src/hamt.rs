@@ -275,6 +275,7 @@ impl<'a> Hamt<'a> {
         self.data.len()
     }
 
+    #[must_use]
     pub fn iter(&'a self) -> HamtIterator<'a> {
         HamtIterator::new(self)
     }
@@ -301,7 +302,7 @@ impl<'a> HamtIterator<'a> {
             stack: vec![
                 StackFrame {
                     ptr_pos: 31 * size_of::<u32>() as u32,
-                    tags: 0xFFFFFFFF,
+                    tags: 0xFFFF_FFFF,
                     index: 0,
                     count: 32,
                     current_key: U256::zero(),
