@@ -994,6 +994,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             return Ok(())
         }
 
+        if transfer.source == transfer.target {
+            return Ok(())
+        }
+
         self.substate.transfer(transfer, self.backend)
     }
 
