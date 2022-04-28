@@ -6,7 +6,6 @@ cat << EOF
     build:
       branch: "${PROXY_BRANCH:-develop}"
       env:
-          SOLANA_REVISION: "v1.8.12-testnet"
           NEON_EVM_FULL_TEST_SUITE: $(buildkite-agent meta-data get "full_test_suite" --default "false")
           NEON_EVM_COMMIT: "${BUILDKITE_COMMIT}"
           NEON_EVM_BRANCH: "${BUILDKITE_BRANCH}"
