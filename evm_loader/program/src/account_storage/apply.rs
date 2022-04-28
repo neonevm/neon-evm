@@ -29,6 +29,9 @@ impl<'a> ProgramAccountStorage<'a> {
             return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds", origin);
         }
 
+        if operator.address == origin {
+            return Ok(())
+        }
 
         if self.ethereum_accounts.contains_key(&operator.address) {
             self.transfer_neon_tokens(origin, operator.address, value)?;
@@ -210,6 +213,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
     fn transfer_neon_tokens(&mut self, source: H160, target: H160, value: U256) -> Result<(), ProgramError> {
         solana_program::msg!("Transfer {} NEONs from {} to {}", value, source, target);
+
+        if source == target {
+            return Ok(())
+        }
 
         if !self.ethereum_accounts.contains_key(&source) {
             return Err!(ProgramError::InvalidArgument; "Account {} - expect initialized", source);
