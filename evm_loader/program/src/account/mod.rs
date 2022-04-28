@@ -260,7 +260,7 @@ where
 
 pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> {
     if info.owner != program_id {
-        return Err!(ProgramError::InvalidAccountData; "Account {} - expected program owned", info.key);
+        return Err!(ProgramError::InvalidAccountData; "Account({}) - expected program({}) owned({})", info.key, program_id, info.owner);
     }
 
     let data = info.try_borrow_data()?;
