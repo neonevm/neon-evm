@@ -1,6 +1,6 @@
 [package]
 name = "neon-cli"
-version = "0.7.5-dev"
+version = "0.7.6-dev"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
