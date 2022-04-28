@@ -613,6 +613,10 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
+        if transfer.source == transfer.target {
+            return Ok(())
+        }
+
         let new_source_balance = {
             let balance = self.balance(&transfer.source, backend);
             balance.checked_sub(transfer.value).ok_or(ExitError::OutOfFund)?
@@ -669,6 +673,10 @@ impl ExecutorSubstate {
 
     fn spl_transfer<B: AccountStorage>(&mut self, transfer: SplTransfer, backend: &B) -> Result<(), ExitError> {
         debug_print!("spl_transfer: {:?}", transfer);
+
+        if transfer.source_token == transfer.target_token {
+            return Ok(())
+        }
 
         let new_source_balance = {
             let balance = self.spl_balance(&transfer.source_token, backend);
