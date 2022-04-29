@@ -67,7 +67,5 @@ pub fn process<'a>(
         parsed_instruction_data.value,
         &operator,
         &system_program,
-    )?;
-
-    Ok(())
+    )
 }
