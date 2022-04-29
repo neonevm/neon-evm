@@ -14,7 +14,7 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    if instruction_data.len() > 0 && instruction_data[0] > 0xee {
+    if !instruction_data.is_empty() && instruction_data[0] > 0xee {
         for _ in 0..(instruction_data[0] - 0xee) {
             let instruction = Instruction {
                 program_id: *accounts[0].key,
@@ -32,7 +32,7 @@ fn process_instruction(
                 &accounts[1..],
             )?;
         }
-        return  Ok(());
+        Ok(())
     } else {
         let instruction = Instruction {
             program_id: *accounts[0].key,
