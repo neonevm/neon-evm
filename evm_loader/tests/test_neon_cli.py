@@ -458,42 +458,42 @@ class NeonCliTest(unittest.TestCase):
         self.assertIsNotNone(output)
         self.assert_exit_code(output)
 
-    def test_command_migrate_account(self):
-        """
-        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        ether_account = self.create_new_account()
+    # def test_command_migrate_account(self):
+    #     """
+    #     neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     ether_account = self.create_new_account()
 
-        # checking the account
-        output = neon_cli().call_run(
-            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
-        )
-        self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+    #     # checking the account
+    #     output = neon_cli().call_run(
+    #         f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+    #     )
+    #     self.assertIsNotNone(output)
+    #     self.assert_exit_code(output)
 
-        # running migrate-account
-        output = neon_cli().call_run(
-            f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
-        self.assertIsNotNone(output)
-        # Solana Client Error
-        # self.assertEqual(output.returncode, 113)
-        self.assert_exit_code(output)
+    #     # running migrate-account
+    #     output = neon_cli().call_run(
+    #         f"migrate-account {ether_account} --evm_loader {evm_loader_id}")
+    #     self.assertIsNotNone(output)
+    #     # Solana Client Error
+    #     # self.assertEqual(output.returncode, 113)
+    #     self.assert_exit_code(output)
 
-    def test_command_migrate_account_alternative(self):
-        """
-        neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
-        """
-        ether_account = self.create_new_account()
+    # def test_command_migrate_account_alternative(self):
+    #     """
+    #     neon-cli migrate-account <ETHER> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
+    #     """
+    #     ether_account = self.create_new_account()
 
-        # running migrate-account
-        output = neon_cli().call_run(
-            f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
-        )
-        self.assertIsNotNone(output)
-        self.assert_exit_code(output)
+    #     # running migrate-account
+    #     output = neon_cli().call_run(
+    #         f"get-ether-account-data {ether_account} --evm_loader {evm_loader_id}"
+    #     )
+    #     self.assertIsNotNone(output)
+    #     self.assert_exit_code(output)
 
-        # running migrate-account
-        self.do_migrate(ether_account)
+    #     # running migrate-account
+    #     self.do_migrate(ether_account)
 
     def test_command_neon_elf_params(self):
         """
@@ -550,24 +550,24 @@ class NeonCliTest(unittest.TestCase):
     def assert_exit_code(self, result: CompletedProcess):
         self.assertEqual(result.returncode, 0, "Return code is not 0")
 
-    def do_migrate(self, address: str) -> None:
-        cli = subprocess.Popen([
-            "neon-cli", "migrate-account", address, "--url", SOLANA_URL,
-            "--evm_loader", evm_loader_id
-        ],
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT)
-        # output = neon_cli().call_run(
-        #     f"migrate-account {address} --evm_loader {evm_loader_id}")
-        # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
-        #     for line in out:
-        #         print(line.strip())
-        res = cli.communicate()[0]
-        print("//// account-migrate results ////")
-        print(res)
+    # def do_migrate(self, address: str) -> None:
+    #     cli = subprocess.Popen([
+    #         "neon-cli", "migrate-account", address, "--url", SOLANA_URL,
+    #         "--evm_loader", evm_loader_id
+    #     ],
+    #                            stdout=subprocess.PIPE,
+    #                            stderr=subprocess.STDOUT)
+    #     # output = neon_cli().call_run(
+    #     #     f"migrate-account {address} --evm_loader {evm_loader_id}")
+    #     # with io.TextIOWrapper(cli.stdout, encoding="utf-8") as out:
+    #     #     for line in out:
+    #     #         print(line.strip())
+    #     res = cli.communicate()[0]
+    #     print("//// account-migrate results ////")
+    #     print(res)
 
-        # self.assert_exit_code(output)
-        assert cli.returncode == 0, f"Return code is not 0, it's {cli.returncode}"
+    #     # self.assert_exit_code(output)
+    #     assert cli.returncode == 0, f"Return code is not 0, it's {cli.returncode}"
 
 
 if __name__ == '__main__':
