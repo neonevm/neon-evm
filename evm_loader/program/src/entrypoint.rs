@@ -77,6 +77,9 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         },
+        EvmInstruction::WriteValueToDistributedStorage => {
+            instruction::write_value_to_distributed_storage::process(program_id, accounts, instruction)
+        },
         EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };

@@ -151,6 +151,9 @@ pub enum EvmInstruction {
 
     /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
     ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
+
+    /// Writes value to Ethereum account's distributed practically infinite storage.
+    WriteValueToDistributedStorage,
 }
 
 impl EvmInstruction {
@@ -183,6 +186,7 @@ impl EvmInstruction {
             25 => Self::Deposit,
             26 => Self::MigrateAccount,
             27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
+            28 => Self::WriteValueToDistributedStorage,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -207,3 +211,4 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;
+pub mod write_value_to_distributed_storage;

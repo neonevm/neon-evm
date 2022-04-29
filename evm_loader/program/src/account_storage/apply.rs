@@ -149,7 +149,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn update_storage_infinite(
+    pub fn update_storage_infinite(
         &mut self,
         address: H160,
         index: U256,
