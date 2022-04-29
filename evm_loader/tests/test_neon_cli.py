@@ -437,7 +437,6 @@ class NeonCliTest(unittest.TestCase):
         """
         neon-cli get-storage-at <contract_id> <index> --commitment <COMMITMENT_LEVEL> --config <PATH> --url <URL>
         """
-        # contract_id = self.create_new_account()
 
         contract_id = self.eth_contract
         # program_id, bytes_result, code_id = EvmLoader().deployChecked(
