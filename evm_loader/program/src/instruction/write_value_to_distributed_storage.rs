@@ -1,13 +1,16 @@
 use arrayref::{array_ref, array_refs};
 use evm::U256;
-use solana_program::account_info::AccountInfo;
-use solana_program::entrypoint::ProgramResult;
-use solana_program::msg;
-use solana_program::pubkey::Pubkey;
+use solana_program::{
+    account_info::AccountInfo,
+    entrypoint::ProgramResult,
+    msg,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+};
 
 use crate::account::{EthereumAccount, Operator, program};
 use crate::account_storage::ProgramAccountStorage;
-use crate::config::chain_id;
+use crate::config::{chain_id, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT};
 
 enum AccountIndexes {
     Operator,
@@ -42,6 +45,15 @@ pub fn process<'a>(
 ) -> ProgramResult {
     msg!("Instruction: WriteValueToDistributedStorage");
 
+    let ethereum_account = EthereumAccount::from_account(
+        program_id,
+        &accounts[AccountIndexes::EthereumAccount as usize],
+    )?;
+
+    let parsed_instruction_data = ParsedInstructionData::parse(instruction_data);
+
+    validate(&ethereum_account, &parsed_instruction_data)?;
+
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts,
@@ -55,11 +67,6 @@ pub fn process<'a>(
     let system_program = program::System::from_account(
         &accounts[AccountIndexes::SystemProgram as usize],
     )?;
-    let ethereum_account = EthereumAccount::from_account(
-        program_id,
-        &accounts[AccountIndexes::EthereumAccount as usize],
-    )?;
-    let parsed_instruction_data = ParsedInstructionData::parse(instruction_data);
 
     account_storage.update_storage_infinite(
         ethereum_account.address,
@@ -68,4 +75,30 @@ pub fn process<'a>(
         &operator,
         &system_program,
     )
+}
+
+/// Validates provided data.
+fn validate(
+    ethereum_account: &EthereumAccount,
+    instruction_data: &ParsedInstructionData,
+) -> ProgramResult {
+    if ethereum_account.code_account.is_none() {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Ethereum account {} must be a contract account",
+            ethereum_account.address
+        );
+    }
+
+    if instruction_data.index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Index ({}) is not supported in distributed storage. Indexes in range 0..{} must be \
+                stored into contract account's data.",
+            instruction_data.index,
+            STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT
+        );
+    }
+
+    Ok(())
 }
