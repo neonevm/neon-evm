@@ -28,8 +28,14 @@ impl ParsedInstructionData {
     /// 0..32:  index (key)
     /// 32..64: value
     fn parse(data: &[u8]) -> Self {
-        let data = array_ref![data, 0, 32 + 32];
-        let (index, value) = array_refs![data, 32, 32];
+        const U256_SIZE: usize = 32;
+        const INDEX_SIZE: usize = U256_SIZE;
+        const VALUE_SIZE: usize = U256_SIZE;
+
+        let data = array_ref![data, 0, INDEX_SIZE + VALUE_SIZE];
+        #[allow(clippy::ptr_offset_with_cast)]
+        let (index, value) = array_refs![data, INDEX_SIZE, VALUE_SIZE];
+
         Self {
             index: U256::from(index),
             value: U256::from(value),
