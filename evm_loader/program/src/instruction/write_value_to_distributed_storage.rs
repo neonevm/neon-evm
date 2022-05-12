@@ -18,28 +18,38 @@ enum AccountIndexes {
     EthereumAccount,
 }
 
-struct ParsedInstructionData {
+struct InstructionData {
     index: U256,
     value: U256,
 }
 
-impl ParsedInstructionData {
+impl InstructionData {
     /// Instruction data layout:
     /// 0..32:  index (key)
     /// 32..64: value
-    fn parse(data: &[u8]) -> Self {
+    fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         const U256_SIZE: usize = 32;
         const INDEX_SIZE: usize = U256_SIZE;
         const VALUE_SIZE: usize = U256_SIZE;
+        const INSTRUCTION_DATA_SIZE: usize = INDEX_SIZE + VALUE_SIZE;
 
-        let data = array_ref![data, 0, INDEX_SIZE + VALUE_SIZE];
+        if input.len() != INSTRUCTION_DATA_SIZE {
+            msg!(
+                "Fail: The instruction data size is {}, but it is expected to have a size {}.",
+                input.len(),
+                INSTRUCTION_DATA_SIZE,
+            );
+            return Err(ProgramError::InvalidArgument);
+        }
+
+        let instruction_data = array_ref![input, 0, INSTRUCTION_DATA_SIZE];
         #[allow(clippy::ptr_offset_with_cast)]
-        let (index, value) = array_refs![data, INDEX_SIZE, VALUE_SIZE];
+        let (index, value) = array_refs![instruction_data, INDEX_SIZE, VALUE_SIZE];
 
-        Self {
+        Ok(Self {
             index: U256::from(index),
             value: U256::from(value),
-        }
+        })
     }
 }
 
@@ -56,7 +66,7 @@ pub fn process<'a>(
         &accounts[AccountIndexes::EthereumAccount as usize],
     )?;
 
-    let parsed_instruction_data = ParsedInstructionData::parse(instruction_data);
+    let parsed_instruction_data = InstructionData::unpack(instruction_data)?;
 
     validate(&ethereum_account, &parsed_instruction_data)?;
 
@@ -86,7 +96,7 @@ pub fn process<'a>(
 /// Validates provided data.
 fn validate(
     ethereum_account: &EthereumAccount,
-    instruction_data: &ParsedInstructionData,
+    instruction_data: &InstructionData,
 ) -> ProgramResult {
     if ethereum_account.code_account.is_none() {
         return Err!(
