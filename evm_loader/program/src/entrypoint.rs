@@ -80,6 +80,9 @@ fn process_instruction<'a>(
         EvmInstruction::WriteValueToDistributedStorage => {
             instruction::write_value_to_distributed_storage::process(program_id, accounts, instruction)
         },
+        EvmInstruction::ConvertDataAccountFromV1ToV2 => {
+            instruction::convert_data_account_from_v1_to_v2::process(program_id, accounts, instruction)
+        },
         EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
