@@ -21,6 +21,7 @@ function mint()
 {
     token_name=$1
     token_mint=$2
+    echo
     echo "Depositing ${token_name}s to deployer $DEPLOYER_PUBLIC_KEY"
     ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
     echo "Solana account $ACCOUNT"
@@ -32,8 +33,6 @@ function mint()
 
 mint "NEON" "$(solana address -k /opt/neon_token_keypair.json)"
 
-mint "USDT" "B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
-
 neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000000000000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
 echo "Compiling and deploying contracts"
@@ -41,3 +40,5 @@ cd /opt/contracts/
 npx hardhat compile
 sleep 20
 npx hardhat run --network ci /opt/contracts/scripts/deploy.js
+
+mint "USDT" "B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
