@@ -27,7 +27,7 @@ function mint()
     echo "Solana account $ACCOUNT"
     TOKEN_ACCOUNT=$(spl-token create-account $token_mint --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
     echo "Token accout $TOKEN_ACCOUNT"
-    spl-token mint $token_mint 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
+    spl-token mint $token_mint 5000 --owner /opt/evm_loader-keypair.json -- $TOKEN_ACCOUNT
     echo "Balance of $ACCOUNT is: $(spl-token balance $token_mint --owner $ACCOUNT) ${token_name}s"
 }
 
