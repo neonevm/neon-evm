@@ -30,9 +30,9 @@ function mint()
     echo "Balance of $ACCOUNT is: $(spl-token balance $token_mint --owner $ACCOUNT) ${token_name}s"
 }
 
-mint("NEON", $(solana address -k /opt/neon_token_keypair.json))
+mint "NEON" "$(solana address -k /opt/neon_token_keypair.json)"
 
-mint("USDT", "B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L")
+mint "USDT" "B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
 
 neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000000000000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
