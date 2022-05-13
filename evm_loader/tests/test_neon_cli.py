@@ -441,7 +441,7 @@ class NeonCliTest(unittest.TestCase):
         contract_id = self.eth_contract
         # program_id, bytes_result, code_id = EvmLoader().deployChecked(
         #     CONTRACTS_DIR + "EthToken.binary", contract_id, None)
-        index = 0
+        index = 1 # 0
         output = neon_cli().call_run(
             f"get-storage-at {contract_id} {index} --evm_loader {evm_loader_id}"
         )
