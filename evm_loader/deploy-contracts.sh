@@ -43,4 +43,4 @@ echo "Solana account $ACCOUNT"
 TOKEN_ACCOUNT=$(spl-token create-account $USDT_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
 echo "Token accout $TOKEN_ACCOUNT"
 spl-token mint $USDT_TOKEN_MINT 5000 --owner /opt/contracts/ci-tokens/owner-keypair.json -- $TOKEN_ACCOUNT
-echo "Balance of $ACCOUNT is: $(spl-token balance $USDT_TOKEN_MINT --owner $ACCOUNT) NEONs"
+echo "Balance of $ACCOUNT is: $(spl-token balance $USDT_TOKEN_MINT --owner $ACCOUNT) USDTs"
