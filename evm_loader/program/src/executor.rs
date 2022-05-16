@@ -125,11 +125,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::one() // TODO
+        self.state.gas_limit().saturating_sub(self.gasometer.used_gas())
     }
 
     fn gas_price(&self) -> U256 {
-        U256::zero() // TODO
+        self.state.gas_price()
     }
 
     fn origin(&self) -> H160 {
@@ -390,9 +390,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        #[allow(unused_variables)] gas_limit: U256
+        gas_limit: U256,
+        gas_price: U256
     ) -> ProgramResult {
-	    event!(TransactCall {
+        event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
@@ -404,6 +405,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.state.inc_nonce(caller);
         self.executor.state.enter(false);
         self.executor.state.touch(code_address);
+        self.executor.state.set_gas_limit(gas_limit);
+        self.executor.state.set_gas_price(gas_price);
 
         self.executor.gasometer.record_transfer(&self.executor.state, code_address, transfer_value);
 
@@ -433,7 +436,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        #[allow(unused_variables)] gas_limit: U256,
+                        gas_limit: U256,
+                        gas_price: U256
     ) -> ProgramResult {
         event!(TransactCreate {
             caller,
@@ -460,6 +464,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 if CONFIG.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
                 }
+                self.executor.state.set_gas_limit(gas_limit);
+                self.executor.state.set_gas_price(gas_price);
 
                 self.executor.gasometer.record_deploy(&self.executor.state, info.address);
 

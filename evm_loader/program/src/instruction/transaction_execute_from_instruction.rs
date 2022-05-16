@@ -90,7 +90,7 @@ fn execute<'a>(
             trx.to.expect("This is function call or transfer"),
             trx.call_data,
             trx.value,
-            trx.gas_limit,
+            trx.gas_limit, trx.gas_price
         )?;
 
         let (result, exit_reason) = executor.execute();
