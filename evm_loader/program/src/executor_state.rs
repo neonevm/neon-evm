@@ -602,10 +602,12 @@ impl ExecutorSubstate {
         self.metadata_mut().set_gas_price(gas_price);
     }
 
+    #[must_use]
     pub fn gas_limit(&self) -> U256 {
         self.metadata.gas_limit
     }
 
+    #[must_use]
     pub fn gas_price(&self) -> U256 {
         self.metadata.gas_price
     }
@@ -926,10 +928,12 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.substate.set_gas_price(gas_price);
     }
 
+    #[must_use]
     pub fn gas_limit(&self) -> U256 {
         self.substate.gas_limit()
     }
 
+    #[must_use]
     pub fn gas_price(&self) -> U256 {
         self.substate.gas_price()
     }
