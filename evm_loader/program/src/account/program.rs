@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
+use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
 use evm::backend::Log;
 use solana_program::{
     program::{invoke, invoke_signed}, rent::Rent,
@@ -9,7 +9,7 @@ use solana_program::{
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::instruction::Instruction;
-use solana_program::log::{sol_log, sol_log_slice};
+use solana_program::log::sol_log_data;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 
@@ -99,28 +99,17 @@ impl<'a> Neon<'a> {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn on_event(&self, log: Log) {
-        use core::mem::size_of;
-
-        debug_print!("on_event {}", log.address);
-
-        let capacity = size_of::<u8>()
-            + size_of::<H160>()  // address
-            + size_of::<usize>() // topics.len
-            + log.topics.len() * size_of::<H256>()
-            + log.data.len();
-
-        let mut data = Vec::with_capacity(capacity);
-        data.push(7_u8);
-        data.extend_from_slice(log.address.as_bytes());
-        data.extend_from_slice(&log.topics.len().to_le_bytes());
-        for topic in log.topics {
-            data.extend_from_slice(topic.as_bytes());
+    pub fn on_event(&self, log: &Log) {
+        let capacity = 1 + 1 + log.topics.len() + 1;
+        let mut fields = Vec::with_capacity(capacity);
+        let mnemonic = format!("LOG{}", log.topics.len());
+        fields.push(mnemonic.as_bytes());
+        fields.push(log.address.as_bytes());
+        for topic in &log.topics {
+            fields.push(topic.as_bytes());
         }
-        data.extend(&log.data);
-
-        sol_log("OnEvent");
-        sol_log_slice(&data);
+        fields.push(&log.data);
+        sol_log_data(&fields);
     }
 }
 
