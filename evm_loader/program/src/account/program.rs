@@ -105,7 +105,7 @@ impl<'a> Neon<'a> {
         #[allow(clippy::cast_possible_truncation)]
         let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
         fields.push(&mnemonic);
-        fields.push(log.address.as_bytes());
+        //fields.push(log.address.as_bytes());
         //for topic in &log.topics {
         //    fields.push(topic.as_bytes());
         //}
