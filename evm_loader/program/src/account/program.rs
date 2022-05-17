@@ -101,10 +101,10 @@ impl<'a> Neon<'a> {
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, log: &Log) {
         let capacity = 1 + 1 + log.topics.len() + 1;
-        let mut fields: Vec<&[u8]> = Vec::with_capacity(capacity);
-        #[allow(clippy::cast_possible_truncation)]
-        let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
-        fields.push(&mnemonic);
+        let fields: Vec<&[u8]> = Vec::with_capacity(capacity);
+        //#[allow(clippy::cast_possible_truncation)]
+        //let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
+        //fields.push(&mnemonic);
         //fields.push(log.address.as_bytes());
         //for topic in &log.topics {
         //    fields.push(topic.as_bytes());
