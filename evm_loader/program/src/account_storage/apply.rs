@@ -99,7 +99,7 @@ impl<'a> ProgramAccountStorage<'a> {
         debug_print!("Applies done");
 
         for log in logs {
-            neon_program.on_event(log)?;
+            neon_program.on_event(log);
         }
 
         Ok(())

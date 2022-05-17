@@ -1,18 +1,21 @@
-use solana_program::account_info::AccountInfo;
-use solana_program::program_error::ProgramError;
-use solana_program::pubkey::Pubkey;
-use solana_program::{
-    program::{invoke, invoke_signed}, system_instruction,
-    rent::Rent, sysvar::Sysvar
-};
-use super::{Operator, EthereumAccount, sysvar, token};
 use std::ops::Deref;
+
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
 use evm::backend::Log;
+use solana_program::{
+    program::{invoke, invoke_signed}, rent::Rent,
+    system_instruction, sysvar::Sysvar
+};
+use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::instruction::Instruction;
+use solana_program::log::{sol_log, sol_log_slice};
+use solana_program::program_error::ProgramError;
+use solana_program::pubkey::Pubkey;
+
 use crate::account::ACCOUNT_SEED_VERSION;
 
+use super::{EthereumAccount, Operator, sysvar, token};
 
 pub struct Neon<'a> {
     info: &'a AccountInfo<'a>
@@ -29,6 +32,8 @@ impl<'a> Neon<'a> {
 
     pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8]) -> ProgramResult
     {
+        debug_print!("on_return {:?}", exit_reason);
+
         let (exit_message, exit_status) = match exit_reason {
             ExitReason::Succeed(success_code) => {
                 match success_code {
@@ -93,27 +98,29 @@ impl<'a> Neon<'a> {
         invoke(&instruction, &[ self.info.clone() ])
     }
 
-    pub fn on_event(&self, log: Log) -> ProgramResult {
-        let instruction = {
-            use core::mem::size_of;
-            let capacity = size_of::<u8>()
-                + size_of::<H160>()  // address
-                + size_of::<usize>() // topics.len
-                + log.topics.len() * size_of::<H256>()
-                + log.data.len();
+    #[allow(clippy::unused_self)]
+    pub fn on_event(&self, log: Log) {
+        use core::mem::size_of;
 
-            let mut data = Vec::with_capacity(capacity);
-            data.push(7_u8);
-            data.extend_from_slice(log.address.as_bytes());
-            data.extend_from_slice(&log.topics.len().to_le_bytes());
-            for topic in log.topics {
-                data.extend_from_slice(topic.as_bytes());
-            }
-            data.extend(&log.data);
+        debug_print!("on_event {}", log.address);
 
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
-        };
-        invoke(&instruction, &[ self.info.clone() ])
+        let capacity = size_of::<u8>()
+            + size_of::<H160>()  // address
+            + size_of::<usize>() // topics.len
+            + log.topics.len() * size_of::<H256>()
+            + log.data.len();
+
+        let mut data = Vec::with_capacity(capacity);
+        data.push(7_u8);
+        data.extend_from_slice(log.address.as_bytes());
+        data.extend_from_slice(&log.topics.len().to_le_bytes());
+        for topic in log.topics {
+            data.extend_from_slice(topic.as_bytes());
+        }
+        data.extend(&log.data);
+
+        sol_log("OnEvent");
+        sol_log_slice(&data);
     }
 }
 
