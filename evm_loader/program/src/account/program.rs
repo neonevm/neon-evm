@@ -109,7 +109,7 @@ impl<'a> Neon<'a> {
         for topic in &log.topics {
             fields.push(topic.as_bytes());
         }
-        fields.push(&log.data);
+        //fields.push(&log.data);
         sol_log_data(&fields);
     }
 }
