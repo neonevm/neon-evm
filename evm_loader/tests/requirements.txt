@@ -1,7 +1,8 @@
-typing-extensions==3.7.4.2
-ecdsa==0.16.0
+pytest==7.1.2
+typing-extensions==4.2.0
+ecdsa==0.17.0
 pysha3==1.0.2
-eth-keys==0.3.3
+eth-keys==0.4.0
 rlp==2.0.1
-web3
-solana==0.10.0
+web3==5.29.0
+solana==0.23.2
