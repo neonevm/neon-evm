@@ -17,18 +17,30 @@ echo "EVM address: $EVM_LOADER"
 echo "Creating deployer account $DEPLOYER_PUBLIC_KEY"
 neon-cli --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" create-ether-account "$DEPLOYER_PUBLIC_KEY"
 
+echo
 echo "Depositing NEONs to deployer $DEPLOYER_PUBLIC_KEY"
 export ETH_TOKEN_MINT=$(solana address -k /opt/neon_token_keypair.json)
 ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
 echo "Solana account $ACCOUNT"
 TOKEN_ACCOUNT=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
-echo "Token accout $TOKEN_ACCOUNT"
-spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT
+echo "Token account $TOKEN_ACCOUNT"
+spl-token mint $ETH_TOKEN_MINT 5000 --owner /opt/evm_loader-keypair.json -- $TOKEN_ACCOUNT
 echo "Balance of $ACCOUNT is: $(spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT) NEONs"
 neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000000000000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
+echo
 echo "Compiling and deploying contracts"
 cd /opt/contracts/
 npx hardhat compile
 sleep 20
 npx hardhat run --network ci /opt/contracts/scripts/deploy.js
+
+echo
+echo "Depositing USDTs to deployer $DEPLOYER_PUBLIC_KEY"
+USDT_TOKEN_MINT="B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
+ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
+echo "Solana account $ACCOUNT"
+TOKEN_ACCOUNT=$(spl-token create-account $USDT_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
+echo "Token accout $TOKEN_ACCOUNT"
+spl-token mint $USDT_TOKEN_MINT 5000 --owner /opt/contracts/ci-tokens/owner-keypair.json -- $TOKEN_ACCOUNT
+echo "Balance of $ACCOUNT is: $(spl-token balance $USDT_TOKEN_MINT --owner $ACCOUNT) USDTs"
