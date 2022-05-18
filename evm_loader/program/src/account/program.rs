@@ -81,9 +81,11 @@ impl<'a> Neon<'a> {
             used_gas.as_u64()
         };
 
+        let mnemonic = b"RETURN";
         let exit_status = exit_status.to_le_bytes();
         let used_gas = used_gas.to_le_bytes();
-        let fields = [exit_status.as_slice(),
+        let fields = [mnemonic.as_slice(),
+                      exit_status.as_slice(),
                       used_gas.as_slice()];
         sol_log_data(&fields);
         set_return_data(result);
