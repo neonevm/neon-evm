@@ -100,20 +100,17 @@ impl<'a> Neon<'a> {
 
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, log: &Log) {
-        //let capacity = 1 + 1 + log.topics.len() + 1;
-        //let fields: Vec<&[u8]> = Vec::with_capacity(capacity);
-        //#[allow(clippy::cast_possible_truncation)]
-        //let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
-        //fields.push(&mnemonic);
-        //fields.push(log.address.as_bytes());
+        debug_print!("on_event enter");
         //for topic in &log.topics {
         //    fields.push(topic.as_bytes());
         //}
         //fields.push(&log.data);
         #[allow(clippy::cast_possible_truncation)]
         let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
-        let fields = [mnemonic.as_slice()];
+        let fields = [mnemonic.as_slice(),
+                      log.address.as_bytes()];
         sol_log_data(&fields);
+        debug_print!("on_event leave");
     }
 }
 
