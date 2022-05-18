@@ -125,7 +125,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        self.state.gas_limit().saturating_sub(self.gasometer.used_gas())
+        self.state.gas_limit().saturating_sub(self.gasometer.used_gas_total())
     }
 
     fn gas_price(&self) -> U256 {
@@ -352,7 +352,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     pub fn new(origin: H160, backend: &'a B) -> Result<Self, ProgramError> {
         let substate = Box::new(ExecutorSubstate::new(backend));
         let state = ExecutorState::new(substate, backend);
-        let gasometer = Gasometer::new()?;
+        let gasometer = Gasometer::new(None)?;
         
         let executor = Executor { origin, state, gasometer };
         Ok(Self { executor, runtime: Vec::new(), steps_executed: 0 })
@@ -370,7 +370,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Deserializes and restores state of runtime and executor from a storage account.
     pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Result<Self, ProgramError> {
         let (runtime, substate) = storage.deserialize()?;
-        let gasometer = Gasometer::new()?;
+        let gasometer = Gasometer::new(Some(storage.gas_used_and_paid))?;
 
         let origin = storage.caller;
         let state = ExecutorState::new(substate, backend);
