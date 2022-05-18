@@ -100,17 +100,23 @@ impl<'a> Neon<'a> {
 
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, log: &Log) {
-        debug_print!("on_event enter");
-        //for topic in &log.topics {
-        //    fields.push(topic.as_bytes());
-        //}
-        //fields.push(&log.data);
+        debug_print!("on_event");
         #[allow(clippy::cast_possible_truncation)]
-        let mnemonic = [b'L', b'O', b'G', b'0' + log.topics.len() as u8];
+        let nt = log.topics.len() as u8;
+        let empty = [] as [u8; 0];
+        let mnemonic = [b'L', b'O', b'G', b'0' + nt];
+        let t1 = if nt < 1 { &empty } else { log.topics[0].as_bytes() };
+        let t2 = if nt < 2 { &empty } else { log.topics[1].as_bytes() };
+        let t3 = if nt < 3 { &empty } else { log.topics[2].as_bytes() };
+        let t4 = if nt < 4 { &empty } else { log.topics[3].as_bytes() };
         let fields = [mnemonic.as_slice(),
-                      log.address.as_bytes()];
+                      log.address.as_bytes(),
+                      t1,
+                      t2,
+                      t3,
+                      t4,
+                      &log.data];
         sol_log_data(&fields);
-        debug_print!("on_event leave");
     }
 }
 
