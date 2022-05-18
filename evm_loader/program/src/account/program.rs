@@ -3,12 +3,10 @@ use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
 use evm::backend::Log;
 use solana_program::{
-    program::{invoke, invoke_signed}, rent::Rent,
+    program::{invoke, invoke_signed, set_return_data}, rent::Rent,
     system_instruction, sysvar::Sysvar
 };
 use solana_program::account_info::AccountInfo;
-use solana_program::entrypoint::ProgramResult;
-use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -30,14 +28,15 @@ impl<'a> Neon<'a> {
         Ok(Self { info })
     }
 
-    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8]) -> ProgramResult
+    #[allow(clippy::unused_self)]
+    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8])
     {
         debug_print!("on_return {:?}", exit_reason);
 
         let (exit_message, exit_status) = match exit_reason {
             ExitReason::Succeed(success_code) => {
                 match success_code {
-                    ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11)},
+                    ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11_u8)},
                     ExitSucceed::Returned => {("ExitSucceed: Machine encountered an explict return.", 0x12)},
                     ExitSucceed::Suicided => {("ExitSucceed: Machine encountered an explict suicide.", 0x13)},
                 }
@@ -76,34 +75,29 @@ impl<'a> Neon<'a> {
         debug_print!("result {}", &hex::encode(&result));
 
         let used_gas = if used_gas > U256::from(u64::MAX) { // Convert to u64 to not break ABI
-            solana_program::msg!("Error: used gas {} exceeds u64::max", used_gas);
+            solana_program::msg!("Error: used gas {} exceeds u64::MAX", used_gas);
             u64::MAX
         } else {
             used_gas.as_u64()
         };
 
-
-        let instruction = {
-            use core::mem::size_of;
-            let capacity = 2 * size_of::<u8>() + size_of::<u64>() + result.len();
-
-            let mut data = Vec::with_capacity(capacity);
-            data.push(6_u8);
-            data.push(exit_status);
-            data.extend(&used_gas.to_le_bytes());
-            data.extend(result);
-
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
-        };
-        invoke(&instruction, &[ self.info.clone() ])
+        let exit_status = exit_status.to_le_bytes();
+        let used_gas = used_gas.to_le_bytes();
+        let fields = [exit_status.as_slice(),
+                      used_gas.as_slice()];
+        sol_log_data(&fields);
+        set_return_data(result);
     }
 
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, log: &Log) {
         debug_print!("on_event");
+
+        assert!(log.topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]
         let nt = log.topics.len() as u8;
         let empty = [] as [u8; 0];
+
         let mnemonic = [b'L', b'O', b'G', b'0' + nt];
         let t1 = if nt < 1 { &empty } else { log.topics[0].as_bytes() };
         let t2 = if nt < 2 { &empty } else { log.topics[1].as_bytes() };

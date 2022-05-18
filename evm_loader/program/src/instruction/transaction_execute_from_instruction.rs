@@ -141,7 +141,7 @@ fn execute<'a>(
         }
     }
 
-    accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
+    accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
     
     Ok(())
 }

@@ -194,7 +194,7 @@ fn finalize<'a>(
             }
         }
 
-        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;
+        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result);
 
         account_storage.block_accounts(false)?;
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
