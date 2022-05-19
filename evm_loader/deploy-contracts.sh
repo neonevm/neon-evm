@@ -38,9 +38,17 @@ npx hardhat run --network ci /opt/contracts/scripts/deploy.js
 echo
 echo "Depositing USDTs to deployer $DEPLOYER_PUBLIC_KEY"
 USDT_TOKEN_MINT="B77GCLJPHQAzH5dMfeCMWeaKV4zzWV2WibaAYrscxe4L"
-ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
-echo "Solana account $ACCOUNT"
-TOKEN_ACCOUNT=$(spl-token create-account $USDT_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
-echo "Token accout $TOKEN_ACCOUNT"
+TOKEN_ACCOUNT="999hfhQYiixPtQraEyZ8sFU4KENLjmrU9ecqT4iUtw9y"
+echo "Token account $TOKEN_ACCOUNT"
 spl-token mint $USDT_TOKEN_MINT 5000 --owner /opt/contracts/ci-tokens/owner-keypair.json -- $TOKEN_ACCOUNT
+ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
 echo "Balance of $ACCOUNT is: $(spl-token balance $USDT_TOKEN_MINT --owner $ACCOUNT) USDTs"
+
+echo
+echo "Depositing AAVEs to deployer $DEPLOYER_PUBLIC_KEY"
+AAVE_TOKEN_MINT="Dsoj9idxF4izCgBNFaCv1Y6tF9waGv4Du7DZuEhWSocD"
+TOKEN_ACCOUNT="999hfhQYiixPtQraEyZ8sFU4KENLjmrU9ecqT4iUtw9y"
+echo "Token account $TOKEN_ACCOUNT"
+spl-token mint $AAVE_TOKEN_MINT 5000 --owner /opt/contracts/ci-tokens/owner-keypair.json -- $TOKEN_ACCOUNT
+ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
+echo "Balance of $ACCOUNT is: $(spl-token balance $AAVE_TOKEN_MINT --owner $ACCOUNT) AAVEs"
