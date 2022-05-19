@@ -47,7 +47,7 @@ echo "Balance of $ACCOUNT is: $(spl-token balance $USDT_TOKEN_MINT --owner $ACCO
 echo
 echo "Depositing AAVEs to deployer $DEPLOYER_PUBLIC_KEY"
 AAVE_TOKEN_MINT="Dsoj9idxF4izCgBNFaCv1Y6tF9waGv4Du7DZuEhWSocD"
-TOKEN_ACCOUNT="999hfhQYiixPtQraEyZ8sFU4KENLjmrU9ecqT4iUtw9y"
+TOKEN_ACCOUNT="3t3fJuacwX2asAffW4phf2GK323cPxzgd1G2Q6tR1QPA"
 echo "Token account $TOKEN_ACCOUNT"
 spl-token mint $AAVE_TOKEN_MINT 5000 --owner /opt/contracts/ci-tokens/owner-keypair.json -- $TOKEN_ACCOUNT
 ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
