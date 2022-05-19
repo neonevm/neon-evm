@@ -64,9 +64,9 @@ pub fn do_begin<'a>(
         executor.gasometer_mut().record_transaction_size(&trx);
 
         let begin_result = if let Some(code_address) = trx.to {
-            executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit)
+            executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
         } else {
-            executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit)
+            executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
         };
 
         match begin_result {

@@ -91,6 +91,7 @@ fn execute<'a>(
             trx.call_data,
             trx.value,
             trx.gas_limit,
+            trx.gas_price,
         )?;
 
         let (result, exit_reason) = executor.execute();
