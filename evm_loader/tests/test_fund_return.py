@@ -44,18 +44,16 @@ class TestFundReturn:
     bob_acc: Keypair
     refundable_acc: PublicKey
     fail_acc: PublicKey
-    refundable_seed: str
-    fail_seed: str
+    refundable_seed = "refund"
+    fail_seed = "fail"
 
     @classmethod
     def setup_class(cls):
         cls.alice_acc = create_account("alice")
         cls.bob_acc = create_account("bob")
 
-        cls.refundable_seed = "refund"
         cls.refundable_acc = create_account_with_seed_from_acc(cls.alice_acc, cls.refundable_seed)
 
-        cls.fail_seed = "fail"
         cls.fail_acc = create_account_with_seed_from_acc(cls.alice_acc, cls.fail_seed)
 
     def test_creator_not_signer(self):
