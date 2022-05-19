@@ -39,8 +39,8 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/tests/*.sol /opt/
-COPY evm_loader/tests/test_solidity_precompiles.json /opt/
+#COPY evm_loader/tests/*.sol /opt/
+#COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
