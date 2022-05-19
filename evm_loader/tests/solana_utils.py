@@ -4,6 +4,7 @@ import os
 import subprocess
 import math
 import time
+import pathlib
 from hashlib import sha256
 from typing import NamedTuple, Tuple, Union
 
@@ -127,7 +128,7 @@ def create_collateral_pool_address(collateral_pool_index):
     return account_with_seed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
 
 
-def confirm_transaction(http_client, tx_sig, confirmations=0):
+def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
     timeout = 30
     elapsed_time = 0
@@ -140,7 +141,7 @@ def confirm_transaction(http_client, tx_sig, confirmations=0):
             if status and (status['confirmationStatus'] == 'finalized' or status['confirmationStatus'] == 'confirmed'
                            and status['confirmations'] >= confirmations):
                 return
-        sleep_time = 0.1
+        sleep_time = 1
         time.sleep(sleep_time)
         elapsed_time += sleep_time
     raise RuntimeError("could not confirm transaction: ", tx_sig)
@@ -266,7 +267,7 @@ class WalletAccount(RandomAccount):
 class OperatorAccount:
     def __init__(self, path=None):
         if path is None:
-            self.path = operator1_keypair_path()
+            self.path = pathlib.Path.home() / ".config" / "solana" / "id.json"
         else:
             self.path = path
         self.retrieve_keys()
@@ -481,35 +482,20 @@ def get_neon_balance(solana_client: Client, sol_account: Union[str, PublicKey]) 
     return balance
 
 
-def wallet_path():
-    res = solana_cli().call("config get")
-    substr = "Keypair Path: "
-    for line in res.splitlines():
-        if line.startswith(substr):
-            return line[len(substr):].strip()
-    raise Exception("cannot get keypair path")
-
-
-def operator1_keypair_path():
-    res = solana_cli().call("config get")
-    substr = "Keypair Path: "
-    for line in res.splitlines():
-        if line.startswith(substr):
-            return line[len(substr):].strip()
-    raise Exception("cannot get keypair path")
-
-
-def operator2_keypair_path():
-    return "/root/.config/solana/id2.json"
-
-
 def send_transaction(client, trx, acc):
     print("Send trx")
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
+    tx = result["result"]
     print("Result: {}".format(result))
-    confirm_transaction(client, result["result"])
-    result = client.get_confirmed_transaction(result["result"])
-    return result
+    wait_confirm_transaction(client, tx)
+    for _ in range(6):
+        receipt = client.get_confirmed_transaction(tx)
+        if receipt["result"] is not None:
+            break
+        time.sleep(10)
+    else:
+        raise AssertionError(f"Can't get confirmed transaction ")
+    return receipt
 
 
 def create_neon_evm_instr_05_single(evm_loader_program_id,

@@ -1,11 +1,13 @@
 import os
+import pathlib
+
 import web3
 
 from solana.keypair import Keypair
 
 from solana_utils import PublicKey, ACCOUNT_INFO_LAYOUT, EVM_LOADER, EvmLoader, Account, Transaction, get_account_data, \
     solana_client, AccountInfo, b58encode, ACCOUNT_SEED_VERSION, account_with_seed, create_account_with_seed, TransactionInstruction, \
-    AccountMeta, TransactionWithComputeBudget, OperatorAccount, operator1_keypair_path, send_transaction
+    AccountMeta, TransactionWithComputeBudget, OperatorAccount, send_transaction
 
 
 def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, size: int) -> Transaction:
@@ -38,20 +40,11 @@ def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, siz
 
 
 class TestResize:
-    loader: EvmLoader
-    account: Keypair
-
-    @classmethod
-    def setup_class(cls):
-        wallet = OperatorAccount(operator1_keypair_path())
-        cls.loader = EvmLoader(wallet, EVM_LOADER)
-        cls.account = Keypair.from_secret_key(wallet.get_acc().secret_key())
-
-    def test_resize(self):
+    def test_resize(self, evm_loader, operator_keypair):
         account = web3.Account.create()
-        self.loader.create_ether_account(account.address)
+        evm_loader.create_ether_account(account.address)
 
         for size in range(1*1024*1024, 10*1024*1024 + 1, 1*1024*1024):
-            resize_trx = create_resize_transaction(self.loader, self.account, account.address, size)
-            result = send_transaction(solana_client, resize_trx, self.account)
-            assert result["status"] == {"OK": None}
+            resize_trx = create_resize_transaction(evm_loader, operator_keypair, account.address, size)
+            result = send_transaction(solana_client, resize_trx, operator_keypair)
+            assert result["result"]["meta"]["status"] == {"Ok": None}
