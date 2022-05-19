@@ -43,9 +43,9 @@ RUN apt-get update && \
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
-RUN solc --output-dir . --bin *.sol && \
-    for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
-        ls -l
+#RUN solc --output-dir . --bin *.sol && \
+#    for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
+#        ls -l
 
 # Define solana-image that contains utility
 FROM neonlabsorg/solana:${SOLANA_REVISION} AS solana
