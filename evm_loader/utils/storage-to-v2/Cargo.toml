@@ -1,0 +1,32 @@
+[workspace]
+
+[package]
+name = "storage-to-v2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.evm-loader]
+git = "https://github.com/neonlabsorg/neon-evm.git"
+rev = "e612ec1d305354e5f1a671c45688ba59216f1683"
+package = "evm-loader"
+default_features = false
+
+[dependencies.evm-core]
+git = "https://github.com/neonlabsorg/neon-evm.git"
+rev = "e612ec1d305354e5f1a671c45688ba59216f1683"
+package = "evm-core"
+default_features = false
+features = ["with-serde"]
+
+[dependencies]
+anyhow = "1.0.57"
+jsonrpc = "0.12.1"
+lazy_static = "1.4.0"
+remove_dir_all = "=0.5.0"
+serde = "1.0.137"
+serde_derive = "1.0.137"
+solana-program = "=1.9.12"
+solana-sdk = "=1.9.12"
+solana-transaction-status = "=1.9.12"
+solana-client = "=1.9.12"
+
