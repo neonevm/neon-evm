@@ -59,7 +59,7 @@ RUN apt-get update && \
 
 COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
 RUN pip3 install -r /tmp/requirements.txt
-RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
+#RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt update & apt install -y nodejs
