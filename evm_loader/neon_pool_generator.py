@@ -1,6 +1,7 @@
 import sys
 
 from solana.publickey import PublicKey
+from solana.keypair import Keypair
 from solana_utils import OperatorAccount, get_associated_token_address, solana_client, TransactionWithComputeBudget, create_associated_token_account, send_transaction
 from solana.rpc.commitment import Processed
 
@@ -20,5 +21,5 @@ if pool_account_exists:
 
 trx = TransactionWithComputeBudget()
 trx.add(create_associated_token_account(signer.public_key(), authority_account, mint))
-result = send_transaction(solana_client, trx, signer)
+result = send_transaction(solana_client, trx, Keypair.from_secret_key(signer.secret_key()))
 print(result)
