@@ -2,7 +2,7 @@ import sys
 
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
-from tests.solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, solana_client, TransactionWithComputeBudget, send_transaction, create_account_with_seed, get_solana_balance
+from solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, solana_client, TransactionWithComputeBudget, send_transaction, create_account_with_seed, get_solana_balance
 
 
 wallet = OperatorAccount(sys.argv[1]).get_acc()
