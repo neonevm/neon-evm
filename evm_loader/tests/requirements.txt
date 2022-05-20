@@ -5,4 +5,4 @@ pysha3==1.0.2
 eth-keys==0.4.0
 rlp==2.0.1
 web3==5.29.0
-solana==0.23.3
+solana==0.21.0
