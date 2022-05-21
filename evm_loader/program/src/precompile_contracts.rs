@@ -538,7 +538,7 @@ pub fn ecrecover(
     } else {
         return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]));
     };
-    let recovery_id = v - 27;
+    let recovery_id = v.wrapping_sub(27);
     let public_key = match secp256k1_recover(&msg[..], recovery_id, &sig[..]) {
         Ok(key) => key,
         Err(_) => {
