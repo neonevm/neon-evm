@@ -1,5 +1,4 @@
 import os
-import pathlib
 
 import web3
 
@@ -7,7 +6,7 @@ from solana.keypair import Keypair
 
 from solana_utils import PublicKey, ACCOUNT_INFO_LAYOUT, EVM_LOADER, EvmLoader, Account, Transaction, get_account_data, \
     solana_client, AccountInfo, b58encode, ACCOUNT_SEED_VERSION, account_with_seed, create_account_with_seed, TransactionInstruction, \
-    AccountMeta, TransactionWithComputeBudget, OperatorAccount, send_transaction
+    AccountMeta, TransactionWithComputeBudget, send_transaction
 
 
 def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, size: int) -> Transaction:

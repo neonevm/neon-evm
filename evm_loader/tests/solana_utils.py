@@ -122,6 +122,9 @@ class SplToken:
             return res.split()[2]
 
 
+spl_cli = SplToken(solana_url)
+
+
 def create_collateral_pool_address(collateral_pool_index):
     collateral_seed_prefix = "collateral_seed_"
     seed = collateral_seed_prefix + str(collateral_pool_index)
