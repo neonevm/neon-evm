@@ -1,10 +1,13 @@
 use std::mem::size_of;
 
 use evm::U256;
+use solana_program::{msg, system_instruction};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
-use solana_program::msg;
+use solana_program::program::invoke;
 use solana_program::pubkey::Pubkey;
+use solana_program::rent::Rent;
+use solana_program::sysvar::Sysvar;
 
 use crate::account::{AccountData, ether_contract, Packable};
 use crate::account::ether_contract::DataV1;
@@ -17,6 +20,8 @@ const CONTRACT_STORAGE_SIZE: usize =
     STORAGE_ENTRY_SIZE * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize;
 
 enum AccountIndexes {
+    FundingAccount,
+    SystemProgram,
     EthereumContract,
 }
 
@@ -47,7 +52,11 @@ fn extract_contract_storage(hamt: &Hamt) -> Vec<u8> {
     contract_storage
 }
 
-fn convert_to_v2<'a>(account_info: &'a AccountInfo<'a>) -> ProgramResult {
+fn convert_to_v2<'a>(
+    account_info: &'a AccountInfo<'a>,
+    funding_account: &'a AccountInfo<'a>,
+    system_program: &'a AccountInfo<'a>,
+) -> ProgramResult {
     const DATA_END: usize = TAG_SIZE + DataV1::SIZE;
     const GENERATION_FIELD_SIZE: usize = size_of::<u32>();
 
@@ -66,9 +75,33 @@ fn convert_to_v2<'a>(account_info: &'a AccountInfo<'a>) -> ProgramResult {
     let addition_size = code_size + valids_size;
     let mut contract_storage_start = DATA_END + addition_size;
 
+    let data_size = account_info.data.borrow().len();
+    let min_size_needed = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
+    if data_size < min_size_needed {
+        let rent = Rent::get()?;
+        let balance_needed = rent.minimum_balance(min_size_needed);
+        let balance_diff = balance_needed.saturating_sub(account_info.lamports());
+        if balance_diff > 0 {
+            invoke(
+                &system_instruction::transfer(
+                    funding_account.key,
+                    account_info.key,
+                    balance_diff,
+                ),
+                &[
+                    funding_account.clone(),
+                    account_info.clone(),
+                    system_program.clone(),
+                ],
+            )?;
+        }
+
+        account_info.realloc(min_size_needed, false)?;
+    }
+
     let mut data = account_info.data.borrow_mut();
 
-    assert!(data.len() >= contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE);
+    assert!(data.len() >= min_size_needed);
 
     // Move `code` and `valids` to the new place:
     data.copy_within(DATA_END..DATA_END + addition_size, DATA_END + GENERATION_FIELD_SIZE);
@@ -95,7 +128,11 @@ pub fn process<'a>(
 ) -> ProgramResult {
     msg!("Instruction: ConvertStorageAccountFromV1ToV2");
 
-    convert_to_v2(&accounts[AccountIndexes::EthereumContract as usize])
+    let finding_account = &accounts[AccountIndexes::FundingAccount as usize];
+    let system_program = &accounts[AccountIndexes::SystemProgram as usize];
+    let account_info = &accounts[AccountIndexes::EthereumContract as usize];
+
+    convert_to_v2(account_info, finding_account, system_program)
 }
 
 #[cfg(test)]
@@ -107,6 +144,7 @@ mod tests {
     use solana_program::account_info::AccountInfo;
     use solana_program::entrypoint::ProgramResult;
     use solana_program::pubkey::Pubkey;
+    use solana_program::system_program;
 
     use crate::account::{EthereumContract, Packable};
     use crate::account::ether_contract::DataV1;
@@ -142,9 +180,28 @@ mod tests {
 
     #[test]
     fn test_conversion() -> ProgramResult {
+        fn simple_account<'a>(
+            pubkey: &'a Pubkey,
+            lamports: &'a mut u64,
+            data: &'a mut [u8],
+            owner: &'a Pubkey,
+        ) -> AccountInfo<'a> {
+            AccountInfo::new(
+                pubkey,
+                false,
+                false,
+                lamports,
+                data,
+                owner,
+                false,
+                0,
+            )
+        }
+
         let mut data = vec![0u8; TAG_SIZE + DataV1::SIZE];
         let owner = Pubkey::new_unique();
         let pubkey = Pubkey::new_unique();
+        let funding_pubkey = Pubkey::new_unique();
         let code = vec![1u8, 2, 3];
         let valids = vec![0xFFu8; code.len() / 8 + 1];
         let keys: HashSet<u32> = [0, 1, 2, 3, 63, 64, 640, 1640].iter().cloned().collect();
@@ -170,19 +227,17 @@ mod tests {
         data.splice(data.len().., valids.clone());
         data.splice(data.len().., hamt_buffer.borrow().iter().cloned());
 
-        let mut lamports = 1u64;
-        let account_info = AccountInfo::new(
-            &pubkey,
-            false,
-            false,
-            &mut lamports,
-            &mut data,
-            &owner,
-            false,
-            0,
-        );
+        let mut account_lamports = 1;
+        let mut funding_lamports = 1000;
+        let mut system_lamports = 1000;
 
-        convert_to_v2(&account_info)?;
+        let system_program_id = system_program::id();
+
+        let account_info = simple_account(&pubkey, &mut account_lamports, &mut data, &owner);
+        let funding_account = simple_account(&funding_pubkey, &mut funding_lamports, &mut [], &owner);
+        let system_program = simple_account(&system_program_id, &mut system_lamports, &mut [], &system_program_id);
+
+        convert_to_v2(&account_info, &funding_account, &system_program)?;
 
         let ethereum_contract_v2 = EthereumContract::from_account(
             &owner,

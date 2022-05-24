@@ -70,6 +70,8 @@ fn convert_to_v2_instruction(
         EVM_LOADER.clone(),
         &[29u8],
         vec![
+            AccountMeta::new_readonly(PAYER.pubkey(), true),         // Funding account
+            AccountMeta::new_readonly(system_program::id(), false),  // System program
             AccountMeta::new(ether_account, false),                  // Ether account
         ],
     )
