@@ -15,6 +15,11 @@ use crate::account::ACCOUNT_SEED_VERSION;
 
 use super::{EthereumAccount, Operator, sysvar, token};
 
+// ---- Legacy code
+use evm::{H160, H256};
+use solana_program::instruction::Instruction;
+// ---- Legacy code
+
 pub struct Neon<'a> {
     info: &'a AccountInfo<'a>
 }
@@ -81,6 +86,23 @@ impl<'a> Neon<'a> {
             used_gas.as_u64()
         };
 
+        // ---- Legacy code
+        let instruction = {
+            use core::mem::size_of;
+            let capacity = 2 * size_of::<u8>() + size_of::<u64>() + result.len();
+
+            let mut data = Vec::with_capacity(capacity);
+            data.push(6_u8);
+            data.push(exit_status);
+            data.extend(&used_gas.to_le_bytes());
+            data.extend(result);
+
+            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
+        };
+        let r = invoke(&instruction, &[self.info.clone()]);
+        assert!(r.is_ok());
+        // ---- Legacy code
+
         let mnemonic = b"RETURN";
         let exit_status = exit_status.to_le_bytes();
         let used_gas = used_gas.to_le_bytes();
@@ -94,6 +116,30 @@ impl<'a> Neon<'a> {
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, log: &Log) {
         debug_print!("on_event");
+
+        // ---- Legacy code
+        let instruction = {
+            use core::mem::size_of;
+            let capacity = size_of::<u8>()
+                + size_of::<H160>()  // address
+                + size_of::<usize>() // topics.len
+                + log.topics.len() * size_of::<H256>()
+                + log.data.len();
+
+            let mut data = Vec::with_capacity(capacity);
+            data.push(7_u8);
+            data.extend_from_slice(log.address.as_bytes());
+            data.extend_from_slice(&log.topics.len().to_le_bytes());
+            for topic in &log.topics {
+                data.extend_from_slice(topic.as_bytes());
+            }
+            data.extend(&log.data);
+
+            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
+        };
+        let r = invoke(&instruction, &[self.info.clone()]);
+        assert!(r.is_ok());
+        // ---- Legacy code
 
         assert!(log.topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]

@@ -77,6 +77,11 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         },
+
+        // ---- Legacy code
+        EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
+        // ---- Legacy code
+
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
