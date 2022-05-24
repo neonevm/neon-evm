@@ -26,29 +26,14 @@ enum AccountIndexes {
 }
 
 fn extract_contract_storage(hamt: &Hamt) -> Vec<u8> {
-    fn write_value(index: usize, value: &U256, contract_storage: &mut [u8]) {
-        assert!(index < STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize);
-        let offset = index * STORAGE_ENTRY_SIZE;
-        value.to_big_endian(&mut contract_storage[offset..offset + 32]);
+    let mut contract_storage = vec![0u8; CONTRACT_STORAGE_SIZE];
+    for index in 0..STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize {
+        if let Some(value) = hamt.find(index.into()) {
+            let offset = index * STORAGE_ENTRY_SIZE;
+            value.to_big_endian(&mut contract_storage[offset..offset + 32]);
+        }
     }
 
-    const MAX_ELEMENTS_FOR_ITERATION: usize =
-        size_of::<u32>() * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize * 8;
-    let mut contract_storage = vec![0u8; CONTRACT_STORAGE_SIZE];
-    if hamt.last_used() as usize > MAX_ELEMENTS_FOR_ITERATION {
-        for index in 0..STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize {
-            if let Some(value) = hamt.find(index.into()) {
-                write_value(index, &value, &mut contract_storage);
-            }
-        }
-    } else {
-        let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
-        for (key, value) in hamt.iter() {
-            if key < storage_entries_in_contract_account {
-                write_value(key.as_usize(), &value, &mut contract_storage);
-            }
-        }
-    }
     contract_storage
 }
 
