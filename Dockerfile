@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION=!!!UNSET_REVESION
+ARG SOLANA_REVISION
 # Install BPF SDK
 FROM solanalabs/rust:latest AS builder
 RUN rustup toolchain install nightly
