@@ -31,6 +31,11 @@ NEON_BPF_ARGS=(
     --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
 )
 
+NEON_VALIDATOR_ARGS=(
+    --gossip-host $(hostname -i)
+)
+
 export SOLANA_RUN_SH_GENESIS_ARGS="${NEON_BPF_ARGS[@]}"
+export SOLANA_RUN_SH_VALIDATOR_ARGS="${NEON_VALIDATOR_ARGS[@]}"
 
 ./solana-run.sh
