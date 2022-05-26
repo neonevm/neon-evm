@@ -11,6 +11,8 @@ use solana_program::{
 use crate::account::{EthereumAccount, Operator, program};
 use crate::account_storage::ProgramAccountStorage;
 use crate::config::{chain_id, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT};
+use crate::error::EvmLoaderError;
+use crate::instruction::storage_to_v2::OPERATOR_PUBKEY;
 
 enum AccountIndexes {
     Operator,
@@ -80,6 +82,15 @@ pub fn process<'a>(
     let operator = unsafe {
         Operator::from_account_not_whitelisted(&accounts[AccountIndexes::Operator as usize])
     }?;
+
+    if operator.key != &OPERATOR_PUBKEY {
+        return Err!(
+            EvmLoaderError::UnauthorizedOperator.into();
+            "Account {} - expected authorized operator",
+            operator.key
+        );
+    }
+
     let system_program = program::System::from_account(
         &accounts[AccountIndexes::SystemProgram as usize],
     )?;

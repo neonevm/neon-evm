@@ -12,7 +12,9 @@ use solana_program::sysvar::Sysvar;
 use crate::account::{AccountData, ether_contract, Packable};
 use crate::account::ether_contract::DataV1;
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
+use crate::error::EvmLoaderError;
 use crate::hamt::Hamt;
+use crate::instruction::storage_to_v2::OPERATOR_PUBKEY;
 
 const TAG_SIZE: usize = size_of::<u8>();
 const STORAGE_ENTRY_SIZE: usize = size_of::<U256>();
@@ -45,44 +47,47 @@ fn convert_to_v2<'a>(
     const DATA_END: usize = TAG_SIZE + DataV1::SIZE;
     const GENERATION_FIELD_SIZE: usize = size_of::<u32>();
 
-    let (contract_storage, code_size) = {
+    let data_size = account_info.data.borrow().len();
+
+    let (contract_storage, min_size_needed, addition_size, mut contract_storage_start) = {
         let ethereum_contract_v1 =
             AccountData::<ether_contract::DataV1, ether_contract::ExtensionV1>::from_account(
                 account_info.owner,
                 account_info,
             )?;
-        (
-            extract_contract_storage(&ethereum_contract_v1.extension.storage),
-            ethereum_contract_v1.code_size as usize,
-        )
-    };
-    let valids_size = code_size / 8 + 1;
-    let addition_size = code_size + valids_size;
-    let mut contract_storage_start = DATA_END + addition_size;
 
-    let data_size = account_info.data.borrow().len();
-    let min_size_needed = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
-    if data_size < min_size_needed {
-        let rent = Rent::get()?;
-        let balance_needed = rent.minimum_balance(min_size_needed);
-        let balance_diff = balance_needed.saturating_sub(account_info.lamports());
-        if balance_diff > 0 {
-            invoke(
-                &system_instruction::transfer(
-                    funding_account.key,
-                    account_info.key,
-                    balance_diff,
-                ),
-                &[
-                    funding_account.clone(),
-                    account_info.clone(),
-                    system_program.clone(),
-                ],
-            )?;
+        let code_size = ethereum_contract_v1.code_size as usize;
+        let valids_size = code_size / 8 + 1;
+        let addition_size = code_size + valids_size;
+        let contract_storage_start = DATA_END + addition_size;
+
+        let min_size_needed = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
+        if data_size < min_size_needed {
+            let rent = Rent::get()?;
+            let balance_needed = rent.minimum_balance(min_size_needed);
+            let balance_diff = balance_needed.saturating_sub(account_info.lamports());
+            if balance_diff != 0 {
+                invoke(
+                    &system_instruction::transfer(
+                        funding_account.key,
+                        account_info.key,
+                        balance_diff,
+                    ),
+                    &[
+                        funding_account.clone(),
+                        account_info.clone(),
+                        system_program.clone(),
+                    ],
+                )?;
+            }
+
+            account_info.realloc(min_size_needed, false)?;
         }
 
-        account_info.realloc(min_size_needed, false)?;
-    }
+        let contract_storage = extract_contract_storage(&ethereum_contract_v1.extension.storage);
+
+        (contract_storage, min_size_needed, addition_size, contract_storage_start)
+    };
 
     let mut data = account_info.data.borrow_mut();
 
@@ -113,11 +118,20 @@ pub fn process<'a>(
 ) -> ProgramResult {
     msg!("Instruction: ConvertStorageAccountFromV1ToV2");
 
-    let finding_account = &accounts[AccountIndexes::FundingAccount as usize];
+    let funding_account = &accounts[AccountIndexes::FundingAccount as usize];
+
+    if funding_account.key != &OPERATOR_PUBKEY {
+        return Err!(
+            EvmLoaderError::UnauthorizedOperator.into();
+            "Account {} - expected authorized operator",
+            funding_account.key
+        );
+    }
+
     let system_program = &accounts[AccountIndexes::SystemProgram as usize];
     let account_info = &accounts[AccountIndexes::EthereumContract as usize];
 
-    convert_to_v2(account_info, finding_account, system_program)
+    convert_to_v2(account_info, funding_account, system_program)
 }
 
 #[cfg(test)]
@@ -135,7 +149,8 @@ mod tests {
     use crate::account::ether_contract::DataV1;
     use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
     use crate::hamt::Hamt;
-    use crate::instruction::convert_data_account_from_v1_to_v2::{
+
+    use super::{
         CONTRACT_STORAGE_SIZE,
         convert_to_v2,
         extract_contract_storage,

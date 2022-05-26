@@ -215,5 +215,4 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;
-pub mod write_value_to_distributed_storage;
-pub mod convert_data_account_from_v1_to_v2;
+pub mod storage_to_v2;
