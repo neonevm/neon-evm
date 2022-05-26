@@ -47,8 +47,10 @@ fn convert_to_v2<'a>(
     const GENERATION_FIELD_SIZE: usize = size_of::<u32>();
 
     let data_size = account_info.data_len();
-    let code_size = EthereumContractV1::from_account(account_info.owner, account_info)?
-        .code_size as usize;
+    let (code_size, contract_storage) = {
+        let contract_v1 = EthereumContractV1::from_account(account_info.owner, account_info)?;
+        (contract_v1.code_size as usize, extract_contract_storage(&contract_v1.extension.storage))
+    };
 
     let valids_size = code_size / 8 + 1;
     let addition_size = code_size + valids_size;
@@ -78,10 +80,6 @@ fn convert_to_v2<'a>(
             account_info.realloc(new_size, false)?;
         }
     }
-
-    let contract_storage = extract_contract_storage(
-        &EthereumContractV1::from_account(account_info.owner, account_info)?.extension.storage,
-    );
 
     let mut data = account_info.data.borrow_mut();
 
