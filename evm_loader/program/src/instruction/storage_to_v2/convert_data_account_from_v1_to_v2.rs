@@ -1,12 +1,10 @@
 use std::mem::size_of;
 
 use evm::U256;
-use solana_program::{msg, system_instruction};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
-use solana_program::program::invoke;
+use solana_program::msg;
 use solana_program::pubkey::Pubkey;
-use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
 use crate::account::{AccountData, ether_contract, Packable};
@@ -14,7 +12,8 @@ use crate::account::ether_contract::DataV1;
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::error::EvmLoaderError;
 use crate::hamt::Hamt;
-use crate::instruction::storage_to_v2::OPERATOR_PUBKEY;
+
+type EthereumContractV1<'a> = AccountData::<'a, ether_contract::DataV1, ether_contract::ExtensionV1<'a>>;
 
 const TAG_SIZE: usize = size_of::<u8>();
 const STORAGE_ENTRY_SIZE: usize = size_of::<U256>();
@@ -47,51 +46,50 @@ fn convert_to_v2<'a>(
     const DATA_END: usize = TAG_SIZE + DataV1::SIZE;
     const GENERATION_FIELD_SIZE: usize = size_of::<u32>();
 
-    let data_size = account_info.data.borrow().len();
+    let data_size = account_info.data_len();
+    let code_size = EthereumContractV1::from_account(account_info.owner, account_info)?
+        .code_size as usize;
 
-    let (contract_storage, min_size_needed, addition_size, mut contract_storage_start) = {
-        let ethereum_contract_v1 =
-            AccountData::<ether_contract::DataV1, ether_contract::ExtensionV1>::from_account(
-                account_info.owner,
-                account_info,
+    let valids_size = code_size / 8 + 1;
+    let addition_size = code_size + valids_size;
+    let mut contract_storage_start = DATA_END + addition_size;
+
+    let new_size = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
+    if data_size != new_size {
+        let rent = solana_program::rent::Rent::get()?;
+        let balance_needed = rent.minimum_balance(new_size);
+        let balance_diff = balance_needed.saturating_sub(account_info.lamports());
+        if balance_diff != 0 {
+            solana_program::program::invoke(
+                &solana_program::system_instruction::transfer(
+                    funding_account.key,
+                    account_info.key,
+                    balance_diff,
+                ),
+                &[
+                    funding_account.clone(),
+                    account_info.clone(),
+                    system_program.clone(),
+                ],
             )?;
-
-        let code_size = ethereum_contract_v1.code_size as usize;
-        let valids_size = code_size / 8 + 1;
-        let addition_size = code_size + valids_size;
-        let contract_storage_start = DATA_END + addition_size;
-
-        let min_size_needed = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
-        if data_size < min_size_needed {
-            let rent = Rent::get()?;
-            let balance_needed = rent.minimum_balance(min_size_needed);
-            let balance_diff = balance_needed.saturating_sub(account_info.lamports());
-            if balance_diff != 0 {
-                invoke(
-                    &system_instruction::transfer(
-                        funding_account.key,
-                        account_info.key,
-                        balance_diff,
-                    ),
-                    &[
-                        funding_account.clone(),
-                        account_info.clone(),
-                        system_program.clone(),
-                    ],
-                )?;
-            }
-
-            account_info.realloc(min_size_needed, false)?;
         }
 
-        let contract_storage = extract_contract_storage(&ethereum_contract_v1.extension.storage);
+        if cfg!(target_arch = "bpf") {
+            account_info.realloc(new_size, false)?;
+        }
+    }
 
-        (contract_storage, min_size_needed, addition_size, contract_storage_start)
-    };
+    let contract_storage = extract_contract_storage(
+        &EthereumContractV1::from_account(account_info.owner, account_info)?.extension.storage,
+    );
 
     let mut data = account_info.data.borrow_mut();
 
-    assert!(data.len() >= min_size_needed);
+    if cfg!(target_arch = "bpf") {
+        assert_eq!(data.len(), new_size);
+    } else {
+        assert!(data.len() >= new_size);
+    }
 
     // Move `code` and `valids` to the new place:
     data.copy_within(DATA_END..DATA_END + addition_size, DATA_END + GENERATION_FIELD_SIZE);
@@ -120,7 +118,7 @@ pub fn process<'a>(
 
     let funding_account = &accounts[AccountIndexes::FundingAccount as usize];
 
-    if funding_account.key != &OPERATOR_PUBKEY {
+    if funding_account.key != &super::OPERATOR_PUBKEY {
         return Err!(
             EvmLoaderError::UnauthorizedOperator.into();
             "Account {} - expected authorized operator",
@@ -142,8 +140,10 @@ mod tests {
     use evm::U256;
     use solana_program::account_info::AccountInfo;
     use solana_program::entrypoint::ProgramResult;
+    use solana_program::program_stubs::SyscallStubs;
     use solana_program::pubkey::Pubkey;
     use solana_program::system_program;
+    use solana_sdk::sysvar::rent::Rent;
 
     use crate::account::{EthereumContract, Packable};
     use crate::account::ether_contract::DataV1;
@@ -159,6 +159,34 @@ mod tests {
     };
 
     const VALUE_MULTIPLICATOR: u32 = 100;
+
+    pub struct Stubs {
+        rent: Rent,
+    }
+
+    impl Stubs {
+        pub fn new() -> Box<Stubs> {
+            Box::new(Self {
+                rent: Rent {
+                    lamports_per_byte_year: 10,
+                    exemption_threshold: 1.0,
+                    burn_percent: 1,
+                }
+            })
+        }
+    }
+
+    impl SyscallStubs for Stubs {
+        fn sol_get_rent_sysvar(&self, pointer: *mut u8) -> u64 {
+            unsafe {
+                #[allow(clippy::cast_ptr_alignment)]
+                let rent = pointer.cast::<Rent>();
+                *rent = self.rent;
+            }
+
+            0
+        }
+    }
 
     #[test]
     fn test_extract_contract_storage() -> ProgramResult {
@@ -236,6 +264,8 @@ mod tests {
         let account_info = simple_account(&pubkey, &mut account_lamports, &mut data, &owner);
         let funding_account = simple_account(&funding_pubkey, &mut funding_lamports, &mut [], &owner);
         let system_program = simple_account(&system_program_id, &mut system_lamports, &mut [], &system_program_id);
+
+        solana_sdk::program_stubs::set_syscall_stubs(Stubs::new());
 
         convert_to_v2(&account_info, &funding_account, &system_program)?;
 
