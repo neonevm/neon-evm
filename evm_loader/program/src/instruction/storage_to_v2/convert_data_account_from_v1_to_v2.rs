@@ -57,29 +57,46 @@ fn convert_to_v2<'a>(
     let mut contract_storage_start = DATA_END + addition_size;
 
     let new_size = contract_storage_start + CONTRACT_STORAGE_SIZE + GENERATION_FIELD_SIZE;
-    if data_size != new_size {
-        let rent = solana_program::rent::Rent::get()?;
-        let balance_needed = rent.minimum_balance(new_size);
-        let balance_diff = balance_needed.saturating_sub(account_info.lamports());
-        if balance_diff != 0 {
-            solana_program::program::invoke(
-                &solana_program::system_instruction::transfer(
-                    funding_account.key,
-                    account_info.key,
-                    balance_diff,
-                ),
-                &[
-                    funding_account.clone(),
-                    account_info.clone(),
-                    system_program.clone(),
-                ],
-            )?;
-        }
 
-        if cfg!(target_arch = "bpf") {
-            account_info.realloc(new_size, false)?;
-        }
+    let rent = solana_program::rent::Rent::get()?;
+    let balance_needed = rent.minimum_balance(new_size);
+
+    if account_info.lamports() < balance_needed {
+        solana_program::program::invoke(
+            &solana_program::system_instruction::transfer(
+                funding_account.key,
+                account_info.key,
+                balance_needed - account_info.lamports(),
+            ),
+            &[
+                funding_account.clone(),
+                account_info.clone(),
+                system_program.clone(),
+            ],
+        )?;
     }
+
+    if cfg!(target_arch = "bpf") && data_size != new_size {
+        account_info.realloc(new_size, false)?;
+    }
+
+    if account_info.lamports() > balance_needed {
+        solana_program::program::invoke(
+            &solana_program::system_instruction::transfer(
+                account_info.key,
+                funding_account.key,
+                account_info.lamports() - balance_needed,
+            ),
+            &[
+                funding_account.clone(),
+                account_info.clone(),
+                system_program.clone(),
+            ],
+        )?;
+    }
+
+    #[cfg(target_arch = "bpf")]
+    assert_eq!(account_info.lamports(), balance_needed);
 
     let mut data = account_info.data.borrow_mut();
 
