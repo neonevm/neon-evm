@@ -3,6 +3,7 @@
 use std::cmp::min;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::Write;
 use std::mem::size_of;
 use std::ops::Sub;
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use anyhow::Result;
 use evm_core::{H160, U256};
 use evm_loader::account::{ACCOUNT_SEED_VERSION, AccountData, ether_account, ether_contract, ether_storage, Packable};
 use evm_loader::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
-use jsonrpc::{Request, serde_json};
+use serde_json::{json, Value};
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_client::client_error::Result as ClientResult;
 use solana_client::rpc_client::{RpcClient, serialize_and_encode};
@@ -32,25 +33,47 @@ use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use solana_transaction_status::UiTransactionEncoding;
 
+use crate::json_rpc::JsonRpcClient;
+
+mod json_rpc;
+
+macro_rules! print {
+    ($($arg:tt)*) => {
+        std::print!($($arg)*);
+        std::io::stdout().flush().unwrap();
+    }
+}
+
+macro_rules! println {
+    () => (print!("\n"));
+    ($($arg:tt)*) => ({
+        std::println!($($arg)*);
+        std::io::stdout().flush().unwrap();
+    })
+}
+
 #[derive(serde_derive::Deserialize)]
 struct Config {
     url: String,
     evm_loader_pubkey: String,
     batch_size: usize,
     recent_block_hash_ttl_sec: u64,
+    client_timeout_sec: u64,
 }
 
-const PAYER_KEYPAIR_PATH: &str = "keys.json";
-
-type EthereumContractV1<'a> = AccountData::<'a, ether_contract::DataV1, ether_contract::ExtensionV1<'a>>;
+type EthereumContractV1<'a> = AccountData<'a, ether_contract::DataV1, ether_contract::ExtensionV1<'a>>;
 type ContractsV1Map<'a> = HashMap<&'a Pubkey, EthereumContractV1<'a>>;
 type EtherAddressesMap = HashMap<Pubkey, H160>;
 type DataWrittenMap = HashMap<Pubkey, U256>;
 
 lazy_static::lazy_static! {
-    static ref CONFIG: Config = serde_json::from_reader(File::open("config.json").unwrap()).unwrap();
-    static ref EVM_LOADER: Pubkey = Pubkey::from_str(&CONFIG.evm_loader_pubkey).unwrap();
-    static ref PAYER: Keypair = read_keypair_file(PAYER_KEYPAIR_PATH).unwrap();
+    static ref CONFIG: Config = serde_json::from_reader(
+        File::open("config.json").expect("Failed to open `config.json` file"),
+    ).expect("Failed to parse configuration file");
+    static ref EVM_LOADER: Pubkey = Pubkey::from_str(&CONFIG.evm_loader_pubkey)
+        .expect("Failed to parse `evm_loader_pubkey` in config");
+    static ref PAYER: Keypair = read_keypair_file("payer.keys.json")
+        .expect("Failed to read `payer.keys.json` file");
 }
 
 struct RecentBlockHash<'a> {
@@ -72,6 +95,7 @@ impl <'a> RecentBlockHash<'a> {
         if Instant::now().duration_since(self.time).as_secs() > CONFIG.recent_block_hash_ttl_sec {
             self.hash = self.client.get_latest_blockhash()?;
             self.time = Instant::now();
+            println!("New recent block hash: {}", self.hash);
         }
 
         Ok(&self.hash)
@@ -187,37 +211,44 @@ fn copy_data_to_distributed_storage<'a>(
     result
 }
 
-fn send_batch_slice(client: &jsonrpc::client::Client, batch_slice: &[Transaction]) -> Result<()> {
-    let mut requests_params = Vec::with_capacity(batch_slice.len());
+fn send_batch_slice(client: &JsonRpcClient, batch_slice: &[Transaction]) -> Result<()> {
+    let mut requests = Vec::with_capacity(batch_slice.len());
     for transaction in batch_slice {
         let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)?;
-        requests_params.push([
-            jsonrpc::try_arg(serialized)?,
-            jsonrpc::try_arg(serde_json::json!({ "encoding": "base64" }))?,
-        ]);
+        requests.push(client.request(
+            "sendTransaction",
+            json!([
+                serialized,
+                { "encoding": "base64" },
+            ])
+        ));
     }
 
-    let requests: Vec<Request> = requests_params.iter()
-        .map(|params| client.build_request("sendTransaction", params))
-        .collect();
-
     let responses = client.send_batch(&requests)?;
-    let error_count = responses.iter()
-        .filter_map(|response_opt| response_opt.as_ref()
-            .map(|response| response.error.as_ref()).flatten()
-        )
-        .map(|error| println!("Error: {}", error.message))
-        .count();
-    if error_count == 0 {
-        println!("OK")
+
+    if let Value::Array(responses) = responses {
+        let error_count = responses.into_iter()
+            .filter(|response|
+                if let Value::String(ref error_message) = response["error"]["message"] {
+                    println!("Error: {}", error_message);
+                    true
+                } else {
+                    false
+                }
+            ).count();
+        if error_count == 0 {
+            println!("OK")
+        } else {
+            println!("Error count: {}", error_count);
+        }
     } else {
-        println!("Error count: {}", error_count);
+        println!("Error: {:?}", responses);
     }
 
     Ok(())
 }
 
-fn send_batch(client: &jsonrpc::client::Client, batch: &[Transaction]) -> Result<()> {
+fn send_batch(client: &JsonRpcClient, batch: &[Transaction]) -> Result<()> {
     let mut from = 0;
     while from < batch.len() {
         let mut to = min(from + CONFIG.batch_size, batch.len());
@@ -269,7 +300,7 @@ fn is_data_written<'a>(
 }
 
 fn extract_data_to_distributed_storage(
-    json_rpc_client: &jsonrpc::client::Client,
+    json_rpc_client: &JsonRpcClient,
     recent_block_hash: &mut RecentBlockHash,
     ether_addresses_map: &EtherAddressesMap,
     contracts_v1_map: &ContractsV1Map,
@@ -307,7 +338,7 @@ fn make_convert_to_v2_transaction(pubkey: Pubkey, recent_blockhash: &Hash) -> Tr
 }
 
 fn convert_accounts_to_v2(
-    json_rpc_client: &jsonrpc::client::Client,
+    json_rpc_client: &JsonRpcClient,
     recent_block_hash: &mut RecentBlockHash,
     ether_addresses_map: &EtherAddressesMap,
     contracts_v1_map: &ContractsV1Map,
@@ -360,10 +391,13 @@ fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
 }
 
 fn main() -> Result<()> {
-    let client = RpcClient::new(&CONFIG.url);
-    let json_rpc_client = jsonrpc::client::Client::with_transport(
-        jsonrpc::simple_http::SimpleHttpTransport::builder().url(&CONFIG.url)?.build()
+    println!("Payer public key: {}", PAYER.pubkey());
+
+    let client = RpcClient::new_with_timeout(
+        &CONFIG.url,
+        Duration::from_secs(CONFIG.client_timeout_sec),
     );
+    let json_rpc_client = JsonRpcClient::new(&CONFIG.url);
 
     print!("Querying accounts for Ethereum addresses map... ");
     let ether_addresses_map = obtain_ether_addresses_map(&client)?;
