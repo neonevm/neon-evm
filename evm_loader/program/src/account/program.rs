@@ -1,12 +1,15 @@
 use std::ops::Deref;
 
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
+// ---- Legacy code
+use evm::{H160, H256};
 use evm::backend::Log;
 use solana_program::{
-    program::{invoke, invoke_signed, set_return_data}, rent::Rent,
+    program::{invoke, invoke_signed}, rent::Rent,
     system_instruction, sysvar::Sysvar
 };
 use solana_program::account_info::AccountInfo;
+use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -15,9 +18,6 @@ use crate::account::ACCOUNT_SEED_VERSION;
 
 use super::{EthereumAccount, Operator, sysvar, token};
 
-// ---- Legacy code
-use evm::{H160, H256};
-use solana_program::instruction::Instruction;
 // ---- Legacy code
 
 pub struct Neon<'a> {
@@ -108,9 +108,9 @@ impl<'a> Neon<'a> {
         let used_gas = used_gas.to_le_bytes();
         let fields = [mnemonic.as_slice(),
                       exit_status.as_slice(),
-                      used_gas.as_slice()];
+                      used_gas.as_slice(),
+                      result];
         sol_log_data(&fields);
-        set_return_data(result);
     }
 
     #[allow(clippy::unused_self)]
