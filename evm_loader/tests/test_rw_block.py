@@ -17,7 +17,7 @@ from eth_utils import abi
 from eth_keys import keys as eth_keys
 from solana_utils import account_with_seed, EVM_LOADER, neon_cli, solana_client, TransactionWithComputeBudget, \
     create_account_with_seed, send_transaction, get_solana_balance, \
-    wait_confirm_transaction, ETH_TOKEN_MINT_ID, create_collateral_pool_address, RandomAccount, \
+    wait_confirm_transaction, ETH_TOKEN_MINT_ID, create_treasury_pool_address, RandomAccount, \
     create_neon_evm_instr_19_partial_call, create_neon_evm_instr_20_continue, create_neon_evm_instr_21_cancel, \
     get_transaction_count, keccakprog, ACCOUNT_SEED_VERSION, get_account_data, AccountInfo, ACCOUNT_INFO_LAYOUT, \
     evm_step_cost
@@ -135,7 +135,7 @@ class CollateralPool:
 @pytest.fixture(scope="module")
 def collateral_pool(evm_loader) -> CollateralPool:
     index = 2
-    address = create_collateral_pool_address(index)
+    address = create_treasury_pool_address(index)
     index_buf = index.to_bytes(4, 'little')
     return CollateralPool(index, address, index_buf)
 
@@ -155,7 +155,7 @@ class TestRWBlock:
         neon_evm_instr_19_partial_call = create_neon_evm_instr_19_partial_call(
             self.evm_loader.loader_id,
             caller,
-            acc.public_key(),
+            acc.public_key,
             storage_account,
             self.deployed_acc.id,
             self.deployed_acc.code,
@@ -174,7 +174,7 @@ class TestRWBlock:
         neon_evm_instr_20_continue = create_neon_evm_instr_20_continue(
             self.evm_loader.loader_id,
             caller,
-            acc.public_key(),
+            acc.public_key,
             storage_account,
             self.deployed_acc.id,
             self.deployed_acc.code,
@@ -187,11 +187,11 @@ class TestRWBlock:
         print('neon_evm_instr_20_continue:', neon_evm_instr_20_continue)
         return neon_evm_instr_20_continue
 
-    def neon_emv_instr_cancel_21(self, acc, caller, storage, nonce):
+    def neon_evm_instr_cancel_21(self, acc, caller, storage, nonce):
         neon_evm_instr_21_cancel = create_neon_evm_instr_21_cancel(
             self.evm_loader.loader_id,
             caller,
-            acc.public_key(),
+            acc.public_key,
             storage,
             self.deployed_acc.id,
             self.deployed_acc.code,
@@ -217,11 +217,11 @@ class TestRWBlock:
         trx.add(self.sol_instr_20_continue(storage, steps, writable_code, acc, caller, add_meta))
         return send_transaction(solana_client, trx, acc)
 
-    def get_call_parameters(self, data, acc, caller, caller_ether):
+    def get_call_parameters(self, data, acc: Keypair, caller, caller_ether):
         nonce = get_transaction_count(solana_client, caller)
         tx = {'to': self.deployed_acc.eth, 'value': 0, 'gas': 9999999999, 'gasPrice': 0,
               'nonce': nonce, 'data': data, 'chainId': 111}
-        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key())
+        (from_addr, sign, msg) = make_instruction_data_from_tx(tx, acc.secret_key[:32])
         assert from_addr == caller_ether
         return from_addr, sign, msg, nonce
 
@@ -229,14 +229,14 @@ class TestRWBlock:
         return TransactionInstruction(program_id=keccakprog, data=keccak_instruction, keys=[
             AccountMeta(pubkey=PublicKey(keccakprog), is_signer=False, is_writable=False), ])
 
-    def create_storage_account(self, seed, acc):
+    def create_storage_account(self, seed, acc: Keypair):
         storage = PublicKey(
-            sha256(bytes(acc.public_key()) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
+            sha256(bytes(acc.public_key) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
         print("Storage", storage)
 
         if get_solana_balance(storage) == 0:
             trx = TransactionWithComputeBudget()
-            trx.add(create_account_with_seed(acc.public_key(), acc.public_key(), seed, 10 ** 9, 128 * 1024,
+            trx.add(create_account_with_seed(acc.public_key, acc.public_key, seed, 10 ** 9, 128 * 1024,
                                              PublicKey(EVM_LOADER)))
             send_transaction(solana_client, trx, acc)
 
@@ -261,23 +261,35 @@ class TestRWBlock:
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         data = (func_name + bytes.fromhex("%064x" % 0x1) + bytes.fromhex("%064x" % 0x1))
 
-        from_addr1, sign1, msg1, _ = self.get_call_parameters(data, self.caller1.account, self.caller1,
-                                                              self.caller1.ether)
-        from_addr2, sign2, msg2, _ = self.get_call_parameters(data, self.caller2.account, self.caller2,
-                                                              self.caller2.ether)
+        from_addr1, sign1, msg1, nonce1 = self.get_call_parameters(data, self.caller1.account, self.caller1.address,
+                                                                   self.caller1.ether)
+        from_addr2, sign2, msg2, nonce2 = self.get_call_parameters(data, self.caller2.account, self.caller2.address,
+                                                                   self.caller2.ether)
+        print("FIRST PARAMS")
+        print(from_addr1, sign1, msg1, nonce1)
+        print("SECOND PARAMS")
+        print(from_addr2, sign2, msg2, nonce2)
 
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
 
+        print("INSTRUCTION1 ", instruction1)
+        print("INSTRUCTION2 ", instruction2)
+
         storage1 = self.create_storage_account(sign1[:8].hex(), self.caller1.account)
         storage2 = self.create_storage_account(sign2[1:9].hex(), self.caller1.account)
 
-        result = self.call_begin(storage1, 10, msg1, instruction1, False, self.caller1.account, self.caller1)
-        result = self.call_begin(storage2, 10, msg2, instruction2, False, self.caller1.account, self.caller2)
-        result = self.call_continue(storage1, 10, False, self.caller1.account, self.caller1)
-        result = self.call_continue(storage2, 10, False, self.caller1.account, self.caller2)
-        result1 = self.call_continue(storage1, 1000, False, self.caller1.account, self.caller1)
-        result2 = self.call_continue(storage2, 1000, False, self.caller1.account, self.caller2)
+        print("STORAGE1 ", storage1)
+        print("STORAGE2 ", storage2)
+
+        trx = self.call_begin(storage1, 1, msg1, instruction1, False, self.caller1.account, self.caller1.address)
+        assert trx["result"]["meta"]["err"] is None
+        trx = self.call_begin(storage2, 1, msg2, instruction2, False, self.caller1.account, self.caller2.address)
+        assert trx["result"]["meta"]["err"] is None
+        result = self.call_continue(storage1, 10, False, self.caller1.account, self.caller1.address)
+        result = self.call_continue(storage2, 10, False, self.caller1.account, self.caller2.address)
+        result1 = self.call_continue(storage1, 1000, False, self.caller1.account, self.caller1.address)
+        result2 = self.call_continue(storage2, 1000, False, self.caller1.account, self.caller2.address)
 
         self.check_continue_result(result1["result"])
         self.check_continue_result(result2["result"])
@@ -308,35 +320,25 @@ class TestRWBlock:
         func_name = abi.function_signature_to_4byte_selector('update_storage(uint8)')
         data = (func_name + bytes.fromhex("%064x" % 0x1))
 
-        (from_addr1, sign1, msg1, nonce1) = self.get_call_parameters(data, self.caller1.account, self.caller1,
+        (from_addr1, sign1, msg1, nonce1) = self.get_call_parameters(data, self.caller1.account, self.caller1.address,
                                                                      self.caller1.ether)
-        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(data, self.caller2.account, self.caller2,
+        (from_addr2, sign2, msg2, nonce2) = self.get_call_parameters(data, self.caller2.account, self.caller2.address,
                                                                      self.caller2.ether)
-
         instruction1 = from_addr1 + sign1 + msg1
         instruction2 = from_addr2 + sign2 + msg2
 
         storage1 = self.create_storage_account(sign1[:8].hex(), self.caller1.account)
         storage2 = self.create_storage_account(sign2[1:9].hex(), self.caller1.account)
 
-        result = self.call_begin(storage1, 10, msg1, instruction1, True, self.caller1.account, self.caller1)
+        result = self.call_begin(storage1, 10, msg1, instruction1, True, self.caller1.account, self.caller1.address)
 
-        try:
-            result = self.call_begin(storage2, 10, msg2, instruction2, True, self.caller1.account, self.caller2)
-        except RPCException as err:
-            print("Ok")
-
-            # removing the rw-lock
-            trx = TransactionWithComputeBudget().add(
-                self.neon_emv_instr_cancel_21(self.caller1.account, self.caller1, storage1, nonce1))
-            response = send_transaction(solana_client, trx, self.caller1.account)
-            return
+        with pytest.raises(RPCException):
+            self.call_begin(storage2, 10, msg2, instruction2, True, self.caller1.account, self.caller2.address)
 
         # removing the rw-lock
         trx = TransactionWithComputeBudget().add(
-            self.neon_emv_instr_cancel_21(self.caller1.account, self.caller1, storage1, nonce1))
-        response = send_transaction(solana_client, trx, self.caller1.account)
-        raise AssertionError("error, account was not block")
+            self.neon_evm_instr_cancel_21(self.caller1.account, self.caller1.address, storage1, nonce1))
+        send_transaction(solana_client, trx, self.caller1.account)
 
     def test_writable_flag_from_emulator(self):
         print("\ntest_03_writable_flag_from_emulator")
@@ -385,14 +387,14 @@ class TestRWBlock:
 
         assert meta is not None
 
-        (from_addr, sign, msg, _) = self.get_call_parameters(func_name, self.caller1.account, self.caller1,
+        (from_addr, sign, msg, _) = self.get_call_parameters(func_name, self.caller1.account, self.caller1.address,
                                                              self.caller1.ether)
         instruction = from_addr + sign + msg
         storage = self.create_storage_account(sign[:8].hex(), self.caller1.account)
 
-        self.call_begin(storage, 10, msg, instruction, True, self.caller1.account, self.caller1, meta)
-        self.call_continue(storage, 450, True, self.caller1.account, self.caller1, meta)
-        result = self.call_continue(storage, 550, True, self.caller1.account, self.caller1, meta)
+        self.call_begin(storage, 10, msg, instruction, True, self.caller1.account, self.caller1.address, meta)
+        self.call_continue(storage, 450, True, self.caller1.account, self.caller1.address, meta)
+        result = self.call_continue(storage, 550, True, self.caller1.account, self.caller1.address, meta)
         self.check_continue_result(result["result"])
 
         # 4. "writable" must be False. Contract calls the method of other contract. Contract nonce is not changed
@@ -410,13 +412,13 @@ class TestRWBlock:
         input1 = (func_name + bytes.fromhex("%064x" % 0x1))  # update storage without account resizing
         input2 = (func_name + bytes.fromhex("%064x" % 0x20))  # update storage with account resizing
 
-        (from_addr1, sign1, msg1, _) = self.get_call_parameters(input1, self.caller1.account, self.caller1,
+        (from_addr1, sign1, msg1, _) = self.get_call_parameters(input1, self.caller1.account, self.caller1.address,
                                                                 self.caller1.ether)
         instruction1 = from_addr1 + sign1 + msg1
         storage1 = self.create_storage_account(sign1[:8].hex(), self.caller1.account)
 
         # start first transaction
-        self.call_begin(storage1, 10, msg1, instruction1, True, self.caller1.account, self.caller1)
+        self.call_begin(storage1, 10, msg1, instruction1, True, self.caller1.account, self.caller1.address)
 
         # emulate second transaction
         res = emulate(self.caller2.ether.hex(), self.deployed_acc.eth.hex(), input2.hex(), "")
@@ -463,7 +465,7 @@ class TestRWBlock:
         assert info_data.code_account == PublicKey(self.deployed_acc.code)
 
         # finish first transaction for unlocking accounts
-        self.call_continue(storage1, 1000, True, self.caller1.account, self.caller1)
+        self.call_continue(storage1, 1000, True, self.caller1.account, self.caller1.address)
 
         # before resizing the old code account must have some balance
         assert get_solana_balance(self.deployed_acc.code) != 0

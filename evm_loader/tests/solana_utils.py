@@ -125,7 +125,7 @@ class SplToken:
 spl_cli = SplToken(solana_url)
 
 
-def create_collateral_pool_address(collateral_pool_index):
+def create_treasury_pool_address(collateral_pool_index):
     collateral_seed_prefix = "collateral_seed_"
     seed = collateral_seed_prefix + str(collateral_pool_index)
     return account_with_seed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
@@ -457,8 +457,13 @@ class AccountInfo(NamedTuple):
         return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
 
 
-def get_account_data(solana_client: Client, account: Union[str, PublicKey], expected_length: int) -> bytes:
-    info = solana_client.get_account_info(account, commitment=Confirmed)['result']['value']
+def get_account_data(solana_client: Client, account: Union[str, PublicKey, Keypair], expected_length: int) -> bytes:
+    if isinstance(account, Keypair):
+        account = account.public_key
+    print(f"Get account data for {account}")
+    info = solana_client.get_account_info(account, commitment=Confirmed)
+    print(f"Result: {info}")
+    info = info['result']['value']
     if info is None:
         raise Exception("Can't get information about {}".format(account))
 
