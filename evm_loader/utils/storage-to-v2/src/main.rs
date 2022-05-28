@@ -10,9 +10,11 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use arrayref::array_ref;
 use evm_core::{H160, U256};
 use evm_loader::account::{ACCOUNT_SEED_VERSION, AccountData, ether_account, ether_contract, ether_storage, Packable};
 use evm_loader::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
+use evm_loader::hamt::Hamt;
 use serde_json::{json, Value};
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_client::client_error::Result as ClientResult;
@@ -61,8 +63,14 @@ struct Config {
     client_timeout_sec: u64,
 }
 
+struct ContractV1<'a> {
+    ether_address: H160,
+    owner: &'a Pubkey,
+    storage: &'a Hamt<'a>,
+}
+
 type EthereumContractV1<'a> = AccountData<'a, ether_contract::DataV1, ether_contract::ExtensionV1<'a>>;
-type ContractsV1Map<'a> = HashMap<&'a Pubkey, EthereumContractV1<'a>>;
+type ContractsV1Map<'a> = HashMap<&'a Pubkey, ContractV1<'a>>;
 type EtherAddressesMap = HashMap<Pubkey, H160>;
 type DataWrittenMap = HashMap<Pubkey, U256>;
 
@@ -175,21 +183,18 @@ fn get_evm_accounts(
 }
 
 fn copy_data_to_distributed_storage<'a>(
-    ethereum_contract_v1: &EthereumContractV1<'a>,
-    ether_addresses_map: &EtherAddressesMap,
+    ethereum_contract_v1: &ContractV1<'a>,
     data_written_map: &DataWrittenMap,
     recent_blockhash: &Hash,
 ) -> Vec<Transaction> {
-    let ether_address = ether_addresses_map.get(&ethereum_contract_v1.owner)
-        .expect(&format!("Ethereum address not found for Solana account: {}", ethereum_contract_v1.owner));
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
     let mut result = Vec::new();
-    for (key, value) in ethereum_contract_v1.extension.storage.iter() {
+    for (key, value) in ethereum_contract_v1.storage.iter() {
         if key < storage_entries_in_contract_account {
             continue;
         }
 
-        let storage_address = get_storage_address(ether_address, &key);
+        let storage_address = get_storage_address(&ethereum_contract_v1.ether_address, &key);
         if let Some(stored_value) = data_written_map.get(&storage_address) {
             if stored_value == &value {
                 continue;
@@ -198,7 +203,7 @@ fn copy_data_to_distributed_storage<'a>(
         }
 
         let instructions = vec![
-            write_value_instruction(ethereum_contract_v1.info.key.clone(), key, value),
+            write_value_instruction(ethereum_contract_v1.owner.clone(), key, value),
         ];
         let mut message = Message::new(&instructions, Some(&PAYER.pubkey()));
         message.recent_blockhash = recent_blockhash.clone();
@@ -211,10 +216,11 @@ fn copy_data_to_distributed_storage<'a>(
     result
 }
 
-fn send_batch_slice(client: &JsonRpcClient, batch_slice: &[Transaction]) -> Result<()> {
+fn send_batch_slice(client: &JsonRpcClient, batch_slice: &[Transaction]) {
     let mut requests = Vec::with_capacity(batch_slice.len());
     for transaction in batch_slice {
-        let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)?;
+        let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
+            .expect("Transaction serialization error");
         requests.push(client.request(
             "sendTransaction",
             json!([
@@ -224,63 +230,46 @@ fn send_batch_slice(client: &JsonRpcClient, batch_slice: &[Transaction]) -> Resu
         ));
     }
 
-    let responses = client.send_batch(&requests)?;
-
-    if let Value::Array(responses) = responses {
-        let error_count = responses.into_iter()
-            .filter(|response|
+    match client.send_batch(&requests) {
+        Ok(Value::Array(responses)) => {
+            let mut error_count = 0;
+            for response in responses {
                 if let Value::String(ref error_message) = response["error"]["message"] {
                     println!("Error: {}", error_message);
-                    true
-                } else {
-                    false
+                    error_count += 1;
                 }
-            ).count();
-        if error_count == 0 {
-            println!("OK")
-        } else {
-            println!("Error count: {}", error_count);
+            }
+            if error_count == 0 {
+                println!("OK")
+            } else {
+                println!("Error count: {}", error_count);
+            }
         }
-    } else {
-        println!("Error: {:?}", responses);
+        Ok(response) => println!("Error: {:?}", response),
+        Err(error) => println!("Error: {:?}", error),
     }
-
-    Ok(())
 }
 
-fn send_batch(client: &JsonRpcClient, batch: &[Transaction]) -> Result<()> {
+fn send_batch(client: &JsonRpcClient, batch: &[Transaction]) {
     let mut from = 0;
     while from < batch.len() {
-        let mut to = min(from + CONFIG.batch_size, batch.len());
-        if to + CONFIG.batch_size / 3 >= batch.len() {
-            to = batch.len();
-        }
+        let to = min(from + CONFIG.batch_size, batch.len());
         println!("Sending batch ({}..{} of {} requests)...", from, to, batch.len());
-        send_batch_slice(client, &batch[from..to])?;
+        send_batch_slice(client, &batch[from..to]);
         from = to;
     }
-
-    Ok(())
 }
 
 fn is_data_written<'a>(
-    ether_addresses_map: &EtherAddressesMap,
     data_written_map: &DataWrittenMap,
-    ethereum_contract_v1: &EthereumContractV1,
+    ethereum_contract_v1: &ContractV1,
 ) -> bool {
-    let ether_address = ether_addresses_map.get(&ethereum_contract_v1.owner)
-        .expect(
-            &format!(
-                "Unable to find Ethereum address for solana account: {}",
-                ethereum_contract_v1.owner,
-            )
-        );
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
-    for (key, value) in ethereum_contract_v1.extension.storage.iter() {
+    for (key, value) in ethereum_contract_v1.storage.iter() {
         if key < storage_entries_in_contract_account {
             continue;
         }
-        let solana_address = get_storage_address(&ether_address, &key);
+        let solana_address = get_storage_address(&ethereum_contract_v1.ether_address, &key);
         let stored_value = match data_written_map.get(&solana_address) {
             Some(value) => value,
             None => return false,
@@ -302,7 +291,6 @@ fn is_data_written<'a>(
 fn extract_data_to_distributed_storage(
     json_rpc_client: &JsonRpcClient,
     recent_block_hash: &mut RecentBlockHash,
-    ether_addresses_map: &EtherAddressesMap,
     contracts_v1_map: &ContractsV1Map,
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
@@ -310,19 +298,20 @@ fn extract_data_to_distributed_storage(
     for ethereum_contract_v1 in contracts_v1_map.values() {
         let mut transactions = copy_data_to_distributed_storage(
             ethereum_contract_v1,
-            ether_addresses_map,
             data_written_map,
             recent_block_hash.get()?,
         );
         batch.append(&mut transactions);
 
         if batch.len() >= CONFIG.batch_size {
-            send_batch(&json_rpc_client, &batch)?;
+            send_batch(&json_rpc_client, &batch);
             batch.clear();
         }
     }
 
-    send_batch(&json_rpc_client, &batch)
+    send_batch(&json_rpc_client, &batch);
+
+    Ok(())
 }
 
 fn make_convert_to_v2_transaction(pubkey: Pubkey, recent_blockhash: &Hash) -> Transaction {
@@ -340,41 +329,51 @@ fn make_convert_to_v2_transaction(pubkey: Pubkey, recent_blockhash: &Hash) -> Tr
 fn convert_accounts_to_v2(
     json_rpc_client: &JsonRpcClient,
     recent_block_hash: &mut RecentBlockHash,
-    ether_addresses_map: &EtherAddressesMap,
     contracts_v1_map: &ContractsV1Map,
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
     let mut batch = Vec::new();
 
-    for ethereum_contract_v1 in contracts_v1_map.values() {
-        if is_data_written(ether_addresses_map, data_written_map, &ethereum_contract_v1) {
+    for (pubkey, ethereum_contract_v1) in contracts_v1_map.iter() {
+        if is_data_written(data_written_map, &ethereum_contract_v1) {
             batch.push(
                 make_convert_to_v2_transaction(
-                    ethereum_contract_v1.info.key.clone(),
+                    *pubkey.clone(),
                     recent_block_hash.get()?,
                 ),
             );
             if batch.len() >= CONFIG.batch_size {
-                send_batch(&json_rpc_client, &batch)?;
+                send_batch(&json_rpc_client, &batch);
                 batch.clear();
             }
         }
     }
 
-    send_batch(&json_rpc_client, &batch)
+    send_batch(&json_rpc_client, &batch);
+
+    Ok(())
 }
 
 fn obtain_ether_addresses_map(client: &RpcClient) -> ClientResult<EtherAddressesMap> {
-    get_evm_accounts(
-        client,
-        ether_account::Data::TAG,
-        Some(UiDataSliceConfig { offset: 1, length: size_of::<H160>() }),
-    ).map(|vec| vec.into_iter()
-        .map(|(pubkey, account)| {
-            (pubkey, H160::from_slice(account.data()))
-        })
-        .collect()
-    )
+    fn get_addresses<T: FromIterator<(Pubkey, H160)>>(
+        client: &RpcClient,
+        tag: u8,
+    ) -> ClientResult<T> {
+        get_evm_accounts(
+            client,
+            tag,
+            Some(UiDataSliceConfig { offset: 1, length: size_of::<H160>() }),
+        ).map(|vec| vec.into_iter()
+            .map(|(pubkey, ref account)|
+                (pubkey, H160::from(array_ref!(account.data(), 0, 20)))
+            ).collect()
+        )
+    }
+
+    let mut addresses: EtherAddressesMap = get_addresses(client, ether_account::Data::TAG)?;
+    addresses.extend(get_addresses::<Vec<(Pubkey, H160)>>(client, ether_account::DataV1::TAG)?);
+
+    Ok(addresses)
 }
 
 fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
@@ -390,6 +389,13 @@ fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
     )
 }
 
+fn count_storage_accounts(contracts_v1_map: &ContractsV1Map) -> usize {
+    contracts_v1_map.iter()
+        .map(|(_pubkey, ether_contract)|
+                 ether_contract.storage.iter().count()
+    ).sum()
+}
+
 fn main() -> Result<()> {
     println!("Payer public key: {}", PAYER.pubkey());
 
@@ -400,34 +406,55 @@ fn main() -> Result<()> {
     let json_rpc_client = JsonRpcClient::new(&CONFIG.url);
 
     print!("Querying accounts for Ethereum addresses map... ");
-    let ether_addresses_map = obtain_ether_addresses_map(&client)?;
+    let mut ether_addresses_map = obtain_ether_addresses_map(&client)?;
     println!("OK ({} accounts)", ether_addresses_map.len());
 
     print!("Querying Contract V1 accounts... ");
     let mut contract_v1_accounts = get_evm_accounts(&client, ether_contract::DataV1::TAG, None)?;
     print!("Transforming... ");
+
     let contracts_v1_info: Vec<AccountInfo> = contract_v1_accounts.iter_mut()
         .map(|(pubkey, account)| (&*pubkey, account).into_account_info())
         .collect();
-    let mut contracts_v1_map: ContractsV1Map = contracts_v1_info.iter()
-        .map(|info| (
-            info.key,
-            EthereumContractV1::from_account(&EVM_LOADER, info)
-                .expect(&format!("Cannot decode contract V1 data for account: {}", info.key)),
-        ))
+    let ether_contracts_v1: Vec<(&Pubkey, EthereumContractV1)> = contracts_v1_info.iter()
+        .map(|info| {
+            (
+                info.key,
+                EthereumContractV1::from_account(&EVM_LOADER, info)
+                    .expect(&format!("Cannot decode contract V1 data for account: {}", info.key))
+            )
+        }).collect();
+
+    let mut contracts_v1_map: ContractsV1Map = ether_contracts_v1.iter()
+        .map(|(pubkey, contract_v1)| {
+            let ether_address = ether_addresses_map.remove(&contract_v1.owner)
+                .expect(&format!("Ethereum address not found for Solana account: {}", contract_v1.owner));
+            (
+                *pubkey,
+                ContractV1 {
+                    ether_address,
+                    owner: &contract_v1.owner,
+                    storage: &contract_v1.extension.storage,
+                },
+            )
+        })
         .collect();
-    println!("OK ({} accounts)", contracts_v1_info.len());
+    drop(ether_addresses_map);
+    println!("OK ({} accounts)", contracts_v1_map.len());
+
+    print!("Counting expected infinite storage accounts to be created... ");
+    let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
+    println!("{} accounts", expected_storage_accounts_count);
 
     let mut recent_block_hash = RecentBlockHash::new(&client);
     loop {
-        print!("Querying infinite storage accounts... ");
+        print!("Querying already written infinite storage accounts... ");
         let data_written_map = obtain_data_written_map(&client)?;
         println!("OK ({} values)", data_written_map.len());
 
         extract_data_to_distributed_storage(
             &json_rpc_client,
             &mut recent_block_hash,
-            &ether_addresses_map,
             &contracts_v1_map,
             &data_written_map,
         )?;
@@ -435,7 +462,6 @@ fn main() -> Result<()> {
         convert_accounts_to_v2(
             &json_rpc_client,
             &mut recent_block_hash,
-            &ether_addresses_map,
             &contracts_v1_map,
             &data_written_map,
         )?;
@@ -449,7 +475,7 @@ fn main() -> Result<()> {
             contracts_v1_map.remove(&pubkey);
         }
 
-        if contracts_v1_info.len() == 0 {
+        if contracts_v1_map.len() == 0 {
             return Ok(());
         }
     }

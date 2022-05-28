@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use reqwest::StatusCode;
 use serde_json::json;
 
 #[derive(Debug)]
@@ -44,12 +45,21 @@ impl<'a> JsonRpcClient<'a> {
             .map(|request| request.to_json())
             .collect();
 
-        Ok(
-            reqwest::blocking::Client::new()
-                .post(self.url)
-                .json(&json)
-                .send()?
-                .json()?
+        let response = reqwest::blocking::Client::new()
+            .post(self.url)
+            .json(&json)
+            .send()?;
+
+        if response.status() == StatusCode::OK {
+            return Ok(response.json()?);
+        }
+
+        Err(
+            anyhow!(
+                "HTTP Error: {}, Text: {}",
+                response.status(),
+                response.text().unwrap_or_default(),
+            )
         )
     }
 }

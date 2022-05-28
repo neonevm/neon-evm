@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.57"
+arrayref = "0.3.6"
 evm-loader = { path = "../../program", default-features = false }
 evm-core = { path = "../../rust-evm/core", default-features = false, features = ["with-serde"] }
 lazy_static = "1.4.0"
