@@ -366,8 +366,9 @@ fn obtain_ether_addresses_map(client: &RpcClient) -> ClientResult<EtherAddresses
         )
     }
 
-    let mut addresses: EtherAddressesMap = get_addresses(client, ether_account::Data::TAG)?;
-    addresses.extend(get_addresses::<Vec<(Pubkey, H160)>>(client, ether_account::DataV1::TAG)?);
+    let /*mut*/ addresses: EtherAddressesMap = get_addresses(client, ether_account::Data::TAG)?;
+    // We decided to ignore V1 accounts:
+    // addresses.extend(get_addresses::<Vec<(Pubkey, H160)>>(client, ether_account::DataV1::TAG)?);
 
     Ok(addresses)
 }
@@ -422,17 +423,18 @@ fn main() -> Result<()> {
         }).collect();
 
     let mut contracts_v1_map: ContractsV1Map = ether_contracts_v1.iter()
-        .map(|(pubkey, contract_v1)| {
-            let ether_address = ether_addresses_map.remove(&contract_v1.owner)
-                .expect(&format!("Ethereum address not found for Solana account: {}", contract_v1.owner));
-            (
+        .filter_map(|(pubkey, contract_v1)| {
+            let ether_address = ether_addresses_map.remove(&contract_v1.owner)?;
+                // We decided to ignore V1 accounts:
+                // .expect(&format!("Ethereum address not found for Solana account: {}", contract_v1.owner));
+            Some((
                 *pubkey,
                 ContractV1 {
                     ether_address,
                     owner: &contract_v1.owner,
                     storage: &contract_v1.extension.storage,
                 },
-            )
+            ))
         })
         .collect();
     drop(ether_addresses_map);
