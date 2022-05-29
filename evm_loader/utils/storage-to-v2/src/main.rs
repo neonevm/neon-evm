@@ -1,6 +1,5 @@
 #![allow(deprecated)]
 
-use std::cmp::min;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -35,7 +34,7 @@ use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use solana_transaction_status::UiTransactionEncoding;
 
-use crate::json_rpc::JsonRpcClient;
+use crate::json_rpc::{JsonRpcClient, Request};
 
 mod json_rpc;
 
@@ -107,6 +106,65 @@ impl <'a> RecentBlockHash<'a> {
         }
 
         Ok(&self.hash)
+    }
+}
+
+struct Batch<'url> {
+    client: JsonRpcClient<'url>,
+    batch: Vec<Transaction>,
+    batch_size: usize,
+}
+
+impl<'url> Batch<'url> {
+    pub fn new(client: JsonRpcClient<'url>, batch_size: usize) -> Self {
+        Self {
+            client,
+            batch: Vec::with_capacity(batch_size),
+            batch_size,
+        }
+    }
+
+    pub fn send(&mut self) {
+        println!("Sending batch of {} requests...", self.batch.len());
+        let requests: Vec<Request> = self.batch.iter()
+            .map(|transaction| {
+                let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
+                    .expect("Transaction serialization error");
+                self.client.request(
+                    "sendTransaction",
+                    json!([
+                        serialized,
+                        { "encoding": "base64" },
+                    ])
+                )
+            }).collect();
+
+        match self.client.send_batch(&requests) {
+            Ok(Value::Array(responses)) => {
+                let mut error_count = 0;
+                for response in responses {
+                    if let Value::String(ref error_message) = response["error"]["message"] {
+                        println!("Error: {}", error_message);
+                        error_count += 1;
+                    }
+                }
+                if error_count == 0 {
+                    println!("OK")
+                } else {
+                    println!("Error count: {}", error_count);
+                }
+            }
+            Ok(response) => println!("Error: {:?}", response),
+            Err(error) => println!("Error: {:?}", error),
+        }
+        self.batch.clear();
+    }
+
+    pub fn add(&mut self, transaction: Transaction) {
+        self.batch.push(transaction);
+        if self.batch.len() >= self.batch_size {
+            self.send();
+        }
     }
 }
 
@@ -183,12 +241,12 @@ fn get_evm_accounts(
 }
 
 fn copy_data_to_distributed_storage<'a>(
+    batch: &mut Batch,
     ethereum_contract_v1: &ContractV1<'a>,
     data_written_map: &DataWrittenMap,
     recent_blockhash: &Hash,
-) -> Vec<Transaction> {
+) {
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
-    let mut result = Vec::new();
     for (key, value) in ethereum_contract_v1.storage.iter() {
         if key < storage_entries_in_contract_account {
             continue;
@@ -210,53 +268,7 @@ fn copy_data_to_distributed_storage<'a>(
         let mut transaction = Transaction::new_unsigned(message);
         transaction.sign(&[&*PAYER], recent_blockhash.clone());
 
-        result.push(transaction);
-    }
-
-    result
-}
-
-fn send_batch_slice(client: &JsonRpcClient, batch_slice: &[Transaction]) {
-    let mut requests = Vec::with_capacity(batch_slice.len());
-    for transaction in batch_slice {
-        let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
-            .expect("Transaction serialization error");
-        requests.push(client.request(
-            "sendTransaction",
-            json!([
-                serialized,
-                { "encoding": "base64" },
-            ])
-        ));
-    }
-
-    match client.send_batch(&requests) {
-        Ok(Value::Array(responses)) => {
-            let mut error_count = 0;
-            for response in responses {
-                if let Value::String(ref error_message) = response["error"]["message"] {
-                    println!("Error: {}", error_message);
-                    error_count += 1;
-                }
-            }
-            if error_count == 0 {
-                println!("OK")
-            } else {
-                println!("Error count: {}", error_count);
-            }
-        }
-        Ok(response) => println!("Error: {:?}", response),
-        Err(error) => println!("Error: {:?}", error),
-    }
-}
-
-fn send_batch(client: &JsonRpcClient, batch: &[Transaction]) {
-    let mut from = 0;
-    while from < batch.len() {
-        let to = min(from + CONFIG.batch_size, batch.len());
-        println!("Sending batch ({}..{} of {} requests)...", from, to, batch.len());
-        send_batch_slice(client, &batch[from..to]);
-        from = to;
+        batch.add(transaction);
     }
 }
 
@@ -289,27 +301,19 @@ fn is_data_written<'a>(
 }
 
 fn extract_data_to_distributed_storage(
-    json_rpc_client: &JsonRpcClient,
+    batch: &mut Batch,
     recent_block_hash: &mut RecentBlockHash,
     contracts_v1_map: &ContractsV1Map,
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
-    let mut batch = Vec::with_capacity(CONFIG.batch_size);
     for ethereum_contract_v1 in contracts_v1_map.values() {
-        let mut transactions = copy_data_to_distributed_storage(
+        copy_data_to_distributed_storage(
+            batch,
             ethereum_contract_v1,
             data_written_map,
             recent_block_hash.get()?,
         );
-        batch.append(&mut transactions);
-
-        if batch.len() >= CONFIG.batch_size {
-            send_batch(&json_rpc_client, &batch);
-            batch.clear();
-        }
     }
-
-    send_batch(&json_rpc_client, &batch);
 
     Ok(())
 }
@@ -327,29 +331,21 @@ fn make_convert_to_v2_transaction(pubkey: Pubkey, recent_blockhash: &Hash) -> Tr
 }
 
 fn convert_accounts_to_v2(
-    json_rpc_client: &JsonRpcClient,
+    batch: &mut Batch,
     recent_block_hash: &mut RecentBlockHash,
     contracts_v1_map: &ContractsV1Map,
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
-    let mut batch = Vec::new();
-
     for (pubkey, ethereum_contract_v1) in contracts_v1_map.iter() {
         if is_data_written(data_written_map, &ethereum_contract_v1) {
-            batch.push(
+            batch.add(
                 make_convert_to_v2_transaction(
                     *pubkey.clone(),
                     recent_block_hash.get()?,
                 ),
             );
-            if batch.len() >= CONFIG.batch_size {
-                send_batch(&json_rpc_client, &batch);
-                batch.clear();
-            }
         }
     }
-
-    send_batch(&json_rpc_client, &batch);
 
     Ok(())
 }
@@ -403,7 +399,7 @@ fn main() -> Result<()> {
         &CONFIG.url,
         Duration::from_secs(CONFIG.client_timeout_sec),
     );
-    let json_rpc_client = JsonRpcClient::new(&CONFIG.url);
+    let mut batch = Batch::new(JsonRpcClient::new(&CONFIG.url), CONFIG.batch_size);
 
     print!("Querying accounts for Ethereum addresses map... ");
     let mut ether_addresses_map = obtain_ether_addresses_map(&client)?;
@@ -453,18 +449,20 @@ fn main() -> Result<()> {
         println!("OK ({} values)", data_written_map.len());
 
         extract_data_to_distributed_storage(
-            &json_rpc_client,
+            &mut batch,
             &mut recent_block_hash,
             &contracts_v1_map,
             &data_written_map,
         )?;
 
         convert_accounts_to_v2(
-            &json_rpc_client,
+            &mut batch,
             &mut recent_block_hash,
             &contracts_v1_map,
             &data_written_map,
         )?;
+
+        batch.send();
 
         let contracts_v2 = get_evm_accounts(
             &client,
