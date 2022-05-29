@@ -144,6 +144,7 @@ impl<'a> Neon<'a> {
         assert!(log.topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]
         let nt = log.topics.len() as u8;
+        let count_topics = log.topics.len().to_le_bytes();
         let empty = [] as [u8; 0];
 
         let mnemonic = [b'L', b'O', b'G', b'0' + nt];
@@ -153,6 +154,7 @@ impl<'a> Neon<'a> {
         let t4 = if nt < 4 { &empty } else { log.topics[3].as_bytes() };
         let fields = [mnemonic.as_slice(),
                       log.address.as_bytes(),
+                      count_topics.as_slice(),
                       t1,
                       t2,
                       t3,
