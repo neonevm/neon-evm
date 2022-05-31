@@ -3,9 +3,10 @@ version: "2.1"
 services:
   solana:
     container_name: solana
-    image: neonlabsorg/solana:v1.9.12-testnet-with_trx_cap
+    image: ${EVM_LOADER_IMAGE}
     environment:
       - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
+      - SOLANA_URL=http://127.0.0.1:8899
     hostname: solana
     ports:
       - 8899:8899
@@ -17,6 +18,8 @@ services:
       - "9900"
       - "8900"
       - "8003/udp"
+    entrypoint:
+      /opt/solana/bin/solana-run-neon.sh
 
 #  proxy:
 #    container_name: proxy
@@ -32,4 +35,3 @@ services:
 networks:
   default:
     name: evm_loader-deploy_test-net
-

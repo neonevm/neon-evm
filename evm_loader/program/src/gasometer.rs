@@ -27,20 +27,30 @@ const EVM_STEPS_MIN: u64 = 500;
 const EVM_STEP_COST: u64 = (LAMPORTS_PER_SIGNATURE / EVM_STEPS_MIN) + (PAYMENT_TO_TREASURE / EVM_STEPS_MIN);
 
 pub struct Gasometer {
+    paid_gas: U256,
     gas: u64,
     rent: Rent
 }
 
 impl Gasometer {
-    pub fn new() -> Result<Self, ProgramError> {
+    pub fn new(paid_gas: Option<U256>) -> Result<Self, ProgramError> {
         let rent = Rent::get()?;
 
-        Ok( Self { gas: 0_u64, rent } )
+        Ok( Self { 
+            paid_gas: paid_gas.unwrap_or(U256::zero()), 
+            gas: 0_u64, 
+            rent,
+        } )
     }
 
     #[must_use]
     pub fn used_gas(&self) -> U256 {
         U256::from(self.gas)
+    }
+
+    #[must_use]
+    pub fn used_gas_total(&self) -> U256 {
+        self.paid_gas.saturating_add(U256::from(self.gas))
     }
 
     pub fn record_iterative_overhead(&mut self) {
