@@ -173,6 +173,7 @@ impl<'url> Batch<'url> {
 
 fn write_value_instruction(
     ether_account: Pubkey,
+    storage_address: Pubkey,
     key: U256,
     value: U256,
 ) -> Instruction {
@@ -187,6 +188,7 @@ fn write_value_instruction(
             AccountMeta::new_readonly(PAYER.pubkey(), true),         // Operator
             AccountMeta::new_readonly(system_program::id(), false),  // System program
             AccountMeta::new_readonly(ether_account, false),         // Ether account
+            AccountMeta::new(storage_address, false),                // Storage account
         ],
     )
 }
@@ -251,7 +253,7 @@ fn copy_data_to_distributed_storage<'a>(
 ) {
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
     for (key, value) in ethereum_contract_v1.storage.iter() {
-        if key < storage_entries_in_contract_account {
+        if key < storage_entries_in_contract_account || value.is_zero() {
             continue;
         }
 
@@ -264,7 +266,7 @@ fn copy_data_to_distributed_storage<'a>(
         }
 
         let instructions = vec![
-            write_value_instruction(ethereum_contract_v1.owner.clone(), key, value),
+            write_value_instruction(ethereum_contract_v1.owner.clone(), storage_address, key, value),
         ];
         let mut message = Message::new(&instructions, Some(&PAYER.pubkey()));
         message.recent_blockhash = recent_blockhash.clone();
@@ -394,7 +396,7 @@ fn count_storage_accounts(contracts_v1_map: &ContractsV1Map) -> usize {
     contracts_v1_map.values()
         .map(|ether_contract|
                  ether_contract.storage.iter()
-                     .filter(|(key, _value)| *key >= storage_entries_in_contract_account)
+                     .filter(|(key, value)| *key >= storage_entries_in_contract_account && !value.is_zero())
                      .count()
     ).sum()
 }

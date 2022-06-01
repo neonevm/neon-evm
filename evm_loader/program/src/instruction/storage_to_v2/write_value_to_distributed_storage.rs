@@ -19,6 +19,7 @@ enum AccountIndexes {
     Operator,
     SystemProgram,
     EthereumAccount,
+    StorageAccount,
 }
 
 struct InstructionData {
@@ -60,7 +61,7 @@ fn write_to_storage<'a>(
     system_program: &program::System<'a>,
     program_id: &Pubkey,
     operator: &Operator<'a>,
-    accounts: &'a [AccountInfo<'a>],
+    storage_account: &'a AccountInfo<'a>,
     address: &H160,
     index: &U256,
     value: U256,
@@ -69,25 +70,20 @@ fn write_to_storage<'a>(
     index.to_little_endian(&mut index_bytes);
 
     let mut seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &[0; size_of::<u32>()], &index_bytes];
+    let bump_seed = [Pubkey::find_program_address(&seeds, program_id).1];
+    seeds.push(&bump_seed);
 
-    let (solana_address, bump_seed) = Pubkey::find_program_address(&seeds, program_id);
-    let account = accounts.iter().find(|account| *account.key == solana_address)
-        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", solana_address))?;
-
-    if !solana_program::system_program::check_id(account.owner) {
-        return Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", account.key);
+    if !solana_program::system_program::check_id(storage_account.owner) {
+        return Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", storage_account.key);
     }
 
     if value.is_zero() {
         return Ok(());
     }
 
-    let bump_seed = [bump_seed];
-    seeds.push(&bump_seed);
+    system_program.create_pda_account(program_id, operator, storage_account, &seeds, EthereumStorage::SIZE)?;
 
-    system_program.create_pda_account(program_id, operator, account, &seeds, EthereumStorage::SIZE)?;
-
-    EthereumStorage::init(account, crate::account::ether_storage::Data { value })?;
+    EthereumStorage::init(storage_account, crate::account::ether_storage::Data { value })?;
 
     Ok(())
 }
@@ -129,7 +125,7 @@ pub fn process<'a>(
         &system_program,
         program_id,
         &operator,
-        accounts,
+        &accounts[AccountIndexes::StorageAccount as usize],
         &ethereum_account.address,
         &parsed_instruction_data.index,
         parsed_instruction_data.value,
