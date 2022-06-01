@@ -81,18 +81,9 @@ fn convert_to_v2<'a>(
     }
 
     if account_info.lamports() > balance_needed {
-        solana_program::program::invoke(
-            &solana_program::system_instruction::transfer(
-                account_info.key,
-                funding_account.key,
-                account_info.lamports() - balance_needed,
-            ),
-            &[
-                funding_account.clone(),
-                account_info.clone(),
-                system_program.clone(),
-            ],
-        )?;
+        let diff = account_info.lamports().saturating_sub(balance_needed);
+        **account_info.lamports.borrow_mut() = balance_needed;
+        **funding_account.lamports.borrow_mut() += diff;
     }
 
     #[cfg(target_arch = "bpf")]
