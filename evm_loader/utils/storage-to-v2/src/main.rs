@@ -125,6 +125,9 @@ impl<'url> Batch<'url> {
     }
 
     pub fn send(&mut self) {
+        if self.batch.len() == 0 {
+            return;
+        }
         println!("Sending batch of {} requests...", self.batch.len());
         let requests: Vec<Request> = self.batch.iter()
             .map(|transaction| {
@@ -272,7 +275,7 @@ fn copy_data_to_distributed_storage<'a>(
     }
 }
 
-fn is_data_written<'a>(
+fn is_all_data_written<'a>(
     data_written_map: &DataWrittenMap,
     ethereum_contract_v1: &ContractV1,
 ) -> bool {
@@ -337,7 +340,7 @@ fn convert_accounts_to_v2(
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
     for (pubkey, ethereum_contract_v1) in contracts_v1_map.iter() {
-        if is_data_written(data_written_map, &ethereum_contract_v1) {
+        if is_all_data_written(data_written_map, &ethereum_contract_v1) {
             batch.add(
                 make_convert_to_v2_transaction(
                     *pubkey.clone(),
@@ -387,14 +390,18 @@ fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
 }
 
 fn count_storage_accounts(contracts_v1_map: &ContractsV1Map) -> usize {
-    contracts_v1_map.iter()
-        .map(|(_pubkey, ether_contract)|
-                 ether_contract.storage.iter().count()
+    let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
+    contracts_v1_map.values()
+        .map(|ether_contract|
+                 ether_contract.storage.iter()
+                     .filter(|(key, _value)| *key >= storage_entries_in_contract_account)
+                     .count()
     ).sum()
 }
 
 fn main() -> Result<()> {
     println!("Payer public key: {}", PAYER.pubkey());
+    println!("Payer public key: {:?}", PAYER.pubkey().as_ref());
 
     let client = RpcClient::new_with_timeout(
         &CONFIG.url,
@@ -408,7 +415,7 @@ fn main() -> Result<()> {
 
     print!("Querying Contract V1 accounts... ");
     let mut contract_v1_accounts = get_evm_accounts(&client, ether_contract::DataV1::TAG, None)?;
-    print!("Transforming... ");
+    print!("Queried {} accounts. Transforming... ", contract_v1_accounts.len());
 
     let contracts_v1_info: Vec<AccountInfo> = contract_v1_accounts.iter_mut()
         .map(|(pubkey, account)| (&*pubkey, account).into_account_info())
