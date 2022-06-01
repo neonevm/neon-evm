@@ -283,7 +283,7 @@ fn is_all_data_written<'a>(
 ) -> bool {
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
     for (key, value) in ethereum_contract_v1.storage.iter() {
-        if key < storage_entries_in_contract_account {
+        if key < storage_entries_in_contract_account || value.is_zero() {
             continue;
         }
         let solana_address = get_storage_address(&ethereum_contract_v1.ether_address, &key);
@@ -457,6 +457,7 @@ fn main() -> Result<()> {
         print!("Querying already written infinite storage accounts... ");
         let data_written_map = obtain_data_written_map(&client)?;
         println!("OK ({} values)", data_written_map.len());
+        println!("Accounts to convert: {}", contracts_v1_map.len());
 
         extract_data_to_distributed_storage(
             &mut batch,
@@ -474,14 +475,22 @@ fn main() -> Result<()> {
 
         batch.send();
 
+        print!("Querying converted storage accounts... ");
         let contracts_v2 = get_evm_accounts(
             &client,
             ether_contract::Data::TAG,
             Some(UiDataSliceConfig { offset: 0, length: 0 }),
         )?;
+        println!("OK ({} accounts)", contracts_v2.len());
+
+        print!("Removing converted accounts... ");
+        let mut removed = 0;
         for (pubkey, _account) in contracts_v2 {
-            contracts_v1_map.remove(&pubkey);
+            if contracts_v1_map.remove(&pubkey).is_some() {
+                removed += 1;
+            }
         }
+        println!("{} accounts removed", removed);
 
         if contracts_v1_map.len() == 0 {
             return Ok(());
