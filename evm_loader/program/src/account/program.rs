@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
 // ---- Legacy code
-use evm::{H160, H256};
+//use evm::{H160, H256};
 use evm::backend::Log;
 use solana_program::{
     program::{invoke, invoke_signed}, rent::Rent,
@@ -118,6 +118,7 @@ impl<'a> Neon<'a> {
         debug_print!("on_event");
 
         // ---- Legacy code
+        /*
         let instruction = {
             use core::mem::size_of;
             let capacity = size_of::<u8>()
@@ -139,6 +140,7 @@ impl<'a> Neon<'a> {
         };
         let r = invoke(&instruction, &[self.info.clone()]);
         assert!(r.is_ok());
+        */
         // ---- Legacy code
 
         assert!(log.topics.len() < 5);
