@@ -1,5 +1,7 @@
+use std::mem::size_of;
+
 use arrayref::{array_ref, array_refs};
-use evm::U256;
+use evm::{H160, U256};
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -8,9 +10,8 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
-use crate::account::{EthereumAccount, Operator, program};
-use crate::account_storage::ProgramAccountStorage;
-use crate::config::{chain_id, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
+use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::error::EvmLoaderError;
 use crate::instruction::storage_to_v2::OPERATOR_PUBKEY;
 
@@ -55,6 +56,42 @@ impl InstructionData {
     }
 }
 
+fn write_to_storage<'a>(
+    system_program: &program::System<'a>,
+    program_id: &Pubkey,
+    operator: &Operator<'a>,
+    accounts: &'a [AccountInfo<'a>],
+    address: &H160,
+    index: &U256,
+    value: U256,
+) -> ProgramResult {
+    let mut index_bytes = [0_u8; 32];
+    index.to_little_endian(&mut index_bytes);
+
+    let mut seeds: Vec<&[u8]> = vec![&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &[0; size_of::<u32>()], &index_bytes];
+
+    let (solana_address, bump_seed) = Pubkey::find_program_address(&seeds, program_id);
+    let account = accounts.iter().find(|account| *account.key == solana_address)
+        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", solana_address))?;
+
+    if !solana_program::system_program::check_id(account.owner) {
+        return Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", account.key);
+    }
+
+    if value.is_zero() {
+        return Ok(());
+    }
+
+    let bump_seed = [bump_seed];
+    seeds.push(&bump_seed);
+
+    system_program.create_pda_account(program_id, operator, account, &seeds, EthereumStorage::SIZE)?;
+
+    EthereumStorage::init(account, crate::account::ether_storage::Data { value })?;
+
+    Ok(())
+}
+
 /// Processes the writing of one single value to the distributed storage.
 pub fn process<'a>(
     program_id: &'a Pubkey,
@@ -72,13 +109,6 @@ pub fn process<'a>(
 
     validate(&ethereum_account, &parsed_instruction_data)?;
 
-    let mut account_storage = ProgramAccountStorage::new(
-        program_id,
-        accounts,
-        crate::config::token_mint::id(),
-        chain_id().as_u64(),
-    )?;
-
     let operator = unsafe {
         Operator::from_account_not_whitelisted(&accounts[AccountIndexes::Operator as usize])
     }?;
@@ -95,12 +125,14 @@ pub fn process<'a>(
         &accounts[AccountIndexes::SystemProgram as usize],
     )?;
 
-    account_storage.update_storage_infinite(
-        ethereum_account.address,
-        parsed_instruction_data.index,
-        parsed_instruction_data.value,
-        &operator,
+    write_to_storage(
         &system_program,
+        program_id,
+        &operator,
+        accounts,
+        &ethereum_account.address,
+        &parsed_instruction_data.index,
+        parsed_instruction_data.value,
     )
 }
 

@@ -180,7 +180,7 @@ fn write_value_instruction(
     key.to_big_endian(&mut data[1..33]);
     value.to_big_endian(&mut data[33..]);
 
-    Instruction::new_with_bincode(
+    Instruction::new_with_bytes(
         EVM_LOADER.clone(),
         &data,
         vec![
@@ -194,7 +194,7 @@ fn write_value_instruction(
 fn convert_to_v2_instruction(
     ether_account: Pubkey,
 ) -> Instruction {
-    Instruction::new_with_bincode(
+    Instruction::new_with_bytes(
         EVM_LOADER.clone(),
         &[29u8],
         vec![
