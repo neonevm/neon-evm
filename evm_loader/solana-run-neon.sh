@@ -5,7 +5,7 @@ set -e
 SOLANA_BIN=/opt/solana/bin
 NEON_BIN=/opt
 
-DEPLOY_EVM_IN_GENESIS = "${DEPLOY_IN_GENESIS:-YES}"
+DEPLOY_EVM_IN_GENESIS="${DEPLOY_IN_GENESIS:-YES}"
 
 function deploy_tokens() {
     # deploy tokens needed by Neon EVM
