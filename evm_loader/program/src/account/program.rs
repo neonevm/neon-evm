@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
-// ---- Legacy code
-//use evm::{H160, H256};
+use evm::{H160, /*H256*/};
 use evm::backend::Log;
 use solana_program::{
     program::{invoke, invoke_signed}, rent::Rent,
@@ -17,8 +16,6 @@ use solana_program::pubkey::Pubkey;
 use crate::account::ACCOUNT_SEED_VERSION;
 
 use super::{EthereumAccount, Operator, sysvar, token};
-
-// ---- Legacy code
 
 pub struct Neon<'a> {
     info: &'a AccountInfo<'a>
@@ -118,29 +115,28 @@ impl<'a> Neon<'a> {
         debug_print!("on_event");
 
         // ---- Legacy code
-        /*
         let instruction = {
             use core::mem::size_of;
             let capacity = size_of::<u8>()
                 + size_of::<H160>()  // address
-                + size_of::<usize>() // topics.len
-                + log.topics.len() * size_of::<H256>()
+                //+ size_of::<usize>() // topics.len
+                //+ log.topics.len() * size_of::<H256>()
                 + log.data.len();
 
             let mut data = Vec::with_capacity(capacity);
             data.push(7_u8);
             data.extend_from_slice(log.address.as_bytes());
-            data.extend_from_slice(&log.topics.len().to_le_bytes());
-            for topic in &log.topics {
-                data.extend_from_slice(topic.as_bytes());
-            }
+            data.extend_from_slice(&0_usize.to_le_bytes());
+            //data.extend_from_slice(&log.topics.len().to_le_bytes());
+            //for topic in &log.topics {
+            //    data.extend_from_slice(topic.as_bytes());
+            //}
             data.extend(&log.data);
 
             Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
         };
         let r = invoke(&instruction, &[self.info.clone()]);
         assert!(r.is_ok());
-        */
         // ---- Legacy code
 
         assert!(log.topics.len() < 5);
