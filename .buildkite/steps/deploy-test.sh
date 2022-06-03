@@ -10,7 +10,7 @@ case "${option}" in
 esac
 done
 
-EVM_LOADER_IMAGE=neonlabsorg/evm_loader:${IMAGETAG:-${BUILDKITE_COMMIT}}
+export EVM_LOADER_IMAGE=neonlabsorg/evm_loader:${IMAGETAG:-${BUILDKITE_COMMIT}}
 
 echo "Currently runned Docker-containers"
 docker ps -a
@@ -18,13 +18,13 @@ docker ps -a
 function cleanup_docker {
     docker logs solana >solana.log 2>&1
     echo "Cleanup docker-compose..."
-    docker-compose -f evm_loader/docker-compose-test.yml down --timeout 60
+    docker-compose -f evm_loader/docker-compose-test.yml down --timeout 1
     echo "Cleanup docker-compose done."
 }
 trap cleanup_docker EXIT
 
 echo "\nCleanup docker-compose..."
-docker-compose -f evm_loader/docker-compose-test.yml down
+docker-compose -f evm_loader/docker-compose-test.yml down --timeout 1
 
 if ! docker-compose -f evm_loader/docker-compose-test.yml up -d; then
     echo "docker-compose failed to start"
@@ -32,13 +32,10 @@ if ! docker-compose -f evm_loader/docker-compose-test.yml up -d; then
 fi
 
 # waiting for solana to launch
-sleep 10
+# sleep 10
 
 echo "Run tests..."
-docker run --rm --network evm_loader-deploy_test-net -ti \
-     -e SOLANA_URL=http://solana:8899 \
-     ${EXTRA_ARGS:-} \
-     $EVM_LOADER_IMAGE 'deploy-test.sh'
+docker exec -ti solana '/opt/deploy-test.sh'
 echo "Run tests return"
 
 exit $?

@@ -120,7 +120,7 @@ class BlockHashesTest(unittest.TestCase):
         '''
         slot_hash = {}
         current_slot = client.get_slot()["result"]
-        for slot in range(max(current_slot - 100, 0), current_slot):
+        for slot in range(max(current_slot - 100, 10), current_slot):
             hash_val = base58.b58decode(client.get_confirmed_block(slot)['result']['blockhash']).hex()
             slot_hash[int(slot)] = hash_val
         return slot_hash
