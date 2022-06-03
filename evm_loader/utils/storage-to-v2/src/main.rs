@@ -61,6 +61,7 @@ struct Config {
     recent_block_hash_ttl_sec: u64,
     client_timeout_sec: u64,
     show_errors: bool,
+    skip_preflight: bool,
 }
 
 struct ContractV1<'a> {
@@ -142,7 +143,7 @@ impl<'url> Batch<'url> {
                     json!([
                         serialized,
                         {
-                            "skipPreflight": true,
+                            "skipPreflight": CONFIG.skip_preflight,
                             "preflightCommitment": "confirmed",
                             "encoding": "base64",
                         },
