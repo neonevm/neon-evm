@@ -60,6 +60,7 @@ struct Config {
     batch_size: usize,
     recent_block_hash_ttl_sec: u64,
     client_timeout_sec: u64,
+    show_errors: bool,
 }
 
 struct ContractV1<'a> {
@@ -128,7 +129,10 @@ impl<'url> Batch<'url> {
         if self.batch.len() == 0 {
             return;
         }
-        println!("Sending batch of {} requests...", self.batch.len());
+        print!("Sending batch of {} requests... ", self.batch.len());
+        if CONFIG.show_errors {
+            println!();
+        }
         let requests: Vec<Request> = self.batch.iter()
             .map(|transaction| {
                 let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
@@ -137,7 +141,11 @@ impl<'url> Batch<'url> {
                     "sendTransaction",
                     json!([
                         serialized,
-                        { "encoding": "base64" },
+                        {
+                            "skipPreflight": true,
+                            "preflightCommitment": "confirmed",
+                            "encoding": "base64",
+                        },
                     ])
                 )
             }).collect();
@@ -147,14 +155,16 @@ impl<'url> Batch<'url> {
                 let mut error_count = 0;
                 for response in responses {
                     if let Value::String(ref error_message) = response["error"]["message"] {
-                        println!("Error: {}", error_message);
+                        if CONFIG.show_errors {
+                            println!("Error: {}", error_message);
+                        }
                         error_count += 1;
                     }
                 }
                 if error_count == 0 {
                     println!("OK")
                 } else {
-                    println!("Error count: {}", error_count);
+                    println!("{} error(s)", error_count);
                 }
             }
             Ok(response) => println!("Error: {:?}", response),
