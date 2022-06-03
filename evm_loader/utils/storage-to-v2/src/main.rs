@@ -412,7 +412,7 @@ fn count_storage_accounts(contracts_v1_map: &ContractsV1Map) -> usize {
 }
 
 fn main() -> Result<()> {
-    println!("Payer public key: {}, array: {:?}", PAYER.pubkey(), PAYER.pubkey().as_ref());
+    println!("Payer public key: {}", PAYER.pubkey());
 
     let client = RpcClient::new_with_timeout(
         &CONFIG.url,
