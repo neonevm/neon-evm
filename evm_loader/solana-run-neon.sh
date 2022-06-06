@@ -5,9 +5,11 @@ set -e
 SOLANA_BIN=/opt/solana/bin
 NEON_BIN=/opt
 
+DEPLOY_EVM_IN_GENESIS="${DEPLOY_IN_GENESIS:-YES}"
+
 function deploy_tokens() {
     # deploy tokens needed by Neon EVM
-    export SKIP_EVM_DEPLOY="YES"
+    export SKIP_EVM_DEPLOY=$DEPLOY_EVM_IN_GENESIS
     export SOLANA_URL=http://127.0.0.1:8899
 
     cd ${NEON_BIN}
@@ -27,9 +29,11 @@ EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
 
 cp ${EVM_LOADER_PATH} .
 
-NEON_BPF_ARGS=(
-    --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
-)
+if [[ "$DEPLOY_EVM_IN_GENESIS" == "YES" ]]; then
+  NEON_BPF_ARGS=(
+      --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
+  )
+fi
 
 NEON_VALIDATOR_ARGS=(
     --gossip-host $(hostname -i)

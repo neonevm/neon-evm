@@ -4,11 +4,11 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use crate::account;
-use crate::account::{EthereumAccount, Operator, program, Storage, FinalizedStorage, Treasury};
+use crate::account::{EthereumAccount, Operator, program, State, FinalizedState, Treasury};
 use crate::account_storage::{ProgramAccountStorage};
 use crate::executor::Machine;
 use crate::executor_state::{ApplyState};
-use crate::storage_account::Deposit;
+use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, UnsignedTransaction};
 use crate::error::EvmLoaderError;
 
@@ -30,14 +30,14 @@ pub fn is_new_transaction<'a>(
 ) -> Result<bool, ProgramError> {
     match account::tag(program_id, storage_info)? {
         account::TAG_EMPTY => Ok(true),
-        FinalizedStorage::TAG => {
-            if FinalizedStorage::from_account(program_id, storage_info)?.is_outdated(signature, caller) {
+        FinalizedState::TAG => {
+            if FinalizedState::from_account(program_id, storage_info)?.is_outdated(signature, caller) {
                 Ok(true)
             } else {
                 return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
             }
         },
-        Storage::TAG => Ok(false),
+        State::TAG => Ok(false),
         _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
     }
 }
@@ -45,7 +45,7 @@ pub fn is_new_transaction<'a>(
 pub fn do_begin<'a>(
     step_count: u64,
     accounts: Accounts<'a>,
-    mut storage: Storage<'a>,
+    mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     trx: UnsignedTransaction,
     caller: H160,
@@ -89,7 +89,7 @@ pub fn do_begin<'a>(
 pub fn do_continue<'a>(
     step_count: u64,
     accounts: Accounts<'a>,
-    mut storage: Storage<'a>,
+    mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
@@ -108,7 +108,7 @@ type EvmResults = (Vec<u8>, ExitReason, Option<ApplyState>);
 fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
     step_count: u64,
-    storage: &mut Storage
+    storage: &mut State
 ) -> (Option<EvmResults>, U256) {
 
     match executor.execute_n_steps(step_count) {
@@ -135,7 +135,7 @@ fn execute_steps(
 fn pay_gas_cost<'a>(
     used_gas: U256,
     operator_ether_account: EthereumAccount<'a>,
-    storage: &mut Storage<'a>,
+    storage: &mut State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
     debug_print!("pay_gas_cost {}", used_gas);
@@ -157,7 +157,7 @@ fn pay_gas_cost<'a>(
 
 fn finalize<'a>(
     accounts: Accounts<'a>,
-    mut storage: Storage<'a>,
+    mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     results: Option<EvmResults>,
     used_gas: U256,

@@ -1,7 +1,7 @@
 use crate::{
     config::OPERATOR_PRIORITY_SLOTS,
     error::EvmLoaderError,
-    account::{Storage, FinalizedStorage, Operator, Incinerator, program},
+    account::{State, FinalizedState, Operator, Incinerator, program},
     transaction::UnsignedTransaction,
 };
 use evm::{H160, U256};
@@ -22,7 +22,7 @@ pub enum Deposit<'a> {
 }
 
 
-impl <'a> FinalizedStorage<'a> {
+impl <'a> FinalizedState<'a> {
     #[must_use]
     pub fn is_outdated(&self, signature: &[u8; 65], caller: &H160)  -> bool {
         self.sender != *caller || self.signature.ne(signature)
@@ -30,7 +30,7 @@ impl <'a> FinalizedStorage<'a> {
 }
 
 
-impl<'a> Storage<'a> {
+impl<'a> State<'a> {
     pub fn new(
         program_id: &'a Pubkey,
         info: &'a AccountInfo<'a>,
@@ -39,7 +39,7 @@ impl<'a> Storage<'a> {
         trx: &UnsignedTransaction,
         signature: &[u8; 65]
     ) -> Result<Self, ProgramError> {
-        let data = crate::account::storage::Data {
+        let data = crate::account::state::Data {
             caller,
             nonce: trx.nonce,
             gas_limit: trx.gas_limit,
@@ -56,10 +56,10 @@ impl<'a> Storage<'a> {
 
         let mut storage = match crate::account::tag(program_id, info)? {
             crate::account::TAG_EMPTY => {
-                Storage::init(info, data)
+                State::init(info, data)
             }
-            FinalizedStorage::TAG => {
-                let finalized_storage = FinalizedStorage::from_account(program_id, info)?;
+            FinalizedState::TAG => {
+                let finalized_storage = FinalizedState::from_account(program_id, info)?;
                 assert!(finalized_storage.is_outdated(signature, &caller));
 
                 unsafe { finalized_storage.replace(data) }
@@ -79,14 +79,14 @@ impl<'a> Storage<'a> {
         accounts: &[AccountInfo],
     ) -> Result<Self, ProgramError> {
         let account_tag = crate::account::tag(program_id, info)?;
-        if account_tag == FinalizedStorage::TAG {
+        if account_tag == FinalizedState::TAG {
             return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
         }
         if account_tag == crate::account::TAG_EMPTY {
             return Err!(EvmLoaderError::StorageAccountUninitialized.into(); "Account {} - Storage Uninitialized", info.key);
         }
 
-        let mut storage = Storage::from_account(program_id, info)?;
+        let mut storage = State::from_account(program_id, info)?;
         storage.check_accounts(accounts)?;
 
         let clock = Clock::get()?;
@@ -102,7 +102,7 @@ impl<'a> Storage<'a> {
         Ok(storage)
     }
 
-    pub fn finalize(self, deposit: Deposit<'a>) -> Result<FinalizedStorage<'a>, ProgramError> {
+    pub fn finalize(self, deposit: Deposit<'a>) -> Result<FinalizedState<'a>, ProgramError> {
         solana_program::msg!("Finalize Storage {}", self.info.key);
 
         match deposit {
@@ -110,7 +110,7 @@ impl<'a> Storage<'a> {
             Deposit::Burn(incinerator) => self.withdraw_deposit(&incinerator),
         }?;
 
-        let finalized_data = crate::account::storage::FinalizedData {
+        let finalized_data = crate::account::state::FinalizedData {
             sender: self.caller,
             signature: self.signature,
         };
