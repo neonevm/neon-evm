@@ -7,11 +7,11 @@ use solana_program::{
     program_error::ProgramError,
 };
 use crate::{
-    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE},
+    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     executor_state::ExecutorState,
     transaction::UnsignedTransaction, 
-    account::{EthereumAccount, ERC20Allowance}
+    account::{EthereumAccount, ERC20Allowance, EthereumStorage}
 };
 use solana_program::{program_pack::Pack, pubkey::Pubkey};
 use spl_associated_token_account::get_associated_token_address;
@@ -25,7 +25,6 @@ const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
 
 const EVM_STEPS_MIN: u64 = 500;
 const EVM_STEP_COST: u64 = (LAMPORTS_PER_SIGNATURE / EVM_STEPS_MIN) + (PAYMENT_TO_TREASURE / EVM_STEPS_MIN);
-const STORAGE_ENTRY_BYTES: usize = 100; // ~90, round up to 100.
 
 pub struct Gasometer {
     paid_gas: U256,
@@ -88,19 +87,25 @@ impl Gasometer {
         self.record_evm_steps(EVM_STEPS_MIN - steps);
     }
 
-    pub fn record_storage_write<B>(&mut self, state: &ExecutorState<B>, address: H160, key: U256)
+    pub fn record_storage_write<B>(&mut self, state: &ExecutorState<B>, address: H160, key: U256, value: U256)
     where
         B: AccountStorage
     {
+        if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+            return;
+        }
+
+        if value.is_zero() {
+            return;
+        }
+
         if !state.storage(address, key).is_zero() {
             return;
         }
 
-        let rent = self.rent.minimum_balance(STORAGE_ENTRY_BYTES);
-        let overhead = self.rent.minimum_balance(0);
-        let cost = rent - overhead;
+        let rent = self.rent.minimum_balance(EthereumStorage::SIZE);
 
-        self.gas = self.gas.saturating_add(cost);
+        self.gas = self.gas.saturating_add(rent);
     }
 
     pub fn record_deploy<B>(&mut self, state: &ExecutorState<B>, address: H160)

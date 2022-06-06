@@ -1,15 +1,15 @@
-use crate::account::{Operator, Storage, Incinerator};
+use crate::account::{Operator, State, Incinerator};
 use arrayref::{array_ref};
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
 use crate::account_storage::ProgramAccountStorage;
-use crate::storage_account::Deposit;
+use crate::state_account::Deposit;
 use crate::config::chain_id;
 
 struct Accounts<'a> {
-    storage: Storage<'a>,
+    storage: State<'a>,
     // operator: Operator<'a>,
     incinerator: Incinerator<'a>,
     remaining_accounts: &'a [AccountInfo<'a>],
@@ -23,7 +23,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let incinerator = Incinerator::from_account(&accounts[2])?;
     let remaining_accounts = &accounts[3..];
 
-    let storage = Storage::restore(program_id, storage_info, &operator, remaining_accounts)?;
+    let storage = State::restore(program_id, storage_info, &operator, remaining_accounts)?;
 
     let accounts = Accounts { storage, incinerator, remaining_accounts };
     let nonce = u64::from_le_bytes(*array_ref![instruction, 0, 8]);

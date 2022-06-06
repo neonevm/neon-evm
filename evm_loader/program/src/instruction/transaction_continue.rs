@@ -1,4 +1,4 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury, Storage};
+use crate::account::{Operator, program, EthereumAccount, Treasury, State};
 use crate::account_storage::ProgramAccountStorage;
 use crate::instruction::transaction::Accounts;
 use arrayref::{array_ref};
@@ -29,7 +29,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     };
 
 
-    let storage = Storage::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
+    let storage = State::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,

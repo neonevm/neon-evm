@@ -24,7 +24,7 @@ pub mod hamt;
 pub mod instruction;
 pub mod precompile_contracts;
 pub mod query;
-pub mod storage_account;
+pub mod state_account;
 pub mod transaction;
 pub mod utils;
 
