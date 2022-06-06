@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 use std::str::FromStr;
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -62,6 +63,7 @@ struct Config {
     client_timeout_sec: u64,
     show_errors: bool,
     skip_preflight: bool,
+    max_tps: usize,
 }
 
 struct ContractV1<'a> {
@@ -89,19 +91,21 @@ struct RecentBlockHash<'a> {
     client: &'a RpcClient,
     hash: Hash,
     time: Instant,
+    recent_block_hash_ttl_sec: u64,
 }
 
 impl <'a> RecentBlockHash<'a> {
-    fn new(client: &'a RpcClient) -> Self {
+    fn new(client: &'a RpcClient, recent_block_hash_ttl_sec: u64) -> Self {
         Self {
             client,
             hash: Hash::new_from_array([0; 32]),
             time: Instant::now().sub(Duration::from_secs(60 * 60 * 24)),
+            recent_block_hash_ttl_sec,
         }
     }
 
     fn get(&mut self) -> ClientResult<&Hash> {
-        if Instant::now().duration_since(self.time).as_secs() > CONFIG.recent_block_hash_ttl_sec {
+        if Instant::now().duration_since(self.time).as_secs() > self.recent_block_hash_ttl_sec {
             self.hash = self.client.get_latest_blockhash()?;
             self.time = Instant::now();
             println!("New recent block hash: {}", self.hash);
@@ -113,16 +117,32 @@ impl <'a> RecentBlockHash<'a> {
 
 struct Batch<'url> {
     client: JsonRpcClient<'url>,
-    batch: Vec<Transaction>,
+    batch: Vec<Request>,
     batch_size: usize,
+    show_errors: bool,
+    skip_preflight: bool,
+    max_tps: usize,
+    created_at: Instant,
+    transaction_count: usize,
 }
 
 impl<'url> Batch<'url> {
-    pub fn new(client: JsonRpcClient<'url>, batch_size: usize) -> Self {
+    pub fn new(
+        client: JsonRpcClient<'url>,
+        batch_size: usize,
+        show_errors: bool,
+        skip_preflight: bool,
+        max_tps: usize,
+    ) -> Self {
         Self {
             client,
             batch: Vec::with_capacity(batch_size),
             batch_size,
+            show_errors,
+            skip_preflight,
+            max_tps,
+            created_at: Instant::now(),
+            transaction_count: 0,
         }
     }
 
@@ -130,33 +150,30 @@ impl<'url> Batch<'url> {
         if self.batch.len() == 0 {
             return;
         }
+
+        let next_transaction_at = self.created_at.add(
+            Duration::from_secs_f64(self.transaction_count as f64 / self.max_tps as f64)
+        );
+        while next_transaction_at > Instant::now() {
+            sleep(Duration::from_millis(10));
+        }
+
+        let now = Instant::now();
+        if now - self.created_at > Duration::from_secs(20) {
+            self.created_at = now;
+            self.transaction_count = 0;
+        }
+
         print!("Sending batch of {} requests... ", self.batch.len());
-        if CONFIG.show_errors {
+        if self.show_errors {
             println!();
         }
-        let requests: Vec<Request> = self.batch.iter()
-            .map(|transaction| {
-                let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
-                    .expect("Transaction serialization error");
-                self.client.request(
-                    "sendTransaction",
-                    json!([
-                        serialized,
-                        {
-                            "skipPreflight": CONFIG.skip_preflight,
-                            "preflightCommitment": "confirmed",
-                            "encoding": "base64",
-                        },
-                    ])
-                )
-            }).collect();
-
-        match self.client.send_batch(&requests) {
+        match self.client.send_batch(&self.batch) {
             Ok(Value::Array(responses)) => {
                 let mut error_count = 0;
                 for response in responses {
                     if let Value::String(ref error_message) = response["error"]["message"] {
-                        if CONFIG.show_errors {
+                        if self.show_errors {
                             println!("Error: {}", error_message);
                         }
                         error_count += 1;
@@ -171,11 +188,26 @@ impl<'url> Batch<'url> {
             Ok(response) => println!("Error: {:?}", response),
             Err(error) => println!("Error: {:?}", error),
         }
+
+        self.transaction_count += self.batch.len();
         self.batch.clear();
     }
 
-    pub fn add(&mut self, transaction: Transaction) {
-        self.batch.push(transaction);
+    pub fn add(&mut self, transaction: &Transaction) {
+        let serialized = serialize_and_encode(transaction, UiTransactionEncoding::Base64)
+            .expect("Transaction serialization error");
+        let request = self.client.request(
+            "sendTransaction",
+            json!([
+                serialized,
+                {
+                    "skipPreflight": self.skip_preflight,
+                    "preflightCommitment": "confirmed",
+                    "encoding": "base64",
+                },
+            ])
+        );
+        self.batch.push(request);
         if self.batch.len() >= self.batch_size {
             self.send();
         }
@@ -284,7 +316,7 @@ fn copy_data_to_distributed_storage<'a>(
         let mut transaction = Transaction::new_unsigned(message);
         transaction.sign(&[&*PAYER], recent_blockhash.clone());
 
-        batch.add(transaction);
+        batch.add(&transaction);
     }
 }
 
@@ -355,7 +387,7 @@ fn convert_accounts_to_v2(
     for (pubkey, ethereum_contract_v1) in contracts_v1_map.iter() {
         if is_all_data_written(data_written_map, &ethereum_contract_v1) {
             batch.add(
-                make_convert_to_v2_transaction(
+                &make_convert_to_v2_transaction(
                     *pubkey.clone(),
                     recent_block_hash.get()?,
                 ),
@@ -419,7 +451,6 @@ fn main() -> Result<()> {
         &CONFIG.url,
         Duration::from_secs(CONFIG.client_timeout_sec),
     );
-    let mut batch = Batch::new(JsonRpcClient::new(&CONFIG.url), CONFIG.batch_size);
 
     print!("Querying accounts for Ethereum addresses map... ");
     let mut ether_addresses_map = obtain_ether_addresses_map(&client)?;
@@ -463,19 +494,32 @@ fn main() -> Result<()> {
     let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
     println!("{} accounts", expected_storage_accounts_count);
 
-    let mut recent_block_hash = RecentBlockHash::new(&client);
+    let mut recent_block_hash = RecentBlockHash::new(&client, CONFIG.recent_block_hash_ttl_sec);
     loop {
         print!("Querying already written infinite storage accounts... ");
         let data_written_map = obtain_data_written_map(&client)?;
         println!("OK ({} values)", data_written_map.len());
         println!("Accounts to convert: {}", contracts_v1_map.len());
 
+        let mut batch = Batch::new(
+            JsonRpcClient::new(&CONFIG.url),
+            CONFIG.batch_size,
+            CONFIG.show_errors,
+            CONFIG.skip_preflight,
+            CONFIG.max_tps,
+        );
+
+        println!("Extracting data to distributed storage...");
         extract_data_to_distributed_storage(
             &mut batch,
             &mut recent_block_hash,
             &contracts_v1_map,
             &data_written_map,
         )?;
+
+        batch.send();
+
+        println!("Converting accounts from V1 to V2...");
 
         convert_accounts_to_v2(
             &mut batch,
