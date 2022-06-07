@@ -1,6 +1,5 @@
 #![allow(deprecated)]
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
@@ -15,6 +14,7 @@ use evm_core::{H160, U256};
 use evm_loader::account::{ACCOUNT_SEED_VERSION, AccountData, ether_account, ether_contract, ether_storage, Packable};
 use evm_loader::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use evm_loader::hamt::Hamt;
+use rustc_hash::FxHashMap;
 use serde_json::{json, Value};
 use solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig};
 use solana_client::client_error::Result as ClientResult;
@@ -73,9 +73,9 @@ struct ContractV1<'a> {
 }
 
 type EthereumContractV1<'a> = AccountData<'a, ether_contract::DataV1, ether_contract::ExtensionV1<'a>>;
-type ContractsV1Map<'a> = HashMap<&'a Pubkey, ContractV1<'a>>;
-type EtherAddressesMap = HashMap<Pubkey, H160>;
-type DataWrittenMap = HashMap<Pubkey, U256>;
+type ContractsV1Map<'a> = FxHashMap<&'a Pubkey, ContractV1<'a>>;
+type EtherAddressesMap = FxHashMap<Pubkey, H160>;
+type DataWrittenMap = FxHashMap<Pubkey, U256>;
 
 lazy_static::lazy_static! {
     static ref CONFIG: Config = serde_json::from_reader(
@@ -293,7 +293,8 @@ fn copy_data_to_distributed_storage<'a>(
     ethereum_contract_v1: &ContractV1<'a>,
     data_written_map: &DataWrittenMap,
     recent_blockhash: &Hash,
-) {
+) -> usize {
+    let mut count = 0;
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
     for (key, value) in ethereum_contract_v1.storage.iter() {
         if key < storage_entries_in_contract_account || value.is_zero() {
@@ -317,7 +318,10 @@ fn copy_data_to_distributed_storage<'a>(
         transaction.sign(&[&*PAYER], recent_blockhash.clone());
 
         batch.add(&transaction);
+        count += 1;
     }
+
+    count
 }
 
 fn is_all_data_written<'a>(
@@ -353,14 +357,19 @@ fn extract_data_to_distributed_storage(
     recent_block_hash: &mut RecentBlockHash,
     contracts_v1_map: &ContractsV1Map,
     data_written_map: &DataWrittenMap,
+    mut sent: usize,
 ) -> Result<()> {
     for ethereum_contract_v1 in contracts_v1_map.values() {
-        copy_data_to_distributed_storage(
+        let count = copy_data_to_distributed_storage(
             batch,
             ethereum_contract_v1,
             data_written_map,
             recent_block_hash.get()?,
         );
+        sent += count;
+        if count > 0 {
+            println!("{} value(s) sent (+{})", sent, count);
+        }
     }
 
     Ok(())
@@ -490,7 +499,7 @@ fn main() -> Result<()> {
     drop(ether_addresses_map);
     println!("OK ({} accounts)", contracts_v1_map.len());
 
-    print!("Counting expected infinite storage accounts to be created... ");
+    print!("Counting expected infinite storage accounts to create... ");
     let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
     println!("{} accounts", expected_storage_accounts_count);
 
@@ -515,6 +524,7 @@ fn main() -> Result<()> {
             &mut recent_block_hash,
             &contracts_v1_map,
             &data_written_map,
+            data_written_map.len(),
         )?;
 
         batch.send();
