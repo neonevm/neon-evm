@@ -6,7 +6,8 @@ from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from eth_keys import keys as eth_keys
 
-from .constants import EVM_LOADER, SYSTEM_ADDRESS, CREATE_ACCOUNT_LAYOUT, SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS
+from .constants import EVM_LOADER, SYSTEM_ADDRESS, SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS
+from .layouts import CREATE_ACCOUNT_LAYOUT
 
 
 DEFAULT_UNITS = 500 * 1000

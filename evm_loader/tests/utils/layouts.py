@@ -35,3 +35,9 @@ ACCOUNT_INFO_LAYOUT = Struct(
     "is_rw_blocked" / Int8ul,
     "ro_blocked_cnt" / Int8ul,
 )
+
+
+CREATE_ACCOUNT_LAYOUT = Struct(
+    "ether" / Bytes(20),
+    "nonce" / Int8ul
+)

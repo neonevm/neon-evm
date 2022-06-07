@@ -14,6 +14,6 @@ class TreasuryPool:
 class Caller:
     solana_account: Keypair
     solana_account_address: PublicKey
-    ether_address: bytes
+    eth_address: bytes
     nonce: int
     token_address: PublicKey

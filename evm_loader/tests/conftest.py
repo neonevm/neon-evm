@@ -37,7 +37,7 @@ def evm_loader(request) -> EvmLoader:
     return loader
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def treasury_pool(evm_loader) -> TreasuryPool:
     index = 2
     address = create_treasury_pool_address(index)
@@ -45,6 +45,6 @@ def treasury_pool(evm_loader) -> TreasuryPool:
     return TreasuryPool(index, address, index_buf)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def user_account(evm_loader) -> Caller:
     return make_new_user(evm_loader)

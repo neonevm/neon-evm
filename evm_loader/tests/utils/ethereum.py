@@ -23,7 +23,7 @@ class Contract:
 def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     # Create contract address from (caller_address, nonce)
     user_nonce = get_transaction_count(solana_client, user.solana_account_address)
-    contract_eth_address = keccak_256(pack([user.ether_address, user_nonce or None])).digest()[-20:]
+    contract_eth_address = keccak_256(pack([user.eth_address, user_nonce or None])).digest()[-20:]
     contract_solana_address, contract_nonce = evm_loader.ether2program(contract_eth_address)
     contract_code_address, _ = evm_loader.ether2seed(contract_eth_address)
     seed = b58encode(ACCOUNT_SEED_VERSION + contract_eth_address).decode('utf8')

@@ -27,8 +27,8 @@ from spl.token.instructions import get_associated_token_address, approve, Approv
 
 from .utils.instructions import TransactionWithComputeBudget
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, ETH_TOKEN_MINT_ID, \
-    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION, CREATE_ACCOUNT_LAYOUT
-from .utils.layouts import ACCOUNT_INFO_LAYOUT
+    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
+from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
 
@@ -460,9 +460,9 @@ def get_neon_balance(solana_client: Client, sol_account: Union[str, PublicKey]) 
     return balance
 
 
-def send_transaction(client, trx, acc):
+def send_transaction(client, trx, acc, wait_status=Confirmed):
     print("Send trx")
-    result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed))
+    result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=wait_status))
     tx = result["result"]
     print("Result: {}".format(result))
     wait_confirm_transaction(client, tx)
