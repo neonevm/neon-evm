@@ -41,12 +41,16 @@ function DeployToken {
 DeployToken "Permission Allowance Token" NEON_PERMISSION_ALLOWANCE_TOKEN permission_allowance_token_keypair.json
 DeployToken "Permission Denial Token" NEON_PERMISSION_DENIAL_TOKEN permission_denial_token_keypair.json
 
-echo "Deploying evm_loader at address $EVM_LOADER..."
-if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
-  echo "Failed to deploy evm_loader"
-  exit 1
+if [ "$SKIP_EVM_DEPLOY" != "YES" ]; then
+    echo "Deploying evm_loader at address $EVM_LOADER..."
+    if ! solana program deploy --upgrade-authority evm_loader-keypair.json evm_loader.so >evm_loader_id; then
+        echo "Failed to deploy evm_loader"
+        exit 1
+    fi
+    sleep 30
+else
+    echo "Skip deploying of evm_loader"
 fi
-sleep 30
 
 DeployToken "Neon Token" NEON_TOKEN_MINT neon_token_keypair.json
 export ETH_TOKEN_MINT=$NEON_TOKEN_MINT

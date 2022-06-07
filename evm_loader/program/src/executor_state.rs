@@ -41,6 +41,8 @@ pub struct ExecutorMetadata {
     depth: Option<usize>,
     block_number: U256,
     block_timestamp: U256,
+    gas_limit: U256,
+    gas_price: U256,
 }
 
 impl ExecutorMetadata {
@@ -52,8 +54,18 @@ impl ExecutorMetadata {
             is_static: false,
             depth: None,
             block_number: backend.block_number(),
-            block_timestamp: backend.block_timestamp()
+            block_timestamp: backend.block_timestamp(),
+            gas_limit: U256::one(),
+            gas_price: U256::zero()
         }
+    }
+
+    pub fn set_gas_limit(&mut self, gas_limit: U256) {
+        self.gas_limit = gas_limit;
+    }
+
+    pub fn set_gas_price(&mut self, gas_price: U256) {
+        self.gas_price = gas_price;
     }
 
     #[allow(clippy::needless_pass_by_value, clippy::unused_self)]
@@ -92,6 +104,8 @@ impl ExecutorMetadata {
             },
             block_number: self.block_number,
             block_timestamp: self.block_timestamp,
+            gas_limit: self.gas_limit,
+            gas_price: self.gas_price,
         }
     }
 
@@ -580,6 +594,24 @@ impl ExecutorSubstate {
         self.account_mut(address, backend).code = Some(code);
     }
 
+    pub fn set_gas_limit(&mut self, gas_limit: U256) {
+        self.metadata_mut().set_gas_limit(gas_limit);
+    }
+
+    pub fn set_gas_price(&mut self, gas_price: U256) {
+        self.metadata_mut().set_gas_price(gas_price);
+    }
+
+    #[must_use]
+    pub fn gas_limit(&self) -> U256 {
+        self.metadata.gas_limit
+    }
+
+    #[must_use]
+    pub fn gas_price(&self) -> U256 {
+        self.metadata.gas_price
+    }
+
     #[must_use]
     pub fn known_balance(&self, address: &H160) -> Option<U256> {
         let balances = self.balances.borrow();
@@ -613,6 +645,10 @@ impl ExecutorSubstate {
         transfer: &Transfer,
         backend: &B,
     ) -> Result<(), ExitError> {
+        if transfer.source == transfer.target {
+            return Ok(())
+        }
+
         let new_source_balance = {
             let balance = self.balance(&transfer.source, backend);
             balance.checked_sub(transfer.value).ok_or(ExitError::OutOfFund)?
@@ -669,6 +705,10 @@ impl ExecutorSubstate {
 
     fn spl_transfer<B: AccountStorage>(&mut self, transfer: SplTransfer, backend: &B) -> Result<(), ExitError> {
         debug_print!("spl_transfer: {:?}", transfer);
+
+        if transfer.source_token == transfer.target_token {
+            return Ok(())
+        }
 
         let new_source_balance = {
             let balance = self.spl_balance(&transfer.source_token, backend);
@@ -880,6 +920,24 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.substate.balance(&address, self.backend)
     }
 
+    pub fn set_gas_limit(&mut self, gas_limit: U256) {
+        self.substate.set_gas_limit(gas_limit);
+    }
+
+    pub fn set_gas_price(&mut self, gas_price: U256) {
+        self.substate.set_gas_price(gas_price);
+    }
+
+    #[must_use]
+    pub fn gas_limit(&self) -> U256 {
+        self.substate.gas_limit()
+    }
+
+    #[must_use]
+    pub fn gas_price(&self) -> U256 {
+        self.substate.gas_price()
+    }
+
     #[must_use]
     pub fn code(&self, address: H160) -> Vec<u8> {
         self.substate
@@ -991,6 +1049,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn transfer(&mut self, transfer: &Transfer) -> Result<(), ExitError> {
         debug_print!("executor transfer from={} to={} value={}", transfer.source, transfer.target, transfer.value);
         if transfer.value.is_zero() {
+            return Ok(())
+        }
+
+        if transfer.source == transfer.target {
             return Ok(())
         }
 

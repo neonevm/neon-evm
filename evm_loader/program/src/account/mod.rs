@@ -21,8 +21,9 @@ mod holder;
 mod incinerator;
 pub mod ether_account;
 pub mod ether_contract;
+pub mod ether_storage;
 pub mod erc20_allowance;
-pub mod storage;
+pub mod state;
 pub mod program;
 pub mod token;
 pub mod sysvar;
@@ -40,17 +41,21 @@ pub const TAG_EMPTY: u8 = 0;
 #[deprecated]
 const TAG_ACCOUNT_V1: u8 = 1;
 const TAG_ACCOUNT: u8 = 10;
-const TAG_CONTRACT: u8 = 2;
 #[deprecated]
-const _TAG_STORAGE_V1: u8 = 3;
-const TAG_STORAGE: u8 = 30;
+const _TAG_CONTRACT_V1: u8 = 2;
+const TAG_CONTRACT: u8 = 20;
+const TAG_CONTRACT_STORAGE: u8 = 6;
+#[deprecated]
+const _TAG_STATE_V1: u8 = 3;
+const TAG_STATE: u8 = 30;
 const TAG_ERC20_ALLOWANCE: u8 = 4;
-const TAG_FINALIZED_STORAGE: u8 = 5;
+const TAG_FINALIZED_STATE: u8 = 5;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_contract::Extension<'a>>;
-pub type Storage<'a> = AccountData<'a, storage::Data>;
-pub type FinalizedStorage<'a> = AccountData<'a, storage::FinalizedData>;
+pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
+pub type State<'a> = AccountData<'a, state::Data>;
+pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
 pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data>;
 
 

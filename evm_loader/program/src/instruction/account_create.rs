@@ -78,6 +78,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u
         EthereumContract::init(contract_info, crate::account::ether_contract::Data {
             owner: *accounts.ether_account.key,
             code_size: 0_u32,
+            generation: 0_u32,
         })?;
     }
 

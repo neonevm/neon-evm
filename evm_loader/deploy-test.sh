@@ -1,9 +1,8 @@
 #!/bin/bash
 set -xeuo pipefail
 
-if ! (wait-for-solana.sh 20 \
-      && create-test-accounts.sh 2 \
-      && deploy-evm.sh); then
+if ! (wait-for-neon.sh 20 \
+      && create-test-accounts.sh 2); then
   echo "Failed to start evm_loader tests"
   exit 1
 fi

@@ -862,7 +862,8 @@ fn main() {
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
-                get_storage_at::execute(&config, contract_id, &index)
+                get_storage_at::execute(&config, contract_id, &index);
+                Ok(())
             }
             ("update-valids-table", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();

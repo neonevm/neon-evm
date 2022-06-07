@@ -4,8 +4,9 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{ERC20Allowance, token, EthereumContract};
+use crate::account::{ERC20Allowance, token, EthereumContract, EthereumStorage};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn token_mint(&self) -> &Pubkey { &self.token_mint }
@@ -78,11 +79,33 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
             .map_or_else(Vec::new, |valids| valids.to_vec())
     }
 
-    fn storage(&self, address: &H160, index: &U256) -> U256 {
+    fn generation(&self, address: &H160) -> u32 {
         self.ethereum_contract(address)
-            .map(|c| &c.extension.storage)
-            .and_then(|hamt| hamt.find(*index))
-            .unwrap_or_else(U256::zero)
+            .map_or(0_u32, |c| c.generation)
+    }
+
+    fn storage(&self, address: &H160, index: &U256) -> U256 {
+        if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+            let index: usize = index.as_usize() * 32;
+            return self.ethereum_contract(address)
+                .map(|c| &c.extension.storage[index..index+32])
+                .map_or_else(U256::zero, U256::from_big_endian);
+        }
+
+        let (solana_address, _) = self.get_storage_address(address, index);
+        let account = self.solana_accounts.get(&solana_address)
+            .unwrap_or_else(|| panic!("Account {} - storage account not found", solana_address));
+
+        if account.owner == self.program_id {
+            let storage = EthereumStorage::from_account(self.program_id, account).unwrap();
+            return storage.value
+        }
+
+        if solana_program::system_program::check_id(account.owner) {
+            return U256::zero()
+        }
+
+        panic!("Account {} - expected system or program owned", solana_address);
     }
 
     fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
@@ -139,7 +162,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                     EthereumContract::SIZE
                         + a.extension.code.len()
                         + a.extension.valids.len()
-                        + a.extension.storage.buffer_len()
+                        + a.extension.storage.len()
                 })
         };
 

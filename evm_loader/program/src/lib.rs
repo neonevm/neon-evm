@@ -7,10 +7,11 @@
 #![allow(missing_docs, clippy::missing_panics_doc, clippy::missing_errors_doc)]
 
 
+mod allocator;
 #[macro_use]
 mod debug;
 #[macro_use]
-mod error;
+pub mod error;
 pub mod account;
 pub mod account_storage;
 pub mod config;
@@ -23,7 +24,7 @@ pub mod hamt;
 pub mod instruction;
 pub mod precompile_contracts;
 pub mod query;
-pub mod storage_account;
+pub mod state_account;
 pub mod transaction;
 pub mod utils;
 

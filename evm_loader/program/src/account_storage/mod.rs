@@ -16,16 +16,6 @@ enum Account<'a> {
     Contract(EthereumAccount<'a>, EthereumContract<'a>),
 }
 
-impl<'a> Account<'a> {
-    #[allow(clippy::missing_const_for_fn)] // constant functions cannot evaluate destructors
-    pub fn deconstruct(self) -> (EthereumAccount<'a>, Option<EthereumContract<'a>>) {
-        match self {
-            Account::User(account) => (account, None),
-            Account::Contract(account, contract) => (account, Some(contract)),
-        }
-    }
-}
-
 pub struct ProgramAccountStorage<'a> {
     token_mint: Pubkey,
     program_id: &'a Pubkey,
@@ -72,6 +62,18 @@ pub trait AccountStorage {
     fn code(&self, address: &H160) -> Vec<u8>;
     /// Get valids data
     fn valids(&self, address: &H160) -> Vec<u8>;
+    /// Get contract generation
+    fn generation(&self, address: &H160) -> u32;
+    /// Get storage account address and bump seed
+    fn get_storage_address(&self, address: &H160, index: &U256) -> (Pubkey, u8) {
+        let generation_bytes = self.generation(address).to_le_bytes();
+
+        let mut index_bytes = [0_u8; 32];
+        index.to_little_endian(&mut index_bytes);
+
+        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes];
+        Pubkey::find_program_address(seeds, self.program_id())
+    }
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256;
 
