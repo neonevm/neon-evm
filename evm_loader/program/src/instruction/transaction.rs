@@ -34,11 +34,11 @@ pub fn is_new_transaction<'a>(
             if FinalizedState::from_account(program_id, storage_info)?.is_outdated(signature, caller) {
                 Ok(true)
             } else {
-                return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
+                Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
             }
         },
         State::TAG => Ok(false),
-        _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
+            _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
     }
 }
 
