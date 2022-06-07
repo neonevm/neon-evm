@@ -104,14 +104,20 @@ impl <'a> RecentBlockHash<'a> {
         }
     }
 
-    fn get(&mut self) -> ClientResult<&Hash> {
+    fn get(&mut self) -> &Hash {
         if Instant::now().duration_since(self.time).as_secs() > self.recent_block_hash_ttl_sec {
-            self.hash = self.client.get_latest_blockhash()?;
-            self.time = Instant::now();
-            println!("New recent block hash: {}", self.hash);
+            match self.client.get_latest_blockhash() {
+                Ok(hash) => {
+                    self.hash = hash;
+                    self.time = Instant::now();
+                    println!("New recent block hash: {}", self.hash);
+                },
+                Err(err) =>
+                    println!("Failed to get recent blockhash: {:?}, using old value: {}", err, self.hash),
+            }
         }
 
-        Ok(&self.hash)
+        &self.hash
     }
 }
 
@@ -292,7 +298,7 @@ fn copy_data_to_distributed_storage<'a>(
     batch: &mut Batch,
     ethereum_contract_v1: &ContractV1<'a>,
     data_written_map: &DataWrittenMap,
-    recent_blockhash: &Hash,
+    recent_blockhash: &mut RecentBlockHash,
 ) -> usize {
     let mut count = 0;
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
@@ -312,10 +318,11 @@ fn copy_data_to_distributed_storage<'a>(
         let instructions = vec![
             write_value_instruction(ethereum_contract_v1.owner.clone(), storage_address, key, value),
         ];
+        let blockhash = recent_blockhash.get();
         let mut message = Message::new(&instructions, Some(&PAYER.pubkey()));
-        message.recent_blockhash = recent_blockhash.clone();
+        message.recent_blockhash = blockhash.clone();
         let mut transaction = Transaction::new_unsigned(message);
-        transaction.sign(&[&*PAYER], recent_blockhash.clone());
+        transaction.sign(&[&*PAYER], blockhash.clone());
 
         batch.add(&transaction);
         count += 1;
@@ -364,7 +371,7 @@ fn extract_data_to_distributed_storage(
             batch,
             ethereum_contract_v1,
             data_written_map,
-            recent_block_hash.get()?,
+            recent_block_hash,
         );
         sent += count;
         if count > 0 {
@@ -398,7 +405,7 @@ fn convert_accounts_to_v2(
             batch.add(
                 &make_convert_to_v2_transaction(
                     *pubkey.clone(),
-                    recent_block_hash.get()?,
+                    recent_block_hash.get(),
                 ),
             );
         }
