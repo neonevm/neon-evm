@@ -22,6 +22,8 @@ pub enum EvmLoaderError {
     UnauthorizedOperator,
     #[error("Storage Account is finalized")]
     StorageAccountFinalized,
+    #[error("Service mode")]
+    ServiceMode,
 }
 
 impl From<EvmLoaderError> for ProgramError {

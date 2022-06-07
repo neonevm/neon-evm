@@ -34,15 +34,28 @@ pub fn is_new_transaction<'a>(
             if FinalizedStorage::from_account(program_id, storage_info)?.is_outdated(signature, caller) {
                 Ok(true)
             } else {
-                return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
+                Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
             }
         },
         Storage::TAG => Ok(false),
-        _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
+        _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
     }
 }
 
+#[allow(clippy::pedantic)]
 pub fn do_begin<'a>(
+    _step_count: u64,
+    _accounts: Accounts<'a>,
+    mut _storage: Storage<'a>,
+    _account_storage: &mut ProgramAccountStorage<'a>,
+    _trx: UnsignedTransaction,
+    _caller: H160,
+) -> ProgramResult {
+    Err!(EvmLoaderError::ServiceMode.into(); "Service mode")
+    //_do_begin(_step_count, _accounts, _storage, _account_storage, _trx, _caller)
+}
+
+pub fn _do_begin<'a>(
     step_count: u64,
     accounts: Accounts<'a>,
     mut storage: Storage<'a>,

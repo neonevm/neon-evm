@@ -9,6 +9,7 @@ use solana_program::{
 };
 use crate::executor::Machine;
 use crate::config::chain_id;
+use crate::error::EvmLoaderError;
 
 
 struct Accounts<'a> {
@@ -21,10 +22,15 @@ struct Accounts<'a> {
     remaining_accounts: &'a [AccountInfo<'a>],
 }
 
+pub fn process<'a>(_program_id: &'a Pubkey, _accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
+    Err!(EvmLoaderError::ServiceMode.into(); "Service mode")
+    // _process(_program_id, _accounts, _instruction)
+}
+
 /// Execute Ethereum transaction in a single Solana transaction
 /// Can only be used for function call or transfer
 /// SOLANA TRANSACTION FAILS IF `trx.to` IS EMPTY
-pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
+pub fn _process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
     solana_program::msg!("Instruction: Execute Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
