@@ -4,9 +4,11 @@ import web3
 
 from solana.keypair import Keypair
 
-from solana_utils import PublicKey, ACCOUNT_INFO_LAYOUT, EVM_LOADER, EvmLoader, Account, Transaction, get_account_data, \
+from .solana_utils import PublicKey, ACCOUNT_INFO_LAYOUT, EvmLoader, Transaction, get_account_data, \
     solana_client, AccountInfo, b58encode, ACCOUNT_SEED_VERSION, account_with_seed, create_account_with_seed, TransactionInstruction, \
-    AccountMeta, TransactionWithComputeBudget, send_transaction
+    AccountMeta, send_transaction
+from .utils.instructions import TransactionWithComputeBudget
+from .utils.constants import EVM_LOADER
 
 
 def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, size: int) -> Transaction:

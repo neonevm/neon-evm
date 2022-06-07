@@ -10,7 +10,7 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-from construct import Bytes, Int8ul, Struct as cStruct
+
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -25,30 +25,16 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
-CREATE_ACCOUNT_LAYOUT = cStruct(
-    "ether" / Bytes(20),
-    "nonce" / Int8ul
-)
+from .utils.instructions import TransactionWithComputeBudget
+from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, ETH_TOKEN_MINT_ID, \
+    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION, CREATE_ACCOUNT_LAYOUT
+from .utils.layouts import ACCOUNT_INFO_LAYOUT
+from .utils.types import Caller
 
-system = "11111111111111111111111111111111"
-tokenkeg = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-sysvarclock = "SysvarC1ock11111111111111111111111111111111"
-sysinstruct = "Sysvar1nstructions1111111111111111111111111"
-keccakprog = "KeccakSecp256k11111111111111111111111111111"
-rentid = "SysvarRent111111111111111111111111111111111"
-incinerator = "1nc1nerator11111111111111111111111111111111"
-collateral_pool_base = "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT"
-COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget111111111111111111111111111111")
-
-solana_url = os.environ.get("SOLANA_URL", "http://localhost:8899")
-EVM_LOADER = os.environ.get("EVM_LOADER")
-ETH_TOKEN_MINT_ID: PublicKey = PublicKey(os.environ.get("ETH_TOKEN_MINT"))
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
-solana_client = Client(solana_url)
+solana_client = Client(SOLANA_URL)
 path_to_solana = 'solana'
-
-ACCOUNT_SEED_VERSION = b'\1'
 
 # amount of gas per 1 byte evm_storage
 EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
@@ -66,10 +52,6 @@ PAYMENT_TO_TREASURE = 5000
 LAMPORTS_PER_SIGNATURE = 5000
 # account storage overhead for calculation of base rent
 ACCOUNT_STORAGE_OVERHEAD = 128
-
-DEFAULT_UNITS = 500 * 1000
-DEFAULT_HEAP_FRAME = 256 * 1024
-DEFAULT_ADDITIONAL_FEE = 0
 
 
 class SplToken:
@@ -122,13 +104,13 @@ class SplToken:
             return res.split()[2]
 
 
-spl_cli = SplToken(solana_url)
+spl_cli = SplToken(SOLANA_URL)
 
 
 def create_treasury_pool_address(collateral_pool_index):
     collateral_seed_prefix = "collateral_seed_"
     seed = collateral_seed_prefix + str(collateral_pool_index)
-    return account_with_seed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
+    return account_with_seed(PublicKey(TREASURY_POOL_BASE), seed, PublicKey(EVM_LOADER))
 
 
 def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
@@ -154,7 +136,7 @@ def account_with_seed(base, seed, program) -> PublicKey:
     return PublicKey(sha256(bytes(base) + bytes(seed, 'utf8') + bytes(program)).digest())
 
 
-def create_account_with_seed(funding, base, seed, lamports, space, program):
+def create_account_with_seed(funding, base, seed, lamports, space, program=PublicKey(EVM_LOADER)):
     data = SYSTEM_INSTRUCTIONS_LAYOUT.build(
         dict(
             instruction_type=SystemInstructionType.CREATE_ACCOUNT_WITH_SEED,
@@ -176,7 +158,7 @@ def create_account_with_seed(funding, base, seed, lamports, space, program):
             AccountMeta(pubkey=created, is_signer=False, is_writable=True),
             AccountMeta(pubkey=base, is_signer=True, is_writable=False),
         ],
-        program_id=PublicKey(system),
+        program_id=PublicKey(SYSTEM_ADDRESS),
         data=data
     )
 
@@ -187,9 +169,9 @@ class solana_cli:
 
     def call(self, arguments):
         if self.acc is None:
-            cmd = '{} --url {} {}'.format(path_to_solana, solana_url, arguments)
+            cmd = '{} --url {} {}'.format(path_to_solana, SOLANA_URL, arguments)
         else:
-            cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), solana_url, arguments)
+            cmd = '{} --keypair {} --url {} {}'.format(path_to_solana, self.acc.get_path(), SOLANA_URL, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -202,7 +184,7 @@ class neon_cli:
         self.verbose_flags = verbose_flags
 
     def call(self, arguments):
-        cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, solana_url, arguments)
+        cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, SOLANA_URL, arguments)
         try:
             return subprocess.check_output(cmd, shell=True, universal_newlines=True)
         except subprocess.CalledProcessError as err:
@@ -212,7 +194,7 @@ class neon_cli:
     def emulate(self, loader_id, arguments):
         cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
                                                                                               loader_id,
-                                                                                              solana_url,
+                                                                                              SOLANA_URL,
                                                                                               arguments)
         print('cmd:', cmd)
         try:
@@ -414,7 +396,7 @@ class EvmLoader:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                     AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
                 ]))
         else:
@@ -423,7 +405,7 @@ class EvmLoader:
                 data=data,
                 keys=[
                     AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=system, is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=SYSTEM_ADDRESS, is_signer=False, is_writable=False),
                     AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
                 ]))
@@ -432,18 +414,6 @@ class EvmLoader:
 
 def get_solana_balance(account):
     return solana_client.get_balance(account, commitment=Confirmed)['result']['value']
-
-
-ACCOUNT_INFO_LAYOUT = cStruct(
-    "type" / Int8ul,
-    "ether" / Bytes(20),
-    "nonce" / Int8ul,
-    "trx_count" / Bytes(8),
-    "balance" / Bytes(32),
-    "code_account" / Bytes(32),
-    "is_rw_blocked" / Int8ul,
-    "ro_blocked_cnt" / Int8ul,
-)
 
 
 class AccountInfo(NamedTuple):
@@ -522,7 +492,7 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
         data=bytearray.fromhex("05") + collateral_pool_index_buf + evm_instruction,
         keys=[
                  # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYS_INSTRUCT_ADDRESS), is_signer=False, is_writable=False),
 
                  # Operator's SOL account:
                  AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
@@ -531,7 +501,7 @@ def create_neon_evm_instr_05_single(evm_loader_program_id,
                  # Operator's NEON account:
                  AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
                  # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                  # NeonEVM program account
                  AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -565,7 +535,7 @@ def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
         keys=[
                  AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
                  # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYS_INSTRUCT_ADDRESS), is_signer=False, is_writable=False),
 
                  # Operator's SOL account:
                  AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
@@ -574,7 +544,7 @@ def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
                  # Operator's NEON account:
                  AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
                  # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                  # NeonEVM program account
                  AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -582,7 +552,7 @@ def create_neon_evm_instr_13_partial_call_or_continue(evm_loader_program_id,
                  AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=writable_code),
                  AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
 
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYS_INSTRUCT_ADDRESS), is_signer=False, is_writable=False),
              ] + add_meta + [
                  AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
              ])
@@ -609,7 +579,7 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
         keys=[
                  AccountMeta(pubkey=storage_sol_acc, is_signer=False, is_writable=True),
                  # System instructions account:
-                 AccountMeta(pubkey=PublicKey(sysinstruct), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYS_INSTRUCT_ADDRESS), is_signer=False, is_writable=False),
 
                  # Operator's SOL account:
                  AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
@@ -618,7 +588,7 @@ def create_neon_evm_instr_19_partial_call(evm_loader_program_id,
                  # Operator's NEON account:
                  AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
                  # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                  # NeonEVM program account
                  AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -656,7 +626,7 @@ def create_neon_evm_instr_20_continue(evm_loader_program_id,
                  # Operator's NEON account:
                  AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
                  # System program account:
-                 AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+                 AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                  # NeonEVM program account
                  AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -692,7 +662,7 @@ def create_neon_evm_instr_22_begin(evm_loader_program_id,
             # Operator's NEON token account:
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
             # NeonEVM program account
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -720,7 +690,7 @@ def create_neon_evm_instr_21_cancel(evm_loader_program_id,
             # Operator's SOL account:
             AccountMeta(pubkey=operator_sol_acc, is_signer=True, is_writable=True),
             # Incinerator
-            AccountMeta(pubkey=PublicKey(incinerator), is_signer=False, is_writable=True),
+            AccountMeta(pubkey=PublicKey(INCINERATOR_ADDRESS), is_signer=False, is_writable=True),
 
             AccountMeta(pubkey=contract_sol_acc, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_sol_acc, is_signer=False, is_writable=True),
@@ -754,7 +724,7 @@ def create_neon_evm_instr_14_combined_continue(evm_loader_program_id,
             # Operator's NEON account:
             AccountMeta(pubkey=caller_sol_acc, is_signer=False, is_writable=True),
             # System program account:
-            AccountMeta(pubkey=PublicKey(system), is_signer=False, is_writable=False),
+            AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
             # NeonEVM program account
             AccountMeta(pubkey=evm_loader_program_id, is_signer=False, is_writable=False),
 
@@ -771,30 +741,20 @@ def evm_step_cost():
     return math.floor(operator_expences / EVM_STEPS)
 
 
-class ComputeBudget:
-    @staticmethod
-    def request_units(units, additional_fee):
-        return TransactionInstruction(
-            program_id=COMPUTE_BUDGET_ID,
-            keys=[],
-            data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
-        )
+def make_new_user(evm_loader: EvmLoader):
+    key = Keypair.generate()
+    if get_solana_balance(key.public_key) == 0:
+        tx = solana_client.request_airdrop(key.public_key, 1000000 * 10 ** 9, commitment=Confirmed)
+        wait_confirm_transaction(solana_client, tx["result"])
+    caller_ether = eth_keys.PrivateKey(key.secret_key[:32]).public_key.to_canonical_address()
+    caller, caller_nonce = evm_loader.ether2program(caller_ether)
+    caller_token = get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
 
-    @staticmethod
-    def request_heap_frame(heapFrame):
-        return TransactionInstruction(
-            program_id=COMPUTE_BUDGET_ID,
-            keys=[],
-            data=bytes.fromhex("01") + heapFrame.to_bytes(4, "little")
-        )
+    if get_solana_balance(caller) == 0:
+        print(f"Create account for user {caller}")
+        evm_loader.create_ether_account(caller_ether)
 
-
-def TransactionWithComputeBudget(units=DEFAULT_UNITS,
-                                 additional_fee=DEFAULT_ADDITIONAL_FEE,
-                                 heap_frame=DEFAULT_HEAP_FRAME, **kwargs):
-    trx = Transaction(**kwargs)
-    if units:
-        trx.add(ComputeBudget.request_units(units, additional_fee))
-    if heap_frame:
-        trx.add(ComputeBudget.request_heap_frame(heap_frame))
-    return trx
+    print('Account solana address:', key.public_key)
+    print(f'Account ether address: {caller_ether.hex()} {caller_nonce}', )
+    print(f'Account solana address: {caller}')
+    return Caller(key, caller, caller_ether, caller_nonce, caller_token)

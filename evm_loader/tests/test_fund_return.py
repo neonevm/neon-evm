@@ -2,8 +2,10 @@ import pytest
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
 from solana.transaction import AccountMeta, TransactionInstruction
-from solana_utils import sha256, solana_client, wait_confirm_transaction, get_solana_balance,\
-    TransactionWithComputeBudget, create_account_with_seed, PublicKey, EVM_LOADER, send_transaction
+from .solana_utils import sha256, solana_client, wait_confirm_transaction, get_solana_balance,\
+     create_account_with_seed, PublicKey, send_transaction
+from .utils.instructions import TransactionWithComputeBudget
+from .utils.constants import EVM_LOADER
 
 
 def create_account(seed: str):

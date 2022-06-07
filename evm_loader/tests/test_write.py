@@ -7,14 +7,12 @@
 import pytest
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
-from solana_utils import (
+from .solana_utils import (
     solana_cli,
     get_solana_balance,
     PublicKey,
     keccak_256,
     account_with_seed,
-    EVM_LOADER,
-    TransactionWithComputeBudget,
     solana_client,
     create_account_with_seed,
     TxOpts,
@@ -22,6 +20,8 @@ from solana_utils import (
     AccountMeta,
     TransactionInstruction,
 )
+from .utils.instructions import TransactionWithComputeBudget
+from .utils.constants import EVM_LOADER
 
 
 test_data = b"Chancellor on brink of second bailout for banks"
