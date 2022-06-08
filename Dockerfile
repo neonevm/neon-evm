@@ -82,6 +82,7 @@ COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
     evm_loader/tests/*.py \
+    evm_loader/tests/utils \
     evm_loader/wait-for-solana.sh \
     evm_loader/wait-for-neon.sh \
     evm_loader/create-test-accounts.sh \
