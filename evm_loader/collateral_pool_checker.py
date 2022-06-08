@@ -1,6 +1,6 @@
 import sys
 from solana.publickey import PublicKey
-from solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, get_solana_balance
+from tests.solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, get_solana_balance
 
 
 wallet = OperatorAccount(sys.argv[1]).get_acc()
