@@ -506,10 +506,6 @@ fn main() -> Result<()> {
     drop(ether_addresses_map);
     println!("OK ({} accounts)", contracts_v1_map.len());
 
-    print!("Counting expected infinite storage accounts to create... ");
-    let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
-    println!("{} accounts", expected_storage_accounts_count);
-
     let mut recent_block_hash = RecentBlockHash::new(&client, CONFIG.recent_block_hash_ttl_sec);
     loop {
         print!("Querying already written infinite storage accounts... ");
@@ -558,6 +554,11 @@ fn main() -> Result<()> {
         }
 
         println!("Extracting data to distributed storage...");
+
+        print!("Counting expected infinite storage accounts to create... ");
+        let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
+        println!("{} accounts", expected_storage_accounts_count);
+
         extract_data_to_distributed_storage(
             &mut batch,
             &mut recent_block_hash,
