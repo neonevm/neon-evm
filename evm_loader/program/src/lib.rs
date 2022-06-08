@@ -36,14 +36,23 @@ pub use solana_program;
 pub use transaction::UnsignedTransaction;
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
-#[cfg(feature = "tracing")]
+// #[cfg(feature = "tracing")]
 pub mod tracing;
+
+#[cfg(not(feature = "tracing"))]
+macro_rules! evente {
+    ($x:expr) => {
+        use crate::tracing::Event::*;
+        crate::tracing::send($x);
+    };
+}
 
 #[cfg(feature = "tracing")]
 macro_rules! event {
     ($x:expr) => {
         use crate::tracing::Event::*;
-        crate::tracing::with(|listener| listener.event($x));
+        // crate::tracing::with(|listener| listener.event($x));
+        send($x);
     };
 }
 
@@ -85,3 +94,4 @@ macro_rules! event {
 
 pub(crate) use emit_exit;
 pub(crate) use event;
+pub(crate) use evente;

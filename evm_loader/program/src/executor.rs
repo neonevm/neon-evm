@@ -20,7 +20,7 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
-use crate::{event, emit_exit};
+use crate::{event,  evente, emit_exit};
 
 
 fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
@@ -246,12 +246,12 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        event!(Create {
+        evente!(Create {
             caller,
             address,
             scheme,
             value,
-            init_code: &init_code,
+            init_code: init_code.clone(),
             target_gas,
         });
 
@@ -289,13 +289,13 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        event!(Call {
+        evente!(Call {
             code_address,
-            transfer: &transfer,
-            input: &input,
+            transfer: transfer,
+            input: input.clone(),
             target_gas,
             is_static,
-            context: &context,
+            context: context.clone(),
         });
 
         debug_print!("call");
