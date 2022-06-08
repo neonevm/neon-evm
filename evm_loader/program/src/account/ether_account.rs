@@ -83,7 +83,7 @@ impl Packable for DataV1 {
         ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
 
         Self {
-            ether: H160::from_slice(&*ether),
+            ether: H160::from_slice(ether),
             nonce: nonce[0],
             trx_count: u64::from_le_bytes(*trx_count),
             code_account: Pubkey::new_from_array(*code_account),

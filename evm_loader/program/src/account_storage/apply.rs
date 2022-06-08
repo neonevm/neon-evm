@@ -186,7 +186,7 @@ impl<'a> ProgramAccountStorage<'a> {
             return Ok(())
         }
 
-        return Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", solana_address);
+        Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", solana_address)
     }
 
 
