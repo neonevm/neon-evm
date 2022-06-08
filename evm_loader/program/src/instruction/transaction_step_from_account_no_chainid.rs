@@ -1,4 +1,4 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury, Storage, Holder};
+use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder};
 use crate::transaction::{ UnsignedTransaction, verify_tx_signature};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
@@ -48,12 +48,12 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             return Err!(ProgramError::InvalidArgument; "Expected transaction without chain id");
         }
 
-        let mut storage = Storage::new(program_id, storage_info, &accounts, caller, &trx, &signature)?;
+        let mut storage = State::new(program_id, storage_info, &accounts, caller, &trx, &signature)?;
         storage.gas_limit = storage.gas_limit.saturating_mul(U256::from(crate::config::GAS_LIMIT_MULTIPLIER_NO_CHAINID));
 
         do_begin(step_count, accounts, storage, &mut account_storage, trx, caller)
     } else {
-        let storage = Storage::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
+        let storage = State::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
 
         do_continue(step_count, accounts, storage, &mut account_storage)
     }

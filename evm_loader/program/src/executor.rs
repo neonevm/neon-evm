@@ -185,7 +185,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             return Err(ExitError::StaticModeViolation);
         }
 
-        self.gasometer.record_storage_write(&self.state, address, index);
+        self.gasometer.record_storage_write(&self.state, address, index, value);
 
         self.state.set_storage(address, index, value);
         Ok(())
@@ -363,12 +363,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// # Panics
     ///
     /// Panics if account is invalid or any serialization error occurs.
-    pub fn save_into(&self, storage: &mut crate::account::Storage) {
+    pub fn save_into(&self, storage: &mut crate::account::State) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
     /// Deserializes and restores state of runtime and executor from a storage account.
-    pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Result<Self, ProgramError> {
+    pub fn restore(storage: &crate::account::State, backend: &'a B) -> Result<Self, ProgramError> {
         let (runtime, substate) = storage.deserialize()?;
         let gasometer = Gasometer::new(Some(storage.gas_used_and_paid))?;
 

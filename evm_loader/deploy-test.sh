@@ -22,7 +22,7 @@ TOKEN_ACCOUNT2=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT2 | gr
 spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT2
 spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT2
 
-python3 -m unittest discover -v -p 'test*.py'
+# python3 -m unittest discover -v -p 'test*.py'
 
 echo "Deploy test success"
 exit 0

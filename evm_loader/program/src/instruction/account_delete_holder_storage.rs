@@ -1,4 +1,4 @@
-use crate::account::{FinalizedStorage, Operator};
+use crate::account::{FinalizedState, Operator};
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
@@ -32,7 +32,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, seed: &str) -> ProgramResu
     }
 
     let tag = crate::account::tag(program_id, accounts.deleted_account)?;
-    if !(tag == FinalizedStorage::TAG || tag == crate::account::TAG_EMPTY) {
+    if !(tag == FinalizedState::TAG || tag == crate::account::TAG_EMPTY) {
         return Err!(ProgramError::InvalidAccountData; "Account {} - expected empty or finalized storage", accounts.deleted_account.key)
     }
 
