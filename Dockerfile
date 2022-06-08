@@ -81,7 +81,6 @@ COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
-    evm_loader/tests/ \
     evm_loader/wait-for-solana.sh \
     evm_loader/wait-for-neon.sh \
     evm_loader/create-test-accounts.sh \
@@ -95,6 +94,7 @@ COPY evm_loader/*.py \
     evm_loader/deploy-contracts.sh \
     evm_loader/get_deployer_address.py /opt/
 
+COPY evm_loader/tests /opt/
 COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
