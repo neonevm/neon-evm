@@ -525,17 +525,6 @@ fn main() -> Result<()> {
             CONFIG.max_tps,
         );
 
-        println!("Extracting data to distributed storage...");
-        extract_data_to_distributed_storage(
-            &mut batch,
-            &mut recent_block_hash,
-            &contracts_v1_map,
-            &data_written_map,
-            data_written_map.len(),
-        )?;
-
-        batch.send();
-
         println!("Converting accounts from V1 to V2...");
 
         convert_accounts_to_v2(
@@ -567,5 +556,16 @@ fn main() -> Result<()> {
         if contracts_v1_map.len() == 0 {
             return Ok(());
         }
+
+        println!("Extracting data to distributed storage...");
+        extract_data_to_distributed_storage(
+            &mut batch,
+            &mut recent_block_hash,
+            &contracts_v1_map,
+            &data_written_map,
+            data_written_map.len(),
+        )?;
+
+        batch.send();
     }
 }
