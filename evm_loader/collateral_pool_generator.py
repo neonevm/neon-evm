@@ -2,7 +2,8 @@ import sys
 
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed, Processed
+from solana.rpc.commitment import Confirmed
+from solana.rpc.types import TxOpts
 from tests.solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, solana_client, TransactionWithComputeBudget, send_transaction, create_account_with_seed, get_solana_balance
 
 print("Run collateral_pool_generator.py")
@@ -19,5 +20,5 @@ for collateral_pool_index in range(0, 10):
         minimum_balance = solana_client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
         trx = TransactionWithComputeBudget()
         trx.add(create_account_with_seed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance, 0, PublicKey(EVM_LOADER)))
-        result = solana_client.send_transaction(trx, Keypair.from_secret_key(wallet.secret_key()))
+        result = solana_client.send_transaction(trx, Keypair.from_secret_key(wallet.secret_key()), opts=TxOpts(skip_confirmation=False, preflight_commitment=Confirmed))
         print(result)

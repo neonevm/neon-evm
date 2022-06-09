@@ -2,7 +2,7 @@ import sys
 
 from solana.publickey import PublicKey
 from solana.keypair import Keypair
-from solana_utils import OperatorAccount, get_associated_token_address, solana_client, TransactionWithComputeBudget, create_associated_token_account, send_transaction
+from tests.solana_utils import OperatorAccount, get_associated_token_address, solana_client, TransactionWithComputeBudget, create_associated_token_account, send_transaction
 from solana.rpc.commitment import Processed
 
 
