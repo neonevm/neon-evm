@@ -14,8 +14,7 @@ export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
 WAIT_TIME=${1:-1}
 echo "Waiting ${WAIT_TIME} seconds for Neon EVM to be available at ${SOLANA_URL}"
 for i in $(seq 1 ${WAIT_TIME}); do
-  echo "Run colalteral pool checker"
-  ls -la
+  echo "Run collateral pool checker"
     if python3 collateral_pool_checker.py collateral-pool-keypair.json; then
         exit 0
     fi

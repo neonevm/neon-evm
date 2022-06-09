@@ -7,7 +7,7 @@ fi
 
 solana config set --url "$SOLANA_URL"
 
-./wait-for-neon.sh 20
+./wait-for-neon.sh 60
 
 # NOTE: If you change this key, keep in mind to update also token addresses in solidity/tokenlist.json file
 export DEPLOYER_PRIVATE_KEY='0x4deacb079b4714c38f39508aa8900039f2721ed8686835d43347ba9267da767b'
