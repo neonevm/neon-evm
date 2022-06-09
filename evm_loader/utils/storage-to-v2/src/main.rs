@@ -1,12 +1,13 @@
 #![allow(deprecated)]
 
+use std::env::current_dir;
 use std::fs::File;
 use std::io::Write;
 use std::mem::size_of;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Result;
 use arrayref::array_ref;
@@ -24,8 +25,10 @@ use solana_client::rpc_filter;
 use solana_client::rpc_filter::{MemcmpEncodedBytes, RpcFilterType};
 use solana_program::account_info::AccountInfo;
 use solana_program::hash::Hash;
+use solana_program::pubkey;
 use solana_sdk::account::{Account, ReadableAccount};
 use solana_sdk::account_info::IntoAccountInfo;
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
@@ -64,6 +67,7 @@ struct Config {
     show_errors: bool,
     skip_preflight: bool,
     max_tps: usize,
+    skip_backup: bool,
 }
 
 struct ContractV1<'a> {
@@ -85,6 +89,10 @@ lazy_static::lazy_static! {
         .expect("Failed to parse `evm_loader_pubkey` in config");
     static ref PAYER: Keypair = read_keypair_file("payer.keys.json")
         .expect("Failed to read `payer.keys.json` file");
+    static ref EXCLUDE_V1_CONTRACTS: Vec<Pubkey> = vec![
+        pubkey!("74gQvu6R5DnSFdJ9JoMXFzk3e7uZgo9cZKxrdZBW8RaH"),
+        pubkey!("9HYmDSLt1svoJB23CkEZ9iMUCRUoNVj7iUS7T6pHPYr5"),
+    ];
 }
 
 struct RecentBlockHash<'a> {
@@ -106,8 +114,8 @@ impl <'a> RecentBlockHash<'a> {
 
     fn get(&mut self) -> &Hash {
         if Instant::now().duration_since(self.time).as_secs() > self.recent_block_hash_ttl_sec {
-            match self.client.get_latest_blockhash() {
-                Ok(hash) => {
+            match self.client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()) {
+                Ok((hash, _)) => {
                     self.hash = hash;
                     self.time = Instant::now();
                     println!("New recent block hash: {}", self.hash);
@@ -401,7 +409,7 @@ fn convert_accounts_to_v2(
     data_written_map: &DataWrittenMap,
 ) -> Result<()> {
     for (pubkey, ethereum_contract_v1) in contracts_v1_map.iter() {
-        if is_all_data_written(data_written_map, &ethereum_contract_v1) {
+        if is_all_data_written(data_written_map, ethereum_contract_v1) {
             batch.add(
                 &make_convert_to_v2_transaction(
                     *pubkey.clone(),
@@ -452,11 +460,13 @@ fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
 
 fn count_storage_accounts(contracts_v1_map: &ContractsV1Map) -> usize {
     let storage_entries_in_contract_account = U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT);
-    contracts_v1_map.values()
-        .map(|ether_contract|
-                 ether_contract.storage.iter()
-                     .filter(|(key, value)| *key >= storage_entries_in_contract_account && !value.is_zero())
-                     .count()
+    contracts_v1_map.iter()
+        .map(|(pubkey, ether_contract)| {
+            ether_contract.storage.iter()
+                .on_error(|_err| println!("Data corrupted in HAMT for account: {}", pubkey))
+                .filter(|(key, value)| *key >= storage_entries_in_contract_account && !value.is_zero())
+                .count()
+        }
     ).sum()
 }
 
@@ -474,11 +484,33 @@ fn main() -> Result<()> {
 
     print!("Querying Contract V1 accounts... ");
     let mut contract_v1_accounts = get_evm_accounts(&client, ether_contract::DataV1::TAG, None)?;
-    print!("Queried {} accounts. Transforming... ", contract_v1_accounts.len());
+    print!("Queried {} accounts. ", contract_v1_accounts.len());
+
+    if !CONFIG.skip_backup {
+        let path = current_dir()?
+            .join("backups")
+            .join(
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_secs()
+                    .to_string(),
+            );
+        std::fs::create_dir_all(&path)?;
+        print!("Backing up to {:?}... ", path);
+        for (pubkey, account_info) in contract_v1_accounts.iter() {
+            std::fs::write(
+                path.join(pubkey.to_string()),
+                account_info.data(),
+            )?;
+        }
+    }
+
+    print!("Transforming...");
 
     let contracts_v1_info: Vec<AccountInfo> = contract_v1_accounts.iter_mut()
         .map(|(pubkey, account)| (&*pubkey, account).into_account_info())
         .collect();
+
     let ether_contracts_v1: Vec<(&Pubkey, EthereumContractV1)> = contracts_v1_info.iter()
         .map(|info| {
             (
@@ -504,7 +536,15 @@ fn main() -> Result<()> {
         })
         .collect();
     drop(ether_addresses_map);
+
+    for exclude_pubkey in EXCLUDE_V1_CONTRACTS.iter() {
+        contracts_v1_map.remove(exclude_pubkey);
+    }
     println!("OK ({} accounts)", contracts_v1_map.len());
+
+    print!("Counting expected infinite storage accounts to create... ");
+    let expected_storage_accounts_count = count_storage_accounts(&contracts_v1_map);
+    println!("{} accounts", expected_storage_accounts_count);
 
     let mut recent_block_hash = RecentBlockHash::new(&client, CONFIG.recent_block_hash_ttl_sec);
     loop {
