@@ -16,6 +16,7 @@ echo "Waiting ${WAIT_TIME} seconds for Neon EVM to be available at ${SOLANA_URL}
 for i in $(seq 1 ${WAIT_TIME}); do
   echo "Run collateral pool checker"
     if python3 collateral_pool_checker.py collateral-pool-keypair.json; then
+      docker logs solana
         exit 0
     fi
     if [ ${i} -lt ${WAIT_TIME} ]; then
