@@ -339,11 +339,11 @@ impl<'a> HamtIterator<'a> {
     }
 
     fn on_data_corrupted(&self) {
-        if let Some(ref on_error) = self.on_error {
-            on_error(HamtIteratorErrorType::DataCorrupted);
-        } else {
-            panic!("HAMT data corrupted");
-        }
+        self.on_error.as_ref()
+            .map_or_else(
+                || panic!("HAMT data corrupted"),
+                |on_error| on_error(HamtIteratorErrorType::DataCorrupted),
+            );
     }
 }
 
