@@ -9,18 +9,7 @@ use solana_program::{
 };
 use crate::executor::Machine;
 use crate::config::chain_id;
-// use solana_program::tracer_api;
 
-// use crate::tracing::Event;
-// use evm::{
-//     Transfer,
-//     U256,
-//     Context,
-// };
-
-// use std::{
-//     str::FromStr
-// };
 
 struct Accounts<'a> {
     sysvar_instructions: sysvar::Instructions<'a>,
@@ -32,44 +21,11 @@ struct Accounts<'a> {
     remaining_accounts: &'a [AccountInfo<'a>],
 }
 
-
 /// Execute Ethereum transaction in a single Solana transaction
 /// Can only be used for function call or transfer
 /// SOLANA TRANSACTION FAILS IF `trx.to` IS EMPTY
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
     solana_program::msg!("Instruction: Execute Transaction from Instruction");
-
-    // let transfer = Transfer{
-    //     source: H160::default(),
-    //     target: H160::default(),
-    //     value: U256::zero(),
-    // };
-    //
-    // let context = Context{
-    //     address: H160::default(),
-    //     caller: H160::default(),
-    //     apparent_value: U256::from(55_u8),
-    // };
-    //
-    // let event = Event::Call{
-    //     code_address: H160::from_str("1333333333333333333333333333333333333331").unwrap(),
-    //     transfer: Some(transfer),
-    //     input: vec![5, 5],
-    //     target_gas: Some(1),
-    //     is_static: true,
-    //     context: context
-    // };
-    //
-    // let mut buffer = vec![0_u8; 0];
-    // bincode::serialize_into(&mut buffer, &event).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-    //
-    // solana_program::msg!("buffer {:?} ", buffer);
-
-    // let st: Event = bincode::deserialize_from(buffer.as_slice()).unwrap();
-    // solana_program::msg!("st {:?} ", st);
-    // let var = vec![1_u8, 2, 3];
-    // let var_ref = var.as_slice();
-    // tracer_api::send_trace_message(var_ref  );
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let caller_address = H160::from(*array_ref![instruction, 4, 20]);

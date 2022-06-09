@@ -3,15 +3,8 @@
 use evm::Context;
 use evm::{H160, H256, U256};
 use evm_runtime::{CreateScheme, ExitReason, Transfer};
-use solana_program::tracer_api;
+use solana_program::{tracer_api, program_error::ProgramError};
 
-// environmental::environmental!(listener: dyn EventListener + 'static);
-
-// Implementors can build traces based on handled [Events](Event)
-// pub trait EventListener {
-//     Handle an [Event]
-    // fn event(&mut self, event: Event);
-// }
 
 /// Trace event
 #[derive(Debug,  Clone)]
@@ -22,16 +15,16 @@ pub enum Event {
         /// Called code address
         code_address: H160,
         /// Transfer parameters
-        transfer: Option<Transfer>,
+        transfer:  Option<Transfer>,
         /// Input data provided to the call
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
-        input:  Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        input: Vec<u8>,
         /// Target gas
         target_gas: Option<u64>,
         /// Static call flag
         is_static: bool,
         /// Runtime context
-        context:  Context,
+        context: Context,
     },
     /// Create event
     Create {
@@ -44,7 +37,7 @@ pub enum Event {
         /// Value the created account is endowed with
         value: U256,
         /// Init code
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
+        #[serde(with = "serde_bytes")]
         init_code: Vec<u8>,
         /// Target Gas
         target_gas: Option<u64>,
@@ -63,7 +56,7 @@ pub enum Event {
         /// Exit reason
         reason: ExitReason,
         /// Return value
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
+        #[serde(with = "serde_bytes")]
         return_value: Vec<u8>,
     },
     /// Transactional Call event
@@ -75,7 +68,7 @@ pub enum Event {
         /// Value transferred to the destination account
         value: U256,
         /// Input data provided to the call
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
+        #[serde(with = "serde_bytes")]
         data: Vec<u8>,
         /// Gas Limit
         gas_limit: U256,
@@ -87,7 +80,7 @@ pub enum Event {
         /// Value the created account is endowed with
         value: U256,
         /// Init code
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
+        #[serde(with = "serde_bytes")]
         init_code: Vec<u8>,
         /// Gas limit
         gas_limit: U256,
@@ -101,7 +94,7 @@ pub enum Event {
         /// Value the created account is endowed with
         value: U256,
         /// Init code
-        #[cfg_attr(feature = "with-serde", serde(with = "serde_bytes"))]
+        #[serde(with = "serde_bytes")]
         init_code: Vec<u8>,
         /// Salt
         salt: H256,
@@ -112,19 +105,8 @@ pub enum Event {
     },
 }
 
-// Expose `listener::with` to the crate only
-// pub(crate) fn with<F: FnOnce(&mut (dyn EventListener + 'static))>(f: F) {
-//     listener::with(f);
-// }
-
-// Run closure with provided listener
-// pub fn using<R, F: FnOnce() -> R>(new: &mut (dyn EventListener + 'static), f: F) -> R {
-//     listener::using(new, f)
-// }
-
-pub fn send(_: Event){
-    solana_program::msg!("SEND SEND SEND");
-    let var = vec![1_u8, 2, 3];
-    let var_ref = var.as_slice();
-    tracer_api::send_trace_message(var_ref  );
+pub fn send(event: Event){
+    let mut message = vec![];
+    bincode::serialize_into(&mut message, &event).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e)).unwrap();
+    tracer_api::send_trace_message(message.as_slice());
 }

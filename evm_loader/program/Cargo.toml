@@ -9,29 +9,24 @@ authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
 [features]
-#alpha = []
-#mainnet = []
-#testnet = []
-#devnet = []
+alpha = []
+mainnet = []
+testnet = []
+devnet = []
 no-logs = []
 no-entrypoint = []
 test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
-#tracing = [ "environmental" ]
-#with-codec = ["codec", "evm-core/with-codec", "evm-runtime/with-codec"]
-#with-serde = ["serde", "serde_bytes", "evm-core/with-serde", "evm-runtime/with-serde"]
-
+tracing = []
 
 [dependencies]
 
-#solana-program = { version = "=1.9.12", path = "../../../solana/sdk/program", default_features = false }
-solana-program = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false }
-#solana-program = { version = "=1.9.12", path = "/home/user/CLionProjects/solanalabs/solana/sdk/program", default_features = false }
 #solana-program = { version = "=1.9.12", default_features = false }
-spl-token = { version = "3.2.0", path = "/home/user/CLionProjects/solanalabs/solana-program-library/token/program", default_features = false, features = ["no-entrypoint"] }
 #spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
 #spl-associated-token-account = { version = "1.0.3", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
+solana-program = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false }
+spl-token = { version = "3.2.0", path = "/home/user/CLionProjects/solanalabs/solana-program-library/token/program", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.2", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
 #num-bigint = "0.4"
 num-derive = "0.3"
@@ -53,7 +48,7 @@ impl-serde = "0.1"
 rlp = "0.5"
 bincode = "1.3.3"
 evm = { version = "0.18.0", path = "../rust-evm", default_features = false, features = ["with-serde", ] }
-evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false,  features = ["with-serde", ] }
+evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
 log = "0.4"
@@ -63,10 +58,7 @@ log = "0.4"
 rand = { version = "0.7.0"}
 solana-program-test = "=1.9.12"
 #solana-sdk = "=1.9.12"
-#solana-sdk = { version = "=1.9.12", path = "/home/user/CLionProjects/solanalabs/solana/sdk", default_features = false }
 solana-sdk = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk", default_features = false }
-
-
 
 [lib]
 crate-type = ["cdylib", "lib"]

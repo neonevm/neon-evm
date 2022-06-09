@@ -20,7 +20,7 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
-use crate::{event,  evente, emit_exit};
+use crate::{event, emit_exit};
 
 
 fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
@@ -246,7 +246,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        evente!(Create {
+        event!(Create {
             caller,
             address,
             scheme,
@@ -289,9 +289,9 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        evente!(Call {
+        event!(Call {
             code_address,
-            transfer: transfer,
+            transfer: transfer.clone(),
             input: input.clone(),
             target_gas,
             is_static,
@@ -397,7 +397,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             caller,
             address: code_address,
             value: transfer_value,
-            data: &input,
+            data: input.clone(),
             gas_limit
         });
         debug_print!("call_begin");
@@ -442,7 +442,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         event!(TransactCreate {
             caller,
             value: transfer_value,
-            init_code: &code,
+            init_code: code.clone(),
             gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
