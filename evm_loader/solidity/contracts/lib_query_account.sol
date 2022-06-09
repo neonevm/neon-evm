@@ -16,7 +16,7 @@ library QueryAccount {
      * @param len Length in bytes of the chunk.
      */
     function cache(uint256 solana_address, uint64 offset, uint64 len) internal view returns (bool) {
-        (bool success, bytes memory _dummy) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
+        (bool success,) = precompiled.staticcall(abi.encodeWithSignature("cache(uint256,uint64,uint64)", solana_address, offset, len));
         return success;
     }
 
