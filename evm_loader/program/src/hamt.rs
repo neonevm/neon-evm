@@ -1,9 +1,10 @@
 #![allow(clippy::cast_possible_truncation, clippy::similar_names)]
 
 use std::cell::RefMut;
-use evm::U256;
-use arrayref::{array_ref, array_mut_ref, mut_array_refs};
 use std::mem::size_of;
+
+use arrayref::{array_mut_ref, array_ref, mut_array_refs};
+use evm::U256;
 use solana_program::program_error::ProgramError;
 
 /*
@@ -276,7 +277,7 @@ impl<'a> Hamt<'a> {
     }
 
     #[must_use]
-    pub fn iter(&'a self) -> HamtIterator<'a> {
+    pub fn iter(&'a self) -> HamtIterator<'a, > {
         HamtIterator::new(self)
     }
 }
@@ -290,9 +291,14 @@ struct StackFrame {
     current_key: U256,
 }
 
+pub enum HamtIteratorErrorType {
+    DataCorrupted,
+}
+
 pub struct HamtIterator<'a> {
     hamt: &'a Hamt<'a>,
     stack: Vec<StackFrame>,
+    on_error: Option<Box<dyn Fn(HamtIteratorErrorType) +'a>>,
 }
 
 impl<'a> HamtIterator<'a> {
@@ -308,6 +314,18 @@ impl<'a> HamtIterator<'a> {
                     current_key: U256::zero(),
                 },
             ],
+            on_error: None,
+        }
+    }
+
+    pub fn on_error(
+        self,
+        callback: impl Fn(HamtIteratorErrorType) + 'a,
+    ) -> HamtIterator<'a> {
+        HamtIterator {
+            hamt: self.hamt,
+            stack: self.stack,
+            on_error: Some(Box::new(callback)),
         }
     }
 
@@ -317,6 +335,11 @@ impl<'a> HamtIterator<'a> {
         }
 
         value.trailing_zeros()
+    }
+
+    fn on_data_corrupted(&self) {
+        self.on_error.as_ref()
+            .map(|on_error| on_error(HamtIteratorErrorType::DataCorrupted));
     }
 }
 
@@ -335,15 +358,29 @@ impl<'a> Iterator for HamtIterator<'a> {
         ) = self.stack.pop() {
             while index < count {
                 index += 1;
-                match self.hamt.get_item(ptr_pos + index * size_of::<u32>() as u32) {
+                let position = ptr_pos + index * size_of::<u32>() as u32;
+                if position as usize + size_of::<u32>() > self.hamt.data.len() {
+                    self.on_data_corrupted();
+                    return None;
+                }
+                match self.hamt.get_item(position) {
                     ItemType::Empty => (),
 
                     ItemType::Item { pos } => {
                         // TODO: Can be optimized:
                         let tag = Self::find_nth_one(tags, index - 1);
                         let mut key = current_key | (U256::from(tag) << (self.stack.len() * 5));
+                        if pos as usize + size_of::<U256>() > self.hamt.data.len() {
+                            self.on_data_corrupted();
+                            return None;
+                        }
                         key = key | (self.hamt.restore_value(pos) << ((self.stack.len() + 1) * 5));
-                        let value = self.hamt.restore_value(pos + size_of::<U256>() as u32);
+                        let position = pos + size_of::<U256>() as u32;
+                        if position as usize + size_of::<U256>() > self.hamt.data.len() {
+                            self.on_data_corrupted();
+                            return None;
+                        }
+                        let value = self.hamt.restore_value(position);
 
                         self.stack.push(StackFrame {
                             ptr_pos,
@@ -368,6 +405,10 @@ impl<'a> Iterator for HamtIterator<'a> {
                         let tag = Self::find_nth_one(tags, index - 1);
                         current_key = current_key | (U256::from(tag) << ((self.stack.len() - 1) * 5));
                         ptr_pos = pos;
+                        if pos as usize + size_of::<u32>() > self.hamt.data.len() {
+                            self.on_data_corrupted();
+                            return None;
+                        }
                         tags = self.hamt.restore_u32(pos);
                         index = 0;
                         count = tags.count_ones();
