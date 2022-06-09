@@ -101,6 +101,14 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
     code = 14
     d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
+    print("MAKE INSTR--------")
+    print("Holder ", holder_address)
+    print("Storage ", storage_address)
+    print("Operator ", operator.public_key)
+    print("Treasury ", treasury_address)
+    print("Operator eth ", evm_loader.ether2program(operator_ether)[0])
+    print("SYS ", SYS_PROGRAM_ID)
+    print("EVM LOADER ", EVM_LOADER)")
 
     accounts = [
                 AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
@@ -113,6 +121,7 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
                 AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
             ]
     for acc in additional_accounts:
+        print("Additional acc ", acc)
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
     return TransactionInstruction(
