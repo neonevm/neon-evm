@@ -277,7 +277,7 @@ impl<'a> Hamt<'a> {
     }
 
     #[must_use]
-    pub fn iter(&'a self) -> HamtIterator<'a, > {
+    pub fn iter(&'a self) -> HamtIterator<'a> {
         HamtIterator::new(self)
     }
 }
