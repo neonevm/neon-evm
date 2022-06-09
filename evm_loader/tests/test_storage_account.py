@@ -18,7 +18,7 @@ from .utils.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUN
 @pytest.fixture(scope="function")
 def deployed_contract(evm_loader: "EvmLoader", user_account: "Caller", operator_keypair: Keypair,
                       treasury_pool) -> "Contract":
-    return deploy_contract(operator_keypair, user_account, "rw_block.binary", evm_loader, treasury_pool)
+    return deploy_contract(operator_keypair, user_account, "rw_lock.binary", evm_loader, treasury_pool)
 
 
 #  We need test here two types of transaction
