@@ -19,6 +19,5 @@ for collateral_pool_index in range(0, 10):
         minimum_balance = solana_client.get_minimum_balance_for_rent_exemption(0, commitment=Confirmed)["result"]
         trx = TransactionWithComputeBudget()
         trx.add(create_account_with_seed(wallet.public_key(), PublicKey(collateral_pool_base), seed, minimum_balance, 0, PublicKey(EVM_LOADER)))
-        result = send_transaction(solana_client, trx, Keypair.from_secret_key(wallet.secret_key()), Processed)
+        result = solana_client.send_transaction(trx, Keypair.from_secret_key(wallet.secret_key()))
         print(result)
-print(collateral_pool_base)
