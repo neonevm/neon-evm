@@ -108,7 +108,7 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
     print("Treasury ", treasury_address)
     print("Operator eth ", evm_loader.ether2program(operator_ether)[0])
     print("SYS ", SYS_PROGRAM_ID)
-    print("EVM LOADER ", EVM_LOADER)")
+    print("EVM LOADER ", EVM_LOADER")
 
     accounts = [
                 AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
