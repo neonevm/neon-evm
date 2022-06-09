@@ -2,6 +2,7 @@ import os
 import typing as tp
 import pathlib
 
+import pytest
 from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
@@ -18,17 +19,12 @@ from ..conftest import Caller, TreasuryPool
 from .ethereum import create_contract_address, Contract
 
 
-CONTRACTS_DIR = os.environ.get("CONTRACTS_DIR")
-if CONTRACTS_DIR is None:
-    CONTRACTS_DIR = pathlib.Path(__file__).parent.parent / "contracts"
-
-
 def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pathlib.Path, str], holder_account: PublicKey, holder_id: int,
                                         operator: Keypair) -> int:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
-        contract_path = CONTRACTS_DIR / contract_path
+        contract_path = pytest.CONTRACTS_PATH / contract_path
     with open(contract_path, 'rb') as f:
         contract_code = f.read()
 

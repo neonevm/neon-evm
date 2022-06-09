@@ -1,11 +1,9 @@
 import base64
-import pathlib
 
 import pytest
 
 from solana.keypair import Keypair
 from solana.rpc.core import RPCException
-from solana.rpc.commitment import Finalized
 
 from eth_utils import abi
 from .solana_utils import send_transaction, solana_client, get_transaction_count, make_new_user
@@ -20,8 +18,7 @@ from .utils.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUN
 @pytest.fixture(scope="function")
 def deployed_contract(evm_loader: "EvmLoader", user_account: "Caller", operator_keypair: Keypair,
                       treasury_pool) -> "Contract":
-    hello_world_contract_path = pathlib.Path(__file__).parent / "contracts" / "rw_block.binary"
-    return deploy_contract(operator_keypair, user_account, hello_world_contract_path, evm_loader, treasury_pool)
+    return deploy_contract(operator_keypair, user_account, "rw_block.binary", evm_loader, treasury_pool)
 
 
 #  We need test here two types of transaction

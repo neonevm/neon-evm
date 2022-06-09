@@ -1,16 +1,12 @@
+import os
 import json
 import pathlib
-
 
 import pytest
 
 from solana.keypair import Keypair
-from solana.publickey import PublicKey
-from solana.rpc.commitment import Confirmed
-from eth_keys import keys as eth_keys
 
-from .solana_utils import ETH_TOKEN_MINT_ID, EvmLoader, OperatorAccount, get_solana_balance, create_treasury_pool_address, solana_client, \
-    wait_confirm_transaction, get_associated_token_address, make_new_user
+from .solana_utils import EvmLoader, OperatorAccount, create_treasury_pool_address, make_new_user
 from .utils.types import TreasuryPool, Caller
 
 
@@ -18,6 +14,13 @@ def pytest_addoption(parser):
     parser.addoption(
         "--operator-key", action="store", default="~/.config/solana/id.json", help="Path to operator keypair"
     )
+
+
+def pytest_configure(config):
+    if "RUST_LOG" in os.environ:
+        pytest.CONTRACTS_PATH = pathlib.Path("/opt/solidity")
+    else:
+        pytest.CONTRACTS_PATH = pathlib.Path(__file__).parent / "contracts"
 
 
 @pytest.fixture(scope="session")
