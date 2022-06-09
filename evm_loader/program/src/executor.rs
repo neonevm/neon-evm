@@ -21,6 +21,8 @@ use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
 use crate::{event, emit_exit};
+#[cfg(feature = "tracing")]
+use evm::tracing::Event::*;
 
 
 fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {

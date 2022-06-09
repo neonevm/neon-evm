@@ -36,20 +36,23 @@ pub use solana_program;
 pub use transaction::UnsignedTransaction;
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
+
 #[cfg(feature = "tracing")]
 pub mod tracing;
+
 
 #[cfg(feature = "tracing")]
 macro_rules! event {
     ($x:expr) => {
-        use crate::tracing::Event::*;
-        crate::tracing::send($x);
+        use crate::tracing;
+        tracing::send($x);
     };
 }
 
 #[cfg(feature = "tracing")]
 macro_rules! emit_exit {
     ($reason:expr) => {{
+        use evm::tracing::Event::*;
         let reason = $reason;
         event!(Exit {
             reason: reason.clone().into(),
