@@ -161,7 +161,7 @@ impl<'url> Batch<'url> {
     }
 
     pub fn send(&mut self) {
-        if self.batch.len() == 0 {
+        if self.batch.is_empty() {
             return;
         }
 
@@ -239,7 +239,7 @@ fn write_value_instruction(
     value.to_big_endian(&mut data[33..]);
 
     Instruction::new_with_bytes(
-        EVM_LOADER.clone(),
+        *EVM_LOADER,
         &data,
         vec![
             AccountMeta::new_readonly(PAYER.pubkey(), true),         // Operator
@@ -254,7 +254,7 @@ fn convert_to_v2_instruction(
     ether_account: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
-        EVM_LOADER.clone(),
+        *EVM_LOADER,
         &[29u8],
         vec![
             AccountMeta::new_readonly(PAYER.pubkey(), true),         // Funding account
@@ -324,13 +324,13 @@ fn copy_data_to_distributed_storage<'a>(
         }
 
         let instructions = vec![
-            write_value_instruction(ethereum_contract_v1.owner.clone(), storage_address, key, value),
+            write_value_instruction(*ethereum_contract_v1.owner, storage_address, key, value),
         ];
         let blockhash = recent_blockhash.get();
         let mut message = Message::new(&instructions, Some(&PAYER.pubkey()));
-        message.recent_blockhash = blockhash.clone();
+        message.recent_blockhash = *blockhash;
         let mut transaction = Transaction::new_unsigned(message);
-        transaction.sign(&[&*PAYER], blockhash.clone());
+        transaction.sign(&[&*PAYER], *blockhash);
 
         batch.add(&transaction);
         count += 1;
@@ -339,7 +339,7 @@ fn copy_data_to_distributed_storage<'a>(
     count
 }
 
-fn is_all_data_written<'a>(
+fn is_all_data_written(
     data_written_map: &DataWrittenMap,
     ethereum_contract_v1: &ContractV1,
 ) -> bool {
@@ -395,9 +395,9 @@ fn make_convert_to_v2_transaction(pubkey: Pubkey, recent_blockhash: &Hash) -> Tr
         convert_to_v2_instruction(pubkey),
     ];
     let mut message = Message::new(&instructions, Some(&PAYER.pubkey()));
-    message.recent_blockhash = recent_blockhash.clone();
+    message.recent_blockhash = *recent_blockhash;
     let mut transaction = Transaction::new_unsigned(message);
-    transaction.sign(&[&*PAYER], recent_blockhash.clone());
+    transaction.sign(&[&*PAYER], *recent_blockhash);
 
     transaction
 }
@@ -412,7 +412,7 @@ fn convert_accounts_to_v2(
         if is_all_data_written(data_written_map, ethereum_contract_v1) {
             batch.add(
                 &make_convert_to_v2_transaction(
-                    *pubkey.clone(),
+                    **pubkey,
                     recent_block_hash.get(),
                 ),
             );
@@ -447,7 +447,7 @@ fn obtain_ether_addresses_map(client: &RpcClient) -> ClientResult<EtherAddresses
 
 fn obtain_data_written_map(client: &RpcClient) -> ClientResult<DataWrittenMap> {
     get_evm_accounts(
-        &client,
+        client,
         ether_storage::Data::TAG,
         Some(UiDataSliceConfig { offset: 1, length: size_of::<U256>() }),
     ).map(|vec| vec.into_iter()
@@ -516,7 +516,9 @@ fn main() -> Result<()> {
             (
                 info.key,
                 EthereumContractV1::from_account(&EVM_LOADER, info)
-                    .expect(&format!("Cannot decode contract V1 data for account: {}", info.key))
+                    .unwrap_or_else(|err|
+                        panic!("Cannot decode contract V1 data for account: {}, error: {:?}", info.key, err)
+                    )
             )
         }).collect();
 
@@ -589,7 +591,7 @@ fn main() -> Result<()> {
         }
         println!("{} accounts removed", removed);
 
-        if contracts_v1_map.len() == 0 {
+        if contracts_v1_map.is_empty() {
             return Ok(());
         }
 

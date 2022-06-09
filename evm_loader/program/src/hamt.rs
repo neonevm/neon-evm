@@ -318,11 +318,12 @@ impl<'a> HamtIterator<'a> {
         }
     }
 
+    #[must_use]
     pub fn on_error(
         self,
         callback: impl Fn(HamtIteratorErrorType) + 'a,
-    ) -> HamtIterator<'a> {
-        HamtIterator {
+    ) -> Self {
+        Self {
             hamt: self.hamt,
             stack: self.stack,
             on_error: Some(Box::new(callback)),
@@ -338,8 +339,9 @@ impl<'a> HamtIterator<'a> {
     }
 
     fn on_data_corrupted(&self) {
-        self.on_error.as_ref()
-            .map(|on_error| on_error(HamtIteratorErrorType::DataCorrupted));
+        if let Some(ref on_error) = self.on_error {
+            on_error(HamtIteratorErrorType::DataCorrupted);
+        }
     }
 }
 
