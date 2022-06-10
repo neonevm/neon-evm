@@ -17,7 +17,7 @@ WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo +nightly clippy && \
+RUN cargo +1.61.0 clippy && \
     cargo build --release && \
     cargo build-sbf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-sbf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
