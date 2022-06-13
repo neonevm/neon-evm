@@ -728,7 +728,7 @@ fn main() {
             .unwrap_or_default();
     let loglevel: log::LevelFilter =
         app_matches.value_of("loglevel")
-            .map(|ll| 
+            .map_or(log::LevelFilter::Trace, |ll| 
                 match ll.to_ascii_lowercase().as_str() {
                     "off"   => log::LevelFilter::Off,
                     "err"   => log::LevelFilter::Error,
@@ -737,8 +737,7 @@ fn main() {
                     "deb"   => log::LevelFilter::Debug,
                     _       => log::LevelFilter::Trace,
                 }
-            )
-            .unwrap_or(log::LevelFilter::Trace);
+            );
     logs::init(context, loglevel).unwrap();
 
     let mut wallet_manager = None;
