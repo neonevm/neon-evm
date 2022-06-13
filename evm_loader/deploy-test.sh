@@ -22,7 +22,7 @@ TOKEN_ACCOUNT2=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT2 | gr
 spl-token mint $ETH_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT2
 spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT2
 
-py.test -n 2 tests/
+py.test -n 4 tests/
 
 echo "Deploy test success"
 exit 0
