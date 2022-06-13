@@ -10,7 +10,7 @@ use solana_program::{
     system_instruction, sysvar::Sysvar
 };
 use solana_program::account_info::AccountInfo;
-use solana_program::instruction::Instruction;
+//use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -86,7 +86,7 @@ impl<'a> Neon<'a> {
         };
 
         // ---- Legacy code
-        let instruction = {
+        /*let instruction = {
             use core::mem::size_of;
             let capacity = 2 * size_of::<u8>() + size_of::<u64>() + result.len();
 
@@ -99,7 +99,7 @@ impl<'a> Neon<'a> {
             Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
         };
         let r = invoke(&instruction, &[self.info.clone()]);
-        assert!(r.is_ok());
+        assert!(r.is_ok());*/
         // ---- Legacy code
 
         let mnemonic = b"RETURN";
