@@ -92,6 +92,7 @@ def deploy_contract_step(
 
 
 def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pathlib.Path, str], evm_loader: EvmLoader, treasury_pool: TreasuryPool, step_count: int = 1000):
+    print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     storage_account = create_storage_account(operator)

@@ -101,7 +101,13 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
     code = 14
     d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
-
+    print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
+    print("Holder: ", holder_address)
+    print("Storage: ", storage_address)
+    print("Operator: ", operator.public_key)
+    print("Treasury: ", treasury_address)
+    print("Operator ether: ", operator_ether.hex())
+    print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
     accounts = [
                 AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
