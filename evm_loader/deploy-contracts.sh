@@ -7,7 +7,7 @@ fi
 
 solana config set --url "$SOLANA_URL"
 
-./wait-for-neon.sh 20
+./wait-for-neon.sh 60
 
 # NOTE: If you change this key, keep in mind to update also token addresses in solidity/tokenlist.json file
 export DEPLOYER_PRIVATE_KEY='0x4deacb079b4714c38f39508aa8900039f2721ed8686835d43347ba9267da767b'
@@ -21,13 +21,13 @@ neon-cli --commitment=processed --evm_loader "$EVM_LOADER" --url "$SOLANA_URL" c
 
 echo
 echo "Depositing NEONs to deployer $DEPLOYER_PUBLIC_KEY"
-export ETH_TOKEN_MINT=$(solana address -k /opt/neon_token_keypair.json)
+export NEON_TOKEN_MINT=$(solana address -k /opt/neon_token_keypair.json)
 ACCOUNT=$(solana address --keypair /root/.config/solana/id.json)
 echo "Solana account $ACCOUNT"
-TOKEN_ACCOUNT=$(spl-token create-account $ETH_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
+TOKEN_ACCOUNT=$(spl-token create-account $NEON_TOKEN_MINT --owner $ACCOUNT | grep -Po 'Creating account \K[^\n]*')
 echo "Token account $TOKEN_ACCOUNT"
-spl-token mint $ETH_TOKEN_MINT 5000 --owner /opt/evm_loader-keypair.json -- $TOKEN_ACCOUNT
-echo "Balance of $ACCOUNT is: $(spl-token balance $ETH_TOKEN_MINT --owner $ACCOUNT) NEONs"
+spl-token mint $NEON_TOKEN_MINT 5000 --owner /opt/evm_loader-keypair.json -- $TOKEN_ACCOUNT
+echo "Balance of $ACCOUNT is: $(spl-token balance $NEON_TOKEN_MINT --owner $ACCOUNT) NEONs"
 neon-cli --commitment=processed --url "$SOLANA_URL" deposit 1000000000000 "$DEPLOYER_PUBLIC_KEY" --evm_loader "$EVM_LOADER"
 
 echo
