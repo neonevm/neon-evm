@@ -6,3 +6,4 @@ eth-keys==0.4.0
 rlp==2.0.1
 web3==5.29.1
 solana==0.18.3
+pytest-xdist==2.5.0
