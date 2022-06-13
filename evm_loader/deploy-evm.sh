@@ -53,7 +53,7 @@ else
 fi
 
 DeployToken "Neon Token" NEON_TOKEN_MINT neon_token_keypair.json
-export ETH_TOKEN_MINT=$NEON_TOKEN_MINT
+export NEON_TOKEN_MINT=$NEON_TOKEN_MINT
 
 export COLLATERAL_POOL_BASE=$(solana address -k collateral-pool-keypair.json)
 if [ "$COLLATERAL_POOL_BASE" != "$NEON_POOL_BASE" ]; then

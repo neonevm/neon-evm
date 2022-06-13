@@ -7,27 +7,27 @@ import struct
 
 def unpack(data):
     ch = data[0]
-    if (ch <= 0x7F):
-        return (ch, data[1:])
-    elif (ch == 0x80):
-        return (None, data[1:])
-    elif (ch <= 0xB7):
+    if ch <= 0x7F:
+        return ch, data[1:]
+    elif ch == 0x80:
+        return None, data[1:]
+    elif ch <= 0xB7:
         l = ch - 0x80
-        return (data[1:1 + l].tobytes(), data[1 + l:])
-    elif (ch <= 0xBF):
+        return data[1:1 + l].tobytes(), data[1 + l:]
+    elif ch <= 0xBF:
         lLen = ch - 0xB7
         l = int.from_bytes(data[1:1 + lLen], byteorder='big')
-        return (data[1 + lLen:1 + lLen + l].tobytes(), data[1 + lLen + l:])
-    elif (ch == 0xC0):
-        return ((), data[1:])
-    elif (ch <= 0xF7):
+        return data[1 + lLen:1 + lLen + l].tobytes(), data[1 + lLen + l:]
+    elif ch == 0xC0:
+        return (), data[1:]
+    elif ch <= 0xF7:
         l = ch - 0xC0
         lst = list()
         sub = data[1:1 + l]
         while len(sub):
             (item, sub) = unpack(sub)
             lst.append(item)
-        return (lst, data[1 + l:])
+        return lst, data[1 + l:]
     else:
         lLen = ch - 0xF7
         l = int.from_bytes(data[1:1 + lLen], byteorder='big')
@@ -36,11 +36,11 @@ def unpack(data):
         while len(sub):
             (item, sub) = unpack(sub)
             lst.append(item)
-        return (lst, data[1 + lLen + l:])
+        return lst, data[1 + lLen + l:]
 
 
 def pack(data):
-    if data == None:
+    if data is None:
         return (0x80).to_bytes(1, 'big')
     if isinstance(data, str):
         return pack(data.encode('utf8'))
@@ -75,10 +75,13 @@ def pack(data):
         raise Exception("Unknown type {} of data".format(str(type(data))))
 
 
-def getInt(a):
-    if isinstance(a, int): return a
-    if isinstance(a, bytes): return int.from_bytes(a, 'big')
-    if a == None: return a
+def get_int(a):
+    if isinstance(a, int):
+        return a
+    if isinstance(a, bytes):
+        return int.from_bytes(a, 'big')
+    if a is None:
+        return a
     raise Exception("Invalid convertion from {} to int".format(a))
 
 
@@ -95,22 +98,22 @@ class Trx:
         self.s = None
 
     @classmethod
-    def fromString(cls, s):
+    def from_string(cls, s):
         t = Trx()
         (unpacked, data) = unpack(memoryview(s))
         (nonce, gasPrice, gasLimit, toAddress, value, callData, v, r, s) = unpacked
-        t.nonce = getInt(nonce)
-        t.gasPrice = getInt(gasPrice)
-        t.gasLimit = getInt(gasLimit)
+        t.nonce = get_int(nonce)
+        t.gasPrice = get_int(gasPrice)
+        t.gasLimit = get_int(gasLimit)
         t.toAddress = toAddress
-        t.value = getInt(value)
+        t.value = get_int(value)
         t.callData = callData
-        t.v = getInt(v)
-        t.r = getInt(r)
-        t.s = getInt(s)
+        t.v = get_int(v)
+        t.r = get_int(r)
+        t.s = get_int(s)
         return t
 
-    def chainId(self):
+    def chain_id(self):
         # chainid*2 + 35  xxxxx0 + 100011   xxxx0 + 100010 +1
         # chainid*2 + 36  xxxxx0 + 100100   xxxx0 + 100011 +1
         return (self.v - 1) // 2 - 17
@@ -128,7 +131,7 @@ class Trx:
             self.s.to_bytes(32, 'big') if self.s else None)
         ).hex()
 
-    def get_msg(self, chainId=None):
+    def get_msg(self, chain_id=None):
         return pack((
             self.nonce,
             self.gasPrice,
@@ -136,9 +139,9 @@ class Trx:
             self.toAddress,
             self.value,
             self.callData,
-            chainId or self.chainId(), None, None))
+            chain_id or self.chain_id(), None, None))
 
-    def hash(self, chainId=None):
+    def hash(self, chain_id=None):
         trx = pack((
             self.nonce,
             self.gasPrice,
@@ -146,13 +149,13 @@ class Trx:
             self.toAddress,
             self.value,
             self.callData,
-            chainId or self.chainId(), None, None))
+            chain_id or self.chain_id(), None, None))
         return keccak_256(trx).digest()
 
     def sender(self):
-        msgHash = self.hash()
+        msg_hash = self.hash()
         sig = keys.Signature(vrs=[1 if self.v % 2 == 0 else 0, self.r, self.s])
-        pub = sig.recover_public_key_from_msg_hash(msgHash)
+        pub = sig.recover_public_key_from_msg_hash(msg_hash)
         return pub.to_canonical_address().hex()
 
 
@@ -160,19 +163,19 @@ class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, bytes):
             return obj.hex()
-        return json.JSONEncoder.default(self.obj)
+        return json.JSONEncoder.default(obj)
 
 
 def make_instruction_data_from_tx(instruction, private_key=None):
     if isinstance(instruction, dict):
-        if instruction['chainId'] == None:
+        if instruction['chainId'] is None:
             raise Exception("chainId value is needed in input dict")
-        if private_key == None:
+        if private_key is None:
             raise Exception("Needed private key for transaction creation from fields")
 
         signed_tx = w3.eth.account.sign_transaction(instruction, private_key)
         # print(signed_tx.rawTransaction.hex())
-        _trx = Trx.fromString(signed_tx.rawTransaction)
+        _trx = Trx.from_string(signed_tx.rawTransaction)
         # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))     
 
         raw_msg = _trx.get_msg(instruction['chainId'])
@@ -181,12 +184,12 @@ def make_instruction_data_from_tx(instruction, private_key=None):
 
         # print(pub.to_hex())
 
-        return (pub.to_canonical_address(), sig.to_bytes(), raw_msg)
+        return pub.to_canonical_address(), sig.to_bytes(), raw_msg
     elif isinstance(instruction, str):
         if instruction[:2] == "0x":
             instruction = instruction[2:]
 
-        _trx = Trx.fromString(bytearray.fromhex(instruction))
+        _trx = Trx.from_string(bytearray.fromhex(instruction))
         # print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
 
         raw_msg = _trx.get_msg()
@@ -197,7 +200,7 @@ def make_instruction_data_from_tx(instruction, private_key=None):
         data += sig.to_bytes()
         data += raw_msg
 
-        return (pub.to_canonical_address(), sig.to_bytes(), raw_msg)
+        return pub.to_canonical_address(), sig.to_bytes(), raw_msg
     else:
         raise Exception("function gets ")
 
@@ -223,29 +226,3 @@ def make_keccak_instruction_data(check_instruction_index, msg_len, data_start):
     data += struct.pack("B", check_instruction_index)
 
     return data
-
-# tx_1 = {
-#     'to': '0x2ccb0f131443b797b46dd9690a7dec9e6eeee309',
-#     'value': 0,
-#     'gas': 1,
-#     'gasPrice': 1,
-#     'nonce': 0,
-#     'data': '3917b3df',
-#     'chainId': 1
-# } 
-# trx = "0xf86c018522ecb25c0082520894a090e606e30bd747d4e6245a1517ebe430f0057e880340c0086a5cbe008025a0e213a2a87b050644f9c982144fa762132bbc00b9ac63d168d68146e300de6b4ba059dbbae6d190d820ddde818a98204232194eb6d27226190b4c0be82480d6a735"
-# signed = w3.eth.account.sign_transaction(tx_1, '0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff')
-
-# _trx = Trx.fromString(signed.rawTransaction)
-# _trx = Trx.fromString(bytearray.fromhex(trx[2:]))
-# print(json.dumps(_trx.__dict__, cls=JsonEncoder, indent=3))
-# print("0x" + str(_trx))
-# print(signed.rawTransaction.hex())
-
-# msgHash = _trx.hash()
-# print(_trx.get_msg().hex())
-
-# sig = keys.Signature(vrs=[1 if _trx.v%2==0 else 0, _trx.r, _trx.s])
-# pub = sig.recover_public_key_from_msg_hash(msgHash)
-# print('SENDER', pub.to_canonical_address().hex())
-# print("VERIFY", sig.verify_msg_hash(msgHash, pub))
