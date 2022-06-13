@@ -1,4 +1,4 @@
-import os
+import random
 import typing as tp
 import pathlib
 
@@ -97,7 +97,7 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
         contract_path = pathlib.Path(contract_path)
     storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
-    holder_acc, holder_id = create_holder_account(operator)
+    holder_acc, holder_id = create_holder_account(operator, random.randint(0, 100))
     size = write_transaction_to_holder_account(user, contract_path, holder_acc, holder_id, operator)
     create_contract_accounts(contract.seed, size + 1 + 32 + 4 + 2048, contract, operator)
 
