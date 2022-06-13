@@ -26,7 +26,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
 from .utils.instructions import TransactionWithComputeBudget
-from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, ETH_TOKEN_MINT_ID, \
+from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
@@ -286,8 +286,8 @@ class EvmLoader:
         operator = self.acc.get_acc()
 
         (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(self.loader_id))
-        pool_token_account = get_associated_token_address(neon_evm_authority, ETH_TOKEN_MINT_ID)
-        source_token_account = get_associated_token_address(operator.public_key(), ETH_TOKEN_MINT_ID)
+        pool_token_account = get_associated_token_address(neon_evm_authority, NEON_TOKEN_MINT_ID)
+        source_token_account = get_associated_token_address(operator.public_key(), NEON_TOKEN_MINT_ID)
         (user_solana_address, _) = self.ether2program(user_ether_address)
 
         pool_account_exists = solana_client.get_account_info(
@@ -297,7 +297,7 @@ class EvmLoader:
 
         trx = TransactionWithComputeBudget()
         if not pool_account_exists:
-            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, ETH_TOKEN_MINT_ID))
+            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
 
         trx.add(approve(ApproveParams(
             program_id=TOKEN_PROGRAM_ID,
@@ -748,7 +748,7 @@ def make_new_user(evm_loader: EvmLoader):
         wait_confirm_transaction(solana_client, tx["result"])
     caller_ether = eth_keys.PrivateKey(key.secret_key[:32]).public_key.to_canonical_address()
     caller, caller_nonce = evm_loader.ether2program(caller_ether)
-    caller_token = get_associated_token_address(PublicKey(caller), ETH_TOKEN_MINT_ID)
+    caller_token = get_associated_token_address(PublicKey(caller), NEON_TOKEN_MINT_ID)
 
     if get_solana_balance(caller) == 0:
         print(f"Create account for user {caller}")

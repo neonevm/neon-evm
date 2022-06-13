@@ -21,7 +21,7 @@ Also we can configure some variables from environment variables:
 
 1. SOLANA_URL - by default http://localhost:8899
 2. EVM_LOADER - set evm loader address
-3. ETH_TOKEN_MINT - ethereum token mint address
+3. NEON_TOKEN_MINT - ethereum token mint address
 
 
 How to write tests
