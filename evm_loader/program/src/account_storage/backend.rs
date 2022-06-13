@@ -4,15 +4,22 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{ERC20Allowance, token, EthereumContract, EthereumStorage};
+use crate::account::{EthereumContract, EthereumStorage, ACCOUNT_SEED_VERSION};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
+use crate::executor::OwnedAccountInfo;
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
-    fn token_mint(&self) -> &Pubkey { &self.token_mint }
+    fn neon_token_mint(&self) -> &Pubkey { 
+        &crate::config::token_mint::ID
+    }
 
     fn program_id(&self) -> &Pubkey {
         self.program_id
+    }
+
+    fn operator(&self) -> &Pubkey {
+        self.operator
     }
 
     fn block_number(&self) -> U256 {
@@ -108,46 +115,9 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         panic!("Account {} - expected system or program owned", solana_address);
     }
 
-    fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64 {
-        let account = self.solana_accounts[token_account];
-        token::State::from_account(account)
-            .map_or(0_u64, |a| a.amount)
-    }
-
-    fn get_spl_token_supply(&self, token_mint: &Pubkey) -> u64 {
-        let account = self.solana_accounts[token_mint];
-        token::Mint::from_account(account)
-            .map_or(0_u64, |a| a.supply)
-    }
-
-    fn get_spl_token_decimals(&self, token_mint: &Pubkey) -> u8 {
-        let account = self.solana_accounts[token_mint];
-        token::Mint::from_account(account)
-            .map_or(0_u8, |a| a.decimals)
-    }
-
-    fn get_erc20_allowance(&self, owner: &H160, spender: &H160, contract: &H160, mint: &Pubkey) -> U256 {
-        let (address, _) = self.get_erc20_allowance_address(owner, spender, contract, mint);
-        let account = self.solana_accounts[&address];
-        ERC20Allowance::from_account(self.program_id, account)
-            .map_or_else(|_| U256::zero(), |a| a.value)
-    }
-
-    fn query_account(&self, address: &Pubkey, data_offset: usize, data_len: usize) -> Option<crate::query::Value> {
-        let account = self.solana_accounts[address];
-        if account.owner == self.program_id { // NeonEVM accounts may be already borrowed
-            return None;
-        }
-
-        Some(crate::query::Value {
-            owner: *account.owner,
-            length: account.data_len(),
-            lamports: account.lamports(),
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
-            offset: data_offset,
-            data: crate::query::clone_chunk(&account.data.borrow(), data_offset, data_len),
-        })
+    fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo {
+        let info = self.solana_accounts[address];
+        OwnedAccountInfo::from_account_info(info)
     }
 
     fn solana_accounts_space(&self, address: &H160) -> (usize, usize) {
@@ -169,7 +139,18 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         (account_space, contract_space)
     }
 
+    fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
+        use super::Account;
+
+        #[allow(clippy::match_same_arms)]
+        match self.ethereum_accounts.get(address) {
+            Some(Account::User(a)) => (*a.info.key, a.bump_seed),
+            Some(Account::Contract(a, _)) => (*a.info.key, a.bump_seed),
+            None => Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id)
+        }
+    }
+
     fn chain_id(&self) -> u64 {
-        self.chain_id
+        crate::config::CHAIN_ID
     }
 }
