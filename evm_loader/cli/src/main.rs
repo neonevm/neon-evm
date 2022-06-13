@@ -83,7 +83,7 @@ use solana_client::{
 
 use rlp::RlpStream;
 
-use log::{debug, error};
+use log::{ debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
@@ -490,10 +490,19 @@ fn main() {
             Arg::with_name("logging_ctx")
                 .short("L")
                 .long("logging_ctx")
-                .value_name("LOG_CONTEST")
+                .value_name("LOG_CONTEXT")
                 .takes_value(true)
                 .global(true)
                 .help("Logging context"),
+        )
+        .arg(
+            Arg::with_name("loglevel")
+                .short("l")
+                .long("loglevel")
+                .value_name("LOG_LEVEL")
+                .takes_value(true)
+                .global(true)
+                .help("Logging level"),
         )
         .subcommand(
             SubCommand::with_name("emulate")
@@ -717,7 +726,20 @@ fn main() {
         app_matches.value_of("logging_ctx")
             .map(|ctx| LogContext::new(ctx.to_string()) )
             .unwrap_or_default();
-    logs::init(context).unwrap();
+    let loglevel: log::LevelFilter =
+        app_matches.value_of("loglevel")
+            .map(|ll| 
+                match ll.to_ascii_lowercase().as_str() {
+                    "off"   => log::LevelFilter::Off,
+                    "err"   => log::LevelFilter::Error,
+                    "warn"  => log::LevelFilter::Warn,
+                    "info"  => log::LevelFilter::Info,
+                    "deb"   => log::LevelFilter::Debug,
+                    _       => log::LevelFilter::Trace,
+                }
+            )
+            .unwrap_or(log::LevelFilter::Trace);
+    logs::init(context, loglevel).unwrap();
 
     let mut wallet_manager = None;
     let config = {

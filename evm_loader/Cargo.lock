@@ -972,6 +972,7 @@ name = "evm"
 version = "0.18.0"
 dependencies = [
  "evm-core",
+ "evm-gasometer",
  "evm-runtime",
  "log",
  "rlp",
@@ -991,6 +992,15 @@ dependencies = [
  "serde",
  "serde_bytes",
  "uint",
+]
+
+[[package]]
+name = "evm-gasometer"
+version = "0.18.0"
+dependencies = [
+ "evm-core",
+ "evm-runtime",
+ "serde",
 ]
 
 [[package]]
