@@ -16,7 +16,7 @@ use solana_sdk::{
 };
 use evm_loader::{
     config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
-    executor::{Action, OwnedAccountInfo},
+    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, EthereumStorage},
     account_storage::{AccountStorage},
 };
@@ -459,6 +459,23 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     
             OwnedAccountInfo::from_account_info(&info)
         }
+    }
+
+    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
+        let account = self.clone_solana_account(address);
+
+        Some(OwnedAccountInfoPartial {
+            key: account.key,
+            is_signer: account.is_signer,
+            is_writable: account.is_writable,
+            lamports: account.lamports,
+            data: account.data.get(offset .. offset + len).map(<[u8]>::to_vec)?,
+            data_offset: offset,
+            data_total_len: account.data.len(),
+            owner: account.owner,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
+        })
     }
 
     fn solana_address(&self, address: &H160) -> (Pubkey, u8) {

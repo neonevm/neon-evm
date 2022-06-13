@@ -10,7 +10,7 @@ use borsh::{BorshSerialize, BorshDeserialize};
 use crate::account_storage::AccountStorage;
 use crate::executor::cache::AccountMeta;
 
-use super::OwnedAccountInfo;
+use super::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use super::action::Action;
 use super::cache::Cache;
 
@@ -30,6 +30,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     pub fn new(backend: &'a B) -> Self {
         let cache = Cache {
             solana_accounts: BTreeMap::new(),
+            solana_accounts_partial: BTreeMap::new(),
             block_number: backend.block_number(),
             block_timestamp: backend.block_timestamp(),
         };
@@ -388,6 +389,28 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         }
 
         Ok(accounts[&address].clone())
+    }
+
+    pub fn external_account_partial_cache(&mut self, address: Pubkey, offset: usize, len: usize) -> Result<(), ProgramError> {
+        if (len == 0) || (len > 8*1024) {
+            return Err!(ProgramError::InvalidArgument; "Account cache: invalid data len");
+        }
+        
+        if let Some(account) = self.backend.clone_solana_account_partial(&address, offset, len) {
+            let mut cache = self.cache.borrow_mut();
+            cache.solana_accounts_partial.insert(address, account);
+    
+            Ok(())
+        } else {
+            Err!(ProgramError::InvalidArgument; "Account cache: invalid data offset")
+        }
+    }
+
+    pub fn external_account_partial(&self, address: Pubkey) -> Result<OwnedAccountInfoPartial, ProgramError> {
+        let cache = self.cache.borrow();
+        cache.solana_accounts_partial.get(&address)
+            .cloned()
+            .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
 }

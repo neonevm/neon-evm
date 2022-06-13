@@ -7,7 +7,7 @@ use solana_program::{
 use crate::account::{EthereumContract, EthereumStorage, ACCOUNT_SEED_VERSION};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
-use crate::executor::OwnedAccountInfo;
+use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn neon_token_mint(&self) -> &Pubkey { 
@@ -118,6 +118,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo {
         let info = self.solana_accounts[address];
         OwnedAccountInfo::from_account_info(info)
+    }
+
+    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial> {
+        let info = self.solana_accounts[address];
+        OwnedAccountInfoPartial::from_account_info(info, offset, len)
     }
 
     fn solana_accounts_space(&self, address: &H160) -> (usize, usize) {

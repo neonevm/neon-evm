@@ -19,6 +19,44 @@ pub struct OwnedAccountInfo {
     pub rent_epoch: solana_program::clock::Epoch,
 }
 
+#[derive(BorshSerialize, BorshDeserialize, Clone)]
+pub struct OwnedAccountInfoPartial {
+    pub key: Pubkey,
+    pub is_signer: bool,
+    pub is_writable: bool,
+    pub lamports: u64,
+    pub data: Vec<u8>,
+    pub data_offset: usize,
+    pub data_total_len: usize,
+    pub owner: Pubkey,
+    pub executable: bool,
+    pub rent_epoch: solana_program::clock::Epoch,
+}
+
+impl OwnedAccountInfoPartial {
+    #[must_use]
+    pub fn from_account_info(info: &AccountInfo, offset: usize, len: usize) -> Option<Self> {
+        let data = info.data.borrow();
+
+        if offset.saturating_add(len) > data.len() {
+            return None;
+        }
+
+        Some(Self { 
+            key: *info.key,
+            is_signer: info.is_signer,
+            is_writable: info.is_writable,
+            lamports: info.lamports(),
+            data: data[offset .. offset+len].to_vec(),
+            data_offset: offset,
+            data_total_len: data.len(),
+            owner: *info.owner,
+            executable: info.executable,
+            rent_epoch: info.rent_epoch,
+        })
+    }
+}
+
 impl OwnedAccountInfo {
     #[must_use]
     pub fn from_account_info(info: &AccountInfo) -> Self {
@@ -83,6 +121,7 @@ impl AccountMeta {
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct Cache {
     pub solana_accounts: BTreeMap<Pubkey, OwnedAccountInfo>,
+    pub solana_accounts_partial: BTreeMap<Pubkey, OwnedAccountInfoPartial>,
     pub block_number: U256,
     pub block_timestamp: U256,
 }
