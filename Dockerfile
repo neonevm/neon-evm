@@ -1,8 +1,8 @@
 ARG SOLANA_REVISION
 # Install BPF SDK
 FROM solanalabs/rust:1.61.0 AS builder
-RUN rustup toolchain install 1.61.0
-RUN rustup component add clippy --toolchain 1.61.0
+RUN rustup toolchain install nightly
+RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
 RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
@@ -17,7 +17,7 @@ WORKDIR /opt/evm_loader
 RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo +1.61.0 clippy && \
+RUN cargo +nightly clippy && \
     cargo build --release && \
     cargo build-sbf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-sbf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
