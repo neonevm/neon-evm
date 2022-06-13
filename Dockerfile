@@ -1,6 +1,6 @@
 ARG SOLANA_REVISION
 # Install BPF SDK
-FROM solanalabs/rust:latest AS builder
+FROM solanalabs/rust:1.61.0 AS builder
 RUN rustup toolchain install nightly
 RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
@@ -31,8 +31,8 @@ FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
-COPY evm_loader/tests/*.sol /opt/
-COPY evm_loader/tests/test_solidity_precompiles.json /opt/
+COPY evm_loader/tests/contracts/*.sol /opt/
+#COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
 RUN solc --output-dir . --bin *.sol && \
@@ -51,7 +51,7 @@ RUN apt-get update && \
 
 COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
 RUN pip3 install -r /tmp/requirements.txt
-RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
+#RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt update & apt install -y nodejs
@@ -81,7 +81,6 @@ COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
 COPY evm_loader/*.py \
-    evm_loader/tests/*.py \
     evm_loader/wait-for-solana.sh \
     evm_loader/wait-for-neon.sh \
     evm_loader/create-test-accounts.sh \
@@ -95,6 +94,7 @@ COPY evm_loader/*.py \
     evm_loader/deploy-contracts.sh \
     evm_loader/get_deployer_address.py /opt/
 
+COPY evm_loader/tests /opt/tests
 COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json

@@ -1,0 +1,3 @@
+contracts/*.binary
+__pycache__
+.pytest_cache
