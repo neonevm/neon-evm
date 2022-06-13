@@ -731,10 +731,10 @@ fn main() {
             .map_or(log::LevelFilter::Trace, |ll| 
                 match ll.to_ascii_lowercase().as_str() {
                     "off"   => log::LevelFilter::Off,
-                    "err"   => log::LevelFilter::Error,
+                    "error" => log::LevelFilter::Error,
                     "warn"  => log::LevelFilter::Warn,
                     "info"  => log::LevelFilter::Info,
-                    "deb"   => log::LevelFilter::Debug,
+                    "debug" => log::LevelFilter::Debug,
                     _       => log::LevelFilter::Trace,
                 }
             );
