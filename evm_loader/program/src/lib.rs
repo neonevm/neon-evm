@@ -40,33 +40,46 @@ pub use transaction::UnsignedTransaction;
 #[cfg(feature = "tracing")]
 pub mod tracing;
 
-
 #[cfg(feature = "tracing")]
 macro_rules! event {
     ($x:expr) => {
-        use crate::tracing;
-        tracing::send($x);
+        // use crate::tracing;
+        // tracing::send(&$x);
+        use solana_program::{tracer_api, compute_meter_remaining, compute_meter_set_remaining};
+
+        let mut remaining: u64 = 0;
+        compute_meter_remaining::compute_meter_remaining(&mut remaining);
+
+        // let mut message = vec![];
+        // bincode::serialize_into(&mut message, event).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e)).unwrap();
+        let ptr = &$x  as *const _ as *const u8;
+        tracer_api::send_trace_message(ptr);
+        // solana_program::msg!("{}", remaining);
+        compute_meter_set_remaining::compute_meter_set_remaining(remaining + 12);
+
     };
 }
 
 #[cfg(feature = "tracing")]
 macro_rules! emit_exit {
     ($reason:expr) => {{
-        use evm::tracing::Event::*;
+        use evm::tracing::{EventOnStack::*, ExitTrace};
         let reason = $reason;
-        event!(Exit {
+        event!(Exit(ExitTrace {
             reason: reason.clone().into(),
-            return_value: Vec::new(),
-        });
+            return_value: vec![].as_slice(),
+            return_value_len: 0,
+        }));
         reason
     }};
     ($return_value:expr, $reason:expr) => {{
         let reason = $reason;
         let return_value = $return_value;
-        event!(Exit {
+        event!((ExitTrace {
             reason: reason.clone(),
-            return_value: return_value.clone(),
-        });
+            return_value: return_value.as_slice(),
+            return_value_len: return_value.len()
+        }));
         (return_value, reason)
     }};
 }

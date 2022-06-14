@@ -7,10 +7,7 @@ use std::convert::Infallible;
 use std::mem;
 use std::boxed::Box;
 
-use evm::{
-    Capture, ExitError, ExitFatal, ExitReason,
-    H160, H256, Handler, Resolve, Valids, U256,
-};
+use evm::{Capture, ExitError, ExitFatal, ExitReason, H160, H256, Handler, Resolve, Valids, U256};
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
@@ -21,8 +18,9 @@ use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
 use crate::{event, emit_exit};
+// use evm::tracing::EventOnStack::*;
 #[cfg(feature = "tracing")]
-use evm::tracing::Event::*;
+use evm::tracing::{EventOnStack::*, *};
 
 
 fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
@@ -248,14 +246,15 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        event!(Create {
+        event!(Create(CreateTrace {
             caller,
             address,
             scheme,
             value,
-            init_code: init_code.clone(),
+            init_code: init_code.as_slice(),
+            init_code_len: init_code.len(),
             target_gas,
-        });
+        }));
 
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
@@ -291,14 +290,15 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        event!(Call {
+        event!(Call(CallTrace{
             code_address,
             transfer: transfer.clone(),
-            input: input.clone(),
+            input: input.as_slice(),
+            input_len: input.len(),
             target_gas,
             is_static,
             context: context.clone(),
-        });
+        }));
 
         debug_print!("call");
 
@@ -395,13 +395,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         gas_limit: U256,
         gas_price: U256
     ) -> ProgramResult {
-        event!(TransactCall {
+        event!(TransactCall(TransactCallTrace {
             caller,
             address: code_address,
             value: transfer_value,
-            data: input.clone(),
+            data: input.as_slice(),
+            data_len: input.len(),
             gas_limit
-        });
+        }));
         debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
@@ -441,13 +442,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         gas_limit: U256,
                         gas_price: U256
     ) -> ProgramResult {
-        event!(TransactCreate {
+        event!(TransactCreate(TransactCreateTrace {
             caller,
             value: transfer_value,
-            init_code: code.clone(),
+            init_code: code.as_slice(),
+            init_code_len: code.len(),
             gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
-        });
+        }));
 
         debug_print!("create_begin");
 
