@@ -35,13 +35,22 @@ const LOG_MODULES: [&str; 14] = [
 ];
 
 
-pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
+pub fn init(context: LogContext, loglevel: log::LevelFilter) -> Result<(), log::SetLoggerError> {
 
-    let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
+    let dispatch: Dispatch =
+        if loglevel == log::LevelFilter::Off {
 
-    for module_name in LOG_MODULES {
-        dispatch = dispatch.level_for(module_name, log::LevelFilter::Trace);
-    }
+            fern::Dispatch::new().level(log::LevelFilter::Off)
+
+        } else {
+            let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
+
+            for module_name in LOG_MODULES {
+                dispatch = dispatch.level_for(module_name, loglevel);
+            }
+
+            dispatch
+        };
 
     dispatch
         .format(move |out, message, record| {
