@@ -125,11 +125,11 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        U256::one() // TODO
+        self.state.gas_limit().saturating_sub(self.gasometer.used_gas_total())
     }
 
     fn gas_price(&self) -> U256 {
-        U256::zero() // TODO
+        self.state.gas_price()
     }
 
     fn origin(&self) -> H160 {
@@ -185,7 +185,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             return Err(ExitError::StaticModeViolation);
         }
 
-        self.gasometer.record_storage_write(&self.state, address, index);
+        self.gasometer.record_storage_write(&self.state, address, index, value);
 
         self.state.set_storage(address, index, value);
         Ok(())
@@ -225,7 +225,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         scheme: evm::CreateScheme,
         value: U256,
         init_code: Vec<u8>,
-        _target_gas: Option<u64>,
+        #[allow(unused_variables)] target_gas: Option<u64>,
     ) -> Capture<(ExitReason, Option<H160>, Vec<u8>), Self::CreateInterrupt> {
         debug_print!("create");
 
@@ -252,7 +252,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             scheme,
             value,
             init_code: &init_code,
-            _target_gas,
+            target_gas,
         });
 
 
@@ -285,7 +285,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         code_address: H160,
         transfer: Option<evm::Transfer>,
         input: Vec<u8>,
-        _target_gas: Option<u64>,
+        #[allow(unused_variables)] target_gas: Option<u64>,
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
@@ -293,7 +293,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             code_address,
             transfer: &transfer,
             input: &input,
-            _target_gas,
+            target_gas,
             is_static,
             context: &context,
         });
@@ -352,7 +352,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     pub fn new(origin: H160, backend: &'a B) -> Result<Self, ProgramError> {
         let substate = Box::new(ExecutorSubstate::new(backend));
         let state = ExecutorState::new(substate, backend);
-        let gasometer = Gasometer::new()?;
+        let gasometer = Gasometer::new(None)?;
         
         let executor = Executor { origin, state, gasometer };
         Ok(Self { executor, runtime: Vec::new(), steps_executed: 0 })
@@ -363,14 +363,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// # Panics
     ///
     /// Panics if account is invalid or any serialization error occurs.
-    pub fn save_into(&self, storage: &mut crate::account::Storage) {
+    pub fn save_into(&self, storage: &mut crate::account::State) {
         storage.serialize(&self.runtime, self.executor.state.substate()).unwrap();
     }
 
     /// Deserializes and restores state of runtime and executor from a storage account.
-    pub fn restore(storage: &crate::account::Storage, backend: &'a B) -> Result<Self, ProgramError> {
+    pub fn restore(storage: &crate::account::State, backend: &'a B) -> Result<Self, ProgramError> {
         let (runtime, substate) = storage.deserialize()?;
-        let gasometer = Gasometer::new()?;
+        let gasometer = Gasometer::new(Some(storage.gas_used_and_paid))?;
 
         let origin = storage.caller;
         let state = ExecutorState::new(substate, backend);
@@ -390,20 +390,23 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         code_address: H160,
         input: Vec<u8>,
         transfer_value: U256,
-        _gas_limit: U256
+        gas_limit: U256,
+        gas_price: U256
     ) -> ProgramResult {
-	    event!(TransactCall {
+        event!(TransactCall {
             caller,
             address: code_address,
             value: transfer_value,
             data: &input,
-            _gas_limit
+            gas_limit
         });
         debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
         self.executor.state.enter(false);
         self.executor.state.touch(code_address);
+        self.executor.state.set_gas_limit(gas_limit);
+        self.executor.state.set_gas_price(gas_price);
 
         self.executor.gasometer.record_transfer(&self.executor.state, code_address, transfer_value);
 
@@ -433,13 +436,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         caller: H160,
                         code: Vec<u8>,
                         transfer_value: U256,
-                        _gas_limit: U256,
+                        gas_limit: U256,
+                        gas_price: U256
     ) -> ProgramResult {
         event!(TransactCreate {
             caller,
             value: transfer_value,
             init_code: &code,
-            _gas_limit,
+            gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
         });
 
@@ -460,6 +464,8 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 if CONFIG.create_increase_nonce {
                     self.executor.state.inc_nonce(info.address);
                 }
+                self.executor.state.set_gas_limit(gas_limit);
+                self.executor.state.set_gas_price(gas_price);
 
                 self.executor.gasometer.record_deploy(&self.executor.state, info.address);
 

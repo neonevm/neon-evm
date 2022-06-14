@@ -88,6 +88,7 @@ fn execute(accounts: Accounts) -> ProgramResult {
         EthereumContract::init(new_code_account, account::ether_contract::Data {
             owner: *ethereum_account.info.key,
             code_size: 0_u32,
+            generation: 0_u32,
         })?;
     } else {
         {

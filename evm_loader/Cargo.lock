@@ -972,6 +972,7 @@ name = "evm"
 version = "0.18.0"
 dependencies = [
  "evm-core",
+ "evm-gasometer",
  "evm-runtime",
  "log",
  "rlp",
@@ -994,8 +995,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "evm-gasometer"
+version = "0.18.0"
+dependencies = [
+ "evm-core",
+ "evm-runtime",
+ "serde",
+]
+
+[[package]]
 name = "evm-loader"
-version = "0.7.5-dev"
+version = "0.7.6-dev"
 dependencies = [
  "arrayref",
  "bincode",
@@ -1841,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "neon-cli"
-version = "0.7.5-dev"
+version = "0.7.6-dev"
 dependencies = [
  "arrayref",
  "base64 0.13.0",

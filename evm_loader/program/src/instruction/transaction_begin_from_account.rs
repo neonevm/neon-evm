@@ -1,4 +1,4 @@
-use crate::account::{Operator, program, EthereumAccount, Treasury, Storage, Holder};
+use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder};
 use crate::transaction::{ UnsignedTransaction, verify_tx_signature };
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
@@ -35,7 +35,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     let trx = UnsignedTransaction::from_rlp(&unsigned_msg)?;
 
-    let storage = Storage::new(program_id, storage_info, &accounts, caller, &trx, &signature)?;
+    let storage = State::new(program_id, storage_info, &accounts, caller, &trx, &signature)?;
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         accounts.remaining_accounts,

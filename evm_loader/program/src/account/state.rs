@@ -43,7 +43,7 @@ pub struct FinalizedData {
 
 impl Packable for Data {
     /// Storage struct tag
-    const TAG: u8 = super::TAG_STORAGE;
+    const TAG: u8 = super::TAG_STATE;
     /// Storage struct serialized size
     const SIZE: usize = 20 + 8 + 32 + 32 + 8 + 32 + 8 + 8 + 8 + 32 + 8 + 65;
 
@@ -119,11 +119,11 @@ impl Packable for Data {
 
 impl Packable for FinalizedData {
     /// Finalized storage struct tag
-    const TAG: u8 = super::TAG_FINALIZED_STORAGE;
+    const TAG: u8 = super::TAG_FINALIZED_STATE;
     /// Finalized storage struct serialized size
     const SIZE: usize = 20 + 65;
 
-    /// Deserialize `FinalizedStorage` struct from input data
+    /// Deserialize `FinalizedState` struct from input data
     #[must_use]
     fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
@@ -136,7 +136,7 @@ impl Packable for FinalizedData {
         }
     }
 
-    /// Serialize `FinalizedStorage` struct into given destination
+    /// Serialize `FinalizedState` struct into given destination
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, FinalizedData::SIZE];
