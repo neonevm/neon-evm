@@ -11,7 +11,7 @@ function createSplToken(spl_token) {
   let token_keyfile = `./ci-tokens/${spl_token.symbol}.json`;
   if (!fs.existsSync(token_keyfile)) {
     console.log(`Keyfile ${token_keyfile} not found. Will skip token creation.`);
-    return true;
+    return false;
   }
   console.log(`Token keyfile is ${token_keyfile}`);
 
