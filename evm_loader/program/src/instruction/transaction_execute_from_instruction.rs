@@ -7,8 +7,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::executor::Machine;
-use crate::config::chain_id;
+use crate::executor::{Machine, Action};
 
 
 struct Accounts<'a> {
@@ -47,9 +46,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
+        &accounts.operator,
         accounts.remaining_accounts,
-        crate::config::token_mint::id(),
-        chain_id().as_u64(),
     )?;
 
 
@@ -104,8 +102,7 @@ fn execute<'a>(
             (evm::ExitError::OutOfGas.into(), vec![], None, trx.gas_limit)
         } else {
             let apply = if exit_reason.is_succeed() {
-                let executor_state = executor.into_state();
-                Some(executor_state.deconstruct())
+                Some(executor.into_state_actions())
             } else {
                 None
             };
@@ -134,12 +131,8 @@ fn execute<'a>(
     if let Some(apply_state) = apply_state {
         account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
     } else {
-        // Transaction ended with error, no state to apply
-        // Increment nonce here. Normally it is incremented inside apply_state_change
-        if let Some(caller) = account_storage.ethereum_account_mut(&caller_address) {
-            caller.trx_count = caller.trx_count.checked_add(1)
-                .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", caller.address))?;
-        }
+        let apply_actions = vec![Action::EvmIncrementNonce { address: caller_address }];
+        account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
     }
 
     accounts.neon_program.on_return(exit_reason, used_gas, &return_value);

@@ -22,7 +22,6 @@ mod incinerator;
 pub mod ether_account;
 pub mod ether_contract;
 pub mod ether_storage;
-pub mod erc20_allowance;
 pub mod state;
 pub mod program;
 pub mod token;
@@ -48,7 +47,8 @@ const TAG_CONTRACT_STORAGE: u8 = 6;
 #[deprecated]
 const _TAG_STATE_V1: u8 = 3;
 const TAG_STATE: u8 = 30;
-const TAG_ERC20_ALLOWANCE: u8 = 4;
+#[deprecated]
+const _TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
@@ -56,7 +56,6 @@ pub type EthereumContract<'a> = AccountData<'a, ether_contract::Data, ether_cont
 pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
 pub type State<'a> = AccountData<'a, state::Data>;
 pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
-pub type ERC20Allowance<'a> = AccountData<'a, erc20_allowance::Data>;
 
 
 pub trait AccountExtension<'a, T> {

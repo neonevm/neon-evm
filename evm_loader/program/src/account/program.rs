@@ -1,23 +1,18 @@
-use std::ops::Deref;
-
-use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, U256};
-
-// ---- Legacy code
-//use evm::{H160, H256};
-use evm::backend::Log;
-use solana_program::{
-    program::{invoke, invoke_signed}, rent::Rent,
-    system_instruction, sysvar::Sysvar
-};
 use solana_program::account_info::AccountInfo;
-//use solana_program::instruction::Instruction;
-use solana_program::log::sol_log_data;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-
+use solana_program::log::sol_log_data;
+use solana_program::{
+    program::{invoke, invoke_signed}, system_instruction,
+    rent::Rent, sysvar::Sysvar
+};
+use super::{Operator, EthereumAccount, sysvar, token};
+use std::ops::Deref;
+use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
+//use solana_program::entrypoint::ProgramResult;
+//use solana_program::instruction::Instruction;
 use crate::account::ACCOUNT_SEED_VERSION;
 
-use super::{EthereumAccount, Operator, sysvar, token};
 
 pub struct Neon<'a> {
     info: &'a AccountInfo<'a>
@@ -113,7 +108,7 @@ impl<'a> Neon<'a> {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn on_event(&self, log: &Log) {
+    pub fn on_event(&self, address: H160, topics: &[H256], data: &[u8]) -> Result<(), ProgramError> {
         debug_print!("on_event");
 
         // ---- Legacy code
@@ -123,45 +118,47 @@ impl<'a> Neon<'a> {
             let capacity = size_of::<u8>()
                 + size_of::<H160>()  // address
                 + size_of::<usize>() // topics.len
-                + log.topics.len() * size_of::<H256>()
-                + log.data.len();
+                + topics.len() * size_of::<H256>()
+                + data.len();
 
-            let mut data = Vec::with_capacity(capacity);
-            data.push(7_u8);
-            data.extend_from_slice(log.address.as_bytes());
-            data.extend_from_slice(&log.topics.len().to_le_bytes());
-            for topic in &log.topics {
-                data.extend_from_slice(topic.as_bytes());
+            let mut buffer = Vec::with_capacity(capacity);
+            buffer.push(7_u8);
+            buffer.extend_from_slice(address.as_bytes());
+            buffer.extend_from_slice(&topics.len().to_le_bytes());
+            for topic in topics {
+                buffer.extend_from_slice(topic.as_bytes());
             }
-            data.extend(&log.data);
+            buffer.extend(data);
 
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
+            Instruction { program_id: *self.info.key, accounts: Vec::new(), data: buffer }
         };
         let r = invoke(&instruction, &[self.info.clone()]);
         assert!(r.is_ok());
         */
         // ---- Legacy code
 
-        assert!(log.topics.len() < 5);
+        assert!(topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]
-        let nt = log.topics.len() as u8;
-        let count_topics = log.topics.len().to_le_bytes();
+        let nt = topics.len() as u8;
+        let count_topics = topics.len().to_le_bytes();
         let empty = [] as [u8; 0];
 
         let mnemonic = [b'L', b'O', b'G', b'0' + nt];
-        let t1 = if nt < 1 { &empty } else { log.topics[0].as_bytes() };
-        let t2 = if nt < 2 { &empty } else { log.topics[1].as_bytes() };
-        let t3 = if nt < 3 { &empty } else { log.topics[2].as_bytes() };
-        let t4 = if nt < 4 { &empty } else { log.topics[3].as_bytes() };
+        let t1 = if nt < 1 { &empty } else { topics[0].as_bytes() };
+        let t2 = if nt < 2 { &empty } else { topics[1].as_bytes() };
+        let t3 = if nt < 3 { &empty } else { topics[2].as_bytes() };
+        let t4 = if nt < 4 { &empty } else { topics[3].as_bytes() };
         let fields = [mnemonic.as_slice(),
-                      log.address.as_bytes(),
+                      address.as_bytes(),
                       count_topics.as_slice(),
                       t1,
                       t2,
                       t3,
                       t4,
-                      &log.data];
+                      data];
         sol_log_data(&fields);
+
+        Ok(())
     }
 }
 

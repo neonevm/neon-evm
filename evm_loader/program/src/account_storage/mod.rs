@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, program};
+use crate::account::{EthereumAccount, EthereumContract, ACCOUNT_SEED_VERSION};
+use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
@@ -17,26 +18,26 @@ enum Account<'a> {
 }
 
 pub struct ProgramAccountStorage<'a> {
-    token_mint: Pubkey,
     program_id: &'a Pubkey,
+    operator: &'a Pubkey,
     clock: Clock,
-    token_program: Option<program::Token<'a>>,
 
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, Account<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
-
-    chain_id: u64,
 }
 
 /// Account storage
 /// Trait to access account info
 pub trait AccountStorage {
     /// Get `NEON` token mint
-    fn token_mint(&self) -> &Pubkey;
+    fn neon_token_mint(&self) -> &Pubkey;
 
     /// Get `NeonEVM` program id
     fn program_id(&self) -> &Pubkey;
+
+    /// Get operator pubkey
+    fn operator(&self) -> &Pubkey;
 
     /// Get block number
     fn block_number(&self) -> U256;
@@ -77,29 +78,14 @@ pub trait AccountStorage {
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256;
 
-    /// Get SPL token balance
-    fn get_spl_token_balance(&self, token_account: &Pubkey) -> u64;
-    /// Get SPL token supply
-    fn get_spl_token_supply(&self, token_mint: &Pubkey) -> u64;
-    /// Get SPL token decimals
-    fn get_spl_token_decimals(&self, token_mint: &Pubkey) -> u8;
+    /// Clone existing solana account
+    fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo;
 
-    /// Get ERC20 token account address and bump seed
-    fn get_erc20_token_address(&self, owner: &H160, contract: &H160, mint: &Pubkey) -> (Pubkey, u8) {
-        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ERC20Balance", &mint.to_bytes(), contract.as_bytes(), owner.as_bytes()];
-        Pubkey::find_program_address(seeds, self.program_id())
-    }
-    /// Get ERC20 allowance account address and bump seed
-    fn get_erc20_allowance_address(&self, owner: &H160, spender: &H160, contract: &H160, mint: &Pubkey) -> (Pubkey, u8) {
-        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ERC20Allowance", &mint.to_bytes(), contract.as_bytes(), owner.as_bytes(), spender.as_bytes()];
-        Pubkey::find_program_address(seeds, self.program_id())
-    }
-    /// Get ERC20 allowance
-    fn get_erc20_allowance(&self, owner: &H160, spender: &H160, contract: &H160, mint: &Pubkey) -> U256;
+    /// Clone part of existing solana account
+    fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial>;
 
-    /// Query account meta info
-    fn query_account(&self, key: &Pubkey, data_offset: usize, data_len: usize) -> Option<crate::query::Value>;
-
+    /// Account solana address and bump seed
+    fn solana_address(&self, address: &H160) -> (Pubkey, u8);
     /// Solana accounts data len
     fn solana_accounts_space(&self, address: &H160) -> (usize, usize);
 }

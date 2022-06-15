@@ -149,7 +149,7 @@ mod tests {
     use solana_program::program_stubs::SyscallStubs;
     use solana_program::pubkey::Pubkey;
     use solana_program::system_program;
-    use solana_sdk::sysvar::rent::Rent;
+    use solana_program::sysvar::rent::Rent;
 
     use crate::account::{EthereumContract, Packable};
     use crate::account::ether_contract::DataV1;
@@ -273,7 +273,7 @@ mod tests {
         let funding_account = simple_account(&funding_pubkey, &mut funding_lamports, &mut [], &owner);
         let system_program = simple_account(&system_program_id, &mut system_lamports, &mut [], &system_program_id);
 
-        solana_sdk::program_stubs::set_syscall_stubs(Stubs::new());
+        solana_program::program_stubs::set_syscall_stubs(Stubs::new());
 
         convert_to_v2(&account_info, &funding_account, &system_program)?;
 
