@@ -63,11 +63,12 @@ macro_rules! event {
 #[cfg(feature = "tracing")]
 macro_rules! emit_exit {
     ($reason:expr) => {{
-        use evm::tracing::{EventOnStack::*, ExitTrace};
+    //     use evm::tracing::{EventOnStack::*, ExitTrace};
         let reason = $reason;
+        let vec : Vec<u8> = vec![];
         event!(Exit(ExitTrace {
             reason: reason.clone().into(),
-            return_value: vec![].as_slice(),
+            return_value: vec.as_slice() as *const _ as *const u8 as u64,
             return_value_len: 0,
         }));
         reason
@@ -75,9 +76,9 @@ macro_rules! emit_exit {
     ($return_value:expr, $reason:expr) => {{
         let reason = $reason;
         let return_value = $return_value;
-        event!((ExitTrace {
+        event!(Exit(ExitTrace {
             reason: reason.clone(),
-            return_value: return_value.as_slice(),
+            return_value: return_value.as_slice() as *const _ as *const u8 as u64,
             return_value_len: return_value.len()
         }));
         (return_value, reason)

@@ -251,7 +251,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             address,
             scheme,
             value,
-            init_code: init_code.as_slice(),
+            init_code: init_code.as_slice() as *const _ as *const u8 as u64,
             init_code_len: init_code.len(),
             target_gas,
         }));
@@ -293,7 +293,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         event!(Call(CallTrace{
             code_address,
             transfer: transfer.clone(),
-            input: input.as_slice(),
+            input: input.as_slice() as *const _ as *const u8 as u64,
             input_len: input.len(),
             target_gas,
             is_static,
@@ -399,7 +399,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             caller,
             address: code_address,
             value: transfer_value,
-            data: input.as_slice(),
+            data: input.as_slice() as *const _ as *const u8 as u64,
             data_len: input.len(),
             gas_limit
         }));
@@ -445,7 +445,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         event!(TransactCreate(TransactCreateTrace {
             caller,
             value: transfer_value,
-            init_code: code.as_slice(),
+            init_code: code.as_slice() as *const _ as *const u8 as u64,
             init_code_len: code.len(),
             gas_limit,
             address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
