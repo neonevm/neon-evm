@@ -8,7 +8,6 @@ use solana_program::{
 use super::{Operator, EthereumAccount, sysvar, token};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
-use evm::backend::Log;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::instruction::Instruction;
 use crate::account::ACCOUNT_SEED_VERSION;
@@ -93,25 +92,25 @@ impl<'a> Neon<'a> {
         invoke(&instruction, &[ self.info.clone() ])
     }
 
-    pub fn on_event(&self, log: Log) -> ProgramResult {
+    pub fn on_event(&self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> ProgramResult {
         let instruction = {
             use core::mem::size_of;
             let capacity = size_of::<u8>()
                 + size_of::<H160>()  // address
                 + size_of::<usize>() // topics.len
-                + log.topics.len() * size_of::<H256>()
-                + log.data.len();
+                + topics.len() * size_of::<H256>()
+                + data.len();
 
-            let mut data = Vec::with_capacity(capacity);
-            data.push(7_u8);
-            data.extend_from_slice(log.address.as_bytes());
-            data.extend_from_slice(&log.topics.len().to_le_bytes());
-            for topic in log.topics {
-                data.extend_from_slice(topic.as_bytes());
+            let mut buffer = Vec::with_capacity(capacity);
+            buffer.push(7_u8);
+            buffer.extend_from_slice(address.as_bytes());
+            buffer.extend_from_slice(&topics.len().to_le_bytes());
+            for topic in topics {
+                buffer.extend_from_slice(topic.as_bytes());
             }
-            data.extend(&log.data);
+            buffer.extend(data);
 
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
+            Instruction { program_id: *self.info.key, accounts: Vec::new(), data: buffer }
         };
         invoke(&instruction, &[ self.info.clone() ])
     }
