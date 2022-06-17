@@ -65,10 +65,6 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
-use solana_program::{
-    keccak::{hash,},
-};
-
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of,},
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
@@ -124,17 +120,18 @@ fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
 
 #[must_use]
 pub fn keccak256_h256(data: &[u8]) -> H256 {
-    H256::from(hash(data).to_bytes())
+    let hash = solana_sdk::keccak::hash(data).to_bytes();
+    H256::from(hash)
 }
 
 #[must_use]
 pub fn keccak256(data: &[u8]) -> [u8; 32] {
-    hash(data).to_bytes()
+    solana_sdk::keccak::hash(data).to_bytes()
 }
 
 #[must_use]
 pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
-    hash(data).to_bytes().to_vec()
+    solana_sdk::keccak::hash(data).to_bytes().to_vec()
 }
 
 #[derive(Debug)]

@@ -12,8 +12,7 @@ use solana_program::{
     sysvar::Sysvar,
     clock::Clock,
 };
-use serde::{ Serialize, de::DeserializeOwned };
-use std::convert::TryInto;
+use std::cell::{RefMut, Ref};
 
 
 pub enum Deposit<'a> {
@@ -193,72 +192,27 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn serialize<T: Serialize, E: Serialize>(&mut self, evm_data: &T, executor_data: &E) -> Result<(), ProgramError> {
-        {
-            self.evm_data_size = bincode::serialized_size(&evm_data)
-                .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
-                .try_into()
-                .map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
-            self.executor_data_size = bincode::serialized_size(&executor_data)
-                .map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
-                .try_into()
-                .map_err(|e| E!(ProgramError::InvalidInstructionData; "TryFromIntError={:?}", e))?;
-        }
-        
-        let mut account_data = self.info.try_borrow_mut_data()?;
-        {
-            let (start, mid, end) = self.storage_region();
-            if account_data.len() < end {
-                return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?} < end={:?}", account_data.len(), end);
-            }
+    #[must_use]
+    pub fn evm_state_data(&self) -> Ref<[u8]> {
+        let (_, accounts_region_end) = self.accounts_region();
 
-            {
-                let buffer = &mut account_data[start..mid];
-                bincode::serialize_into(buffer, &evm_data).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-            }
-            {
-                let buffer = &mut account_data[mid..end];
-                bincode::serialize_into(buffer, &executor_data).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?;
-            }
-        }
-
-        Ok(())
+        let data = self.info.data.borrow();
+        Ref::map(data, |d| &d[accounts_region_end..])
     }
 
-    pub fn deserialize<T: DeserializeOwned, E: DeserializeOwned>(&self) -> Result<(T, E), ProgramError> {
-        let account_data = self.info.try_borrow_data()?;
+    #[must_use]
+    pub fn evm_state_mut_data(&mut self) -> RefMut<[u8]> {
+        let (_, accounts_region_end) = self.accounts_region();
 
-        let (start, mid, end) = self.storage_region();
-        if account_data.len() < end {
-            return Err!(ProgramError::AccountDataTooSmall; "account_data.len()={:?}", account_data.len());
-        }
-
-        let evm_data: T = {
-            let buffer = &account_data[start..mid];
-            bincode::deserialize_from(buffer).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
-        };
-        let executor_data: E = {
-            let buffer = &account_data[mid..end];
-            bincode::deserialize_from(buffer).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e))?
-        };
-
-        Ok((evm_data, executor_data))
+        let data = self.info.data.borrow_mut();
+        RefMut::map(data, |d| &mut d[accounts_region_end..])
     }
 
+    #[must_use]
     fn accounts_region(&self) -> (usize, usize) {
         let begin = Self::SIZE;
         let end = begin + self.accounts_len * (1 + 32);
 
         (begin, end)
-    }
-
-    fn storage_region(&self) -> (usize, usize, usize) {
-        let (_accounts_region_begin, accounts_region_end) = self.accounts_region();
-
-        let begin = accounts_region_end;
-        let mid = begin + self.evm_data_size;
-        let end = mid + self.executor_data_size;
-
-        (begin, mid, end)
     }
 }
