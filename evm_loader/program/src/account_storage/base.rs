@@ -7,13 +7,18 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, Operator};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, Operator, program};
 use crate::account_storage::{Account, ProgramAccountStorage};
 
 
 
 impl<'a> ProgramAccountStorage<'a> {
-    pub fn new(program_id: &'a Pubkey, operator: &Operator<'a>, accounts: &'a [AccountInfo<'a>]) -> Result<Self, ProgramError> {
+    pub fn new(
+        program_id: &'a Pubkey,
+        operator: &Operator<'a>,
+        system_program: Option<&program::System<'a>>,
+        accounts: &'a [AccountInfo<'a>]
+    ) -> Result<Self, ProgramError> {
         debug_print!("ProgramAccountStorage::new");
 
         let mut solana_accounts = BTreeMap::new();
@@ -23,6 +28,12 @@ impl<'a> ProgramAccountStorage<'a> {
                 return Err!(ProgramError::InvalidArgument; "Account {} - repeats in the transaction", account.key)
             }
         }
+
+        solana_accounts.insert(*operator.key, operator.info);
+        if let Some(system) = system_program {
+            solana_accounts.insert(*system.key, system.info);
+        }
+
 
         let mut ethereum_accounts = BTreeMap::new();
         for account_info in accounts {
@@ -41,7 +52,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let account = if let Some(code_account_key) = ether_account.code_account {
                 debug_print!("Contract Account {}", ether_address);
 
-                let code_account = solana_accounts[&code_account_key];
+                let code_account = &solana_accounts[&code_account_key];
                 let ether_contract = EthereumContract::from_account(program_id, code_account)?;
                 Account::Contract(ether_account, ether_contract)
             } else {

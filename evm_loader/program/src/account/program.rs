@@ -126,7 +126,7 @@ impl<'a> Deref for Neon<'a> {
 
 
 pub struct System<'a> {
-    info: &'a AccountInfo<'a>
+    pub info: &'a AccountInfo<'a>
 }
 
 impl<'a> System<'a> {

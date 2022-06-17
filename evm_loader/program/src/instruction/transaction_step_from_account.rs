@@ -34,6 +34,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         &accounts.operator,
+        Some(&accounts.system_program),
         accounts.remaining_accounts,
     )?;
 
