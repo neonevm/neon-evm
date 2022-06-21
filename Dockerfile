@@ -23,7 +23,7 @@ RUN cargo +nightly clippy && \
     cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
     cargo build-bpf --features no-logs,alpha && cp target/deploy/evm_loader.so target/deploy/evm_loader-alpha.so && \
     cargo build-bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
-    cargo build-bpf
+    cargo build-bpf --features no-logs
 
 # Build Solidity contracts
 FROM ethereum/solc:0.7.0 AS solc
