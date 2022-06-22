@@ -32,60 +32,75 @@ pub mod utils;
 // solana-sdk version
 pub use solana_program;
 
-#[cfg(feature = "tracing")]
-pub use transaction::UnsignedTransaction;
+// #[cfg(feature = "tracing")]
+// pub use transaction::UnsignedTransaction;
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
 
-#[cfg(feature = "tracing")]
-pub mod tracing;
+// #[cfg(feature = "tracing")]
+// macro_rules! event {
+//     ($x:expr) => {
+//         use solana_program::{tracer_api, compute_meter_remaining, compute_meter_set_remaining};
+//         use solana_program::{tracer_api};
 
-#[cfg(feature = "tracing")]
-macro_rules! event {
-    ($x:expr) => {
-        // use crate::tracing;
-        // tracing::send(&$x);
-        use solana_program::{tracer_api, compute_meter_remaining, compute_meter_set_remaining};
+        // let mut remaining: u64 = 0;
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
 
-        let mut remaining: u64 = 0;
-        compute_meter_remaining::compute_meter_remaining(&mut remaining);
+        // let ptr = &$x  as *const _ as *const u8;
+        // tracer_api::send_trace_message(ptr);
 
-        // let mut message = vec![];
-        // bincode::serialize_into(&mut message, event).map_err(|e| E!(ProgramError::InvalidInstructionData; "Error={:?}", e)).unwrap();
-        let ptr = &$x  as *const _ as *const u8;
-        tracer_api::send_trace_message(ptr);
-        // solana_program::msg!("{}", remaining);
-        compute_meter_set_remaining::compute_meter_set_remaining(remaining + 12);
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
+    // };
+// }
 
-    };
-}
 
-#[cfg(feature = "tracing")]
-macro_rules! emit_exit {
-    ($reason:expr) => {{
-    //     use evm::tracing::{EventOnStack::*, ExitTrace};
-        let reason = $reason;
-        let vec : Vec<u8> = vec![];
-        event!(Exit(ExitTrace {
-            reason: reason.clone().into(),
-            return_value: vec.as_slice() as *const _ as *const u8 as u64,
-            return_value_len: 0,
-        }));
-        reason
-    }};
-    ($return_value:expr, $reason:expr) => {{
-        let reason = $reason;
-        let return_value = $return_value;
-        event!(Exit(ExitTrace {
-            reason: reason.clone(),
-            return_value: return_value.as_slice() as *const _ as *const u8 as u64,
-            return_value_len: return_value.len()
-        }));
-        (return_value, reason)
-    }};
-}
+// #[cfg(feature = "tracing")]
+// macro_rules! emit_exit {
+//     ($reason:expr) => {{
+        // use evm::tracing::{Event::*, ExitTrace};
 
-#[cfg(not(feature = "tracing"))]
+        // #[cfg(feature = "tracing")]
+        // use solana_program::{compute_meter_remaining, compute_meter_set_remaining};
+
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
+
+        // let reason = $reason;
+        // event!(Exit(ExitTrace {
+        //     reason: &$reason.into(),
+        //     return_value: &Vec::new(),
+        // }));
+
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
+
+        // $reason
+    // }};
+    // ($return_value:expr, $reason:expr) => {{
+        // let reason = $reason;
+        // let return_value = $return_value;
+
+
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
+        //
+        // event!(Exit(ExitTrace{
+        //     reason: &$reason,
+        //     return_value: &$return_value,
+        // }));
+        //
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
+
+//         ($return_value, $reason)
+//     }};
+// }
+
+// #[cfg(not(feature = "tracing"))]
 macro_rules! emit_exit {
     ($reason:expr) => {
         $reason
@@ -95,10 +110,10 @@ macro_rules! emit_exit {
     };
 }
 
-#[cfg(not(feature = "tracing"))]
-macro_rules! event {
-    ($x:expr) => {};
-}
+// #[cfg(not(feature = "tracing"))]
+// macro_rules! event {
+//     ($x:expr) => {};
+// }
 
 pub(crate) use emit_exit;
-pub(crate) use event;
+// pub(crate) use event;

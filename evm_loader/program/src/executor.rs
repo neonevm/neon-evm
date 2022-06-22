@@ -17,10 +17,15 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
-use crate::{event, emit_exit};
-// use evm::tracing::EventOnStack::*;
-#[cfg(feature = "tracing")]
-use evm::tracing::{EventOnStack::*, *};
+// use crate::{event, emit_exit};
+use crate::{ emit_exit};
+
+// #[cfg(feature = "tracing")]
+// use solana_program::{compute_meter_remaining, compute_meter_set_remaining};
+
+
+// #[cfg(feature = "tracing")]
+// use evm::tracing::{Event::*, *};
 
 
 fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
@@ -246,16 +251,22 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        event!(Create(CreateTrace {
-            caller,
-            address,
-            scheme,
-            value,
-            init_code: init_code.as_slice() as *const _ as *const u8 as u64,
-            init_code_len: init_code.len(),
-            target_gas,
-        }));
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
 
+        // event!(Create(CreateTrace {
+        //     caller,
+        //     address,
+        //     scheme,
+        //     value,
+        //     init_code: &init_code,
+        //     target_gas,
+        // }));
+
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
@@ -290,15 +301,23 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        event!(Call(CallTrace{
-            code_address,
-            transfer: transfer.clone(),
-            input: input.as_slice() as *const _ as *const u8 as u64,
-            input_len: input.len(),
-            target_gas,
-            is_static,
-            context: context.clone(),
-        }));
+
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
+        //
+        // event!(Call(CallTrace{
+        //     code_address,
+        //     transfer: &transfer,
+        //     input: &input,
+        //     target_gas,
+        //     is_static,
+        //     context: &context,
+        // }));
+        //
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
 
         debug_print!("call");
 
@@ -395,14 +414,22 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         gas_limit: U256,
         gas_price: U256
     ) -> ProgramResult {
-        event!(TransactCall(TransactCallTrace {
-            caller,
-            address: code_address,
-            value: transfer_value,
-            data: input.as_slice() as *const _ as *const u8 as u64,
-            data_len: input.len(),
-            gas_limit
-        }));
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
+        //
+        // event!(TransactCall(TransactCallTrace {
+        //     caller,
+        //     address: code_address,
+        //     value: transfer_value,
+        //     data: &input,
+        //     gas_limit
+        // }));
+        //
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
+
         debug_print!("call_begin");
 
         self.executor.state.inc_nonce(caller);
@@ -442,14 +469,21 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         gas_limit: U256,
                         gas_price: U256
     ) -> ProgramResult {
-        event!(TransactCreate(TransactCreateTrace {
-            caller,
-            value: transfer_value,
-            init_code: code.as_slice() as *const _ as *const u8 as u64,
-            init_code_len: code.len(),
-            gas_limit,
-            address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
-        }));
+        // #[cfg(feature = "tracing")]
+        // let mut remaining: u64 =0;
+        // #[cfg(feature = "tracing")]
+        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
+        //
+        // event!(TransactCreate(TransactCreateTrace {
+        //     caller,
+        //     value: transfer_value,
+        //     init_code: &code,
+        //     gas_limit,
+        //     address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
+        // }));
+        //
+        // #[cfg(feature = "tracing")]
+        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
 
         debug_print!("create_begin");
 
@@ -494,41 +528,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
-    #[cfg(feature = "tracing")]
-    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
-        let runtime = match self.runtime.last_mut() {
-            Some((runtime, _)) => runtime,
-            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
-        };
-
-        let mut steps_executed = 0;
-        loop {
-            if steps_executed >= max_steps {
-                    return (steps_executed, RuntimeApply::Continue);
-            }
-            if let Err(capture) = runtime.step(&mut self.executor) {
-                return match capture {
-                    Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
-                    Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
-                    Capture::Trap(interrupt) => {
-                        match interrupt {
-                            Resolve::Call(interrupt, resolve) => {
-                                mem::forget(resolve);
-                                (steps_executed, RuntimeApply::Call(interrupt))
-                            },
-                            Resolve::Create(interrupt, resolve) => {
-                                mem::forget(resolve);
-                                (steps_executed, RuntimeApply::Create(interrupt))
-                            },
-                        }
-                    }
-                };
-            }
-            steps_executed += 1;
-        }
-    }
-
-    #[cfg(not(feature = "tracing"))]
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
