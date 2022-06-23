@@ -1,8 +1,8 @@
 [workspace]
 members = [
+    'cli',
     'program',
 ]
 exclude = [
-    'cli',
     'rust-evm'
 ]

@@ -1,17 +1,11 @@
 use log::{debug, info};
 
-use evm::{H160, U256, ExitReason,};
-
-use evm_loader::{
-    executor::Machine,
-};
+use evm::{H160, U256, ExitReason};
+use evm_loader::executor::Machine;
 
 use crate::{
     account_storage::{
-        EmulatorAccountStorage,
-        AccountJSON,
-        SolanaAccountJSON,
-        TokenAccountJSON,
+        EmulatorAccountStorage, NeonAccount, SolanaAccount,
     },
     Config,
     NeonCliResult,
@@ -55,7 +49,7 @@ pub fn execute(
         program_id
     };
 
-    let (exit_reason, result, applies_logs,  steps_executed, used_gas) = {
+    let (exit_reason, result, actions, steps_executed, used_gas) = {
         let gas_limit = U256::from(999_999_999_999_u64);
         let mut executor = Machine::new(caller_id, &storage)?;
         debug!("Executor initialized");
@@ -105,11 +99,10 @@ pub fn execute(
 
         let steps_executed = executor.get_steps_executed();
         let used_gas = executor.used_gas();
-        let executor_state = executor.into_state();
+        let actions = executor.into_state_actions();
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            let apply = executor_state.deconstruct();
-            (exit_reason, result, Some(apply), steps_executed, used_gas)
+            (exit_reason, result, Some(actions), steps_executed, used_gas)
         } else {
             (exit_reason, result, None, steps_executed, used_gas)
         }
@@ -118,20 +111,7 @@ pub fn execute(
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let (applies,
-                _logs,
-                transfers,
-                spl_transfers,
-                spl_approves,
-                withdrawals,
-                erc20_approves) = applies_logs.unwrap();
-
-            storage.apply(applies)?;
-            storage.apply_transfers(transfers);
-            storage.apply_spl_approves(spl_approves);
-            storage.apply_spl_transfers(spl_transfers);
-            storage.apply_erc20_approves(erc20_approves);
-            storage.apply_withdrawals(withdrawals, token_mint);
+            storage.apply_actions(actions.unwrap());
 
             debug!("Applies done");
             "succeed".to_string()
@@ -149,32 +129,28 @@ pub fn execute(
         debug!("Not succeed execution");
     }
 
-    let accounts: Vec<AccountJSON> = storage.get_used_accounts();
-
-    let solana_accounts: Vec<SolanaAccountJSON> = storage.solana_accounts
+    let accounts: Vec<NeonAccount> = storage.accounts
         .borrow()
         .values()
         .cloned()
-        .map(SolanaAccountJSON::from)
         .collect();
 
-    let token_accounts: Vec<TokenAccountJSON> = storage.token_accounts
+    let solana_accounts: Vec<SolanaAccount> = storage.solana_accounts
         .borrow()
         .values()
         .cloned()
-        .map(TokenAccountJSON::from)
         .collect();
 
     let js = serde_json::json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
-        "token_accounts": token_accounts,
+        "token_accounts": [],
         "result": &hex::encode(&result),
         "exit_status": status,
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,
         "used_gas": used_gas.as_u64(),
-    }).to_string();
+    });
 
     println!("{}", js);
 

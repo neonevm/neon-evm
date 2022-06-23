@@ -65,10 +65,6 @@ use clap::{
     ArgMatches, SubCommand,
 };
 
-use solana_program::{
-    keccak::{hash,},
-};
-
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of,},
     input_validators::{is_url_or_moniker, is_valid_pubkey, normalize_to_url_if_moniker},
@@ -83,7 +79,7 @@ use solana_client::{
 
 use rlp::RlpStream;
 
-use log::{debug, error};
+use log::{ debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
@@ -124,17 +120,18 @@ fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
 
 #[must_use]
 pub fn keccak256_h256(data: &[u8]) -> H256 {
-    H256::from(hash(data).to_bytes())
+    let hash = solana_sdk::keccak::hash(data).to_bytes();
+    H256::from(hash)
 }
 
 #[must_use]
 pub fn keccak256(data: &[u8]) -> [u8; 32] {
-    hash(data).to_bytes()
+    solana_sdk::keccak::hash(data).to_bytes()
 }
 
 #[must_use]
 pub fn keccak256_digest(data: &[u8]) -> Vec<u8> {
-    hash(data).to_bytes().to_vec()
+    solana_sdk::keccak::hash(data).to_bytes().to_vec()
 }
 
 #[derive(Debug)]
@@ -490,10 +487,19 @@ fn main() {
             Arg::with_name("logging_ctx")
                 .short("L")
                 .long("logging_ctx")
-                .value_name("LOG_CONTEST")
+                .value_name("LOG_CONTEXT")
                 .takes_value(true)
                 .global(true)
                 .help("Logging context"),
+        )
+        .arg(
+            Arg::with_name("loglevel")
+                .short("l")
+                .long("loglevel")
+                .value_name("LOG_LEVEL")
+                .takes_value(true)
+                .global(true)
+                .help("Logging level"),
         )
         .subcommand(
             SubCommand::with_name("emulate")
@@ -717,7 +723,19 @@ fn main() {
         app_matches.value_of("logging_ctx")
             .map(|ctx| LogContext::new(ctx.to_string()) )
             .unwrap_or_default();
-    logs::init(context).unwrap();
+    let loglevel: log::LevelFilter =
+        app_matches.value_of("loglevel")
+            .map_or(log::LevelFilter::Trace, |ll| 
+                match ll.to_ascii_lowercase().as_str() {
+                    "off"   => log::LevelFilter::Off,
+                    "error" => log::LevelFilter::Error,
+                    "warn"  => log::LevelFilter::Warn,
+                    "info"  => log::LevelFilter::Info,
+                    "debug" => log::LevelFilter::Debug,
+                    _       => log::LevelFilter::Trace,
+                }
+            );
+    logs::init(context, loglevel).unwrap();
 
     let mut wallet_manager = None;
     let config = {

@@ -6,8 +6,7 @@ use solana_program::pubkey::Pubkey;
 use crate::account;
 use crate::account::{EthereumAccount, Operator, program, State, FinalizedState, Treasury};
 use crate::account_storage::{ProgramAccountStorage};
-use crate::executor::Machine;
-use crate::executor_state::{ApplyState};
+use crate::executor::{Machine, Action};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, UnsignedTransaction};
 use crate::error::EvmLoaderError;
@@ -103,7 +102,7 @@ pub fn do_continue<'a>(
 }
 
 
-type EvmResults = (Vec<u8>, ExitReason, Option<ApplyState>);
+type EvmResults = (Vec<u8>, ExitReason, Option<Vec<Action>>);
 
 fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
@@ -122,7 +121,7 @@ fn execute_steps(
             let used_gas = executor.used_gas();
 
             let apply_state = if reason.is_succeed() {
-                Some(executor.into_state().deconstruct())
+                Some(executor.into_state_actions())
             } else {
                 None
             };
@@ -186,12 +185,8 @@ fn finalize<'a>(
         if let Some(apply_state) = apply_state {
             account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
         } else {
-            // Transaction ended with error, no state to apply
-            // Increment nonce here. Normally it is incremented inside apply_state_change
-            if let Some(caller) = account_storage.ethereum_account_mut(&storage.caller) {
-                caller.trx_count = caller.trx_count.checked_add(1)
-                    .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - nonce overflow", caller.address))?;
-            }
+            let apply_actions = vec![Action::EvmIncrementNonce { address: storage.caller }];
+            account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
         }
 
         accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;

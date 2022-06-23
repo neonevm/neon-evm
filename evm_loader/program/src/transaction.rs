@@ -1,5 +1,4 @@
 use evm::{H160, U256};
-use serde::{Deserialize, Serialize};
 use solana_program::{ 
     sysvar::instructions::{load_current_index_checked, load_instruction_at_checked},
     account_info::AccountInfo,
@@ -12,7 +11,8 @@ use std::convert::{Into, TryFrom};
 use crate::account_storage::ProgramAccountStorage;
 use crate::utils::{keccak256_digest};
 
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[repr(packed)]
+#[allow(dead_code)]
 struct SecpSignatureOffsets {
     signature_offset: u16, // offset to [signature,recovery_id] of 64+1 bytes
     signature_instruction_index: u8,
@@ -42,7 +42,7 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
         message_instruction_index: instruction_index,
     };
 
-    let bin_offsets = bincode::serialize(&offsets).unwrap();
+    let bin_offsets: [u8; 11] = unsafe { core::mem::transmute(offsets) };
 
     let mut instruction_data = Vec::with_capacity(1 + bin_offsets.len());
     instruction_data.push(NUMBER_OF_SIGNATURES);
