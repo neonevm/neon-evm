@@ -9,13 +9,6 @@ use solana_program::{
 };
 use crate::executor::Machine;
 use crate::config::chain_id;
-use solana_program::cast;
-
-
-pub struct Item<'a> {
-    a: u8,
-    b: &'a[u8],
-}
 
 
 struct Accounts<'a> {
@@ -28,21 +21,11 @@ struct Accounts<'a> {
     remaining_accounts: &'a [AccountInfo<'a>],
 }
 
-
 /// Execute Ethereum transaction in a single Solana transaction
 /// Can only be used for function call or transfer
 /// SOLANA TRANSACTION FAILS IF `trx.to` IS EMPTY
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
     solana_program::msg!("Instruction: Execute Transaction from Instruction");
-    let v = vec! [1_u8, 2, 3];
-
-    let val = Item{
-        a: 9,
-        b: v.as_slice()
-    };
-    solana_program::msg!("{} {:?}", val.a, val.b);
-    let ptr = &val  as *const _ as *const u8;
-    cast::cast(ptr);
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let caller_address = H160::from(*array_ref![instruction, 4, 20]);

@@ -35,7 +35,7 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
             position = (HEAP_START_ADDRESS as usize) + core::mem::size_of::<usize>();
         }
 
-        let alignment = layout.align();
+        let alignment = layout.align() - 1;
 
         // round up to multiple of alignment
         position = position.saturating_add(alignment);

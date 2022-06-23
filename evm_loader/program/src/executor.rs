@@ -7,7 +7,7 @@ use std::convert::Infallible;
 use std::mem;
 use std::boxed::Box;
 
-use evm::{Capture, ExitError, ExitFatal, ExitReason, H160, H256, Handler, Resolve, Valids, U256};
+use evm::{Capture, ExitError, ExitFatal, ExitReason, H160, H256, Handler, Resolve, Valids, U256, event};
 use evm_runtime::{CONFIG, Control, save_created_address, save_return_value};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
@@ -17,20 +17,13 @@ use crate::utils::{keccak256_h256, keccak256_h256_v};
 use crate::precompile_contracts::{call_precompile, is_precompile_address};
 use crate::account_storage::AccountStorage;
 use crate::gasometer::Gasometer;
-// use crate::{event, emit_exit};
-use crate::{ emit_exit};
 
-// #[cfg(feature = "tracing")]
-// use solana_program::{compute_meter_remaining, compute_meter_set_remaining};
+#[cfg(feature = "tracing")]
+use solana_program::tracer_api;
 
+#[cfg(feature = "tracing")]
+use evm::{Event, CreateTrace, CallTrace,  TransactCreateTrace, TransactCallTrace, ExitTrace};
 
-// #[cfg(feature = "tracing")]
-// use evm::tracing::{Event::*, *};
-
-
-fn emit_exit<E: Into<ExitReason> + Copy>(error: E) -> E {
-    emit_exit!(error)
-}
 
 /// "All but one 64th" operation.
 /// See also EIP-150.
@@ -251,22 +244,16 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        // #[cfg(feature = "tracing")]
-        // let mut remaining: u64 =0;
-        // #[cfg(feature = "tracing")]
-        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
 
-        // event!(Create(CreateTrace {
-        //     caller,
-        //     address,
-        //     scheme,
-        //     value,
-        //     init_code: &init_code,
-        //     target_gas,
-        // }));
+        event!(Event::Create(CreateTrace {
+            caller,
+            address,
+            scheme,
+            value,
+            init_code: &init_code,
+            target_gas,
+        }));
 
-        // #[cfg(feature = "tracing")]
-        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
 
         // TODO: may be increment caller's nonce after runtime creation or success execution?
         self.state.inc_nonce(caller);
@@ -302,24 +289,14 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
 
-        // #[cfg(feature = "tracing")]
-        // let mut remaining: u64 =0;
-        // #[cfg(feature = "tracing")]
-        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
-        //
-        // event!(Call(CallTrace{
-        //     code_address,
-        //     transfer: &transfer,
-        //     input: &input,
-        //     target_gas,
-        //     is_static,
-        //     context: &context,
-        // }));
-        //
-        // #[cfg(feature = "tracing")]
-        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
-
-        debug_print!("call");
+        event!(Event::Call(CallTrace{
+            code_address,
+            transfer: &transfer,
+            input: &input,
+            target_gas,
+            is_static,
+            context: &context,
+        }));
 
         if (self.state.metadata().is_static() || is_static) && transfer.is_some() {
             return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
@@ -414,21 +391,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         gas_limit: U256,
         gas_price: U256
     ) -> ProgramResult {
-        // #[cfg(feature = "tracing")]
-        // let mut remaining: u64 =0;
-        // #[cfg(feature = "tracing")]
-        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
-        //
-        // event!(TransactCall(TransactCallTrace {
-        //     caller,
-        //     address: code_address,
-        //     value: transfer_value,
-        //     data: &input,
-        //     gas_limit
-        // }));
-        //
-        // #[cfg(feature = "tracing")]
-        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
+
+        event!(Event::TransactCall(TransactCallTrace {
+            caller,
+            address: code_address,
+            value: transfer_value,
+            data: &input,
+            gas_limit
+        }));
 
         debug_print!("call_begin");
 
@@ -442,7 +412,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
         let transfer = evm::Transfer { source: caller, target: code_address, value: transfer_value };
         self.executor.state.transfer(&transfer)
-            .map_err(emit_exit)
+            .map_err(
+                |#[allow(unused_variables)] e|{
+                    event!(Event::Exit(ExitTrace {
+                        reason: &e.into(),
+                        return_value: &Vec::new(),
+                    }));
+                }
+            )
             .map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
 
         let code = self.executor.code(code_address);
@@ -469,29 +446,25 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                         gas_limit: U256,
                         gas_price: U256
     ) -> ProgramResult {
-        // #[cfg(feature = "tracing")]
-        // let mut remaining: u64 =0;
-        // #[cfg(feature = "tracing")]
-        // compute_meter_remaining::compute_meter_remaining(&mut remaining);
-        //
-        // event!(TransactCreate(TransactCreateTrace {
-        //     caller,
-        //     value: transfer_value,
-        //     init_code: &code,
-        //     gas_limit,
-        //     address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
-        // }));
-        //
-        // #[cfg(feature = "tracing")]
-        // compute_meter_set_remaining::compute_meter_set_remaining(remaining+12);
 
-        debug_print!("create_begin");
+        event!(Event::TransactCreate(TransactCreateTrace {
+            caller,
+            value: transfer_value,
+            init_code: &code,
+            gas_limit,
+            address: self.executor.create_address(evm::CreateScheme::Legacy { caller }),
+        }));
 
         let scheme = evm::CreateScheme::Legacy { caller };
 
         match self.executor.create(caller, scheme, transfer_value, code, None) {
             Capture::Exit((reason, addr, value)) => {
-                let (value, reason) = emit_exit!(value, reason);
+
+                event!(Event::Exit(ExitTrace {
+                        reason: &reason,
+                        return_value: &value,
+                }));
+
                 return Err!(ProgramError::InvalidInstructionData; "create_begin() error={:?} ", (reason, addr, value));
             },
             Capture::Trap(info) => {
@@ -509,7 +482,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
                 if let Some(transfer) = info.transfer {
                     self.executor.state.transfer(&transfer)
-                        .map_err(emit_exit)
+                        .map_err(
+                                |#[allow(unused_variables)] e|{
+                                event!(Event::Exit(ExitTrace {
+                                        reason: &e.into(),
+                                        return_value: &Vec::new(),
+                                }));
+                            }
+                        )
                         .map_err(|e| E!(ProgramError::InsufficientFunds; "ExitError={:?}", e))?;
                 }
 
@@ -663,7 +643,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
         };
 
-        emit_exit!(exited_runtime.machine().return_value(), reason);
+        event!(Event::Exit(ExitTrace {
+                    reason: &reason,
+                    return_value: &exited_runtime.machine().return_value(),
+                }));
 
         match reason {
             ExitReason::Succeed(_) => Ok(()),
