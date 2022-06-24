@@ -573,9 +573,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.9"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ff1f980957787286a554052d03c7aee98d99cc32e09f6d45f0a814133c87978"
+checksum = "7d82ee10ce34d7bc12c2122495e7593a9c41347ecdd64185af4ecf72cb1a7f83"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -886,8 +886,20 @@ dependencies = [
 name = "evm"
 version = "0.18.0"
 dependencies = [
- "evm-core",
- "evm-runtime",
+ "evm-core 0.18.2",
+ "evm-runtime 0.18.0",
+ "log",
+ "rlp",
+ "sha3 0.8.2",
+]
+
+[[package]]
+name = "evm"
+version = "0.18.0"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "evm-core 0.18.2 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "evm-runtime 0.18.0 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
  "log",
  "rlp",
  "sha3 0.8.2",
@@ -910,6 +922,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "evm-core"
+version = "0.18.2"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "borsh",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde",
+ "log",
+ "rlp",
+ "serde",
+ "serde_bytes",
+ "solana-program 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "uint",
+]
+
+[[package]]
 name = "evm-loader"
 version = "0.7.6-dev"
 dependencies = [
@@ -919,8 +948,8 @@ dependencies = [
  "bs58 0.3.1",
  "cfg-if",
  "const_format",
- "evm",
- "evm-runtime",
+ "evm 0.18.0 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "evm-runtime 0.18.0 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
  "hex",
  "log",
  "num-derive",
@@ -939,9 +968,20 @@ name = "evm-runtime"
 version = "0.18.0"
 dependencies = [
  "borsh",
- "evm-core",
+ "evm-core 0.18.2",
  "sha3 0.8.2",
  "solana-program 1.9.12",
+]
+
+[[package]]
+name = "evm-runtime"
+version = "0.18.0"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "borsh",
+ "evm-core 0.18.2 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "sha3 0.8.2",
+ "solana-program 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
 ]
 
 [[package]]
@@ -1733,7 +1773,7 @@ dependencies = [
  "chrono",
  "clap",
  "ethereum-types",
- "evm",
+ "evm 0.18.0",
  "evm-loader",
  "fern",
  "getrandom 0.1.16",
@@ -2993,6 +3033,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-frozen-abi"
+version = "1.9.12"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "bs58 0.4.0",
+ "bv",
+ "generic-array 0.14.5",
+ "log",
+ "memmap2",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "sha2",
+ "solana-frozen-abi-macro 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "solana-logger 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-frozen-abi-macro"
 version = "1.9.12"
 dependencies = [
@@ -3015,6 +3074,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-frozen-abi-macro"
+version = "1.9.12"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "rustc_version",
+ "syn 1.0.98",
+]
+
+[[package]]
 name = "solana-logger"
 version = "1.9.12"
 dependencies = [
@@ -3028,6 +3098,16 @@ name = "solana-logger"
 version = "1.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e3e1c7bf616aa4926d70dd9015077fcccd88c9271cef29c9038e76a2da1ac5d"
+dependencies = [
+ "env_logger",
+ "lazy_static",
+ "log",
+]
+
+[[package]]
+name = "solana-logger"
+version = "1.9.12"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -3188,6 +3268,48 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-program"
+version = "1.9.12"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
+dependencies = [
+ "base64 0.13.0",
+ "bincode",
+ "bitflags",
+ "blake3",
+ "borsh",
+ "borsh-derive",
+ "bs58 0.4.0",
+ "bv",
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "curve25519-dalek",
+ "getrandom 0.1.16",
+ "itertools",
+ "js-sys",
+ "lazy_static",
+ "libsecp256k1 0.6.0",
+ "log",
+ "num-derive",
+ "num-traits",
+ "parking_lot 0.11.2",
+ "rand 0.7.3",
+ "rustc_version",
+ "rustversion",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "sha2",
+ "sha3 0.9.1",
+ "solana-frozen-abi 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "solana-frozen-abi-macro 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "solana-logger 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
+ "solana-sdk-macro 1.9.12 (git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events)",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -3369,6 +3491,18 @@ name = "solana-sdk-macro"
 version = "1.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "333726c958386c09937aba55ca4390bcfb4621c6120f47610682a94ea4d4533c"
+dependencies = [
+ "bs58 0.4.0",
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "rustversion",
+ "syn 1.0.98",
+]
+
+[[package]]
+name = "solana-sdk-macro"
+version = "1.9.12"
+source = "git+https://github.com/neonlabsorg/evm?branch=39_serialize_trace_events#c461a6a676e4efbcee52254c6e3bb44a5c365ae5"
 dependencies = [
  "bs58 0.4.0",
  "proc-macro2 1.0.40",
@@ -3809,9 +3943,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.27"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7709595b8878a4965ce5e87ebf880a7d39c9afc6837721b21a5a816a8117d921"
+checksum = "7b7358be39f2f274f322d2aaed611acc57f382e8eb1e5b48cb9ae30933495ce7"
 dependencies = [
  "once_cell",
 ]
