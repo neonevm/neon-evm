@@ -25,11 +25,8 @@ tracing = ["evm/tracing", "evm-runtime/tracing"]
 solana-program = { version = "=1.9.12", default_features = false }
 spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
-#spl-associated-token-account = { version = "1.0.3", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
 
 solana-program_neon = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false, package = "solana-program" }
-#spl-token = { version = "3.2.0", path = "/home/user/CLionProjects/solanalabs/solana-program-library/token/program", default_features = false, features = ["no-entrypoint"] }
-#spl-associated-token-account = { version = "1.0.2", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
 
 num-derive = "0.3"
 num-traits = "0.2"
@@ -42,11 +39,8 @@ rlp = "0.5"
 borsh = "0.9"
 bincode = "1.3.3"
 
-evm = { git = "https://github.com/neonlabsorg/evm", branch = "39_serialize_trace_events", default_features = false }
-evm-runtime = { git = "https://github.com/neonlabsorg/evm", branch = "39_serialize_trace_events", default_features = false }
-
-#evm = { version = "0.18.0", path = "../rust-evm", default_features = false }
-#evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
+evm = { version = "0.18.0", path = "../rust-evm", default_features = false }
+evm-runtime = { version = "0.18", path = "../rust-evm/runtime", default-features = false }
 
 const_format = { version = "0.2.21" }
 cfg-if = { version = "1.0" }
