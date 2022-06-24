@@ -9,8 +9,7 @@ use solana_program::{
 use super::{Operator, EthereumAccount, sysvar, token};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
-//use solana_program::entrypoint::ProgramResult;
-//use solana_program::instruction::Instruction;
+
 use crate::account::ACCOUNT_SEED_VERSION;
 
 
@@ -80,23 +79,6 @@ impl<'a> Neon<'a> {
             used_gas.as_u64()
         };
 
-        // ---- Legacy code
-        /*let instruction = {
-            use core::mem::size_of;
-            let capacity = 2 * size_of::<u8>() + size_of::<u64>() + result.len();
-
-            let mut data = Vec::with_capacity(capacity);
-            data.push(6_u8);
-            data.push(exit_status);
-            data.extend(&used_gas.to_le_bytes());
-            data.extend(result);
-
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data }
-        };
-        let r = invoke(&instruction, &[self.info.clone()]);
-        assert!(r.is_ok());*/
-        // ---- Legacy code
-
         let mnemonic = b"RETURN";
         let exit_status = exit_status.to_le_bytes();
         let used_gas = used_gas.to_le_bytes();
@@ -110,32 +92,6 @@ impl<'a> Neon<'a> {
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, address: H160, topics: &[H256], data: &[u8]) -> Result<(), ProgramError> {
         debug_print!("on_event");
-
-        // ---- Legacy code
-        /*
-        let instruction = {
-            use core::mem::size_of;
-            let capacity = size_of::<u8>()
-                + size_of::<H160>()  // address
-                + size_of::<usize>() // topics.len
-                + topics.len() * size_of::<H256>()
-                + data.len();
-
-            let mut buffer = Vec::with_capacity(capacity);
-            buffer.push(7_u8);
-            buffer.extend_from_slice(address.as_bytes());
-            buffer.extend_from_slice(&topics.len().to_le_bytes());
-            for topic in topics {
-                buffer.extend_from_slice(topic.as_bytes());
-            }
-            buffer.extend(data);
-
-            Instruction { program_id: *self.info.key, accounts: Vec::new(), data: buffer }
-        };
-        let r = invoke(&instruction, &[self.info.clone()]);
-        assert!(r.is_ok());
-        */
-        // ---- Legacy code
 
         assert!(topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]

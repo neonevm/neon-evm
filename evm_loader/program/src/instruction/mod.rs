@@ -27,11 +27,11 @@ pub enum EvmInstruction {
     CallFromRawEthereumTX,
 
     /// Deprecated: Called action return
-    //#[deprecated(note = "Instruction not supported")]
+    #[deprecated(note = "Instruction not supported")]
     OnReturn,
 
     /// Deprecated: Called action event
-    //#[deprecated(note = "Instruction not supported")]
+    #[deprecated(note = "Instruction not supported")]
     OnEvent,
 
     /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
