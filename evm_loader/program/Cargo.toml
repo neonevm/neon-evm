@@ -18,7 +18,7 @@ no-entrypoint = []
 test-bpf = []
 custom-heap = []
 default = ["custom-heap"]
-tracing = ["evm/tracing", "evm-runtime/tracing"]
+tracing = ["evm/tracing", "evm-runtime/tracing", "solana-program-tracing"]
 
 [dependencies]
 
@@ -26,7 +26,7 @@ solana-program = { version = "=1.9.12", default_features = false }
 spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
 
-solana-program_neon = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false, package = "solana-program" }
+solana-program-tracing = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false, package = "solana-program", optional = true }
 
 num-derive = "0.3"
 num-traits = "0.2"
