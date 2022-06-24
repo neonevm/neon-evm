@@ -14,7 +14,6 @@ use solana_cli::{
 use evm::{H160};
 
 use evm_loader::{
-    account::{EthereumAccount},
     config::{
         COMPUTE_BUDGET_UNITS,
         COMPUTE_BUDGET_HEAP_FRAME,
@@ -23,12 +22,7 @@ use evm_loader::{
 };
 
 use crate::{
-    account_storage::{
-        EmulatorAccountStorage,
-        make_solana_program_address,
-        account_info,
-    },
-    errors::NeonCliError,
+    account_storage::make_solana_program_address,
     Config,
     NeonCliResult,
 };
@@ -37,25 +31,14 @@ use crate::{
 pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
     trace!("Enter execution for address {:?}", ether_address);
 
-    let (mut account, _) = EmulatorAccountStorage::get_account_from_solana(config, &ether_address)
-        .ok_or(NeonCliError::AccountNotFoundAtAddress(ether_address))?;
-    info!("account: {:?}", account);
-
-    let code_account = {
-        let (key, _) = make_solana_program_address(&ether_address, &config.evm_loader);
-        let info = account_info(&key, &mut account);
-        EthereumAccount::from_account(&config.evm_loader, &info)
-            .map_err(NeonCliError::from)
-            .map(|a| a.code_account)?
-            .ok_or(NeonCliError::CodeAccountNotFound(ether_address))?
-    };
-    info!("code account: {:?}", code_account);
+    let (pubkey, _) = make_solana_program_address(&ether_address, &config.evm_loader);
+    info!("account: {:?}", pubkey);
 
     let update_valids_table_instruction =
         Instruction::new_with_bincode(
             config.evm_loader,
             &(23_u8), // TODO remove magic number
-            vec![AccountMeta::new(code_account, false)]
+            vec![AccountMeta::new(pubkey, false)]
         );
 
     let instructions = vec![

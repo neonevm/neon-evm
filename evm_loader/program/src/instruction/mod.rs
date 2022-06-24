@@ -40,7 +40,7 @@ pub enum EvmInstruction {
     /// ### Account references
     ///   0. \[WRITE\] storage account
     ///   1. ... Account references same as in Call
-    PartialCallFromRawEthereumTXv02,
+    PartialCallFromRawEthereumTxV03,
 
     /// Deprecated: Continue (version 01) Ethereum-contract action from raw transaction data
     #[deprecated(note = "Instruction not supported")]
@@ -48,14 +48,14 @@ pub enum EvmInstruction {
 
     /// Continue (version 02) Ethereum-contract action from raw transaction data
     /// ### Account references same as in PartialCallFromRawEthereumTX
-    ContinueV02,
+    ContinueV03,
 
     /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
     #[deprecated(note = "Instruction not supported")]
     ExecuteTrxFromAccountDataIterative,
 
     /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    ExecuteTrxFromAccountDataIterativeV02,
+    ExecuteTrxFromAccountDataIterativeV03,
 
     /// Cancel iterative transaction execution
     #[deprecated(note = "Instruction not supported")]
@@ -92,12 +92,8 @@ pub enum EvmInstruction {
     ///   1. [WRITE] Deleted account creator
     DeleteHolderOrStorageAccount,
 
-    /// copying the content of the one code_account to the new code_account
-    /// # Account references
-    ///   0. [WRITE] contract account
-    ///   1. [WRITE] current code account
-    ///   2. [WRITE] new code account
-    ///   3. [READ] operator account
+    /// Deprecated: copying the content of the one code_account to the new code_account
+    #[deprecated(note = "Instruction not supported")]
     ResizeContractAccount,
 
     /// Cancel iterative transaction execution providing caller nonce
@@ -116,12 +112,8 @@ pub enum EvmInstruction {
     ///   0. \[WRITE\] Code account
     UpdateValidsTable,
 
-    /// Create Ethereum account
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [] System Program
-    ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
-    ///   3. (for contract creation) [WRITE] Code account for new contract account
+    /// Deprecated: Create Ethereum account V2
+    #[deprecated(note = "Instruction not supported")]
     CreateAccountV02,
 
     /// Deposits NEON tokens to a Ether account.
@@ -137,26 +129,27 @@ pub enum EvmInstruction {
     ///   5. `[]` SPL Token program id.
     Deposit,
 
-    /// Migrates Ethereum account's internal structure from v1 to current.
-    ///
-    /// Accounts expected by this instruction:
-    ///
-    ///   0. `[writable]` Operator (to close associated token account).
-    ///   1. `[writable]` Ether account to migrate.
-    ///   2. `[writable]` NEON token account associated with the ether account.
-    ///   3. `[writable]` NEON token pool account.
-    ///   4. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
-    ///   5. `[]` SPL Token program id.
+    /// Deprecated: Migrates Ethereum account's internal structure from v1 to current.
+    #[deprecated(note = "Instruction not supported")]
     MigrateAccount,
 
     /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
     ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
 
-    /// Writes value to Ethereum account's distributed practically infinite storage.
+    /// Deprecated: Writes value to Ethereum account's distributed practically infinite storage.
+    #[deprecated(note = "Instruction not supported")]
     WriteValueToDistributedStorage,
 
-    /// Converts data account from V1 (HAMT) to V2 (distributed storage).
+    /// Deprecated: Converts data account from V1 (HAMT) to V2 (distributed storage).
+    #[deprecated(note = "Instruction not supported")]
     ConvertDataAccountFromV1ToV2,
+
+    /// Create Ethereum account
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [] System Program
+    ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
+    CreateAccountV03,
 }
 
 impl EvmInstruction {
@@ -178,19 +171,20 @@ impl EvmInstruction {
             14 => Self::ExecuteTrxFromAccountDataIterativeOrContinue,
             15 => Self::ERC20CreateTokenAccount,
             16 => Self::DeleteHolderOrStorageAccount,
-            17 => Self::ResizeContractAccount,
+            17 => Self::ResizeContractAccount, // deprecated
             18 => Self::WriteHolder,
-            19 => Self::PartialCallFromRawEthereumTXv02,
-            20 => Self::ContinueV02,
+            19 => Self::PartialCallFromRawEthereumTxV03,
+            20 => Self::ContinueV03,
             21 => Self::CancelWithNonce,
-            22 => Self::ExecuteTrxFromAccountDataIterativeV02,
+            22 => Self::ExecuteTrxFromAccountDataIterativeV03,
             23 => Self::UpdateValidsTable,
-            24 => Self::CreateAccountV02,
+            24 => Self::CreateAccountV02, // deprecated
             25 => Self::Deposit,
-            26 => Self::MigrateAccount,
+            26 => Self::MigrateAccount, // deprecated
             27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
-            28 => Self::WriteValueToDistributedStorage,
-            29 => Self::ConvertDataAccountFromV1ToV2,
+            28 => Self::WriteValueToDistributedStorage, // deprecated
+            29 => Self::ConvertDataAccountFromV1ToV2, // deprecated
+            30 => Self::CreateAccountV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -200,10 +194,8 @@ impl EvmInstruction {
 
 pub mod account_create;
 pub mod account_delete_holder_storage;
-pub mod account_resize;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
-pub mod migrate_account;
 pub mod transaction_write_to_holder;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;
@@ -215,4 +207,3 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;
-pub mod storage_to_v2;

@@ -39,7 +39,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
         return Err!(ProgramError::InvalidArgument; "Account {} - expected system owned", accounts.user_token.key);
     }
 
-    if accounts.erc20_contract.code_account.is_none() {
+    if accounts.erc20_contract.extension.is_none() {
         return Err!(ProgramError::InvalidArgument; "Account {} - expected ERC20 contract", accounts.erc20_contract.address);
     }
 

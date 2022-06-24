@@ -5,7 +5,7 @@ use solana_program::pubkey::Pubkey;
 use crate::hamt::Hamt;
 use super::{ Packable, AccountExtension };
 
-/// Ethereum contract data account
+/// Ethereum contract data account v1
 #[deprecated]
 #[derive(Debug)]
 pub struct DataV1 {
@@ -66,10 +66,10 @@ impl Packable for DataV1 {
     }
 }
 
-
-/// Ethereum contract data account
+/// Ethereum contract data account v2
+#[deprecated]
 #[derive(Debug)]
-pub struct Data {
+pub struct DataV2 {
     /// Solana account with ethereum account data associated with this code data
     pub owner: Pubkey,
     /// Contract code size
@@ -79,15 +79,17 @@ pub struct Data {
 }
 
 
+#[deprecated]
 #[derive(Debug)]
-pub struct Extension<'a> {
+pub struct ExtensionV2<'a> {
     pub code: RefMut<'a, [u8]>,
     pub valids: RefMut<'a, [u8]>,
     pub storage: RefMut<'a, [u8]>,
 }
 
-impl<'a> AccountExtension<'a, Data> for Extension<'a> {
-    fn unpack(data: &Data, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
+#[allow(deprecated)]
+impl<'a> AccountExtension<'a, DataV2> for ExtensionV2<'a> {
+    fn unpack(data: &DataV2, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
         let code_size = data.code_size as usize;
         let valids_size = (code_size / 8) + 1;
 
@@ -98,9 +100,10 @@ impl<'a> AccountExtension<'a, Data> for Extension<'a> {
     }
 }
 
-impl Packable for Data {
+#[allow(deprecated)]
+impl Packable for DataV2 {
     /// Contract struct tag
-    const TAG: u8 = super::TAG_CONTRACT;
+    const TAG: u8 = super::_TAG_CONTRACT_V2;
     /// Contract struct serialized size
     const SIZE: usize = 32 + 4 + 4;
 
@@ -108,7 +111,7 @@ impl Packable for Data {
     #[must_use]
     fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
-        let data = array_ref![input, 0, Data::SIZE];
+        let data = array_ref![input, 0, DataV2::SIZE];
         let (owner, code_size, generation) = array_refs![data, 32, 4, 4];
 
         Self {
@@ -121,7 +124,7 @@ impl Packable for Data {
     /// Serialize `Contract` struct into given destination
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
-        let data = array_mut_ref![dst, 0, Data::SIZE];
+        let data = array_mut_ref![dst, 0, DataV2::SIZE];
         let (owner, code_size, generation) = mut_array_refs![data, 32, 4, 4];
         owner.copy_from_slice(self.owner.as_ref());
         *code_size = self.code_size.to_le_bytes();

@@ -19,7 +19,6 @@ use solana_sdk::{
     transaction::Transaction,
     signers::Signers,
     system_program,
-    system_instruction,
     compute_budget::ComputeBudgetInstruction,
 };
 
@@ -42,18 +41,17 @@ use solana_client::{
     tpu_client::{TpuClient, TpuClientConfig},
 };
 
-use evm::{H160};
+use evm::H160;
 
 use evm_loader::{
-    account::{
-        EthereumContract,
-    },
     config::{
         COMPUTE_BUDGET_UNITS,
         COMPUTE_BUDGET_HEAP_FRAME,
         REQUEST_UNITS_ADDITIONAL_FEE,
     }
 };
+use evm_loader::account::ether_account::ContractExtension;
+use evm_loader::account::EthereumAccount;
 
 use crate::{
     errors::NeonCliError,
@@ -68,9 +66,7 @@ fn get_ethereum_contract_account_credentials(
     config: &Config,
     caller_ether: &H160,
     trx_count: u64,
-) -> (Pubkey, H160, u8, Pubkey, String) {
-    let creator = &config.signer;
-
+) -> (Pubkey, H160, u8) {
     let (program_id, program_ether, program_nonce) = {
         let ether = crate::get_program_ether(caller_ether, trx_count);
         let (address, nonce) = crate::make_solana_program_address(&ether, &config.evm_loader);
@@ -78,57 +74,39 @@ fn get_ethereum_contract_account_credentials(
     };
     debug!("Create account: {} with {} {}", program_id, program_ether, program_nonce);
 
-    let (program_code, program_seed) = {
-        let seed: &[u8] = &[ &[crate::ACCOUNT_SEED_VERSION], program_ether.as_bytes() ].concat();
-        let seed = bs58::encode(seed).into_string();
-        debug!("Code account seed {} and len {}", &seed, &seed.len());
-        let address = Pubkey::create_with_seed(&creator.pubkey(), &seed, &config.evm_loader).unwrap();
-        (address, seed)
-    };
-    debug!("Create code account: {}", &program_code.to_string());
-
-    (program_id, program_ether, program_nonce, program_code, program_seed)
+    (program_id, program_ether, program_nonce)
 }
 
-fn create_ethereum_contract_accounts_in_solana(
+fn create_ethereum_account_in_solana(
     config: &Config,
     program_id: &Pubkey,
     program_ether: &H160,
     program_nonce: u8,
-    program_code: &Pubkey,
-    program_seed: &str,
     program_code_len: usize,
 ) -> Result<Vec<Instruction>, NeonCliError> {
     let creator = &config.signer;
 
-    let program_code_acc_len = EthereumContract::SIZE + program_code_len + 2*1024;
-    let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_acc_len)?;
+    // let program_code_acc_len = EthereumContract::SIZE + program_code_len + 2*1024;
+    // let minimum_balance_for_code = config.rpc_client.get_minimum_balance_for_rent_exemption(program_code_acc_len)?;
 
     if let Some(account) = config.rpc_client.get_account_with_commitment(program_id, CommitmentConfig::confirmed())?.value
     {
         return Err(NeonCliError::AccountAlreadyExists(account));
     }
 
+    let size = EthereumAccount::SIZE + ContractExtension::size_needed(program_code_len);
+
     let instructions = vec![
         ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
         ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
-        system_instruction::create_account_with_seed(
-            &creator.pubkey(),
-            program_code,
-            &creator.pubkey(),
-            program_seed,
-            minimum_balance_for_code,
-            program_code_acc_len as u64,
-            &config.evm_loader
-        ),
+
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(24_u8, program_ether.as_fixed_bytes(), program_nonce),
+            &(30_u8, program_ether.as_fixed_bytes(), program_nonce, u32::try_from(size).expect("Size of contract can't be more than u32::MAX")),
             vec![
                 AccountMeta::new(creator.pubkey(), true),
                 AccountMeta::new_readonly(system_program::id(), false),
                 AccountMeta::new(*program_id, false),
-                AccountMeta::new(*program_code, false),
             ]
         )
     ];
@@ -422,17 +400,15 @@ pub fn execute(
     // Get caller nonce
     let (trx_count, caller_ether) = crate::get_ether_account_nonce(config, &caller_sol)?;
 
-    let (program_id, program_ether, program_nonce, program_code, program_seed) =
+    let (program_id, program_ether, program_nonce) =
         get_ethereum_contract_account_credentials(config, &caller_ether, trx_count);
 
     // Check program account to see if partial initialization has occurred
-    let mut instructions = create_ethereum_contract_accounts_in_solana(
+    let mut instructions = create_ethereum_account_in_solana(
         config,
         &program_id,
         &program_ether,
         program_nonce,
-        &program_code,
-        &program_seed,
         program_data.len(),
     )?;
 
@@ -460,7 +436,6 @@ pub fn execute(
         AccountMeta::new_readonly(config.evm_loader, false),
 
         AccountMeta::new(program_id, false),
-        AccountMeta::new(program_code, false),
         AccountMeta::new(caller_sol, false),
     ];
 
@@ -470,7 +445,7 @@ pub fn execute(
     {
         debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_with_accounts);
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
+                                                                              &(22_u8, collateral_pool_index, 0_u64),
                                                                               holder_with_accounts);
         instructions.push(trx_from_account_data_instruction);
         debug!("instructions: {:?}", instructions);
@@ -483,7 +458,7 @@ pub fn execute(
         debug!("continue continue_accounts: {:?}", continue_accounts);
         let continue_instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &(0x14_u8, collateral_pool_index, 400_u64),
+            &(20_u8, collateral_pool_index, 400_u64),
             continue_accounts
         );
         let instructions = vec![
@@ -514,7 +489,6 @@ pub fn execute(
 
     println!("{}", serde_json::json!({
         "programId": format!("{}", program_id),
-        "codeId": format!("{}", program_code),
         "ethereum": format!("{:?}", program_ether),
     }));
     Ok(())

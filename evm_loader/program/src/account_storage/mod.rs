@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::account::{EthereumAccount, EthereumContract, ACCOUNT_SEED_VERSION};
+use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION};
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
@@ -11,19 +11,13 @@ mod base;
 mod apply;
 mod backend;
 
-
-enum Account<'a> {
-    User(EthereumAccount<'a>),
-    Contract(EthereumAccount<'a>, EthereumContract<'a>),
-}
-
 pub struct ProgramAccountStorage<'a> {
     program_id: &'a Pubkey,
     operator: &'a Pubkey,
     clock: Clock,
 
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
-    ethereum_accounts: BTreeMap<H160, Account<'a>>,
+    ethereum_accounts: BTreeMap<H160, EthereumAccount<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
 }
 
@@ -86,6 +80,6 @@ pub trait AccountStorage {
 
     /// Account solana address and bump seed
     fn solana_address(&self, address: &H160) -> (Pubkey, u8);
-    /// Solana accounts data len
-    fn solana_accounts_space(&self, address: &H160) -> (usize, usize);
+    /// Solana account data len
+    fn solana_account_space(&self, address: &H160) -> usize;
 }

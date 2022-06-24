@@ -186,7 +186,7 @@ pub fn check_ethereum_transaction(
     let contract_account = account_storage.ethereum_account(&contract_address)
         .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", contract_address))?;
 
-    if !transaction.call_data.is_empty() && contract_account.code_account.is_none() {
+    if !transaction.call_data.is_empty() && contract_account.extension.is_none() {
         return Err!(ProgramError::InvalidArgument; "Account {} - target must be contract account", contract_address);
     }
 

@@ -7,8 +7,9 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, Operator};
-use crate::account_storage::{Account, ProgramAccountStorage};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator};
+use crate::account::ether_account::ContractExtension;
+use crate::account_storage::ProgramAccountStorage;
 
 
 
@@ -36,19 +37,7 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             let ether_account = EthereumAccount::from_account(program_id, account_info)?;
-            let ether_address = ether_account.address;
-
-            let account = if let Some(code_account_key) = ether_account.code_account {
-                debug_print!("Contract Account {}", ether_address);
-
-                let code_account = solana_accounts[&code_account_key];
-                let ether_contract = EthereumContract::from_account(program_id, code_account)?;
-                Account::Contract(ether_account, ether_contract)
-            } else {
-                debug_print!("User Account {}", ether_address);
-                Account::User(ether_account)
-            };
-            ethereum_accounts.insert(ether_address, account);
+            ethereum_accounts.insert(ether_account.address, ether_account);
         }
 
 
@@ -85,55 +74,33 @@ impl<'a> ProgramAccountStorage<'a> {
 
     pub fn ethereum_account(&self, address: &H160) -> Option<&EthereumAccount<'a>> {
         self.panic_if_account_not_exists(address);
-
-        #[allow(clippy::match_same_arms)]
-        match self.ethereum_accounts.get(address)? {
-            Account::User(ref account) => Some(account),
-            Account::Contract(ref account, _) => Some(account),
-        }
+        self.ethereum_accounts.get(address)
     }
 
     pub fn ethereum_account_mut(&mut self, address: &H160) -> &mut EthereumAccount<'a> {
-        #[allow(clippy::match_same_arms)]
-        match self.ethereum_accounts.get_mut(address).unwrap() { // mutable accounts always present
-            Account::User(ref mut account) => account,
-            Account::Contract(ref mut account, _) => account,
-        }
+        self.ethereum_accounts.get_mut(address).unwrap() // mutable accounts always present
     }
 
-    pub fn ethereum_contract(&self, address: &H160) -> Option<&EthereumContract<'a>> {
+    pub fn ethereum_contract(&self, address: &H160) -> Option<&ContractExtension<'a>> {
         self.panic_if_account_not_exists(address);
-
-        match self.ethereum_accounts.get(address)? {
-            Account::User(_) => None,
-            Account::Contract(_, ref contract) => Some(contract),
-        }
+        self.ethereum_accounts.get(address)?.extension.as_ref()
     }
 
-    pub fn ethereum_contract_mut(&mut self, address: &H160) -> &mut EthereumContract<'a> {
-        match self.ethereum_accounts.get_mut(address).unwrap() {
-            Account::User(_) => panic!("Contract account is not created"),
-            Account::Contract(_, ref mut contract) => contract,
-        }
+    pub fn ethereum_contract_mut(&mut self, address: &H160) -> &mut ContractExtension<'a> {
+        self.ethereum_accounts.get_mut(address).unwrap()
+            .extension.as_mut().expect("Contract account is not created")
     }
 
     pub fn block_accounts(&mut self, block: bool) -> Result<(), ProgramError> {
-        for ethereum_account in &mut self.ethereum_accounts.values_mut() {
-
-            match ethereum_account {
-                Account::User(account) => {
-                    account.rw_blocked = block;
-                }
-                Account::Contract(account, contract) if contract.info.is_writable => {
-                    account.rw_blocked = block;
-                }
-                Account::Contract(account, _contract) /* not is_writable */ => {
-                    account.ro_blocked_count = if block {
-                        account.ro_blocked_count.checked_add(1)
-                    } else {
-                        account.ro_blocked_count.checked_sub(1)
-                    }.ok_or_else(|| E!(ProgramError::InvalidAccountData; "Account {} - read lock overflow", account.address))?;
-                }
+        for account in &mut self.ethereum_accounts.values_mut() {
+            if account.info.is_writable {
+                account.rw_blocked = block;
+            } else {
+                account.ro_blocked_count = if block {
+                    account.ro_blocked_count.checked_add(1)
+                } else {
+                    account.ro_blocked_count.checked_sub(1)
+                }.ok_or_else(|| E!(ProgramError::InvalidAccountData; "Account {} - read lock overflow", account.address))?;
             }
         }
 
@@ -142,11 +109,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
     pub fn check_for_blocked_accounts(&self, required_exclusive_access : bool) -> Result<(), ProgramError> {
         for ethereum_account in self.ethereum_accounts.values() {
-            #[allow(clippy::match_same_arms)]
-            match ethereum_account {
-                Account::User(account) => account,
-                Account::Contract(account, _) => account,
-            }.check_blocked(required_exclusive_access)?;
+            ethereum_account.check_blocked(required_exclusive_access)?;
         }
 
         Ok(())

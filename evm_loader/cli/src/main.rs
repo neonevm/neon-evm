@@ -30,11 +30,8 @@ use crate::{
 };
 
 use evm_loader::{
-    account::{
-        ACCOUNT_SEED_VERSION,
-        EthereumAccount,
-    },
-    config::{  collateral_pool_base },
+    account::EthereumAccount,
+    config::collateral_pool_base,
 };
 
 use evm::{H160, H256, U256};

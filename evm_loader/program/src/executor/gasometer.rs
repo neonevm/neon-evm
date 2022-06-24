@@ -111,14 +111,11 @@ impl Gasometer {
     where
         B: AccountStorage
     {
-        let (account_space, contract_space) = state.backend.solana_accounts_space(&address);
+        let account_space = state.backend.solana_account_space(&address);
         let account_rent = self.rent.minimum_balance(account_space);
-        let contract_rent = self.rent.minimum_balance(contract_space);
 
         self.gas = self.gas
             .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST)
-            .saturating_add(contract_rent)
             .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 

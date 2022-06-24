@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use log::{debug, info};
 
 use solana_sdk::{
@@ -19,6 +20,7 @@ use solana_cli::{
 };
 
 use evm::{H160};
+use evm_loader::account::EthereumAccount;
 
 use crate::{
     Config,
@@ -34,9 +36,9 @@ pub fn execute (
     let (solana_address, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
-    let create_account_v02_instruction = Instruction::new_with_bincode(
+    let create_account_v03_instruction = Instruction::new_with_bincode(
         config.evm_loader,
-        &(24_u8, ether_address.as_fixed_bytes(), nonce),
+        &(30_u8, ether_address.as_fixed_bytes(), nonce, u32::try_from(EthereumAccount::SIZE).unwrap()),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
@@ -47,7 +49,7 @@ pub fn execute (
     let instructions = vec![
         ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
         ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
-        create_account_v02_instruction
+        create_account_v03_instruction
     ];
 
     let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));

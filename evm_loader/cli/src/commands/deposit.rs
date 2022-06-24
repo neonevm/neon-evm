@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use log::{info, debug};
 
 use solana_sdk::{
@@ -14,6 +15,7 @@ use solana_cli::{
 };
 
 use evm::{H160};
+use evm_loader::account::EthereumAccount;
 
 use evm_loader::config::{
     COMPUTE_BUDGET_UNITS,
@@ -109,7 +111,7 @@ fn create_ether_account_instruction(
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(24_u8, ether_address.as_fixed_bytes(), nonce),
+        &(30_u8, ether_address.as_fixed_bytes(), nonce, u32::try_from(EthereumAccount::SIZE).unwrap()),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
