@@ -905,7 +905,6 @@ dependencies = [
  "rlp",
  "serde",
  "serde_bytes",
- "solana-program 1.9.12",
  "uint",
 ]
 
@@ -927,8 +926,7 @@ dependencies = [
  "num-traits",
  "ripemd160",
  "rlp",
- "solana-program 1.9.12",
- "solana-program 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-program",
  "spl-associated-token-account",
  "spl-token",
  "thiserror",
@@ -941,7 +939,6 @@ dependencies = [
  "borsh",
  "evm-core",
  "sha3 0.8.2",
- "solana-program 1.9.12",
 ]
 
 [[package]]
@@ -2713,8 +2710,8 @@ dependencies = [
  "num-traits",
  "rustc_version",
  "serde",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-program-runtime",
  "solana-sdk",
  "thiserror",
@@ -2734,8 +2731,8 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-sdk",
 ]
 
@@ -2768,7 +2765,7 @@ dependencies = [
  "memmap2",
  "rand 0.7.3",
  "rayon",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger",
  "solana-measure",
  "solana-sdk",
  "tempfile",
@@ -2822,7 +2819,7 @@ dependencies = [
  "solana-client",
  "solana-config-program",
  "solana-faucet",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger",
  "solana-program-runtime",
  "solana-remote-wallet",
  "solana-sdk",
@@ -2945,31 +2942,13 @@ dependencies = [
  "serde_derive",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger",
  "solana-metrics",
  "solana-sdk",
  "solana-version",
  "spl-memo",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "solana-frozen-abi"
-version = "1.9.12"
-dependencies = [
- "bs58 0.4.0",
- "bv",
- "generic-array 0.14.5",
- "log",
- "memmap2",
- "rustc_version",
- "serde",
- "serde_derive",
- "sha2",
- "solana-frozen-abi-macro 1.9.12",
- "solana-logger 1.9.12",
- "thiserror",
 ]
 
 [[package]]
@@ -2987,19 +2966,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi-macro",
+ "solana-logger",
  "thiserror",
-]
-
-[[package]]
-name = "solana-frozen-abi-macro"
-version = "1.9.12"
-dependencies = [
- "proc-macro2 1.0.40",
- "quote 1.0.20",
- "rustc_version",
- "syn 1.0.98",
 ]
 
 [[package]]
@@ -3012,15 +2981,6 @@ dependencies = [
  "quote 1.0.20",
  "rustc_version",
  "syn 1.0.98",
-]
-
-[[package]]
-name = "solana-logger"
-version = "1.9.12"
-dependencies = [
- "env_logger",
- "lazy_static",
- "log",
 ]
 
 [[package]]
@@ -3072,7 +3032,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "socket2",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger",
  "solana-sdk",
  "solana-version",
  "tokio",
@@ -3101,52 +3061,11 @@ dependencies = [
  "rayon",
  "serde",
  "solana-bloom",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-vote-program",
-]
-
-[[package]]
-name = "solana-program"
-version = "1.9.12"
-dependencies = [
- "base64 0.13.0",
- "bincode",
- "bitflags",
- "blake3",
- "borsh",
- "borsh-derive",
- "bs58 0.4.0",
- "bv",
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "curve25519-dalek",
- "getrandom 0.1.16",
- "itertools",
- "js-sys",
- "lazy_static",
- "libsecp256k1 0.6.0",
- "log",
- "num-derive",
- "num-traits",
- "parking_lot 0.11.2",
- "rand 0.7.3",
- "rustc_version",
- "rustversion",
- "serde",
- "serde_bytes",
- "serde_derive",
- "sha2",
- "sha3 0.9.1",
- "solana-frozen-abi 1.9.12",
- "solana-frozen-abi-macro 1.9.12",
- "solana-logger 1.9.12",
- "solana-sdk-macro 1.9.12",
- "thiserror",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3184,10 +3103,10 @@ dependencies = [
  "serde_derive",
  "sha2",
  "sha3 0.9.1",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
+ "solana-sdk-macro",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -3208,9 +3127,9 @@ dependencies = [
  "num-traits",
  "rustc_version",
  "serde",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
  "solana-measure",
  "solana-sdk",
  "thiserror",
@@ -3285,9 +3204,9 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
@@ -3343,25 +3262,14 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3 0.9.1",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-program 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
+ "solana-program",
+ "solana-sdk-macro",
  "thiserror",
  "uriparse",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "solana-sdk-macro"
-version = "1.9.12"
-dependencies = [
- "bs58 0.4.0",
- "proc-macro2 1.0.40",
- "quote 1.0.20",
- "rustversion",
- "syn 1.0.98",
 ]
 
 [[package]]
@@ -3391,8 +3299,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-metrics",
  "solana-program-runtime",
  "solana-sdk",
@@ -3437,8 +3345,8 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-sdk",
 ]
 
@@ -3455,9 +3363,9 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-frozen-abi-macro 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
  "solana-metrics",
  "solana-program-runtime",
  "solana-sdk",
@@ -3495,7 +3403,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "393e2240d521c3dd770806bff25c2c00d761ac962be106e14e22dd912007f428"
 dependencies = [
- "solana-program 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-program",
  "spl-token",
 ]
 
@@ -3505,7 +3413,7 @@ version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0dc6f70db6bacea7ff25870b016a65ba1d1b6013536f08e4fd79a8f9005325"
 dependencies = [
- "solana-program 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-program",
 ]
 
 [[package]]
@@ -3518,7 +3426,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "solana-program 1.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-program",
  "thiserror",
 ]
 

@@ -16,7 +16,7 @@ use evm::event;
 #[cfg(feature = "tracing")]
 use evm::{Event, ExitTrace};
 #[cfg(feature = "tracing")]
-use solana_program_tracing::tracer_api;
+extern "C" { fn sol_send_trace_message(val: *const u8) -> u64;}
 
 /// Represents reason of an Ethereum transaction.
 /// It can be creation of a smart contract or a call of it's function.

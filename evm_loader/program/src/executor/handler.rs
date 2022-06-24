@@ -8,7 +8,7 @@ use crate::{
 use super::{state::ExecutorState, gasometer::Gasometer};
 
 #[cfg(feature = "tracing")]
-use solana_program_tracing::tracer_api;
+extern "C" { fn sol_send_trace_message(val: *const u8) -> u64;}
 
 #[cfg(feature = "tracing")]
 use evm::{Event, CreateTrace, CallTrace,  TransactCreateTrace, TransactCallTrace, ExitTrace};
@@ -67,12 +67,12 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         &mut self,
         origin: H160,
         address: H160,
-        #[allow(unused)] data: &Vec<u8>,
+        _data: &Vec<u8>,
         value: U256,
         gas_limit: U256,
         gas_price: U256
     ) -> ProgramResult {
-        event!(Event::TransactCall (TransactCallTrace{ caller: origin, address, value, data, gas_limit }));
+        event!(Event::TransactCall (TransactCallTrace{ caller: origin, address, value, data: _data, gas_limit }));
 
         self.gas_limit = gas_limit;
         self.gas_price = gas_price;
@@ -95,12 +95,12 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
     pub fn create_begin(
         &mut self,
         origin: H160,
-        #[allow(unused)] init_code: &Vec<u8>,
+        _init_code: &Vec<u8>,
         value: U256,
         gas_limit: U256,
         gas_price: U256
     ) -> Result<H160, ProgramError> {
-        event!(Event::TransactCreate (TransactCreateTrace{ caller: origin, value, init_code, gas_limit,
+        event!(Event::TransactCreate (TransactCreateTrace{ caller: origin, value, init_code: _init_code, gas_limit,
         address: self.create_address(evm::CreateScheme::Legacy { caller: origin })}));
 
         self.gas_limit = gas_limit;
@@ -311,7 +311,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-
         event!(Event::Call(CallTrace{
             code_address,
             transfer: &transfer,
