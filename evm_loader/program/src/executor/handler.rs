@@ -8,7 +8,7 @@ use crate::{
 use super::{state::ExecutorState, gasometer::Gasometer};
 
 #[cfg(feature = "tracing")]
-use solana_program::tracer_api;
+use solana_program_neon::tracer_api;
 
 #[cfg(feature = "tracing")]
 use evm::{Event, CreateTrace, CallTrace,  TransactCreateTrace, TransactCallTrace, ExitTrace};

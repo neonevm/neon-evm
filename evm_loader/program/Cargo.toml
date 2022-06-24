@@ -22,12 +22,15 @@ tracing = ["evm/tracing", "evm-runtime/tracing"]
 
 [dependencies]
 
-#solana-program = { version = "=1.9.12", default_features = false }
-#spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
+solana-program = { version = "=1.9.12", default_features = false }
+spl-token = { version = "3.2.0", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
 #spl-associated-token-account = { version = "1.0.3", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
-solana-program = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false }
-spl-token = { version = "3.2.0", path = "/home/user/CLionProjects/solanalabs/solana-program-library/token/program", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.0.2", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
+
+solana-program_neon = { version = "=1.9.12", path = "/home/user/CLionProjects/neonlabs/solana/sdk/program", default_features = false, package = "solana-program" }
+#spl-token = { version = "3.2.0", path = "/home/user/CLionProjects/solanalabs/solana-program-library/token/program", default_features = false, features = ["no-entrypoint"] }
+#spl-associated-token-account = { version = "1.0.2", path = "/home/user/CLionProjects/solanalabs/solana-program-library/associated-token-account/program", default_features = false, features = ["no-entrypoint"] }
+
 num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1.0"
