@@ -103,3 +103,4 @@ COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
 
 ENV CONTRACTS_DIR=/opt/solidity/
 ENV PATH=/opt/solana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt
+
