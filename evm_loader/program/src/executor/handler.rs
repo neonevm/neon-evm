@@ -67,7 +67,7 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         &mut self,
         origin: H160,
         address: H160,
-        _data: &Vec<u8>,
+        #[allow( clippy::ptr_arg)] _data: &Vec<u8>,
         value: U256,
         gas_limit: U256,
         gas_price: U256
@@ -95,7 +95,7 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
     pub fn create_begin(
         &mut self,
         origin: H160,
-        _init_code: &Vec<u8>,
+        #[allow( clippy::ptr_arg)] _init_code: &Vec<u8>,
         value: U256,
         gas_limit: U256,
         gas_price: U256
