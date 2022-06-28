@@ -24,17 +24,17 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     };
 
     let instruction = array_ref![instruction, 0, 20 + 1 + 4];
-    let (address, bump_seed, size) = array_refs![instruction, 20, 1, 4];
+    let (address, bump_seed, code_size) = array_refs![instruction, 20, 1, 4];
 
     let address = H160::from(address);
     let bump_seed = u8::from_le_bytes(*bump_seed);
-    let size = u32::from_le_bytes(*size) as usize;
+    let code_size = u32::from_le_bytes(*code_size) as usize;
 
-    validate(program_id, &parsed_accounts, &address, bump_seed, size)?;
-    execute(program_id, &parsed_accounts, address, bump_seed, size)
+    validate(program_id, &parsed_accounts, &address, bump_seed)?;
+    execute(program_id, &parsed_accounts, address, bump_seed, code_size)
 }
 
-fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160, bump_seed: u8, size: usize) -> ProgramResult {
+fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160, bump_seed: u8) -> ProgramResult {
     if !solana_program::system_program::check_id(accounts.ether_account.owner) {
         return Err!(ProgramError::InvalidArgument; "Account {} - expected system owned", accounts.ether_account.key);
     }
@@ -48,28 +48,17 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160, bump_seed:
         return Err!(ProgramError::InvalidArgument; "Invalid bump seed, expected = {} found = {}", expected_bump_seed, bump_seed);
     }
 
-    let min_size_with_code = EthereumAccount::SIZE + ContractExtension::size_needed(1);
-    if size < min_size_with_code && size != EthereumAccount::SIZE {
-        return Err!(
-            ProgramError::InvalidArgument;
-            "Invalid account size ({}), must be {} or be at least {}",
-            size,
-            EthereumAccount::SIZE,
-            min_size_with_code
-        );
-    }
-
     Ok(())
 }
 
-fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u8, size: usize) -> ProgramResult {
+fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u8, code_size: usize) -> ProgramResult {
     let program_seeds = &[ &[ACCOUNT_SEED_VERSION], address.as_bytes(), &[bump_seed]];
     accounts.system_program.create_pda_account(
         program_id,
         &accounts.operator,
         accounts.ether_account,
         program_seeds,
-        size,
+        EthereumAccount::SIZE + ContractExtension::size_needed(code_size),
     )?;
     
     EthereumAccount::init(

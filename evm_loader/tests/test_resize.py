@@ -13,8 +13,6 @@ from .utils.constants import EVM_LOADER
 
 def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, size: int) -> Transaction:
     solana_address = PublicKey(loader.ether2program(address)[0])
-    account_data: bytes = get_account_data(solana_client, solana_address, ACCOUNT_INFO_LAYOUT.sizeof())
-    account: AccountInfo = AccountInfo.from_bytes(account_data)
 
     seed = b58encode(ACCOUNT_SEED_VERSION + os.urandom(20)).decode('utf8')
     code_account_new = account_with_seed(acc.public_key, seed, PublicKey(EVM_LOADER))
@@ -27,7 +25,6 @@ def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, siz
         data=bytearray.fromhex("11") + seed.encode('utf-8'),  # 17- ResizeStorageAccount
         keys=[
             AccountMeta(pubkey=solana_address, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=account.code_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=code_account_new, is_signer=False, is_writable=True),
             AccountMeta(pubkey=acc.public_key, is_signer=True, is_writable=False)
         ]
@@ -42,6 +39,7 @@ def create_resize_transaction(loader: EvmLoader, acc: Keypair, address: str, siz
 
 class TestResize:
     def test_resize(self, evm_loader, operator_keypair):
+        # TODO: Instruction `ResizeStorageAccount` is deprecated.
         account = web3.Account.create()
         evm_loader.create_ether_account(account.address)
 

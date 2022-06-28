@@ -94,15 +94,13 @@ fn create_ethereum_account_in_solana(
         return Err(NeonCliError::AccountAlreadyExists(account));
     }
 
-    let size = EthereumAccount::SIZE + ContractExtension::size_needed(program_code_len);
-
     let instructions = vec![
         ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
         ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
 
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(30_u8, program_ether.as_fixed_bytes(), program_nonce, u32::try_from(size).expect("Size of contract can't be more than u32::MAX")),
+            &(30_u8, program_ether.as_fixed_bytes(), program_nonce, u32::try_from(program_code_len).expect("Size of contract code can't be more than u32::MAX")),
             vec![
                 AccountMeta::new(creator.pubkey(), true),
                 AccountMeta::new_readonly(system_program::id(), false),
