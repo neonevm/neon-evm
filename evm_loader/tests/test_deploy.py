@@ -9,9 +9,7 @@ def test_deploy_contract(user_account, evm_loader, operator_keypair, treasury_po
     contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool)
     assert contract.eth_address
     assert get_solana_balance(contract.solana_address) > 0
-    assert get_solana_balance(contract.code_solana_address) > 0
     data = abi.function_signature_to_4byte_selector('call_hello_world()')
     result = json.loads(neon_cli().emulate(evm_loader.loader_id, f"{user_account.eth_address.hex()} {contract.eth_address.hex()} {data.hex()}"))
     assert result["exit_status"] == "succeed"
     assert "Hello World" in to_text(result["result"])
-    

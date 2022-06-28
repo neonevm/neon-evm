@@ -47,7 +47,6 @@ class TestStorageAccountAccess:
                 operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 10,
                 [
                     deployed_contract.solana_address,
-                    deployed_contract.code_solana_address,
                     user_account.solana_account_address,
                 ]
             )
@@ -67,7 +66,6 @@ class TestStorageAccountAccess:
                 operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
                 [
                     deployed_contract.solana_address,
-                    deployed_contract.code_solana_address,
                     user_account.solana_account_address,
                 ]
             )
@@ -98,7 +96,6 @@ class TestStorageAccountAccess:
                 operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
                 [
                     deployed_contract.solana_address,
-                    deployed_contract.code_solana_address,
                     user_account.solana_account_address,
                 ]
             )
@@ -124,7 +121,6 @@ class TestStorageAccountAccess:
                 operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 100,
                 [
                     deployed_contract.solana_address,
-                    deployed_contract.code_solana_address,
                     user2.solana_account_address,
                 ]
             )
@@ -156,7 +152,6 @@ class TestStorageAccountAccess:
                     operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
                     [
                         deployed_contract.solana_address,
-                        deployed_contract.code_solana_address,
                         user_account.solana_account_address,
                     ]
                 )
@@ -187,7 +182,6 @@ class TestStorageAccountAccess:
                 operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
                 [
                     deployed_contract.solana_address,
-                    deployed_contract.code_solana_address,
                     user_account.solana_account_address,
                 ]
             )
@@ -200,13 +194,15 @@ class TestStorageAccountAccess:
         user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
         trx = TransactionWithComputeBudget()
         trx.add(
-            make_CancelWithNonce(storage_account, operator_keypair, user_nonce,
-                                 [
-                                     deployed_contract.solana_address,
-                                     deployed_contract.code_solana_address,
-                                     user_account.solana_account_address,
-                                 ]
-                                 )
+            make_CancelWithNonce(
+                storage_account,
+                operator_keypair,
+                user_nonce,
+                [
+                    deployed_contract.solana_address,
+                    user_account.solana_account_address,
+                ]
+            )
         )
         send_transaction(solana_client, trx, operator_keypair)
         account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
