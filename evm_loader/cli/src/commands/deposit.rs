@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use log::{info, debug};
 
 use solana_sdk::{
@@ -15,7 +14,6 @@ use solana_cli::{
 };
 
 use evm::{H160};
-use evm_loader::account::EthereumAccount;
 
 use evm_loader::config::{
     COMPUTE_BUDGET_UNITS,

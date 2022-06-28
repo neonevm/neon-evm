@@ -50,8 +50,6 @@ use evm_loader::{
         REQUEST_UNITS_ADDITIONAL_FEE,
     }
 };
-use evm_loader::account::ether_account::ContractExtension;
-use evm_loader::account::EthereumAccount;
 
 use crate::{
     errors::NeonCliError,

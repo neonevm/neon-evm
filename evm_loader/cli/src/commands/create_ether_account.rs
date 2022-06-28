@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use log::{debug, info};
 
 use solana_sdk::{
@@ -20,7 +19,6 @@ use solana_cli::{
 };
 
 use evm::{H160};
-use evm_loader::account::EthereumAccount;
 
 use crate::{
     Config,
