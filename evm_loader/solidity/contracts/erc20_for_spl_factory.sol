@@ -31,4 +31,21 @@ contract ERC20ForSplFactory {
 
         emit ERC20ForSplCreated(_mint, erc20spl, allErc20ForSpl.length);
     }
+
+    function createErc20ForSplMintable(string memory _name, string memory _symbol, uint8 _decimals) public returns (address erc20spl) {
+
+        bytes memory bytecode = type(ERC20ForSplMintable).creationCode;
+        bytecode = abi.encodePacked(bytecode, abi.encode(_name, _symbol, _decimals));
+        bytes32 salt = keccak256(abi.encodePacked(bytes32(0)));
+        assembly {
+            erc20spl := create2(0, add(bytecode, 32), mload(bytecode), salt)
+        }
+        require(erc20spl != address(0), 'ERC20 SPL Factory: SPL TOKEN MINTABLE IS NOT CREATED');
+
+        bytes32 _mint = ERC20ForSplMintable(erc20spl).findMintAccount();
+        getErc20ForSpl[_mint] = erc20spl;
+        allErc20ForSpl.push(erc20spl);
+
+        emit ERC20ForSplCreated(_mint, erc20spl, allErc20ForSpl.length);
+    }
 }

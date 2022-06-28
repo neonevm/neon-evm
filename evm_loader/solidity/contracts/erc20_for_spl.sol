@@ -261,6 +261,10 @@ contract ERC20ForSplMintable is ERC20ForSpl {
         _admin = msg.sender;
     }
 
+    function findMintAccount() public pure returns (bytes32) {
+        return _splToken.findAccount(bytes32(0));
+    }
+
     function mint(address to, uint256 amount) public {
         require(msg.sender == _admin, "ERC20: must have minter role to mint");
         require(to != address(0), "ERC20: mint to the zero address");
