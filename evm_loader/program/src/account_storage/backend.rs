@@ -127,11 +127,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn solana_account_space(&self, address: &H160) -> usize {
         self.ethereum_account(address)
             .map_or(0, |a|
-                EthereumAccount::SIZE +
-                    a.extension.as_ref().map_or(
-                        0,
-                        |ext| ext.code_size() + ext.valids.len() + ext.storage.len(),
-                    )
+                EthereumAccount::SIZE + a.extension.as_ref().map_or(0, ContractExtension::size)
             )
     }
 

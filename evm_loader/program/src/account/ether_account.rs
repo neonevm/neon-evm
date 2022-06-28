@@ -104,6 +104,11 @@ impl<'a> ContractExtension<'a> {
             + Valids::size_needed(code_size)
             + Self::INTERNAL_STORAGE_SIZE
     }
+
+    #[must_use]
+    pub fn size(&self) -> usize {
+        Self::CODE_SIZE_SIZE + self.code.len() + self.valids.len() + self.storage.len()
+    }
 }
 
 impl<'a> AccountExtension<'a, Data> for Option<ContractExtension<'a>> {
