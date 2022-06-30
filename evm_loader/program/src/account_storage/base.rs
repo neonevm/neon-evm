@@ -31,7 +31,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         solana_accounts.insert(*operator.key, operator.info);
         if let Some(system) = system_program {
-            solana_accounts.insert(*system.key, system.info);
+            solana_accounts.insert(*system.key, system.into());
         }
 
 

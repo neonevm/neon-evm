@@ -3,7 +3,6 @@
 pragma solidity >= 0.7.0;
 pragma abicoder v2;
 
-
 interface SPLToken {
 
     enum AccountState {
@@ -57,7 +56,7 @@ interface SPLToken {
 }
 
 
-contract NeonERC20Wrapper {
+contract ERC20ForSpl {
     SPLToken constant _splToken = SPLToken(0xFf00000000000000000000000000000000000004);
 
     string public name;
@@ -247,19 +246,24 @@ contract NeonERC20Wrapper {
     }
 }
 
-contract NeonERC20MintableWrapper is NeonERC20Wrapper {
+contract ERC20ForSplMintable is ERC20ForSpl {
     address immutable _admin;
 
     constructor(
         string memory _name,
         string memory _symbol,
-        uint8 _decimals
-    ) NeonERC20Wrapper(
+        uint8 _decimals,
+        address _mint_authority
+    ) ERC20ForSpl(
         _name,
         _symbol, 
         _splToken.initializeMint(bytes32(0), _decimals)
     ) {
-        _admin = msg.sender;
+        _admin = _mint_authority;
+    }
+
+    function findMintAccount() public pure returns (bytes32) {
+        return _splToken.findAccount(bytes32(0));
     }
 
     function mint(address to, uint256 amount) public {
