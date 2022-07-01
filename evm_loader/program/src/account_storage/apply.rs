@@ -1,18 +1,20 @@
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::mem::ManuallyDrop;
 use evm::{H160, U256};
 use solana_program::instruction::Instruction;
-use solana_program::{
-    program_error::ProgramError,
-};
-use solana_program::entrypoint::ProgramResult;
+use solana_program::{program_error::ProgramError, system_instruction};
+use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, AccountMeta};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
-use solana_program::program::{invoke_signed_unchecked};
+use solana_program::program::{invoke, invoke_signed_unchecked};
+use solana_program::rent::Rent;
+use solana_program::sysvar::Sysvar;
+use crate::account::ether_account::ContractExtension;
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -86,7 +88,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     account.trx_count += 1;
                 },
                 Action::EvmSetCode { address, code, valids } => {
-                    self.deploy_contract(address, &code, &valids)?;
+                    self.deploy_contract(address, &code, &valids, system_program, operator)?;
                 },
                 Action::EvmSelfDestruct { address } => {
                     storage.remove(&address);
@@ -161,21 +163,77 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn deploy_contract(&mut self, address: H160, code: &[u8], valids: &[u8]) -> ProgramResult {
+    fn deploy_contract(
+        &mut self,
+        address: H160,
+        code: &[u8],
+        valids: &[u8],
+        system_program: &program::System<'a>,
+        payer: &Operator<'a>,
+    ) -> ProgramResult {
         let account = self.ethereum_accounts.get_mut(&address)
             .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
-        {
+        let old_code_size = {
             let extension = account.extension.as_mut()
                 .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not a contract account", address))?;
 
-            extension.update_code_size(code.len().try_into().expect("code.len() never exceeds u32::max"));
+            extension.code_size()
+        };
+
+        if old_code_size != code.len() {
+            unsafe { account.drop_extension(); }
+
+            let mut cur_len = account.info.data_len();
+            let new_len = ContractExtension::size_needed(code.len());
+
+            let rent = Rent::get()?;
+
+            let balance_needed = rent.minimum_balance(new_len);
+
+            if account.info.lamports() < balance_needed {
+                invoke(
+                    &system_instruction::transfer(
+                        payer.key,
+                        account.info.key,
+                        balance_needed - account.info.lamports(),
+                    ),
+                    &[
+                        (*payer).clone(),
+                        account.info.clone(),
+                        (*system_program).clone(),
+                    ],
+                )?;
+            }
+
+            if new_len < cur_len {
+                account.info.realloc(new_len, false)?;
+            } else {
+                while cur_len < new_len {
+                    cur_len += min(new_len - cur_len, MAX_PERMITTED_DATA_INCREASE);
+                    account.info.realloc(cur_len, false)?;
+                }
+            }
+
+            account.reload_extension()?;
+
+            {
+                let extension = account.extension.as_mut().unwrap();
+                extension.update_code_size(code.len().try_into().expect("code.len() never exceeds u32::max"));
+
+                unsafe { account.drop_extension(); }
+                account.reload_extension()?;
+            }
+
+            if account.info.lamports() > balance_needed {
+                let diff = account.info.lamports().saturating_sub(balance_needed);
+                **account.info.lamports.borrow_mut() = balance_needed;
+                **payer.lamports.borrow_mut() += diff;
+            }
         }
 
-        account.reload_extension()?;
+        let extension = account.extension.as_mut().unwrap();
 
-        let extension = account.extension.as_mut()
-            .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not contract account", address))?;
         extension.code.copy_from_slice(code);
         extension.valids.copy_from_slice(valids);
 

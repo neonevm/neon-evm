@@ -163,10 +163,19 @@ where
         Ok(Self { dirty: false, data, extension, info })
     }
 
+    /// Drop extension for temporary release of the borrowed account data.
+    /// # Safety
+    /// DO NOT call twice! Use `reload_extension` after dropping.
+    pub unsafe fn drop_extension(&mut self) {
+        // Release borrowed account data
+        ManuallyDrop::drop(&mut self.extension);
+    }
+
+    /// Reload extension after dropping.
+    /// # Safety
+    /// `drop_extension` MUST be called before each `reload_extension`!
     pub fn reload_extension(&mut self) -> Result<(), ProgramError> {
         debug_print!("reload extension {:?}", &self.data);
-
-        unsafe { ManuallyDrop::drop(&mut self.extension) }; // Release borrowed account data
 
         let parts = split_account_data(self.info, T::SIZE)?;
 
