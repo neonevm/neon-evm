@@ -67,7 +67,7 @@ pub fn execute(
                     data.unwrap_or_default(),
                     value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(100_000){
+                match executor.execute_n_steps(300_000){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -84,7 +84,7 @@ pub fn execute(
                     data.unwrap_or_default(),
                     value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(100_000){
+                match executor.execute_n_steps(300_000){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
