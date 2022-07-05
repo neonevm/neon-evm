@@ -185,7 +185,8 @@ impl<'a> ProgramAccountStorage<'a> {
             unsafe { account.drop_extension(); }
 
             let mut cur_len = account.info.data_len();
-            let new_len = ContractExtension::size_needed(code.len());
+            let new_len = EthereumAccount::SIZE +
+                ContractExtension::size_needed(code.len());
 
             let rent = Rent::get()?;
 
@@ -219,7 +220,9 @@ impl<'a> ProgramAccountStorage<'a> {
 
             {
                 let extension = account.extension.as_mut().unwrap();
-                extension.update_code_size(code.len().try_into().expect("code.len() never exceeds u32::max"));
+                extension.update_code_size(
+                    code.len().try_into().expect("code.len() never exceeds u32::max"),
+                );
 
                 unsafe { account.drop_extension(); }
                 account.reload_extension()?;
