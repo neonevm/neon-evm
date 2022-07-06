@@ -15,7 +15,7 @@ use crate::{
 use solana_sdk::pubkey::Pubkey;
 use crate::{errors};
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn execute(
     config: &Config, 
     contract_id: Option<H160>, 
@@ -24,6 +24,7 @@ pub fn execute(
     value: Option<U256>,
     token_mint: &Pubkey,
     chain_id: u64,
+    max_steps_to_execute: u64,
 ) -> NeonCliResult {
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -67,7 +68,7 @@ pub fn execute(
                     data.unwrap_or_default(),
                     value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(300_000){
+                match executor.execute_n_steps(max_steps_to_execute){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -84,7 +85,7 @@ pub fn execute(
                     data.unwrap_or_default(),
                     value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(300_000){
+                match executor.execute_n_steps(max_steps_to_execute){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
