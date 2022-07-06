@@ -563,6 +563,7 @@ fn main() {
                         .value_name("NUMBER_OF_STEPS")
                         .takes_value(true)
                         .required(false)
+                        .default_value("100000")
                         .help("Maximal number of steps to execute in a single run"),
                 )
         )
@@ -831,7 +832,7 @@ fn main() {
                 }
                 let token_mint = token_mint.unwrap();
                 let chain_id = chain_id.unwrap();
-                let max_steps_to_execute = value_of::<u64>(arg_matches, "max_steps_to_execute").unwrap_or(100_000);
+                let max_steps_to_execute = value_of::<u64>(arg_matches, "max_steps_to_execute").unwrap();
 
                 emulate::execute(&config,
                                  contract,
