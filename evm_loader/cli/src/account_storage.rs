@@ -39,6 +39,7 @@ pub struct NeonAccount {
     writable: bool,
     new: bool,
     size: usize,
+    size_current: usize,
     #[serde(skip)]
     data: Option<Account>,
 }
@@ -57,6 +58,7 @@ impl NeonAccount {
                 writable,
                 new: false,
                 size: account.data.len(),
+                size_current: account.data.len(),
                 data: Some(account)
             }
         }
@@ -69,6 +71,7 @@ impl NeonAccount {
                 writable,
                 new: true,
                 size: 0,
+                size_current: 0,
                 data: None
             }
         }
@@ -186,8 +189,13 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     self.add_ethereum_account(&address, true);
                 },
-                Action::EvmSetCode { address, .. } => {
+                Action::EvmSetCode { address, code, .. } => {
                     self.add_ethereum_account(&address, true);
+
+                    let mut accounts = self.accounts.borrow_mut();
+                    accounts.entry(address).and_modify(|a| {
+                        a.size = EthereumAccount::SIZE + ContractExtension::size_needed(code.len());
+                    });
                 },
                 Action::EvmSelfDestruct { address } => {
                     self.add_ethereum_account(&address, true);
