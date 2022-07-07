@@ -38,6 +38,7 @@ pub struct NeonAccount {
     account: Pubkey,
     writable: bool,
     new: bool,
+    size: usize,
     #[serde(skip)]
     data: Option<Account>,
 }
@@ -55,6 +56,7 @@ impl NeonAccount {
                 account: key,
                 writable,
                 new: false,
+                size: account.data.len(),
                 data: Some(account)
             }
         }
@@ -65,7 +67,8 @@ impl NeonAccount {
                 address, 
                 account: key, 
                 writable,
-                new: true, 
+                new: true,
+                size: 0,
                 data: None
             }
         }
