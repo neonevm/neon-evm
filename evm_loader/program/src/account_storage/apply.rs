@@ -177,12 +177,8 @@ impl<'a> ProgramAccountStorage<'a> {
 
         solana_program::msg!("deploy_contract: 1");
 
-        let old_code_size = {
-            let extension = account.extension.as_mut()
-                .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - is not a contract account", address))?;
-
-            extension.code_size()
-        };
+        let old_code_size = account.extension.as_mut()
+            .map_or(0, |extension| extension.code_size());
 
         solana_program::msg!("deploy_contract: 2");
 
