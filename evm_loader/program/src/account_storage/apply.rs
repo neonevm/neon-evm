@@ -171,8 +171,11 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         payer: &Operator<'a>,
     ) -> ProgramResult {
+        solana_program::msg!("deploy_contract: begin");
         let account = self.ethereum_accounts.get_mut(&address)
             .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
+
+        solana_program::msg!("deploy_contract: 1");
 
         let old_code_size = {
             let extension = account.extension.as_mut()
@@ -181,18 +184,24 @@ impl<'a> ProgramAccountStorage<'a> {
             extension.code_size()
         };
 
+        solana_program::msg!("deploy_contract: 2");
+
         if old_code_size != code.len() {
+            solana_program::msg!("deploy_contract: 3");
             unsafe { account.drop_extension(); }
+            solana_program::msg!("deploy_contract: 4");
 
             let mut cur_len = account.info.data_len();
             let new_len = EthereumAccount::SIZE +
                 ContractExtension::size_needed(code.len());
 
             let rent = Rent::get()?;
+            solana_program::msg!("deploy_contract: 5");
 
             let balance_needed = rent.minimum_balance(new_len);
 
             if account.info.lamports() < balance_needed {
+                solana_program::msg!("deploy_contract: 6");
                 invoke(
                     &system_instruction::transfer(
                         payer.key,
@@ -207,38 +216,59 @@ impl<'a> ProgramAccountStorage<'a> {
                 )?;
             }
 
+            solana_program::msg!("deploy_contract: 7");
+
             if new_len < cur_len {
+                solana_program::msg!("deploy_contract: 8");
                 account.info.realloc(new_len, false)?;
             } else {
+                solana_program::msg!("deploy_contract: 9");
                 while cur_len < new_len {
+                    solana_program::msg!("deploy_contract: 10");
                     cur_len += min(new_len - cur_len, MAX_PERMITTED_DATA_INCREASE);
                     account.info.realloc(cur_len, false)?;
                 }
             }
 
+            solana_program::msg!("deploy_contract: 11");
+
             account.reload_extension()?;
+
+            solana_program::msg!("deploy_contract: 12");
 
             {
                 let extension = account.extension.as_mut().unwrap();
+                solana_program::msg!("deploy_contract: 13");
                 extension.update_code_size(
                     code.len().try_into().expect("code.len() never exceeds u32::max"),
                 );
+                solana_program::msg!("deploy_contract: 14");
 
                 unsafe { account.drop_extension(); }
+                solana_program::msg!("deploy_contract: 15");
                 account.reload_extension()?;
             }
 
+            solana_program::msg!("deploy_contract: 16");
+
             if account.info.lamports() > balance_needed {
+                solana_program::msg!("deploy_contract: 17");
                 let diff = account.info.lamports().saturating_sub(balance_needed);
                 **account.info.lamports.borrow_mut() = balance_needed;
                 **payer.lamports.borrow_mut() += diff;
             }
         }
 
+        solana_program::msg!("deploy_contract: 18");
+
         let extension = account.extension.as_mut().unwrap();
+
+        solana_program::msg!("deploy_contract: 19");
 
         extension.code.copy_from_slice(code);
         extension.valids.copy_from_slice(valids);
+
+        solana_program::msg!("deploy_contract: end");
 
         Ok(())
     }
