@@ -28,8 +28,6 @@ impl<'a> Neon<'a> {
     #[allow(clippy::unused_self)]
     pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8])
     {
-        debug_print!("on_return {:?}", exit_reason);
-
         let (exit_message, exit_status) = match exit_reason {
             ExitReason::Succeed(success_code) => {
                 match success_code {
@@ -90,8 +88,6 @@ impl<'a> Neon<'a> {
 
     #[allow(clippy::unused_self)]
     pub fn on_event(&self, address: H160, topics: &[H256], data: &[u8]) -> Result<(), ProgramError> {
-        debug_print!("on_event");
-
         assert!(topics.len() < 5);
         #[allow(clippy::cast_possible_truncation)]
         let nt = topics.len() as u8;
