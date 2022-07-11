@@ -33,7 +33,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     let accounts = Accounts {
         sysvar_instructions: sysvar::Instructions::from_account(&accounts[0])?,
-        operator: Operator::from_account(&accounts[1])?,
+        operator: unsafe { Operator::from_account_not_whitelisted(&accounts[1])? },
         treasury: Treasury::from_account(program_id, treasury_index, &accounts[2])?,
         operator_ether_account: EthereumAccount::from_account(program_id, &accounts[3])?,
         system_program: program::System::from_account(&accounts[4])?,
@@ -47,6 +47,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         &accounts.operator,
+        Some(&accounts.system_program),
         accounts.remaining_accounts,
     )?;
 

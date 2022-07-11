@@ -1,3 +1,4 @@
+use std::convert::From;
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -13,9 +14,7 @@ use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
 use crate::account::ACCOUNT_SEED_VERSION;
 
 
-pub struct Neon<'a> {
-    info: &'a AccountInfo<'a>
-}
+pub struct Neon<'a> (&'a AccountInfo<'a>);
 
 impl<'a> Neon<'a> {
     pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
@@ -23,7 +22,7 @@ impl<'a> Neon<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not Neon program", info.key);
         }
 
-        Ok(Self { info })
+        Ok(Self ( info ))
     }
 
     #[allow(clippy::unused_self)]
@@ -122,13 +121,23 @@ impl<'a> Deref for Neon<'a> {
     type Target = AccountInfo<'a>;
 
     fn deref(&self) -> &Self::Target {
-        self.info
+        self.0
     }
 }
 
 
-pub struct System<'a> {
-    info: &'a AccountInfo<'a>
+pub struct System<'a> (&'a AccountInfo<'a>);
+
+impl<'a> From<&'a AccountInfo<'a>> for System<'a> {
+    fn from(info: &'a AccountInfo<'a>) -> Self {
+        Self( info )
+    }
+}
+
+impl<'a> From<& System<'a>> for &'a AccountInfo<'a> {
+    fn from(f:& System<'a>) -> Self {
+        f.0
+    }
 }
 
 impl<'a> System<'a> {
@@ -137,7 +146,7 @@ impl<'a> System<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not system program", info.key);
         }
 
-        Ok(Self { info })
+        Ok(Self ( info ))
     }
 
     pub fn create_pda_account(
@@ -157,19 +166,19 @@ impl<'a> System<'a> {
             if required_lamports > 0 {
                 invoke(
                     &system_instruction::transfer(payer.key, new_account.key, required_lamports),
-                    &[(*payer).clone(), new_account.clone(), self.info.clone()]
+                    &[(*payer).clone(), new_account.clone(), self.0.clone()]
                 )?;
             }
 
             invoke_signed(
                 &system_instruction::allocate(new_account.key, space as u64),
-                &[new_account.clone(), self.info.clone()],
+                &[new_account.clone(), self.0.clone()],
                 &[new_account_seeds],
             )?;
 
             invoke_signed(
                 &system_instruction::assign(new_account.key, program_id),
-                &[new_account.clone(), self.info.clone()],
+                &[new_account.clone(), self.0.clone()],
                 &[new_account_seeds]
             )
         } else {
@@ -181,7 +190,7 @@ impl<'a> System<'a> {
                     space as u64,
                     program_id,
                 ),
-                &[(*payer).clone(), new_account.clone(), self.info.clone()],
+                &[(*payer).clone(), new_account.clone(), self.0.clone()],
                 &[new_account_seeds],
             )
         }
@@ -197,7 +206,7 @@ impl<'a> System<'a> {
 
         invoke(
             &system_instruction::transfer(source.key, target.key, lamports),
-            &[(*source).clone(), target.clone(), self.info.clone()]
+            &[(*source).clone(), target.clone(), self.0.clone()]
         )
     }
 }
@@ -206,14 +215,12 @@ impl<'a> Deref for System<'a> {
     type Target = AccountInfo<'a>;
 
     fn deref(&self) -> &Self::Target {
-        self.info
+        self.0
     }
 }
 
 
-pub struct Token<'a> {
-    info: &'a AccountInfo<'a>
-}
+pub struct Token<'a>(&'a AccountInfo<'a>);
 
 impl<'a> Token<'a> {
     pub fn from_account(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
@@ -221,7 +228,7 @@ impl<'a> Token<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - is not token program", info.key);
         }
 
-        Ok(Self { info })
+        Ok(Self ( info ))
     }
 
     pub fn initialize_account(
@@ -241,7 +248,7 @@ impl<'a> Token<'a> {
             account.clone(),
             mint.info.clone(),
             owner.info.clone(),
-            self.info.clone(),
+            self.0.clone(),
             rent.info.clone(),
         ];
 
@@ -267,7 +274,7 @@ impl<'a> Token<'a> {
             source.clone(),
             target.clone(),
             authority.info.clone(),
-            self.info.clone(),
+            self.0.clone(),
         ];
         let seeds: &[&[u8]] = &[
             &[ACCOUNT_SEED_VERSION],
@@ -297,7 +304,7 @@ impl<'a> Token<'a> {
             source.clone(),
             delegate.clone(),
             authority.info.clone(),
-            self.info.clone(),
+            self.0.clone(),
         ];
         let seeds: &[&[u8]] = &[
             &[ACCOUNT_SEED_VERSION],
@@ -325,7 +332,7 @@ impl<'a> Token<'a> {
             destination.clone(),
             account.clone(),
             authority.info.clone(),
-            self.info.clone(),
+            self.0.clone(),
         ];
         let seeds: &[&[u8]] = &[
             &[ACCOUNT_SEED_VERSION],
@@ -341,6 +348,6 @@ impl<'a> Deref for Token<'a> {
     type Target = AccountInfo<'a>;
 
     fn deref(&self) -> &Self::Target {
-        self.info
+        self.0
     }
 }

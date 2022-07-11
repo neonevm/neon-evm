@@ -168,6 +168,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
     }
 
     #[must_use]
+    pub fn call_depth(&self) -> usize {
+        self.stack.len()
+    }
+
+    #[must_use]
     pub fn balance(&self, from_address: &H160) -> U256 {
         let mut balance = self.backend.balance(from_address);
 
