@@ -151,4 +151,9 @@ impl Gasometer {
         self.gas = self.gas.saturating_add(account_rent);
     }
 
+    pub fn record_lamports_used(&mut self, lamports: u64)
+    {
+        self.gas = self.gas.saturating_add(lamports);
+    }
+
 }
