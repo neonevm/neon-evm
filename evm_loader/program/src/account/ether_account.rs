@@ -73,7 +73,7 @@ pub struct Data {
 
 #[derive(Debug)]
 pub struct ContractExtension<'a> {
-    code_size: RefMut<'a, [u8]>,
+    code_size_ref: RefMut<'a, [u8]>,
     pub code: RefMut<'a, [u8]>,
     pub valids: RefMut<'a, [u8]>,
     pub storage: RefMut<'a, [u8]>,
@@ -90,7 +90,7 @@ impl<'a> ContractExtension<'a> {
     }
 
     pub fn update_code_size(&mut self, new_code_size: u32) {
-        self.code_size.copy_from_slice(&new_code_size.to_le_bytes());
+        self.code_size_ref.copy_from_slice(&new_code_size.to_le_bytes());
     }
 
     #[must_use]
@@ -124,9 +124,11 @@ impl<'a> AccountExtension<'a, Data> for Option<ContractExtension<'a>> {
         let (code, rest) = RefMut::map_split(rest, |r| r.split_at_mut(code_size));
         let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
 
+        assert_eq!(storage.len(), ContractExtension::INTERNAL_STORAGE_SIZE);
+
         Ok(Some(
             ContractExtension {
-                code_size: code_size_ref,
+                code_size_ref,
                 code,
                 valids,
                 storage,
