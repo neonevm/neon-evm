@@ -262,6 +262,9 @@ impl<'a> ProgramAccountStorage<'a> {
         solana_program::msg!("deploy_contract: 19");
 
         extension.code.copy_from_slice(code);
+
+        solana_program::msg!("deploy_contract: 20");
+
         extension.valids.copy_from_slice(valids);
 
         solana_program::msg!("deploy_contract: end");
