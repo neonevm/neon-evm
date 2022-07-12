@@ -7,9 +7,9 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, Operator, program};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program};
 use crate::account::ether_account::ContractExtension;
-use crate::account_storage::{Account, ProgramAccountStorage};
+use crate::account_storage::ProgramAccountStorage;
 
 
 impl<'a> ProgramAccountStorage<'a> {

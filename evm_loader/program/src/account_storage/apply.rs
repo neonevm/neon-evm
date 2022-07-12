@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use std::ops::Deref;
 use std::mem::ManuallyDrop;
 use evm::{H160, U256};
 use solana_program::instruction::Instruction;
