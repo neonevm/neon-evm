@@ -37,7 +37,7 @@ pub fn execute(config: &Config, ether_address: H160) -> NeonCliResult {
     let update_valids_table_instruction =
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(23_u8), // TODO remove magic number
+            &(0x17_u8), // TODO remove magic number
             vec![AccountMeta::new(pubkey, false)]
         );
 

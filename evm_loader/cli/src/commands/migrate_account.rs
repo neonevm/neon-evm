@@ -93,7 +93,7 @@ fn migrate_account_instruction(
 
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(26_u8),
+        &(0x1a_u8),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new(ether_pubkey, false),

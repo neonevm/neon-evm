@@ -234,7 +234,7 @@ fn write_value_instruction(
     key: U256,
     value: U256,
 ) -> Instruction {
-    let mut data = vec![28_u8; 1 + 32 + 32];
+    let mut data = vec![0x1c_u8; 1 + 32 + 32];
     key.to_big_endian(&mut data[1..33]);
     value.to_big_endian(&mut data[33..]);
 
@@ -255,7 +255,7 @@ fn convert_to_v2_instruction(
 ) -> Instruction {
     Instruction::new_with_bytes(
         *EVM_LOADER,
-        &[29u8],
+        &[0x1du8],
         vec![
             AccountMeta::new_readonly(PAYER.pubkey(), true),         // Funding account
             AccountMeta::new_readonly(system_program::id(), false),  // System program

@@ -159,32 +159,32 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            2 => Self::CreateAccount, // deprecated
-            5 => Self::CallFromRawEthereumTX,
-            6 => Self::OnReturn,
-            7 => Self::OnEvent,
-            9 => Self::PartialCallFromRawEthereumTX, // deprecated
-            10 => Self::Continue, // deprecated
-            11 => Self::ExecuteTrxFromAccountDataIterative, // deprecated
-            12 => Self::Cancel, // deprecated
-            13 => Self::PartialCallOrContinueFromRawEthereumTX,
-            14 => Self::ExecuteTrxFromAccountDataIterativeOrContinue,
-            15 => Self::ERC20CreateTokenAccount,
-            16 => Self::DeleteHolderOrStorageAccount,
-            17 => Self::ResizeContractAccount, // deprecated
-            18 => Self::WriteHolder,
-            19 => Self::PartialCallFromRawEthereumTxV03,
-            20 => Self::ContinueV03,
-            21 => Self::CancelWithNonce,
-            22 => Self::ExecuteTrxFromAccountDataIterativeV03,
-            23 => Self::UpdateValidsTable,
-            24 => Self::CreateAccountV02, // deprecated
-            25 => Self::Deposit,
-            26 => Self::MigrateAccount, // deprecated
-            27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
-            28 => Self::WriteValueToDistributedStorage, // deprecated
-            29 => Self::ConvertDataAccountFromV1ToV2, // deprecated
-            30 => Self::CreateAccountV03,
+            0x02 => Self::CreateAccount, // deprecated
+            0x05 => Self::CallFromRawEthereumTX,
+            0x06 => Self::OnReturn,
+            0x07 => Self::OnEvent,
+            0x09 => Self::PartialCallFromRawEthereumTX, // deprecated
+            0x0a => Self::Continue, // deprecated
+            0x0b => Self::ExecuteTrxFromAccountDataIterative, // deprecated
+            0x0c => Self::Cancel, // deprecated
+            0x0d => Self::PartialCallOrContinueFromRawEthereumTX,
+            0x0e => Self::ExecuteTrxFromAccountDataIterativeOrContinue,
+            0x0f => Self::ERC20CreateTokenAccount,
+            0x10 => Self::DeleteHolderOrStorageAccount,
+            0x11 => Self::ResizeContractAccount, // deprecated
+            0x12 => Self::WriteHolder,
+            0x13 => Self::PartialCallFromRawEthereumTxV03,
+            0x14 => Self::ContinueV03,
+            0x15 => Self::CancelWithNonce,
+            0x16 => Self::ExecuteTrxFromAccountDataIterativeV03,
+            0x17 => Self::UpdateValidsTable,
+            0x18 => Self::CreateAccountV02, // deprecated
+            0x19 => Self::Deposit,
+            0x1a => Self::MigrateAccount, // deprecated
+            0x1b => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
+            0x1c => Self::WriteValueToDistributedStorage, // deprecated
+            0x1d => Self::ConvertDataAccountFromV1ToV2, // deprecated
+            0x1e => Self::CreateAccountV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })

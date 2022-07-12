@@ -98,7 +98,7 @@ fn create_ethereum_account_in_solana(
 
         Instruction::new_with_bincode(
             config.evm_loader,
-            &(30_u8, program_ether.as_fixed_bytes(), program_nonce, u32::try_from(program_code_len).expect("Size of contract code can't be more than u32::MAX")),
+            &(0x1e_u8, program_ether.as_fixed_bytes(), program_nonce, u32::try_from(program_code_len).expect("Size of contract code can't be more than u32::MAX")),
             vec![
                 AccountMeta::new(creator.pubkey(), true),
                 AccountMeta::new_readonly(system_program::id(), false),
@@ -441,7 +441,7 @@ pub fn execute(
     {
         debug!("trx_from_account_data_instruction holder_plus_accounts: {:?}", holder_with_accounts);
         let trx_from_account_data_instruction = Instruction::new_with_bincode(config.evm_loader,
-                                                                              &(22_u8, collateral_pool_index, 0_u64),
+                                                                              &(0x16_u8, collateral_pool_index, 0_u64),
                                                                               holder_with_accounts);
         instructions.push(trx_from_account_data_instruction);
         debug!("instructions: {:?}", instructions);
@@ -454,7 +454,7 @@ pub fn execute(
         debug!("continue continue_accounts: {:?}", continue_accounts);
         let continue_instruction = Instruction::new_with_bincode(
             config.evm_loader,
-            &(20_u8, collateral_pool_index, 400_u64),
+            &(0x14_u8, collateral_pool_index, 400_u64),
             continue_accounts
         );
         let instructions = vec![
