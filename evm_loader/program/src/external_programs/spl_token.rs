@@ -28,14 +28,23 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
         TokenInstruction::InitializeMint { decimals, mint_authority, freeze_authority } => {
             spl_token::processor::Processor::process_initialize_mint(&instruction_accounts, decimals, mint_authority, freeze_authority)
         }
+        TokenInstruction::InitializeMint2 { decimals, mint_authority, freeze_authority } => {
+            spl_token::processor::Processor::process_initialize_mint2(&instruction_accounts, decimals, mint_authority, freeze_authority)
+        }
         TokenInstruction::InitializeAccount => {
-            spl_token::processor::Processor::process_initialize_account(&instruction_accounts)
+            spl_token::processor::Processor::process_initialize_account(&spl_token::ID, &instruction_accounts)
         }
         TokenInstruction::InitializeAccount2 { owner } => {
-            spl_token::processor::Processor::process_initialize_account2(&instruction_accounts, owner)
+            spl_token::processor::Processor::process_initialize_account2(&spl_token::ID, &instruction_accounts, owner)
+        }
+        TokenInstruction::InitializeAccount3 { owner } => {
+            spl_token::processor::Processor::process_initialize_account3(&spl_token::ID, &instruction_accounts, owner)
         }
         TokenInstruction::InitializeMultisig { m } => {
             spl_token::processor::Processor::process_initialize_multisig(&instruction_accounts, m)
+        }
+        TokenInstruction::InitializeMultisig2 { m } => {
+            spl_token::processor::Processor::process_initialize_multisig2(&instruction_accounts, m)
         }
         TokenInstruction::Transfer { amount } => {
             spl_token::processor::Processor::process_transfer(&spl_token::ID, &instruction_accounts, amount, None)

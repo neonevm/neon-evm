@@ -504,7 +504,7 @@ pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 /// Additional fee for `request units` instruction
-pub const REQUEST_UNITS_ADDITIONAL_FEE: u32 = 0;
+pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
 /// Gas limit multiplier for transactions without chain id
 pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 /// Amount of storage enties strored in the contract account
