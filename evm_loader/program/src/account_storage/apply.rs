@@ -200,9 +200,9 @@ impl<'a> ProgramAccountStorage<'a> {
                 )?;
             }
 
-            solana_program::msg!("deploy_contract: 7");
+            solana_program::msg!("deploy_contract: 7 (cur_len: {}, new_len: {})", cur_len, new_len);
 
-            if new_len < cur_len {
+            if cur_len > new_len {
                 solana_program::msg!("deploy_contract: 8");
                 account.info.realloc(new_len, false)?;
             } else {
