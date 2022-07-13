@@ -24,6 +24,7 @@ tracing = [ "environmental" ]
 solana-program = { version = "=1.10.29", default_features = false }
 spl-token = { version = "=3.3.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "=1.0.5", default_features = false, features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "=1.3.2", default_features = false, features = ["no-entrypoint"] }
 num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1.0"
