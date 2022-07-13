@@ -124,7 +124,7 @@ impl<'a> AccountExtension<'a, Data> for Option<ContractExtension<'a>> {
         let (code, rest) = RefMut::map_split(rest, |r| r.split_at_mut(code_size));
         let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
 
-        assert_eq!(storage.len(), ContractExtension::INTERNAL_STORAGE_SIZE);
+        assert!(storage.len() >= ContractExtension::INTERNAL_STORAGE_SIZE);
 
         Ok(Some(
             ContractExtension {
