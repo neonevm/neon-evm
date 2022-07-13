@@ -30,7 +30,7 @@ use solana_transaction_status::{
     EncodedTransaction,
     UiMessage,
     UiInstruction,
-    EncodedConfirmedTransaction
+    EncodedConfirmedTransactionWithStatusMeta
 };
 
 use solana_client::{
@@ -93,7 +93,8 @@ fn create_ethereum_account_in_solana(
     }
 
     let instructions = vec![
-        ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
+        ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
         ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
 
         Instruction::new_with_bincode(
@@ -134,7 +135,8 @@ fn fill_holder_account(
         );
 
         let instructions = vec![
-            ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+            ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
+            ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
             ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
             write_holder_instruction
         ];
@@ -206,7 +208,7 @@ fn make_deploy_ethereum_transaction(
     msg
 }
 
-fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransaction) -> Option<Vec<u8>> {
+fn parse_transaction_reciept(config: &Config, result: EncodedConfirmedTransactionWithStatusMeta) -> Option<Vec<u8>> {
     let mut return_value : Option<Vec<u8>> = None;
     if let EncodedTransaction::Json(transaction) = result.transaction.transaction {
         if let UiMessage::Raw(message) = transaction.message {
@@ -458,7 +460,8 @@ pub fn execute(
             continue_accounts
         );
         let instructions = vec![
-            ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE),
+            ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
+            ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
             ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
             continue_instruction
         ];
@@ -470,6 +473,7 @@ pub fn execute(
             RpcTransactionConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
                 encoding: Some(UiTransactionEncoding::Json),
+                max_supported_transaction_version: None
             },
         )?;
 
