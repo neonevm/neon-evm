@@ -4,8 +4,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{EthereumStorage, ACCOUNT_SEED_VERSION, EthereumAccount};
-use crate::account::ether_account::ContractExtension;
+use crate::account::{EthereumStorage, ACCOUNT_SEED_VERSION, EthereumAccount, ether_contract};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
@@ -63,8 +62,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn code_size(&self, address: &H160) -> usize {
-        self.ethereum_contract(address)
-            .map_or(0, ContractExtension::code_size)
+        self.ethereum_account(address)
+            .map_or(0, |a| a.code_size as usize)
     }
 
     fn code_hash(&self, address: &H160) -> H256 {
@@ -127,7 +126,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn solana_account_space(&self, address: &H160) -> usize {
         self.ethereum_account(address)
             .map_or(0, |a|
-                EthereumAccount::SIZE + a.extension.as_ref().map_or(0, ContractExtension::size)
+                EthereumAccount::SIZE + a.extension.as_ref().map_or(0, ether_contract::Extension::size)
             )
     }
 

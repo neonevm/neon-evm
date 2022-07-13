@@ -30,9 +30,10 @@ pub fn execute (
             println!("    ro_blocked_count: {}", account_data.ro_blocked_count);
             println!("    rw_blocked: {}", account_data.rw_blocked);
             println!("    balance: {}", account_data.balance);
+            println!("    code_size: {}", account_data.code_size);
 
             if let Some(extension) = account_data.extension.as_ref() {
-                let code_size = extension.code_size();
+                let code_size = account_data.code_size as usize;
                 let mut offset = 0;
                 while offset < code_size {
                     let data_slice = &extension.code;

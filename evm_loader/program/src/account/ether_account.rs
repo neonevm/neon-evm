@@ -1,14 +1,10 @@
-use std::cell::RefMut;
 use std::mem::size_of;
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use evm::{H160, U256, Valids};
+use evm::{H160, U256};
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-
-use crate::account::AccountExtension;
-use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 
 use super::Packable;
 
@@ -69,72 +65,8 @@ pub struct Data {
     pub ro_blocked_count: u8,
     /// Account generation, increment on suicide
     pub generation: u32,
-}
-
-#[derive(Debug)]
-pub struct ContractExtension<'a> {
-    code_size_ref: RefMut<'a, [u8]>,
-    pub code: RefMut<'a, [u8]>,
-    pub valids: RefMut<'a, [u8]>,
-    pub storage: RefMut<'a, [u8]>,
-}
-
-impl<'a> ContractExtension<'a> {
-    pub const CODE_SIZE_SIZE: usize = size_of::<u32>();
-    pub const INTERNAL_STORAGE_SIZE: usize =
-        size_of::<U256>() * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize;
-
-    #[must_use]
-    pub fn code_size(&self) -> usize {
-        self.code.len()
-    }
-
-    pub fn update_code_size(&mut self, new_code_size: u32) {
-        self.code_size_ref.copy_from_slice(&new_code_size.to_le_bytes());
-    }
-
-    #[must_use]
-    pub fn size_needed(code_size: usize) -> usize {
-        if code_size == 0 {
-            return 0;
-        }
-
-        Self::CODE_SIZE_SIZE
-            + code_size
-            + Valids::size_needed(code_size)
-            + Self::INTERNAL_STORAGE_SIZE
-    }
-
-    #[must_use]
-    pub fn size(&self) -> usize {
-        Self::CODE_SIZE_SIZE + self.code.len() + self.valids.len() + self.storage.len()
-    }
-}
-
-impl<'a> AccountExtension<'a, Data> for Option<ContractExtension<'a>> {
-    fn unpack(_data: &Data, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
-        if remaining.is_empty() {
-            return Ok(None);
-        }
-        let (code_size_ref, rest) = RefMut::map_split(remaining, |r| r.split_at_mut(ContractExtension::CODE_SIZE_SIZE));
-        let code_size = u32::from_le_bytes(*array_ref![code_size_ref, 0, ContractExtension::CODE_SIZE_SIZE]) as usize;
-
-        let valids_size = Valids::size_needed(code_size);
-
-        let (code, rest) = RefMut::map_split(rest, |r| r.split_at_mut(code_size));
-        let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
-
-        assert!(storage.len() >= ContractExtension::INTERNAL_STORAGE_SIZE);
-
-        Ok(Some(
-            ContractExtension {
-                code_size_ref,
-                code,
-                valids,
-                storage,
-            }
-        ))
-    }
+    /// Contract code size
+    pub code_size: u32,
 }
 
 impl Data {
@@ -145,6 +77,7 @@ impl Data {
     const RW_BLOCKED_SIZE: usize = size_of::<bool>();
     const RO_BLOCKED_COUNT_SIZE: usize = size_of::<u8>();
     const GENERATION_SIZE: usize = size_of::<u32>();
+    const CODE_SIZE_SIZE: usize = size_of::<u32>();
 
     pub fn check_blocked(&self, required_exclusive_access: bool) -> ProgramResult {
         if self.rw_blocked {
@@ -297,13 +230,14 @@ impl Packable for Data {
     const TAG: u8 = super::TAG_ACCOUNT_V3;
 
     /// `AccountV3` struct serialized size
-    const SIZE: usize = Data::ADDRESS_SIZE
-        + Data::BUMP_SEED_SIZE
-        + Data::TRX_COUNT_SIZE
-        + Data::BALANCE_SIZE
-        + Data::RW_BLOCKED_SIZE
-        + Data::RO_BLOCKED_COUNT_SIZE
-        + Data::GENERATION_SIZE;
+    const SIZE: usize = Data::ADDRESS_SIZE +
+        Data::BUMP_SEED_SIZE +
+        Data::TRX_COUNT_SIZE +
+        Data::BALANCE_SIZE +
+        Data::RW_BLOCKED_SIZE +
+        Data::RO_BLOCKED_COUNT_SIZE +
+        Data::GENERATION_SIZE +
+        Data::CODE_SIZE_SIZE;
 
     /// Deserialize `AccountV3` struct from input data
     #[must_use]
@@ -318,6 +252,7 @@ impl Packable for Data {
             rw_blocked,
             ro_blocked_count,
             generation,
+            code_size,
         ) = array_refs![
             data,
             Data::ADDRESS_SIZE,
@@ -326,7 +261,8 @@ impl Packable for Data {
             Data::BALANCE_SIZE,
             Data::RW_BLOCKED_SIZE,
             Data::RO_BLOCKED_COUNT_SIZE,
-            Data::GENERATION_SIZE
+            Data::GENERATION_SIZE,
+            Data::CODE_SIZE_SIZE
         ];
 
         Self {
@@ -337,6 +273,7 @@ impl Packable for Data {
             rw_blocked: rw_blocked[0] != 0,
             ro_blocked_count: ro_blocked_count[0],
             generation: u32::from_le_bytes(*generation),
+            code_size: u32::from_le_bytes(*code_size),
         }
     }
 
@@ -352,6 +289,7 @@ impl Packable for Data {
             rw_blocked,
             ro_blocked_count,
             generation,
+            code_size,
         ) = mut_array_refs![
             data,
             Data::ADDRESS_SIZE,
@@ -360,7 +298,8 @@ impl Packable for Data {
             Data::BALANCE_SIZE,
             Data::RW_BLOCKED_SIZE,
             Data::RO_BLOCKED_COUNT_SIZE,
-            Data::GENERATION_SIZE
+            Data::GENERATION_SIZE,
+            Data::CODE_SIZE_SIZE
         ];
 
         *address = self.address.to_fixed_bytes();
@@ -370,5 +309,6 @@ impl Packable for Data {
         rw_blocked[0] = u8::from(self.rw_blocked);
         ro_blocked_count[0] = self.ro_blocked_count;
         *generation = self.generation.to_le_bytes();
+        *code_size = self.code_size.to_le_bytes();
     }
 }

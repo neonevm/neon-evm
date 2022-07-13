@@ -6,14 +6,13 @@ use evm::{H160, U256};
 use solana_program::instruction::Instruction;
 use solana_program::{program_error::ProgramError, system_instruction};
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
+use crate::account::{ACCOUNT_SEED_VERSION, ether_contract, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, AccountMeta};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use solana_program::program::{invoke, invoke_signed_unchecked};
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
-use crate::account::ether_account::ContractExtension;
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -165,19 +164,13 @@ impl<'a> ProgramAccountStorage<'a> {
 
         solana_program::msg!("deploy_contract: 1");
 
-        let old_code_size = account.extension.as_mut()
-            .map_or(0, |extension| extension.code_size());
-
-        solana_program::msg!("deploy_contract: 2");
-
-        if old_code_size != code.len() {
+        if account.code_size as usize != code.len() {
             solana_program::msg!("deploy_contract: 3");
             unsafe { account.drop_extension(); }
             solana_program::msg!("deploy_contract: 4");
 
             let mut cur_len = account.info.data_len();
-            let new_len = EthereumAccount::SIZE +
-                ContractExtension::size_needed(code.len());
+            let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed(code.len());
 
             let rent = Rent::get()?;
             solana_program::msg!("deploy_contract: 5");
@@ -210,28 +203,15 @@ impl<'a> ProgramAccountStorage<'a> {
                 while cur_len < new_len {
                     solana_program::msg!("deploy_contract: 10");
                     cur_len += min(new_len - cur_len, MAX_PERMITTED_DATA_INCREASE);
-                    account.info.realloc(cur_len, false)?;
+                    account.info.realloc(cur_len, true)?;
                 }
             }
 
             solana_program::msg!("deploy_contract: 11");
 
-            account.reload_extension()?;
-
-            solana_program::msg!("deploy_contract: 12");
-
-            {
-                let extension = account.extension.as_mut().unwrap();
-                solana_program::msg!("deploy_contract: 13");
-                extension.update_code_size(
-                    code.len().try_into().expect("code.len() never exceeds u32::max"),
-                );
-                solana_program::msg!("deploy_contract: 14");
-
-                unsafe { account.drop_extension(); }
-                solana_program::msg!("deploy_contract: 15");
-                account.reload_extension()?;
-            }
+            account.code_size = code.len()
+                .try_into()
+                .expect("code.len() never exceeds u32::max");
 
             solana_program::msg!("deploy_contract: 16");
 
@@ -241,6 +221,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 **account.info.lamports.borrow_mut() = balance_needed;
                 **payer.lamports.borrow_mut() += diff;
             }
+
+            account.reload_extension()?;
         }
 
         solana_program::msg!("deploy_contract: 18");

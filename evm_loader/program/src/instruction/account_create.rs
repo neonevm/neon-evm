@@ -5,8 +5,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program};
-use crate::account::ether_account::ContractExtension;
+use crate::account::{ACCOUNT_SEED_VERSION, ether_contract, EthereumAccount, Operator, program};
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -58,7 +57,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u
         &accounts.operator,
         accounts.ether_account,
         program_seeds,
-        EthereumAccount::SIZE + ContractExtension::size_needed(code_size),
+        EthereumAccount::SIZE + ether_contract::Extension::size_needed(code_size),
     )?;
     
     EthereumAccount::init(
@@ -71,6 +70,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u
             rw_blocked: false,
             ro_blocked_count: 0,
             generation: 0,
+            code_size: 0,
         },
     )?;
 

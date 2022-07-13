@@ -4,8 +4,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::account::ether_account::ContractExtension;
-use crate::account::EthereumAccount;
+use crate::account::{ether_contract, EthereumAccount};
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _instruction: &[u8]) -> ProgramResult {
@@ -27,7 +26,7 @@ fn validate(account: &EthereumAccount) -> ProgramResult {
     Ok(())
 }
 
-fn execute(contract: &mut ContractExtension) {
+fn execute(contract: &mut ether_contract::Extension) {
     let valids = evm::Valids::compute(&contract.code);
     contract.valids.copy_from_slice(&valids);
 }

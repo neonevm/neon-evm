@@ -54,7 +54,7 @@ const TAG_STATE: u8 = 30;
 const _TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
 
-pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, Option<ether_account::ContractExtension<'a>>>;
+pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, Option<ether_contract::Extension<'a>>>;
 pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
 pub type State<'a> = AccountData<'a, state::Data>;
 pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
