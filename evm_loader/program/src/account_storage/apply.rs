@@ -154,7 +154,7 @@ impl<'a> ProgramAccountStorage<'a> {
         &mut self,
         address: H160,
         code: &[u8],
-        _valids: &[u8],
+        valids: &[u8],
         system_program: &program::System<'a>,
         payer: &Operator<'a>,
     ) -> ProgramResult {
@@ -225,17 +225,17 @@ impl<'a> ProgramAccountStorage<'a> {
             account.reload_extension()?;
         }
 
-        // solana_program::msg!("deploy_contract: 18");
-        //
-        // let extension = account.extension.as_mut().unwrap();
-        //
-        // solana_program::msg!("deploy_contract: 19");
-        //
-        // extension.code.copy_from_slice(code);
-        //
-        // solana_program::msg!("deploy_contract: 20");
-        //
-        // extension.valids.copy_from_slice(valids);
+        solana_program::msg!("deploy_contract: 18");
+
+        let extension = account.extension.as_mut().unwrap();
+
+        solana_program::msg!("deploy_contract: 19");
+
+        extension.code.copy_from_slice(code);
+
+        solana_program::msg!("deploy_contract: 20");
+
+        extension.valids.copy_from_slice(valids);
 
         solana_program::msg!("deploy_contract: end");
 
