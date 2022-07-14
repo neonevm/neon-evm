@@ -1,11 +1,11 @@
-use std::cmp::min;
+// use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 use evm::{H160, U256};
 use solana_program::instruction::Instruction;
 use solana_program::{program_error::ProgramError, system_instruction};
-use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
+use solana_program::entrypoint::{/*MAX_PERMITTED_DATA_INCREASE,*/ ProgramResult};
 use crate::account::{ACCOUNT_SEED_VERSION, ether_contract, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, AccountMeta};
@@ -169,7 +169,7 @@ impl<'a> ProgramAccountStorage<'a> {
             unsafe { account.drop_extension(); }
             solana_program::msg!("deploy_contract: 4");
 
-            let mut cur_len = account.info.data_len();
+            let /*mut*/ cur_len = account.info.data_len();
             let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed(code.len());
 
             let rent = Rent::get()?;
@@ -195,17 +195,20 @@ impl<'a> ProgramAccountStorage<'a> {
 
             solana_program::msg!("deploy_contract: 7 (cur_len: {}, new_len: {})", cur_len, new_len);
 
-            if cur_len > new_len {
-                solana_program::msg!("deploy_contract: 8");
-                account.info.realloc(new_len, false)?;
-            } else {
-                solana_program::msg!("deploy_contract: 9");
-                while cur_len < new_len {
-                    solana_program::msg!("deploy_contract: 10");
-                    cur_len += min(new_len - cur_len, MAX_PERMITTED_DATA_INCREASE);
-                    account.info.realloc(cur_len, false)?;
-                }
-            }
+
+            account.info.realloc(new_len, false)?;
+
+            // if cur_len > new_len {
+            //     solana_program::msg!("deploy_contract: 8");
+            //     account.info.realloc(new_len, false)?;
+            // } else {
+            //     solana_program::msg!("deploy_contract: 9");
+            //     while cur_len < new_len {
+            //         solana_program::msg!("deploy_contract: 10");
+            //         cur_len += min(new_len - cur_len, MAX_PERMITTED_DATA_INCREASE);
+            //         account.info.realloc(cur_len, false)?;
+            //     }
+            // }
 
             solana_program::msg!("deploy_contract: 11");
 
