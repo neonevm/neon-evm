@@ -457,7 +457,7 @@ cfg_if! {
         pub mod token_mint {
             use super::declare_param_id;
 
-            declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
+            declare_param_id!(NEON_TOKEN_MINT, "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk");
             /// Ethereum account version
             pub const DECIMALS: u8 = 9;
 
@@ -470,7 +470,7 @@ cfg_if! {
         pub mod collateral_pool_base {
             use super::declare_param_id;
 
-            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
+            declare_param_id!(NEON_POOL_BASE, "7aPH9mBAvUtJDGV2L1KyvpR5nKF7man5DZzBPaxmisg5");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
@@ -535,7 +535,7 @@ cfg_if! {
         pub mod token_mint {
             use super::declare_param_id;
 
-            declare_param_id!(NEON_TOKEN_MINT, "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk");
+            declare_param_id!(NEON_TOKEN_MINT, "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU");
             /// Ethereum account version
             pub const DECIMALS: u8 = 9;
 
@@ -548,7 +548,7 @@ cfg_if! {
         pub mod collateral_pool_base {
             use super::declare_param_id;
 
-            declare_param_id!(NEON_POOL_BASE, "7aPH9mBAvUtJDGV2L1KyvpR5nKF7man5DZzBPaxmisg5");
+            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
