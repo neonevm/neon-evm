@@ -4,7 +4,7 @@ use solana_program::program_error::ProgramError;
 use std::ops::Deref;
 
 pub struct Operator<'a> {
-    info: &'a AccountInfo<'a>,
+    pub info: &'a AccountInfo<'a>,
 }
 
 impl<'a> Operator<'a> {

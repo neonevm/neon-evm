@@ -6,11 +6,10 @@ use solana_program::{
 };
 use crate::account_storage::ProgramAccountStorage;
 use crate::state_account::Deposit;
-use crate::config::chain_id;
 
 struct Accounts<'a> {
     storage: State<'a>,
-    // operator: Operator<'a>,
+    operator: Operator<'a>,
     incinerator: Incinerator<'a>,
     remaining_accounts: &'a [AccountInfo<'a>],
 }
@@ -25,7 +24,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     let storage = State::restore(program_id, storage_info, &operator, remaining_accounts)?;
 
-    let accounts = Accounts { storage, incinerator, remaining_accounts };
+    let accounts = Accounts { storage, operator, incinerator, remaining_accounts };
     let nonce = u64::from_le_bytes(*array_ref![instruction, 0, 8]);
 
     validate(&accounts, nonce)?;
@@ -45,13 +44,11 @@ fn validate(accounts: &Accounts, nonce: u64) -> ProgramResult {
 fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult {
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
+        &accounts.operator,
+        None,
         accounts.remaining_accounts,
-        crate::config::token_mint::id(),
-        chain_id().as_u64(),
     )?;
-    let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller)
-        .expect("Caller account present in the transaction");
-
+    let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller);
     caller_account.trx_count += 1;
 
     account_storage.block_accounts(false)?;

@@ -29,19 +29,28 @@ const LOG_MODULES: [&str; 14] = [
   "neon_cli::commands::get_neon_elf",
   "neon_cli::commands::get_storage_at",
   "neon_cli::commands::update_valids_table",
-  "evm_loader::precompile_contracts",
+  "evm_loader::precompile",
   "evm_loader::executor",
-  "evm_loader::executor_state",
+  "evm_loader::external_programs",
 ];
 
 
-pub fn init(context: LogContext) -> Result<(), log::SetLoggerError> {
+pub fn init(context: LogContext, loglevel: log::LevelFilter) -> Result<(), log::SetLoggerError> {
 
-    let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
+    let dispatch: Dispatch =
+        if loglevel == log::LevelFilter::Off {
 
-    for module_name in LOG_MODULES {
-        dispatch = dispatch.level_for(module_name, log::LevelFilter::Trace);
-    }
+            fern::Dispatch::new().level(log::LevelFilter::Off)
+
+        } else {
+            let mut dispatch: Dispatch = fern::Dispatch::new().level(log::LevelFilter::Error);
+
+            for module_name in LOG_MODULES {
+                dispatch = dispatch.level_for(module_name, loglevel);
+            }
+
+            dispatch
+        };
 
     dispatch
         .format(move |out, message, record| {

@@ -19,8 +19,8 @@ solana-cli-config = "=1.9.12"
 solana-cli = "=1.9.12"
 solana-cli-output = "=1.9.12"
 solana-transaction-status = "=1.9.12"
-spl-token = { version = "3.2", default_features = false, features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.0", default_features = false, features = ["no-entrypoint"] }
+spl-token = { version = "=3.2.0", default_features = false, features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "1.0.3", default_features = false, features = ["no-entrypoint"] }
 bs58 = "0.4.0"
 hex = "0.4.2"
 sha3 = "0.8"
@@ -32,7 +32,6 @@ libsecp256k1 = { version = "0.5.0", default-features = false, features = ["stati
 log = "0.4.11"
 fern = "0.6"
 rlp = "0.5"
-solana-program = { version = "=1.9.12", default_features = false }
 rand = "0.8"
 ethereum-types = "0.11.0"
 base64 = { version = "0.13.0" }

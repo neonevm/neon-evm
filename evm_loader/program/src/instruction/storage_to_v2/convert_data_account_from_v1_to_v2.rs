@@ -149,7 +149,7 @@ mod tests {
     use solana_program::program_stubs::SyscallStubs;
     use solana_program::pubkey::Pubkey;
     use solana_program::system_program;
-    use solana_sdk::sysvar::rent::Rent;
+    use solana_program::sysvar::rent::Rent;
 
     use crate::account::{EthereumContract, Packable};
     use crate::account::ether_contract::DataV1;
@@ -200,7 +200,7 @@ mod tests {
         let hamt_data = RefMut::map(buffer.borrow_mut(), |v| &mut v[..]);
         let mut hamt = Hamt::new(hamt_data)?;
 
-        let keys: HashSet<u32> = [0, 1, 2, 3, 63, 64, 640, 1640].iter().cloned().collect();
+        let keys: HashSet<u32> = [0, 1, 2, 3, 63, 64, 640, 1640].iter().copied().collect();
         for key in &keys {
             hamt.insert(U256::from(*key), U256::from(*key) * VALUE_MULTIPLICATOR)?;
         }
@@ -238,7 +238,7 @@ mod tests {
         let funding_pubkey = Pubkey::new_unique();
         let code = vec![1u8, 2, 3];
         let valids = vec![0xFFu8; code.len() / 8 + 1];
-        let keys: HashSet<u32> = [0, 1, 2, 3, 63, 64, 640, 1640].iter().cloned().collect();
+        let keys: HashSet<u32> = [0, 1, 2, 3, 63, 64, 640, 1640].iter().copied().collect();
 
         let hamt_buffer = RefCell::new(vec![0u8; 100_000]);
         {
@@ -250,16 +250,18 @@ mod tests {
             }
         }
 
+        #[allow(clippy::cast_possible_truncation)]
         let data_v1 = DataV1 {
-            owner: owner.clone(),
+            owner,
             code_size: code.len() as u32,
         };
 
         data[0] = DataV1::TAG;
+        #[allow(clippy::range_plus_one)]
         data_v1.pack(&mut data[TAG_SIZE..TAG_SIZE + DataV1::SIZE]);
         data.splice(data.len().., code.clone());
         data.splice(data.len().., valids.clone());
-        data.splice(data.len().., hamt_buffer.borrow().iter().cloned());
+        data.splice(data.len().., hamt_buffer.borrow().iter().copied());
 
         let mut account_lamports = 1;
         let mut funding_lamports = 1000;
@@ -271,7 +273,7 @@ mod tests {
         let funding_account = simple_account(&funding_pubkey, &mut funding_lamports, &mut [], &owner);
         let system_program = simple_account(&system_program_id, &mut system_lamports, &mut [], &system_program_id);
 
-        solana_sdk::program_stubs::set_syscall_stubs(Stubs::new());
+        solana_program::program_stubs::set_syscall_stubs(Stubs::new());
 
         convert_to_v2(&account_info, &funding_account, &system_program)?;
 

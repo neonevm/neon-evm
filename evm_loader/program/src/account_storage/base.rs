@@ -7,13 +7,18 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, program};
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumContract, Operator, program};
 use crate::account_storage::{Account, ProgramAccountStorage};
 
 
 
 impl<'a> ProgramAccountStorage<'a> {
-    pub fn new(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], token_mint: Pubkey, chain_id: u64) -> Result<Self, ProgramError> {
+    pub fn new(
+        program_id: &'a Pubkey,
+        operator: &Operator<'a>,
+        system_program: Option<&program::System<'a>>,
+        accounts: &'a [AccountInfo<'a>]
+    ) -> Result<Self, ProgramError> {
         debug_print!("ProgramAccountStorage::new");
 
         let mut solana_accounts = BTreeMap::new();
@@ -23,6 +28,12 @@ impl<'a> ProgramAccountStorage<'a> {
                 return Err!(ProgramError::InvalidArgument; "Account {} - repeats in the transaction", account.key)
             }
         }
+
+        solana_accounts.insert(*operator.key, operator.info);
+        if let Some(system) = system_program {
+            solana_accounts.insert(*system.key, system.into());
+        }
+
 
         let mut ethereum_accounts = BTreeMap::new();
         for account_info in accounts {
@@ -41,7 +52,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let account = if let Some(code_account_key) = ether_account.code_account {
                 debug_print!("Contract Account {}", ether_address);
 
-                let code_account = solana_accounts[&code_account_key];
+                let code_account = &solana_accounts[&code_account_key];
                 let ether_contract = EthereumContract::from_account(program_id, code_account)?;
                 Account::Contract(ether_account, ether_contract)
             } else {
@@ -51,20 +62,14 @@ impl<'a> ProgramAccountStorage<'a> {
             ethereum_accounts.insert(ether_address, account);
         }
 
-        let token_program = solana_accounts.get(&spl_token::ID)
-            .map(|info| program::Token::from_account(info))
-            .transpose()?;
-
 
         Ok(Self{
-            token_mint,
             program_id,
+            operator: operator.key,
             clock: Clock::get()?,
-            token_program,
             solana_accounts,
             ethereum_accounts,
             empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
-            chain_id,
         })
     }
 
@@ -99,13 +104,11 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn ethereum_account_mut(&mut self, address: &H160) -> Option<&mut EthereumAccount<'a>> {
-        self.panic_if_account_not_exists(address);
-
+    pub fn ethereum_account_mut(&mut self, address: &H160) -> &mut EthereumAccount<'a> {
         #[allow(clippy::match_same_arms)]
-        match self.ethereum_accounts.get_mut(address)? {
-            Account::User(ref mut account) => Some(account),
-            Account::Contract(ref mut account, _) => Some(account),
+        match self.ethereum_accounts.get_mut(address).unwrap() { // mutable accounts always present
+            Account::User(ref mut account) => account,
+            Account::Contract(ref mut account, _) => account,
         }
     }
 
@@ -118,12 +121,10 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn ethereum_contract_mut(&mut self, address: &H160) -> Option<&mut EthereumContract<'a>> {
-        self.panic_if_account_not_exists(address);
-
-        match self.ethereum_accounts.get_mut(address)? {
-            Account::User(_) => None,
-            Account::Contract(_, ref mut contract) => Some(contract),
+    pub fn ethereum_contract_mut(&mut self, address: &H160) -> &mut EthereumContract<'a> {
+        match self.ethereum_accounts.get_mut(address).unwrap() {
+            Account::User(_) => panic!("Contract account is not created"),
+            Account::Contract(_, ref mut contract) => contract,
         }
     }
 

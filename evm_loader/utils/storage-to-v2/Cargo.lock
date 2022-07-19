@@ -3146,6 +3146,7 @@ dependencies = [
  "lazy_static",
  "remove_dir_all",
  "reqwest",
+ "rustc-hash",
  "serde",
  "serde_derive",
  "serde_json",
