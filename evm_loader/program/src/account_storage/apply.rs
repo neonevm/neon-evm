@@ -69,7 +69,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     account.balance -= value;
                 },
                 Action::EvmLog { address, topics, data } => {
-                    neon_program.on_event(address, topics, data)?;
+                    neon_program.on_event(address, &topics, &data)?;
                 },
                 Action::EvmSetStorage { address, key, value } => {
                     storage.entry(address).or_default().push((key, value));
