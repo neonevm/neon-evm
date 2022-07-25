@@ -95,7 +95,7 @@ impl<'a> Extension<'a> {
         size_of::<U256>() * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize;
 
     #[must_use]
-    pub fn size_needed(code_size: usize) -> usize {
+    pub fn size_needed_v3(code_size: usize) -> usize {
         if code_size == 0 {
             return 0;
         }

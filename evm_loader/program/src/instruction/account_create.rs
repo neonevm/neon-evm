@@ -57,7 +57,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u
         &accounts.operator,
         accounts.ether_account,
         program_seeds,
-        EthereumAccount::SIZE + ether_contract::Extension::size_needed(code_size),
+        EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code_size),
     )?;
     
     EthereumAccount::init(

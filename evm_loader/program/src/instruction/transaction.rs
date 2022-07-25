@@ -163,8 +163,8 @@ fn finalize<'a>(
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    // The only place where checked math is requiered.
-    // Saturating math should be used everywhere else for gas calculation
+    // The only place where checked math is required.
+    // Saturating math should be used everywhere else for gas calculation.
     let total_used_gas = storage.gas_used_and_paid.checked_add(used_gas);
 
     // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas

@@ -198,7 +198,7 @@ impl<'a> EmulatorAccountStorage<'a> {
 
                     let mut accounts = self.accounts.borrow_mut();
                     accounts.entry(address).and_modify(|a| {
-                        a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed(code.len());
+                        a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len());
                     });
                 },
                 Action::EvmSelfDestruct { address } => {

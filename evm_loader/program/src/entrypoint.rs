@@ -38,9 +38,6 @@ fn process_instruction<'a>(
         EvmInstruction::Deposit => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
-        EvmInstruction::UpdateValidsTable => {
-            instruction::update_valids_table::process(program_id, accounts, instruction)
-        }
         EvmInstruction::WriteHolder => {
             instruction::transaction_write_to_holder::process(program_id, accounts, instruction)
         }

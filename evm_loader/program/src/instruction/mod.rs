@@ -17,7 +17,7 @@ pub enum EvmInstruction {
 
     /// Deprecated: Create ethereum account
     #[deprecated(note = "Instruction not supported")]
-    CreateAccount,
+    CreateAccountV01,
 
     /// Deprecated: Create ethereum account with seed
     #[deprecated(note = "Instruction not supported")]
@@ -106,10 +106,11 @@ pub enum EvmInstruction {
     ///   1. \[SIGNER\] Signer for Ether account
     WriteHolder,
 
-    /// Recompute Valids Table
+    /// Deprecated: recompute Valids Table
     ///
     /// # Account references
     ///   0. \[WRITE\] Code account
+    #[deprecated(note = "Instruction not supported")]
     UpdateValidsTable,
 
     /// Deprecated: Create Ethereum account V2
@@ -131,24 +132,25 @@ pub enum EvmInstruction {
 
     /// Deprecated: Migrates Ethereum account's internal structure from v1 to current.
     #[deprecated(note = "Instruction not supported")]
-    MigrateAccount,
+    Migrate01AccountFromV1ToV2,
 
     /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
     ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
 
     /// Deprecated: Writes value to Ethereum account's distributed practically infinite storage.
     #[deprecated(note = "Instruction not supported")]
-    WriteValueToDistributedStorage,
+    Migrate02ContractFromV1ToV2WriteValueToDistributedStorage,
 
     /// Deprecated: Converts data account from V1 (HAMT) to V2 (distributed storage).
     #[deprecated(note = "Instruction not supported")]
-    ConvertDataAccountFromV1ToV2,
+    Migrate02ContractFromV1ToV2ConvertDataAccount,
 
     /// Create Ethereum account
     /// # Account references
     ///   0. [WRITE, SIGNER] Funding account
     ///   1. [] System Program
     ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
+    // TODO: Remove:
     CreateAccountV03,
 }
 
@@ -159,7 +161,7 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            0x02 => Self::CreateAccount, // deprecated
+            0x02 => Self::CreateAccountV01, // deprecated
             0x05 => Self::CallFromRawEthereumTX,
             0x06 => Self::OnReturn,
             0x07 => Self::OnEvent,
@@ -177,13 +179,14 @@ impl EvmInstruction {
             0x14 => Self::ContinueV03,
             0x15 => Self::CancelWithNonce,
             0x16 => Self::ExecuteTrxFromAccountDataIterativeV03,
-            0x17 => Self::UpdateValidsTable,
+            0x17 => Self::UpdateValidsTable, // deprecated
             0x18 => Self::CreateAccountV02, // deprecated
             0x19 => Self::Deposit,
-            0x1a => Self::MigrateAccount, // deprecated
+            0x1a => Self::Migrate01AccountFromV1ToV2, // deprecated
             0x1b => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
-            0x1c => Self::WriteValueToDistributedStorage, // deprecated
-            0x1d => Self::ConvertDataAccountFromV1ToV2, // deprecated
+            0x1c => Self::Migrate02ContractFromV1ToV2WriteValueToDistributedStorage, // deprecated
+            0x1d => Self::Migrate02ContractFromV1ToV2ConvertDataAccount, // deprecated
+            // TODO: Remove:
             0x1e => Self::CreateAccountV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
@@ -205,5 +208,4 @@ pub mod transaction_continue;
 pub mod transaction_step_from_instruction;
 pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
-pub mod update_valids_table;
 pub mod transaction;

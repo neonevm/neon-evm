@@ -170,7 +170,7 @@ impl<'a> ProgramAccountStorage<'a> {
             solana_program::msg!("deploy_contract: 4");
 
             let /*mut*/ cur_len = account.info.data_len();
-            let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed(code.len());
+            let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len());
 
             let rent = Rent::get()?;
             solana_program::msg!("deploy_contract: 5");
