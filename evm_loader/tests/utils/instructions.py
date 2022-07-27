@@ -47,10 +47,8 @@ class TransactionWithComputeBudget(Transaction):
             self.instructions.append(ComputeBudget.request_heap_frame(heap_frame))
 
 
-def make_CreateAccountV03(operator: Keypair, contract_address: PublicKey, contract_eth_address: bytes, nonce: int,
-                          code_size: int = 0):
-    d = bytes.fromhex('1E') + CREATE_ACCOUNT_LAYOUT.build(
-        dict(ether=contract_eth_address, nonce=nonce, code_size=code_size))
+def make_CreateAccountV02(operator: Keypair, contract_address: PublicKey, contract_eth_address: bytes, nonce: int):
+    d = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=contract_eth_address, nonce=nonce))
 
     accounts = [
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=False),

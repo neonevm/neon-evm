@@ -14,7 +14,7 @@ from ..solana_utils import EVM_LOADER, solana_client, \
     wait_confirm_transaction
 from .storage import create_storage_account, create_holder_account
 from ..eth_tx_utils import make_instruction_data_from_tx
-from .instructions import TransactionWithComputeBudget, make_WriteHolder, make_CreateAccountV03, make_ExecuteTrxFromAccountDataIterativeOrContinue
+from .instructions import TransactionWithComputeBudget, make_WriteHolder, make_CreateAccountV02, make_ExecuteTrxFromAccountDataIterativeOrContinue
 from ..conftest import Caller, TreasuryPool
 from .ethereum import create_contract_addresses, Contract
 
@@ -58,10 +58,10 @@ def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pa
     return len(contract_code)
 
 
-def create_contract_account(code_size: int, contract: Contract, operator: Keypair):
+def create_contract_account(contract: Contract, operator: Keypair):
     print("Creating contract accounts")
     trx = Transaction()
-    trx.add(make_CreateAccountV03(operator, contract.solana_address, contract.eth_address, contract.nonce, code_size))
+    trx.add(make_CreateAccountV02(operator, contract.solana_address, contract.eth_address, contract.nonce))
     receipt = send_transaction(solana_client, trx, operator)["result"]
     return receipt
 
@@ -94,8 +94,8 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
     storage_account = create_storage_account(operator)
     contract = create_contract_addresses(user, evm_loader)
     holder_acc, holder_id = create_holder_account(operator, random.randint(0, 100))
-    code_size = write_transaction_to_holder_account(user, contract_path, holder_acc, holder_id, operator)
-    create_contract_account(code_size, contract, operator)
+    write_transaction_to_holder_account(user, contract_path, holder_acc, holder_id, operator)
+    create_contract_account(contract, operator)
 
     contract_deployed = False
     while not contract_deployed:

@@ -35,7 +35,7 @@ fn process_instruction<'a>(
         EvmInstruction::ERC20CreateTokenAccount => {
             instruction::erc20_account_create::process(program_id, accounts, instruction)
         }
-        EvmInstruction::Deposit => {
+        EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
         EvmInstruction::WriteHolder => {
@@ -52,23 +52,20 @@ fn process_instruction<'a>(
         }
         EvmInstruction::ExecuteTrxFromAccountDataIterativeV03 => {
             instruction::transaction_begin_from_account::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::ContinueV03 => {
             instruction::transaction_continue::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::PartialCallOrContinueFromRawEthereumTX => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
-        },
-        EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
-        EvmInstruction::CreateAccountV03 => {
-            instruction::account_create::process(program_id, accounts, instruction)
         }
+        EvmInstruction::CreateAccountV02 | EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 

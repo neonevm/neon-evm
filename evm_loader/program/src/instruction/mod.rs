@@ -114,7 +114,7 @@ pub enum EvmInstruction {
     UpdateValidsTable,
 
     /// Deprecated: Create Ethereum account V2
-    #[deprecated(note = "Instruction not supported")]
+    /// Note: Account creation now performed implicitly, this instruction is no-op.
     CreateAccountV02,
 
     /// Deposits NEON tokens to a Ether account.
@@ -127,8 +127,9 @@ pub enum EvmInstruction {
     ///   1. `[writable]` NEON token pool (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
     ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
-    ///   5. `[]` SPL Token program id.
-    Deposit,
+    ///   4. `[]` SPL Token program id.
+    #[deprecated(note = "Use `DepositV03` instead")]
+    DepositV02,
 
     /// Deprecated: Migrates Ethereum account's internal structure from v1 to current.
     #[deprecated(note = "Instruction not supported")]
@@ -145,13 +146,20 @@ pub enum EvmInstruction {
     #[deprecated(note = "Instruction not supported")]
     Migrate02ContractFromV1ToV2ConvertDataAccount,
 
-    /// Create Ethereum account
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [] System Program
-    ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
-    // TODO: Remove:
-    CreateAccountV03,
+    /// Deposits NEON tokens to a Ether account (V3).
+    /// Requires previously executed SPL-Token.Approve which
+    /// delegates the deposit amount to the NEON destination account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   0. `[writable]` NEON token source account.
+    ///   1. `[writable]` NEON token pool (destination) account.
+    ///   2. `[writable]` Ether account to store balance of NEONs.
+    ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
+    ///   4. `[]` SPL Token program id.
+    ///   5. `[writeable,signer]` Funding account (must be a system account).
+    ///   6. `[]` System program.
+    DepositV03,
 }
 
 impl EvmInstruction {
@@ -180,14 +188,13 @@ impl EvmInstruction {
             0x15 => Self::CancelWithNonce,
             0x16 => Self::ExecuteTrxFromAccountDataIterativeV03,
             0x17 => Self::UpdateValidsTable, // deprecated
-            0x18 => Self::CreateAccountV02, // deprecated
-            0x19 => Self::Deposit,
+            0x18 => Self::CreateAccountV02, // deprecated, no-op
+            0x19 => Self::DepositV02, // deprecated
             0x1a => Self::Migrate01AccountFromV1ToV2, // deprecated
             0x1b => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
             0x1c => Self::Migrate02ContractFromV1ToV2WriteValueToDistributedStorage, // deprecated
             0x1d => Self::Migrate02ContractFromV1ToV2ConvertDataAccount, // deprecated
-            // TODO: Remove:
-            0x1e => Self::CreateAccountV03,
+            0x1e => Self::DepositV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
