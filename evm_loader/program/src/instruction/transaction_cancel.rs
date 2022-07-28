@@ -45,6 +45,7 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         &accounts.operator,
+        None,
         accounts.remaining_accounts,
     )?;
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller);

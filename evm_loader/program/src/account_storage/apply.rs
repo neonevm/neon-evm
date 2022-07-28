@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use std::ops::Deref;
 use evm::{H160, U256};
 use solana_program::instruction::Instruction;
 use solana_program::{
@@ -70,7 +69,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     account.balance -= value;
                 },
                 Action::EvmLog { address, topics, data } => {
-                    neon_program.on_event(address, topics, data)?;
+                    neon_program.on_event(address, &topics, &data)?;
                 },
                 Action::EvmSetStorage { address, key, value } => {
                     storage.entry(address).or_default().push((key, value));
@@ -96,21 +95,10 @@ impl<'a> ProgramAccountStorage<'a> {
                     let accounts: Vec<_> = accounts.into_iter().map(AccountMeta::into_solana_meta).collect();
 
                     let mut accounts_info = Vec::with_capacity(accounts.len() + 1);
-                    let mut use_account_info = |key| match key {
-                        key if key == operator.key => {
-                            accounts_info.push(operator.deref().clone());
-                        },
-                        key if key == system_program.key => {
-                            accounts_info.push(system_program.deref().clone());
-                        },
-                        key => {
-                            accounts_info.push(self.solana_accounts[key].clone());
-                        }
-                    };
 
-                    use_account_info(&program_id);
+                    accounts_info.push(self.solana_accounts[&program_id].clone());
                     for meta in &accounts {
-                        use_account_info(&meta.pubkey);
+                        accounts_info.push(self.solana_accounts[&meta.pubkey].clone());
                     }
 
                     let instruction = Instruction { program_id, accounts, data: instruction };

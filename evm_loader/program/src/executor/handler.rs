@@ -2,7 +2,7 @@ use evm::{H160, ExitReason, U256, Transfer, ExitError, CONFIG, Handler, H256, Ca
 use solana_program::{entrypoint::ProgramResult, program_error::ProgramError};
 
 use crate::{
-    account_storage::AccountStorage, precompile::call_precompile
+    account_storage::AccountStorage, precompile::{call_precompile, is_precompile_address}
 };
 
 use super::{state::ExecutorState, gasometer::Gasometer};
@@ -158,6 +158,10 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn code_size(&self, address: H160) -> U256 {
+        if is_precompile_address(&address) {
+            return U256::one();
+        }
+
         self.state.code_size(&address)
     }
 

@@ -26,10 +26,12 @@ pub enum EvmInstruction {
     /// Call Ethereum-contract action from raw transaction data
     CallFromRawEthereumTX,
 
-    /// Called action return
+    /// Deprecated: Called action return
+    #[deprecated(note = "Instruction not supported")]
     OnReturn,
 
-    /// Called action event
+    /// Deprecated: Called action event
+    #[deprecated(note = "Instruction not supported")]
     OnEvent,
 
     /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
@@ -168,8 +170,8 @@ impl EvmInstruction {
         Ok(match tag {
             2 => Self::CreateAccount, // deprecated
             5 => Self::CallFromRawEthereumTX,
-            6 => Self::OnReturn,
-            7 => Self::OnEvent,
+            6 => Self::OnReturn, // deprecated
+            7 => Self::OnEvent, // deprecated
             9 => Self::PartialCallFromRawEthereumTX, // deprecated
             10 => Self::Continue, // deprecated
             11 => Self::ExecuteTrxFromAccountDataIterative, // deprecated
