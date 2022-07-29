@@ -2,6 +2,7 @@ use std::convert::From;
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
+use solana_program::log::sol_log_data;
 use solana_program::{
     program::{invoke, invoke_signed}, system_instruction,
     rent::Rent, sysvar::Sysvar
@@ -9,8 +10,7 @@ use solana_program::{
 use super::{Operator, EthereumAccount, sysvar, token};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
-use solana_program::entrypoint::ProgramResult;
-use solana_program::instruction::Instruction;
+
 use crate::account::ACCOUNT_SEED_VERSION;
 
 
@@ -25,12 +25,13 @@ impl<'a> Neon<'a> {
         Ok(Self ( info ))
     }
 
-    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8]) -> ProgramResult
+    #[allow(clippy::unused_self)]
+    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8])
     {
         let (exit_message, exit_status) = match exit_reason {
             ExitReason::Succeed(success_code) => {
                 match success_code {
-                    ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11)},
+                    ExitSucceed::Stopped => {("ExitSucceed: Machine encountered an explict stop.", 0x11_u8)},
                     ExitSucceed::Returned => {("ExitSucceed: Machine encountered an explict return.", 0x12)},
                     ExitSucceed::Suicided => {("ExitSucceed: Machine encountered an explict suicide.", 0x13)},
                 }
@@ -69,49 +70,46 @@ impl<'a> Neon<'a> {
         debug_print!("result {}", &hex::encode(&result));
 
         let used_gas = if used_gas > U256::from(u64::MAX) { // Convert to u64 to not break ABI
-            solana_program::msg!("Error: used gas {} exceeds u64::max", used_gas);
+            solana_program::msg!("Error: used gas {} exceeds u64::MAX", used_gas);
             u64::MAX
         } else {
             used_gas.as_u64()
         };
 
-
-        let instruction = {
-            use core::mem::size_of;
-            let capacity = 2 * size_of::<u8>() + size_of::<u64>() + result.len();
-
-            let mut data = Vec::with_capacity(capacity);
-            data.push(6_u8);
-            data.push(exit_status);
-            data.extend(&used_gas.to_le_bytes());
-            data.extend(result);
-
-            Instruction { program_id: *self.0.key, accounts: Vec::new(), data }
-        };
-        invoke(&instruction, &[ self.0.clone() ])
+        let mnemonic = b"RETURN";
+        let exit_status = exit_status.to_le_bytes();
+        let used_gas = used_gas.to_le_bytes();
+        let fields = [mnemonic.as_slice(),
+                      exit_status.as_slice(),
+                      used_gas.as_slice(),
+                      result];
+        sol_log_data(&fields);
     }
 
-    pub fn on_event(&self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> ProgramResult {
-        let instruction = {
-            use core::mem::size_of;
-            let capacity = size_of::<u8>()
-                + size_of::<H160>()  // address
-                + size_of::<usize>() // topics.len
-                + topics.len() * size_of::<H256>()
-                + data.len();
+    #[allow(clippy::unused_self)]
+    pub fn on_event(&self, address: H160, topics: &[H256], data: &[u8]) -> Result<(), ProgramError> {
+        assert!(topics.len() < 5);
+        #[allow(clippy::cast_possible_truncation)]
+        let nt = topics.len() as u8;
+        let count_topics = topics.len().to_le_bytes();
+        let empty = [] as [u8; 0];
 
-            let mut buffer = Vec::with_capacity(capacity);
-            buffer.push(7_u8);
-            buffer.extend_from_slice(address.as_bytes());
-            buffer.extend_from_slice(&topics.len().to_le_bytes());
-            for topic in topics {
-                buffer.extend_from_slice(topic.as_bytes());
-            }
-            buffer.extend(data);
+        let mnemonic = [b'L', b'O', b'G', b'0' + nt];
+        let t1 = if nt < 1 { &empty } else { topics[0].as_bytes() };
+        let t2 = if nt < 2 { &empty } else { topics[1].as_bytes() };
+        let t3 = if nt < 3 { &empty } else { topics[2].as_bytes() };
+        let t4 = if nt < 4 { &empty } else { topics[3].as_bytes() };
+        let fields = [mnemonic.as_slice(),
+                      address.as_bytes(),
+                      count_topics.as_slice(),
+                      t1,
+                      t2,
+                      t3,
+                      t4,
+                      data];
+        sol_log_data(&fields);
 
-            Instruction { program_id: *self.0.key, accounts: Vec::new(), data: buffer }
-        };
-        invoke(&instruction, &[ self.0.clone() ])
+        Ok(())
     }
 }
 

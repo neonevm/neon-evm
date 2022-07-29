@@ -136,7 +136,7 @@ fn execute<'a>(
         account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
     }
 
-    accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
+    accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
     
     Ok(())
 }
