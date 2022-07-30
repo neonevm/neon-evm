@@ -193,12 +193,12 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     self.add_ethereum_account(&address, true);
                 },
-                Action::EvmSetCode { address, code, .. } => {
+                Action::EvmSetCode { address, code, valids } => {
                     self.add_ethereum_account(&address, true);
 
                     let mut accounts = self.accounts.borrow_mut();
                     accounts.entry(address).and_modify(|a| {
-                        a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len());
+                        a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len(), Some(valids.len()));
                     });
                 },
                 Action::EvmSelfDestruct { address } => {
@@ -451,13 +451,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             executable: account.executable,
             rent_epoch: account.rent_epoch,
         })
-    }
-
-    fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
-        info!("solana_address {}", address);
-
-        let seeds: &[&[u8]] = &[ &[ACCOUNT_SEED_VERSION], address.as_bytes() ];
-        Pubkey::find_program_address(seeds, self.program_id())
     }
 }
 

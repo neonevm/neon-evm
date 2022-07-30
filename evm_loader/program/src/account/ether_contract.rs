@@ -95,12 +95,14 @@ impl<'a> Extension<'a> {
         size_of::<U256>() * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize;
 
     #[must_use]
-    pub fn size_needed_v3(code_size: usize) -> usize {
+    pub fn size_needed_v3(code_size: usize, valids_size: Option<usize>) -> usize {
         if code_size == 0 {
             return 0;
         }
 
-        code_size + Valids::size_needed(code_size) + Self::INTERNAL_STORAGE_SIZE
+        code_size +
+            valids_size.unwrap_or_else(|| Valids::size_needed(code_size)) +
+            Self::INTERNAL_STORAGE_SIZE
     }
 
     #[must_use]

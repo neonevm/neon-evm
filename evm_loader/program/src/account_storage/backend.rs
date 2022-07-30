@@ -4,7 +4,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{EthereumStorage, ACCOUNT_SEED_VERSION, EthereumAccount, ether_contract};
+use crate::account::{EthereumStorage, EthereumAccount, ether_contract};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
@@ -133,7 +133,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
         match self.ethereum_accounts.get(address) {
             Some(a) => (*a.info.key, a.bump_seed),
-            None => Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id)
+            None => self.calc_solana_address(address),
         }
     }
 

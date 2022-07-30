@@ -33,7 +33,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if self.ethereum_accounts.contains_key(&operator.address) {
-            self.transfer_neon_tokens(origin, operator.address, value)?;
+            self.transfer_neon_tokens(&origin, &operator.address, value)?;
             core::mem::drop(operator);
         } else {
             let origin_account = self.ethereum_account_mut(&origin);
@@ -61,7 +61,7 @@ impl<'a> ProgramAccountStorage<'a> {
         for action in actions {
             match action {
                 Action::NeonTransfer { source, target, value } => {
-                    self.transfer_neon_tokens(source, target, value)?;
+                    self.transfer_neon_tokens(&source, &target, value)?;
                 },
                 Action::NeonWithdraw { source, value } => {
                     let account = self.ethereum_account_mut(&source);
@@ -170,7 +170,7 @@ impl<'a> ProgramAccountStorage<'a> {
             solana_program::msg!("deploy_contract: 4");
 
             let /*mut*/ cur_len = account.info.data_len();
-            let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len());
+            let new_len = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len(), Some(valids.len()));
 
             let rent = Rent::get()?;
             solana_program::msg!("deploy_contract: 5");
@@ -286,26 +286,26 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
 
-    fn transfer_neon_tokens(&mut self, source: H160, target: H160, value: U256) -> ProgramResult {
+    fn transfer_neon_tokens(&mut self, source: &H160, target: &H160, value: U256) -> ProgramResult {
         solana_program::msg!("Transfer {} NEONs from {} to {}", value, source, target);
 
         if source == target {
             return Ok(())
         }
 
-        if !self.ethereum_accounts.contains_key(&source) {
+        if !self.ethereum_accounts.contains_key(source) {
             return Err!(ProgramError::InvalidArgument; "Account {} - expect initialized", source);
         }
-        if !self.ethereum_accounts.contains_key(&target) {
+        if !self.ethereum_accounts.contains_key(target) {
             return Err!(ProgramError::InvalidArgument; "Account {} - expect initialized", source);
         }
 
-        if self.balance(&source) < value {
+        if self.balance(source) < value {
             return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, required = {}", source, value)
         }
 
-        self.ethereum_account_mut(&source).balance -= value;
-        self.ethereum_account_mut(&target).balance += value;
+        self.ethereum_account_mut(source).balance -= value;
+        self.ethereum_account_mut(target).balance += value;
 
         Ok(())
     }

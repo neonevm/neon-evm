@@ -59,6 +59,7 @@ pub trait AccountStorage {
     fn valids(&self, address: &H160) -> Vec<u8>;
     /// Get contract generation
     fn generation(&self, address: &H160) -> u32;
+
     /// Get storage account address and bump seed
     fn get_storage_address(&self, address: &H160, index: &U256) -> (Pubkey, u8) {
         let generation_bytes = self.generation(address).to_le_bytes();
@@ -69,6 +70,7 @@ pub trait AccountStorage {
         let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes];
         Pubkey::find_program_address(seeds, self.program_id())
     }
+
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256;
 
@@ -78,8 +80,16 @@ pub trait AccountStorage {
     /// Clone part of existing solana account
     fn clone_solana_account_partial(&self, address: &Pubkey, offset: usize, len: usize) -> Option<OwnedAccountInfoPartial>;
 
-    /// Account solana address and bump seed
-    fn solana_address(&self, address: &H160) -> (Pubkey, u8);
+    /// Calculate account solana address and bump seed
+    fn calc_solana_address(&self, address: &H160) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id())
+    }
+
+    /// Resolve account solana address and bump seed
+    fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
+        self.calc_solana_address(address)
+    }
+
     /// Solana account data len
     fn solana_account_space(&self, address: &H160) -> usize;
 }

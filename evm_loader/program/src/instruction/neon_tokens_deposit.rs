@@ -10,6 +10,7 @@ use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
+use crate::account::program::EtherAccountParams;
 
 struct Accounts<'a> {
     source: token::State<'a>,
@@ -149,43 +150,28 @@ fn execute<'a>(
     let deposit = U256::from(amount) * U256::from(10_u64.pow(additional_decimals));
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
-        let program_seeds = &[
-            &[ACCOUNT_SEED_VERSION],
-            ethereum_address.as_bytes(),
-            &[ethereum_bump_seed],
-        ];
-        accounts.system_program.create_pda_account(
+        return accounts.system_program.create_account(
             program_id,
             &accounts.operator,
-            accounts.ethereum_account,
-            program_seeds,
-            EthereumAccount::SIZE,
-        )?;
-
-        EthereumAccount::init(
-            accounts.ethereum_account,
-            crate::account::ether_account::Data {
+            &EtherAccountParams {
                 address: ethereum_address,
+                info: accounts.ethereum_account,
                 bump_seed: ethereum_bump_seed,
-                trx_count: 0,
+                space: EthereumAccount::SIZE,
                 balance: deposit,
-                rw_blocked: false,
-                ro_blocked_count: 0,
-                generation: 0,
-                code_size: 0,
             },
-        )?;
-    } else {
-        let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
-        ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
-            .ok_or_else(||
-                E!(
-                    ProgramError::InvalidArgument;
-                    "Account {} - balance overflow",
-                    ethereum_address
-                )
-            )?;
+        );
     }
+
+    let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
+    ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
+        .ok_or_else(||
+            E!(
+                ProgramError::InvalidArgument;
+                "Account {} - balance overflow",
+                ethereum_address
+            )
+        )?;
 
     Ok(())
 }

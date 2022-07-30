@@ -7,8 +7,8 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ACCOUNT_SEED_VERSION, ether_contract, EthereumAccount, Operator, program};
-use crate::account_storage::ProgramAccountStorage;
+use crate::account::{ether_contract, EthereumAccount, Operator, program};
+use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -70,7 +70,7 @@ impl<'a> ProgramAccountStorage<'a> {
             return;
         }
 
-        let (solana_address, _) = Pubkey::find_program_address(&[&[ACCOUNT_SEED_VERSION], address.as_bytes()], self.program_id);
+        let (solana_address, _) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
             assert!(system_program::check_id(account.owner), "Empty ethereum account {} must belong to the system program", address);
 
@@ -79,6 +79,10 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         panic!("Ethereum account {} must be present in the transaction", address);
+    }
+
+    pub fn solana_account(&self, solana_address: &Pubkey) -> Option<&'a AccountInfo<'a>> {
+        self.solana_accounts.get(solana_address).copied()
     }
 
     pub fn ethereum_account(&self, address: &H160) -> Option<&EthereumAccount<'a>> {
