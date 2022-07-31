@@ -277,7 +277,7 @@ impl Packable for Data {
         }
     }
 
-    /// Serialize `AccountV2` struct into given destination
+    /// Serialize `AccountV3` struct into given destination
     fn pack(&self, dst: &mut [u8]) {
         let data = array_mut_ref![dst, 0, Data::SIZE];
         #[allow(clippy::ptr_offset_with_cast)]
