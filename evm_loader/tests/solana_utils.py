@@ -20,6 +20,7 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed, Processed
 from solana.rpc.types import TxOpts
+from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
 from spl.token.constants import TOKEN_PROGRAM_ID
@@ -28,7 +29,7 @@ from spl.token.instructions import get_associated_token_address, approve, Approv
 from .utils.instructions import TransactionWithComputeBudget
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
-from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
+from .utils.layouts import ACCOUNT_INFO_LAYOUT
 from .utils.types import Caller
 
 
@@ -308,13 +309,15 @@ class EvmLoader:
         )))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex("19"),
+            data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=user_solana_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=True),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
             ]
         ))
         result = send_transaction(solana_client, trx, operator)
@@ -331,30 +334,30 @@ class EvmLoader:
         result = json.loads(output.splitlines()[-1])
         return result
 
-    def create_ether_account(self, ether):
-        (trx, sol) = self.create_ether_account_trx(ether)
-        signer = Keypair.from_secret_key(self.acc.get_acc().secret_key())
-        result = send_transaction(solana_client, trx, signer)
-        return sol
-
-    def ether2seed(self, ether):
+    @staticmethod
+    def ether2hex(ether):
         if isinstance(ether, str):
             if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-        seed = b58encode(ACCOUNT_SEED_VERSION + bytes.fromhex(ether)).decode('utf8')
+                return ether[2:]
+            return ether
+        return ether.hex()
+
+    @staticmethod
+    def ether2bytes(ether):
+        if isinstance(ether, str):
+            if ether.startswith('0x'):
+                return bytes.fromhex(ether[2:])
+            return bytes.fromhex(ether)
+        return ether
+
+    def ether2seed(self, ether):
+        seed = b58encode(ACCOUNT_SEED_VERSION + self.ether2bytes(ether)).decode('utf8')
         acc = account_with_seed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
-        print('ether2program: {} {} => {}'.format(ether, 255, acc))
+        print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
         return acc, 255
 
     def ether2program(self, ether):
-        if isinstance(ether, str):
-            if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
+        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
         return items[0], int(items[1])
 
@@ -376,29 +379,6 @@ class EvmLoader:
             raise Exception("Invalid owner for account {}".format(program))
         else:
             return program[0], ether, code[0]
-
-    def create_ether_account_trx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
-        if isinstance(ether, str):
-            if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-
-        (sol, nonce) = self.ether2program(ether)
-        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
-
-        base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
-        trx = TransactionWithComputeBudget()
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=data,
-            keys=[
-                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
-                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-            ]))
-        return trx, sol
 
 
 def get_solana_balance(account):
@@ -740,7 +720,7 @@ def make_new_user(evm_loader: EvmLoader):
 
     if get_solana_balance(caller) == 0:
         print(f"Create account for user {caller}")
-        evm_loader.create_ether_account(caller_ether)
+        evm_loader.airdrop_neon_tokens(caller_ether, 1)
 
     print('Account solana address:', key.public_key)
     print(f'Account ether address: {caller_ether.hex()} {caller_nonce}', )

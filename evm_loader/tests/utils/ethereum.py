@@ -19,7 +19,7 @@ class Contract:
     seed: str
 
 
-def create_contract_addresses(user: Caller, evm_loader: EvmLoader) -> Contract:
+def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     # Create contract address from (caller_address, nonce)
     user_nonce = get_transaction_count(solana_client, user.solana_account_address)
     contract_eth_address = keccak_256(pack([user.eth_address, user_nonce or None])).digest()[-20:]

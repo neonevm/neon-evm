@@ -38,12 +38,7 @@ def operator_keypair(request, evm_loader) -> Keypair:
     """
     with open(pathlib.Path(request.config.getoption("--operator-key")).expanduser(), "r") as key:
         account = Keypair(json.load(key)[:32])
-    caller_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
-    caller, caller_nonce = evm_loader.ether2program(caller_ether)
 
-    if get_solana_balance(caller) == 0:
-        print(f"Create eth account for operator {caller}")
-        evm_loader.create_ether_account(caller_ether)
     return account
 
 

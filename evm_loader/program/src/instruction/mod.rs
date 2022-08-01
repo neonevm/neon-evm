@@ -57,7 +57,7 @@ pub enum EvmInstruction {
     /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
     ExecuteTrxFromAccountDataIterativeV03,
 
-    /// Cancel iterative transaction execution
+    /// Deprecated: cancel iterative transaction execution
     #[deprecated(note = "Instruction not supported")]
     Cancel,
 
@@ -107,9 +107,6 @@ pub enum EvmInstruction {
     WriteHolder,
 
     /// Deprecated: recompute Valids Table
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] Code account
     #[deprecated(note = "Instruction not supported")]
     UpdateValidsTable,
 
@@ -117,32 +114,22 @@ pub enum EvmInstruction {
     /// Note: Account creation now performed implicitly, this instruction is no-op.
     CreateAccountV02,
 
-    /// Deposits NEON tokens to a Ether account.
-    /// Requires previously executed SPL-Token.Approve which
-    /// delegates the deposit amount to the NEON destination account.
-    ///
-    /// Accounts expected by this instruction:
-    ///
-    ///   0. `[writable]` NEON token source account.
-    ///   1. `[writable]` NEON token pool (destination) account.
-    ///   2. `[writable]` Ether account to store balance of NEONs.
-    ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
-    ///   4. `[]` SPL Token program id.
+    /// Deprecated: deposits NEON tokens to a Ether account.
     #[deprecated(note = "Use `DepositV03` instead")]
     DepositV02,
 
-    /// Deprecated: Migrates Ethereum account's internal structure from v1 to current.
+    /// Deprecated: migrates Ethereum account's internal structure from v1 to current.
     #[deprecated(note = "Instruction not supported")]
     Migrate01AccountFromV1ToV2,
 
     /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
     ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
 
-    /// Deprecated: Writes value to Ethereum account's distributed practically infinite storage.
+    /// Deprecated: writes value to Ethereum account's distributed practically infinite storage.
     #[deprecated(note = "Instruction not supported")]
     Migrate02ContractFromV1ToV2WriteValueToDistributedStorage,
 
-    /// Deprecated: Converts data account from V1 (HAMT) to V2 (distributed storage).
+    /// Deprecated: converts data account from V1 (HAMT) to V2 (distributed storage).
     #[deprecated(note = "Instruction not supported")]
     Migrate02ContractFromV1ToV2ConvertDataAccount,
 

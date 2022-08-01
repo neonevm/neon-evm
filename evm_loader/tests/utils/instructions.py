@@ -7,7 +7,6 @@ from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 from eth_keys import keys as eth_keys
 
 from .constants import EVM_LOADER, SYSTEM_ADDRESS, SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS
-from .layouts import CREATE_ACCOUNT_LAYOUT
 
 
 DEFAULT_UNITS = 500 * 1000
@@ -47,21 +46,6 @@ class TransactionWithComputeBudget(Transaction):
             self.instructions.append(ComputeBudget.request_heap_frame(heap_frame))
 
 
-def make_CreateAccountV02(operator: Keypair, contract_address: PublicKey, contract_eth_address: bytes, nonce: int):
-    d = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=contract_eth_address, nonce=nonce))
-
-    accounts = [
-        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=False),
-        AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
-        AccountMeta(pubkey=contract_address, is_signer=False, is_writable=True),
-    ]
-
-    return TransactionInstruction(
-            program_id=EVM_LOADER,
-            data=d,
-            keys=accounts)
-
-
 def write_holder_layout(nonce, offset, data):
     return (bytes.fromhex('12') +
             nonce.to_bytes(8, byteorder='little') +
@@ -91,8 +75,7 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         treasury_buffer: bytes,
         step_count: int,
         additional_accounts: tp.List[PublicKey]):
-    code = 14
-    d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
+    d = bytes.fromhex("0E") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
     print("Holder: ", holder_address)
@@ -102,15 +85,15 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
     print("Operator ether: ", operator_ether.hex())
     print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
     accounts = [
-                AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
-                AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
-                # Neon EVM account
-                AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
-            ]
+        AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
+        AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+        AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        # Neon EVM account
+        AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+    ]
     for acc in additional_accounts:
         print("Additional acc ", acc)
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
@@ -131,8 +114,7 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         treasury_buffer: bytes,
         step_count: int,
         additional_accounts: tp.List[PublicKey]):
-    code = 13
-    d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
+    d = bytes.fromhex("0D") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
@@ -156,8 +138,7 @@ def make_PartialCallOrContinueFromRawEthereumTX(
 
 
 def make_CancelWithNonce(storage_address: PublicKey, operator: Keypair, nonce: int, additional_accounts: tp.List[PublicKey]):
-    code = 21
-    d = code.to_bytes(1, "little") + nonce.to_bytes(8, byteorder="little")
+    d = bytes.fromhex("15") + nonce.to_bytes(8, byteorder="little")
 
     accounts = [
         AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
