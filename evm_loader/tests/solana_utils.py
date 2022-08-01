@@ -307,7 +307,7 @@ class EvmLoader:
             owner=operator.public_key(),
             amount=amount * (10 ** 9),
         )))
-        trx.add(TransactionInstruction(
+        instruction = TransactionInstruction(
             program_id=self.loader_id,
             data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
             keys=[
@@ -319,7 +319,12 @@ class EvmLoader:
                 AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=True),
                 AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
             ]
-        ))
+        )
+        print("Deposit instruction keys:")
+        for key in instruction.keys:
+            print(f"  Key: {key}")
+
+        trx.add(instruction)
         result = send_transaction(solana_client, trx, operator)
         print("Airdrop transaction: ", result)
 
