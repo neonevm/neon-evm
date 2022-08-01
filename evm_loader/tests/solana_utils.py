@@ -313,11 +313,11 @@ class EvmLoader:
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=user_solana_address, is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(user_solana_address), is_signer=False, is_writable=True),
                 AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
                 AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
             ]
         ))
         result = send_transaction(solana_client, trx, operator)
@@ -335,7 +335,7 @@ class EvmLoader:
         return result
 
     @staticmethod
-    def ether2hex(ether):
+    def ether2hex(ether: Union[str, bytes]):
         if isinstance(ether, str):
             if ether.startswith('0x'):
                 return ether[2:]
@@ -343,20 +343,20 @@ class EvmLoader:
         return ether.hex()
 
     @staticmethod
-    def ether2bytes(ether):
+    def ether2bytes(ether: Union[str, bytes]):
         if isinstance(ether, str):
             if ether.startswith('0x'):
                 return bytes.fromhex(ether[2:])
             return bytes.fromhex(ether)
         return ether
 
-    def ether2seed(self, ether):
+    def ether2seed(self, ether: Union[str, bytes]):
         seed = b58encode(ACCOUNT_SEED_VERSION + self.ether2bytes(ether)).decode('utf8')
         acc = account_with_seed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
         print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
         return acc, 255
 
-    def ether2program(self, ether):
+    def ether2program(self, ether: Union[str, bytes]):
         output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
         return items[0], int(items[1])
