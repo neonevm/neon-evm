@@ -133,7 +133,7 @@ pub enum EvmInstruction {
     #[deprecated(note = "Instruction not supported")]
     Migrate02ContractFromV1ToV2ConvertDataAccount,
 
-    /// Deposits NEON tokens to a Ether account (V3).
+    /// Deposits NEON tokens to an Ether account (V3).
     /// Requires previously executed SPL-Token.Approve which
     /// delegates the deposit amount to the NEON destination account.
     ///

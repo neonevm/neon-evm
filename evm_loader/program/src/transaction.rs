@@ -161,9 +161,8 @@ pub fn verify_tx_signature(signature: &[u8; 65], unsigned_trx: &[u8]) -> Result<
 pub fn check_ethereum_transaction(
     account_storage: &ProgramAccountStorage,
     recovered_address: &H160,
-    transaction: &UnsignedTransaction
-) -> ProgramResult
-{
+    transaction: &UnsignedTransaction,
+) -> ProgramResult {
     let sender_account = account_storage.ethereum_account(recovered_address)
         .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - sender must be initialized account", recovered_address))?;
 
@@ -175,19 +174,6 @@ pub fn check_ethereum_transaction(
         if &U256::from(crate::config::CHAIN_ID) != chain_id {
             return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::config::CHAIN_ID);
         }
-    }
-
-    let contract_address: H160 = transaction.to.unwrap_or_else(|| {
-        let mut stream = rlp::RlpStream::new_list(2);
-        stream.append(recovered_address);
-        stream.append(&U256::from(transaction.nonce));
-        crate::utils::keccak256_h256(&stream.out()).into()
-    });
-    let contract_account = account_storage.ethereum_account(&contract_address)
-        .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", contract_address))?;
-
-    if transaction.to.is_some() && !transaction.call_data.is_empty() && contract_account.extension.is_none() {
-        return Err!(ProgramError::InvalidArgument; "Account {} - target must be contract account", contract_address);
     }
 
     Ok(())
