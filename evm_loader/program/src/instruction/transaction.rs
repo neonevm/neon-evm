@@ -164,7 +164,7 @@ fn preprocess_actions<'a>(
     system_program: &program::System<'a>,
     neon_program: &program::Neon<'a>,
     operator: &Operator<'a>,
-    account_storage: &ProgramAccountStorage<'a>,
+    account_storage: &mut ProgramAccountStorage<'a>,
     actions: &[Action],
 ) -> Result<bool, ProgramError> {
     let mut result = true;
@@ -199,6 +199,9 @@ fn preprocess_actions<'a>(
                     balance: U256::zero(),
                 },
             )?;
+
+            account_storage.update_ether_account(neon_program.key, solana_account)?;
+
             if space_needed > MAX_PERMITTED_DATA_INCREASE {
                 result = false;
             }
@@ -230,6 +233,8 @@ fn preprocess_actions<'a>(
                 }
 
                 solana_account.realloc(max_possible_space_per_instruction, false)?;
+
+                account_storage.update_ether_account(neon_program.key, solana_account)?;
             }
         }
     }

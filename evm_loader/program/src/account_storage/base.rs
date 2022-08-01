@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use evm::{H160};
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
+use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
@@ -58,6 +59,13 @@ impl<'a> ProgramAccountStorage<'a> {
             ethereum_accounts,
             empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
         })
+    }
+
+    pub fn update_ether_account(&mut self, program_id: &Pubkey, info: &'a AccountInfo<'a>) -> ProgramResult {
+        let ether_account = EthereumAccount::from_account(program_id, info)?;
+        self.ethereum_accounts.insert(ether_account.address, ether_account);
+
+        Ok(())
     }
 
     fn panic_if_account_not_exists(&self, address: &H160) {
