@@ -118,15 +118,15 @@ def make_PartialCallOrContinueFromRawEthereumTX(
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
-                AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_INSTRUCT_ADDRESS, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
-                AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
-                AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
-                # Neon EVM account
-                AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
-            ]
+        AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=SYS_INSTRUCT_ADDRESS, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
+        AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+        AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        # Neon EVM account
+        AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+    ]
     for acc in additional_accounts:
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
