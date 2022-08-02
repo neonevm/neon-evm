@@ -7,6 +7,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use solana_program::program::invoke_signed;
+use solana_program::program_option::COption;
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
@@ -102,12 +103,14 @@ fn validate(
         );
     }
 
-    if !accounts.source.delegate.contains(accounts.authority.key) {
-        return Err!(
-            ProgramError::InvalidArgument;
-            "Account {} - expected tokens delegated to authority account",
-            accounts.source.info.key
-        );
+    if let COption::Some(delegate) = &accounts.source.delegate {
+        if delegate != accounts.authority.key {
+            return Err!(
+                ProgramError::InvalidArgument;
+                "Account {} - expected tokens delegated to authority account",
+                accounts.source.info.key
+            );
+        }
     }
 
     Ok((authority_bump_seed, ethereum_bump_seed))
@@ -120,9 +123,9 @@ fn execute<'a>(
     ethereum_address: H160,
     ethereum_bump_seed: u8,
 ) -> ProgramResult {
-    let amount = accounts.source.delegated_amount;
-
-    if amount != 0 {
+    let deposit = if accounts.source.delegate.is_none() {
+        U256::zero()
+    } else {
         let signers_seeds: &[&[&[u8]]] = &[&[AUTHORITY_SEED, &[authority_bump_seed]]];
 
         let instruction = spl_token::instruction::transfer(
@@ -131,7 +134,7 @@ fn execute<'a>(
             accounts.pool.info.key,
             accounts.authority.key,
             &[],
-            amount
+            accounts.source.delegated_amount,
         )?;
 
         let account_infos: &[AccountInfo] = &[
@@ -142,12 +145,13 @@ fn execute<'a>(
         ];
 
         invoke_signed(&instruction, account_infos, signers_seeds)?;
-    }
 
-    assert!(crate::config::token_mint::decimals() <= 18);
-    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+        assert!(crate::config::token_mint::decimals() <= 18);
+        let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
 
-    let deposit = U256::from(amount) * U256::from(10_u64.pow(additional_decimals));
+        U256::from(accounts.source.delegated_amount) *
+            U256::from(10_u64.pow(additional_decimals))
+    };
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
         return accounts.system_program.create_account(
@@ -168,10 +172,10 @@ fn execute<'a>(
         ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
             .ok_or_else(||
                 E!(
-                ProgramError::InvalidArgument;
-                "Account {} - balance overflow",
-                ethereum_address
-            )
+                    ProgramError::InvalidArgument;
+                    "Account {} - balance overflow",
+                    ethereum_address
+                )
             )?;
     }
 
