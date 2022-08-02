@@ -8,6 +8,10 @@ pub struct Treasury<'a> {
     info: &'a AccountInfo<'a>
 }
 
+pub struct MainTreasury<'a> {
+    info: &'a AccountInfo<'a>
+}
+
 impl<'a> Treasury<'a> {
     pub fn from_account(program_id: &Pubkey, index: u32, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         if info.owner != program_id {
@@ -25,6 +29,29 @@ impl<'a> Treasury<'a> {
 }
 
 impl<'a> Deref for Treasury<'a> {
+    type Target = AccountInfo<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        self.info
+    }
+}
+
+impl<'a> MainTreasury<'a> {
+    pub fn from_account(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+        let expected_key = Pubkey::create_with_seed(
+            &collateral_pool_base::id(),
+            collateral_pool_base::MAIN_BALANCE_SEED,
+            &spl_token::id())?;
+
+        if *info.key != expected_key {
+            return Err!(ProgramError::InvalidArgument; "Account {} - invalid main treasure account", info.key);
+        }
+
+        Ok(Self { info })
+    }
+}
+
+impl<'a> Deref for MainTreasury<'a> {
     type Target = AccountInfo<'a>;
 
     fn deref(&self) -> &Self::Target {

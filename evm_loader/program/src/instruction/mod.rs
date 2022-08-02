@@ -159,6 +159,9 @@ pub enum EvmInstruction {
 
     /// Converts data account from V1 (HAMT) to V2 (distributed storage).
     ConvertDataAccountFromV1ToV2,
+
+    /// Collect lamports from treasury pool accounts to main pool balance
+    CollectTreasure,
 }
 
 impl EvmInstruction {
@@ -193,6 +196,7 @@ impl EvmInstruction {
             27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
             28 => Self::WriteValueToDistributedStorage,
             29 => Self::ConvertDataAccountFromV1ToV2,
+            30 => Self::CollectTreasure,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -218,3 +222,4 @@ pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;
 pub mod storage_to_v2;
+pub mod collect_treasury;

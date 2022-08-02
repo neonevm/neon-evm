@@ -48,6 +48,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
         }
@@ -98,6 +101,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
@@ -244,6 +250,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
@@ -397,6 +406,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
         }
@@ -475,6 +487,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
         }
@@ -552,6 +567,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
