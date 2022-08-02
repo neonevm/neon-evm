@@ -189,7 +189,6 @@ impl EvmInstruction {
 }
 
 
-pub mod account_create;
 pub mod account_delete_holder_storage;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
