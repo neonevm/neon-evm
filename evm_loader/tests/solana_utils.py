@@ -291,16 +291,16 @@ class EvmLoader:
         source_token_account = get_associated_token_address(operator.public_key(), NEON_TOKEN_MINT_ID)
         (user_solana_address, _) = self.ether2program(user_ether_address)
 
-        pool_account_exists = solana_client.get_account_info(
-            pool_token_account, commitment=Processed
-        )["result"]["value"] is not None
-        print("Pool Account Exists: ", pool_account_exists)
-
         trx = TransactionWithComputeBudget()
-        if not pool_account_exists:
-            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
-
         if amount > 0:
+            pool_account_exists = solana_client.get_account_info(
+                pool_token_account, commitment=Processed
+            )["result"]["value"] is not None
+            print("Pool Account Exists: ", pool_account_exists)
+
+            if not pool_account_exists:
+                trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
+
             trx.add(approve(ApproveParams(
                 program_id=TOKEN_PROGRAM_ID,
                 source=source_token_account,

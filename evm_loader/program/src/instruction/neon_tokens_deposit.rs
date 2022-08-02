@@ -123,7 +123,8 @@ fn execute<'a>(
     ethereum_address: H160,
     ethereum_bump_seed: u8,
 ) -> ProgramResult {
-    let deposit = if accounts.source.delegate.is_none() {
+    let amount = accounts.source.delegated_amount;
+    let deposit = if accounts.source.delegate.is_none() || amount == 0 {
         U256::zero()
     } else {
         let signers_seeds: &[&[&[u8]]] = &[&[AUTHORITY_SEED, &[authority_bump_seed]]];
@@ -134,7 +135,7 @@ fn execute<'a>(
             accounts.pool.info.key,
             accounts.authority.key,
             &[],
-            accounts.source.delegated_amount,
+            amount,
         )?;
 
         let account_infos: &[AccountInfo] = &[
@@ -149,8 +150,7 @@ fn execute<'a>(
         assert!(crate::config::token_mint::decimals() <= 18);
         let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
 
-        U256::from(accounts.source.delegated_amount) *
-            U256::from(10_u64.pow(additional_decimals))
+        U256::from(amount) * U256::from(10_u64.pow(additional_decimals))
     };
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
@@ -167,7 +167,7 @@ fn execute<'a>(
         );
     }
 
-    if !deposit.is_zero() {
+    if amount > 0 {
         let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
         ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
             .ok_or_else(||
