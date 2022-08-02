@@ -122,7 +122,7 @@ fn execute<'a>(
 ) -> ProgramResult {
     let amount = accounts.source.delegated_amount;
 
-    {
+    if amount != 0 {
         let signers_seeds: &[&[&[u8]]] = &[&[AUTHORITY_SEED, &[authority_bump_seed]]];
 
         let instruction = spl_token::instruction::transfer(
@@ -163,15 +163,17 @@ fn execute<'a>(
         );
     }
 
-    let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
-    ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
-        .ok_or_else(||
-            E!(
+    if !deposit.is_zero() {
+        let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
+        ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
+            .ok_or_else(||
+                E!(
                 ProgramError::InvalidArgument;
                 "Account {} - balance overflow",
                 ethereum_address
             )
-        )?;
+            )?;
+    }
 
     Ok(())
 }

@@ -300,13 +300,14 @@ class EvmLoader:
         if not pool_account_exists:
             trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
 
-        trx.add(approve(ApproveParams(
-            program_id=TOKEN_PROGRAM_ID,
-            source=source_token_account,
-            delegate=neon_evm_authority,
-            owner=operator.public_key(),
-            amount=amount * (10 ** 9),
-        )))
+        if amount > 0:
+            trx.add(approve(ApproveParams(
+                program_id=TOKEN_PROGRAM_ID,
+                source=source_token_account,
+                delegate=neon_evm_authority,
+                owner=operator.public_key(),
+                amount=amount * (10 ** 9),
+            )))
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
             data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
@@ -720,7 +721,7 @@ def make_new_user(evm_loader: EvmLoader):
 
     if get_solana_balance(caller) == 0:
         print(f"Create account for user {caller}")
-        evm_loader.airdrop_neon_tokens(caller_ether, 1)
+        evm_loader.airdrop_neon_tokens(caller_ether, 0)
 
     print('Account solana address:', key.public_key)
     print(f'Account ether address: {caller_ether.hex()} {caller_nonce}', )
