@@ -7,7 +7,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::executor::{Machine, Action};
+use crate::executor::Machine;
 
 
 struct Accounts<'a> {
@@ -128,13 +128,13 @@ fn execute<'a>(
         Err(e) => return Err(e) 
     };
 
-
-    if let Some(apply_state) = apply_state {
-        account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
-    } else {
-        let apply_actions = vec![Action::EvmIncrementNonce { address: caller_address }];
-        account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
-    }
+    assert!(account_storage.apply_state_change(
+        &accounts.neon_program,
+        &accounts.system_program,
+        &accounts.operator,
+        caller_address,
+        apply_state,
+    )?);
 
     accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
     

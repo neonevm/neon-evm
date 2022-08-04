@@ -3,12 +3,17 @@ use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 
 use evm::{H160, U256};
-use solana_program::program_error::ProgramError;
-use solana_program::entrypoint::ProgramResult;
+use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use solana_program::instruction::Instruction;
-use solana_program::program::invoke_signed_unchecked;
+use solana_program::program::{invoke, invoke_signed_unchecked};
+use solana_program::program_error::ProgramError;
+use solana_program::rent::Rent;
+use solana_program::system_instruction;
+use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
+use crate::account::ether_contract::Extension;
+use crate::account::program::EtherAccountParams;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -49,10 +54,26 @@ impl<'a> ProgramAccountStorage<'a> {
         neon_program: &program::Neon<'a>,
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
-        actions: Vec<Action>,
-    ) -> ProgramResult {
-
+        caller: H160,
+        actions: Option<Vec<Action>>,
+    ) -> Result<bool, ProgramError> {
         debug_print!("Applies begin");
+
+        let actions = match actions {
+            None => vec![Action::EvmIncrementNonce { address: caller }],
+            Some(actions) => {
+                if !self.preprocess_actions(
+                    system_program,
+                    neon_program,
+                    operator,
+                    &actions,
+                )? {
+                    return Ok(false);
+                }
+
+                actions
+            }
+        };
 
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
@@ -123,7 +144,89 @@ impl<'a> ProgramAccountStorage<'a> {
 
         debug_print!("Applies done");
 
-        Ok(())
+        Ok(true)
+    }
+
+    fn preprocess_actions(
+        &mut self,
+        system_program: &program::System<'a>,
+        neon_program: &program::Neon<'a>,
+        operator: &Operator<'a>,
+        actions: &[Action],
+    ) -> Result<bool, ProgramError> {
+        let mut result = true;
+        for action in actions {
+            let (address, code_size, valids_size) = match action {
+                Action::NeonTransfer { target, .. } => (target, 0, None),
+                Action::EvmSetCode { address, code, valids } =>
+                    (address, code.len(), Some(valids.len())),
+                _ => continue,
+            };
+
+            let (solana_address, bump_seed) = self.solana_address(address);
+            let solana_account = self.solana_account(&solana_address)
+                .ok_or_else(||
+                    E!(
+                        ProgramError::UninitializedAccount;
+                        "Account {} - corresponding Solana account was not provided",
+                        address
+                    )
+                )?;
+
+            let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
+            if solana_program::system_program::check_id(solana_account.owner) {
+                system_program.create_account(
+                    neon_program.key,
+                    operator,
+                    &EtherAccountParams {
+                        address: *address,
+                        info: solana_account,
+                        bump_seed,
+                        space: MAX_PERMITTED_DATA_INCREASE.min(space_needed),
+                        balance: U256::zero(),
+                    },
+                )?;
+
+                self.update_ether_account(neon_program.key, solana_account)?;
+
+                if space_needed > MAX_PERMITTED_DATA_INCREASE {
+                    result = false;
+                }
+            } else {
+                let space_current = solana_account.data_len();
+                if space_current < space_needed {
+                    let rent = Rent::get()?;
+                    let lamports_needed = rent.minimum_balance(space_needed);
+                    let lamports_current = solana_account.lamports();
+                    if lamports_current < lamports_needed {
+                        invoke(
+                            &system_instruction::transfer(
+                                operator.key,
+                                solana_account.key,
+                                lamports_needed - lamports_current,
+                            ),
+                            &[
+                                (*operator.info).clone(),
+                                solana_account.clone(),
+                                (*system_program).clone(),
+                            ],
+                        )?;
+                    }
+
+                    let max_possible_space_per_instruction = space_needed
+                        .min(space_current + MAX_PERMITTED_DATA_INCREASE);
+                    if max_possible_space_per_instruction < space_needed {
+                        result = false;
+                    }
+
+                    solana_account.realloc(max_possible_space_per_instruction, false)?;
+
+                    self.update_ether_account(neon_program.key, solana_account)?;
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     /// Delete all data in the account.

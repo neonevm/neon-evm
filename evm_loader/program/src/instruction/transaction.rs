@@ -1,22 +1,16 @@
 use evm::{ExitError, ExitReason, H160, U256};
 use solana_program::account_info::AccountInfo;
-use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
-use solana_program::program::invoke;
+use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use solana_program::rent::Rent;
-use solana_program::system_instruction;
-use solana_program::sysvar::Sysvar;
+
 use crate::account;
-use crate::account::{EthereumAccount, Operator, program, State, FinalizedState, Treasury};
-use crate::account::ether_contract::Extension;
-use crate::account::program::EtherAccountParams;
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
-use crate::executor::{Machine, Action};
+use crate::account::{EthereumAccount, FinalizedState, Operator, program, State, Treasury};
+use crate::account_storage::ProgramAccountStorage;
+use crate::error::EvmLoaderError;
+use crate::executor::{Action, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, UnsignedTransaction};
-use crate::error::EvmLoaderError;
-
 
 pub struct Accounts<'a> {
     pub operator: Operator<'a>,
@@ -160,88 +154,6 @@ fn pay_gas_cost<'a>(
     Ok(())
 }
 
-fn preprocess_actions<'a>(
-    system_program: &program::System<'a>,
-    neon_program: &program::Neon<'a>,
-    operator: &Operator<'a>,
-    account_storage: &mut ProgramAccountStorage<'a>,
-    actions: &[Action],
-) -> Result<bool, ProgramError> {
-    let mut result = true;
-    for action in actions {
-        let (address, code_size, valids_size) = match action {
-            Action::NeonTransfer { target, .. } => (target, 0, None),
-            Action::EvmSetCode { address, code, valids } =>
-                (address, code.len(), Some(valids.len())),
-            _ => continue,
-        };
-
-        let (solana_address, bump_seed) = account_storage.solana_address(address);
-        let solana_account = account_storage.solana_account(&solana_address)
-            .ok_or_else(||
-                E!(
-                    ProgramError::UninitializedAccount;
-                    "Account {} - corresponding Solana account was not provided",
-                    address
-                )
-            )?;
-
-        let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
-        if solana_program::system_program::check_id(solana_account.owner) {
-            system_program.create_account(
-                neon_program.key,
-                operator,
-                &EtherAccountParams {
-                    address: *address,
-                    info: solana_account,
-                    bump_seed,
-                    space: MAX_PERMITTED_DATA_INCREASE.min(space_needed),
-                    balance: U256::zero(),
-                },
-            )?;
-
-            account_storage.update_ether_account(neon_program.key, solana_account)?;
-
-            if space_needed > MAX_PERMITTED_DATA_INCREASE {
-                result = false;
-            }
-        } else {
-            let space_current = solana_account.data_len();
-            if space_current < space_needed {
-                let rent = Rent::get()?;
-                let lamports_needed = rent.minimum_balance(space_needed);
-                let lamports_current = solana_account.lamports();
-                if lamports_current < lamports_needed {
-                    invoke(
-                        &system_instruction::transfer(
-                            operator.key,
-                            solana_account.key,
-                            lamports_needed - lamports_current,
-                        ),
-                        &[
-                            (*operator.info).clone(),
-                            solana_account.clone(),
-                            (*system_program).clone(),
-                        ],
-                    )?;
-                }
-
-                let max_possible_space_per_instruction = space_needed
-                    .min(space_current + MAX_PERMITTED_DATA_INCREASE);
-                if max_possible_space_per_instruction < space_needed {
-                    result = false;
-                }
-
-                solana_account.realloc(max_possible_space_per_instruction, false)?;
-
-                account_storage.update_ether_account(neon_program.key, solana_account)?;
-            }
-        }
-    }
-
-    Ok(result)
-}
-
 fn finalize<'a>(
     accounts: Accounts<'a>,
     mut storage: State<'a>,
@@ -270,28 +182,13 @@ fn finalize<'a>(
     };
 
     if let Some((result, exit_reason, apply_state)) = results {
-        let complete = if let Some(apply_state) = apply_state {
-            let accounts_ready = preprocess_actions(
-                &accounts.system_program,
-                &accounts.neon_program,
-                &accounts.operator,
-                account_storage,
-                &apply_state,
-            )?;
-
-            if accounts_ready {
-                account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
-            }
-
-            accounts_ready
-        } else {
-            let apply_actions = vec![Action::EvmIncrementNonce { address: storage.caller }];
-            account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
-
-            true
-        };
-
-        if complete {
+        if account_storage.apply_state_change(
+            &accounts.neon_program,
+            &accounts.system_program,
+            &accounts.operator,
+            storage.caller,
+            apply_state,
+        )? {
             accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;
         }
 
