@@ -1,9 +1,8 @@
 use std::convert::{Infallible};
 
-use borsh::BorshDeserialize;
 use evm::{Capture, ExitReason, U256, ExitSucceed, ExitRevert};
 use solana_program::{program_error::ProgramError, pubkey::Pubkey};
-use mpl_token_metadata::state::{Creator, Metadata, TokenStandard};
+use mpl_token_metadata::state::{Creator, Metadata, TokenStandard, TokenMetadataAccount};
 
 
 use crate::{
@@ -43,9 +42,9 @@ pub fn metaplex<B: AccountStorage>(
     let result = match *selector {
         [0xc5, 0x73, 0x50, 0xc6] => { // "createMetadata(bytes32,string,string,string)"
             let mint = read_pubkey(input);
-            let name = read_string(&input[32..]);
-            let symbol = read_string(&input[64..]);
-            let uri = read_string(&input[96..]);
+            let name = read_string(input, 32);
+            let symbol = read_string(input, 64);
+            let uri = read_string(input, 96);
 
             create_metadata(context, state, gasometer, mint, name, symbol, uri)
         }
@@ -87,8 +86,8 @@ fn read_pubkey(input: &[u8]) -> Pubkey {
 }
 
 #[inline]
-fn read_string(input: &[u8]) -> String {
-    let offset = U256::from_big_endian_fast(arrayref::array_ref![input, 0, 32]).as_usize();
+fn read_string(input: &[u8], offset_position: usize) -> String {
+    let offset = U256::from_big_endian_fast(arrayref::array_ref![input, offset_position, 32]).as_usize();
     let length = U256::from_big_endian_fast(arrayref::array_ref![input, offset, 32]).as_usize();
 
     let begin = offset + 32;
@@ -203,7 +202,7 @@ fn is_nft<B: AccountStorage>(
         return Ok(vec![0_u8; 32]);
     }
 
-    let metadata = match Metadata::try_from_slice(&metadata_account.data) {
+    let metadata: Metadata = match Metadata::safe_deserialize(&metadata_account.data) {
         Ok(metadata) => metadata,
         Err(_) => return Ok(vec![0_u8; 32])
     };
@@ -231,15 +230,13 @@ fn uri<B: AccountStorage>(
 
     let uri = {
         if mpl_token_metadata::check_id(&metadata_account.owner) {
-            match Metadata::try_from_slice(&metadata_account.data) {
-                Ok(metadata) => metadata.data.uri,
-                Err(_) => String::new()
-            }
+            let metadata: Result<Metadata, _> = Metadata::safe_deserialize(&metadata_account.data);
+            metadata.map_or_else(|_| String::new(), |m| m.data.uri)
         } else {
             String::new()
         }
     };
-
+    let uri = uri.trim_end_matches('\0');
 
     // String encoding
     // 32 bytes - offset
@@ -253,7 +250,6 @@ fn uri<B: AccountStorage>(
     };
 
     let mut result = vec![0_u8; 32 + 32 + data_len];
-    result.resize(64, 0_u8);
 
     result[31] = 0x20; // offset - 32 bytes
 
