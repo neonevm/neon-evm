@@ -83,7 +83,7 @@ fn process_instruction<'a>(
         EvmInstruction::ConvertDataAccountFromV1ToV2 => {
             instruction::storage_to_v2::convert_data_account_from_v1_to_v2::process(program_id, accounts, instruction)
         },
-        EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
+
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 

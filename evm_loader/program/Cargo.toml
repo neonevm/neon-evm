@@ -3,13 +3,14 @@
 
 [package]
 name = "evm-loader"
-version = "0.7.6-dev"
+version = "0.10.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
 [features]
 alpha = []
+govertest = []
 mainnet = []
 testnet = []
 devnet = []
@@ -21,7 +22,7 @@ default = ["custom-heap"]
 tracing = [ "environmental" ]
 
 [dependencies]
-solana-program = { version = "=1.10.29", default_features = false }
+solana-program = { version = "=1.10.30", default_features = false }
 spl-token = { version = "=3.3.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "=1.0.5", default_features = false, features = ["no-entrypoint"] }
 mpl-token-metadata = { version = "=1.3.2", default_features = false, features = ["no-entrypoint"] }

@@ -189,7 +189,7 @@ fn finalize<'a>(
             account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
         }
 
-        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;
+        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result);
 
         account_storage.block_accounts(false)?;
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
