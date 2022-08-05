@@ -18,6 +18,8 @@ use solana_cli::{
     checks::{check_account_for_fee},
 };
 
+use spl_token::instruction::sync_native;
+
 use evm_loader::config::collateral_pool_base;
 
 pub fn execute(
@@ -75,6 +77,20 @@ pub fn execute(
             warn!("{:4}: not found account {}", i, aux_balance_address);
         }
     }
+    let mut message = Message::new(
+        &[
+            sync_native(&spl_token::id(), &main_balance_address)?,
+        ],
+        Some(&config.signer.pubkey())
+    );
+    let blockhash = config.rpc_client.get_latest_blockhash()?;
+    message.recent_blockhash = blockhash;
+
+    check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &message)?;
+
+    let mut trx = Transaction::new_unsigned(message);
+    trx.try_sign(&[&*config.signer], blockhash)?;
+    config.rpc_client.send_and_confirm_transaction_with_spinner(&trx)?;
 
     Ok(())
 }
