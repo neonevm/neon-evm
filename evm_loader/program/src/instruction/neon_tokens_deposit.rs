@@ -15,7 +15,7 @@ use crate::account::program::EtherAccountParams;
 
 struct Accounts<'a> {
     source: token::State<'a>,
-    pool: token::State<'a>,
+    pool: Option<token::State<'a>>,
     ethereum_account: &'a AccountInfo<'a>,
     authority: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
@@ -29,9 +29,15 @@ const AUTHORITY_SEED: &[u8] = b"Deposit";
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
     solana_program::msg!("Instruction: Deposit");
 
+    let source = token::State::from_account(&accounts[0])?;
+    let pool = if source.delegate.is_some() {
+        Some(token::State::from_account(&accounts[1])?)
+    } else {
+        None
+    };
     let parsed_accounts = Accounts {
-        source: token::State::from_account(&accounts[0])?,
-        pool: token::State::from_account(&accounts[1])?,
+        source,
+        pool,
         ethereum_account: &accounts[2],
         authority: &accounts[3],
         token_program: program::Token::from_account(&accounts[4])?,
@@ -74,42 +80,45 @@ fn validate(
         );
     }
 
-    let expected_pool_address = get_associated_token_address(
-        accounts.authority.key,
-        &crate::config::token_mint::id()
-    );
-    if accounts.pool.info.key != &expected_pool_address {
-        return Err!(
-            ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token Pool {}",
-            accounts.pool.info.key,
-            expected_pool_address
-        );
-    }
-
     if accounts.source.mint != crate::config::token_mint::id() {
         return Err!(
-            ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token account",
-            accounts.source.info.key
-        );
-    }
-
-    if accounts.pool.mint != crate::config::token_mint::id() {
-        return Err!(
-            ProgramError::InvalidArgument;
-            "Account {} - expected Neon Token account",
-            accounts.pool.info.key
-        );
-    }
-
-    if let COption::Some(delegate) = &accounts.source.delegate {
-        if delegate != accounts.authority.key {
-            return Err!(
                 ProgramError::InvalidArgument;
-                "Account {} - expected tokens delegated to authority account",
+                "Account {} - expected Neon Token account",
                 accounts.source.info.key
             );
+    }
+
+    if let Some(pool) = &accounts.pool {
+        let expected_pool_address = get_associated_token_address(
+            accounts.authority.key,
+            &crate::config::token_mint::id()
+        );
+
+        if pool.info.key != &expected_pool_address {
+            return Err!(
+                ProgramError::InvalidArgument;
+                "Account {} - expected Neon Token Pool {}",
+                pool.info.key,
+                expected_pool_address
+            );
+        }
+
+        if pool.mint != crate::config::token_mint::id() {
+            return Err!(
+                ProgramError::InvalidArgument;
+                "Account {} - expected Neon Token account",
+                pool.info.key
+            );
+        }
+
+        if let COption::Some(delegate) = &accounts.source.delegate {
+            if delegate != accounts.authority.key {
+                return Err!(
+                    ProgramError::InvalidArgument;
+                    "Account {} - expected tokens delegated to authority account",
+                    accounts.source.info.key
+                );
+            }
         }
     }
 
@@ -127,12 +136,15 @@ fn execute<'a>(
     let deposit = if accounts.source.delegate.is_none() || amount == 0 {
         U256::zero()
     } else {
+        let pool = accounts.pool.as_ref()
+            .expect("Pool must be set in a case of delegated amount");
+
         let signers_seeds: &[&[&[u8]]] = &[&[AUTHORITY_SEED, &[authority_bump_seed]]];
 
         let instruction = spl_token::instruction::transfer(
             accounts.token_program.key,
             accounts.source.info.key,
-            accounts.pool.info.key,
+            pool.info.key,
             accounts.authority.key,
             &[],
             amount,
@@ -140,7 +152,7 @@ fn execute<'a>(
 
         let account_infos: &[AccountInfo] = &[
             accounts.source.info.clone(),
-            accounts.pool.info.clone(),
+            pool.info.clone(),
             accounts.authority.clone(),
             accounts.token_program.clone(),
         ];
