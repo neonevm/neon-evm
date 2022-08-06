@@ -74,7 +74,7 @@ impl<'a> Hamt<'a> {
         let free_pos = u32::from(item_type) * (size_of::<u32>() as u32);
         let size: u32 = match item_type {
             0 => (256 + 256) / 8,
-            _ => (4 + u32::from(item_type) * 4),
+            _ => 4 + u32::from(item_type) * 4,
         };
         if item_type < 32 && item_type > 0 {
             let item_pos = self.restore_u32(free_pos);
@@ -100,7 +100,7 @@ impl<'a> Hamt<'a> {
         assert!(!(item_type >= 32 || item_type == 0), "Release unreleased items");
         let size: u32 = match item_type {
             0 => (256 + 256) / 8,
-            _ => (4 + u32::from(item_type) * 4),
+            _ => 4 + u32::from(item_type) * 4,
         };
         self.save_u32(item_pos, self.restore_u32(free_pos));
         self.save_u32(free_pos, item_pos);
