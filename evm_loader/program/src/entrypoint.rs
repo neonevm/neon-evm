@@ -65,7 +65,10 @@ fn process_instruction<'a>(
         EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         }
-        EvmInstruction::CreateAccountV02 | EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
+        EvmInstruction::CreateAccountV03 => {
+            instruction::account_create::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::OnReturn | EvmInstruction::OnEvent => { Ok(()) },
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 

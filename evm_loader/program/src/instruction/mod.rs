@@ -111,7 +111,7 @@ pub enum EvmInstruction {
     UpdateValidsTable,
 
     /// Deprecated: Create Ethereum account V2
-    /// Note: Account creation now performed implicitly, this instruction is no-op.
+    /// Note: Account creation now performed implicitly in most cases.
     CreateAccountV02,
 
     /// Deprecated: deposits NEON tokens to a Ether account.
@@ -147,6 +147,13 @@ pub enum EvmInstruction {
     ///   5. `[writeable,signer]` Funding account (must be a system account).
     ///   6. `[]` System program.
     DepositV03,
+
+    /// Create Ethereum account V3
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Funding account
+    ///   1. [] System Program
+    ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
+    CreateAccountV03,
 }
 
 impl EvmInstruction {
@@ -182,6 +189,7 @@ impl EvmInstruction {
             0x1c => Self::Migrate02ContractFromV1ToV2WriteValueToDistributedStorage, // deprecated
             0x1d => Self::Migrate02ContractFromV1ToV2ConvertDataAccount, // deprecated
             0x1e => Self::DepositV03,
+            0x1f => Self::CreateAccountV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -189,6 +197,7 @@ impl EvmInstruction {
 }
 
 
+pub mod account_create;
 pub mod account_delete_holder_storage;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;

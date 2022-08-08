@@ -43,7 +43,7 @@ def operator_keypair(request, evm_loader) -> Keypair:
 
     if get_solana_balance(caller) == 0:
         print(f"Create eth account for operator {caller}")
-        evm_loader.airdrop_neon_tokens(caller_ether, 0)
+        evm_loader.create_ether_account(caller_ether)
     return account
 
 

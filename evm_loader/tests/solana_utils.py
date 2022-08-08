@@ -10,7 +10,7 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-
+from construct import Bytes, Struct as cStruct
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -32,6 +32,9 @@ from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_
 from .utils.layouts import ACCOUNT_INFO_LAYOUT
 from .utils.types import Caller
 
+CREATE_ACCOUNT_LAYOUT = cStruct(
+    "ether" / Bytes(20),
+)
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 solana_client = Client(SOLANA_URL)
@@ -308,6 +311,7 @@ class EvmLoader:
                 owner=operator.public_key(),
                 amount=amount * (10 ** 9),
             )))
+
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
             data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
@@ -335,6 +339,12 @@ class EvmLoader:
         result = json.loads(output.splitlines()[-1])
         return result
 
+    def create_ether_account(self, ether):
+        (trx, sol) = self.create_ether_account_trx(ether)
+        signer = Keypair.from_secret_key(self.acc.get_acc().secret_key())
+        send_transaction(solana_client, trx, signer)
+        return sol
+
     @staticmethod
     def ether2hex(ether: Union[str, bytes]):
         if isinstance(ether, str):
@@ -357,8 +367,9 @@ class EvmLoader:
         print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
         return acc, 255
 
-    def ether2program(self, ether: Union[str, bytes]):
-        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, self.ether2hex(ether)))
+    def ether2program(self, ether: Union[str, bytes]) -> Tuple[str, int]:
+        output = neon_cli().call("create-program-address --evm_loader {} {}"
+                                 .format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
         return items[0], int(items[1])
 
@@ -380,6 +391,23 @@ class EvmLoader:
             raise Exception("Invalid owner for account {}".format(program))
         else:
             return program[0], ether, code[0]
+
+    def create_ether_account_trx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
+        (sol, nonce) = self.ether2program(ether)
+        print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
+
+        base = self.acc.get_acc().public_key()
+        data = bytes.fromhex('1f') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
+        trx = TransactionWithComputeBudget()
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+            ]))
+        return trx, sol
 
 
 def get_solana_balance(account):
@@ -721,7 +749,7 @@ def make_new_user(evm_loader: EvmLoader):
 
     if get_solana_balance(caller) == 0:
         print(f"Create account for user {caller}")
-        evm_loader.airdrop_neon_tokens(caller_ether, 0)
+        evm_loader.create_ether_account(caller_ether)
 
     print('Account solana address:', key.public_key)
     print(f'Account ether address: {caller_ether.hex()} {caller_nonce}', )
