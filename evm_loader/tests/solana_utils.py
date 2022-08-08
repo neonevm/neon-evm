@@ -10,7 +10,6 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-from construct import Bytes, Struct as cStruct
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -29,12 +28,8 @@ from spl.token.instructions import get_associated_token_address, approve, Approv
 from .utils.instructions import TransactionWithComputeBudget
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
-from .utils.layouts import ACCOUNT_INFO_LAYOUT
+from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
-
-CREATE_ACCOUNT_LAYOUT = cStruct(
-    "ether" / Bytes(20),
-)
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 solana_client = Client(SOLANA_URL)

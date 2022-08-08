@@ -36,3 +36,7 @@ ACCOUNT_INFO_LAYOUT = Struct(
     "code_size" / Int32ul,
 )
 
+
+CREATE_ACCOUNT_LAYOUT = Struct(
+    "ether" / Bytes(20),
+)
