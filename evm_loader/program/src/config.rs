@@ -48,6 +48,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
         }
@@ -98,6 +101,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
@@ -245,8 +251,11 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -397,8 +406,11 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -470,10 +482,13 @@ cfg_if! {
         pub mod collateral_pool_base {
             use super::declare_param_id;
 
-            declare_param_id!(NEON_POOL_BASE, "7aPH9mBAvUtJDGV2L1KyvpR5nKF7man5DZzBPaxmisg5");
+            declare_param_id!(NEON_POOL_BASE, "pBuoBvc4jeWcRvYABZaxtLZFfT2rnXW7G8ixLYc15bQ");
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
@@ -552,6 +567,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;

@@ -4,13 +4,16 @@ from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from tests.solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, solana_client, TransactionWithComputeBudget, send_transaction, create_account_with_seed, get_solana_balance
+from tests.solana_utils import OperatorAccount, account_with_seed, EVM_LOADER, \
+    solana_client, TransactionWithComputeBudget, send_transaction, \
+    create_account_with_seed, get_solana_balance
 
 print("Run collateral_pool_generator.py")
 wallet = OperatorAccount(sys.argv[1]).get_acc()
 collateral_pool_base = wallet.public_key()
-print(f"Collateral pool base: {collateral_pool_base}")
-for collateral_pool_index in range(0, 10):
+pool_count = int(sys.argv[2])
+print(f"Collateral pool base: {collateral_pool_base} with {pool_count} accounts")
+for collateral_pool_index in range(0, pool_count):
     COLLATERAL_SEED_PREFIX = "collateral_seed_"
     seed = COLLATERAL_SEED_PREFIX + str(collateral_pool_index)
     collateral_pool_address = account_with_seed(PublicKey(collateral_pool_base), seed, PublicKey(EVM_LOADER))
