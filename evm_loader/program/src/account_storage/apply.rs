@@ -3,6 +3,7 @@ use std::convert::TryInto;
 use std::mem::ManuallyDrop;
 
 use evm::{H160, U256};
+use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use solana_program::instruction::Instruction;
 use solana_program::program::{invoke, invoke_signed_unchecked};
@@ -154,7 +155,43 @@ impl<'a> ProgramAccountStorage<'a> {
         operator: &Operator<'a>,
         actions: &[Action],
     ) -> Result<bool, ProgramError> {
-        let mut result = true;
+        fn do_realloc<'a>(
+            system_program: &program::System<'a>,
+            operator: &Operator<'a>,
+            solana_account: &'a AccountInfo<'a>,
+            space_needed: usize,
+        ) -> Result<bool, ProgramError> {
+            let space_current = solana_account.data_len();
+            if space_current >= space_needed {
+                return Ok(false)
+            }
+
+            let rent = Rent::get()?;
+            let lamports_needed = rent.minimum_balance(space_needed);
+            let lamports_current = solana_account.lamports();
+            if lamports_current < lamports_needed {
+                invoke(
+                    &system_instruction::transfer(
+                        operator.key,
+                        solana_account.key,
+                        lamports_needed - lamports_current,
+                    ),
+                    &[
+                        (*operator.info).clone(),
+                        solana_account.clone(),
+                        (*system_program).clone(),
+                    ],
+                )?;
+            }
+
+            let max_possible_space_per_instruction = space_needed
+                .min(space_current + MAX_PERMITTED_DATA_INCREASE);
+            solana_account.realloc(max_possible_space_per_instruction, false)?;
+
+            Ok(space_needed >= max_possible_space_per_instruction)
+        }
+
+        let mut result = Ok(true);
         for action in actions {
             let (address, code_size, valids_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0, None),
@@ -187,46 +224,22 @@ impl<'a> ProgramAccountStorage<'a> {
                     },
                 )?;
 
-                self.update_ether_account(neon_program.key, solana_account)?;
-
                 if space_needed > MAX_PERMITTED_DATA_INCREASE {
-                    result = false;
+                    result = Ok(false);
                 }
             } else {
-                let space_current = solana_account.data_len();
-                if space_current < space_needed {
-                    let rent = Rent::get()?;
-                    let lamports_needed = rent.minimum_balance(space_needed);
-                    let lamports_current = solana_account.lamports();
-                    if lamports_current < lamports_needed {
-                        invoke(
-                            &system_instruction::transfer(
-                                operator.key,
-                                solana_account.key,
-                                lamports_needed - lamports_current,
-                            ),
-                            &[
-                                (*operator.info).clone(),
-                                solana_account.clone(),
-                                (*system_program).clone(),
-                            ],
-                        )?;
-                    }
+                self.remove_ether_account(address);
 
-                    let max_possible_space_per_instruction = space_needed
-                        .min(space_current + MAX_PERMITTED_DATA_INCREASE);
-                    if max_possible_space_per_instruction < space_needed {
-                        result = false;
-                    }
-
-                    solana_account.realloc(max_possible_space_per_instruction, false)?;
-
-                    self.update_ether_account(neon_program.key, solana_account)?;
-                }
+                result = do_realloc(system_program, operator, solana_account, space_needed)
+                    .map(|need_more_reallocs|
+                        result.expect("result expected to be Ok(bool)") || need_more_reallocs
+                    );
             }
+
+            self.update_ether_account(neon_program.key, solana_account)?;
         }
 
-        Ok(result)
+        result
     }
 
     /// Delete all data in the account.
