@@ -160,7 +160,7 @@ impl<'a> ProgramAccountStorage<'a> {
         ) -> Result<bool, ProgramError> {
             let space_current = solana_account.data_len();
             if space_current >= space_needed {
-                return Ok(false)
+                return Ok(true)
             }
 
             let rent = Rent::get()?;
@@ -185,7 +185,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 .min(space_current + MAX_PERMITTED_DATA_INCREASE);
             solana_account.realloc(max_possible_space_per_instruction, false)?;
 
-            Ok(space_needed >= max_possible_space_per_instruction)
+            Ok(max_possible_space_per_instruction >= space_needed)
         }
 
         let mut result = Ok(true);
@@ -229,8 +229,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 self.remove_ether_account(address);
 
                 result = do_realloc(system_program, operator, solana_account, space_needed)
-                    .map(|need_more_reallocs|
-                        result.expect("result expected to be Ok(bool)") || need_more_reallocs
+                    .map(|space_enough|
+                        result.expect("result expected to be Ok(bool)") && space_enough
                     );
             }
 
