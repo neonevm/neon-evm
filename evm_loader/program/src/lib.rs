@@ -19,7 +19,6 @@ pub mod config_macro;
 pub mod entrypoint;
 pub mod executor;
 pub mod external_programs;
-pub mod hamt;
 pub mod instruction;
 pub mod precompile;
 pub mod state_account;

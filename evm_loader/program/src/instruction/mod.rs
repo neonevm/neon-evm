@@ -7,19 +7,6 @@ use solana_program::{ program_error::ProgramError };
 /// `EvmInstruction` serialized in instruction data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction {
-    /// Creates an ERC20 token account for the given Ethereum wallet address, contract address and token mint
-    ///
-    /// ### Account references
-    ///   0. `[writeable,signer]` Funding account (must be a system account)
-    ///   1. `[writeable]` ERC20 token account address to be created
-    ///   2. `[]` Wallet address for the new ERC20 token account
-    ///   3. '[]' Contract address
-    ///   4. `[]` The token mint for the new ERC20 token account
-    ///   5. `[]` System program
-    ///   6. `[]` SPL Token program
-    ///   7. '[]' Rent sysvar
-    ERC20CreateTokenAccount,
-
     /// Deposits NEON tokens to an Ether account (V3).
     /// Requires previously executed SPL-Token.Approve which
     /// delegates the deposit amount to the NEON destination account.
@@ -76,7 +63,6 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            0x0f => Self::ERC20CreateTokenAccount,                  // 15
             0x1e => Self::CollectTreasure,                          // 30
             0x1f => Self::TransactionExecuteFromInstruction,        // 31
             0x20 => Self::TransactionStepFromInstruction,           // 32
@@ -99,7 +85,6 @@ pub mod account_create;
 pub mod account_holder_create;
 pub mod account_holder_delete;
 pub mod account_holder_write;
-pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;
