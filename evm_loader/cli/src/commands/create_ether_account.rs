@@ -36,7 +36,7 @@ pub fn execute (
 
     let create_account_v03_instruction = Instruction::new_with_bincode(
         config.evm_loader,
-        &(0x18_u8, ether_address.as_fixed_bytes(), nonce, 0_u32),
+        &(0x1f_u8, ether_address.as_fixed_bytes()),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
