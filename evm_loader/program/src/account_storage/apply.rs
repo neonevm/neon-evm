@@ -237,6 +237,8 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             self.update_ether_account(neon_program.key, solana_account)?;
+
+            result.clone()?;
         }
 
         result
