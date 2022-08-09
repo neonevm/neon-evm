@@ -60,21 +60,18 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<bool, ProgramError> {
         debug_print!("Applies begin");
 
-        let actions = match actions {
-            None => vec![Action::EvmIncrementNonce { address: caller }],
-            Some(actions) => {
-                if !self.preprocess_actions(
-                    system_program,
-                    neon_program,
-                    operator,
-                    &actions,
-                )? {
-                    return Ok(false);
-                }
+        let actions = actions.unwrap_or_else(
+            || vec![Action::EvmIncrementNonce { address: caller }]
+        );
 
-                actions
-            }
-        };
+        if !self.preprocess_actions(
+            system_program,
+            neon_program,
+            operator,
+            &actions,
+        )? {
+            return Ok(false);
+        }
 
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
@@ -195,6 +192,7 @@ impl<'a> ProgramAccountStorage<'a> {
         for action in actions {
             let (address, code_size, valids_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0, None),
+                Action::EvmIncrementNonce { address } => (address, 0, None),
                 Action::EvmSetCode { address, code, valids } =>
                     (address, code.len(), Some(valids.len())),
                 _ => continue,
@@ -237,6 +235,8 @@ impl<'a> ProgramAccountStorage<'a> {
             }
 
             self.update_ether_account(neon_program.key, solana_account)?;
+
+            result.clone()?;
         }
 
         result
