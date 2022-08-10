@@ -58,7 +58,7 @@ impl<'a> ProgramAccountStorage<'a> {
         caller: H160,
         actions: Option<Vec<Action>>,
     ) -> Result<bool, ProgramError> {
-        debug_print!("Applies begin");
+        solana_program::msg!("Applies begin");
 
         let actions = match actions {
             None => vec![Action::EvmIncrementNonce { address: caller }],
@@ -69,7 +69,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     operator,
                     &actions,
                 )? {
-                    debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
+                    solana_program::msg!("Applies postponed: need to reallocate accounts in the next transaction(s)");
                     return Ok(false);
                 }
 
@@ -144,7 +144,7 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        debug_print!("Applies done");
+        solana_program::msg!("Applies done");
 
         Ok(true)
     }
@@ -167,7 +167,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 return Ok(true)
             }
 
-            debug_print!(
+            solana_program::msg!(
                 "Resizing account (space_current = {}, space_needed = {})",
                 space_current,
                 space_needed
@@ -219,7 +219,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
             let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
             if solana_program::system_program::check_id(solana_account.owner) {
-                debug_print!(
+                solana_program::msg!(
                     "Creating account (space_needed = {}) needed for action: {:?}",
                     space_needed,
                     action
