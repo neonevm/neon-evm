@@ -1,5 +1,5 @@
 [package]
-name = "proxy-caller-program"
+name = "proxy-program"
 version = "0.10.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
