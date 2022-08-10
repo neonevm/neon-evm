@@ -1,10 +1,8 @@
 [package]
-name = "proxy_program"
-version = "3.0.1"
-description = "Solana Program Library Memo"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana-program-library"
-license = "Apache-2.0"
+name = "proxy-caller-program"
+version = "0.10.0-dev"
+description = "Neon EVM loader"
+authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
 [features]
@@ -18,11 +16,11 @@ test-bpf = []
 custom-heap = []
 
 [dependencies]
-solana-program = "=1.9.12"
+solana-program = "=1.10.30"
 
 [dev-dependencies]
-solana-program-test = "=1.9.12"
-solana-sdk = "=1.9.12"
+solana-program-test = "=1.10.30"
+solana-sdk = "=1.10.30"
 
 [lib]
 crate-type = ["cdylib", "lib"]
