@@ -6,6 +6,7 @@ use evm::{H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use solana_program::instruction::Instruction;
+use solana_program::log::sol_log_compute_units;
 use solana_program::program::{invoke, invoke_signed_unchecked};
 use solana_program::program_error::ProgramError;
 use solana_program::rent::Rent;
@@ -60,6 +61,8 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<bool, ProgramError> {
         debug_print!("Applies begin");
 
+        sol_log_compute_units();
+
         let actions = match actions {
             None => vec![Action::EvmIncrementNonce { address: caller }],
             Some(actions) => {
@@ -77,9 +80,13 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         };
 
+        sol_log_compute_units();
+
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
         for action in actions {
+            debug_print!("Process action: {:?}", action);
+            sol_log_compute_units();
             match action {
                 Action::NeonTransfer { source, target, value } => {
                     self.transfer_neon_tokens(&source, &target, value)?;
@@ -130,6 +137,12 @@ impl<'a> ProgramAccountStorage<'a> {
                 }
             }
         }
+
+        sol_log_compute_units();
+
+        debug_print!("Updating storage");
+
+        sol_log_compute_units();
 
         for (address, storage) in storage {
             for (key, value) in storage {
@@ -198,13 +211,21 @@ impl<'a> ProgramAccountStorage<'a> {
             Ok(max_possible_space_per_instruction >= space_needed)
         }
 
+        debug_print!("Actions preprocessing begin");
+
         let mut result = Ok(true);
         for action in actions {
+            debug_print!("Action: {:?}", action);
+            sol_log_compute_units();
             let (address, code_size, valids_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0, None),
                 Action::EvmSetCode { address, code, valids } =>
                     (address, code.len(), Some(valids.len())),
-                _ => continue,
+                _ => {
+                    debug_print!("Action skipped: {:?}", action);
+                    sol_log_compute_units();
+                    continue
+                },
             };
 
             let (solana_address, bump_seed) = self.solana_address(address);
@@ -218,6 +239,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 )?;
 
             let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
+
             if solana_program::system_program::check_id(solana_account.owner) {
                 debug_print!(
                     "Creating account (space_needed = {}) needed for action: {:?}",
@@ -252,6 +274,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
             result.clone()?;
         }
+
+        sol_log_compute_units();
+
+        debug_print!("Actions preprocessing end");
 
         result
     }
