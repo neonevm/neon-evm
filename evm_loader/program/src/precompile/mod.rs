@@ -17,11 +17,13 @@ mod query_account;
 mod neon_token;
 mod erc20_wrapper;
 mod spl_token;
+mod metaplex;
 
 const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_NEON_TOKEN: H160 =        H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_SPL_TOKEN: H160 =         H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
+const SYSTEM_ACCOUNT_METAPLEX: H160 =          H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05]);
 const SYSTEM_ACCOUNT_ECRECOVER: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
 const SYSTEM_ACCOUNT_SHA_256: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_RIPEMD160: H160 =         H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
@@ -40,6 +42,7 @@ pub fn is_precompile_address(address: &H160) -> bool {
         || *address == SYSTEM_ACCOUNT_QUERY
         || *address == SYSTEM_ACCOUNT_NEON_TOKEN
         || *address == SYSTEM_ACCOUNT_SPL_TOKEN
+        || *address == SYSTEM_ACCOUNT_METAPLEX
         || *address == SYSTEM_ACCOUNT_ECRECOVER
         || *address == SYSTEM_ACCOUNT_SHA_256
         || *address == SYSTEM_ACCOUNT_RIPEMD160
@@ -73,6 +76,9 @@ pub fn call_precompile<B: AccountStorage>(
     }
     if address == SYSTEM_ACCOUNT_SPL_TOKEN {
         return Some(spl_token::spl_token(input, context, state, gasometer));
+    }
+    if address == SYSTEM_ACCOUNT_METAPLEX {
+        return Some(metaplex::metaplex(input, context, state, gasometer));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover::ecrecover(input));

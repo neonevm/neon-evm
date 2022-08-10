@@ -50,7 +50,7 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
     }
 
 
-    let initialize_account = spl_token::instruction::initialize_account2(
+    let initialize_account = spl_token::instruction::initialize_account3(
         spl_token_program_key,
         associated_token_account_key,
         spl_token_mint_key,
