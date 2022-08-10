@@ -2,6 +2,7 @@
 members = [
     'cli',
     'program',
+    'proxy_program',
 ]
 exclude = [
     'rust-evm'

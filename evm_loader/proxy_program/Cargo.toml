@@ -1,0 +1,31 @@
+[package]
+name = "proxy_program"
+version = "3.0.1"
+description = "Solana Program Library Memo"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana-program-library"
+license = "Apache-2.0"
+edition = "2018"
+
+[features]
+alpha = []
+mainnet = []
+testnet = []
+devnet = []
+no-logs = []
+no-entrypoint = []
+test-bpf = []
+custom-heap = []
+
+[dependencies]
+solana-program = "=1.9.12"
+
+[dev-dependencies]
+solana-program-test = "=1.9.12"
+solana-sdk = "=1.9.12"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

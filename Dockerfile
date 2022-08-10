@@ -77,6 +77,7 @@ COPY evm_loader/solana-run-neon.sh \
      /opt/solana/bin/
 
 COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/evm_loader*.so /opt/
+COPY --from=evm-loader-builder /opt/evm_loader/target/deploy/proxy_program.so /opt/
 COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
@@ -87,6 +88,7 @@ COPY evm_loader/*.py \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
+    evm_loader/deploy-proxy_program.sh \
     evm_loader/neon_token_keypair.json \
     evm_loader/permission_allowance_token_keypair.json \
     evm_loader/permission_denial_token_keypair.json \
@@ -97,6 +99,7 @@ COPY evm_loader/*.py \
 
 COPY evm_loader/tests /opt/tests
 COPY evm_loader/evm_loader-keypair.json /opt/
+COPY evm_loader/proxy_program-keypair.json /opt/
 COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
 COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
