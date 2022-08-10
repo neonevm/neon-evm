@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use evm::{H160, U256, H256, ExitError};
+use evm::{H160, U256, H256, ExitError, ExitReason};
 use solana_program::instruction::Instruction;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -23,6 +23,7 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     actions: Vec<Action>,
     stack: Vec<usize>,
     is_static: u32,
+    exit_reason: Option<ExitReason>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -41,6 +42,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: Vec::new(),
             stack: Vec::new(),
             is_static: 0_u32,
+            exit_reason: None,
         }
     }
 
@@ -49,6 +51,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.serialize(writer)?;
         self.stack.serialize(writer)?;
         self.is_static.serialize(writer)?;
+        self.exit_reason.serialize(writer)?;
 
         Ok(())
     }
@@ -60,6 +63,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: BorshDeserialize::deserialize(buffer)?,
             stack: BorshDeserialize::deserialize(buffer)?,
             is_static: BorshDeserialize::deserialize(buffer)?,
+            // In order to support for previous versions format, we temporary ignore errors.
+            // In the future it will be okay to handle errors the way as for other fields.
+            exit_reason: BorshDeserialize::deserialize(buffer).unwrap_or_default(),
         })
     }
 
@@ -418,4 +424,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
+    pub fn exit_reason(&self) -> Option<ExitReason> {
+        self.exit_reason
+    }
+
+    pub fn set_exit_reason(&mut self, reason: Option<ExitReason>) {
+        self.exit_reason = reason;
+    }
 }

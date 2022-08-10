@@ -148,12 +148,18 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let mut steps_executed = 0;
         loop {
             if steps_executed >= max_steps {
-                    return (steps_executed, RuntimeApply::Continue);
+                return (steps_executed, RuntimeApply::Continue);
             }
             if let Err(capture) = runtime.step(&mut self.executor) {
                 return match capture {
-                    Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
-                    Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
+                    Capture::Exit(reason) => {
+                        self.executor.state.set_exit_reason(Some(reason));
+                        if reason == ExitReason::StepLimitReached {
+                            (steps_executed, RuntimeApply::Continue)
+                        } else {
+                            (steps_executed, RuntimeApply::Exit(reason))
+                        }
+                    },
                     Capture::Trap(interrupt) => {
                         match interrupt {
                             Resolve::Call(interrupt, resolve) => {
@@ -338,6 +344,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
+        if let Some(reason) = self.state().exit_reason() {
+            if reason != ExitReason::StepLimitReached {
+                if let Some((runtime, _create_reason)) = self.runtime.last() {
+                    return Err((runtime.machine().return_value(), reason));
+                }
+            }
+        }
+
         let mut steps = 0_u64;
 
         while steps < n {
@@ -379,5 +393,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
     pub fn into_state_actions(self) -> Vec<Action> {
         self.executor.state.into_actions()
+    }
+
+    #[must_use]
+    pub fn state(&self) -> &ExecutorState<B> {
+        &self.executor.state
     }
 }

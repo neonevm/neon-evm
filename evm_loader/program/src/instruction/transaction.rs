@@ -109,7 +109,6 @@ fn execute_steps(
     step_count: u64,
     storage: &mut State
 ) -> (Option<EvmResults>, U256) {
-
     match executor.execute_n_steps(step_count) {
         Ok(_) => { // step limit
             let used_gas = executor.used_gas();
@@ -121,6 +120,8 @@ fn execute_steps(
             let used_gas = executor.used_gas();
 
             let apply_state = if reason.is_succeed() {
+                // TODO: Save only when there is needed to repeat transaction.
+                executor.save_into(storage);
                 Some(executor.into_state_actions())
             } else {
                 None

@@ -5,7 +5,7 @@ use solana_program::{pubkey::Pubkey};
 use super::cache::AccountMeta;
 
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub enum Action {
     ExternalInstruction {
         program_id: Pubkey,
