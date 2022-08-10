@@ -153,7 +153,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             if let Err(capture) = runtime.step(&mut self.executor) {
                 return match capture {
                     Capture::Exit(reason) => {
-                        self.executor.state.set_exit_reason(Some(reason));
+                        self.executor.state.set_exit_result(Some(reason));
                         if reason == ExitReason::StepLimitReached {
                             (steps_executed, RuntimeApply::Continue)
                         } else {
@@ -324,10 +324,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
 
     /// Executes current program with all available steps.
     /// # Errors
-    /// Terminates execution if a step encounteres an error.
+    /// Terminates execution if a step encounters an error.
     pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
         loop {
-            if let Err(result) = self.execute_n_steps(u64::max_value()) {
+            if let Err(result) = self.execute_n_steps(u64::MAX) {
                 return result;
             }
         }
@@ -344,11 +344,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
-        if let Some(reason) = self.state().exit_reason() {
-            if reason != ExitReason::StepLimitReached {
-                if let Some((runtime, _create_reason)) = self.runtime.last() {
-                    return Err((runtime.machine().return_value(), reason));
-                }
+        if let Some(result) = self.state_mut().take_exit_result() {
+            if result.1 != ExitReason::StepLimitReached {
+                return Err(result);
             }
         }
 
@@ -396,7 +394,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     }
 
     #[must_use]
-    pub fn state(&self) -> &ExecutorState<B> {
-        &self.executor.state
+    pub fn state_mut(&mut self) -> &mut ExecutorState<'a, B> {
+        &mut self.executor.state
     }
 }
