@@ -91,7 +91,7 @@ fn withdraw<B: AccountStorage>(
     let target_token = get_associated_token_address(&target, state.backend.neon_token_mint());
     let account = state.external_account(target_token)?;
     if !spl_token::check_id(&account.owner) {
-        use spl_associated_token_account::create_associated_token_account;
+        use spl_associated_token_account::instruction::create_associated_token_account;
 
         gasometer.record_account_rent(spl_token::state::Account::LEN);
 

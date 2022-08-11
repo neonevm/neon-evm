@@ -36,7 +36,8 @@ pub fn execute(
 
     let mut instructions = Vec::with_capacity(5);
 
-    instructions.push(ComputeBudgetInstruction::request_units(COMPUTE_BUDGET_UNITS, REQUEST_UNITS_ADDITIONAL_FEE));
+    instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS));
+    instructions.push(ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE));
     instructions.push(ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
 
     let ether_account = config.rpc_client.get_account(&ether_pubkey);

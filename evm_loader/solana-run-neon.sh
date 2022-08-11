@@ -29,9 +29,16 @@ EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
 
 cp ${EVM_LOADER_PATH} .
 
+# dump metaplex program from mainnet
+METAPLEX=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+METAPLEX_SO=metaplex.so
+
+solana program dump ${METAPLEX} ${METAPLEX_SO} --url mainnet-beta
+
 if [[ "$DEPLOY_EVM_IN_GENESIS" == "YES" ]]; then
   NEON_BPF_ARGS=(
       --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
+      --bpf-program ${METAPLEX}   BPFLoader2111111111111111111111111111111111 ${METAPLEX_SO}
   )
 fi
 
