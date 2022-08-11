@@ -49,7 +49,8 @@ pub fn do_begin<'a>(
     trx: UnsignedTransaction,
     caller: H160,
 ) -> ProgramResult {
-    debug_print!("do_begin");
+    solana_program::msg!("do_begin");
+
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     check_ethereum_transaction(account_storage, &caller, &trx)?;
@@ -91,6 +92,8 @@ pub fn do_continue<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
+    solana_program::msg!("do_continue");
+
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     let (results, used_gas) = {
@@ -138,7 +141,7 @@ fn pay_gas_cost<'a>(
     storage: &mut State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
-    debug_print!("pay_gas_cost {}", used_gas);
+    solana_program::msg!("pay_gas_cost {}", used_gas);
 
     // Can overflow in malicious transaction
     let value = used_gas.saturating_mul(storage.gas_price);
@@ -169,7 +172,7 @@ fn finalize<'a>(
     let total_used_gas = storage.gas_used_and_paid.checked_add(used_gas);
 
     // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas
-    if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit))  {
+    if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit)) {
         let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
         let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used_and_paid);
 
@@ -191,6 +194,7 @@ fn finalize<'a>(
             apply_state,
         )? {
             accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result)?;
+
             account_storage.block_accounts(false)?;
             storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
         }
