@@ -220,7 +220,7 @@ impl<'a> ProgramAccountStorage<'a> {
             let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
             if solana_program::system_program::check_id(solana_account.owner) {
                 solana_program::msg!(
-                    "Creating account (space_needed = {}) needed for action: {:?}",
+                    "Creating account (space_needed = {}) needed for action: {}",
                     space_needed,
                     action
                 );
