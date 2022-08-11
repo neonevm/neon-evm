@@ -500,7 +500,7 @@ pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
 /// `the message size that is used to holder-account filling`
 pub const HOLDER_MSG_SIZE: u64 = 950;
 /// `OPERATOR_PRIORITY_SLOTS`
-pub const COMPUTE_BUDGET_UNITS: u32 = 1_500_000;
+pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
 /// `OPERATOR_PRIORITY_SLOTS`
 pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 /// Additional fee for `request units` instruction
