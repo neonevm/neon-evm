@@ -65,7 +65,12 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             is_static: BorshDeserialize::deserialize(buffer)?,
             // In order to support for previous versions format, we temporary ignore errors.
             // In the future it will be okay to handle errors the way as for other fields.
-            exit_result: BorshDeserialize::deserialize(buffer).unwrap_or_default(),
+            exit_result: BorshDeserialize::deserialize(buffer)
+                .map_err(|err| {
+                    solana_program::msg!("exit_result deserialization error: {:?}", err);
+                    err
+                })
+                .unwrap_or_default(),
         })
     }
 
@@ -422,6 +427,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         cache.solana_accounts_partial.get(&address)
             .cloned()
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
+    }
+
+    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
+        &self.exit_result
     }
 
     pub fn set_exit_result(&mut self, result: Option<(Vec<u8>, ExitReason)>) {

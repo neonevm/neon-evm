@@ -37,7 +37,7 @@ pub fn is_new_transaction<'a>(
             }
         },
         State::TAG => Ok(false),
-            _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
+        _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
     }
 }
 
@@ -125,6 +125,7 @@ fn execute_steps(
             let apply_state = if reason.is_succeed() {
                 // TODO: Save only when there is needed to repeat transaction.
                 executor.save_into(storage);
+
                 Some(executor.into_state_actions())
             } else {
                 None
