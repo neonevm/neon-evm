@@ -147,6 +147,33 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
+    #[inline]
+    fn process_capture(
+        capture: Capture<ExitReason, Resolve<Executor<B>>>,
+    ) -> (RuntimeApply, Option<(Vec<u8>, ExitReason)>) {
+        match capture {
+            Capture::Exit(reason) => {
+                if reason == ExitReason::StepLimitReached {
+                    (RuntimeApply::Continue, Some((vec![], reason)))
+                } else {
+                    (RuntimeApply::Exit(reason), Some((vec![], reason)))
+                }
+            },
+            Capture::Trap(interrupt) => {
+                match interrupt {
+                    Resolve::Call(interrupt, resolve) => {
+                        std::mem::forget(resolve);
+                        (RuntimeApply::Call(interrupt), None)
+                    },
+                    Resolve::Create(interrupt, resolve) => {
+                        std::mem::forget(resolve);
+                        (RuntimeApply::Create(interrupt), None)
+                    },
+                }
+            }
+        }
+    }
+
     #[cfg(feature = "tracing")]
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
@@ -157,31 +184,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let mut steps_executed = 0;
         loop {
             if steps_executed >= max_steps {
+                self.state_mut().set_exit_result(Some((vec![], ExitReason::StepLimitReached)));
                 return (steps_executed, RuntimeApply::Continue);
             }
             if let Err(capture) = runtime.step(&mut self.executor) {
-                return match capture {
-                    Capture::Exit(reason) => {
-                        self.executor.state.set_exit_result(Some(reason));
-                        if reason == ExitReason::StepLimitReached {
-                            (steps_executed, RuntimeApply::Continue)
-                        } else {
-                            (steps_executed, RuntimeApply::Exit(reason))
-                        }
-                    },
-                    Capture::Trap(interrupt) => {
-                        match interrupt {
-                            Resolve::Call(interrupt, resolve) => {
-                                mem::forget(resolve);
-                                (steps_executed, RuntimeApply::Call(interrupt))
-                            },
-                            Resolve::Create(interrupt, resolve) => {
-                                mem::forget(resolve);
-                                (steps_executed, RuntimeApply::Create(interrupt))
-                            },
-                        }
-                    }
-                };
+                let (apply_result, exit_result) = Self::process_capture(capture);
+
+                if exit_result.is_some() {
+                    self.state_mut().set_exit_result(exit_result);
+                }
+
+                (steps_executed, apply_result)
             }
             steps_executed += 1;
         }
@@ -195,22 +208,13 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         };
 
         let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
-        match capture {
-            Capture::Exit(ExitReason::StepLimitReached) => (steps_executed, RuntimeApply::Continue),
-            Capture::Exit(reason) => (steps_executed, RuntimeApply::Exit(reason)),
-            Capture::Trap(interrupt) => {
-                match interrupt {
-                    Resolve::Call(interrupt, resolve) => {
-                        core::mem::forget(resolve);
-                        (steps_executed, RuntimeApply::Call(interrupt))
-                    },
-                    Resolve::Create(interrupt, resolve) => {
-                        core::mem::forget(resolve);
-                        (steps_executed, RuntimeApply::Create(interrupt))
-                    },
-                }
-            }
+        let (apply_result, exit_result) = Self::process_capture(capture);
+
+        if exit_result.is_some() {
+            self.state_mut().set_exit_result(exit_result);
         }
+
+        (steps_executed, apply_result)
     }
 
     fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
