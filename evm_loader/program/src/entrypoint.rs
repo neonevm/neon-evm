@@ -29,7 +29,7 @@ fn process_instruction<'a>(
     _accounts: &'a [AccountInfo<'a>],
     _instruction_data: &[u8],
 ) -> ProgramResult {
-    Err!(ProgramError::InvalidInstructionData; "Emergency image: all instruction are rejected")
+    Err!(ProgramError::InvalidInstructionData; "Emergency image: all instructions are rejected")
 }
 
 #[cfg(not(feature = "emergency"))]
