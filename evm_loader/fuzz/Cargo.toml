@@ -17,4 +17,4 @@ members = ["."]
 
 [[bin]]
 name = "fuzz_example"
-path = "fuzz_targets/example.rs"
+path = "fuzz_targets/fuzz_example.rs"
