@@ -1,0 +1,20 @@
+[package]
+name = "fuzz"
+version = "0.0.1"
+authors = ["NeonLabs Maintainers"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+evm-loader = { path = "../program" }
+libfuzzer-sys = "0.4"
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_example"
+path = "fuzz_targets/example.rs"
