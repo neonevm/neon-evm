@@ -298,7 +298,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
         account.reload_extension()?;
 
-
         let extension = account.extension.as_mut().unwrap();
         solana_program::msg!("Deploy contract (3): address = {}, extension.code.len() = {}", address, extension.code.len());
         extension.code.copy_from_slice(code);

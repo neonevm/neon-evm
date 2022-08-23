@@ -100,11 +100,11 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         let address = self.create_address(scheme);
         
         if self.code_size(address) > U256::zero() {
-            return Err!(ProgramError::AccountAlreadyInitialized; "Attempt to deploy to existing account")
+            return Err!(ProgramError::AccountAlreadyInitialized; "Attempt to deploy to existing account (code_size > 0)")
         }
         
         if self.nonce(address) > U256::zero() {
-            return Err!(ProgramError::AccountAlreadyInitialized; "Attempt to deploy to existing account")
+            return Err!(ProgramError::AccountAlreadyInitialized; "Attempt to deploy to existing account (nonce > 0)")
         }
 
         self.state.inc_nonce(origin);
