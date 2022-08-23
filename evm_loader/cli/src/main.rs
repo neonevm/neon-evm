@@ -23,6 +23,7 @@ use crate::{
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
+        collect_treasury,
         get_storage_at,
     },
 };
@@ -677,6 +678,10 @@ fn main() {
                 )
         )
         .subcommand(
+            SubCommand::with_name("collect-treasury")
+                .about("Collect lamports from auxiliary treasury accounts to the main treasury balance")
+        )
+        .subcommand(
             SubCommand::with_name("get-storage-at")
                 .about("Get Ethereum storage value at given index")
                 .arg(
@@ -859,6 +864,9 @@ fn main() {
             ("neon-elf-params", Some(arg_matches)) => {
                 let program_location = arg_matches.value_of("program_location");
                 get_neon_elf::execute(&config, program_location)
+            }
+            ("collect-treasury", Some(_)) => {
+                collect_treasury::execute(&config)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();

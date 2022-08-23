@@ -13,7 +13,7 @@ use solana_program::sysvar::Sysvar;
 pub use holder::Holder;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
-pub use treasury::Treasury;
+pub use treasury::{MainTreasury, Treasury};
 
 mod treasury;
 mod operator;

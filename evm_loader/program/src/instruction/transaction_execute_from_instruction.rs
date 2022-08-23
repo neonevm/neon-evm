@@ -141,7 +141,7 @@ fn execute<'a>(
             That's why you have to use iterative transaction for the deployment.",
     );
 
-    accounts.neon_program.on_return(exit_reason, used_gas, &return_value)?;
+    accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
     
     Ok(())
 }

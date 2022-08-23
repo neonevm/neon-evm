@@ -29,15 +29,27 @@ EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
 
 cp ${EVM_LOADER_PATH} .
 
+# dump metaplex program from mainnet
+METAPLEX=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+METAPLEX_SO=metaplex.so
+
+solana program dump ${METAPLEX} ${METAPLEX_SO} --url mainnet-beta
+
 if [[ "$DEPLOY_EVM_IN_GENESIS" == "YES" ]]; then
   NEON_BPF_ARGS=(
       --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
+      --bpf-program ${METAPLEX}   BPFLoader2111111111111111111111111111111111 ${METAPLEX_SO}
   )
 fi
 
 NEON_VALIDATOR_ARGS=(
     --gossip-host $(hostname -i)
 )
+
+if [[ -n $GEYSER_PLUGIN_CONFIG ]]; then
+  echo "Using geyser plugin with config: $GEYSER_PLUGIN_CONFIG"
+  NEON_VALIDATOR_ARGS+=(--geyser-plugin-config $GEYSER_PLUGIN_CONFIG)
+fi
 
 export SOLANA_RUN_SH_GENESIS_ARGS="${NEON_BPF_ARGS[@]}"
 export SOLANA_RUN_SH_VALIDATOR_ARGS="${NEON_VALIDATOR_ARGS[@]}"

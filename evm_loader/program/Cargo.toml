@@ -3,17 +3,35 @@
 
 [package]
 name = "evm-loader"
-version = "0.7.6-dev"
+version = "0.11.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
 [features]
+#! The next feature defines configurations for deploys on different blockchains
+## Builds NeonEVM for `alpha`-testing mode
 alpha = []
+## Builds NeonEVM for testing with goverment system
+govertest = []
+## Builds NeonEVM for mainnet deployment
 mainnet = []
+## Builds NeonEVM for testnet deployment
 testnet = []
+## Builds NeonEVM for devnet deployment
 devnet = []
+
+## Builds NeonEVM program for `emergency` mode. In this mode, NeonEVM doesn't process
+## any transaction and return error `ProgramError::InvalidInstructionData` with comment
+## `Emergency image: all instructions are rejected`. This feature can be used with
+## the feature which defines configuration. In this case, the resulting image will
+## contain a configuration for appropriated deployment.
+emergency = []
+
+## Builds program without debug logs
 no-logs = []
+
+## Do not include entrypoint (for include in other application)
 no-entrypoint = []
 test-bpf = []
 custom-heap = []
@@ -21,9 +39,10 @@ default = ["custom-heap"]
 tracing = [ "environmental" ]
 
 [dependencies]
-solana-program = { version = "=1.10.29", default_features = false }
+solana-program = { version = "=1.10.30", default_features = false }
 spl-token = { version = "=3.3.0", default_features = false, features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "=1.0.5", default_features = false, features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "=1.3.2", default_features = false, features = ["no-entrypoint"] }
 num-derive = "0.3"
 num-traits = "0.2"
 thiserror = "1.0"

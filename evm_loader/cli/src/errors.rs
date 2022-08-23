@@ -7,7 +7,7 @@ use log::{ error };
 use evm::{ H160, U256 };
 
 use solana_sdk::account::Account;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::{Pubkey,PubkeyError as SolanaPubkeyError};
 use solana_sdk::signer::SignerError as SolanaSignerError;
 use solana_sdk::{decode_error::DecodeError};
 use solana_sdk::program_error::ProgramError as SolanaProgramError;
@@ -38,12 +38,18 @@ pub enum NeonCliError {
     /// TPU Sender Error
     #[error("TPU sender error. {0:?}")]
     TpuSenderError(SolanaTpuSenderError),
+    /// Pubkey Error
+    #[error("Pubkey Error. {0:?}")]
+    PubkeyError(SolanaPubkeyError),
     /// Need specify evm_loader
     #[error("EVM loader must be specified.")]
     EvmLoaderNotSpecified,
     /// Need specify fee payer
     #[error("Fee payer must be specified.")]
     FeePayerNotSpecified,
+    /// Incorrect program
+    #[error("Incorrect program {0:?}")]
+    IncorrectProgram(Pubkey),
     /// Account not found at address
     #[error("Account not found at address {0:?}.")]
     AccountNotFoundAtAddress(H160),
@@ -124,8 +130,10 @@ impl NeonCliError {
             NeonCliError::ClientError(_)                    => 113, // => 1013,
             NeonCliError::CliError(_)                       => 114, // => 1014,
             NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
+            NeonCliError::PubkeyError(_)                    => 116,
             NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
             NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
+            NeonCliError::IncorrectProgram(_)               => 203,
             NeonCliError::AccountNotFound(_)                => 205, // => 4005,
             NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
             NeonCliError::CodeAccountNotFound(_)            => 207, // => 4007,
@@ -186,6 +194,12 @@ impl From<SolanaCliError> for NeonCliError {
 impl From<SolanaTpuSenderError> for NeonCliError {
     fn from(e: SolanaTpuSenderError) -> NeonCliError {
         NeonCliError::TpuSenderError(e)
+    }
+}
+
+impl From<SolanaPubkeyError> for NeonCliError {
+    fn from(e: SolanaPubkeyError) -> NeonCliError {
+        NeonCliError::PubkeyError(e)
     }
 }
 

@@ -26,7 +26,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
 from .utils.instructions import TransactionWithComputeBudget
-from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
+from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
@@ -309,7 +309,7 @@ class EvmLoader:
 
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
-            data=bytes.fromhex("1e") + self.ether2bytes(user_ether_address),
+            data=bytes.fromhex("1f") + self.ether2bytes(user_ether_address),
             keys=[
                 AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
@@ -392,7 +392,7 @@ class EvmLoader:
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
         base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('1f') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
+        data = bytes.fromhex('20') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
         trx = TransactionWithComputeBudget()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,

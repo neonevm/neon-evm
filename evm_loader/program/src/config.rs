@@ -48,6 +48,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
         }
@@ -99,6 +102,9 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 128;
         }
@@ -142,7 +148,7 @@ cfg_if! {
                 "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
                 "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
                 "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
-                "cSqdT68gjm4JBS67268wxgx5nQ1G8nZBZWLq8Cu12kM",
+                "Cy2e827aiHG1YjPpeyhxdYLsv41GHRXGF6eXm5BhefoP",
                 "2xG1HNtGyJU7toexYdZZmXUnkb1Sf9fuNPtUycieKqDu",
                 "Gom4mLPW9yCe1gpAGExR89KvH8je1mExxhuEHTPDm7HP",
                 "AnKcUi9sRv1LwhKwW8HePfFYQM88wppXPYsE7kzL7DMA",
@@ -245,8 +251,11 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -294,7 +303,7 @@ cfg_if! {
                 "B5Cwn8y3JaFV622wdkocccJ3U1rfjCWA4S922x2ujLU5",
                 "JCjvNTNTfZeo9mSUB4kBVKCJFGiMm4Hux2DSLFubrgVW",
                 "D1apcJxXxAS63cpbTidxjXku7cW2ELQQU9szMQracDSY",
-                "cSqdT68gjm4JBS67268wxgx5nQ1G8nZBZWLq8Cu12kM",
+                "Cy2e827aiHG1YjPpeyhxdYLsv41GHRXGF6eXm5BhefoP",
                 "2xG1HNtGyJU7toexYdZZmXUnkb1Sf9fuNPtUycieKqDu",
                 "Gom4mLPW9yCe1gpAGExR89KvH8je1mExxhuEHTPDm7HP",
                 "AnKcUi9sRv1LwhKwW8HePfFYQM88wppXPYsE7kzL7DMA",
@@ -397,8 +406,11 @@ cfg_if! {
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
 
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
             /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
+            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -407,6 +419,87 @@ cfg_if! {
 
             neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz");
             neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF");
+            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
+            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
+        }
+        
+    } else if #[cfg(feature = "govertest")] {
+
+        /// Supported CHAIN_ID value for transactions
+        pub const CHAIN_ID: u64 = 111;
+
+        pubkey_array!(
+            AUTHORIZED_OPERATOR_LIST,
+            [
+                "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
+                "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
+                "CVAimMqtcmSUCV4RLZSJAreDpEd7JEZmrvCVj85yaRzZ",
+                "5mszzfV23zRfcAdn9d7kmW6Qn57SGkpGywyqyVCVc817",
+                "AdtXr9yGAsTokY75WernsmQdcBPu2LE2Bsh8Nx3ApbbR",
+                "2k8NURTZ8xd1qD2JhujP2MjxkLgLHUmwpXP8FNSP7ntd",
+                "EkEBZJmw4uKfvruf3c6EFJeWeAY3rev3hRsp2S4BDV3M",
+                "9LosHtRuxtFYtj2bJfvkcZpDywtdktpAabRQ7hCQasmt",
+                "FHYUtkDhNaMdaKzP2y7ZXmy6HtiKz7uahz19CPUkjeiD",
+                "3NqgsSRfjpmDfzRH4PLKrzBvMc8MgFXgU58Yy8n41KF5",
+                "8HStt6KLgRY8CBNmDjwMTZhCFrXeVrEgVp3jTS4gaRYR",
+                "V6fr3EgLUYFSGgzPBxTnhrieeAratBX46AGvAtmQ2Xe",
+                "7r5GAh4SDhBwxg98vT86Q8sA8c9zEgJduSWWCV1y48V",
+                "GwUnjJs6i7TKGjy71PvFpGN7yu9xqA8Cs1oyV4zSVPvq",
+                "EdSEh9UxXjbrrHLrH5manpxfXi7HxzkAMDAotPC5DggQ",
+                "9s7umnvnGqT1nvrCgzvBwWFyaaYABj64LxiBpjAayLiv",
+                "2Ma3MxGpKmk2KPbp631bNhm2NcSMU6oxFgtj2FfzkiBF",
+                "2v3dnQQaBALRmaQ1Jr7GbCVagTqEBKHPZ65b4nAmdDmN",
+                "47dYMgKdKxRGuGBpjH58eGuj1n4FXC6v4QTcpCSaVC2c",
+                "5dyQQATyk4yga4f4m8BCrUF1jdfGQ1mShV4ezFLxyCqW",
+                "7C6iuRYzEJEwe878X2TeMDoCHPEw85ZhaxapNEBuqwL9",
+                "82YcsM5eN83trdhdShGUF4crAC4CGgFJ7EWd2vnGiSsb",
+                "A3CEBvqJPPgHPARxzUQUafHXC4iU6x4iZzNudJ1Tks4z",
+                "AezpxgT4Qbo1pB9cLgBzzET7V2t7yK2ZrJrhDTCwxac9",
+                "CXJy6dzL8kAazo5jhBf8MuW17nJ8dW23EfzPmqTJ6P5H",
+                "DPRfsB8HQrJZM5g3B74rqZSmvtJn41PavhKBjmCRb45R",
+                "EbkUFw2EQkG85ua4sQy54Y6c988j7zkSAjkD6gRUTA3u",
+                "F4nLmDy62mhYiY4gGmRXDYpdFM4mLrm9t5YLpqTDMBz5",
+                "GHGLwKXzo2fAtLAVNJisP7wNyCRWBcmHEzCD36UcutW1",
+                "GZ3vKajaDjxFkiczL4g6as3qhMg7tdMgrMrpuApGWF8D",
+                "eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
+            ]
+        );
+
+        /// Token Mint ID
+        pub mod token_mint {
+            use super::declare_param_id;
+
+            declare_param_id!(NEON_TOKEN_MINT, "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk");
+            /// Ethereum account version
+            pub const DECIMALS: u8 = 9;
+
+            /// Number of base 10 digits to the right of the decimal place
+            #[must_use]
+            pub const fn decimals() -> u8 { DECIMALS }
+        }
+
+        /// Collateral pool base address
+        pub mod collateral_pool_base {
+            use super::declare_param_id;
+
+            declare_param_id!(NEON_POOL_BASE, "pBuoBvc4jeWcRvYABZaxtLZFfT2rnXW7G8ixLYc15bQ");
+
+            /// `COLLATERAL_SEED_PREFIX`
+            pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
+
+            /// Count of balances in collaterail pool
+            pub const NEON_POOL_COUNT: u32 = 10;
+        }
+
+        /// Account whitelists: Permission tokens
+        pub mod account_whitelists {
+            use super::neon_elf_param;
+
+            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1");
+            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX");
             neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, "0");
             neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, "0");
         }
@@ -435,21 +528,21 @@ cfg_if! {
                 "GwUnjJs6i7TKGjy71PvFpGN7yu9xqA8Cs1oyV4zSVPvq",
                 "EdSEh9UxXjbrrHLrH5manpxfXi7HxzkAMDAotPC5DggQ",
                 "9s7umnvnGqT1nvrCgzvBwWFyaaYABj64LxiBpjAayLiv",
-		"2Ma3MxGpKmk2KPbp631bNhm2NcSMU6oxFgtj2FfzkiBF",
-		"2v3dnQQaBALRmaQ1Jr7GbCVagTqEBKHPZ65b4nAmdDmN",
-		"47dYMgKdKxRGuGBpjH58eGuj1n4FXC6v4QTcpCSaVC2c",
-		"5dyQQATyk4yga4f4m8BCrUF1jdfGQ1mShV4ezFLxyCqW",
-		"7C6iuRYzEJEwe878X2TeMDoCHPEw85ZhaxapNEBuqwL9",
-		"82YcsM5eN83trdhdShGUF4crAC4CGgFJ7EWd2vnGiSsb",
-		"A3CEBvqJPPgHPARxzUQUafHXC4iU6x4iZzNudJ1Tks4z",
-		"AezpxgT4Qbo1pB9cLgBzzET7V2t7yK2ZrJrhDTCwxac9",
-		"CXJy6dzL8kAazo5jhBf8MuW17nJ8dW23EfzPmqTJ6P5H",
-		"DPRfsB8HQrJZM5g3B74rqZSmvtJn41PavhKBjmCRb45R",
-		"EbkUFw2EQkG85ua4sQy54Y6c988j7zkSAjkD6gRUTA3u",
-		"F4nLmDy62mhYiY4gGmRXDYpdFM4mLrm9t5YLpqTDMBz5",
-		"GHGLwKXzo2fAtLAVNJisP7wNyCRWBcmHEzCD36UcutW1",
-		"GZ3vKajaDjxFkiczL4g6as3qhMg7tdMgrMrpuApGWF8D",
-		"eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
+                "2Ma3MxGpKmk2KPbp631bNhm2NcSMU6oxFgtj2FfzkiBF",
+                "2v3dnQQaBALRmaQ1Jr7GbCVagTqEBKHPZ65b4nAmdDmN",
+                "47dYMgKdKxRGuGBpjH58eGuj1n4FXC6v4QTcpCSaVC2c",
+                "5dyQQATyk4yga4f4m8BCrUF1jdfGQ1mShV4ezFLxyCqW",
+                "7C6iuRYzEJEwe878X2TeMDoCHPEw85ZhaxapNEBuqwL9",
+                "82YcsM5eN83trdhdShGUF4crAC4CGgFJ7EWd2vnGiSsb",
+                "A3CEBvqJPPgHPARxzUQUafHXC4iU6x4iZzNudJ1Tks4z",
+                "AezpxgT4Qbo1pB9cLgBzzET7V2t7yK2ZrJrhDTCwxac9",
+                "CXJy6dzL8kAazo5jhBf8MuW17nJ8dW23EfzPmqTJ6P5H",
+                "DPRfsB8HQrJZM5g3B74rqZSmvtJn41PavhKBjmCRb45R",
+                "EbkUFw2EQkG85ua4sQy54Y6c988j7zkSAjkD6gRUTA3u",
+                "F4nLmDy62mhYiY4gGmRXDYpdFM4mLrm9t5YLpqTDMBz5",
+                "GHGLwKXzo2fAtLAVNJisP7wNyCRWBcmHEzCD36UcutW1",
+                "GZ3vKajaDjxFkiczL4g6as3qhMg7tdMgrMrpuApGWF8D",
+                "eXiURdoUQ4JpUysAevcTPiLMdWwG8q6mRAmice5Kioh",
             ]
         );
     
@@ -474,6 +567,9 @@ cfg_if! {
 
             /// `COLLATERAL_SEED_PREFIX`
             pub const PREFIX: &str = "collateral_seed_";
+
+            /// Treasury pool main balance seed
+            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
 
             /// Count of balances in collaterail pool
             pub const NEON_POOL_COUNT: u32 = 10;
@@ -509,6 +605,15 @@ pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
 pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 /// Amount of storage enties strored in the contract account
 pub const STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
+
+cfg_if! {
+    if #[cfg(feature = "emergency")] {
+        neon_elf_param!( NEON_STATUS_NAME, "EMERGENCY");
+    } else {
+        neon_elf_param!( NEON_STATUS_NAME, "WORK");
+    }
+}
+
 
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));

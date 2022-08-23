@@ -26,10 +26,12 @@ pub enum EvmInstruction {
     /// Call Ethereum-contract action from raw transaction data
     CallFromRawEthereumTX,
 
-    /// Called action return
+    /// Deprecated: Called action return
+    #[deprecated(note = "Instruction not supported")]
     OnReturn,
 
-    /// Called action event
+    /// Deprecated: Called action event
+    #[deprecated(note = "Instruction not supported")]
     OnEvent,
 
     /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
@@ -154,6 +156,9 @@ pub enum EvmInstruction {
     ///   1. [] System Program
     ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
     CreateAccountV03,
+
+    /// Collect lamports from treasury pool accounts to main pool balance
+    CollectTreasure,
 }
 
 impl EvmInstruction {
@@ -165,8 +170,8 @@ impl EvmInstruction {
         Ok(match tag {
             0x02 => Self::CreateAccountV01, // deprecated
             0x05 => Self::CallFromRawEthereumTX,
-            0x06 => Self::OnReturn,
-            0x07 => Self::OnEvent,
+            0x06 => Self::OnReturn, // deprecated
+            0x07 => Self::OnEvent, // deprecated
             0x09 => Self::PartialCallFromRawEthereumTX, // deprecated
             0x0a => Self::Continue, // deprecated
             0x0b => Self::ExecuteTrxFromAccountDataIterative, // deprecated
@@ -188,8 +193,9 @@ impl EvmInstruction {
             0x1b => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
             0x1c => Self::Migrate02ContractFromV1ToV2WriteValueToDistributedStorage, // deprecated
             0x1d => Self::Migrate02ContractFromV1ToV2ConvertDataAccount, // deprecated
-            0x1e => Self::DepositV03,
-            0x1f => Self::CreateAccountV03,
+            0x1e => Self::CollectTreasure,
+            0x1f => Self::DepositV03,
+            0x20 => Self::CreateAccountV03,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -211,3 +217,4 @@ pub mod transaction_step_from_instruction;
 pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod transaction;
+pub mod collect_treasury;
