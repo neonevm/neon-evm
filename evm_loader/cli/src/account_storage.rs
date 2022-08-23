@@ -13,6 +13,7 @@ use solana_sdk::{
     pubkey,
     sysvar::recent_blockhashes,
 };
+use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
     config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
@@ -40,6 +41,7 @@ pub struct NeonAccount {
     new: bool,
     size: usize,
     size_current: usize,
+    additional_resize_steps: bool,
     #[serde(skip)]
     data: Option<Account>,
 }
@@ -59,6 +61,7 @@ impl NeonAccount {
                 new: false,
                 size: account.data.len(),
                 size_current: account.data.len(),
+                additional_resize_steps: false,
                 data: Some(account)
             }
         }
@@ -72,6 +75,7 @@ impl NeonAccount {
                 new: true,
                 size: 0,
                 size_current: 0,
+                additional_resize_steps: false,
                 data: None
             }
         }
@@ -199,6 +203,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                     let mut accounts = self.accounts.borrow_mut();
                     accounts.entry(address).and_modify(|a| {
                         a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len(), Some(valids.len()));
+                        a.additional_resize_steps = a.size
+                            .saturating_sub(a.size_current) / MAX_PERMITTED_DATA_INCREASE > 0;
                     });
                 },
                 Action::EvmSelfDestruct { address } => {
