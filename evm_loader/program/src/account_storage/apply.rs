@@ -284,22 +284,22 @@ impl<'a> ProgramAccountStorage<'a> {
         code: &[u8],
         valids: &[u8],
     ) -> ProgramResult {
-        solana_program::msg!("Deploy contract: address = {}, code.len() = {}, valids.len() = {}", address, code.len(), valids.len());
         let account = self.ethereum_accounts.get_mut(&address)
             .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
-        unsafe { account.drop_extension(); }
+        if account.code_size as usize != code.len() {
+            unsafe { account.drop_extension(); }
 
-        solana_program::msg!("Deploy contract (2): address = {}, data_len() = {}", address, account.info.data_len());
+            account.code_size = code.len()
+                .try_into()
+                .expect("code.len() never exceeds u32::max");
 
-        account.code_size = code.len()
-            .try_into()
-            .expect("code.len() never exceeds u32::max");
+            account.reload_extension()?;
+        }
 
         account.reload_extension()?;
 
         let extension = account.extension.as_mut().unwrap();
-        solana_program::msg!("Deploy contract (3): address = {}, extension.code.len() = {}", address, extension.code.len());
         extension.code.copy_from_slice(code);
         extension.valids.copy_from_slice(valids);
 
