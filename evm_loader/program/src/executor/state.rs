@@ -429,10 +429,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
-    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
-        &self.exit_result
-    }
-
     pub fn set_exit_result(&mut self, result: Option<(Vec<u8>, ExitReason)>) {
         self.exit_result = result;
     }

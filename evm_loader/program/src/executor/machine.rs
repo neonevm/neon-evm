@@ -58,24 +58,18 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     ///
     /// Panics if account is invalid or any serialization error occurs.
     pub fn save_into(&self, storage: &mut crate::account::State) {
-        let storage_addr = storage.info.key;
-        solana_program::msg!("Saving executor state to {}, exit_result = {:?}...", storage_addr, self.executor.state.exit_result());
         let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
 
         self.runtime.serialize(&mut &mut buffer).unwrap();
         self.executor.state.serialize(&mut &mut buffer).unwrap();
-        solana_program::msg!("Executor state saved to {}", storage_addr);
     }
 
     /// Deserializes and restores state of runtime and executor from a storage account.
     pub fn restore(storage: &crate::account::State, backend: &'a B) -> Result<Self, ProgramError> {
-        let storage_addr = storage.info.key;
         let mut buffer: &[u8] = &storage.evm_state_data();
 
         let runtime = BorshDeserialize::deserialize(&mut buffer).unwrap();
         let state = ExecutorState::deserialize(&mut buffer, backend).unwrap();
-
-        solana_program::msg!("Executor state restored from {}. Exit result: {:?}", storage_addr, state.exit_result());
 
         let gasometer = Gasometer::new(Some(storage.gas_used_and_paid))?;
         let executor = Executor { 
