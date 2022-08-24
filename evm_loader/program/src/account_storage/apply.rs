@@ -298,8 +298,6 @@ impl<'a> ProgramAccountStorage<'a> {
             account.reload_extension()?;
         }
 
-        account.reload_extension()?;
-
         let extension = account.extension.as_mut().unwrap();
         extension.code.copy_from_slice(code);
         extension.valids.copy_from_slice(valids);
