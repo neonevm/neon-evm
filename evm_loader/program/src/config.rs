@@ -606,6 +606,15 @@ pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 /// Amount of storage enties strored in the contract account
 pub const STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
 
+cfg_if! {
+    if #[cfg(feature = "emergency")] {
+        neon_elf_param!( NEON_STATUS_NAME, "EMERGENCY");
+    } else {
+        neon_elf_param!( NEON_STATUS_NAME, "WORK");
+    }
+}
+
+
 neon_elf_param!( NEON_PKG_VERSION           , env!("CARGO_PKG_VERSION"));
 neon_elf_param!( NEON_REVISION              , env!("NEON_REVISION"));
 neon_elf_param!( NEON_SEED_VERSION          , formatcp!("{:?}", ACCOUNT_SEED_VERSION));

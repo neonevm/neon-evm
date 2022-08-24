@@ -11,15 +11,28 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
+
+#[cfg(not(feature = "emergency"))]
 use crate::{
     instruction,
-    instruction::EvmInstruction
+    instruction::EvmInstruction,
+    allocator::BumpAllocator,
 };
 
 
 
 entrypoint!(process_instruction);
 
+#[cfg(feature = "emergency")]
+fn process_instruction<'a>(
+    _program_id: &'a Pubkey,
+    _accounts: &'a [AccountInfo<'a>],
+    _instruction_data: &[u8],
+) -> ProgramResult {
+    Err!(ProgramError::InvalidInstructionData; "Emergency image: all instructions are rejected")
+}
+
+#[cfg(not(feature = "emergency"))]
 fn process_instruction<'a>(
     program_id: &'a Pubkey,
     accounts: &'a [AccountInfo<'a>],
@@ -90,6 +103,6 @@ fn process_instruction<'a>(
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
-    solana_program::msg!("Total memory occupied: {}", crate::allocator::BumpAllocator::occupied());
+    solana_program::msg!("Total memory occupied: {}", BumpAllocator::occupied());
     result
 }

@@ -11,7 +11,7 @@ use solana_program::entrypoint::HEAP_START_ADDRESS;
 pub struct BumpAllocator;
 
 impl BumpAllocator {
-    #[must_use]
+    #[allow(dead_code)]
     pub fn occupied() -> usize {
         const POSITION_PTR: *const usize = HEAP_START_ADDRESS as *const usize;
 
