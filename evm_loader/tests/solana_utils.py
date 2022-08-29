@@ -163,6 +163,17 @@ def create_account_with_seed(funding, base, seed, lamports, space, program=Publi
     )
 
 
+def create_holder_account(account, operator):
+    return TransactionInstruction(
+        keys=[
+            AccountMeta(pubkey=account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=operator, is_signer=True, is_writable=False),
+        ],
+        program_id=PublicKey(EVM_LOADER),
+        data=bytes.fromhex("24")
+    )
+
+
 class solana_cli:
     def __init__(self, acc=None):
         self.acc = acc

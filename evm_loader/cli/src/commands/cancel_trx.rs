@@ -4,23 +4,14 @@ use solana_sdk::{
     incinerator,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
-    compute_budget::ComputeBudgetInstruction,
 };
 
 use evm_loader::{
     account::State,
-    config::{
-        COMPUTE_BUDGET_UNITS,
-        COMPUTE_BUDGET_HEAP_FRAME,
-        REQUEST_UNITS_ADDITIONAL_FEE,
-    }
 };
 
 use crate::{
-    account_storage::{
-        make_solana_program_address,
-        account_info,
-    },
+    account_storage::account_info,
     Config,
     NeonCliResult,
 };
@@ -33,9 +24,6 @@ pub fn execute(
     let mut acc = config.rpc_client.get_account(storage_account)?;
     let storage_info = account_info(storage_account, &mut acc);
     let storage = State::from_account(&config.evm_loader, &storage_info)?;
-
-    let (caller_solana, _) = make_solana_program_address(&storage.caller, &config.evm_loader);
-    let (trx_count, _caller_ether) = crate::get_ether_account_nonce(config, &caller_solana)?;
 
     let operator = &config.signer.pubkey();
 
@@ -58,15 +46,10 @@ pub fn execute(
     }
 
     let cancel_with_nonce_instruction = Instruction::new_with_bincode(
-        config.evm_loader, &(21_u8, trx_count), accounts_meta
+        config.evm_loader, &(21_u8, storage.transaction_hash), accounts_meta
     );
 
-    let instructions = vec![
-        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
-        ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
-        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
-        cancel_with_nonce_instruction
-    ];
+    let instructions = vec![cancel_with_nonce_instruction];
 
     crate::send_transaction(config, &instructions)?;
 

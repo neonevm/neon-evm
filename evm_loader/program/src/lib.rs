@@ -31,7 +31,7 @@ pub mod utils;
 pub use solana_program;
 
 #[cfg(feature = "tracing")]
-pub use transaction::UnsignedTransaction;
+pub use transaction::Transaction;
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
 #[cfg(feature = "tracing")]

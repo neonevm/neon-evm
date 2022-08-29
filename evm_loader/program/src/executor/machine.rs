@@ -71,7 +71,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let runtime = BorshDeserialize::deserialize(&mut buffer).unwrap();
         let state = ExecutorState::deserialize(&mut buffer, backend).unwrap();
 
-        let gasometer = Gasometer::new(Some(storage.gas_used_and_paid))?;
+        let gasometer = Gasometer::new(Some(storage.gas_used))?;
         let executor = Executor { 
             origin: storage.caller, state, gasometer,
             gas_limit: storage.gas_limit, gas_price: storage.gas_price

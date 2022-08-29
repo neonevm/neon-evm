@@ -6,46 +6,36 @@ use super::Packable;
 /// Storage data account to store execution metainfo between steps for iterative execution
 #[derive(Debug)]
 pub struct Data {
+    pub owner: Pubkey,
+    pub transaction_hash: [u8; 32],
     /// Ethereum transaction caller address
     pub caller: H160,
-    /// Ethereum transaction caller nonce
-    pub nonce: u64,
     /// Ethereum transaction gas limit
     pub gas_limit: U256,
     /// Ethereum transaction gas price
     pub gas_price: U256,
-    /// Last transaction slot
-    pub slot: u64,
+    /// Ethereum transaction gas used and paid
+    pub gas_used: U256,
     /// Operator public key
     pub operator: Pubkey,
+    /// Starting slot for this operator
+    pub slot: u64,
     /// Stored accounts length
     pub accounts_len: usize,
-    /// Stored executor data size
-    pub executor_data_size: usize,
-    /// Stored evm data size
-    pub evm_data_size: usize,
-    /// Ethereum transaction gas used and paid
-    pub gas_used_and_paid: U256,
-    /// Number of payments
-    pub number_of_payments: u64,
-    /// ethereum transaction signature
-    pub signature: [u8; 65],
 }
 
 /// Storage account data for the finalized transaction state
 #[derive(Debug)]
 pub struct FinalizedData {
-    /// caller of the ethereum transaction
-    pub sender: H160,
-    /// ethereum transaction signature
-    pub signature: [u8; 65],
+    pub owner: Pubkey,
+    pub transaction_hash: [u8; 32],
 }
 
 impl Packable for Data {
     /// Storage struct tag
     const TAG: u8 = super::TAG_STATE;
     /// Storage struct serialized size
-    const SIZE: usize = 20 + 8 + 32 + 32 + 8 + 32 + 8 + 8 + 8 + 32 + 8 + 65;
+    const SIZE: usize = 32 + 32 + 20 + 32 + 32 + 32 + 32 + 8 + 8;
 
     /// Deserialize `Storage` struct from input data
     #[must_use]
@@ -53,33 +43,27 @@ impl Packable for Data {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, Data::SIZE];
         let (
+            owner,
+            hash,
             caller,
-            nonce,
             gas_limit,
             gas_price,
-            slot,
+            gas_used,
             operator,
+            slot,
             accounts_len,
-            executor_data_size,
-            evm_data_size,
-            gas_used_and_paid,
-            number_of_payments,
-            sign,
-        ) = array_refs![data, 20, 8, 32, 32, 8, 32, 8, 8, 8, 32, 8, 65];
+        ) = array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
 
         Self {
+            owner: Pubkey::new_from_array(*owner),
+            transaction_hash: *hash,
             caller: H160::from(*caller),
-            nonce: u64::from_le_bytes(*nonce),
             gas_limit: U256::from_little_endian(gas_limit),
             gas_price: U256::from_little_endian(gas_price),
-            slot: u64::from_le_bytes(*slot),
+            gas_used: U256::from_little_endian(gas_used),
             operator: Pubkey::new_from_array(*operator),
+            slot: u64::from_le_bytes(*slot),
             accounts_len: usize::from_le_bytes(*accounts_len),
-            executor_data_size: usize::from_le_bytes(*executor_data_size),
-            evm_data_size: usize::from_le_bytes(*evm_data_size),
-            gas_used_and_paid: U256::from_little_endian(gas_used_and_paid),
-            number_of_payments: u64::from_le_bytes(*number_of_payments),
-            signature: *sign,
         }
     }
 
@@ -88,32 +72,26 @@ impl Packable for Data {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, Data::SIZE];
         let (
+            owner,
+            hash,
             caller,
-            nonce,
             gas_limit,
             gas_price,
-            slot,
+            gas_used,
             operator,
+            slot,
             accounts_len,
-            executor_data_size,
-            evm_data_size,
-            gas_used_and_paid,
-            number_of_payments,
-            signature,
-        ) = mut_array_refs![data, 20, 8, 32, 32, 8, 32, 8, 8, 8, 32, 8, 65];
+        ) = mut_array_refs![data, 32, 32, 20, 32, 32, 32, 32, 8, 8];
 
+        owner.copy_from_slice(self.owner.as_ref());
+        hash.copy_from_slice(&self.transaction_hash);
         *caller = self.caller.to_fixed_bytes();
-        *nonce = self.nonce.to_le_bytes();
         self.gas_limit.to_little_endian(gas_limit);
         self.gas_price.to_little_endian(gas_price);
-        *slot = self.slot.to_le_bytes();
+        self.gas_used.to_little_endian(gas_used);
         operator.copy_from_slice(self.operator.as_ref());
+        *slot = self.slot.to_le_bytes();
         *accounts_len = self.accounts_len.to_le_bytes();
-        *executor_data_size = self.executor_data_size.to_le_bytes();
-        *evm_data_size = self.evm_data_size.to_le_bytes();
-        self.gas_used_and_paid.to_little_endian(gas_used_and_paid);
-        *number_of_payments = self.number_of_payments.to_le_bytes();
-        signature.copy_from_slice(self.signature.as_ref());
     }
 }
 
@@ -121,18 +99,18 @@ impl Packable for FinalizedData {
     /// Finalized storage struct tag
     const TAG: u8 = super::TAG_FINALIZED_STATE;
     /// Finalized storage struct serialized size
-    const SIZE: usize = 20 + 65;
+    const SIZE: usize = 32 + 32;
 
     /// Deserialize `FinalizedState` struct from input data
     #[must_use]
     fn unpack(src: &[u8]) -> Self {
         #[allow(clippy::use_self)]
         let data = array_ref![src, 0, FinalizedData::SIZE];
-        let (sender, signature) = array_refs![data, 20, 65];
+        let (owner, hash) = array_refs![data, 32, 32];
 
         Self {
-            sender: H160::from(*sender),
-            signature: *signature,
+            owner: Pubkey::new_from_array(*owner),
+            transaction_hash: *hash
         }
     }
 
@@ -140,9 +118,9 @@ impl Packable for FinalizedData {
     fn pack(&self, dst: &mut [u8]) {
         #[allow(clippy::use_self)]
         let data = array_mut_ref![dst, 0, FinalizedData::SIZE];
-        let (sender, signature) = mut_array_refs![data, 20, 65];
+        let (owner, hash) = mut_array_refs![data, 32, 32];
 
-        *sender = self.sender.to_fixed_bytes();
-        signature.copy_from_slice(self.signature.as_ref());
+        owner.copy_from_slice(self.owner.as_ref());
+        hash.copy_from_slice(&self.transaction_hash);
     }
 }

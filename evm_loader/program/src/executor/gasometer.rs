@@ -9,7 +9,7 @@ use solana_program::{
 use crate::{
     config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
-    transaction::UnsignedTransaction, 
+    transaction::Transaction, 
     account::{EthereumAccount, EthereumStorage}
 };
 
@@ -60,7 +60,7 @@ impl Gasometer {
             .saturating_add(CANCEL_TRX_COST);
     }
 
-    pub fn record_transaction_size(&mut self, trx: &UnsignedTransaction) {
+    pub fn record_transaction_size(&mut self, trx: &Transaction) {
         let overhead = 65/*vrs*/ + 8/*u64 len*/;
         let size = trx.rlp_len.saturating_add(overhead);
 

@@ -5,13 +5,6 @@ use solana_sdk::{
     message::Message,
     transaction::Transaction,
     system_program,
-    compute_budget::ComputeBudgetInstruction,
-};
-
-use evm_loader::config::{
-    COMPUTE_BUDGET_UNITS,
-    COMPUTE_BUDGET_HEAP_FRAME,
-    REQUEST_UNITS_ADDITIONAL_FEE,
 };
 
 use solana_cli::{
@@ -44,12 +37,7 @@ pub fn execute (
         ]
     );
 
-    let instructions = vec![
-        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
-        ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
-        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
-        create_account_v02_instruction
-    ];
+    let instructions = vec![create_account_v02_instruction];
 
     let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
     let blockhash = config.rpc_client.get_latest_blockhash()?;
