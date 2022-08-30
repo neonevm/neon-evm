@@ -135,6 +135,9 @@ pub enum EvmInstruction {
     #[deprecated(note = "Instruction not supported")]
     Migrate02ContractFromV1ToV2ConvertDataAccount,
 
+    /// Collect lamports from treasury pool accounts to main pool balance
+    CollectTreasure,
+
     /// Deposits NEON tokens to an Ether account (V3).
     /// Requires previously executed SPL-Token.Approve which
     /// delegates the deposit amount to the NEON destination account.
@@ -156,9 +159,6 @@ pub enum EvmInstruction {
     ///   1. [] System Program
     ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
     CreateAccountV03,
-
-    /// Collect lamports from treasury pool accounts to main pool balance
-    CollectTreasure,
 }
 
 impl EvmInstruction {
