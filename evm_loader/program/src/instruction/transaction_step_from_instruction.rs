@@ -13,8 +13,9 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     solana_program::msg!("Instruction: Begin or Continue Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
-    let step_count = u64::from_le_bytes(*array_ref![instruction, 4, 8]);
-    let message = &instruction[4 + 8..];
+    let step_count = u64::from(u32::from_le_bytes(*array_ref![instruction, 4, 4]));
+    // skip let unique_index = u32::from_le_bytes(*array_ref![instruction, 8, 4]);
+    let message = &instruction[4 + 4 + 4..];
 
     let storage_info = &accounts[0];
 
