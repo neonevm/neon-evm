@@ -159,6 +159,14 @@ pub enum EvmInstruction {
     ///   1. [] System Program
     ///   2. [WRITE] New account (program_address(version, ether, bump_seed))
     CreateAccountV03,
+
+    /// Merges contract with account and converts account to the version 3 format.
+    /// # Account references
+    ///   0. [WRITE, SIGNER] Operator account.
+    ///   1. [] System Program.
+    ///   2. [WRITE] Neon account to convert.
+    ///   3. [WRITE] (optional) Neon contract to convert.
+    Migrate03AccountFromV2ToV3,
 }
 
 impl EvmInstruction {
@@ -196,6 +204,7 @@ impl EvmInstruction {
             0x1e => Self::CollectTreasure,
             0x1f => Self::DepositV03,
             0x20 => Self::CreateAccountV03,
+            0x21 => Self::Migrate03AccountFromV2ToV3,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -218,3 +227,4 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod transaction;
 pub mod collect_treasury;
+pub mod migrate_v2_to_v3;

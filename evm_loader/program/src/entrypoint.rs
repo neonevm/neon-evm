@@ -84,6 +84,9 @@ fn process_instruction<'a>(
         EvmInstruction::CollectTreasure => {
             instruction::collect_treasury::process(program_id, accounts, instruction)
         }
+        EvmInstruction::Migrate03AccountFromV2ToV3 => {
+            instruction::migrate_v2_to_v3::process(program_id, accounts, instruction)
+        }
 
         _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
