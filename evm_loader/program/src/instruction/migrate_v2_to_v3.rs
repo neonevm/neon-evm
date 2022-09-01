@@ -8,7 +8,7 @@ use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
-use crate::account::{AccountData, ether_account, ether_contract, EthereumAccount, Operator, program};
+use crate::account::{AccountData, ether_account, ether_contract, EthereumAccount, Operator, Packable, program};
 use crate::account::ether_contract::Extension;
 use crate::error::EvmLoaderError;
 
@@ -113,7 +113,12 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
         0
     };
 
-    if !extend_if_needed(accounts, space_needed)? {
+    let space_current = accounts.ether_account.data_len();
+    let rent = Rent::get()?;
+    let lamports_needed = rent.minimum_balance(space_needed);
+    if space_current < space_needed &&
+        !extend_ether_account_space(accounts, space_current, space_needed, lamports_needed)?
+    {
         solana_program::msg!(
             "Account reallocation will be continued on the next step(s): {}",
             accounts.ether_account.key
@@ -144,44 +149,52 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
         }
     };
 
-    let mut account_v3 = EthereumAccount::init(accounts.ether_account, data)?;
+    {
+        let mut data_dst = accounts.ether_account.data.borrow_mut();
+        data_dst[0] = EthereumAccount::TAG;
+        data.pack(&mut data_dst[1..]);
 
-    assert_eq!(account_v3.extension.is_some(), accounts.ether_contract.is_some());
-
-    let valids_len = Valids::size_needed(account_v3.code_size as usize);
-    if let Some(extension) = account_v3.extension.as_mut() {
-        let contract_v2_info = accounts.ether_contract.expect("Expected contract");
-        {
+        let valids_len = Valids::size_needed(data.code_size as usize);
+        if let Some(contract_v2_info) = accounts.ether_contract {
             let contract_v2_data = EthereumContractV2::from_account(
                 program_id,
                 contract_v2_info,
             )?;
-            extension.code.copy_from_slice(&contract_v2_data.extension.code);
-            extension.valids.copy_from_slice(&contract_v2_data.extension.valids[..valids_len]);
-            extension.storage.copy_from_slice(&contract_v2_data.extension.storage);
-        }
 
-        **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
-        **contract_v2_info.lamports.borrow_mut() = 0;
+            let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
+            extension_dst[..data.code_size as usize].copy_from_slice(&contract_v2_data.extension.code);
+            extension_dst[data.code_size as usize..][..valids_len]
+                .copy_from_slice(&contract_v2_data.extension.valids[..valids_len]);
+            extension_dst[(data.code_size as usize + valids_len)..]
+                .copy_from_slice(&contract_v2_data.extension.storage);
+
+            **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
+            **contract_v2_info.lamports.borrow_mut() = 0;
+        }
+    }
+
+    if space_current > space_needed {
+        accounts.ether_account.realloc(space_needed, false)?;
+        let excessive_lamports = accounts.ether_account.lamports().saturating_sub(lamports_needed);
+        **accounts.ether_account.lamports.borrow_mut() -= excessive_lamports;
+        **accounts.operator.lamports.borrow_mut() += excessive_lamports;
     }
 
     Ok(())
 }
 
-fn extend_if_needed(accounts: &Accounts, space_needed: usize) -> Result<bool, ProgramError> {
-    let space_current = accounts.ether_account.data_len();
-    if space_current >= space_needed {
-        return Ok(true)
-    }
-
+fn extend_ether_account_space(
+    accounts: &Accounts,
+    space_current: usize,
+    space_needed: usize,
+    lamports_needed: u64,
+) -> Result<bool, ProgramError> {
     solana_program::msg!(
         "Resizing account (space_current = {}, space_needed = {})",
         space_current,
         space_needed
     );
 
-    let rent = Rent::get()?;
-    let lamports_needed = rent.minimum_balance(space_needed);
     let lamports_current = accounts.ether_account.lamports();
     if lamports_current < lamports_needed {
         invoke(
