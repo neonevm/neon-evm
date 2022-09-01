@@ -58,7 +58,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 
     validate_account(program_id, accounts.ether_account, "account", EthereumAccountV2::TAG, EthereumAccountV2::SIZE)?;
     if let Some(contract) = &accounts.ether_contract {
-        validate_account(program_id, *contract, "contract", EthereumContractV2::TAG, EthereumContractV2::SIZE)?;
+        validate_account(program_id, contract, "contract", EthereumContractV2::TAG, EthereumContractV2::SIZE)?;
     }
 
     Ok(())
