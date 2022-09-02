@@ -84,10 +84,16 @@ impl rlp::Decodable for Transaction {
         let value: U256 = rlp.val_at(4)?;
         let call_data: Vec<u8> = rlp.val_at(5)?;
         let v: U256 = rlp.val_at(6)?;
+
         let mut r: [u8; 32] = [0_u8; 32];
-        r.copy_from_slice(rlp.at(7)?.data()?);
+        let r_src: &[u8] = rlp.at(7)?.data()?;
+        let r_pos: usize = r.len() - r_src.len();
+        r[r_pos..].copy_from_slice(r_src);
+
         let mut s: [u8; 32] = [0_u8; 32];
-        s.copy_from_slice(rlp.at(8)?.data()?);
+        let s_src: &[u8] = rlp.at(8)?.data()?;
+        let s_pos: usize = s.len() - s_src.len();
+        s[s_pos..].copy_from_slice(s_src);
 
         let (chain_id, recovery_id) = if v >= U256::from(35) {
             let chain_id = (v - 1) / 2 - 17;
