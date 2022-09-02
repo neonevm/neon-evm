@@ -46,7 +46,7 @@ pub fn make_secp256k1_instruction(instruction_index: u8, message_len: u16, data_
 
     let mut instruction_data = Vec::with_capacity(1 + bin_offsets.len());
     instruction_data.push(NUMBER_OF_SIGNATURES);
-    instruction_data.extend(&bin_offsets);
+    instruction_data.extend(bin_offsets);
 
     instruction_data
 }
