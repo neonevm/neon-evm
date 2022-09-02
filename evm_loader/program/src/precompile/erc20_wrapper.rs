@@ -24,7 +24,7 @@ pub fn erc20_wrapper<B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    debug_print!("erc20_wrapper({})", hex::encode(&input));
+    debug_print!("erc20_wrapper({})", hex::encode(input));
 
     let (token_mint, rest) = input.split_at(32);
     let token_mint = Pubkey::new(token_mint);
@@ -118,10 +118,10 @@ pub fn erc20_wrapper<B: AccountStorage>(
         }
     };
 
-    match result {
-        Ok(value) => Capture::Exit((ExitSucceed::Returned.into(), value)),
-        Err(_) => Capture::Exit((ExitRevert::Reverted.into(), b"ERC20 execution reverted".to_vec())),
-    }
+    result.map_or_else(
+        |_| Capture::Exit((ExitRevert::Reverted.into(), b"ERC20 execution reverted".to_vec())),
+        |value| Capture::Exit((ExitSucceed::Returned.into(), value))
+    )
 }
 
 
