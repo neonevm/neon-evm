@@ -68,10 +68,10 @@ pub fn metaplex<B: AccountStorage>(
     };
 
 
-    match result {
-        Ok(value) => Capture::Exit((ExitSucceed::Returned.into(), value)),
-        Err(_) => Capture::Exit((ExitRevert::Reverted.into(), vec![])),
-    }
+    result.map_or_else(
+        |_| Capture::Exit((ExitRevert::Reverted.into(), vec![])),
+        |value| Capture::Exit((ExitSucceed::Returned.into(), value))
+    )
 }
 
 

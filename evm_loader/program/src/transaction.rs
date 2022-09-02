@@ -8,7 +8,6 @@ use std::convert::{Into};
 use crate::account_storage::ProgramAccountStorage;
 use crate::utils::{keccak256_digest};
 
-
 #[derive(Debug)]
 pub struct Transaction {
     pub nonce: u64,

@@ -300,7 +300,7 @@ fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
         if value.to_lowercase() == "none" {
             return None;
         }
-        hex::decode(&make_clean_hex(value)).ok()
+        hex::decode(make_clean_hex(value)).ok()
     })
 }
 
@@ -311,7 +311,7 @@ fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         return Ok(());
     }
 
-    hex::decode(&make_clean_hex(string.as_ref())).map(|_| ())
+    hex::decode(make_clean_hex(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 

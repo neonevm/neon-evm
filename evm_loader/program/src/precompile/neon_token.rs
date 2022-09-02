@@ -27,7 +27,7 @@ pub fn neon_token<B: AccountStorage>(
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
-    debug_print!("neon_token({})", hex::encode(&input));
+    debug_print!("neon_token({})", hex::encode(input));
 
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
