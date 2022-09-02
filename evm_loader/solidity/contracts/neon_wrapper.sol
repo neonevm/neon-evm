@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.5.12;
+pragma solidity >=0.8.0;
+
+interface INeonWithdraw {
+    function withdraw(bytes32) external payable returns(bool);
+}
 
 contract NeonToken {
-    address constant NeonPrecompiled = 0xFF00000000000000000000000000000000000003;
+    INeonWithdraw constant NeonPrecompiled = INeonWithdraw(0xFF00000000000000000000000000000000000003);
 
-    function withdraw(bytes32 spender) public payable {
-        (bool success, bytes memory returnData) = NeonPrecompiled.delegatecall(abi.encodeWithSignature("withdraw(bytes32)", spender));
-        require(success, string(returnData));
+    function withdraw(bytes32 spender) external payable {
+        NeonPrecompiled.withdraw{value: msg.value}(spender);
     }
 }
