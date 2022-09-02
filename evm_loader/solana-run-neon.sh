@@ -5,15 +5,13 @@ set -e
 SOLANA_BIN=/opt/solana/bin
 NEON_BIN=/opt
 
-DEPLOY_EVM_IN_GENESIS="${DEPLOY_IN_GENESIS:-YES}"
-
 function deploy_tokens() {
     # deploy tokens needed by Neon EVM
-    export SKIP_EVM_DEPLOY=$DEPLOY_EVM_IN_GENESIS
+    export SKIP_EVM_DEPLOY=${DEPLOY_EVM_IN_GENESIS:-YES}
     export SOLANA_URL=http://127.0.0.1:8899
 
     cd ${NEON_BIN}
-    ./wait-for-solana.sh 20
+    ./wait-for-solana.sh ${SOLANA_WAIT_TIMEOUT:-60}
     ./deploy-evm.sh
 }
 
@@ -35,7 +33,7 @@ METAPLEX_SO=metaplex.so
 
 solana program dump ${METAPLEX} ${METAPLEX_SO} --url mainnet-beta
 
-if [[ "$DEPLOY_EVM_IN_GENESIS" == "YES" ]]; then
+if [[ "${DEPLOY_EVM_IN_GENESIS:-YES}" == "YES" ]]; then
   NEON_BPF_ARGS=(
       --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
       --bpf-program ${METAPLEX}   BPFLoader2111111111111111111111111111111111 ${METAPLEX_SO}
