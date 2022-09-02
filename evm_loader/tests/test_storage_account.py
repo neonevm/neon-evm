@@ -4,14 +4,15 @@ import pytest
 
 from solana.keypair import Keypair
 from solana.rpc.core import RPCException
+from solana.transaction import Transaction
 
 from eth_utils import abi
 from .solana_utils import send_transaction, solana_client, get_transaction_count, make_new_user
-from .utils.storage import create_storage_account
+from .utils.storage import create_holder
 from .utils.contract import deploy_contract
 from .utils.ethereum import make_eth_transaction
 from .utils.instructions import make_PartialCallOrContinueFromRawEthereumTX, TransactionWithComputeBudget, \
-    make_CancelWithNonce
+    make_Cancel
 from .utils.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
 
 
@@ -37,8 +38,8 @@ class TestStorageAccountAccess:
             user_account.solana_account_address,
             user_account.eth_address
         )
-        storage_account = create_storage_account(operator_keypair)
-        instruction = eth_transaction[0] + eth_transaction[1] + eth_transaction[2]
+        storage_account = create_holder(operator_keypair)
+        instruction = eth_transaction.rawTransaction
 
         trx = TransactionWithComputeBudget()
         trx.add(
@@ -80,7 +81,7 @@ class TestStorageAccountAccess:
 
     def test_write_to_locked(self, operator_keypair, deployed_contract, user_account, treasury_pool, evm_loader):
         """EVM can't write to locked storage account"""
-        storage_account = create_storage_account(operator_keypair)
+        storage_account = create_holder(operator_keypair)
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
         data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
         eth_transaction = make_eth_transaction(
@@ -90,7 +91,7 @@ class TestStorageAccountAccess:
             user_account.solana_account_address,
             user_account.eth_address
         )
-        instruction = eth_transaction[0] + eth_transaction[1] + eth_transaction[2]
+        instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
@@ -116,7 +117,7 @@ class TestStorageAccountAccess:
             user2.solana_account_address,
             user2.eth_address
         )
-        instruction = eth_transaction[0] + eth_transaction[1] + eth_transaction[2]
+        instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
@@ -135,7 +136,7 @@ class TestStorageAccountAccess:
     def test_write_to_finalized(self, operator_keypair, deployed_contract, user_account, treasury_pool, evm_loader):
         """EVM can write to finalized storage account"""
         func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
-        storage_account = create_storage_account(operator_keypair)
+        storage_account = create_holder(operator_keypair)
         print("TEST ACCOUNTS")
         print(deployed_contract.eth_address.hex(), user_account.eth_address.hex())
         for i in range(1, 3):
@@ -147,7 +148,7 @@ class TestStorageAccountAccess:
                 user_account.solana_account_address,
                 user_account.eth_address
             )
-            instruction = eth_transaction[0] + eth_transaction[1] + eth_transaction[2]
+            instruction = eth_transaction.rawTransaction
 
             trx = TransactionWithComputeBudget()
             trx.add(
@@ -178,8 +179,8 @@ class TestStorageAccountAccess:
             user_account.solana_account_address,
             user_account.eth_address
         )
-        storage_account = create_storage_account(operator_keypair)
-        instruction = eth_transaction[0] + eth_transaction[1] + eth_transaction[2]
+        storage_account = create_holder(operator_keypair)
+        instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
@@ -198,9 +199,9 @@ class TestStorageAccountAccess:
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == 30
         user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         trx.add(
-            make_CancelWithNonce(storage_account, operator_keypair, user_nonce,
+            make_Cancel(storage_account, operator_keypair, eth_transaction.hash,
                                  [
                                      deployed_contract.solana_address,
                                      deployed_contract.code_solana_address,

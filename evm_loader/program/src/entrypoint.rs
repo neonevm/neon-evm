@@ -45,8 +45,14 @@ fn process_instruction<'a>(
         EvmInstruction::CreateAccountV02 => {
             instruction::account_create::process(program_id, accounts, instruction)
         }
-        EvmInstruction::DeleteHolderOrStorageAccount => {
-            instruction::account_delete_holder_storage::process(program_id, accounts, instruction)
+        EvmInstruction::HolderCreate => {
+            instruction::account_holder_create::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::HolderDelete => {
+            instruction::account_holder_delete::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::HolderWrite => {
+            instruction::account_holder_write::process(program_id, accounts, instruction)
         }
         EvmInstruction::ResizeContractAccount => {
             instruction::account_resize::process(program_id, accounts, instruction)
@@ -63,31 +69,19 @@ fn process_instruction<'a>(
         EvmInstruction::UpdateValidsTable => {
             instruction::update_valids_table::process(program_id, accounts, instruction)
         }
-        EvmInstruction::WriteHolder => {
-            instruction::transaction_write_to_holder::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::CancelWithNonce => {
+        EvmInstruction::Cancel => {
             instruction::transaction_cancel::process(program_id, accounts, instruction)
         }
-        EvmInstruction::CallFromRawEthereumTX => {
+        EvmInstruction::TransactionExecuteFromInstruction => {
             instruction::transaction_execute_from_instruction::process(program_id, accounts, instruction)
         }
-        EvmInstruction::PartialCallFromRawEthereumTXv02 => {
-            instruction::transaction_begin_from_instruction::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeV02 => {
-            instruction::transaction_begin_from_account::process(program_id, accounts, instruction)
-        },
-        EvmInstruction::ContinueV02 => {
-            instruction::transaction_continue::process(program_id, accounts, instruction)
-        },
-        EvmInstruction::PartialCallOrContinueFromRawEthereumTX => {
+        EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
         },
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue => {
+        EvmInstruction::TransactionStepFromAccount => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
         },
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
+        EvmInstruction::TransactionStepFromAccountNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         },
         EvmInstruction::WriteValueToDistributedStorage => {
@@ -99,8 +93,6 @@ fn process_instruction<'a>(
         EvmInstruction::CollectTreasure => {
             instruction::collect_treasury::process(program_id, accounts, instruction)
         }
-
-        _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", BumpAllocator::occupied());

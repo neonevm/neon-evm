@@ -7,74 +7,6 @@ use solana_program::{ program_error::ProgramError };
 /// `EvmInstruction` serialized in instruction data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EvmInstruction {
-    /// Deprecated: Write to an account
-    #[deprecated(note = "Instruction not supported")]
-    Write,
-
-    /// Deprecated: Finalize an account loaded with program data for execution
-    #[deprecated(note = "Instruction not supported")]
-    Finalise,
-
-    /// Deprecated: Create ethereum account
-    #[deprecated(note = "Instruction not supported")]
-    CreateAccount,
-
-    /// Deprecated: Create ethereum account with seed
-    #[deprecated(note = "Instruction not supported")]
-    CreateAccountWithSeed,
-
-    /// Call Ethereum-contract action from raw transaction data
-    CallFromRawEthereumTX,
-
-    /// Deprecated: Called action return
-    #[deprecated(note = "Instruction not supported")]
-    OnReturn,
-
-    /// Deprecated: Called action event
-    #[deprecated(note = "Instruction not supported")]
-    OnEvent,
-
-    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    #[deprecated(note = "Instruction not supported")]
-    PartialCallFromRawEthereumTX,
-
-    /// Partial call Ethereum-contract action from raw transaction data
-    /// ### Account references
-    ///   0. \[WRITE\] storage account
-    ///   1. ... Account references same as in Call
-    PartialCallFromRawEthereumTXv02,
-
-    /// Deprecated: Continue (version 01) Ethereum-contract action from raw transaction data
-    #[deprecated(note = "Instruction not supported")]
-    Continue,
-
-    /// Continue (version 02) Ethereum-contract action from raw transaction data
-    /// ### Account references same as in PartialCallFromRawEthereumTX
-    ContinueV02,
-
-    /// Deprecated: Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    #[deprecated(note = "Instruction not supported")]
-    ExecuteTrxFromAccountDataIterative,
-
-    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    ExecuteTrxFromAccountDataIterativeV02,
-
-    /// Cancel iterative transaction execution
-    #[deprecated(note = "Instruction not supported")]
-    Cancel,
-
-    /// Partial call Ethereum-contract action from raw transaction data
-    /// or Continue
-    /// ### Account references
-    ///   0. \[WRITE\] storage account
-    ///   1. ... Account references same as in Call
-    PartialCallOrContinueFromRawEthereumTX,
-
-    /// Partial call Ethereum-contract action from raw transaction data stored in holder account data
-    /// or
-    /// Continue
-    ExecuteTrxFromAccountDataIterativeOrContinue,
-
     /// Creates an ERC20 token account for the given Ethereum wallet address, contract address and token mint
     ///
     /// ### Account references
@@ -88,11 +20,6 @@ pub enum EvmInstruction {
     ///   7. '[]' Rent sysvar
     ERC20CreateTokenAccount,
 
-    /// Delete Holder or Storage account
-    /// # Account references
-    ///   0. [WRITE] Deleted account
-    ///   1. [WRITE] Deleted account creator
-    DeleteHolderOrStorageAccount,
 
     /// copying the content of the one code_account to the new code_account
     /// # Account references
@@ -102,15 +29,6 @@ pub enum EvmInstruction {
     ///   3. [READ] operator account
     ResizeContractAccount,
 
-    /// Cancel iterative transaction execution providing caller nonce
-    CancelWithNonce,
-
-    /// Write program data into a holder account
-    ///
-    /// # Account references
-    ///   0. \[WRITE\] Account to write to
-    ///   1. \[SIGNER\] Signer for Ether account
-    WriteHolder,
 
     /// Recompute Valids Table
     ///
@@ -151,9 +69,6 @@ pub enum EvmInstruction {
     ///   5. `[]` SPL Token program id.
     MigrateAccount,
 
-    /// Same as ExecuteTrxFromAccountDataIterativeOrContinue, but for transactions without chain id
-    ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
-
     /// Writes value to Ethereum account's distributed practically infinite storage.
     WriteValueToDistributedStorage,
 
@@ -162,6 +77,30 @@ pub enum EvmInstruction {
 
     /// Collect lamports from treasury pool accounts to main pool balance
     CollectTreasure,
+
+    // Create Holder Account
+    HolderCreate,
+
+    // Delete Holder Account
+    HolderDelete,
+
+    // Write Transaction into Holder Account
+    HolderWrite,
+
+    // Execute Transaction from Instruction in single iteration
+    TransactionExecuteFromInstruction,
+
+    // Execute Iterative Transaction from Instruction
+    TransactionStepFromInstruction,
+
+    // Execute Iterative Transaction from Account
+    TransactionStepFromAccount,
+
+    // Execute Iterative Transaction without ChainId from Account
+    TransactionStepFromAccountNoChainId,
+
+    // Cancel Transaction
+    Cancel
 }
 
 impl EvmInstruction {
@@ -171,32 +110,23 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            2 => Self::CreateAccount, // deprecated
-            5 => Self::CallFromRawEthereumTX,
-            6 => Self::OnReturn, // deprecated
-            7 => Self::OnEvent, // deprecated
-            9 => Self::PartialCallFromRawEthereumTX, // deprecated
-            10 => Self::Continue, // deprecated
-            11 => Self::ExecuteTrxFromAccountDataIterative, // deprecated
-            12 => Self::Cancel, // deprecated
-            13 => Self::PartialCallOrContinueFromRawEthereumTX,
-            14 => Self::ExecuteTrxFromAccountDataIterativeOrContinue,
             15 => Self::ERC20CreateTokenAccount,
-            16 => Self::DeleteHolderOrStorageAccount,
             17 => Self::ResizeContractAccount,
-            18 => Self::WriteHolder,
-            19 => Self::PartialCallFromRawEthereumTXv02,
-            20 => Self::ContinueV02,
-            21 => Self::CancelWithNonce,
-            22 => Self::ExecuteTrxFromAccountDataIterativeV02,
             23 => Self::UpdateValidsTable,
             24 => Self::CreateAccountV02,
             25 => Self::Deposit,
             26 => Self::MigrateAccount,
-            27 => Self::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId,
             28 => Self::WriteValueToDistributedStorage,
             29 => Self::ConvertDataAccountFromV1ToV2,
             30 => Self::CollectTreasure,
+            31 => Self::TransactionExecuteFromInstruction,
+            32 => Self::TransactionStepFromInstruction,
+            33 => Self::TransactionStepFromAccount,
+            34 => Self::TransactionStepFromAccountNoChainId,
+            35 => Self::Cancel,
+            36 => Self::HolderCreate,
+            37 => Self::HolderDelete,
+            38 => Self::HolderWrite,
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -205,17 +135,15 @@ impl EvmInstruction {
 
 
 pub mod account_create;
-pub mod account_delete_holder_storage;
+pub mod account_holder_create;
+pub mod account_holder_delete;
+pub mod account_holder_write;
 pub mod account_resize;
 pub mod erc20_account_create;
 pub mod neon_tokens_deposit;
 pub mod migrate_account;
-pub mod transaction_write_to_holder;
 pub mod transaction_cancel;
 pub mod transaction_execute_from_instruction;
-pub mod transaction_begin_from_instruction;
-pub mod transaction_begin_from_account;
-pub mod transaction_continue;
 pub mod transaction_step_from_instruction;
 pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;

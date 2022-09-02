@@ -1,10 +1,9 @@
 import pytest
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
-from solana.transaction import AccountMeta, TransactionInstruction
-from .solana_utils import sha256, solana_client, wait_confirm_transaction, get_solana_balance,\
+from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from .solana_utils import account_with_seed, create_holder_account, sha256, solana_client, wait_confirm_transaction, get_solana_balance,\
      create_account_with_seed, PublicKey, send_transaction
-from .utils.instructions import TransactionWithComputeBudget
 from .utils.constants import EVM_LOADER
 
 
@@ -16,24 +15,25 @@ def create_account(seed: str):
     return new_acc
 
 
-def create_account_with_seed_from_acc(acc: Keypair, seed: str):
-    storage = PublicKey(
-        sha256(bytes(acc.public_key) + bytes(seed, 'utf8') + bytes(PublicKey(EVM_LOADER))).digest())
+def create_holder(acc: Keypair, seed: str):
+    account = account_with_seed(acc.public_key, seed, PublicKey(EVM_LOADER))
 
-    if get_solana_balance(storage) == 0:
-        trx = TransactionWithComputeBudget()
-        trx.add(create_account_with_seed(acc.public_key, acc.public_key, seed, 10 ** 9, 128 * 1024,
-                                         PublicKey(EVM_LOADER)))
+    if get_solana_balance(account) == 0:
+        trx = Transaction()
+        trx.add(
+            create_account_with_seed(acc.public_key, acc.public_key, seed, 10 ** 9, 128 * 1024, PublicKey(EVM_LOADER)),
+            create_holder_account(account, acc.public_key)
+        )
         send_transaction(solana_client, trx, acc)
 
-    return storage
+    return account
 
 
-def call_refund_tx(del_key: PublicKey, acc: Keypair, seed: str, signer: Keypair):
-    trx = TransactionWithComputeBudget()
+def delete_holder(del_key: PublicKey, acc: Keypair, signer: Keypair):
+    trx = Transaction()
     trx.add(TransactionInstruction(
         program_id=EVM_LOADER,
-        data=bytearray.fromhex("10") + bytes(seed, 'utf8'),
+        data=bytearray.fromhex("25"),
         keys=[
             AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
             AccountMeta(pubkey=acc.public_key, is_signer=(signer == acc), is_writable=True),
@@ -42,46 +42,38 @@ def call_refund_tx(del_key: PublicKey, acc: Keypair, seed: str, signer: Keypair)
 
 
 class TestFundReturn:
-    alice_acc: Keypair
-    bob_acc: Keypair
-    refundable_acc: PublicKey
-    fail_acc: PublicKey
-    refundable_seed = "refund"
-    fail_seed = "fail"
+    alice: Keypair
+    bob: Keypair
+    alice_account: PublicKey
+    bob_account: PublicKey
+
 
     @classmethod
     def setup_class(cls):
-        cls.alice_acc = create_account("alice")
-        cls.bob_acc = create_account("bob")
+        cls.alice = create_account("alice")
+        cls.bob = create_account("bob")
 
-        cls.refundable_acc = create_account_with_seed_from_acc(cls.alice_acc, cls.refundable_seed)
-
-        cls.fail_acc = create_account_with_seed_from_acc(cls.alice_acc, cls.fail_seed)
+        cls.alice_account = create_holder(cls.alice, "1")
+        cls.bob_account = create_holder(cls.bob, "2")
 
     def test_creator_not_signer(self):
         err_msg = "expected signer"
 
         with pytest.raises(RPCException, match=err_msg):
-            call_refund_tx(self.fail_acc, self.alice_acc, self.fail_seed, self.bob_acc)
+            delete_holder(self.bob_account, self.alice, self.bob)
 
     def test_error_on_wrong_creator(self):
         err_msg = "invalid account data for instruction"
 
         with pytest.raises(RPCException, match=err_msg):
-            call_refund_tx(self.fail_acc, self.bob_acc, self.fail_seed, self.bob_acc)
-
-    def test_error_on_wrong_seed(self):
-        err_msg = "invalid account data for instruction"
-
-        with pytest.raises(RPCException, match=err_msg):
-            call_refund_tx(self.fail_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
+            delete_holder(self.alice_account, self.bob, self.bob)
 
     def test_success_refund(self):
-        pre_storage = get_solana_balance(self.refundable_acc)
-        pre_acc = get_solana_balance(self.alice_acc.public_key)
+        pre_storage = get_solana_balance(self.alice_account)
+        pre_acc = get_solana_balance(self.alice.public_key)
 
-        call_refund_tx(self.refundable_acc, self.alice_acc, self.refundable_seed, self.alice_acc)
+        delete_holder(self.alice_account, self.alice, self.alice)
 
-        post_acc = get_solana_balance(self.alice_acc.public_key)
+        post_acc = get_solana_balance(self.alice.public_key)
 
         assert pre_storage + pre_acc, post_acc + 5000

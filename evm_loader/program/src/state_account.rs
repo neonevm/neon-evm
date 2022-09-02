@@ -1,8 +1,8 @@
 use crate::{
     config::OPERATOR_PRIORITY_SLOTS,
     error::EvmLoaderError,
-    account::{State, FinalizedState, Operator, Incinerator, program},
-    transaction::UnsignedTransaction,
+    account::{State, FinalizedState, Operator, Incinerator, program, Holder},
+    transaction::Transaction,
 };
 use evm::{H160, U256};
 use solana_program::{
@@ -23,8 +23,8 @@ pub enum Deposit<'a> {
 
 impl <'a> FinalizedState<'a> {
     #[must_use]
-    pub fn is_outdated(&self, signature: &[u8; 65], caller: &H160)  -> bool {
-        self.sender != *caller || self.signature.ne(signature)
+    pub fn is_outdated(&self, transaction_hash: &[u8; 32]) -> bool {
+        self.transaction_hash.ne(transaction_hash)
     }
 }
 
@@ -35,36 +35,42 @@ impl<'a> State<'a> {
         info: &'a AccountInfo<'a>,
         accounts: &crate::instruction::transaction::Accounts<'a>,
         caller: H160,
-        trx: &UnsignedTransaction,
-        signature: &[u8; 65]
+        trx: &Transaction,
     ) -> Result<Self, ProgramError> {
-        let data = crate::account::state::Data {
-            caller,
-            nonce: trx.nonce,
-            gas_limit: trx.gas_limit,
-            gas_price: trx.gas_price,
-            slot: Clock::get()?.slot,
-            operator: *accounts.operator.key,
-            accounts_len: accounts.remaining_accounts.len(),
-            executor_data_size: 0,
-            evm_data_size: 0,
-            gas_used_and_paid: U256::zero(),
-            number_of_payments: 0,
-            signature: *signature,
-        };
-
-        let mut storage = match crate::account::tag(program_id, info)? {
-            crate::account::TAG_EMPTY => {
-                State::init(info, data)
+        let owner = match crate::account::tag(program_id, info)? {
+            Holder::TAG => {
+                let holder = Holder::from_account(program_id, info)?;
+                holder.owner
             }
             FinalizedState::TAG => {
                 let finalized_storage = FinalizedState::from_account(program_id, info)?;
-                assert!(finalized_storage.is_outdated(signature, &caller));
+                if !finalized_storage.is_outdated(&trx.hash) {
+                    return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
+                }
 
-                unsafe { finalized_storage.replace(data) }
+                finalized_storage.owner
             }
-            _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected finalized storage or empty", info.key)
-        }?;
+            _ => return Err!(ProgramError::InvalidAccountData; "Account {} - expected finalized storage or holder", info.key)
+        };
+
+        if &owner != accounts.operator.key {
+            return Err!(ProgramError::InvalidAccountData; "Account {} - invalid state account owner", info.key)
+        }
+
+        let data = crate::account::state::Data {
+            owner,
+            transaction_hash: trx.hash,
+            caller,
+            gas_limit: trx.gas_limit,
+            gas_price: trx.gas_price,
+            gas_used: U256::zero(),
+            operator: *accounts.operator.key,
+            slot: Clock::get()?.slot,
+            accounts_len: accounts.remaining_accounts.len(),
+        };
+
+        info.data.borrow_mut()[0] = 0_u8;
+        let mut storage = State::init(info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
         storage.write_accounts(accounts.remaining_accounts)?;
@@ -81,7 +87,7 @@ impl<'a> State<'a> {
         if account_tag == FinalizedState::TAG {
             return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
         }
-        if account_tag == crate::account::TAG_EMPTY {
+        if account_tag == Holder::TAG {
             return Err!(EvmLoaderError::StorageAccountUninitialized.into(); "Account {} - Storage Uninitialized", info.key);
         }
 
@@ -110,8 +116,8 @@ impl<'a> State<'a> {
         }?;
 
         let finalized_data = crate::account::state::FinalizedData {
-            sender: self.caller,
-            signature: self.signature,
+            owner: self.owner,
+            transaction_hash: self.transaction_hash
         };
 
         let finalized = unsafe { self.replace(finalized_data) }?;

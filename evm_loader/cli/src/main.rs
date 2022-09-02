@@ -18,7 +18,6 @@ use crate::{
         emulate,
         create_program_address,
         create_ether_account,
-        deploy,
         deposit,
         migrate_account,
         get_ether_account_data,
@@ -32,10 +31,8 @@ use crate::{
 
 use evm_loader::{
     account::{
-        ACCOUNT_SEED_VERSION,
         EthereumAccount,
     },
-    config::{  collateral_pool_base },
 };
 
 use evm::{H160, H256, U256};
@@ -45,9 +42,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer, Signature},
-    keccak::Hasher,
     transaction::Transaction,
-    system_instruction,
 };
 use std::{
     io::{Read},
@@ -56,7 +51,6 @@ use std::{
     str::FromStr,
     process::{exit},
     sync::Arc,
-    convert::{TryInto},
     fmt,
     fmt::{Debug, Display,},
 };
@@ -90,11 +84,11 @@ type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
     rpc_client: Arc<RpcClient>,
-    websocket_url: String,
     evm_loader: Pubkey,
     // #[allow(unused)]
     // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
+    #[allow(dead_code)]
     keypair: Option<Keypair>,
     commitment: CommitmentConfig,
 }
@@ -219,55 +213,6 @@ fn get_program_ether(
     keccak256_h256(&stream.out()).into()
 }
 
-fn create_storage_account(config: &Config) -> SolanaClientResult<Pubkey> {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let creator = &config.signer;
-    debug!("Create storage account");
-    let storage = create_account_with_seed(config, &creator.pubkey(), &creator.pubkey(), &rng.gen::<u32>().to_string(), 128*1024_u64)?;
-    debug!("storage = {}", storage);
-    Ok(storage)
-}
-
-fn get_collateral_pool_account_and_index(config: &Config, collateral_pool_base: &Pubkey) -> (Pubkey, u32) {
-    let collateral_pool_index = 2;
-    let seed = format!("{}{}", collateral_pool_base::PREFIX, collateral_pool_index);
-    let collateral_pool_account = Pubkey::create_with_seed(
-        collateral_pool_base,
-        &seed,
-        &config.evm_loader).unwrap();
-
-    (collateral_pool_account, collateral_pool_index)
-}
-
-fn create_account_with_seed(
-    config: &Config,
-    funding: &Pubkey,
-    base: &Pubkey,
-    seed: &str,
-    len: u64
-) -> SolanaClientResult<Pubkey> {
-    let created_account = Pubkey::create_with_seed(base, seed, &config.evm_loader).unwrap();
-
-    if config.rpc_client.get_account_with_commitment(&created_account, CommitmentConfig::confirmed())?.value.is_none() {
-        debug!("Account not found");
-        let minimum_balance_for_account = config.rpc_client.get_minimum_balance_for_rent_exemption(len.try_into().unwrap())?;
-        let create_acc_instruction = system_instruction::create_account_with_seed(
-            funding,
-            &created_account,
-            base,
-            seed,
-            minimum_balance_for_account,
-            len,
-            &config.evm_loader
-        );
-        send_transaction(config, &[create_acc_instruction])?;
-    } else {
-        debug!("Account found");
-    }
-
-    Ok(created_account)
-}
 
 fn send_transaction(
     config: &Config,
@@ -292,23 +237,6 @@ fn send_transaction(
     // Ok(tx_sig)
 }
 
-/// Returns random nonce and the corresponding seed.
-fn generate_random_holder_seed() -> (u64, String) {
-    use rand::Rng as _;
-    // proxy_id_bytes = proxy_id.to_bytes((proxy_id.bit_length() + 7) // 8, 'big')
-    // seed = keccak_256(b'holder' + proxy_id_bytes).hexdigest()[:32]
-    let mut rng = rand::thread_rng();
-    let id: u64 = rng.gen();
-    let bytes_count = std::mem::size_of_val(&id);
-    let bits_count = bytes_count * 8;
-    let holder_id_bit_length = bits_count - id.leading_zeros() as usize;
-    let significant_bytes_count = (holder_id_bit_length + 7) / 8;
-    let mut hasher = Hasher::default();
-    hasher.hash(b"holder");
-    hasher.hash(&id.to_be_bytes()[bytes_count-significant_bytes_count..]);
-    let output = hasher.result();
-    (id, hex::encode(output)[..32].into())
-}
 
 fn make_clean_hex(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
@@ -594,35 +522,6 @@ fn main() {
                 )
         )
         .subcommand(
-            SubCommand::with_name("deploy")
-                .about("Deploy a program")
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PROGRAM_FILEPATH")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                )
-                .arg(
-                    Arg::with_name("collateral_pool_base")
-                        .long("collateral_pool_base")
-                        .value_name("COLLATERAL_POOL_BASE")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Collateral_pool_base public key")
-                )
-                .arg(
-                    Arg::with_name("chain_id")
-                        .long("chain_id")
-                        .value_name("CHAIN_ID")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Network chain_id"),
-                )
-        )
-        .subcommand(
             SubCommand::with_name("deposit")
                 .about("Deposit NEONs to ether account")
                 .arg(
@@ -806,7 +705,6 @@ fn main() {
 
         Config {
             rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
-            websocket_url: String::new(),
             evm_loader,
             signer,
             keypair,
@@ -856,26 +754,6 @@ fn main() {
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 create_ether_account::execute(&config, &ether)
-            }
-            ("deploy", Some(arg_matches)) => {
-                let program_location = arg_matches.value_of("program_location").unwrap().to_string();
-
-                // Read ELF params only if collateral_pool_base or chain_id is not set.
-                let mut collateral_pool_base = pubkey_of(arg_matches, "collateral_pool_base");
-                let mut chain_id = value_of(arg_matches, "chain_id");
-                if collateral_pool_base.is_none() || chain_id.is_none() {
-                    let cached_elf_params = CachedElfParams::new(&config);
-                    collateral_pool_base = collateral_pool_base.or_else(|| Some(Pubkey::from_str(
-                        cached_elf_params.get("NEON_POOL_BASE").unwrap()
-                    ).unwrap()));
-                    chain_id = chain_id.or_else(|| Some(u64::from_str(
-                        cached_elf_params.get("NEON_CHAIN_ID").unwrap()
-                    ).unwrap()));
-                }
-                let collateral_pool_base = collateral_pool_base.unwrap();
-                let chain_id = chain_id.unwrap();
-
-                deploy::execute(&config, &program_location, &collateral_pool_base, chain_id)
             }
             ("deposit", Some(arg_matches)) => {
                 let amount = value_of(arg_matches, "amount").unwrap();

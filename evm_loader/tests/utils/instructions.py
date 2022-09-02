@@ -69,16 +69,18 @@ def make_CreateAccountV02(operator: Keypair, contract_address: PublicKey, contra
             keys=accounts)
 
 
-def write_holder_layout(nonce, offset, data):
-    return (bytes.fromhex('12') +
-            nonce.to_bytes(8, byteorder='little') +
-            offset.to_bytes(4, byteorder='little') +
-            len(data).to_bytes(8, byteorder='little') +
-            data)
+def write_holder_layout(hash: bytes, offset: int, data: bytes):
+    assert(len(hash) == 32)
+    return (
+        bytes.fromhex("26")
+        + hash
+        + offset.to_bytes(8, byteorder="little")
+        + data
+    )
 
 
-def make_WriteHolder(operator: PublicKey, holder_account: PublicKey, holder_id: int, offset: int, payload: bytes):
-    d = write_holder_layout(holder_id, offset, payload)
+def make_WriteHolder(operator: PublicKey, holder_account: PublicKey, hash: bytes, offset: int, payload: bytes):
+    d = write_holder_layout(hash, offset, payload)
 
     return TransactionInstruction(
                 program_id=EVM_LOADER,
@@ -93,24 +95,21 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         operator: Keypair,
         evm_loader: "EvmLoader",
         holder_address: PublicKey,
-        storage_address: PublicKey,
         treasury_address: PublicKey,
         treasury_buffer: bytes,
         step_count: int,
         additional_accounts: tp.List[PublicKey]):
-    code = 14
-    d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
+
+    d = (33).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
     print("Holder: ", holder_address)
-    print("Storage: ", storage_address)
     print("Operator: ", operator.public_key)
     print("Treasury: ", treasury_address)
     print("Operator ether: ", operator_ether.hex())
     print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
     accounts = [
                 AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
@@ -138,13 +137,12 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         treasury_buffer: bytes,
         step_count: int,
         additional_accounts: tp.List[PublicKey]):
-    code = 13
-    d = code.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
+
+    d = (32).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
     accounts = [
                 AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=SYS_INSTRUCT_ADDRESS, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
@@ -162,9 +160,8 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         )
 
 
-def make_CancelWithNonce(storage_address: PublicKey, operator: Keypair, nonce: int, additional_accounts: tp.List[PublicKey]):
-    code = 21
-    d = code.to_bytes(1, "little") + nonce.to_bytes(8, byteorder="little")
+def make_Cancel(storage_address: PublicKey, operator: Keypair, hash: bytes, additional_accounts: tp.List[PublicKey]):
+    d = (35).to_bytes(1, "little") + hash
 
     accounts = [
         AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),

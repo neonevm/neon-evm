@@ -2,14 +2,12 @@ use evm::{ExitError, ExitReason, H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
-use solana_program::pubkey::Pubkey;
-use crate::account;
-use crate::account::{EthereumAccount, Operator, program, State, FinalizedState, Treasury};
+use crate::account::{EthereumAccount, Operator, program, State,  Treasury};
 use crate::account_storage::{ProgramAccountStorage};
 use crate::executor::{Machine, Action};
 use crate::state_account::Deposit;
-use crate::transaction::{check_ethereum_transaction, UnsignedTransaction};
-use crate::error::EvmLoaderError;
+use crate::transaction::{check_ethereum_transaction, Transaction};
+
 
 
 pub struct Accounts<'a> {
@@ -21,32 +19,13 @@ pub struct Accounts<'a> {
     pub remaining_accounts: &'a [AccountInfo<'a>],
 }
 
-pub fn is_new_transaction<'a>(
-    program_id: &'a Pubkey,
-    storage_info: &'a AccountInfo<'a>,
-    signature: &[u8; 65],
-    caller: &H160,
-) -> Result<bool, ProgramError> {
-    match account::tag(program_id, storage_info)? {
-        account::TAG_EMPTY => Ok(true),
-        FinalizedState::TAG => {
-            if FinalizedState::from_account(program_id, storage_info)?.is_outdated(signature, caller) {
-                Ok(true)
-            } else {
-                Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")
-            }
-        },
-        State::TAG => Ok(false),
-            _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected storage or empty", storage_info.key)
-    }
-}
 
 pub fn do_begin<'a>(
     step_count: u64,
     accounts: Accounts<'a>,
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
-    trx: UnsignedTransaction,
+    trx: Transaction,
     caller: H160,
 ) -> ProgramResult {
     debug_print!("do_begin");
@@ -148,8 +127,7 @@ fn pay_gas_cost<'a>(
         value,
     )?;
 
-    storage.gas_used_and_paid = storage.gas_used_and_paid.saturating_add(used_gas);
-    storage.number_of_payments = storage.number_of_payments.saturating_add(1);
+    storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
     Ok(())
 }
@@ -165,12 +143,12 @@ fn finalize<'a>(
 
     // The only place where checked math is requiered.
     // Saturating math should be used everywhere else for gas calculation
-    let total_used_gas = storage.gas_used_and_paid.checked_add(used_gas);
+    let total_used_gas = storage.gas_used.checked_add(used_gas);
 
     // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas
     if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit))  {
         let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
-        let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used_and_paid);
+        let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used);
 
         return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas);
     }
@@ -189,7 +167,7 @@ fn finalize<'a>(
             account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
         }
 
-        accounts.neon_program.on_return(exit_reason, storage.gas_used_and_paid, &result);
+        accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
 
         account_storage.block_accounts(false)?;
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
