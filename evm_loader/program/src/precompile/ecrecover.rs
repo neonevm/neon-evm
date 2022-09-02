@@ -12,7 +12,7 @@ pub fn ecrecover(
     input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
     debug_print!("ecrecover");
-    debug_print!("input: {}", &hex::encode(&input));
+    debug_print!("input: {}", &hex::encode(input));
 
     if input.len() != 128 {
         return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), vec![0; 32]));
