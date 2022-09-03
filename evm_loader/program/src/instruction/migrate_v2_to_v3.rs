@@ -106,14 +106,18 @@ fn validate_account(
 }
 
 fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
-    let space_needed = EthereumAccount::SIZE + if let Some(contract) = accounts.ether_contract {
+    let (space_needed, code_size, generation) = if let Some(contract) = accounts.ether_contract {
         let contract_v2 = EthereumContractV2::from_account(program_id, contract)?;
-        EthereumAccount::SIZE + Extension::size_needed_v3(contract_v2.code_size as usize, None)
+        (
+            EthereumAccount::SIZE + Extension::size_needed_v3(contract_v2.code_size as usize, None),
+            contract_v2.code_size,
+            contract_v2.generation,
+        )
     } else {
-        0
+        (EthereumAccount::SIZE, 0, 0)
     };
 
-    let space_current = accounts.ether_account.data_len();
+    let mut space_current = accounts.ether_account.data_len();
     let rent = Rent::get()?;
     let lamports_needed = rent.minimum_balance(space_needed);
     if space_current < space_needed &&
@@ -127,14 +131,11 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
         return Ok(());
     }
 
-    let data = {
-        let (code_size, generation) = if let Some(contract) = accounts.ether_contract {
-            let contract_v2 = EthereumContractV2::from_account(program_id, contract)?;
-            (contract_v2.code_size, contract_v2.generation)
-        } else {
-            (0, 0)
-        };
+    space_current = accounts.ether_account.data_len();
 
+    assert!(space_current >= space_needed);
+
+    let data = {
         let account_v2 = EthereumAccountV2::from_account(program_id, accounts.ether_account)?;
 
         ether_account::Data {
@@ -150,22 +151,29 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     };
 
     {
-        let mut data_dst = accounts.ether_account.data.borrow_mut();
+        let data_dst = &mut accounts.ether_account.data.borrow_mut()[..space_needed];
         data_dst[0] = EthereumAccount::TAG;
         data.pack(&mut data_dst[1..]);
 
-        let valids_len = Valids::size_needed(data.code_size as usize);
         if let Some(contract_v2_info) = accounts.ether_contract {
             let contract_v2_data = EthereumContractV2::from_account(
                 program_id,
                 contract_v2_info,
             )?;
 
+            let valids_len = Valids::size_needed(code_size as usize);
+
+            assert!(
+                valids_len == contract_v2_data.extension.valids.len() ||
+                    valids_len == contract_v2_data.extension.valids.len() - 1
+            );
+
             let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
-            extension_dst[..data.code_size as usize].copy_from_slice(&contract_v2_data.extension.code);
-            extension_dst[data.code_size as usize..][..valids_len]
+            extension_dst[..code_size as usize]
+                .copy_from_slice(&contract_v2_data.extension.code);
+            extension_dst[code_size as usize..][..valids_len]
                 .copy_from_slice(&contract_v2_data.extension.valids[..valids_len]);
-            extension_dst[data.code_size as usize..][valids_len..][..contract_v2_data.extension.storage.len()]
+            extension_dst[code_size as usize..][valids_len..]
                 .copy_from_slice(&contract_v2_data.extension.storage);
 
             **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
@@ -179,6 +187,8 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
         **accounts.ether_account.lamports.borrow_mut() -= excessive_lamports;
         **accounts.operator.lamports.borrow_mut() += excessive_lamports;
     }
+
+    assert_eq!(space_current, space_needed);
 
     Ok(())
 }
