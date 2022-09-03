@@ -345,10 +345,14 @@ fn main() -> Result<()> {
     for exclude_pubkey in EXCLUDE_V2_ACCOUNTS.iter() {
         to_convert.remove(exclude_pubkey);
     }
-    println!("OK ({} accounts)", to_convert.len());
+    println!(
+        "OK ({} accounts, {} with contracts)",
+        to_convert.len(),
+        to_convert.values().filter(|contract| contract.is_some()).count(),
+    );
 
     let mut recent_block_hash = RecentBlockHash::new(&client, CONFIG.recent_block_hash_ttl_sec);
-    loop {
+    while !to_convert.is_empty() {
         println!("Accounts to convert: {}", to_convert.len());
 
         let mut batch = Batch::new(
@@ -377,18 +381,19 @@ fn main() -> Result<()> {
         )?;
         println!("OK ({} accounts)", v3_accounts.len());
 
-        print!("Removing converted accounts... ");
-        let mut removed = 0;
-        for (pubkey, _account) in &v3_accounts {
-            if to_convert.remove(pubkey).is_some() {
-                removed += 1;
+        if v3_accounts.len() > 0 {
+            print!("Removing converted accounts... ");
+            let mut removed = 0;
+            for (pubkey, _account) in &v3_accounts {
+                if to_convert.remove(pubkey).is_some() {
+                    removed += 1;
+                }
             }
-        }
-        println!("{} accounts removed", removed);
-
-        if to_convert.is_empty() {
-            println!("Conversion completed.");
-            return Ok(());
+            println!("{} accounts removed", removed);
         }
     }
+
+    println!("Conversion completed.");
+
+    Ok(())
 }
