@@ -199,6 +199,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 
     if space_current > space_needed {
         accounts.ether_account.realloc(space_needed, false)?;
+        space_current = accounts.ether_account.data_len();
         let excessive_lamports = accounts.ether_account.lamports().saturating_sub(lamports_needed);
         **accounts.ether_account.lamports.borrow_mut() -= excessive_lamports;
         **accounts.operator.lamports.borrow_mut() += excessive_lamports;
