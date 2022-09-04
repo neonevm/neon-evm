@@ -156,25 +156,34 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
         data.pack(&mut data_dst[1..]);
 
         if let Some(contract_v2_info) = accounts.ether_contract {
-            let contract_v2_data = EthereumContractV2::from_account(
+            let contract_v2 = EthereumContractV2::from_account(
                 program_id,
                 contract_v2_info,
             )?;
 
             let valids_len = Valids::size_needed(code_size as usize);
 
+            solana_program::msg!(
+                "Copying contract data. code_size = {}, code.len() = {}, valids: (actual len = {}, needed = {}), storage.len() = {}",
+                contract_v2.code_size,
+                contract_v2.extension.code.len(),
+                contract_v2.extension.valids.len(),
+                valids_len,
+                contract_v2.extension.storage.len(),
+            );
+
             assert!(
-                valids_len == contract_v2_data.extension.valids.len() ||
-                    valids_len == contract_v2_data.extension.valids.len() - 1
+                valids_len == contract_v2.extension.valids.len() ||
+                    valids_len == contract_v2.extension.valids.len() - 1
             );
 
             let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
             extension_dst[..code_size as usize]
-                .copy_from_slice(&contract_v2_data.extension.code);
+                .copy_from_slice(&contract_v2.extension.code);
             extension_dst[code_size as usize..][..valids_len]
-                .copy_from_slice(&contract_v2_data.extension.valids[..valids_len]);
+                .copy_from_slice(&contract_v2.extension.valids[..valids_len]);
             extension_dst[code_size as usize..][valids_len..]
-                .copy_from_slice(&contract_v2_data.extension.storage);
+                .copy_from_slice(&contract_v2.extension.storage);
 
             **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
             **contract_v2_info.lamports.borrow_mut() = 0;
