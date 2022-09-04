@@ -1,4 +1,5 @@
-use evm::Valids;
+use std::mem::size_of;
+use evm::{U256, Valids};
 use solana_program::{pubkey, system_instruction};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
@@ -10,9 +11,11 @@ use solana_program::sysvar::Sysvar;
 
 use crate::account::{AccountData, ether_account, ether_contract, EthereumAccount, Operator, Packable, program};
 use crate::account::ether_contract::Extension;
+use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::error::EvmLoaderError;
 
 const OPERATOR_PUBKEY: Pubkey = pubkey!("6sXBjtBYNbUCKFq3CuAg7LHw9DJCvXujRUEFgK9TuzKx");
+const STORAGE_LEN: usize = STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize * size_of::<U256>();
 
 type EthereumAccountV2<'a> = AccountData<'a, ether_account::DataV2>;
 type EthereumContractV2<'a> = AccountData<'a, ether_contract::DataV2, ether_contract::Extension<'a>>;
@@ -172,18 +175,22 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
                 contract_v2.extension.storage.len(),
             );
 
+            assert_eq!(contract_v2.extension.code.len(), code_size as usize);
             assert!(
                 valids_len == contract_v2.extension.valids.len() ||
                     valids_len == contract_v2.extension.valids.len() - 1
             );
 
-            let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
-            extension_dst[..code_size as usize]
-                .copy_from_slice(&contract_v2.extension.code);
-            extension_dst[code_size as usize..][..valids_len]
-                .copy_from_slice(&contract_v2.extension.valids[..valids_len]);
-            extension_dst[code_size as usize..][valids_len..]
-                .copy_from_slice(&contract_v2.extension.storage);
+            if code_size > 0 {
+                assert_eq!(contract_v2.extension.storage.len(), STORAGE_LEN);
+                let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
+                extension_dst[..code_size as usize]
+                    .copy_from_slice(&contract_v2.extension.code);
+                extension_dst[code_size as usize..][..valids_len]
+                    .copy_from_slice(&contract_v2.extension.valids[..valids_len]);
+                extension_dst[code_size as usize..][valids_len..][..STORAGE_LEN]
+                    .copy_from_slice(&contract_v2.extension.storage);
+            }
 
             **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
             **contract_v2_info.lamports.borrow_mut() = 0;
