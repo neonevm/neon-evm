@@ -186,7 +186,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
                 extension_dst[code_size as usize..][..valids_len]
                     .copy_from_slice(&contract_v2.extension.valids[..valids_len]);
                 extension_dst[code_size as usize..][valids_len..][..Extension::INTERNAL_STORAGE_SIZE]
-                    .copy_from_slice(&contract_v2.extension.storage);
+                    .copy_from_slice(&contract_v2.extension.storage[..Extension::INTERNAL_STORAGE_SIZE]);
             }
 
             **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();
