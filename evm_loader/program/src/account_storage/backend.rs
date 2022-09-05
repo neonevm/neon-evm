@@ -131,10 +131,11 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
-        match self.ethereum_accounts.get(address) {
-            Some(a) => (*a.info.key, a.bump_seed),
-            None => self.calc_solana_address(address),
-        }
+        self.ethereum_accounts.get(address)
+            .map_or_else(
+                || self.calc_solana_address(address),
+                |a| (*a.info.key, a.bump_seed),
+            )
     }
 
     fn chain_id(&self) -> u64 {
