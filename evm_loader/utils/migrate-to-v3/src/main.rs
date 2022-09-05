@@ -91,7 +91,7 @@ impl <'a> RecentBlockHash<'a> {
         Self {
             client,
             hash: Hash::new_from_array([0; 32]),
-            time: Instant::now().sub(Duration::from_secs(60 * 60 * 24)),
+            time: Instant::now().sub(Duration::from_secs(60 * 60)),
             recent_block_hash_ttl_sec,
         }
     }
@@ -303,11 +303,11 @@ fn main() -> Result<()> {
     let v2_accounts = get_evm_accounts(&client, ether_account::DataV2::TAG, None)?;
     println!("Queried {} accounts.", v2_accounts.len());
 
-    print!("Querying Contract V2 accounts... ");
-    let contract_v2_accounts = get_evm_accounts(&client, ether_contract::DataV2::TAG, None)?;
-    println!("Queried {} accounts.", contract_v2_accounts.len());
-
     if !CONFIG.skip_backup {
+        print!("Querying Contract V2 accounts... ");
+        let contract_v2_accounts = get_evm_accounts(&client, ether_contract::DataV2::TAG, None)?;
+        println!("Queried {} accounts.", contract_v2_accounts.len());
+
         let path = current_dir()?
             .join("backups")
             .join(
@@ -326,8 +326,6 @@ fn main() -> Result<()> {
         }
         println!("Backup completed. ");
     }
-
-    drop(contract_v2_accounts);
 
     print!("Transforming... ");
 
