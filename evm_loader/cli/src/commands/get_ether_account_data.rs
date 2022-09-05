@@ -20,7 +20,7 @@ pub fn execute (
             let acc_info = account_info(&solana_address, &mut acc);
             let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).unwrap();
 
-            println!("Ethereum address: 0x{}", &hex::encode(&ether_address.as_fixed_bytes()));
+            println!("Ethereum address: 0x{}", &hex::encode(ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);
 
             println!("Account fields");

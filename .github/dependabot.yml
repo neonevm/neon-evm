@@ -7,10 +7,10 @@ updates:
           time: "10:00"
           timezone: "UTC"
       target-branch: "develop"
-      open-pull-requests-limit: 10
+      open-pull-requests-limit: 1
       assignees:
         - "anton-lisanin"
-        - "s-medveded"
+        - "s-medvedev"
       ignore:
         - dependency-name: "solana-program"
         - dependency-name: "spl-token"

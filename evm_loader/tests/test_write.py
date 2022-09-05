@@ -8,6 +8,7 @@ import pytest
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
 from .solana_utils import (
+    create_holder_account,
     solana_cli,
     get_solana_balance,
     PublicKey,
@@ -18,9 +19,10 @@ from .solana_utils import (
     TxOpts,
     Confirmed,
     AccountMeta,
+    Transaction,
     TransactionInstruction,
 )
-from .utils.instructions import TransactionWithComputeBudget
+from .utils.instructions import write_holder_layout
 from .utils.constants import EVM_LOADER
 
 
@@ -30,26 +32,19 @@ path_to_solana = "solana"
 holder_id = 0
 
 
-def write_holder_layout(nonce, offset, data):
-    return (
-        bytes.fromhex("12")
-        + nonce.to_bytes(8, byteorder="little")
-        + offset.to_bytes(4, byteorder="little")
-        + len(data).to_bytes(8, byteorder="little")
-        + data
-    )
-
-
 def create_account(signer: Keypair) -> PublicKey:
     holder_id_bytes = holder_id.to_bytes((holder_id.bit_length() + 7) // 8, "big")
     seed = keccak_256(b"holder" + holder_id_bytes).hexdigest()[:32]
     account = account_with_seed(signer.public_key, seed, PublicKey(EVM_LOADER))
     if get_solana_balance(account) == 0:
         print("Creating account...")
-        trx = TransactionWithComputeBudget()
+        trx = Transaction()
         trx.add(
             create_account_with_seed(
                 signer.public_key, signer.public_key, seed, 10 ** 9, 128 * 1024, PublicKey(EVM_LOADER)
+            ),
+            create_holder_account(
+                account, signer.public_key
             )
         )
         solana_client.send_transaction(
@@ -60,13 +55,13 @@ def create_account(signer: Keypair) -> PublicKey:
     return account
 
 
-def write_to_account(account, operator, signer, nonce, data) -> int:
-    tx = TransactionWithComputeBudget()
+def write_to_account(account, operator, signer, hash, data) -> int:
+    tx = Transaction()
     metas = [
         AccountMeta(pubkey=account, is_signer=False, is_writable=True),
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=False),
     ]
-    tx.add(TransactionInstruction(program_id=EVM_LOADER, data=write_holder_layout(nonce, 0, data), keys=metas))
+    tx.add(TransactionInstruction(program_id=EVM_LOADER, data=write_holder_layout(hash, 0, data), keys=metas))
     opts = TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
     return solana_client.send_transaction(tx, signer, opts=opts)["id"]
 
@@ -88,20 +83,12 @@ def account(operator_keypair) -> PublicKey:
 
 class TestWriteAccount:
     def test_instruction_write_is_ok(self, account, operator_keypair):
-        tx_id = write_to_account(account, operator_keypair, operator_keypair, holder_id, test_data)
+        tx_id = write_to_account(account, operator_keypair, operator_keypair, bytes(32), test_data)
         assert tx_id > 0
-
-    def test_instruction_write_fails_wrong_seed(self, account, operator_keypair):
-        with pytest.raises(
-            RPCException,
-            match="Transaction simulation failed: Error processing Instruction 2: invalid program argument",
-        ):
-            wrong_holder_id = 1000
-            write_to_account(account, operator_keypair, operator_keypair, wrong_holder_id, test_data)
 
     def test_instruction_write_fails_wrong_operator(self, account, attacker):
         with pytest.raises(
             RPCException,
-            match="Transaction simulation failed: Error processing Instruction 2: custom program error: 0x3",
+            match="Transaction simulation failed: Error processing Instruction 0: invalid account data for instruction",
         ):
-            write_to_account(account, attacker, attacker, holder_id, test_data)
+            write_to_account(account, attacker, attacker, bytes(32), test_data)

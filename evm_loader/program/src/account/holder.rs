@@ -1,75 +1,89 @@
 use std::cell::Ref;
-use std::convert::{TryFrom, TryInto};
-use crate::account::Operator;
-use solana_program::account_info::AccountInfo;
+
+use arrayref::{mut_array_refs, array_refs};
+use arrayref::{array_mut_ref, array_ref};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
-use crate::account;
 
-pub struct Holder<'a> {
-    info: &'a AccountInfo<'a>,
+use crate::transaction::Transaction;
+
+use super::Holder;
+use super::Operator;
+use super::Packable;
+
+/// Ethereum holder data account
+#[derive(Default, Debug)]
+pub struct Data {
+    pub owner: Pubkey,
+    pub transaction_hash: [u8; 32]
 }
 
+impl Packable for Data {
+    /// Holder struct tag
+    const TAG: u8 = super::TAG_HOLDER;
+    /// Holder struct serialized size
+    const SIZE: usize = 64;
+
+    /// Deserialize `Holder` struct from input data
+    #[must_use]
+    fn unpack(src: &[u8]) -> Self {
+        let data = array_ref![src, 0, Data::SIZE];
+        let (owner, hash) = array_refs![data, 32, 32];
+
+        Self {
+            owner: Pubkey::new_from_array(*owner),
+            transaction_hash: *hash
+        }
+    }
+
+    /// Serialize `Holder` struct into given destination
+    fn pack(&self, dst: &mut [u8]) {
+        #[allow(clippy::use_self)]
+        let data = array_mut_ref![dst, 0, Data::SIZE];
+        let (owner, hash) = mut_array_refs![data, 32, 32];
+
+        owner.copy_from_slice(self.owner.as_ref());
+        hash.copy_from_slice(&self.transaction_hash);
+    }
+}
+
+
 impl<'a> Holder<'a> {
-    pub fn from_account(program_id: &Pubkey, id: u64, info: &'a AccountInfo<'a>, operator: &Operator) -> Result<Self, ProgramError> {
-        // WTF!?
-        let bytes_count = std::mem::size_of_val(&id);
-        let bits_count = bytes_count * 8;
-        let holder_id_bit_length = bits_count - id.leading_zeros() as usize;
-        let significant_bytes_count = (holder_id_bit_length + 7) / 8;
-        let mut hasher = solana_program::keccak::Hasher::default();
-        hasher.hash(b"holder");
-        hasher.hash(&id.to_be_bytes()[bytes_count - significant_bytes_count..]);
-        let output = hasher.result();
-        let seed = &hex::encode(output)[..32];
-
-        let expected_key = Pubkey::create_with_seed(operator.key, seed, program_id)?;
-        if *info.key != expected_key {
-            return Err!(ProgramError::InvalidArgument; "Account {} - expected holder key {}", info.key, expected_key);
-        }
-
-        Self::from_account_unchecked(program_id, info)
+    pub fn clear(&mut self) {
+        self.transaction_hash.fill(0);
+        
+        let mut data = self.info.data.borrow_mut();
+        data[Self::SIZE..].fill(0);
     }
 
-    pub fn from_account_unchecked(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
-        if account::tag(program_id, info)? != account::TAG_EMPTY {
-            return Err!(ProgramError::InvalidAccountData; "Account {} - expected empty tag", info.key)
-        }
+    pub fn write(&mut self, offset: usize, bytes: &[u8]) {
+        let mut data = self.info.data.borrow_mut();
+        
+        let begin = Self::SIZE + offset;
+        let end = begin + bytes.len();
 
-        Ok(Self { info })
-    }
-
-    pub fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), ProgramError> {
-        let mut data = self.info.try_borrow_mut_data()?;
-        let begin = 1_usize/*TAG_EMPTY*/ + offset as usize;
-        let end = begin.checked_add(bytes.len())
-            .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account data index overflow"))?;
-
-        if data.len() < end {
-            return Err!(ProgramError::AccountDataTooSmall; "Account data too small data.len()={:?}, offset={:?}, bytes.len()={:?}", data.len(), offset, bytes.len());
-        }
         data[begin..end].copy_from_slice(bytes);
+    }
+
+    #[must_use]
+    pub fn transaction(&self) -> Ref<'a, [u8]> {
+        let data = Ref::map(self.info.data.borrow(), |d| *d);
+        Ref::map(data, |d| &d[Self::SIZE..])
+    }
+
+    pub fn validate_owner(&self, operator: &Operator) -> Result<(), ProgramError> {
+        if &self.owner != operator.key {
+            return Err!(ProgramError::InvalidAccountData; "Invalid Holder account owner");
+        }
 
         Ok(())
     }
 
-    #[must_use]
-    pub fn transaction_and_signature(&self) -> (Ref<'a, [u8]>, Ref<'a, [u8; 65]>) {
-        fn split_ref_at(origin: Ref<[u8]>, at: usize) -> (Ref<[u8]>, Ref<[u8]>) {
-            Ref::map_split(origin, |d| d.split_at(at))
+    pub fn validate_transaction(&self, trx: &Transaction) -> Result<(), ProgramError> {
+        if self.transaction_hash != trx.hash {
+            return Err!(ProgramError::InvalidAccountData; "Invalid Holder transaction hash");
         }
 
-        let data = Ref::map(self.info.data.borrow(), |d| *d);
-        let (_tag, rest) = split_ref_at(data, 1);
-        let (signature, rest) = split_ref_at(rest, 65);
-        let signature = Ref::map(signature, |s| s.try_into().expect("s.len() == 65"));
-
-        let (trx_len, rest) = split_ref_at(rest, 8);
-        let trx_len = (*trx_len).try_into().ok().map(u64::from_le_bytes).expect("trx_len is 8 bytes");
-        let trx_len = usize::try_from(trx_len).expect("usize is 8 bytes");
-
-        let (trx, _) = split_ref_at(rest, trx_len);
-
-        (trx, signature)
+        Ok(())
     }
 }

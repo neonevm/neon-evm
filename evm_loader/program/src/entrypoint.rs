@@ -42,8 +42,14 @@ fn process_instruction<'a>(
         .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Invalid instruction - {:?}", instruction_data))?;
 
     let result = match EvmInstruction::parse(tag)? {
-        EvmInstruction::DeleteHolderOrStorageAccount => {
-            instruction::account_delete_holder_storage::process(program_id, accounts, instruction)
+        EvmInstruction::HolderCreate => {
+            instruction::account_holder_create::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::HolderDelete => {
+            instruction::account_holder_delete::process(program_id, accounts, instruction)
+        }
+        EvmInstruction::HolderWrite => {
+            instruction::account_holder_write::process(program_id, accounts, instruction)
         }
         EvmInstruction::ERC20CreateTokenAccount => {
             instruction::erc20_account_create::process(program_id, accounts, instruction)
@@ -51,31 +57,19 @@ fn process_instruction<'a>(
         EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
-        EvmInstruction::WriteHolder => {
-            instruction::transaction_write_to_holder::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::CancelWithNonce => {
+        EvmInstruction::Cancel => {
             instruction::transaction_cancel::process(program_id, accounts, instruction)
         }
-        EvmInstruction::CallFromRawEthereumTX => {
+        EvmInstruction::TransactionExecuteFromInstruction => {
             instruction::transaction_execute_from_instruction::process(program_id, accounts, instruction)
         }
-        EvmInstruction::PartialCallFromRawEthereumTxV03 => {
-            instruction::transaction_begin_from_instruction::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeV03 => {
-            instruction::transaction_begin_from_account::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::ContinueV03 => {
-            instruction::transaction_continue::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::PartialCallOrContinueFromRawEthereumTX => {
+        EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
         }
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinue => {
+        EvmInstruction::TransactionStepFromAccount => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
         }
-        EvmInstruction::ExecuteTrxFromAccountDataIterativeOrContinueNoChainId => {
+        EvmInstruction::TransactionStepFromAccountNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
         }
         EvmInstruction::CreateAccountV03 => {
@@ -87,8 +81,6 @@ fn process_instruction<'a>(
         EvmInstruction::Migrate03AccountFromV2ToV3 => {
             instruction::migrate_v2_to_v3::process(program_id, accounts, instruction)
         }
-
-        _ => Err!(ProgramError::InvalidInstructionData; "Invalid instruction"),
     };
 
     solana_program::msg!("Total memory occupied: {}", BumpAllocator::occupied());

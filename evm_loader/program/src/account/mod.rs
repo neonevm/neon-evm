@@ -10,19 +10,18 @@ use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
-pub use holder::Holder;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
 pub use treasury::{MainTreasury, Treasury};
 
 mod treasury;
 mod operator;
-mod holder;
 mod incinerator;
 pub mod ether_account;
 pub mod ether_contract;
 pub mod ether_storage;
 pub mod state;
+pub mod holder;
 pub mod program;
 pub mod token;
 pub mod sysvar;
@@ -53,11 +52,13 @@ const TAG_STATE: u8 = 30;
 #[deprecated]
 const _TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
+const TAG_HOLDER: u8 = 6;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, Option<ether_contract::Extension<'a>>>;
 pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
 pub type State<'a> = AccountData<'a, state::Data>;
 pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
+pub type Holder<'a> = AccountData<'a, holder::Data>;
 
 
 pub trait AccountExtension<'a, T> {

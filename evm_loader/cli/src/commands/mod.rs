@@ -1,7 +1,6 @@
 pub mod cancel_trx;
 pub mod create_ether_account;
 pub mod create_program_address;
-pub mod deploy;
 pub mod deposit;
 pub mod emulate;
 pub mod get_ether_account_data;

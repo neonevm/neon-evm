@@ -5,13 +5,6 @@ use solana_sdk::{
     message::Message,
     transaction::Transaction,
     system_program,
-    compute_budget::ComputeBudgetInstruction,
-};
-
-use evm_loader::config::{
-    COMPUTE_BUDGET_UNITS,
-    COMPUTE_BUDGET_HEAP_FRAME,
-    REQUEST_UNITS_ADDITIONAL_FEE,
 };
 
 use solana_cli::{
@@ -36,7 +29,7 @@ pub fn execute (
 
     let create_account_v03_instruction = Instruction::new_with_bincode(
         config.evm_loader,
-        &(0x1f_u8, ether_address.as_fixed_bytes()),
+        &(0x28_u8, ether_address.as_fixed_bytes()),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
@@ -44,12 +37,7 @@ pub fn execute (
         ]
     );
 
-    let instructions = vec![
-        ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS),
-        ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE),
-        ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME),
-        create_account_v03_instruction
-    ];
+    let instructions = vec![create_account_v03_instruction];
 
     let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
     let blockhash = config.rpc_client.get_latest_blockhash()?;

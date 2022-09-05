@@ -25,17 +25,19 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let storage = State::restore(program_id, storage_info, &operator, remaining_accounts)?;
 
     let accounts = Accounts { storage, operator, incinerator, remaining_accounts };
-    let nonce = u64::from_le_bytes(*array_ref![instruction, 0, 8]);
+    let transaction_hash = array_ref![instruction, 0, 32];
 
-    validate(&accounts, nonce)?;
+    solana_program::log::sol_log_data(&[b"HASH", transaction_hash]);
+
+    validate(&accounts, transaction_hash)?;
     execute(program_id, accounts)
 }
 
-fn validate(accounts: &Accounts, nonce: u64) -> ProgramResult {
+fn validate(accounts: &Accounts, transaction_hash: &[u8; 32]) -> ProgramResult {
     let storage = &accounts.storage;
 
-    if storage.nonce != nonce {
-        return Err!(ProgramError::InvalidInstructionData; "trx_nonce<{}> != nonce<{}>", storage.nonce, nonce);
+    if &storage.transaction_hash != transaction_hash {
+        return Err!(ProgramError::InvalidInstructionData; "Invalid transaction hash");
     }
 
     Ok(())

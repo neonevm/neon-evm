@@ -254,7 +254,7 @@ fn migrate_v2_to_v3_instruction(
     if let Some(contract) = ether_contract {
         accounts.push(AccountMeta::new(contract, false));  // Ether contract
     }
-    Instruction::new_with_bytes(*EVM_LOADER, &[0x21_u8], accounts)
+    Instruction::new_with_bytes(*EVM_LOADER, &[0x29_u8], accounts)
 }
 
 fn make_migrate_v2_to_v3_transaction(

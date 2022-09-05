@@ -9,6 +9,7 @@ from ..solana_utils import EvmLoader, solana_client, get_transaction_count
 from ..eth_tx_utils import pack, make_instruction_data_from_tx
 from ..conftest import Caller
 from .constants import ACCOUNT_SEED_VERSION
+from web3.auto import w3
 
 
 @dataclass
@@ -38,6 +39,5 @@ def make_eth_transaction(to_addr: str, data: bytes, signer: Keypair, from_solana
     nonce = get_transaction_count(solana_client, from_solana_user)
     tx = {'to': to_addr, 'value': 0, 'gas': 9999999999, 'gasPrice': 0,
           'nonce': nonce, 'data': data, 'chainId': 111}
-    (from_addr, sign, msg) = make_instruction_data_from_tx(tx, signer.secret_key[:32])
-    assert from_addr == user_eth_address, (from_addr, user_eth_address)
-    return from_addr, sign, msg, nonce
+
+    return w3.eth.account.sign_transaction(tx, signer.secret_key[:32])

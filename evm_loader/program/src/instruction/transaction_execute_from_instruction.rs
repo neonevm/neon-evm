@@ -1,5 +1,5 @@
-use crate::account::{Operator, program, EthereumAccount, sysvar, Treasury};
-use crate::transaction::{check_ethereum_transaction, check_secp256k1_instruction, UnsignedTransaction};
+use crate::account::{Operator, program, EthereumAccount, Treasury};
+use crate::transaction::{check_ethereum_transaction, Transaction, recover_caller_address};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
 use evm::{H160};
@@ -11,7 +11,6 @@ use crate::executor::Machine;
 
 
 struct Accounts<'a> {
-    sysvar_instructions: sysvar::Instructions<'a>,
     operator: Operator<'a>,
     treasury: Treasury<'a>,
     operator_ether_account: EthereumAccount<'a>,
@@ -27,23 +26,22 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     solana_program::msg!("Instruction: Execute Transaction from Instruction");
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
-    let caller_address = H160::from(*array_ref![instruction, 4, 20]);
-    let _signature = array_ref![instruction, 4 + 20, 65];
-    let unsigned_msg = &instruction[4 + 20 + 65..];
+    let messsage = &instruction[4..];
 
     let accounts = Accounts {
-        sysvar_instructions: sysvar::Instructions::from_account(&accounts[0])?,
-        operator: unsafe { Operator::from_account_not_whitelisted(&accounts[1])? },
-        treasury: Treasury::from_account(program_id, treasury_index, &accounts[2])?,
-        operator_ether_account: EthereumAccount::from_account(program_id, &accounts[3])?,
-        system_program: program::System::from_account(&accounts[4])?,
-        neon_program: program::Neon::from_account(program_id, &accounts[5])?,
-        remaining_accounts: &accounts[6..]
+        operator: unsafe { Operator::from_account_not_whitelisted(&accounts[0])? },
+        treasury: Treasury::from_account(program_id, treasury_index, &accounts[1])?,
+        operator_ether_account: EthereumAccount::from_account(program_id, &accounts[2])?,
+        system_program: program::System::from_account(&accounts[3])?,
+        neon_program: program::Neon::from_account(program_id, &accounts[4])?,
+        remaining_accounts: &accounts[5..]
     };
 
-    check_secp256k1_instruction(accounts.sysvar_instructions.info, unsigned_msg.len(), 5_u16)?;
+    let trx = Transaction::from_rlp(messsage)?;
+    let caller_address = recover_caller_address(&trx)?;
 
-    let trx = UnsignedTransaction::from_rlp(unsigned_msg)?;
+    solana_program::log::sol_log_data(&[b"HASH", &trx.hash]);
+
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         &accounts.operator,
@@ -59,7 +57,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 fn validate(
     _accounts: &Accounts,
     account_storage: &ProgramAccountStorage,
-    trx: &UnsignedTransaction,
+    trx: &Transaction,
     caller_address: &H160,
 ) -> ProgramResult {
     check_ethereum_transaction(account_storage, caller_address, trx)?;
@@ -75,7 +73,7 @@ fn validate(
 fn execute<'a>(
     accounts: Accounts<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
-    trx: UnsignedTransaction,
+    trx: Transaction,
     caller_address: H160,
 ) -> ProgramResult {
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;

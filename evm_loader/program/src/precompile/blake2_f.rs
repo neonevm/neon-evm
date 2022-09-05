@@ -130,7 +130,7 @@ pub fn blake2_f(
         output_buf[i * 8..(i + 1) * 8].copy_from_slice(&state_word.to_le_bytes());
     }
 
-    debug_print!("{}", &hex::encode(&output_buf));
+    debug_print!("{}", &hex::encode(output_buf));
 
     Capture::Exit((
         ExitReason::Succeed(evm::ExitSucceed::Returned),
