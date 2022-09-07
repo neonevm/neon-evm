@@ -1,3 +1,4 @@
+use bytes::BytesMut;
 use evm::{H160, U256};
 use solana_program::{ 
     entrypoint::{ProgramResult},
@@ -23,40 +24,13 @@ pub struct Transaction {
     pub recovery_id: u8,
     pub rlp_len: usize,
     pub hash: [u8; 32],
+    pub signed_hash: [u8; 32],
 }
 
 impl Transaction {
     pub fn from_rlp(transaction: &[u8]) -> Result<Self, ProgramError> {
         rlp::decode(transaction)
             .map_err(|e| E!(ProgramError::InvalidInstructionData; "RLP DecoderError={}", e))
-    }
-
-    #[must_use]
-    pub fn signed_hash(&self) -> [u8; 32] {
-        let mut rlp = if self.chain_id.is_some() {
-            rlp::RlpStream::new_list(9)
-        } else {
-            rlp::RlpStream::new_list(6)
-        };
-
-        rlp.append(&self.nonce);
-        rlp.append(&self.gas_price);
-        rlp.append(&self.gas_limit);
-        if let Some(to) = self.to {
-            rlp.append(&to);
-        } else {
-            rlp.append_empty_data();
-        }
-        rlp.append(&self.value);
-        rlp.append(&self.call_data);
-        
-        if let Some(chain_id) = self.chain_id {
-            rlp.append(&chain_id);
-            rlp.append_empty_data();
-            rlp.append_empty_data();
-        }
-
-        solana_program::keccak::hash(&rlp.out()).to_bytes()
     }
 }
 
@@ -108,22 +82,43 @@ impl rlp::Decodable for Transaction {
     
         let raw = rlp.as_raw();
         let hash = solana_program::keccak::hash(&raw[..payload_size]).to_bytes();
+        let signed_hash = signed_hash(rlp, chain_id)?;
 
         let tx = Self { 
             nonce, gas_price, gas_limit, to, value, call_data, v, r, s,
-            chain_id, recovery_id, rlp_len: payload_size, hash,
+            chain_id, recovery_id, rlp_len: payload_size, hash, signed_hash
         };
 
         Ok(tx)
     }
 }
 
+fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32], rlp::DecoderError> {
+    let raw = transaction.as_raw();
+    let payload_info = transaction.payload_info()?;
+    let (_, v_offset) = transaction.at_with_offset(6)?;
+
+    let list_len = if chain_id.is_some() { 9 } else { 6 };
+
+    let buffer = BytesMut::with_capacity(raw.len());
+
+    let mut rlp = rlp::RlpStream::new_list_with_buffer(buffer, list_len);
+    rlp.append_raw(&raw[payload_info.header_len..v_offset], 6);
+
+    if let Some(chain_id) = chain_id {
+        rlp.append(&chain_id);
+        rlp.append_empty_data();
+        rlp.append_empty_data();
+    }
+
+    let hash = solana_program::keccak::hash(&rlp.out()).to_bytes();
+
+    Ok(hash)
+}
 
 pub fn recover_caller_address(trx: &Transaction) -> Result<H160, ProgramError> {
-    let digest = trx.signed_hash();
-
     let signature = [trx.r, trx.s].concat();
-    let public_key = secp256k1_recover(&digest, trx.recovery_id, &signature)
+    let public_key = secp256k1_recover(&trx.signed_hash, trx.recovery_id, &signature)
         .map_err(|e| E!(ProgramError::MissingRequiredSignature; "Secp256k1 Error={:?}", e))?;
 
     let address = keccak256_digest(&public_key.to_bytes());
