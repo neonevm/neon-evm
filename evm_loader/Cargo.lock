@@ -2023,7 +2023,7 @@ dependencies = [
  "rlp",
  "serde",
  "serde_json",
- "sha3 0.8.2",
+ "sha3 0.10.1",
  "solana-clap-utils",
  "solana-cli",
  "solana-cli-config",
