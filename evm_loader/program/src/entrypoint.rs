@@ -63,6 +63,9 @@ fn process_instruction<'a>(
         EvmInstruction::Deposit => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }
+        EvmInstruction::Deposit2 => {
+            instruction::neon_tokens_deposit_2::process(program_id, accounts, instruction)
+        }
         EvmInstruction::MigrateAccount => {
             instruction::migrate_account::process(program_id, accounts, instruction)
         }
