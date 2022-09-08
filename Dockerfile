@@ -1,4 +1,4 @@
-ARG SOLANA_REVISION
+ARG SOLANA_IMAGE
 # Install BPF SDK
 FROM solanalabs/rust:1.61.0 AS builder
 RUN rustup toolchain install nightly
@@ -43,7 +43,7 @@ RUN solc --output-dir . --bin *.sol && \
         ls -l
 
 # Define solana-image that contains utility
-FROM solanalabs/solana:${SOLANA_REVISION} AS solana
+FROM ${SOLANA_IMAGE} AS solana
 
 # Build target image
 FROM ubuntu:20.04 AS base
