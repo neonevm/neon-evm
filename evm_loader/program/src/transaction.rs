@@ -69,7 +69,7 @@ impl rlp::Decodable for Transaction {
 
         let (chain_id, recovery_id) = if v >= U256::from(35) {
             let chain_id = (v - 1) / 2 - 17;
-            let recovery_id = if (v % 2).is_zero() { 1_u8 } else { 0_u8 };
+            let recovery_id = u8::from((v % 2).is_zero());
             (Some(chain_id), recovery_id)
         } else if v == U256::from(27) {
             (None, 0_u8)
