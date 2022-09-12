@@ -29,6 +29,16 @@ pub fn neon_token<B: AccountStorage>(
 {
     debug_print!("neon_token({})", hex::encode(input));
 
+    if context.apparent_value.is_zero() {
+        // staticcall or call without value is not allowed
+        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    }
+
+    if context.address != super::SYSTEM_ACCOUNT_NEON_TOKEN {
+        // callcode or delegatecall is not allowed
+        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    }
+
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
@@ -38,7 +48,7 @@ pub fn neon_token<B: AccountStorage>(
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
 
-        let source = context.address; // caller contract
+        let source = context.caller; // caller contract
 
         // owner of the associated token account
         let destination = array_ref![rest, 0, 32];

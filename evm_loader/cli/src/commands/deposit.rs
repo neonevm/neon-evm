@@ -6,7 +6,6 @@ use solana_sdk::{
     pubkey::Pubkey,
     transaction::Transaction,
     system_program,
-    compute_budget::ComputeBudgetInstruction,
 };
 
 use solana_cli::{
@@ -14,12 +13,6 @@ use solana_cli::{
 };
 
 use evm::{H160};
-
-use evm_loader::config::{
-    COMPUTE_BUDGET_UNITS,
-    COMPUTE_BUDGET_HEAP_FRAME,
-    REQUEST_UNITS_ADDITIONAL_FEE,
-};
 
 use crate::{
     Config,
@@ -34,11 +27,7 @@ pub fn execute(
 ) -> NeonCliResult {
     let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
 
-    let mut instructions = Vec::with_capacity(5);
-
-    instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_BUDGET_UNITS));
-    instructions.push(ComputeBudgetInstruction::set_compute_unit_price(REQUEST_UNITS_ADDITIONAL_FEE));
-    instructions.push(ComputeBudgetInstruction::request_heap_frame(COMPUTE_BUDGET_HEAP_FRAME));
+    let mut instructions = Vec::with_capacity(2);
 
     let ether_account = config.rpc_client.get_account(&ether_pubkey);
     if ether_account.is_err() {
@@ -60,7 +49,7 @@ pub fn execute(
     instructions.push(spl_approve_instruction(
         config,
         signer_token_pubkey,
-        evm_token_authority,
+        ether_pubkey,
         amount,
     ));
 
@@ -73,7 +62,6 @@ pub fn execute(
         evm_pool_pubkey,
         ether_address,
         ether_pubkey,
-        evm_token_authority,
     ));
 
     let mut finalize_message = Message::new(&instructions, Some(&config.signer.pubkey()));
@@ -151,16 +139,14 @@ fn deposit_instruction(
     destination_pubkey: Pubkey,
     ether_address: &H160,
     ether_account_pubkey: Pubkey,
-    evm_token_authority: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(0x1e_u8, ether_address.as_fixed_bytes()),
+        &(0x27_u8, ether_address.as_fixed_bytes()),
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),
             AccountMeta::new(ether_account_pubkey, false),
-            AccountMeta::new_readonly(evm_token_authority, false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),

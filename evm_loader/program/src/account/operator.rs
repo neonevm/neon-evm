@@ -32,6 +32,10 @@ impl<'a> Operator<'a> {
             return Err!(ProgramError::InvalidArgument; "Account {} - expected signer", info.key);
         }
 
+        if info.data_len() > 0 {
+            return Err!(ProgramError::InvalidArgument; "Account {} - expected empty", info.key);
+        }
+
         Ok(Self { info })
     }
 }

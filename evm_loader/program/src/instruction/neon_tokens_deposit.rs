@@ -17,7 +17,6 @@ struct Accounts<'a> {
     source: token::State<'a>,
     pool: Option<token::State<'a>>,
     ethereum_account: &'a AccountInfo<'a>,
-    authority: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
     operator: Operator<'a>,
     system_program: program::System<'a>,
@@ -25,38 +24,40 @@ struct Accounts<'a> {
 
 const AUTHORITY_SEED: &[u8] = b"Deposit";
 
+impl<'a> Accounts<'a> {
+    pub fn from_slice(accounts: &'a [AccountInfo<'a>]) -> Result<Accounts<'a>, ProgramError> {
+        let source = token::State::from_account(&accounts[0])?;
+        let pool = if source.delegate.is_some() {
+            Some(token::State::from_account(&accounts[1])?)
+        } else {
+            None
+        };
+        Ok(Accounts {
+            source,
+            pool,
+            ethereum_account: &accounts[2],
+            token_program: program::Token::from_account(&accounts[3])?,
+            operator: unsafe { Operator::from_account_not_whitelisted(&accounts[4]) }?,
+            system_program: program::System::from_account(&accounts[5])?,
+        })
+    }
+}
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
     solana_program::msg!("Instruction: Deposit");
 
-    let source = token::State::from_account(&accounts[0])?;
-    let pool = if source.delegate.is_some() {
-        Some(token::State::from_account(&accounts[1])?)
-    } else {
-        None
-    };
-    let parsed_accounts = Accounts {
-        source,
-        pool,
-        ethereum_account: &accounts[2],
-        authority: &accounts[3],
-        token_program: program::Token::from_account(&accounts[4])?,
-        operator: unsafe { Operator::from_account_not_whitelisted(&accounts[5]) }?,
-        system_program: program::System::from_account(&accounts[6])?,
-    };
-
+    let parsed_accounts = Accounts::from_slice(accounts)?;
     let ethereum_address = H160::from(array_ref![instruction, 0, 20]);
 
-    let (authority_bump_seed, ethereum_bump_seed) =
-        validate(program_id, &parsed_accounts, &ethereum_address)?;
-    execute(program_id, &parsed_accounts, authority_bump_seed, ethereum_address, ethereum_bump_seed)
+    let ethereum_bump_seed = validate(program_id, &parsed_accounts, &ethereum_address)?;
+    execute(program_id, &parsed_accounts, ethereum_address, ethereum_bump_seed)
 }
 
 fn validate(
     program_id: &Pubkey,
     accounts: &Accounts,
     ethereum_address: &H160,
-) -> Result<(u8, u8), ProgramError> {
+) -> Result<u8, ProgramError> {
     let program_seeds = [&[ACCOUNT_SEED_VERSION], ethereum_address.as_bytes()];
     let (expected_solana_address, ethereum_bump_seed) =
         Pubkey::find_program_address(&program_seeds, program_id);
@@ -69,17 +70,6 @@ fn validate(
         );
     }
 
-    let (expected_address, authority_bump_seed) =
-        Pubkey::find_program_address(&[AUTHORITY_SEED], program_id);
-    if accounts.authority.key != &expected_address {
-        return Err!(
-            ProgramError::InvalidArgument;
-            "Account {} - expected PDA address {}",
-            accounts.authority.key,
-            expected_address
-        );
-    }
-
     if accounts.source.mint != crate::config::token_mint::id() {
         return Err!(
                 ProgramError::InvalidArgument;
@@ -89,9 +79,10 @@ fn validate(
     }
 
     if let Some(pool) = &accounts.pool {
+        let (authority_address, _) = Pubkey::find_program_address(&[AUTHORITY_SEED], program_id);
         let expected_pool_address = get_associated_token_address(
-            accounts.authority.key,
-            &crate::config::token_mint::id()
+            &authority_address,
+            &crate::config::token_mint::id(),
         );
 
         if pool.info.key != &expected_pool_address {
@@ -112,23 +103,22 @@ fn validate(
         }
 
         if let COption::Some(delegate) = &accounts.source.delegate {
-            if delegate != accounts.authority.key {
+            if delegate != accounts.ethereum_account.key {
                 return Err!(
                     ProgramError::InvalidArgument;
-                    "Account {} - expected tokens delegated to authority account",
+                    "Account {} - expected tokens delegated to an user account",
                     accounts.source.info.key
                 );
             }
         }
     }
 
-    Ok((authority_bump_seed, ethereum_bump_seed))
+    Ok(ethereum_bump_seed)
 }
 
 fn execute<'a>(
     program_id: &'a Pubkey,
     accounts: &Accounts,
-    authority_bump_seed: u8,
     ethereum_address: H160,
     ethereum_bump_seed: u8,
 ) -> ProgramResult {
@@ -139,13 +129,17 @@ fn execute<'a>(
         let pool = accounts.pool.as_ref()
             .expect("Pool must be set in a case of delegated amount");
 
-        let signers_seeds: &[&[&[u8]]] = &[&[AUTHORITY_SEED, &[authority_bump_seed]]];
+        let signers_seeds: &[&[&[u8]]] = &[&[
+            &[ACCOUNT_SEED_VERSION],
+            ethereum_address.as_bytes(),
+            &[ethereum_bump_seed],
+        ]];
 
         let instruction = spl_token::instruction::transfer(
             accounts.token_program.key,
             accounts.source.info.key,
             pool.info.key,
-            accounts.authority.key,
+            accounts.ethereum_account.key,
             &[],
             amount,
         )?;
@@ -153,7 +147,7 @@ fn execute<'a>(
         let account_infos: &[AccountInfo] = &[
             accounts.source.info.clone(),
             pool.info.clone(),
-            accounts.authority.clone(),
+            accounts.ethereum_account.clone(),
             accounts.token_program.clone(),
         ];
 

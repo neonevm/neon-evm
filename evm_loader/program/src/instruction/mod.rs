@@ -29,10 +29,9 @@ pub enum EvmInstruction {
     ///   0. `[writable]` NEON token source account.
     ///   1. `[writable]` NEON token pool (destination) account.
     ///   2. `[writable]` Ether account to store balance of NEONs.
-    ///   3. `[]` EVM Loader authority account (PDA, seeds = \[b"Deposit"\]).
-    ///   4. `[]` SPL Token program id.
-    ///   5. `[writeable,signer]` Funding account (must be a system account).
-    ///   6. `[]` System program.
+    ///   3. `[]` SPL Token program id.
+    ///   4. `[writeable,signer]` Funding account (must be a system account).
+    ///   5. `[]` System program.
     DepositV03,
 
     /// Create Ethereum account V3
