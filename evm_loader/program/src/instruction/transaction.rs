@@ -7,7 +7,10 @@ use crate::account_storage::{ProgramAccountStorage};
 use crate::executor::{Machine, Action};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
+use crate::executor::LAMPORTS_PER_SIGNATURE;
 
+/// Current cap of transaction accounts
+const TX_ACCOUNT_CNT: u64 = 30;
 
 
 pub struct Accounts<'a> {
@@ -27,6 +30,7 @@ pub fn do_begin<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     trx: Transaction,
     caller: H160,
+    alt_cost: u64,
 ) -> ProgramResult {
     debug_print!("do_begin");
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
@@ -61,7 +65,7 @@ pub fn do_begin<'a>(
         }
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas)
+    finalize(accounts, storage, account_storage, results, used_gas + alt_cost)
 }
 
 pub fn do_continue<'a>(
@@ -174,4 +178,14 @@ fn finalize<'a>(
     }
 
     Ok(())
+}
+
+#[must_use]
+pub fn alt_cost(tx_acc_count: u64) -> u64 {
+    if tx_acc_count > TX_ACCOUNT_CNT {
+        (tx_acc_count /TX_ACCOUNT_CNT+1) * LAMPORTS_PER_SIGNATURE
+    }
+    else{
+        0
+    }
 }

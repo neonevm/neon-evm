@@ -45,7 +45,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
             let storage = State::new(program_id, storage_info, &accounts, caller, &trx)?;
 
-            do_begin(step_count, accounts, storage, &mut account_storage, trx, caller)
+            do_begin(step_count, accounts, storage, &mut account_storage, trx, caller, 0)
         },
         State::TAG => {
             let storage = State::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
