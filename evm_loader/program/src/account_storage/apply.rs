@@ -58,7 +58,7 @@ impl<'a> ProgramAccountStorage<'a> {
         caller: H160,
         actions: Option<Vec<Action>>,
     ) -> Result<bool, ProgramError> {
-        solana_program::msg!("Applies begin");
+        debug_print!("Applies begin");
 
         let actions = match actions {
             None => vec![Action::EvmIncrementNonce { address: caller }],
@@ -69,7 +69,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     operator,
                     &actions,
                 )? {
-                    solana_program::msg!("Applies postponed: need to reallocate accounts in the next transaction(s)");
+                    debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
                     return Ok(false);
                 }
 
@@ -144,7 +144,7 @@ impl<'a> ProgramAccountStorage<'a> {
             }
         }
 
-        solana_program::msg!("Applies done");
+        debug_print!("Applies done");
 
         Ok(true)
     }
@@ -167,7 +167,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 return Ok(true)
             }
 
-            solana_program::msg!(
+            debug_print!(
                 "Resizing account (space_current = {}, space_needed = {})",
                 space_current,
                 space_needed
@@ -219,7 +219,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
             let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
             if solana_program::system_program::check_id(solana_account.owner) {
-                solana_program::msg!(
+                debug_print!(
                     "Creating account (space_needed = {}) needed for action: {}",
                     space_needed,
                     action
@@ -347,7 +347,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
 
     fn transfer_neon_tokens(&mut self, source: &H160, target: &H160, value: U256) -> ProgramResult {
-        solana_program::msg!("Transfer {} NEONs from {} to {}", value, source, target);
+        debug_print!("Transfer {} NEONs from {} to {}", value, source, target);
 
         if source == target {
             return Ok(())

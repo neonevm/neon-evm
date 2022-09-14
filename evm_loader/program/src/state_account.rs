@@ -108,7 +108,7 @@ impl<'a> State<'a> {
     }
 
     pub fn finalize(self, deposit: Deposit<'a>) -> Result<FinalizedState<'a>, ProgramError> {
-        solana_program::msg!("Finalize Storage {}", self.info.key);
+        debug_print!("Finalize Storage {}", self.info.key);
 
         match deposit {
             Deposit::ReturnToOperator(operator) => self.withdraw_deposit(&operator),

@@ -28,7 +28,7 @@ pub fn do_begin<'a>(
     trx: Transaction,
     caller: H160,
 ) -> ProgramResult {
-    solana_program::msg!("do_begin");
+    debug_print!("do_begin");
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
@@ -71,7 +71,7 @@ pub fn do_continue<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
-    solana_program::msg!("do_continue");
+    debug_print!("do_continue");
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
@@ -121,7 +121,7 @@ fn pay_gas_cost<'a>(
     storage: &mut State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
-    solana_program::msg!("pay_gas_cost {}", used_gas);
+    debug_print!("pay_gas_cost {}", used_gas);
 
     // Can overflow in malicious transaction
     let value = used_gas.saturating_mul(storage.gas_price);

@@ -4,7 +4,6 @@ use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 
 use solana_program::account_info::AccountInfo;
-use solana_program::msg;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
@@ -290,7 +289,7 @@ pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> 
 /// # Safety
 /// *Permanently delete all data* in the account. Transfer lamports to the operator.
 pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), ProgramError> {
-    msg!("DELETE ACCOUNT {}", account.key);
+    debug_print!("DELETE ACCOUNT {}", account.key);
 
     let operator_lamports = operator.lamports().checked_add(account.lamports())
         .ok_or_else(|| E!(ProgramError::InvalidArgument; "Operator lamports overflow"))?;
