@@ -7,7 +7,6 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use solana_program::program::invoke_signed;
-use solana_program::program_option::COption;
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
@@ -15,7 +14,7 @@ use crate::account::program::EtherAccountParams;
 
 struct Accounts<'a> {
     source: token::State<'a>,
-    pool: Option<token::State<'a>>,
+    pool: token::State<'a>,
     ethereum_account: &'a AccountInfo<'a>,
     token_program: program::Token<'a>,
     operator: Operator<'a>,
@@ -26,15 +25,9 @@ const AUTHORITY_SEED: &[u8] = b"Deposit";
 
 impl<'a> Accounts<'a> {
     pub fn from_slice(accounts: &'a [AccountInfo<'a>]) -> Result<Accounts<'a>, ProgramError> {
-        let source = token::State::from_account(&accounts[0])?;
-        let pool = if source.delegate.is_some() {
-            Some(token::State::from_account(&accounts[1])?)
-        } else {
-            None
-        };
         Ok(Accounts {
-            source,
-            pool,
+            source: token::State::from_account(&accounts[0])?,
+            pool: token::State::from_account(&accounts[1])?,
             ethereum_account: &accounts[2],
             token_program: program::Token::from_account(&accounts[3])?,
             operator: unsafe { Operator::from_account_not_whitelisted(&accounts[4]) }?,
@@ -72,45 +65,49 @@ fn validate(
 
     if accounts.source.mint != crate::config::token_mint::id() {
         return Err!(
-                ProgramError::InvalidArgument;
-                "Account {} - expected Neon Token account",
-                accounts.source.info.key
-            );
+            ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token account",
+            accounts.source.info.key
+        );
     }
 
-    if let Some(pool) = &accounts.pool {
-        let (authority_address, _) = Pubkey::find_program_address(&[AUTHORITY_SEED], program_id);
-        let expected_pool_address = get_associated_token_address(
-            &authority_address,
-            &crate::config::token_mint::id(),
+    let (authority_address, _) = Pubkey::find_program_address(&[AUTHORITY_SEED], program_id);
+    let expected_pool_address = get_associated_token_address(
+        &authority_address,
+        &crate::config::token_mint::id(),
+    );
+
+    if accounts.pool.info.key != &expected_pool_address {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token Pool {}",
+            accounts.pool.info.key,
+            expected_pool_address
         );
+    }
 
-        if pool.info.key != &expected_pool_address {
-            return Err!(
-                ProgramError::InvalidArgument;
-                "Account {} - expected Neon Token Pool {}",
-                pool.info.key,
-                expected_pool_address
-            );
-        }
+    if accounts.pool.mint != crate::config::token_mint::id() {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Account {} - expected Neon Token account",
+            accounts.pool.info.key
+        );
+    }
 
-        if pool.mint != crate::config::token_mint::id() {
-            return Err!(
-                ProgramError::InvalidArgument;
-                "Account {} - expected Neon Token account",
-                pool.info.key
-            );
-        }
+    if !accounts.source.delegate.contains(accounts.ethereum_account.key) {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Account {} - expected tokens delegated to an user account",
+            accounts.source.info.key
+        );
+    }
 
-        if let COption::Some(delegate) = &accounts.source.delegate {
-            if delegate != accounts.ethereum_account.key {
-                return Err!(
-                    ProgramError::InvalidArgument;
-                    "Account {} - expected tokens delegated to an user account",
-                    accounts.source.info.key
-                );
-            }
-        }
+    if accounts.source.delegated_amount < 1 {
+        return Err!(
+            ProgramError::InvalidArgument;
+            "Account {} - expected positive tokens amount delegated to an user account",
+            accounts.source.info.key
+        );
     }
 
     Ok(ethereum_bump_seed)
@@ -122,45 +119,32 @@ fn execute<'a>(
     ethereum_address: H160,
     ethereum_bump_seed: u8,
 ) -> ProgramResult {
-    let amount = accounts.source.delegated_amount;
-    let deposit = if accounts.source.delegate.is_none() || amount == 0 {
-        U256::zero()
-    } else {
-        let pool = accounts.pool.as_ref()
-            .expect("Pool must be set in a case of delegated amount");
+    let signers_seeds: &[&[&[u8]]] = &[&[
+        &[ACCOUNT_SEED_VERSION],
+        ethereum_address.as_bytes(),
+        &[ethereum_bump_seed],
+    ]];
 
-        let signers_seeds: &[&[&[u8]]] = &[&[
-            &[ACCOUNT_SEED_VERSION],
-            ethereum_address.as_bytes(),
-            &[ethereum_bump_seed],
-        ]];
+    let instruction = spl_token::instruction::transfer(
+        accounts.token_program.key,
+        accounts.source.info.key,
+        accounts.pool.info.key,
+        accounts.ethereum_account.key,
+        &[],
+        accounts.source.delegated_amount,
+    )?;
 
-        let instruction = spl_token::instruction::transfer(
-            accounts.token_program.key,
-            accounts.source.info.key,
-            pool.info.key,
-            accounts.ethereum_account.key,
-            &[],
-            amount,
-        )?;
+    let account_infos: &[AccountInfo] = &[
+        accounts.source.info.clone(),
+        accounts.pool.info.clone(),
+        accounts.ethereum_account.clone(),
+        accounts.token_program.clone(),
+    ];
 
-        let account_infos: &[AccountInfo] = &[
-            accounts.source.info.clone(),
-            pool.info.clone(),
-            accounts.ethereum_account.clone(),
-            accounts.token_program.clone(),
-        ];
-
-        invoke_signed(&instruction, account_infos, signers_seeds)?;
-
-        assert!(crate::config::token_mint::decimals() <= 18);
-        let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
-
-        U256::from(amount) * U256::from(10_u64.pow(additional_decimals))
-    };
+    invoke_signed(&instruction, account_infos, signers_seeds)?;
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
-        return accounts.system_program.create_account(
+        accounts.system_program.create_account(
             program_id,
             &accounts.operator,
             &EtherAccountParams {
@@ -168,22 +152,23 @@ fn execute<'a>(
                 info: accounts.ethereum_account,
                 bump_seed: ethereum_bump_seed,
                 space: EthereumAccount::SIZE,
-                balance: deposit,
+                balance: U256::zero(),
             },
-        );
+        )?;
     }
 
-    if amount > 0 {
-        let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
-        ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
-            .ok_or_else(||
-                E!(
-                    ProgramError::InvalidArgument;
-                    "Account {} - balance overflow",
-                    ethereum_address
-                )
-            )?;
-    }
+    assert!(crate::config::token_mint::decimals() <= 18);
+    let additional_decimals: u32 = (18 - crate::config::token_mint::decimals()).into();
+    let deposit = U256::from(accounts.source.delegated_amount) * U256::from(10_u64.pow(additional_decimals));
+    let mut ethereum_account = EthereumAccount::from_account(program_id, accounts.ethereum_account)?;
+    ethereum_account.balance = ethereum_account.balance.checked_add(deposit)
+        .ok_or_else(||
+            E!(
+                ProgramError::InvalidArgument;
+                "Account {} - balance overflow",
+                ethereum_address
+            )
+        )?;
 
     Ok(())
 }
