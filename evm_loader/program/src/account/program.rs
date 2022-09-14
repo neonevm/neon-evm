@@ -142,7 +142,6 @@ pub struct EtherAccountParams<'a> {
     pub info: &'a AccountInfo<'a>,
     pub bump_seed: u8,
     pub space: usize,
-    pub balance: U256,
 }
 
 impl<'a> System<'a> {
@@ -249,7 +248,7 @@ impl<'a> System<'a> {
                 address: ether_account.address,
                 bump_seed: ether_account.bump_seed,
                 trx_count: 0,
-                balance: ether_account.balance,
+                balance: U256::zero(),
                 rw_blocked: false,
                 ro_blocked_count: 0,
                 generation: 0,

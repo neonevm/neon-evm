@@ -152,7 +152,6 @@ fn execute<'a>(
                 info: accounts.ethereum_account,
                 bump_seed: ethereum_bump_seed,
                 space: EthereumAccount::SIZE,
-                balance: U256::zero(),
             },
         )?;
     }

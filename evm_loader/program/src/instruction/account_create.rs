@@ -1,5 +1,5 @@
 use arrayref::array_ref;
-use evm::{H160, U256};
+use evm::H160;
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
@@ -54,7 +54,6 @@ fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u
             info: accounts.ether_account,
             bump_seed,
             space: EthereumAccount::SIZE,
-            balance: U256::zero(),
         },
     )?;
 

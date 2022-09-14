@@ -232,7 +232,6 @@ impl<'a> ProgramAccountStorage<'a> {
                         info: solana_account,
                         bump_seed,
                         space: MAX_PERMITTED_DATA_INCREASE.min(space_needed),
-                        balance: U256::zero(),
                     },
                 )?;
 
