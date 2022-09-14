@@ -292,47 +292,6 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def airdrop_neon_tokens(self, user_ether_address: Union[str, bytes], amount: int) -> None:
-        operator = self.acc.get_acc()
-
-        (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(self.loader_id))
-        pool_token_account = get_associated_token_address(neon_evm_authority, NEON_TOKEN_MINT_ID)
-        source_token_account = get_associated_token_address(operator.public_key(), NEON_TOKEN_MINT_ID)
-        (user_solana_address, _) = self.ether2program(user_ether_address)
-
-        trx = TransactionWithComputeBudget()
-        if amount > 0:
-            pool_account_exists = solana_client.get_account_info(
-                pool_token_account, commitment=Processed
-            )["result"]["value"] is not None
-            print("Pool Account Exists: ", pool_account_exists)
-
-            if not pool_account_exists:
-                trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
-
-            trx.add(approve(ApproveParams(
-                program_id=TOKEN_PROGRAM_ID,
-                source=source_token_account,
-                delegate=PublicKey(user_solana_address),
-                owner=operator.public_key(),
-                amount=amount * (10 ** 9),
-            )))
-
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=bytes.fromhex("27") + self.ether2bytes(user_ether_address),
-            keys=[
-                AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=PublicKey(user_solana_address), is_signer=False, is_writable=True),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=operator.public_key(), is_signer=True, is_writable=True),
-                AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
-            ]
-        ))
-        result = send_transaction(solana_client, trx, Keypair.from_secret_key(operator.secret_key()))
-        print("Airdrop transaction: ", result)
-
     def deploy(self, contract_path, config=None):
         print(f'Deploy contract from path: {contract_path}')
         if config is None:
