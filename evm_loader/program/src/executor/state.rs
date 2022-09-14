@@ -433,7 +433,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.exit_result = result;
     }
 
-    pub fn take_exit_result(&mut self) -> Option<(Vec<u8>, ExitReason)> {
-        self.exit_result.take()
+    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
+        &self.exit_result
     }
 }

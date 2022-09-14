@@ -351,12 +351,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
-        if let Some(result) = self.state_mut().take_exit_result() {
+        if let Some(result) = self.state_mut().exit_result() {
             if result.1 != ExitReason::StepLimitReached {
                 debug_print!(
                     "Skipping VM execution due to the previous execution result stored to state"
                 );
-                return Err(result);
+                return Err(result.clone());
             }
         }
 
