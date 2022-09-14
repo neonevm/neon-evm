@@ -10,7 +10,6 @@ use solana_program::program::invoke_signed;
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program, token};
-use crate::account::program::EtherAccountParams;
 
 struct Accounts<'a> {
     source: token::State<'a>,
@@ -144,15 +143,14 @@ fn execute<'a>(
     invoke_signed(&instruction, account_infos, signers_seeds)?;
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
-        accounts.system_program.create_account(
+        EthereumAccount::create_account(
+            &accounts.system_program,
             program_id,
             &accounts.operator,
-            &EtherAccountParams {
-                address: ethereum_address,
-                info: accounts.ethereum_account,
-                bump_seed: ethereum_bump_seed,
-                space: EthereumAccount::SIZE,
-            },
+            ethereum_address,
+            accounts.ethereum_account,
+            ethereum_bump_seed,
+            EthereumAccount::SIZE,
         )?;
     }
 

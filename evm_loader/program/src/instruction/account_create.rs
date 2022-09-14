@@ -6,7 +6,6 @@ use solana_program::{
 };
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, Operator, program};
-use crate::account::program::EtherAccountParams;
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -46,15 +45,14 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160) -> Result<
 }
 
 fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u8) -> ProgramResult {
-    accounts.system_program.create_account(
+    EthereumAccount::create_account(
+        &accounts.system_program,
         program_id,
         &accounts.operator,
-        &EtherAccountParams {
-            address,
-            info: accounts.ether_account,
-            bump_seed,
-            space: EthereumAccount::SIZE,
-        },
+        address,
+        accounts.ether_account,
+        bump_seed,
+        EthereumAccount::SIZE,
     )?;
 
     Ok(())

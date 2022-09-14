@@ -49,7 +49,7 @@ pub struct DataV2 {
 }
 
 /// Ethereum account data v3
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Data {
     /// Ethereum address
     pub address: H160,

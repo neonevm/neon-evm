@@ -14,7 +14,6 @@ use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account::ether_contract::Extension;
-use crate::account::program::EtherAccountParams;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -224,15 +223,14 @@ impl<'a> ProgramAccountStorage<'a> {
                     space_needed,
                     action
                 );
-                system_program.create_account(
+                EthereumAccount::create_account(
+                    system_program,
                     neon_program.key,
                     operator,
-                    &EtherAccountParams {
-                        address: *address,
-                        info: solana_account,
-                        bump_seed,
-                        space: MAX_PERMITTED_DATA_INCREASE.min(space_needed),
-                    },
+                    *address,
+                    solana_account,
+                    bump_seed,
+                    MAX_PERMITTED_DATA_INCREASE.min(space_needed),
                 )?;
 
                 if space_needed > MAX_PERMITTED_DATA_INCREASE {

@@ -10,7 +10,6 @@ use solana_program::{
 use super::{Operator, EthereumAccount, sysvar, token};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
-use solana_program::entrypoint::ProgramResult;
 
 use crate::account::ACCOUNT_SEED_VERSION;
 
@@ -137,13 +136,6 @@ impl<'a> From<& System<'a>> for &'a AccountInfo<'a> {
     }
 }
 
-pub struct EtherAccountParams<'a> {
-    pub address: H160,
-    pub info: &'a AccountInfo<'a>,
-    pub bump_seed: u8,
-    pub space: usize,
-}
-
 impl<'a> System<'a> {
     pub fn from_account(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
         if !solana_program::system_program::check_id(info.key) {
@@ -212,51 +204,6 @@ impl<'a> System<'a> {
             &system_instruction::transfer(source.key, target.key, lamports),
             &[(*source).clone(), target.clone(), self.0.clone()]
         )
-    }
-
-    pub fn create_account(
-        &self,
-        program_id: &Pubkey,
-        operator: &Operator<'a>,
-        ether_account: &EtherAccountParams<'a>,
-    ) -> ProgramResult {
-        if ether_account.space < EthereumAccount::SIZE {
-            return Err!(
-                ProgramError::AccountDataTooSmall;
-                "Account {} - account space must be not less than minimal size of {} bytes",
-                ether_account.address,
-                EthereumAccount::SIZE
-            )
-        }
-
-        let program_seeds = &[
-            &[ACCOUNT_SEED_VERSION],
-            ether_account.address.as_bytes(),
-            &[ether_account.bump_seed],
-        ];
-        self.create_pda_account(
-            program_id,
-            operator,
-            ether_account.info,
-            program_seeds,
-            ether_account.space,
-        )?;
-
-        EthereumAccount::init(
-            ether_account.info,
-            crate::account::ether_account::Data {
-                address: ether_account.address,
-                bump_seed: ether_account.bump_seed,
-                trx_count: 0,
-                balance: U256::zero(),
-                rw_blocked: false,
-                ro_blocked_count: 0,
-                generation: 0,
-                code_size: 0,
-            },
-        )?;
-
-        Ok(())
     }
 }
 

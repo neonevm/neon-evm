@@ -2,8 +2,10 @@ use std::cell::RefMut;
 use std::fmt::Debug;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use evm::H160;
 
 use solana_program::account_info::AccountInfo;
+use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
@@ -12,6 +14,7 @@ use solana_program::sysvar::Sysvar;
 pub use incinerator::Incinerator;
 pub use operator::Operator;
 pub use treasury::{MainTreasury, Treasury};
+use crate::account::program::System;
 
 mod treasury;
 mod operator;
@@ -174,7 +177,7 @@ where
     /// Reload extension after dropping.
     /// # Safety
     /// `drop_extension` MUST be called before each `reload_extension`!
-    pub fn reload_extension(&mut self) -> Result<(), ProgramError> {
+    pub fn reload_extension(&mut self) -> ProgramResult {
         debug_print!("reload extension {:?}", &self.data);
 
         let parts = split_account_data(self.info, T::SIZE)?;
@@ -185,10 +188,53 @@ where
         Ok(())
     }
 
+    pub fn create_account(
+        system_program: &System<'a>,
+        program_id: &Pubkey,
+        operator: &Operator<'a>,
+        address: H160,
+        info: &'a AccountInfo<'a>,
+        bump_seed: u8,
+        space: usize,
+    ) -> ProgramResult {
+        if space < EthereumAccount::SIZE {
+            return Err!(
+                ProgramError::AccountDataTooSmall;
+                "Account {} - account space must be not less than minimal size of {} bytes",
+                address,
+                EthereumAccount::SIZE
+            )
+        }
+
+        let program_seeds = &[
+            &[ACCOUNT_SEED_VERSION],
+            address.as_bytes(),
+            &[bump_seed],
+        ];
+        system_program.create_pda_account(
+            program_id,
+            operator,
+            info,
+            program_seeds,
+            space,
+        )?;
+
+        EthereumAccount::init(
+            info,
+            ether_account::Data {
+                address,
+                bump_seed,
+                ..Default::default()
+            },
+        )?;
+
+        Ok(())
+    }
+
     /// # Safety
     /// *Delete account*. Transfer lamports to the operator.
     /// All data stored in the account will be lost
-    pub unsafe fn suicide(mut self, operator: &Operator<'a>) -> Result<(), ProgramError> {
+    pub unsafe fn suicide(mut self, operator: &Operator<'a>) -> ProgramResult {
         let info = self.info;
 
         self.dirty = false; // Do not save data into solana account
@@ -288,7 +334,7 @@ pub fn tag(program_id: &Pubkey, info: &AccountInfo) -> Result<u8, ProgramError> 
 
 /// # Safety
 /// *Permanently delete all data* in the account. Transfer lamports to the operator.
-pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> Result<(), ProgramError> {
+pub unsafe fn delete(account: &AccountInfo, operator: &Operator) -> ProgramResult {
     debug_print!("DELETE ACCOUNT {}", account.key);
 
     let operator_lamports = operator.lamports().checked_add(account.lamports())
