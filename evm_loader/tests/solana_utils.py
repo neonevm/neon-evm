@@ -313,7 +313,7 @@ class EvmLoader:
             trx.add(approve(ApproveParams(
                 program_id=TOKEN_PROGRAM_ID,
                 source=source_token_account,
-                delegate=neon_evm_authority,
+                delegate=PublicKey(user_solana_address),
                 owner=operator.public_key(),
                 amount=amount * (10 ** 9),
             )))
