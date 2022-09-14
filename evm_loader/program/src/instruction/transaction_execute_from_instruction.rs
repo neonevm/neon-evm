@@ -126,14 +126,16 @@ fn execute<'a>(
         Err(e) => return Err(e) 
     };
 
+    let accounts_ready = account_storage.apply_state_change(
+        &accounts.neon_program,
+        &accounts.system_program,
+        &accounts.operator,
+        caller_address,
+        apply_state,
+    )?;
+
     assert!(
-        account_storage.apply_state_change(
-            &accounts.neon_program,
-            &accounts.system_program,
-            &accounts.operator,
-            caller_address,
-            apply_state,
-        )?,
+        accounts_ready,
         "Deployment of contract which needs more than 10kb of account space needs several \
             transactions for reallocation and cannot be performed in a single instruction. \
             That's why you have to use iterative transaction for the deployment.",
