@@ -287,15 +287,21 @@ impl<'a> ProgramAccountStorage<'a> {
         let account = self.ethereum_accounts.get_mut(&address)
             .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
-        if account.code_size as usize != code.len() {
-            unsafe { account.drop_extension(); }
+        assert_eq!(
+            account.code_size,
+            0,
+            "Contract already deployed on address {} (code_size = {})!",
+            account.address,
+            account.code_size,
+        );
 
-            account.code_size = code.len()
-                .try_into()
-                .expect("code.len() never exceeds u32::max");
+        unsafe { account.drop_extension(); }
 
-            account.reload_extension()?;
-        }
+        account.code_size = code.len()
+            .try_into()
+            .expect("code.len() never exceeds u32::max");
+
+        account.reload_extension()?;
 
         let extension = account.extension.as_mut().unwrap();
         extension.code.copy_from_slice(code);
