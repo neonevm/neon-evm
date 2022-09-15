@@ -6,6 +6,7 @@ use evm_loader::{
     account::{EthereumStorage, ACCOUNT_SEED_VERSION},
     config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
 };
+use evm_loader::account::ether_contract::ContractExtension;
 use evm_loader::account::EthereumAccount;
 
 use crate::{
@@ -24,10 +25,10 @@ pub fn execute(
         let info = account_info(&solana_address, &mut account);
 
         let account_data = EthereumAccount::from_account(&config.evm_loader, &info).unwrap();
-        if let Some(extension) = account_data.extension.as_ref() {
+        if let Some(contract) = account_data.contract_data() {
             if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
                 let index: usize = index.as_usize() * 32;
-                U256::from_big_endian(&extension.storage[index..index + 32])
+                U256::from_big_endian(&contract.storage()[index..index + 32])
             } else {
                 let mut index_bytes = [0_u8; 32];
                 index.to_little_endian(&mut index_bytes);

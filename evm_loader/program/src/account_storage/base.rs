@@ -8,7 +8,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{ether_contract, EthereumAccount, Operator, program};
+use crate::account::{EthereumAccount, Operator, program};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
@@ -104,16 +104,6 @@ impl<'a> ProgramAccountStorage<'a> {
 
     pub fn ethereum_account_mut(&mut self, address: &H160) -> &mut EthereumAccount<'a> {
         self.ethereum_accounts.get_mut(address).unwrap() // mutable accounts always present
-    }
-
-    pub fn ethereum_contract(&self, address: &H160) -> Option<&ether_contract::Extension<'a>> {
-        self.panic_if_account_not_exists(address);
-        self.ethereum_accounts.get(address)?.extension.as_ref()
-    }
-
-    pub fn ethereum_contract_mut(&mut self, address: &H160) -> &mut ether_contract::Extension<'a> {
-        self.ethereum_accounts.get_mut(address).unwrap()
-            .extension.as_mut().expect("Contract account is not created")
     }
 
     pub fn block_accounts(&mut self, block: bool) -> Result<(), ProgramError> {

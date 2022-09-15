@@ -8,26 +8,6 @@ use solana_program::pubkey::Pubkey;
 
 use super::Packable;
 
-/// Ethereum account data v1
-#[deprecated]
-#[derive(Debug)]
-pub struct DataV1 {
-    /// Ethereum address
-    pub ether: H160,
-    /// Solana account nonce
-    pub nonce: u8,
-    /// Ethereum account nonce
-    pub trx_count: u64,
-    /// Address of solana account that stores code data (for contract accounts) or Pubkey([0_u8; 32]) if none
-    pub code_account: Pubkey,
-    /// Public key of storage account, associated with the transaction that locked this account for writing
-    pub rw_blocked_acc: Option<Pubkey>,
-    /// ETH token account
-    pub eth_token_account: Pubkey,
-    /// counter of the read-only locks
-    pub ro_blocked_cnt: u8,
-}
-
 /// Ethereum account data v2
 #[deprecated]
 #[derive(Debug)]
@@ -46,118 +26,6 @@ pub struct DataV2 {
     pub rw_blocked: bool,
     /// Read-only lock counter
     pub ro_blocked_count: u8,
-}
-
-/// Ethereum account data v3
-#[derive(Debug, Default)]
-pub struct Data {
-    /// Ethereum address
-    pub address: H160,
-    /// Solana account nonce
-    pub bump_seed: u8,
-    /// Ethereum account nonce
-    pub trx_count: u64,
-    /// Neon token balance
-    pub balance: U256,
-    /// Read-write lock
-    pub rw_blocked: bool,
-    /// Read-only lock counter
-    pub ro_blocked_count: u8,
-    /// Account generation, increment on suicide
-    pub generation: u32,
-    /// Contract code size
-    pub code_size: u32,
-}
-
-impl Data {
-    const ADDRESS_SIZE: usize = size_of::<H160>();
-    const BUMP_SEED_SIZE: usize = size_of::<u8>();
-    const TRX_COUNT_SIZE: usize = size_of::<u64>();
-    const BALANCE_SIZE: usize = size_of::<U256>();
-    const RW_BLOCKED_SIZE: usize = size_of::<bool>();
-    const RO_BLOCKED_COUNT_SIZE: usize = size_of::<u8>();
-    const GENERATION_SIZE: usize = size_of::<u32>();
-    const CODE_SIZE_SIZE: usize = size_of::<u32>();
-
-    pub fn check_blocked(&self, required_exclusive_access: bool) -> ProgramResult {
-        if self.rw_blocked {
-            // error message is parsed in proxy, do not change
-            return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw locked account {}", self.address);
-        }
-        if required_exclusive_access && self.ro_blocked_count > 0 {
-            return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on ro locked account {}", self.address);
-        }
-
-        Ok(())
-    }
-}
-
-#[allow(deprecated)]
-impl Packable for DataV1 {
-    /// Account struct tag
-    const TAG: u8 = super::_TAG_ACCOUNT_V1;
-    /// Account struct serialized size
-    const SIZE: usize = 20 + 1 + 8 + 32 + 1 + 32 + 32 + 1;
-
-    /// Deserialize `Account` struct from input data
-    #[must_use]
-    fn unpack(input: &[u8]) -> Self {
-        #[allow(clippy::use_self)]
-        let data = array_ref![input, 0, DataV1::SIZE];
-        let (
-            ether,
-            nonce,
-            trx_count,
-            code_account,
-            is_rw_blocked,
-            rw_blocked_by,
-            eth,
-            ro_blocked_cnt,
-        ) = array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
-
-        Self {
-            ether: H160::from_slice(ether),
-            nonce: nonce[0],
-            trx_count: u64::from_le_bytes(*trx_count),
-            code_account: Pubkey::new_from_array(*code_account),
-            rw_blocked_acc: if is_rw_blocked[0] > 0 {
-                Some(Pubkey::new_from_array(*rw_blocked_by))
-            } else {
-                None
-            },
-            eth_token_account: Pubkey::new_from_array(*eth),
-            ro_blocked_cnt: ro_blocked_cnt[0],
-        }
-    }
-
-    /// Serialize `Account` struct into given destination
-    fn pack(&self, dst: &mut [u8]) {
-        #[allow(clippy::use_self)]
-        let data = array_mut_ref![dst, 0, DataV1::SIZE];
-        let (
-            ether_dst,
-            nonce_dst,
-            trx_count_dst,
-            code_account_dst,
-            is_rw_blocked_dst,
-            rw_blocked_by_dst,
-            eth_dst,
-            ro_blocked_cnt_dst,
-        ) = mut_array_refs![data, 20, 1, 8, 32, 1, 32, 32, 1];
-
-        *ether_dst = self.ether.to_fixed_bytes();
-        nonce_dst[0] = self.nonce;
-        *trx_count_dst = self.trx_count.to_le_bytes();
-        code_account_dst.copy_from_slice(self.code_account.as_ref());
-        if let Some(blocked_acc) = self.rw_blocked_acc {
-            is_rw_blocked_dst[0] = 1;
-            rw_blocked_by_dst.copy_from_slice(blocked_acc.as_ref());
-        } else {
-            is_rw_blocked_dst[0] = 0;
-        }
-        eth_dst.copy_from_slice(self.eth_token_account.as_ref());
-        ro_blocked_cnt_dst[0] = self.ro_blocked_cnt;
-    }
 }
 
 #[allow(deprecated)]
@@ -222,6 +90,50 @@ impl Packable for DataV2 {
         }
         rw_blocked[0] = u8::from(self.rw_blocked);
         ro_blocked_count[0] = self.ro_blocked_count;
+    }
+}
+
+/// Ethereum account data v3
+#[derive(Debug, Default)]
+pub struct Data {
+    /// Ethereum address
+    pub address: H160,
+    /// Solana account nonce
+    pub bump_seed: u8,
+    /// Ethereum account nonce
+    pub trx_count: u64,
+    /// Neon token balance
+    pub balance: U256,
+    /// Read-write lock
+    pub rw_blocked: bool,
+    /// Read-only lock counter
+    pub ro_blocked_count: u8,
+    /// Account generation, increment on suicide
+    pub generation: u32,
+    /// Contract code size
+    pub code_size: u32,
+}
+
+impl Data {
+    const ADDRESS_SIZE: usize = size_of::<H160>();
+    const BUMP_SEED_SIZE: usize = size_of::<u8>();
+    const TRX_COUNT_SIZE: usize = size_of::<u64>();
+    const BALANCE_SIZE: usize = size_of::<U256>();
+    const RW_BLOCKED_SIZE: usize = size_of::<bool>();
+    const RO_BLOCKED_COUNT_SIZE: usize = size_of::<u8>();
+    const GENERATION_SIZE: usize = size_of::<u32>();
+    const CODE_SIZE_SIZE: usize = size_of::<u32>();
+
+    pub fn check_blocked(&self, required_exclusive_access: bool) -> ProgramResult {
+        if self.rw_blocked {
+            // error message is parsed in proxy, do not change
+            return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw locked account {}", self.address);
+        }
+        if required_exclusive_access && self.ro_blocked_count > 0 {
+            return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on ro locked account {}", self.address);
+        }
+
+        Ok(())
     }
 }
 

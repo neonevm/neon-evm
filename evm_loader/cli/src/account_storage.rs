@@ -21,6 +21,7 @@ use evm_loader::{
     account_storage::{AccountStorage}, precompile::is_precompile_address,
 };
 use evm_loader::account::ether_contract;
+use evm_loader::account::ether_contract::ContractExtension;
 
 
 use crate::Config;
@@ -197,12 +198,12 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     self.add_ethereum_account(&address, true);
                 },
-                Action::EvmSetCode { address, code, valids } => {
+                Action::EvmSetCode { address, code, .. } => {
                     self.add_ethereum_account(&address, true);
 
                     let mut accounts = self.accounts.borrow_mut();
                     accounts.entry(address).and_modify(|a| {
-                        a.size = EthereumAccount::SIZE + ether_contract::Extension::size_needed_v3(code.len(), Some(valids.len()));
+                        a.size = EthereumAccount::space_needed(code.len());
                         a.additional_resize_steps = a.size
                             .saturating_sub(a.size_current) / MAX_PERMITTED_DATA_INCREASE > 0;
                     });
@@ -221,10 +222,9 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-
-    fn ethereum_account_map_or<F, D>(&self, address: &H160, default: D, f: F) -> D 
+    fn ethereum_account_map_or<F, R>(&self, address: &H160, default: R, f: F) -> R
     where 
-        F: FnOnce(&EthereumAccount) -> D
+        F: FnOnce(&EthereumAccount) -> R
     {
         self.add_ethereum_account(address, false);
 
@@ -240,9 +240,9 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    fn ethereum_contract_map_or<F, D>(&self, address: &H160, default: D, f: F) -> D 
-    where 
-        F: FnOnce(&ether_contract::Extension) -> D
+    fn ethereum_contract_map_or<F, R>(&self, address: &H160, default: R, f: F) -> R
+    where
+        F: FnOnce(ether_contract::ContractData) -> R
     {
         self.add_ethereum_account(address, false);
 
@@ -252,7 +252,7 @@ impl<'a> EmulatorAccountStorage<'a> {
         if let Some(account_data) = &mut solana_account.data {
             let info = account_info(&solana_account.account, account_data);
             let ethereum_account = EthereumAccount::from_account(&self.config.evm_loader, &info).unwrap();
-            ethereum_account.extension.as_ref().map_or(default, f)
+            ethereum_account.contract_data().map_or(default, f)
         } else {
             default
         }
@@ -326,16 +326,15 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
     fn code_size(&self, address: &H160) -> usize {
         info!("code_size {}", address);
-        #[allow(clippy::redundant_closure_for_method_calls)]
         self.ethereum_account_map_or(address, 0, |a| a.code_size as usize)
     }
 
     fn code_hash(&self, address: &H160) -> H256 {
         info!("code_hash {}", address);
 
-        self.ethereum_contract_map_or(address, 
+        self.ethereum_contract_map_or(address,
             H256::default(), 
-            |c| evm_loader::utils::keccak256_h256(&c.code)
+            |c| evm_loader::utils::keccak256_h256(&c.code())
         )
     }
 
@@ -344,7 +343,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         self.ethereum_contract_map_or(address,
             Vec::new(),
-            |c| c.code.to_vec()
+            |c| c.code().to_vec()
         )
     }
 
@@ -353,7 +352,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         self.ethereum_contract_map_or(address,
             Vec::new(),
-            |c| c.valids.to_vec()
+            |c| c.valids().to_vec()
         )
     }
 
@@ -376,7 +375,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let index: usize = index.as_usize() * 32;
             self.ethereum_contract_map_or(address,
                 U256::zero(),
-                |c| U256::from_big_endian(&c.storage[index..index+32])
+                |c| U256::from_big_endian(&c.storage()[index..index+32])
             )
         } else {
             let (solana_address, _) = self.get_storage_address(address, index);
@@ -405,9 +404,8 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn solana_account_space(&self, address: &H160) -> usize {
-        self.ethereum_account_map_or(address, 0, |a|
-            EthereumAccount::SIZE + a.extension.as_ref().map_or(0, ether_contract::Extension::size)
-        )
+        #[allow(clippy::redundant_closure_for_method_calls)]
+        self.ethereum_account_map_or(address, 0, |account| account.size())
     }
 
     fn chain_id(&self) -> u64 {

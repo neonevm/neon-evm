@@ -3,6 +3,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey, program_pack::Pack
 };
+use crate::account::ether_contract::ContractExtension;
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -39,7 +40,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> Result<u8, ProgramError
         return Err!(ProgramError::InvalidArgument; "Account {} - expected system owned", accounts.user_token.key);
     }
 
-    if accounts.erc20_contract.extension.is_none() {
+    if accounts.erc20_contract.contract_data().is_none() {
         return Err!(ProgramError::InvalidArgument; "Account {} - expected ERC20 contract", accounts.erc20_contract.address);
     }
 

@@ -1,6 +1,5 @@
 use std::cell::RefMut;
 use std::fmt::Debug;
-use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use evm::H160;
 
@@ -56,21 +55,11 @@ const _TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
 const TAG_HOLDER: u8 = 6;
 
-pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data, Option<ether_contract::Extension<'a>>>;
+pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
 pub type State<'a> = AccountData<'a, state::Data>;
 pub type FinalizedState<'a> = AccountData<'a, state::FinalizedData>;
 pub type Holder<'a> = AccountData<'a, holder::Data>;
-
-
-pub trait AccountExtension<'a, T> {
-    fn unpack(data: &T, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> where Self: Sized;
-}
-
-impl<'a, T> AccountExtension<'a, T> for () {
-    fn unpack(_data: &T, _remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> { Ok(()) }
-}
-
 
 pub trait Packable {
     const TAG: u8;
@@ -87,14 +76,12 @@ struct AccountParts<'a> {
 }
 
 #[derive(Debug)]
-pub struct AccountData<'a, T, E = ()>
+pub struct AccountData<'a, T>
 where
     T: Packable + Debug,
-    E: AccountExtension<'a, T>
 {
     dirty: bool,
     data: T,
-    pub extension: ManuallyDrop<E>,
     pub info: &'a AccountInfo<'a>,
 }
 
@@ -116,10 +103,9 @@ fn split_account_data<'a>(info: &'a AccountInfo<'a>, data_len: usize) -> Result<
     Ok(AccountParts{ tag, data, remaining })
 }
 
-impl<'a, T, E> AccountData<'a, T, E>
+impl<'a, T> AccountData<'a, T>
 where
     T: Packable + Debug,
-    E: AccountExtension<'a, T>
 {
     pub const SIZE: usize = 1 + T::SIZE;
     pub const TAG: u8 = T::TAG;
@@ -135,10 +121,8 @@ where
         }
 
         let data = T::unpack(&parts.data);
-        let extension = E::unpack(&data, parts.remaining)?;
-        let extension = ManuallyDrop::new(extension);
 
-        Ok(Self { dirty: false, data, extension, info })
+        Ok(Self { dirty: false, data, info })
     }
 
     pub fn init(info: &'a AccountInfo<'a>, data: T) -> Result<Self, ProgramError> {
@@ -160,32 +144,8 @@ where
         data.pack(&mut parts.data);
 
         parts.remaining.fill(0);
-        let extension = E::unpack(&data, parts.remaining)?;
-        let extension = ManuallyDrop::new(extension);
 
-        Ok(Self { dirty: false, data, extension, info })
-    }
-
-    /// Drop extension for temporary release of the borrowed account data.
-    /// # Safety
-    /// DO NOT call twice! Use `reload_extension` after dropping.
-    pub unsafe fn drop_extension(&mut self) {
-        // Release borrowed account data
-        ManuallyDrop::drop(&mut self.extension);
-    }
-
-    /// Reload extension after dropping.
-    /// # Safety
-    /// `drop_extension` MUST be called before each `reload_extension`!
-    pub fn reload_extension(&mut self) -> ProgramResult {
-        debug_print!("reload extension {:?}", &self.data);
-
-        let parts = split_account_data(self.info, T::SIZE)?;
-
-        let extension = E::unpack(&self.data, parts.remaining)?;
-        self.extension = ManuallyDrop::new(extension);
-
-        Ok(())
+        Ok(Self { dirty: false, data, info })
     }
 
     pub fn create_account(
@@ -245,10 +205,9 @@ where
 
     /// # Safety
     /// Should be used with care. Can corrupt account data
-    pub unsafe fn replace<U, R>(mut self, data: U) -> Result<AccountData<'a, U, R>, ProgramError>
-        where
-            U: Packable + Debug,
-            R: AccountExtension<'a, U>,
+    pub unsafe fn replace<U>(mut self, data: U) -> Result<AccountData<'a, U>, ProgramError>
+    where
+        U: Packable + Debug,
     {
         debug_print!("replace account data from {:?} to {:?}", &self.data, &data);
         let info = self.info;
@@ -266,17 +225,14 @@ where
         data.pack(&mut parts.data);
 
         parts.remaining.fill(0);
-        let extension = R::unpack(&data, parts.remaining)?;
-        let extension = ManuallyDrop::new(extension);
 
-        Ok(AccountData { dirty: false, data, extension, info })
+        Ok(AccountData { dirty: false, data, info })
     }
 }
 
-impl<'a, T, E> Deref for AccountData<'a, T, E>
+impl<'a, T> Deref for AccountData<'a, T>
 where
     T: Packable + Debug,
-    E: AccountExtension<'a, T>
 {
     type Target = T;
 
@@ -285,10 +241,9 @@ where
     }
 }
 
-impl<'a, T, E> DerefMut for AccountData<'a, T, E>
+impl<'a, T> DerefMut for AccountData<'a, T>
 where
     T: Packable + Debug,
-    E: AccountExtension<'a, T>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.dirty = true;
@@ -296,15 +251,11 @@ where
     }
 }
 
-impl<'a, T, E> Drop for AccountData<'a, T, E>
+impl<'a, T> Drop for AccountData<'a, T>
 where
     T: Packable + Debug,
-    E: AccountExtension<'a, T>
 {
     fn drop(&mut self) {
-        // Release borrowed account data
-        unsafe { ManuallyDrop::drop(&mut self.extension) };
-
         if !self.dirty {
             return;
         }

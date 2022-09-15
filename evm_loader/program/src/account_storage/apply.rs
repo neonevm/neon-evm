@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use std::mem::ManuallyDrop;
 
 use evm::{H160, U256};
 use solana_program::account_info::AccountInfo;
@@ -13,7 +12,7 @@ use solana_program::system_instruction;
 use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
-use crate::account::ether_contract::Extension;
+use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -134,9 +133,11 @@ impl<'a> ProgramAccountStorage<'a> {
             for (key, value) in storage {
                 if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
                     let index: usize = key.as_usize() * 32;
-                    
-                    let contract = self.ethereum_contract_mut(&address);
-                    value.to_big_endian(&mut contract.storage[index..index+32]);
+                    let account = self.ethereum_account(&address)
+                        .expect("Account not found");
+                    let contract = account.contract_data()
+                        .expect("Contract expected");
+                    value.to_big_endian(&mut contract.storage()[index..index+32]);
                 } else {
                     self.update_storage_infinite(address, key, value, operator, system_program)?;
                 }
@@ -199,10 +200,10 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let mut result = Ok(true);
         for action in actions {
-            let (address, code_size, valids_size) = match action {
-                Action::NeonTransfer { target, .. } => (target, 0, None),
-                Action::EvmSetCode { address, code, valids } =>
-                    (address, code.len(), Some(valids.len())),
+            let (address, code_size) = match action {
+                Action::NeonTransfer { target, .. } => (target, 0),
+                Action::EvmSetCode { address, code, .. } =>
+                    (address, code.len()),
                 _ => continue,
             };
 
@@ -216,7 +217,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     )
                 )?;
 
-            let space_needed = EthereumAccount::SIZE + Extension::size_needed_v3(code_size, valids_size);
+            let space_needed = EthereumAccount::space_needed(code_size);
             if solana_program::system_program::check_id(solana_account.owner) {
                 debug_print!(
                     "Creating account (space_needed = {}) needed for action: {}",
@@ -263,14 +264,6 @@ impl<'a> ProgramAccountStorage<'a> {
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;
         account.code_size = 0;
 
-
-        unsafe {
-            // Release borrowed account data
-            ManuallyDrop::drop(
-                &mut std::mem::replace(&mut account.extension, ManuallyDrop::new(None))
-            );
-        }
-
         account.info.realloc(EthereumAccount::SIZE, false)?;
 
         Ok(())
@@ -293,17 +286,14 @@ impl<'a> ProgramAccountStorage<'a> {
             account.code_size,
         );
 
-        unsafe { account.drop_extension(); }
-
         account.code_size = code.len()
             .try_into()
             .expect("code.len() never exceeds u32::max");
 
-        account.reload_extension()?;
-
-        let extension = account.extension.as_mut().unwrap();
-        extension.code.copy_from_slice(code);
-        extension.valids.copy_from_slice(valids);
+        if let Some(contract) = account.contract_data() {
+            contract.code().copy_from_slice(code);
+            contract.valids().copy_from_slice(valids);
+        }
 
         Ok(())
     }

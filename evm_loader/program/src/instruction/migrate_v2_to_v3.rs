@@ -1,3 +1,5 @@
+use std::cell::Ref;
+
 use evm::Valids;
 use solana_program::{pubkey, system_instruction};
 use solana_program::account_info::AccountInfo;
@@ -9,13 +11,69 @@ use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
 use crate::account::{AccountData, ether_account, ether_contract, EthereumAccount, Operator, Packable, program};
-use crate::account::ether_contract::Extension;
+use crate::account::ether_contract::{ContractData, ContractExtension};
 use crate::error::EvmLoaderError;
 
 const OPERATOR_PUBKEY: Pubkey = pubkey!("6sXBjtBYNbUCKFq3CuAg7LHw9DJCvXujRUEFgK9TuzKx");
 
 type EthereumAccountV2<'a> = AccountData<'a, ether_account::DataV2>;
-type EthereumContractV2<'a> = AccountData<'a, ether_contract::DataV2, ether_contract::Extension<'a>>;
+
+#[deprecated]
+#[derive(Debug)]
+pub struct ExtensionV2<'a> {
+    pub code: Ref<'a, [u8]>,
+    pub valids: Ref<'a, [u8]>,
+    pub storage: Ref<'a, [u8]>,
+}
+
+impl<'a> ExtensionV2<'a> {
+    fn unpack(data: &ether_contract::DataV2, remaining: Ref<'a, [u8]>) -> Self {
+        let code_size = data.code_size as usize;
+        let valids_size = (code_size / 8) + 1;
+
+        let (code, rest) = Ref::map_split(remaining, |r| r.split_at(code_size));
+        let (valids, storage) = Ref::map_split(rest, |r| r.split_at(valids_size));
+
+        Self { code, valids, storage }
+    }
+}
+
+struct EthereumContractV2<'a> {
+    data: ether_contract::DataV2,
+    extension: ExtensionV2<'a>,
+}
+
+impl<'a> EthereumContractV2<'a> {
+    pub fn from_account(program_id: &Pubkey, info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
+        if info.owner != program_id {
+            return Err!(ProgramError::InvalidArgument; "Account {} - expected program owned", info.key);
+        }
+
+        if info.data_len() < 1 + ether_contract::DataV2::SIZE {
+            return Err!(
+                ProgramError::InvalidAccountData;
+                "Account {} - invalid data len, expected = {} found = {}",
+                info.key,
+                ether_contract::DataV2::SIZE,
+                info.data_len()
+            );
+        }
+
+        let account_data = info.try_borrow_data()?;
+
+        let (tag, bytes) = Ref::map_split(account_data, |d| d.split_first().expect("data is not empty"));
+        let (data, remaining) = Ref::map_split(bytes, |d| d.split_at(ether_contract::DataV2::SIZE));
+
+        if *tag != ether_contract::DataV2::TAG {
+            return Err!(ProgramError::InvalidAccountData; "Account {} - invalid tag, expected = {} found = {}", info.key, ether_contract::DataV2::TAG, tag);
+        }
+
+        let data = ether_contract::DataV2::unpack(&data);
+        let extension = ExtensionV2::unpack(&data, remaining);
+
+        Ok(Self { data, extension })
+    }
+}
 
 struct Accounts<'a> {
     operator: Operator<'a>,
@@ -58,7 +116,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 
     validate_account(program_id, accounts.ether_account, "account", EthereumAccountV2::TAG, EthereumAccountV2::SIZE)?;
     if let Some(contract) = &accounts.ether_contract {
-        validate_account(program_id, contract, "contract", EthereumContractV2::TAG, EthereumContractV2::SIZE)?;
+        validate_account(program_id, contract, "contract", ether_contract::DataV2::TAG, ether_contract::DataV2::SIZE)?;
     }
 
     Ok(())
@@ -109,9 +167,9 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
     let (space_needed, code_size, generation) = if let Some(contract) = accounts.ether_contract {
         let contract_v2 = EthereumContractV2::from_account(program_id, contract)?;
         (
-            EthereumAccount::SIZE + Extension::size_needed_v3(contract_v2.code_size as usize, None),
-            contract_v2.code_size,
-            contract_v2.generation,
+            EthereumAccount::space_needed(contract_v2.data.code_size as usize),
+            contract_v2.data.code_size,
+            contract_v2.data.generation,
         )
     } else {
         (EthereumAccount::SIZE, 0, 0)
@@ -165,7 +223,7 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
 
             solana_program::msg!(
                 "Copying contract data. code_size = {}, code.len() = {}, valids: (actual len = {}, needed = {}), storage.len() = {}",
-                contract_v2.code_size,
+                contract_v2.data.code_size,
                 contract_v2.extension.code.len(),
                 contract_v2.extension.valids.len(),
                 valids_len,
@@ -179,14 +237,14 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
             );
 
             if code_size > 0 {
-                assert!(contract_v2.extension.storage.len() >= Extension::INTERNAL_STORAGE_SIZE);
+                assert!(contract_v2.extension.storage.len() >= ContractData::INTERNAL_STORAGE_SIZE);
                 let extension_dst = &mut data_dst[EthereumAccount::SIZE..];
                 extension_dst[..code_size as usize]
                     .copy_from_slice(&contract_v2.extension.code);
                 extension_dst[code_size as usize..][..valids_len]
                     .copy_from_slice(&contract_v2.extension.valids[..valids_len]);
-                extension_dst[code_size as usize..][valids_len..][..Extension::INTERNAL_STORAGE_SIZE]
-                    .copy_from_slice(&contract_v2.extension.storage[..Extension::INTERNAL_STORAGE_SIZE]);
+                extension_dst[code_size as usize..][valids_len..][..ContractData::INTERNAL_STORAGE_SIZE]
+                    .copy_from_slice(&contract_v2.extension.storage[..ContractData::INTERNAL_STORAGE_SIZE]);
             }
 
             **accounts.operator.lamports.borrow_mut() += contract_v2_info.lamports();

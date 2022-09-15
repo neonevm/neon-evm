@@ -1,4 +1,5 @@
 use evm::{H160};
+use evm_loader::account::ether_contract::ContractExtension;
 
 use evm_loader::account::EthereumAccount;
 
@@ -32,11 +33,11 @@ pub fn execute (
             println!("    balance: {}", account_data.balance);
             println!("    code_size: {}", account_data.code_size);
 
-            if let Some(extension) = account_data.extension.as_ref() {
+            if let Some(contract) = account_data.contract_data() {
                 let code_size = account_data.code_size as usize;
                 let mut offset = 0;
                 while offset < code_size {
-                    let data_slice = &extension.code;
+                    let data_slice = &contract.code();
                     let remains = if code_size - offset > 80 {
                         80
                     } else {
