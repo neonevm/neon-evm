@@ -183,7 +183,9 @@ fn finalize<'a>(
 #[must_use]
 pub fn alt_cost(tx_acc_count: u64) -> u64 {
     if tx_acc_count > TX_ACCOUNT_CNT {
-        (tx_acc_count /TX_ACCOUNT_CNT+1) * LAMPORTS_PER_SIGNATURE
+        let extend = tx_acc_count /TX_ACCOUNT_CNT+1;
+        // create_alt + extend_alt + deactivate_alt + close_alt
+        (extend+3) * LAMPORTS_PER_SIGNATURE
     }
     else{
         0
