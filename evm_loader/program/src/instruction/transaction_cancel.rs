@@ -44,6 +44,9 @@ fn validate(accounts: &Accounts, transaction_hash: &[u8; 32]) -> ProgramResult {
 }
 
 fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult {
+    let used_gas = accounts.storage.gas_used;
+    solana_program::log::sol_log_data(&[b"CL_TX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
+
     let mut account_storage = ProgramAccountStorage::new(
         program_id,
         &accounts.operator,
@@ -55,9 +58,6 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
 
     account_storage.block_accounts(false)?;
     accounts.storage.finalize(Deposit::Burn(accounts.incinerator))?;
-
-    let used_gas = accounts.storage.gas_used;
-    solana_program::log::sol_log_data(&[b"CSL_TX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
     Ok(())
 }
