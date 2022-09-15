@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use evm::{H160, U256};
-use solana_program::{ 
+use solana_program::{
     entrypoint::{ProgramResult},
     program_error::{ProgramError},
     secp256k1_recover::{secp256k1_recover},
@@ -78,12 +78,12 @@ impl rlp::Decodable for Transaction {
         } else {
             return Err(rlp::DecoderError::RlpExpectedToBeData)
         };
-    
+
         let raw = rlp.as_raw();
         let hash = solana_program::keccak::hash(&raw[..payload_size]).to_bytes();
         let signed_hash = signed_hash(rlp, chain_id)?;
 
-        let tx = Self { 
+        let tx = Self {
             nonce, gas_price, gas_limit, to, value, call_data, v, r, s,
             chain_id, recovery_id, rlp_len: payload_size, hash, signed_hash
         };
