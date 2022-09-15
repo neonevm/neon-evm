@@ -154,7 +154,10 @@ fn finalize<'a>(
     }
 
     let results = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
-        Ok(()) => results,
+        Ok(()) => {
+            solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
+            results
+        },
         Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
         Err(e) => return Err(e)
     };

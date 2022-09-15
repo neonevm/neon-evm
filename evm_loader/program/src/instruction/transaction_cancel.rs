@@ -56,5 +56,8 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     account_storage.block_accounts(false)?;
     accounts.storage.finalize(Deposit::Burn(accounts.incinerator))?;
 
+    let used_gas = accounts.storage.gas_used;
+    solana_program::log::sol_log_data(&[b"CSL_TX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
+
     Ok(())
 }
