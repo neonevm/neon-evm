@@ -5,6 +5,7 @@ use solana_program::{
     program_error::{ProgramError},
     secp256k1_recover::{secp256k1_recover},
 };
+use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::ProgramAccountStorage;
 use crate::utils::{keccak256_digest};
 
@@ -130,8 +131,7 @@ pub fn check_ethereum_transaction(
     account_storage: &ProgramAccountStorage,
     recovered_address: &H160,
     transaction: &Transaction
-) -> ProgramResult
-{
+) -> ProgramResult {
     let sender_account = account_storage.ethereum_account(recovered_address)
         .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - sender must be initialized account", recovered_address))?;
 
@@ -142,6 +142,29 @@ pub fn check_ethereum_transaction(
     if let Some(ref chain_id) = transaction.chain_id {
         if &U256::from(crate::config::CHAIN_ID) != chain_id {
             return Err!(ProgramError::InvalidArgument; "Invalid chain_id: actual {}, expected {}", chain_id, crate::config::CHAIN_ID);
+        }
+    }
+
+    match &transaction.to {
+        Some(address) => {
+            let ether_account = account_storage.ethereum_account(address)
+                .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", address))?;
+            if !transaction.call_data.is_empty() && !ether_account.is_contract() {
+                return Err!(ProgramError::InvalidArgument; "Account {} - target must be contract account", address);
+            }
+        }
+
+        None => {
+            let mut stream = rlp::RlpStream::new_list(2);
+            stream.append(recovered_address);
+            stream.append(&U256::from(transaction.nonce));
+            let contract_address: H160 = crate::utils::keccak256_h256(&stream.out()).into();
+
+            if let Some(account) = account_storage.ethereum_account(&contract_address) {
+                if account.is_contract() {
+                    return Err!(ProgramError::InvalidArgument; "Account {} is already a contract", contract_address)?;
+                }
+            }
         }
     }
 

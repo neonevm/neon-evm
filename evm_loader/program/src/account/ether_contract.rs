@@ -89,6 +89,10 @@ impl<'acc> ContractData<'_, 'acc> {
 }
 
 pub trait ContractExtension<'this, 'acc> {
+    fn is_contract(&self) -> bool {
+        self.code_size() != 0
+    }
+
     fn code_size(&self) -> usize;
     fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>>;
 
@@ -114,7 +118,7 @@ impl<'this, 'acc> ContractExtension<'this, 'acc> for EthereumAccount<'acc> {
     }
 
     fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>> {
-        if self.code_size == 0 {
+        if !self.is_contract() {
             return None;
         }
         Some(ContractData { account: self })
