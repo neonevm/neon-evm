@@ -147,10 +147,13 @@ pub fn check_ethereum_transaction(
 
     match &transaction.to {
         Some(address) => {
-            let ether_account = account_storage.ethereum_account(address)
-                .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", address))?;
-            if !transaction.call_data.is_empty() && !ether_account.is_contract() {
-                return Err!(ProgramError::InvalidArgument; "Account {} - target must be contract account", address);
+            if !transaction.call_data.is_empty() {
+                let ether_account = account_storage.ethereum_account(address)
+                    .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", address))?;
+
+                if !ether_account.is_contract() {
+                    return Err!(ProgramError::InvalidArgument; "Account {} - target must be a contract", address);
+                }
             }
         }
 
