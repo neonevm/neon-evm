@@ -201,10 +201,9 @@ fn execute(program_id: &Pubkey, accounts: &Accounts) -> ProgramResult {
             bump_seed: account_v2.bump_seed,
             trx_count: account_v2.trx_count,
             balance: account_v2.balance,
-            rw_blocked: account_v2.rw_blocked,
-            ro_blocked_count: account_v2.ro_blocked_count,
             generation,
             code_size,
+            rw_blocked: account_v2.rw_blocked,
         }
     };
 

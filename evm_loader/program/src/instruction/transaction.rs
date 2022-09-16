@@ -33,7 +33,7 @@ pub fn do_begin<'a>(
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     check_ethereum_transaction(account_storage, &caller, &trx)?;
-    account_storage.check_for_blocked_accounts(false)?;
+    account_storage.check_for_blocked_accounts()?;
     account_storage.block_accounts(true)?;
 
 

@@ -28,7 +28,6 @@ pub fn execute (
             println!("    address: {}", account_data.address);
             println!("    bump_seed: {}", account_data.bump_seed);
             println!("    trx_count: {}", account_data.trx_count);
-            println!("    ro_blocked_count: {}", account_data.ro_blocked_count);
             println!("    rw_blocked: {}", account_data.rw_blocked);
             println!("    balance: {}", account_data.balance);
             println!("    code_size: {}", account_data.code_size);

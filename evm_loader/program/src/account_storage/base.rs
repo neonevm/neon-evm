@@ -109,23 +109,15 @@ impl<'a> ProgramAccountStorage<'a> {
 
     pub fn block_accounts(&mut self, block: bool) -> Result<(), ProgramError> {
         for account in &mut self.ethereum_accounts.values_mut() {
-            if account.info.is_writable {
-                account.rw_blocked = block;
-            } else {
-                account.ro_blocked_count = if block {
-                    account.ro_blocked_count.checked_add(1)
-                } else {
-                    account.ro_blocked_count.checked_sub(1)
-                }.ok_or_else(|| E!(ProgramError::InvalidAccountData; "Account {} - read lock overflow", account.address))?;
-            }
+            account.rw_blocked = block;
         }
 
         Ok(())
     }
 
-    pub fn check_for_blocked_accounts(&self, required_exclusive_access : bool) -> Result<(), ProgramError> {
+    pub fn check_for_blocked_accounts(&self) -> Result<(), ProgramError> {
         for ethereum_account in self.ethereum_accounts.values() {
-            ethereum_account.check_blocked(required_exclusive_access)?;
+            ethereum_account.check_blocked()?;
         }
 
         Ok(())

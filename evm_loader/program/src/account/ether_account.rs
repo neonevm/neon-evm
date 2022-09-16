@@ -104,14 +104,12 @@ pub struct Data {
     pub trx_count: u64,
     /// Neon token balance
     pub balance: U256,
-    /// Read-write lock
-    pub rw_blocked: bool,
-    /// Read-only lock counter
-    pub ro_blocked_count: u8,
     /// Account generation, increment on suicide
     pub generation: u32,
     /// Contract code size
     pub code_size: u32,
+    /// Read-write lock
+    pub rw_blocked: bool,
 }
 
 impl Data {
@@ -119,18 +117,14 @@ impl Data {
     const BUMP_SEED_SIZE: usize = size_of::<u8>();
     const TRX_COUNT_SIZE: usize = size_of::<u64>();
     const BALANCE_SIZE: usize = size_of::<U256>();
-    const RW_BLOCKED_SIZE: usize = size_of::<bool>();
-    const RO_BLOCKED_COUNT_SIZE: usize = size_of::<u8>();
     const GENERATION_SIZE: usize = size_of::<u32>();
     const CODE_SIZE_SIZE: usize = size_of::<u32>();
+    const RW_BLOCKED_SIZE: usize = size_of::<bool>();
 
-    pub fn check_blocked(&self, required_exclusive_access: bool) -> ProgramResult {
+    pub fn check_blocked(&self) -> ProgramResult {
         if self.rw_blocked {
             // error message is parsed in proxy, do not change
             return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on rw locked account {}", self.address);
-        }
-        if required_exclusive_access && self.ro_blocked_count > 0 {
-            return Err!(ProgramError::InvalidAccountData; "trying to execute transaction on ro locked account {}", self.address);
         }
 
         Ok(())
@@ -146,10 +140,9 @@ impl Packable for Data {
         Data::BUMP_SEED_SIZE +
         Data::TRX_COUNT_SIZE +
         Data::BALANCE_SIZE +
-        Data::RW_BLOCKED_SIZE +
-        Data::RO_BLOCKED_COUNT_SIZE +
         Data::GENERATION_SIZE +
-        Data::CODE_SIZE_SIZE;
+        Data::CODE_SIZE_SIZE +
+        Data::RW_BLOCKED_SIZE;
 
     /// Deserialize `AccountV3` struct from input data
     #[must_use]
@@ -161,20 +154,18 @@ impl Packable for Data {
             bump_seed,
             trx_count,
             balance,
-            rw_blocked,
-            ro_blocked_count,
             generation,
             code_size,
+            rw_blocked,
         ) = array_refs![
             data,
             Data::ADDRESS_SIZE,
             Data::BUMP_SEED_SIZE,
             Data::TRX_COUNT_SIZE,
             Data::BALANCE_SIZE,
-            Data::RW_BLOCKED_SIZE,
-            Data::RO_BLOCKED_COUNT_SIZE,
             Data::GENERATION_SIZE,
-            Data::CODE_SIZE_SIZE
+            Data::CODE_SIZE_SIZE,
+            Data::RW_BLOCKED_SIZE
         ];
 
         Self {
@@ -182,10 +173,9 @@ impl Packable for Data {
             bump_seed: bump_seed[0],
             trx_count: u64::from_le_bytes(*trx_count),
             balance: U256::from_little_endian(balance),
-            rw_blocked: rw_blocked[0] != 0,
-            ro_blocked_count: ro_blocked_count[0],
             generation: u32::from_le_bytes(*generation),
             code_size: u32::from_le_bytes(*code_size),
+            rw_blocked: rw_blocked[0] != 0,
         }
     }
 
@@ -198,29 +188,26 @@ impl Packable for Data {
             bump_seed,
             trx_count,
             balance,
-            rw_blocked,
-            ro_blocked_count,
             generation,
             code_size,
+            rw_blocked,
         ) = mut_array_refs![
             data,
             Data::ADDRESS_SIZE,
             Data::BUMP_SEED_SIZE,
             Data::TRX_COUNT_SIZE,
             Data::BALANCE_SIZE,
-            Data::RW_BLOCKED_SIZE,
-            Data::RO_BLOCKED_COUNT_SIZE,
             Data::GENERATION_SIZE,
-            Data::CODE_SIZE_SIZE
+            Data::CODE_SIZE_SIZE,
+            Data::RW_BLOCKED_SIZE
         ];
 
         *address = self.address.to_fixed_bytes();
         bump_seed[0] = self.bump_seed;
         *trx_count = self.trx_count.to_le_bytes();
         self.balance.to_little_endian(balance);
-        rw_blocked[0] = u8::from(self.rw_blocked);
-        ro_blocked_count[0] = self.ro_blocked_count;
         *generation = self.generation.to_le_bytes();
         *code_size = self.code_size.to_le_bytes();
+        rw_blocked[0] = u8::from(self.rw_blocked);
     }
 }
