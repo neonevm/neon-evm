@@ -44,6 +44,7 @@ pub fn do_begin<'a>(
         let mut executor = Machine::new(caller, account_storage)?;
         executor.gasometer_mut().record_iterative_overhead();
         executor.gasometer_mut().record_transaction_size(&trx);
+        executor.gasometer_mut().record_alt_cost(alt_cost);
 
         let begin_result = if let Some(code_address) = trx.to {
             executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
@@ -65,7 +66,7 @@ pub fn do_begin<'a>(
         }
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas + alt_cost)
+    finalize(accounts, storage, account_storage, results, used_gas)
 }
 
 pub fn do_continue<'a>(

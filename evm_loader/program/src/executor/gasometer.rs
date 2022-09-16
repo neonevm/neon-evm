@@ -156,4 +156,5 @@ impl Gasometer {
         self.gas = self.gas.saturating_add(lamports);
     }
 
+    pub fn record_alt_cost(&mut self, alt_cost: u64) { self.gas = self.gas.saturating_add(alt_cost); }
 }
