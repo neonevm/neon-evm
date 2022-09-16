@@ -270,6 +270,7 @@ contract ERC20ForSplMintable is ERC20ForSpl {
         require(msg.sender == _admin, "ERC20: must have minter role to mint");
         require(to != address(0), "ERC20: mint to the zero address");
         require(amount <= type(uint64).max, "ERC20: mint amount exceeds uint64 max");
+        require(totalSupply() + amount <= type(uint64).max, "ERC20: total mint amount exceeds uint64 max");
 
         bytes32 toSolana = _solanaAccount(to);
         if (!_splToken.exists(toSolana)) {
