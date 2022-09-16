@@ -69,8 +69,7 @@ pub fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<Strin
                 .value.ok_or(NeonCliError::AssociatedPdaNotFound(programdata_address,config.evm_loader))?;
 
             if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
-                let offset =
-                    UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                let offset = UpgradeableLoaderState::size_of_programdata_metadata();
                 let program_data = &programdata_account.data[offset..];
                 Ok(read_elf_parameters(config, program_data))
             } else {
@@ -78,7 +77,7 @@ pub fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<Strin
             }
 
         } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-            let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+            let offset = UpgradeableLoaderState::size_of_buffer_metadata();
             let program_data = &account.data[offset..];
             Ok(read_elf_parameters(config, program_data))
         } else {
