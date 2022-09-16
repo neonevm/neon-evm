@@ -28,7 +28,7 @@ steps:
   - label: ":docker: Up dynamic proxy-model pipeline"
     env:
 #      PROXY_BRANCH: ${PROXY_BRANCH:-develop}
-      PROXY_BRANCH: 2299c0c14c612b9fe8d8dcb3b2012763e09c5af1
+      PROXY_BRANCH: 3a8e4f60d244207cb03917c9fbd9eaab188565c3
     command: ./.buildkite/steps/trigger-proxy-step.sh | buildkite-agent pipeline upload
 
   - wait
