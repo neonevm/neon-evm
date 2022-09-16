@@ -1,6 +1,6 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury};
 use crate::transaction::{check_ethereum_transaction, Transaction, recover_caller_address};
-use crate::account_storage::ProgramAccountStorage;
+use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
 use arrayref::{array_ref};
 use evm::{H160};
 use solana_program::{
@@ -126,7 +126,7 @@ fn execute<'a>(
         Err(e) => return Err(e) 
     };
 
-    let accounts_ready = account_storage.apply_state_change(
+    let accounts_readiness = account_storage.apply_state_change(
         &accounts.neon_program,
         &accounts.system_program,
         &accounts.operator,
@@ -134,8 +134,9 @@ fn execute<'a>(
         apply_state,
     )?;
 
-    assert!(
-        accounts_ready,
+    assert_eq!(
+        accounts_readiness,
+        AccountsReadiness::Ready,
         "Deployment of contract which needs more than 10kb of account space needs several \
             transactions for reallocation and cannot be performed in a single instruction. \
             That's why you have to use iterative transaction for the deployment.",

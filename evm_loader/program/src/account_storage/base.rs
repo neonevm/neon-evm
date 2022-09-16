@@ -61,15 +61,16 @@ impl<'a> ProgramAccountStorage<'a> {
         })
     }
 
-    pub fn remove_ether_account(&mut self, address: &H160) -> Option<EthereumAccount<'a>> {
-        self.ethereum_accounts.remove(address)
-    }
-
-    pub fn update_ether_account(&mut self, program_id: &Pubkey, info: &'a AccountInfo<'a>) -> ProgramResult {
+    pub fn add_ether_account(&mut self, program_id: &Pubkey, info: &'a AccountInfo<'a>) -> ProgramResult {
         let ether_account = EthereumAccount::from_account(program_id, info)?;
-        self.ethereum_accounts.insert(ether_account.address, ether_account);
+        let previous = self.ethereum_accounts.insert(ether_account.address, ether_account);
+        assert!(previous.is_none());
 
         Ok(())
+    }
+
+    pub fn remove_ether_account(&mut self, address: &H160) -> Option<EthereumAccount<'a>> {
+        self.ethereum_accounts.remove(address)
     }
 
     fn panic_if_account_not_exists(&self, address: &H160) {

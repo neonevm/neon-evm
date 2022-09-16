@@ -4,7 +4,7 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::ProgramAccountStorage;
+use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
 use crate::executor::{Action, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -171,7 +171,7 @@ fn finalize<'a>(
             &accounts.operator,
             storage.caller,
             apply_state,
-        )? {
+        )? == AccountsReadiness::Ready {
             accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
 
             account_storage.block_accounts(false)?;

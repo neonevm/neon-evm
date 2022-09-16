@@ -11,6 +11,12 @@ mod base;
 mod apply;
 mod backend;
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum AccountsReadiness {
+    Ready,
+    NeedMoreReallocations,
+}
+
 pub struct ProgramAccountStorage<'a> {
     program_id: &'a Pubkey,
     operator: &'a Pubkey,

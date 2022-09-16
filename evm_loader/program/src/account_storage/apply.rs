@@ -13,7 +13,7 @@ use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account::ether_contract::ContractExtension;
-use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
 
@@ -55,20 +55,20 @@ impl<'a> ProgramAccountStorage<'a> {
         operator: &Operator<'a>,
         caller: H160,
         actions: Option<Vec<Action>>,
-    ) -> Result<bool, ProgramError> {
+    ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
         let actions = match actions {
             None => vec![Action::EvmIncrementNonce { address: caller }],
             Some(actions) => {
-                if !self.preprocess_actions(
+                if self.preprocess_actions(
                     system_program,
                     neon_program,
                     operator,
                     &actions,
-                )? {
+                )? == AccountsReadiness::NeedMoreReallocations {
                     debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
-                    return Ok(false);
+                    return Ok(AccountsReadiness::NeedMoreReallocations);
                 }
 
                 actions
@@ -146,7 +146,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
         debug_print!("Applies done");
 
-        Ok(true)
+        Ok(AccountsReadiness::Ready)
     }
 
     fn preprocess_actions(
@@ -155,16 +155,16 @@ impl<'a> ProgramAccountStorage<'a> {
         neon_program: &program::Neon<'a>,
         operator: &Operator<'a>,
         actions: &[Action],
-    ) -> Result<bool, ProgramError> {
+    ) -> Result<AccountsReadiness, ProgramError> {
         fn do_realloc<'a>(
             system_program: &program::System<'a>,
             operator: &Operator<'a>,
             solana_account: &'a AccountInfo<'a>,
             space_needed: usize,
-        ) -> Result<bool, ProgramError> {
+        ) -> Result<AccountsReadiness, ProgramError> {
             let space_current = solana_account.data_len();
             if space_current >= space_needed {
-                return Ok(true)
+                return Ok(AccountsReadiness::Ready)
             }
 
             debug_print!(
@@ -195,10 +195,14 @@ impl<'a> ProgramAccountStorage<'a> {
                 .min(space_current + MAX_PERMITTED_DATA_INCREASE);
             solana_account.realloc(max_possible_space_per_instruction, false)?;
 
-            Ok(max_possible_space_per_instruction >= space_needed)
+            Ok(if max_possible_space_per_instruction >= space_needed {
+                AccountsReadiness::Ready
+            } else {
+                AccountsReadiness::NeedMoreReallocations
+            })
         }
 
-        let mut result = Ok(true);
+        let mut accounts_readiness = AccountsReadiness::Ready;
         for action in actions {
             let (address, code_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0),
@@ -234,24 +238,19 @@ impl<'a> ProgramAccountStorage<'a> {
                     MAX_PERMITTED_DATA_INCREASE.min(space_needed),
                 )?;
 
+                self.add_ether_account(neon_program.key, solana_account)?;
+
                 if space_needed > MAX_PERMITTED_DATA_INCREASE {
-                    result = Ok(false);
+                    accounts_readiness = AccountsReadiness::NeedMoreReallocations;
                 }
-            } else {
-                self.remove_ether_account(address);
-
-                result = do_realloc(system_program, operator, solana_account, space_needed)
-                    .map(|space_enough|
-                        result.expect("result expected to be Ok(bool)") && space_enough
-                    );
-            }
-
-            self.update_ether_account(neon_program.key, solana_account)?;
-
-            result.clone()?;
+            } else if do_realloc(system_program, operator, solana_account, space_needed)?
+                == AccountsReadiness::NeedMoreReallocations
+            {
+                 accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+             }
         }
 
-        result
+        Ok(accounts_readiness)
     }
 
     /// Delete all data in the account.
