@@ -76,11 +76,14 @@ impl<'acc> ContractData<'_, 'acc> {
         )
     }
 
+    #[must_use]
+    pub fn extension_borrow_mut(&self) -> RefMut<'acc, [u8]> {
+        RefMut::map(self.account.info.data.borrow_mut(), |slice| &mut slice[EthereumAccount::SIZE..])
+    }
+
+    #[must_use]
     fn extension_part_borrow_mut(&self, offset: usize, len: usize) -> RefMut<'acc, [u8]> {
-        RefMut::map(
-            self.account.info.data.borrow_mut(),
-            |slice| &mut slice[EthereumAccount::SIZE..][offset..][..len],
-        )
+        RefMut::map(self.extension_borrow_mut(), |slice| &mut slice[offset..][..len])
     }
 
 }

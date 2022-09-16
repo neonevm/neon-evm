@@ -261,9 +261,12 @@ impl<'a> ProgramAccountStorage<'a> {
         account.trx_count = 0;
         account.generation = account.generation.checked_add(1)
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;
-        account.code_size = 0;
 
-        account.info.realloc(EthereumAccount::SIZE, false)?;
+        if let Some(contract) = account.contract_data() {
+            contract.extension_borrow_mut().fill(0);
+        }
+
+        account.code_size = 0;
 
         Ok(())
     }
