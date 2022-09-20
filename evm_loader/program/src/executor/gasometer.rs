@@ -15,7 +15,7 @@ use crate::{
 
 use super::ExecutorState;
 
-const LAMPORTS_PER_SIGNATURE: u64 = 5000;
+pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -157,4 +157,5 @@ impl Gasometer {
         self.gas = self.gas.saturating_add(lamports);
     }
 
+    pub fn record_alt_cost(&mut self, alt_cost: u64) { self.gas = self.gas.saturating_add(alt_cost); }
 }
