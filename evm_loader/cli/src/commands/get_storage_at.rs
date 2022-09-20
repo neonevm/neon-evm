@@ -29,6 +29,10 @@ pub fn execute(
             let index: usize = index.as_usize() * 32;
             U256::from_big_endian(&contract.extension.storage[index..index+32])
         } else {
+            #[allow(clippy::cast_possible_truncation)]
+            let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
+            let index = *index & !U256::from(0xFF);
+            
             let mut index_bytes = [0_u8; 32];
             index.to_little_endian(&mut index_bytes);
             let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", ether_address.as_bytes(), &contract.generation.to_le_bytes(), &index_bytes];
@@ -41,7 +45,7 @@ pub fn execute(
                 } else {
                     let account_info = account_info(&address, &mut account);
                     let storage = EthereumStorage::from_account(&config.evm_loader, &account_info).unwrap();
-                    storage.value
+                    storage.get(subindex)
                 }
             } else {
                 U256::zero()

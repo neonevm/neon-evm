@@ -99,13 +99,17 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 .map_or_else(U256::zero, U256::from_big_endian);
         }
 
-        let (solana_address, _) = self.get_storage_address(address, index);
+        #[allow(clippy::cast_possible_truncation)]
+        let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
+        let index = *index & !U256::from(0xFF);
+
+        let (solana_address, _) = self.get_storage_address(address, &index);
         let account = self.solana_accounts.get(&solana_address)
             .unwrap_or_else(|| panic!("Account {} - storage account not found", solana_address));
 
         if account.owner == self.program_id {
             let storage = EthereumStorage::from_account(self.program_id, account).unwrap();
-            return storage.value
+            return storage.get(subindex)
         }
 
         if solana_program::system_program::check_id(account.owner) {

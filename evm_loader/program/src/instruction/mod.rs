@@ -70,12 +70,6 @@ pub enum EvmInstruction {
     ///   5. `[]` SPL Token program id.
     MigrateAccount,
 
-    /// Writes value to Ethereum account's distributed practically infinite storage.
-    WriteValueToDistributedStorage,
-
-    /// Converts data account from V1 (HAMT) to V2 (distributed storage).
-    ConvertDataAccountFromV1ToV2,
-
     /// Collect lamports from treasury pool accounts to main pool balance
     CollectTreasure,
 
@@ -117,8 +111,6 @@ impl EvmInstruction {
             24 => Self::CreateAccountV02,
             25 => Self::Deposit,
             26 => Self::MigrateAccount,
-            28 => Self::WriteValueToDistributedStorage,
-            29 => Self::ConvertDataAccountFromV1ToV2,
             30 => Self::CollectTreasure,
             31 => Self::TransactionExecuteFromInstruction,
             32 => Self::TransactionStepFromInstruction,
@@ -152,5 +144,4 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod update_valids_table;
 pub mod transaction;
-pub mod storage_to_v2;
 pub mod collect_treasury;

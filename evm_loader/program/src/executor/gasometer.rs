@@ -10,7 +10,7 @@ use crate::{
     config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     transaction::Transaction, 
-    account::{EthereumAccount, EthereumStorage}
+    account::{EthereumAccount}
 };
 
 use super::ExecutorState;
@@ -102,7 +102,8 @@ impl Gasometer {
             return;
         }
 
-        let rent = self.rent.minimum_balance(EthereumStorage::SIZE);
+        let data_len = 1/*tag*/ + 1/*subindex*/ + 32/*value*/;
+        let rent = self.rent.minimum_balance(data_len);
 
         self.gas = self.gas.saturating_add(rent);
     }
