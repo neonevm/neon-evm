@@ -125,14 +125,13 @@ fn pay_gas_cost<'a>(
 
     // Can overflow in malicious transaction
     let value = used_gas.saturating_mul(storage.gas_price);
+    storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
     account_storage.transfer_gas_payment(
         storage.caller,
         operator_ether_account,
         value,
     )?;
-
-    storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
     Ok(())
 }
@@ -163,6 +162,7 @@ fn finalize<'a>(
         Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
         Err(e) => return Err(e)
     };
+    solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
     if let Some((result, exit_reason, apply_state)) = results {
         if let Some(apply_state) = apply_state {
