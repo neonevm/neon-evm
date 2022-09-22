@@ -6,18 +6,19 @@ use solana_program::{
     rent::Rent,
     program_error::ProgramError,
 };
+use solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use crate::{
     config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     transaction::Transaction, 
-    account::{EthereumAccount, EthereumStorage}
+    account::EthereumStorage,
 };
+use crate::account_storage::{AccountOperation, AccountsOperations};
 
 use super::ExecutorState;
 
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
-const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -102,48 +103,28 @@ impl Gasometer {
             return;
         }
 
-        let rent = self.rent.minimum_balance(EthereumStorage::SIZE);
-
-        self.gas = self.gas.saturating_add(rent);
+        self.record_account_rent(EthereumStorage::SIZE);
     }
 
-    pub fn record_deploy<B>(&mut self, state: &ExecutorState<B>, address: H160)
-    where
-        B: AccountStorage
-    {
-        let account_space = state.backend.solana_account_space(&address);
-        let account_rent = self.rent.minimum_balance(account_space);
+    pub fn record_accounts_operations(&mut self, accounts_operations: &AccountsOperations) {
+        for operation in accounts_operations.values() {
+            match operation {
+                AccountOperation::Create { space, .. } => self.record_account_rent(
+                    (*space).min(MAX_PERMITTED_DATA_INCREASE),
+                ),
 
-        self.gas = self.gas
-            .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST);
-    }
-
-    pub fn record_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256)
-    where
-        B: AccountStorage
-    {
-        if value.is_zero() {
-            return;
+                AccountOperation::Resize { from, to, ..} => {
+                    let account_rent_from = self.rent.minimum_balance(*from);
+                    let account_rent_to = self.rent.minimum_balance(
+                        (*to).min(from + MAX_PERMITTED_DATA_INCREASE),
+                    );
+                    self.gas = self.gas.saturating_add(account_rent_to.saturating_sub(account_rent_from));
+                }
+            }
         }
-
-        let account_is_empty =
-            state.balance(&target).is_zero() &&
-            state.nonce(&target).is_zero();
-
-        if !account_is_empty {
-            return;
-        }
-
-        let account_rent = self.rent.minimum_balance(EthereumAccount::SIZE);
-
-        self.gas = self.gas
-            .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 
-    pub fn record_account_rent(&mut self, data_len: usize)
-    {
+    pub fn record_account_rent(&mut self, data_len: usize) {
         let account_rent = self.rent.minimum_balance(data_len);
         self.gas = self.gas.saturating_add(account_rent);
     }
@@ -152,5 +133,4 @@ impl Gasometer {
     {
         self.gas = self.gas.saturating_add(lamports);
     }
-
 }

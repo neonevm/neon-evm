@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use evm::{ExitError, ExitReason, H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
-use crate::executor::{Action, Machine};
+use crate::account_storage::{AccountsOperations, AccountsReadiness, ProgramAccountStorage};
+use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
 
@@ -37,7 +38,7 @@ pub fn do_begin<'a>(
     account_storage.block_accounts(true)?;
 
 
-    let (results, used_gas) = {
+    let (results, gasometer) = {
         let mut executor = Machine::new(caller, account_storage)?;
         executor.gasometer_mut().record_iterative_overhead();
         executor.gasometer_mut().record_transaction_size(&trx);
@@ -56,13 +57,13 @@ pub fn do_begin<'a>(
                 let result = vec![];
                 let exit_reason = ExitError::OutOfFund.into();
 
-                (Some((result, exit_reason, None)), executor.used_gas())
+                (Some((result, exit_reason, None)), executor.take_gasometer())
             }
             Err(e) => return Err(e)
         }
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer, None)
 }
 
 pub fn do_continue<'a>(
@@ -75,12 +76,12 @@ pub fn do_continue<'a>(
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (results, used_gas) = {
+    let (results, gasometer) = {
         let executor = Machine::restore(&storage, account_storage)?;
         execute_steps(executor, step_count, &mut storage)
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer, None)
 }
 
 
@@ -90,27 +91,26 @@ fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
     step_count: u64,
     storage: &mut State
-) -> (Option<EvmResults>, U256) {
+) -> (Option<EvmResults>, Gasometer) {
     match executor.execute_n_steps(step_count) {
         Ok(_) => { // step limit
-            let used_gas = executor.used_gas();
             executor.save_into(storage);
 
-            (None, used_gas)
+            (None, executor.take_gasometer())
         },
         Err((result, reason)) => { // transaction complete
-            let used_gas = executor.used_gas();
-
-            let apply_state = if reason.is_succeed() {
+            let (apply_state, gasometer) = if reason.is_succeed() {
                 // TODO: Save only when there is needed to repeat transaction.
                 executor.save_into(storage);
 
-                Some(executor.into_state_actions())
+                let (actions, gasometer) = executor.into_state_actions_and_gasometer();
+
+                (Some(actions), gasometer)
             } else {
-                None
+                (None, executor.take_gasometer())
             };
 
-            (Some((result, reason, apply_state)), used_gas)
+            (Some((result, reason, apply_state)), gasometer)
         }
     }
 }
@@ -142,9 +142,27 @@ fn finalize<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     results: Option<EvmResults>,
-    used_gas: U256,
+    mut used_gas: U256,
+    mut gasometer: Gasometer,
+    accounts_operations: Option<AccountsOperations<'a>>,
 ) -> ProgramResult {
     debug_print!("finalize");
+
+    let accounts_operations = match accounts_operations {
+        Some(accounts_operations) => accounts_operations,
+
+        None => match &results {
+            None => HashMap::default(),
+
+            Some((_, _, actions)) => {
+                let accounts_operations = account_storage.calc_acc_changes(actions)?;
+                gasometer.record_accounts_operations(&accounts_operations);
+                used_gas = gasometer.used_gas();
+
+                accounts_operations
+            },
+        },
+    };
 
     // The only place where checked math is required.
     // Saturating math should be used everywhere else for gas calculation.
@@ -155,7 +173,15 @@ fn finalize<'a>(
         let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
         let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used);
 
-        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas);
+        return finalize(
+            accounts,
+            storage,
+            account_storage,
+            out_of_gas,
+            remaining_gas,
+            gasometer,
+            Some(accounts_operations),
+        );
     }
 
     let results = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
@@ -171,6 +197,7 @@ fn finalize<'a>(
             &accounts.operator,
             storage.caller,
             apply_state,
+            accounts_operations,
         )? == AccountsReadiness::Ready {
             accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
 

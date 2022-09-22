@@ -218,7 +218,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.state.enter(interrupt.is_static);
 
         if let Some(transfer) = interrupt.transfer {
-            self.executor.gasometer.record_transfer(&self.executor.state, interrupt.code_address, transfer.value);
             self.executor.transfer(transfer).map_err(|e| (Vec::new(), e.into()))?;
         }
 
@@ -239,8 +238,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         if CONFIG.create_increase_nonce {
             self.executor.state.inc_nonce(interrupt.address);
         }
-
-        self.executor.gasometer.record_deploy(&self.executor.state, interrupt.address);
 
         if let Some(transfer) = interrupt.transfer {
             self.executor.transfer(transfer).map_err(|e| (Vec::new(), e.into()))?;
@@ -392,6 +389,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.executor.gasometer.used_gas()
     }
 
+    /// Consumes Machine and takes gasometer
+    #[must_use]
+    pub fn take_gasometer(self) -> Gasometer {
+        self.executor.gasometer
+    }
+
     /// Returns gasometer mutable reference
     #[must_use]
     pub fn gasometer_mut(&mut self) -> &mut Gasometer {
@@ -401,6 +404,11 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[must_use]
     pub fn into_state_actions(self) -> Vec<Action> {
         self.executor.state.into_actions()
+    }
+
+    #[must_use]
+    pub fn into_state_actions_and_gasometer(self) -> (Vec<Action>, Gasometer) {
+        (self.executor.state.into_actions(), self.executor.gasometer)
     }
 
     #[must_use]

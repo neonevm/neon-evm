@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION};
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
@@ -10,6 +10,23 @@ use solana_program::clock::Clock;
 mod base;
 mod apply;
 mod backend;
+
+#[derive(Debug)]
+pub enum AccountOperation<'a> {
+    Create {
+        space: usize,
+        solana_account: &'a AccountInfo<'a>,
+        bump_seed: u8,
+    },
+
+    Resize {
+        from: usize,
+        to: usize,
+        solana_account: &'a AccountInfo<'a>,
+    },
+}
+
+pub type AccountsOperations<'a> = HashMap<H160, AccountOperation<'a>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountsReadiness {

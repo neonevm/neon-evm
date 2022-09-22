@@ -61,7 +61,7 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         &mut self,
         origin: H160,
         address: H160,
-        #[allow(unused)] data: &[u8],
+        _data: &[u8],
         value: U256,
         gas_limit: U256,
         gas_price: U256
@@ -74,8 +74,6 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         self.state.inc_nonce(origin);
         self.state.enter(false);
         
-        self.gasometer.record_transfer(&self.state, address, value);
-
         if let Err(error) = self.state.transfer(origin, address, value)  {
             return Err!(ProgramError::InsufficientFunds; "ExitError={:?}", error);
         }
@@ -86,7 +84,7 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
     pub fn create_begin(
         &mut self,
         origin: H160,
-        #[allow(unused)] init_code: &[u8],
+        _init_code: &[u8],
         value: U256,
         gas_limit: U256,
         gas_price: U256
@@ -109,8 +107,6 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
 
         self.state.inc_nonce(origin);
         self.state.enter(false);
-
-        self.gasometer.record_deploy(&self.state, address);
 
         if CONFIG.create_increase_nonce {
             self.state.inc_nonce(address);

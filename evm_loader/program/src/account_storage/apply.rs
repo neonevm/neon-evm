@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 
 use evm::{H160, U256};
-use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
 use solana_program::instruction::Instruction;
 use solana_program::program::{invoke, invoke_signed_unchecked};
@@ -13,7 +12,7 @@ use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account::ether_contract::ContractExtension;
-use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
 
@@ -48,6 +47,95 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
+    pub fn calc_acc_changes(
+        &self,
+        actions: &Option<Vec<Action>>,
+    ) -> Result<AccountsOperations<'a>, ProgramError> {
+        let mut operations = HashMap::new();
+
+        let actions = match actions {
+            None => return Ok(operations),
+            Some(actions) => actions,
+        };
+
+        for action in actions {
+            let (address, code_size) = match action {
+                Action::NeonTransfer { target, .. } => (target, 0),
+                Action::EvmSetCode { address, code, .. } =>
+                    (address, code.len()),
+                _ => continue,
+            };
+
+            let (solana_address, bump_seed) = self.solana_address(address);
+            let solana_account = self.solana_account(&solana_address)
+                .ok_or_else(||
+                    E!(
+                        ProgramError::UninitializedAccount;
+                        "Account {} - corresponding Solana account was not provided",
+                        address
+                    )
+                )?;
+
+            let space_needed = EthereumAccount::space_needed(code_size);
+            if solana_program::system_program::check_id(solana_account.owner) {
+                match operations.remove(address) {
+                    None => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Create {
+                                space: space_needed,
+                                solana_account,
+                                bump_seed,
+                            },
+                        );
+                    },
+
+                    Some(AccountOperation::Create { space, solana_account, bump_seed }) => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Create {
+                                space: space_needed.max(space),
+                                solana_account,
+                                bump_seed,
+                            },
+                        );
+                    },
+
+                    _ => unreachable!(),
+                }
+            } else {
+                match operations.remove(address) {
+                    None => {
+                        let space_current = solana_account.data_len();
+                        operations.insert(
+                            *address,
+                            AccountOperation::Resize {
+                                from: space_current,
+                                to: space_needed,
+                                solana_account,
+                            },
+                        );
+                    },
+
+                    Some(AccountOperation::Resize { from, to, solana_account }) => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Resize {
+                                from,
+                                to: space_needed.max(to),
+                                solana_account,
+                            },
+                        );
+                    }
+
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        Ok(operations)
+    }
+
     pub fn apply_state_change(
         &mut self,
         neon_program: &program::Neon<'a>,
@@ -55,17 +143,19 @@ impl<'a> ProgramAccountStorage<'a> {
         operator: &Operator<'a>,
         caller: H160,
         actions: Option<Vec<Action>>,
+        accounts_operations: AccountsOperations<'a>,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
         let actions = match actions {
             None => vec![Action::EvmIncrementNonce { address: caller }],
+
             Some(actions) => {
-                if self.preprocess_actions(
+                if self.process_accounts_operations(
                     system_program,
                     neon_program,
                     operator,
-                    &actions,
+                    accounts_operations,
                 )? == AccountsReadiness::NeedMoreReallocations {
                     debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
                     return Ok(AccountsReadiness::NeedMoreReallocations);
@@ -149,105 +239,65 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(AccountsReadiness::Ready)
     }
 
-    fn preprocess_actions(
+    fn process_accounts_operations(
         &mut self,
         system_program: &program::System<'a>,
         neon_program: &program::Neon<'a>,
         operator: &Operator<'a>,
-        actions: &[Action],
+        accounts_operations: AccountsOperations<'a>,
     ) -> Result<AccountsReadiness, ProgramError> {
-        fn do_realloc<'a>(
-            system_program: &program::System<'a>,
-            operator: &Operator<'a>,
-            solana_account: &'a AccountInfo<'a>,
-            space_needed: usize,
-        ) -> Result<AccountsReadiness, ProgramError> {
-            let space_current = solana_account.data_len();
-            if space_current >= space_needed {
-                return Ok(AccountsReadiness::Ready)
-            }
-
-            debug_print!(
-                "Resizing account (space_current = {}, space_needed = {})",
-                space_current,
-                space_needed
-            );
-
-            let rent = Rent::get()?;
-            let lamports_needed = rent.minimum_balance(space_needed);
-            let lamports_current = solana_account.lamports();
-            if lamports_current < lamports_needed {
-                invoke(
-                    &system_instruction::transfer(
-                        operator.key,
-                        solana_account.key,
-                        lamports_needed - lamports_current,
-                    ),
-                    &[
-                        (*operator.info).clone(),
-                        solana_account.clone(),
-                        (*system_program).clone(),
-                    ],
-                )?;
-            }
-
-            let max_possible_space_per_instruction = space_needed
-                .min(space_current + MAX_PERMITTED_DATA_INCREASE);
-            solana_account.realloc(max_possible_space_per_instruction, false)?;
-
-            Ok(if max_possible_space_per_instruction >= space_needed {
-                AccountsReadiness::Ready
-            } else {
-                AccountsReadiness::NeedMoreReallocations
-            })
-        }
-
         let mut accounts_readiness = AccountsReadiness::Ready;
-        for action in actions {
-            let (address, code_size) = match action {
-                Action::NeonTransfer { target, .. } => (target, 0),
-                Action::EvmSetCode { address, code, .. } =>
-                    (address, code.len()),
-                _ => continue,
-            };
+        for (address, operation) in accounts_operations {
+            match operation {
+                AccountOperation::Create { space, solana_account, bump_seed } => {
+                    debug_print!("Creating account (space = {})", space);
+                    EthereumAccount::create_account(
+                        system_program,
+                        neon_program.key,
+                        operator,
+                        address,
+                        solana_account,
+                        bump_seed,
+                        MAX_PERMITTED_DATA_INCREASE.min(space),
+                    )?;
 
-            let (solana_address, bump_seed) = self.solana_address(address);
-            let solana_account = self.solana_account(&solana_address)
-                .ok_or_else(||
-                    E!(
-                        ProgramError::UninitializedAccount;
-                        "Account {} - corresponding Solana account was not provided",
-                        address
-                    )
-                )?;
+                    self.add_ether_account(neon_program.key, solana_account)?;
 
-            let space_needed = EthereumAccount::space_needed(code_size);
-            if solana_program::system_program::check_id(solana_account.owner) {
-                debug_print!(
-                    "Creating account (space_needed = {}) needed for action: {}",
-                    space_needed,
-                    action
-                );
-                EthereumAccount::create_account(
-                    system_program,
-                    neon_program.key,
-                    operator,
-                    *address,
-                    solana_account,
-                    bump_seed,
-                    MAX_PERMITTED_DATA_INCREASE.min(space_needed),
-                )?;
-
-                self.add_ether_account(neon_program.key, solana_account)?;
-
-                if space_needed > MAX_PERMITTED_DATA_INCREASE {
-                    accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+                    if space > MAX_PERMITTED_DATA_INCREASE {
+                        accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+                    }
                 }
-            } else if do_realloc(system_program, operator, solana_account, space_needed)?
-                == AccountsReadiness::NeedMoreReallocations
-            {
-                 accounts_readiness = AccountsReadiness::NeedMoreReallocations;
-             }
+
+                AccountOperation::Resize { from, to, solana_account } => {
+                    debug_print!("Resizing account (from = {}, to = {})", from, to);
+
+                    let rent = Rent::get()?;
+                    let lamports_needed = rent.minimum_balance(to);
+                    let lamports_current = solana_account.lamports();
+                    if lamports_current < lamports_needed {
+                        invoke(
+                            &system_instruction::transfer(
+                                operator.key,
+                                solana_account.key,
+                                lamports_needed - lamports_current,
+                            ),
+                            &[
+                                (*operator.info).clone(),
+                                solana_account.clone(),
+                                (*system_program).clone(),
+                            ],
+                        )?;
+                    }
+
+                    let max_possible_space_per_instruction = to
+                        .min(from + MAX_PERMITTED_DATA_INCREASE);
+                    solana_account.realloc(max_possible_space_per_instruction, false)?;
+
+                    if max_possible_space_per_instruction < to {
+                        accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+                    }
+                }
+            };
         }
 
         Ok(accounts_readiness)
