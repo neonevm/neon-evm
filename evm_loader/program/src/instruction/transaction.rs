@@ -7,7 +7,10 @@ use crate::account_storage::{ProgramAccountStorage};
 use crate::executor::{Machine, Action};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
+use crate::executor::LAMPORTS_PER_SIGNATURE;
 
+/// Current cap of transaction accounts
+const TX_ACCOUNT_CNT: u64 = 30;
 
 
 pub struct Accounts<'a> {
@@ -27,6 +30,7 @@ pub fn do_begin<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     trx: Transaction,
     caller: H160,
+    alt_cost: u64,
 ) -> ProgramResult {
     debug_print!("do_begin");
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
@@ -40,6 +44,7 @@ pub fn do_begin<'a>(
         let mut executor = Machine::new(caller, account_storage)?;
         executor.gasometer_mut().record_iterative_overhead();
         executor.gasometer_mut().record_transaction_size(&trx);
+        executor.gasometer_mut().record_alt_cost(alt_cost);
 
         let begin_result = if let Some(code_address) = trx.to {
             executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
@@ -120,14 +125,13 @@ fn pay_gas_cost<'a>(
 
     // Can overflow in malicious transaction
     let value = used_gas.saturating_mul(storage.gas_price);
+    storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
     account_storage.transfer_gas_payment(
         storage.caller,
         operator_ether_account,
         value,
     )?;
-
-    storage.gas_used = storage.gas_used.saturating_add(used_gas);
 
     Ok(())
 }
@@ -158,6 +162,7 @@ fn finalize<'a>(
         Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
         Err(e) => return Err(e)
     };
+    solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
     if let Some((result, exit_reason, apply_state)) = results {
         if let Some(apply_state) = apply_state {
@@ -174,4 +179,16 @@ fn finalize<'a>(
     }
 
     Ok(())
+}
+
+#[must_use]
+pub fn alt_cost(tx_acc_count: u64) -> u64 {
+    if tx_acc_count > TX_ACCOUNT_CNT {
+        let extend = tx_acc_count /TX_ACCOUNT_CNT+1;
+        // create_alt + extend_alt + deactivate_alt + close_alt
+        (extend+3) * LAMPORTS_PER_SIGNATURE
+    }
+    else{
+        0
+    }
 }

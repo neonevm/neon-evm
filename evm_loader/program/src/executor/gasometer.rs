@@ -10,12 +10,12 @@ use crate::{
     config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     transaction::Transaction, 
-    account::{EthereumAccount, EthereumStorage}
+    account::{EthereumAccount}
 };
 
 use super::ExecutorState;
 
-const LAMPORTS_PER_SIGNATURE: u64 = 5000;
+pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
 const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -102,7 +102,8 @@ impl Gasometer {
             return;
         }
 
-        let rent = self.rent.minimum_balance(EthereumStorage::SIZE);
+        let data_len = 1/*tag*/ + 1/*subindex*/ + 32/*value*/;
+        let rent = self.rent.minimum_balance(data_len);
 
         self.gas = self.gas.saturating_add(rent);
     }
@@ -156,4 +157,5 @@ impl Gasometer {
         self.gas = self.gas.saturating_add(lamports);
     }
 
+    pub fn record_alt_cost(&mut self, alt_cost: u64) { self.gas = self.gas.saturating_add(alt_cost); }
 }
