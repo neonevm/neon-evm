@@ -333,19 +333,32 @@ impl<'a> ProgramAccountStorage<'a> {
         assert_eq!(
             account.code_size,
             0,
-            "Contract already deployed on address {} (code_size = {})!",
+            "Contract already deployed to address {} (code_size = {})!",
             account.address,
             account.code_size,
+        );
+
+        let space_needed = EthereumAccount::space_needed(code.len());
+        let space_actual = account.info.data_len();
+        assert!(
+            space_actual >= space_needed,
+            "Not enough space for account deployment at address {} \
+                (code size: {}, space needed: {}, actual space: {})",
+            account.address,
+            code.len(),
+            space_needed,
+            space_actual,
         );
 
         account.code_size = code.len()
             .try_into()
             .expect("code.len() never exceeds u32::max");
 
-        if let Some(contract) = account.contract_data() {
-            contract.code().copy_from_slice(code);
-            contract.valids().copy_from_slice(valids);
-        }
+        let contract = account.contract_data()
+            .expect("Contract data must be available at this point");
+
+        contract.code().copy_from_slice(code);
+        contract.valids().copy_from_slice(valids);
 
         Ok(())
     }

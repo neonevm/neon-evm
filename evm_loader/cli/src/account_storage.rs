@@ -343,16 +343,18 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn code(&self, address: &H160) -> Vec<u8> {
         info!("code {}", address);
 
-        self.ethereum_contract_map_or(address,
+        self.ethereum_contract_map_or(
+            address,
             Vec::new(),
-            |c| c.code().to_vec()
+            |c| c.code().to_vec(),
         )
     }
 
     fn valids(&self, address: &H160) -> Vec<u8> {
         info!("valids {}", address);
 
-        self.ethereum_contract_map_or(address,
+        self.ethereum_contract_map_or(
+            address,
             Vec::new(),
             |c| c.valids().to_vec()
         )
@@ -375,9 +377,10 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
 
         let value = if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
-            self.ethereum_contract_map_or(address,
+            self.ethereum_contract_map_or(
+                address,
                 U256::zero(),
-                |c| U256::from_big_endian(&c.storage()[index..index+32])
+                |c| U256::from_big_endian(&c.storage()[index..index+32]),
             )
         } else {
             #[allow(clippy::cast_possible_truncation)]

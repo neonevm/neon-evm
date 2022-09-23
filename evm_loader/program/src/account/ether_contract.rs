@@ -31,7 +31,7 @@ impl Packable for DataV2 {
     #[must_use]
     fn unpack(input: &[u8]) -> Self {
         #[allow(clippy::use_self)]
-            let data = array_ref![input, 0, DataV2::SIZE];
+        let data = array_ref![input, 0, DataV2::SIZE];
         let (owner, code_size, generation) = array_refs![data, 32, 4, 4];
 
         Self {
@@ -78,14 +78,19 @@ impl<'acc> ContractData<'_, 'acc> {
 
     #[must_use]
     pub fn extension_borrow_mut(&self) -> RefMut<'acc, [u8]> {
-        RefMut::map(self.account.info.data.borrow_mut(), |slice| &mut slice[EthereumAccount::SIZE..])
+        RefMut::map(
+            self.account.info.data.borrow_mut(),
+            |slice| &mut slice[EthereumAccount::SIZE..],
+        )
     }
 
     #[must_use]
     fn extension_part_borrow_mut(&self, offset: usize, len: usize) -> RefMut<'acc, [u8]> {
-        RefMut::map(self.extension_borrow_mut(), |slice| &mut slice[offset..][..len])
+        RefMut::map(
+            self.extension_borrow_mut(),
+            |slice| &mut slice[offset..][..len],
+        )
     }
-
 }
 
 pub trait ContractExtension<'this, 'acc> {
