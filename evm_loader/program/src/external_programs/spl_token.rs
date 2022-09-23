@@ -4,7 +4,7 @@ use crate::executor::{OwnedAccountInfo, AccountMeta};
 use solana_program::{
     entrypoint::ProgramResult,
     pubkey::Pubkey,
-    account_info::{AccountInfo, IntoAccountInfo}
+    account_info::{AccountInfo, IntoAccountInfo}, program_error::ProgramError
 };
 use spl_token::instruction::TokenInstruction;
 
@@ -87,6 +87,9 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
         }
         TokenInstruction::SyncNative => {
             spl_token::processor::Processor::process_sync_native(&spl_token::ID, &instruction_accounts)
+        }
+        _ => {
+            Err!(ProgramError::InvalidInstructionData; "SPL Token: unknown instrtuction")
         }
     }
 }

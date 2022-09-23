@@ -1,10 +1,11 @@
 ARG SOLANA_IMAGE
 # Install BPF SDK
-FROM solanalabs/rust:1.61.0 AS builder
+FROM solanalabs/rust:1.63.0 AS builder
 RUN rustup toolchain install nightly
 RUN rustup component add clippy --toolchain nightly
 WORKDIR /opt
-RUN sh -c "$(curl -sSfL https://release.solana.com/stable/install)" && \
+ARG SOLANA_REVISION
+RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -19,14 +20,14 @@ ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
     cargo build --release && \
-    cargo build-bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
-    cargo build-bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
-    cargo build-bpf --features no-logs,alpha && cp target/deploy/evm_loader.so target/deploy/evm_loader-alpha.so && \
-    cargo build-bpf --features no-logs,govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
-    cargo build-bpf --features no-logs,govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
-    cargo build-bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
-    cargo build-bpf --features no-logs,mainnet,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
-    cargo build-bpf --features no-logs
+    cargo build-sbf --arch bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
+    cargo build-sbf --arch bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
+    cargo build-sbf --arch bpf --features no-logs,alpha && cp target/deploy/evm_loader.so target/deploy/evm_loader-alpha.so && \
+    cargo build-sbf --arch bpf --features no-logs,govertest && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest.so && \
+    cargo build-sbf --arch bpf --features no-logs,govertest,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-govertest-emergency.so && \
+    cargo build-sbf --arch bpf --features no-logs,mainnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet.so && \
+    cargo build-sbf --arch bpf --features no-logs,mainnet,emergency && cp target/deploy/evm_loader.so target/deploy/evm_loader-mainnet-emergency.so && \
+    cargo build-sbf --arch bpf --features no-logs
 
 # Build Solidity contracts
 FROM ethereum/solc:0.7.0 AS solc

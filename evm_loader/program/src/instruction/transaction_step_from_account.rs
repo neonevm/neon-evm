@@ -9,7 +9,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult,
     pubkey::Pubkey,
 };
-use crate::instruction::transaction::{Accounts, do_begin, do_continue};
+use crate::instruction::transaction::{Accounts, do_begin, do_continue, alt_cost};
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
@@ -17,7 +17,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let step_count = u64::from(u32::from_le_bytes(*array_ref![instruction, 4, 4]));
-
+    let alt_gas_used = alt_cost(accounts.len() as u64);
 
     let holder_or_storage_info = &accounts[0];
 
@@ -37,7 +37,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         accounts.remaining_accounts,
     )?;
 
-    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, None)
+    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, None, alt_gas_used)
 }
 
 pub fn execute<'a>(
@@ -46,7 +46,8 @@ pub fn execute<'a>(
     accounts: Accounts<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     step_count: u64,
-    gas_multiplier: Option<U256>
+    gas_multiplier: Option<U256>,
+    alt_cost: u64,
 ) -> ProgramResult {
     match crate::account::tag(program_id, holder_or_storage_info)? {
         Holder::TAG => {
@@ -71,7 +72,7 @@ pub fn execute<'a>(
                 storage.gas_limit = storage.gas_limit.saturating_mul(gas_multiplier);
             }
 
-            do_begin(step_count, accounts, storage, account_storage, trx, caller)
+            do_begin(step_count, accounts, storage, account_storage, trx, caller, alt_cost)
         }
         State::TAG => {
             let storage = State::restore(program_id, holder_or_storage_info, &accounts.operator, accounts.remaining_accounts)?;

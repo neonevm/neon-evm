@@ -106,7 +106,10 @@ fn withdraw<B: AccountStorage>(
         gasometer.record_account_rent(spl_token::state::Account::LEN);
 
         let create_associated = create_associated_token_account(
-            state.backend.operator(), &target, state.backend.neon_token_mint()
+            state.backend.operator(),
+            &target,
+            state.backend.neon_token_mint(),
+            &spl_token::ID
         );
         state.queue_external_instruction(create_associated, vec![]);
     }

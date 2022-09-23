@@ -358,13 +358,17 @@ impl<'a> ProgramAccountStorage<'a> {
         operator: &Operator<'a>,
         system_program: &program::System<'a>,
     ) -> ProgramResult {
+        #[allow(clippy::cast_possible_truncation)]
+        let subindex = (index & U256::from(0xFF)).as_u64() as u8;
+        let index = index & !U256::from(0xFF);
+
         let (solana_address, bump_seed) = self.get_storage_address(&address, &index);
         let account = self.solana_accounts.get(&solana_address)
             .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", solana_address))?;
 
         if account.owner == self.program_id {
             let mut storage = EthereumStorage::from_account(self.program_id, account)?;
-            storage.value = value;
+            storage.set(subindex, value, operator, system_program)?;
 
             return Ok(());
         }
@@ -382,7 +386,8 @@ impl<'a> ProgramAccountStorage<'a> {
             let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes, &[bump_seed]];
             system_program.create_pda_account(self.program_id, operator, account, seeds, EthereumStorage::SIZE)?;
 
-            EthereumStorage::init(account, crate::account::ether_storage::Data { value })?;
+            let mut storage = EthereumStorage::init(account, crate::account::ether_storage::Data {})?;
+            storage.set(subindex, value, operator, system_program)?;
 
             return Ok(())
         }

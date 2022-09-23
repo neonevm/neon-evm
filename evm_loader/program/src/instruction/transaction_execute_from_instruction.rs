@@ -80,7 +80,6 @@ fn execute<'a>(
 
     let (exit_reason, return_value, apply_state, accounts_operations, used_gas) = {
         let mut executor = Machine::new(caller_address, account_storage)?;
-        executor.gasometer_mut().record_transaction_size(&trx);
 
         executor.call_begin(
             caller_address,

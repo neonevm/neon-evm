@@ -191,7 +191,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                     if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
-                        let (storage_account, _) = self.get_storage_address(&address, &key);
+                        let index = key & !U256::from(0xFF);
+
+                        let (storage_account, _) = self.get_storage_address(&address, &index);
                         self.add_solana_account(storage_account, true);
                     }
                 },
@@ -378,7 +380,11 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                 |c| U256::from_big_endian(&c.storage()[index..index+32])
             )
         } else {
-            let (solana_address, _) = self.get_storage_address(address, index);
+            #[allow(clippy::cast_possible_truncation)]
+            let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
+            let index = *index & !U256::from(0xFF);
+            
+            let (solana_address, _) = self.get_storage_address(address, &index);
             info!("read storage solana address {:?} - {:?}", address, solana_address);
 
             self.add_solana_account(solana_address, false);
@@ -390,7 +396,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                 } else {
                     let account_info = account_info(&solana_address, &mut account);
                     let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
-                    storage.value
+                    storage.get(subindex)
                 }
             } else {
                 info!("read storage get_account error");
