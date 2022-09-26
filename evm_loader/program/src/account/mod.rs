@@ -264,7 +264,7 @@ where
         assert!(self.info.is_writable);
 
         let mut parts = split_account_data(self.info, T::SIZE)
-            .expect("Account have correct size");
+            .expect("Account have incorrect size");
 
         self.data.pack(&mut parts.data);
     }

@@ -111,7 +111,7 @@ impl<'a> ProgramAccountStorage<'a> {
                             *address,
                             AccountOperation::Resize {
                                 from: space_current,
-                                to: space_needed,
+                                to: space_current.max(space_needed),
                                 solana_account,
                             },
                         );
