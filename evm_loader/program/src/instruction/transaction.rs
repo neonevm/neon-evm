@@ -5,7 +5,7 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::{AccountsOperations, AccountsReadiness, ProgramAccountStorage};
+use crate::account_storage::{AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -148,7 +148,7 @@ fn finalize<'a>(
     results: Option<EvmResults>,
     mut used_gas: U256,
     mut gasometer: Gasometer,
-    accounts_operations: Option<AccountsOperations<'a>>,
+    accounts_operations: Option<AccountsOperations>,
 ) -> ProgramResult {
     debug_print!("finalize");
 
@@ -159,7 +159,7 @@ fn finalize<'a>(
             None => HashMap::default(),
 
             Some((_, _, actions)) => {
-                let accounts_operations = account_storage.calc_acc_changes(actions)?;
+                let accounts_operations = account_storage.calc_acc_changes(actions);
                 gasometer.record_accounts_operations(&accounts_operations);
                 used_gas = gasometer.used_gas();
 

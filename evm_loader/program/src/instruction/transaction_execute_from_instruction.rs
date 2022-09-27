@@ -1,6 +1,6 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury};
 use crate::transaction::{check_ethereum_transaction, Transaction, recover_caller_address};
-use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use arrayref::{array_ref};
 use evm::{H160};
 use solana_program::{
@@ -106,7 +106,7 @@ fn execute<'a>(
             None
         };
 
-        let accounts_operations = account_storage.calc_acc_changes(&apply)?;
+        let accounts_operations = account_storage.calc_acc_changes(&apply);
 
         gasometer.record_accounts_operations(&accounts_operations);
 

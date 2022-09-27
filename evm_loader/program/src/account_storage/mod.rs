@@ -1,32 +1,30 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION};
-use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
+use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
+use crate::account::ether_contract::ContractExtension;
 
 mod base;
 mod apply;
 mod backend;
 
 #[derive(Debug)]
-pub enum AccountOperation<'a> {
+pub enum AccountOperation {
     Create {
         space: usize,
-        solana_account: &'a AccountInfo<'a>,
-        bump_seed: u8,
     },
 
     Resize {
         from: usize,
         to: usize,
-        solana_account: &'a AccountInfo<'a>,
     },
 }
 
-pub type AccountsOperations<'a> = HashMap<H160, AccountOperation<'a>>;
+pub type AccountsOperations = HashMap<H160, AccountOperation>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountsReadiness {
@@ -114,5 +112,74 @@ pub trait AccountStorage {
     }
 
     /// Solana account data len
-    fn solana_account_space(&self, address: &H160) -> usize;
+    fn solana_account_space(&self, address: &H160) -> Option<usize>;
+
+    fn calc_acc_changes(
+        &self,
+        actions: &Option<Vec<Action>>,
+    ) -> AccountsOperations {
+        let mut operations = HashMap::new();
+
+        let actions = match actions {
+            None => return operations,
+            Some(actions) => actions,
+        };
+
+        for action in actions {
+            let (address, code_size) = match action {
+                Action::NeonTransfer { target, .. } => (target, 0),
+                Action::EvmSetCode { address, code, .. } =>
+                    (address, code.len()),
+                _ => continue,
+            };
+
+            let space_current = self.solana_account_space(address);
+            let space_needed = EthereumAccount::space_needed(code_size);
+            if let Some(space_current) = space_current {
+                match operations.remove(address) {
+                    None => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Resize {
+                                from: space_current,
+                                to: space_current.max(space_needed),
+                            },
+                        );
+                    },
+
+                    Some(AccountOperation::Resize { from, to }) => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Resize {
+                                from,
+                                to: space_needed.max(to),
+                            },
+                        );
+                    }
+
+                    _ => unreachable!(),
+                }
+            } else {
+                match operations.remove(address) {
+                    None => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Create { space: space_needed },
+                        );
+                    },
+
+                    Some(AccountOperation::Create { space }) => {
+                        operations.insert(
+                            *address,
+                            AccountOperation::Create { space: space_needed.max(space) },
+                        );
+                    },
+
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        operations
+    }
 }

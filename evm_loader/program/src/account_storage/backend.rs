@@ -131,9 +131,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         OwnedAccountInfoPartial::from_account_info(info, offset, len)
     }
 
-    fn solana_account_space(&self, address: &H160) -> usize {
-        self.ethereum_account(address)
-            .map_or(0, EthereumAccount::size)
+    fn solana_account_space(&self, address: &H160) -> Option<usize> {
+        self.ethereum_account(address).map(EthereumAccount::size)
     }
 
     fn solana_address(&self, address: &H160) -> (Pubkey, u8) {

@@ -417,9 +417,9 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         value
     }
 
-    fn solana_account_space(&self, address: &H160) -> usize {
+    fn solana_account_space(&self, address: &H160) -> Option<usize> {
         #[allow(clippy::redundant_closure_for_method_calls)]
-        self.ethereum_account_map_or(address, 0, |account| account.size())
+        self.ethereum_account_map_or(address, None, |account| Some(account.size()))
     }
 
     fn chain_id(&self) -> u64 {

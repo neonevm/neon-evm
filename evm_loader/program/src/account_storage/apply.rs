@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 
 use evm::{H160, U256};
@@ -47,95 +47,6 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    pub fn calc_acc_changes(
-        &self,
-        actions: &Option<Vec<Action>>,
-    ) -> Result<AccountsOperations<'a>, ProgramError> {
-        let mut operations = HashMap::new();
-
-        let actions = match actions {
-            None => return Ok(operations),
-            Some(actions) => actions,
-        };
-
-        for action in actions {
-            let (address, code_size) = match action {
-                Action::NeonTransfer { target, .. } => (target, 0),
-                Action::EvmSetCode { address, code, .. } =>
-                    (address, code.len()),
-                _ => continue,
-            };
-
-            let (solana_address, bump_seed) = self.solana_address(address);
-            let solana_account = self.solana_account(&solana_address)
-                .ok_or_else(||
-                    E!(
-                        ProgramError::UninitializedAccount;
-                        "Account {} - corresponding Solana account was not provided",
-                        address
-                    )
-                )?;
-
-            let space_needed = EthereumAccount::space_needed(code_size);
-            if solana_program::system_program::check_id(solana_account.owner) {
-                match operations.remove(address) {
-                    None => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Create {
-                                space: space_needed,
-                                solana_account,
-                                bump_seed,
-                            },
-                        );
-                    },
-
-                    Some(AccountOperation::Create { space, solana_account, bump_seed }) => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Create {
-                                space: space_needed.max(space),
-                                solana_account,
-                                bump_seed,
-                            },
-                        );
-                    },
-
-                    _ => unreachable!(),
-                }
-            } else {
-                match operations.remove(address) {
-                    None => {
-                        let space_current = solana_account.data_len();
-                        operations.insert(
-                            *address,
-                            AccountOperation::Resize {
-                                from: space_current,
-                                to: space_current.max(space_needed),
-                                solana_account,
-                            },
-                        );
-                    },
-
-                    Some(AccountOperation::Resize { from, to, solana_account }) => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Resize {
-                                from,
-                                to: space_needed.max(to),
-                                solana_account,
-                            },
-                        );
-                    }
-
-                    _ => unreachable!(),
-                }
-            }
-        }
-
-        Ok(operations)
-    }
-
     pub fn apply_state_change(
         &mut self,
         neon_program: &program::Neon<'a>,
@@ -143,7 +54,7 @@ impl<'a> ProgramAccountStorage<'a> {
         operator: &Operator<'a>,
         caller: H160,
         actions: Option<Vec<Action>>,
-        accounts_operations: AccountsOperations<'a>,
+        accounts_operations: AccountsOperations,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
@@ -244,12 +155,21 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         neon_program: &program::Neon<'a>,
         operator: &Operator<'a>,
-        accounts_operations: AccountsOperations<'a>,
+        accounts_operations: AccountsOperations,
     ) -> Result<AccountsReadiness, ProgramError> {
         let mut accounts_readiness = AccountsReadiness::Ready;
         for (address, operation) in accounts_operations {
+            let (solana_address, bump_seed) = self.calc_solana_address(&address);
+            let solana_account = self.solana_account(&solana_address)
+                .ok_or_else(||
+                    E!(
+                        ProgramError::UninitializedAccount;
+                        "Account {} - corresponding Solana account was not provided",
+                        address
+                    )
+                )?;
             match operation {
-                AccountOperation::Create { space, solana_account, bump_seed } => {
+                AccountOperation::Create { space } => {
                     debug_print!("Creating account (space = {})", space);
                     EthereumAccount::create_account(
                         system_program,
@@ -268,7 +188,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
                 }
 
-                AccountOperation::Resize { from, to, solana_account } => {
+                AccountOperation::Resize { from, to } => {
                     debug_print!("Resizing account (from = {}, to = {})", from, to);
 
                     let rent = Rent::get()?;
