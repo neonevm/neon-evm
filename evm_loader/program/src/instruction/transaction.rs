@@ -152,21 +152,19 @@ fn finalize<'a>(
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    let accounts_operations = match accounts_operations {
-        Some(accounts_operations) => accounts_operations,
-
-        None => match &results {
-            None => HashMap::default(),
-
-            Some((_, _, actions)) => {
+    let accounts_operations = accounts_operations.map_or_else(
+        || results.as_ref().map_or_else(
+            HashMap::default,
+            |(_, _, actions)| {
                 let accounts_operations = account_storage.calc_acc_changes(actions);
                 gasometer.record_accounts_operations(&accounts_operations);
                 used_gas = gasometer.used_gas();
 
                 accounts_operations
-            },
-        },
-    };
+            }
+        ),
+        |accounts_operations| accounts_operations,
+    );
 
     // The only place where checked math is required.
     // Saturating math should be used everywhere else for gas calculation.
