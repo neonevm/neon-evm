@@ -66,7 +66,7 @@ impl<'a> Neon<'a> {
         };
 
         solana_program::msg!("{} exit_status={:#04X}", exit_message, exit_status);
-        debug_print!("used gas {}", used_gas);
+        solana_program::msg!("used gas {}", used_gas);
         debug_print!("result {}", &hex::encode(result));
 
         let used_gas = if used_gas > U256::from(u64::MAX) { // Convert to u64 to not break ABI
