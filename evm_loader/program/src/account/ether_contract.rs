@@ -1,50 +1,10 @@
 use std::cell::RefMut;
 use std::mem::size_of;
 
-use arrayref::{array_ref, array_refs};
 use evm::{U256, Valids};
-use solana_program::pubkey::Pubkey;
 
-use crate::account::{EthereumAccount, Packable};
+use crate::account::EthereumAccount;
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
-
-/// Ethereum contract data account v2
-#[deprecated]
-#[derive(Debug)]
-pub struct DataV2 {
-    /// Solana account with ethereum account data associated with this code data
-    pub owner: Pubkey,
-    /// Contract code size
-    pub code_size: u32,
-    /// Contract generation, increment on suicide
-    pub generation: u32
-}
-
-#[allow(deprecated)]
-impl Packable for DataV2 {
-    /// Contract struct tag
-    const TAG: u8 = super::_TAG_CONTRACT_V2;
-    /// Contract struct serialized size
-    const SIZE: usize = 32 + 4 + 4;
-
-    /// Deserialize `Contract` struct from input data
-    #[must_use]
-    fn unpack(input: &[u8]) -> Self {
-        #[allow(clippy::use_self)]
-        let data = array_ref![input, 0, DataV2::SIZE];
-        let (owner, code_size, generation) = array_refs![data, 32, 4, 4];
-
-        Self {
-            owner: Pubkey::new_from_array(*owner),
-            code_size: u32::from_le_bytes(*code_size),
-            generation: u32::from_le_bytes(*generation),
-        }
-    }
-
-    fn pack(&self, _dst: &mut [u8]) {
-        unimplemented!()
-    }
-}
 
 pub struct ContractData<'this, 'acc> {
     account: &'this EthereumAccount<'acc>,

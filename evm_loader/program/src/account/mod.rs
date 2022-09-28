@@ -37,21 +37,9 @@ pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
 };
 
 pub const TAG_EMPTY: u8 = 0;
-#[deprecated]
-const _TAG_ACCOUNT_V1: u8 = 1;
-#[deprecated]
-const _TAG_ACCOUNT_V2: u8 = 10;
 const TAG_ACCOUNT_V3: u8 = 40;
-#[deprecated]
-const _TAG_CONTRACT_V1: u8 = 2;
-#[deprecated]
-const _TAG_CONTRACT_V2: u8 = 20;
 const TAG_CONTRACT_STORAGE: u8 = 6;
-#[deprecated]
-const _TAG_STATE_V1: u8 = 3;
 const TAG_STATE: u8 = 30;
-#[deprecated]
-const _TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
 const TAG_HOLDER: u8 = 6;
 
