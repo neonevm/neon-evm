@@ -418,7 +418,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn solana_account_space(&self, address: &H160) -> Option<usize> {
-        self.ethereum_account_map_or(address, None, |account| Some(account.size()))
+        self.ethereum_account_map_or(address, None, |account| Some(account.info.data_len()))
     }
 
     fn chain_id(&self) -> u64 {

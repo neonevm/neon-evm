@@ -133,9 +133,8 @@ pub trait AccountStorage {
                 _ => continue,
             };
 
-            let space_current = self.solana_account_space(address);
             let space_needed = EthereumAccount::space_needed(code_size);
-            if let Some(space_current) = space_current {
+            if let Some(space_current) = self.solana_account_space(address) {
                 match operations.remove(address) {
                     None => {
                         operations.insert(
