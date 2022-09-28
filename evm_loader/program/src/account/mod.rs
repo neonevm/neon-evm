@@ -33,7 +33,7 @@ pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
     // testing this version)
     255_u8
 } else {
-    1_u8
+    2_u8
 };
 
 pub const TAG_EMPTY: u8 = 0;
