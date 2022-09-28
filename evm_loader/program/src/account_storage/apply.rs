@@ -192,14 +192,16 @@ impl<'a> ProgramAccountStorage<'a> {
                     debug_print!("Resizing account (from = {}, to = {})", from, to);
 
                     let rent = Rent::get()?;
-                    let lamports_needed = rent.minimum_balance(to);
+                    let lamports_needed = rent.minimum_balance(
+                        to.min(from.saturating_add(MAX_PERMITTED_DATA_INCREASE)),
+                    );
                     let lamports_current = solana_account.lamports();
                     if lamports_current < lamports_needed {
                         invoke(
                             &system_instruction::transfer(
                                 operator.key,
                                 solana_account.key,
-                                lamports_needed - lamports_current,
+                                lamports_needed.saturating_sub(lamports_current),
                             ),
                             &[
                                 (*operator.info).clone(),
