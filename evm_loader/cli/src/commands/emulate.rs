@@ -103,12 +103,12 @@ pub fn execute(
         debug!("{} steps executed", steps_executed);
         debug!("{} used gas by executor", executor.used_gas());
 
-
-        let (actions, gasometer) = executor.into_state_actions_and_gasometer();
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
+            let (actions, gasometer) = executor.into_state_actions_and_gasometer();
             (exit_reason, result, Some(actions), steps_executed, gasometer)
         } else {
+            let gasometer = executor.take_gasometer();
             (exit_reason, result, None, steps_executed, gasometer)
         }
     };
@@ -117,7 +117,7 @@ pub fn execute(
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let accounts_operations = storage.calc_acc_changes(&actions);
-            gasometer.record_accounts_operations(&accounts_operations);
+            gasometer.record_accounts_operations_for_emulation(&accounts_operations);
             storage.apply_actions(actions.unwrap());
 
             debug!("Applies done, {} of gas used", gasometer.used_gas());

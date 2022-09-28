@@ -106,19 +106,33 @@ impl Gasometer {
         self.record_account_rent(data_len);
     }
 
+    pub fn record_accounts_operations_for_emulation(
+        &mut self,
+        accounts_operations: &AccountsOperations,
+    ) {
+        for operation in accounts_operations.values() {
+            match operation {
+                AccountOperation::Create { space } => self.record_account_rent(*space),
+
+                AccountOperation::Resize { from, to } => {
+                    self.record_account_rent_diff(*from, *to);
+                }
+            }
+        }
+    }
+
     pub fn record_accounts_operations(&mut self, accounts_operations: &AccountsOperations) {
         for operation in accounts_operations.values() {
             match operation {
-                AccountOperation::Create { space, .. } => self.record_account_rent(
+                AccountOperation::Create { space } => self.record_account_rent(
                     (*space).min(MAX_PERMITTED_DATA_INCREASE),
                 ),
 
-                AccountOperation::Resize { from, to, ..} => {
-                    let account_rent_from = self.rent.minimum_balance(*from);
-                    let account_rent_to = self.rent.minimum_balance(
-                        (*to).min(from + MAX_PERMITTED_DATA_INCREASE),
+                AccountOperation::Resize { from, to } => {
+                    self.record_account_rent_diff(
+                        *from,
+                        (*to).min(from.saturating_add(MAX_PERMITTED_DATA_INCREASE)),
                     );
-                    self.gas = self.gas.saturating_add(account_rent_to.saturating_sub(account_rent_from));
                 }
             }
         }
@@ -127,6 +141,13 @@ impl Gasometer {
     pub fn record_account_rent(&mut self, data_len: usize) {
         let account_rent = self.rent.minimum_balance(data_len);
         self.gas = self.gas.saturating_add(account_rent);
+    }
+
+    pub fn record_account_rent_diff(&mut self, data_len_old: usize, data_len_new: usize) {
+        assert!(data_len_new >= data_len_old);
+        let account_rent_old = self.rent.minimum_balance(data_len_old);
+        let account_rent_new = self.rent.minimum_balance(data_len_new);
+        self.gas = self.gas.saturating_add(account_rent_new.saturating_sub(account_rent_old));
     }
 
     pub fn record_lamports_used(&mut self, lamports: u64)
