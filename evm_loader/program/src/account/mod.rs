@@ -38,10 +38,10 @@ pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
 
 const TAG_EMPTY: u8 = 0;
 const TAG_ACCOUNT_V3: u8 = 11;
-const TAG_CONTRACT_STORAGE: u8 = 61;
-const TAG_STATE: u8 = 31;
-const TAG_FINALIZED_STATE: u8 = 51;
-const TAG_HOLDER: u8 = 71;
+const TAG_STATE: u8 = 21;
+const TAG_FINALIZED_STATE: u8 = 31;
+const TAG_CONTRACT_STORAGE: u8 = 41;
+const TAG_HOLDER: u8 = 51;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;
 pub type EthereumStorage<'a> = AccountData<'a, ether_storage::Data>;
