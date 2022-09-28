@@ -418,7 +418,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn solana_account_space(&self, address: &H160) -> Option<usize> {
-        #[allow(clippy::redundant_closure_for_method_calls)]
         self.ethereum_account_map_or(address, None, |account| Some(account.size()))
     }
 
