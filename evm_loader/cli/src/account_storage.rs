@@ -5,7 +5,7 @@ use std::{
     convert::TryInto,
 };
 
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use evm::{H160, U256, H256};
 use solana_sdk::{
     account::Account,
@@ -229,7 +229,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                     if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
-                        let (storage_account, _) = self.get_storage_address(&address, &key);
+                        let index = key & !U256::from(0xFF);
+
+                        let (storage_account, _) = self.get_storage_address(&address, &index);
                         self.add_solana_account(storage_account, true);
                     }
                 },
@@ -409,7 +411,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        info!("storage {} -> {}", address, index);
+        debug!("storage {} -> {}", address, index);
 
         let value = if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
@@ -418,27 +420,36 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                 |c| U256::from_big_endian(&c.extension.storage[index..index+32])
             )
         } else {
-            let (solana_address, _) = self.get_storage_address(address, index);
-            info!("read storage solana address {:?} - {:?}", address, solana_address);
+            #[allow(clippy::cast_possible_truncation)]
+            let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
+            let index = *index & !U256::from(0xFF);
+            
+            let (solana_address, _) = self.get_storage_address(address, &index);
+            debug!("read storage solana address {:?} - {:?}", address, solana_address);
 
             self.add_solana_account(solana_address, false);
+
+            let rpc_response = self.config.rpc_client.get_account_with_commitment(
+                &solana_address,
+                self.config.rpc_client.commitment(),
+            ).expect("Error querying account from Solana");
         
-            if let Ok(mut account) = self.config.rpc_client.get_account(&solana_address) {
+            if let Some(mut account) = rpc_response.value {
                 if solana_sdk::system_program::check_id(&account.owner) {
-                    info!("read storage system owned");
+                    debug!("read storage system owned");
                     U256::zero()
                 } else {
                     let account_info = account_info(&solana_address, &mut account);
                     let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
-                    storage.value
+                    storage.get(subindex)
                 }
             } else {
-                info!("read storage get_account error");
+                debug!("storage account doesn't exist");
                 U256::zero()
             }
         };
 
-        info!("Storage read {:?} -> {} = {}", address, index, value);
+        debug!("Storage read {:?} -> {} = {}", address, index, value);
 
         value
     }

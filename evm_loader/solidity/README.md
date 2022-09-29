@@ -3,7 +3,6 @@
 
 This directory contains solidity contracts implementing API to interact with Neon from Solidity:
 
-- NeonERC20Wrapper - ERC20 interface to SPL tokens
 - QueryAccount - Interface to get information from Solana accounts
 - NeonToken - interface to interact with Neon token from Solidity contracts
 

@@ -10,5 +10,5 @@ pub use cache::OwnedAccountInfoPartial;
 pub use cache::AccountMeta;
 pub use action::Action;
 pub use state::ExecutorState;
-pub use gasometer::Gasometer;
+pub use gasometer::{Gasometer, LAMPORTS_PER_SIGNATURE};
 pub use machine::Machine;
