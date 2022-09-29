@@ -353,7 +353,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 debug_print!(
                     "Skipping VM execution due to the previous execution result stored to state"
                 );
-                return Err(result.clone());
+                let result = result.clone();
+                self.gasometer_mut().record_additional_resize_iterations(1);
+                return Err(result);
             }
         }
 

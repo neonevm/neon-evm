@@ -8,7 +8,7 @@ use solana_program::{
 };
 use solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use crate::{
-    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
+    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     transaction::Transaction, 
 };
@@ -90,7 +90,7 @@ impl Gasometer {
     where
         B: AccountStorage
     {
-        if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+        if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
             return;
         }
 
@@ -136,6 +136,13 @@ impl Gasometer {
                 }
             }
         }
+    }
+
+    pub fn record_additional_resize_iterations(&mut self, iteration_count: usize) {
+        let cost = (PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE).saturating_mul(
+            iteration_count as u64,
+        );
+        self.gas = self.gas.saturating_add(cost);
     }
 
     pub fn record_account_rent(&mut self, data_len: usize) {

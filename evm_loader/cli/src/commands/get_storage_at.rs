@@ -4,7 +4,7 @@ use evm::{H160, U256};
 
 use evm_loader::{
     account::{EthereumStorage, ACCOUNT_SEED_VERSION},
-    config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
+    config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
 };
 use evm_loader::account::ether_contract::ContractExtension;
 use evm_loader::account::EthereumAccount;
@@ -26,7 +26,7 @@ pub fn execute(
 
         let account_data = EthereumAccount::from_account(&config.evm_loader, &info).unwrap();
         if let Some(contract) = account_data.contract_data() {
-            if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+            if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                 let index: usize = index.as_usize() * 32;
                 U256::from_big_endian(&contract.storage()[index..index + 32])
             } else {

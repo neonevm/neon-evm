@@ -1,6 +1,7 @@
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason};
+use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::executor::Machine;
 
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
 };
 
 use solana_sdk::pubkey::Pubkey;
-use evm_loader::account_storage::AccountStorage;
+use evm_loader::account_storage::{AccountOperation, AccountsOperations, AccountStorage};
 use crate::{errors};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -118,6 +119,11 @@ pub fn execute(
         ExitReason::Succeed(_) => {
             let accounts_operations = storage.calc_acc_changes(&actions);
             gasometer.record_accounts_operations_for_emulation(&accounts_operations);
+
+            let max_resize = calc_max_resize(&accounts_operations);
+            let additional_iterations = (max_resize + MAX_PERMITTED_DATA_INCREASE - 1) / MAX_PERMITTED_DATA_INCREASE - 1;
+            gasometer.record_additional_resize_iterations(additional_iterations);
+
             storage.apply_actions(actions.unwrap());
 
             debug!("Applies done, {} of gas used", gasometer.used_gas());
@@ -164,3 +170,14 @@ pub fn execute(
     Ok(())
 }
 
+fn calc_max_resize(accounts_operations: &AccountsOperations) -> usize {
+    let mut max_resize = 0;
+    for operation in accounts_operations.values() {
+        let resize = match operation {
+            AccountOperation::Create { space } => *space,
+            AccountOperation::Resize { from, to } => to.saturating_sub(*from),
+        };
+        max_resize = max_resize.max(resize);
+    }
+    max_resize
+}

@@ -7,7 +7,7 @@ use solana_program::{
 use crate::account::{EthereumAccount, EthereumStorage};
 use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
-use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
+use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
@@ -91,7 +91,7 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn storage(&self, address: &H160, index: &U256) -> U256 {
-        if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+        if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
             return self.ethereum_account(address)
                 .and_then(EthereumAccount::contract_data)

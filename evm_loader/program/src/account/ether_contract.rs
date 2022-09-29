@@ -6,7 +6,7 @@ use evm::{U256, Valids};
 use solana_program::pubkey::Pubkey;
 
 use crate::account::{EthereumAccount, Packable};
-use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
+use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 
 /// Ethereum contract data account v2
 #[deprecated]
@@ -52,7 +52,7 @@ pub struct ContractData<'this, 'acc> {
 
 impl<'acc> ContractData<'_, 'acc> {
     pub const INTERNAL_STORAGE_SIZE: usize =
-        size_of::<U256>() * STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT as usize;
+        size_of::<U256>() * STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as usize;
 
     #[must_use]
     pub fn code(&self) -> RefMut<'acc, [u8]> {

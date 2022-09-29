@@ -15,7 +15,7 @@ use solana_sdk::{
 };
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
-    config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT,
+    config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage},
     account_storage::{AccountStorage}, precompile::is_precompile_address,
@@ -188,7 +188,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 },
                 Action::EvmLog { .. } => {},
                 Action::EvmSetStorage { address, key, .. } => {
-                    if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+                    if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
                         let index = key & !U256::from(0xFF);
@@ -375,7 +375,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     fn storage(&self, address: &H160, index: &U256) -> U256 {
         debug!("storage {} -> {}", address, index);
 
-        let value = if *index < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+        let value = if *index < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
             let index: usize = index.as_usize() * 32;
             self.ethereum_contract_map_or(
                 address,
