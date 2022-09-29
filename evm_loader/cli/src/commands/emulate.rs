@@ -122,6 +122,7 @@ pub fn execute(
 
             let max_resize = calc_max_resize(&accounts_operations);
             let additional_iterations = (max_resize + MAX_PERMITTED_DATA_INCREASE - 1) / MAX_PERMITTED_DATA_INCREASE - 1;
+            debug!("max_resize = {}, additional_iterations = {}", max_resize, additional_iterations);
             gasometer.record_additional_resize_iterations(additional_iterations);
 
             storage.apply_actions(actions.unwrap());
