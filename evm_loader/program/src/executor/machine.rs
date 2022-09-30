@@ -188,7 +188,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                     self.state_mut().set_exit_result(exit_result);
                 }
 
-                (steps_executed, apply_result)
+                return (steps_executed, apply_result);
             }
             steps_executed += 1;
         }
