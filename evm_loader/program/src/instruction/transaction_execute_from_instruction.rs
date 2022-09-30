@@ -7,7 +7,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::executor::Machine;
+use crate::executor::{Action, Machine};
 
 
 struct Accounts<'a> {
@@ -133,11 +133,14 @@ fn execute<'a>(
         Err(e) => return Err(e) 
     };
 
+    let apply_state = apply_state.unwrap_or_else(
+        || vec![Action::EvmIncrementNonce { address: caller_address }],
+    );
+
     let accounts_readiness = account_storage.apply_state_change(
         &accounts.neon_program,
         &accounts.system_program,
         &accounts.operator,
-        caller_address,
         apply_state,
         accounts_operations,
     )?;

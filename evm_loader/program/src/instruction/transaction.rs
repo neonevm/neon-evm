@@ -194,11 +194,13 @@ fn finalize<'a>(
     solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
     if let Some((result, exit_reason, apply_state)) = results {
+        let apply_state = apply_state.unwrap_or_else(
+            || vec![Action::EvmIncrementNonce { address: storage.caller }],
+        );
         if account_storage.apply_state_change(
             &accounts.neon_program,
             &accounts.system_program,
             &accounts.operator,
-            storage.caller,
             apply_state,
             accounts_operations,
         )? == AccountsReadiness::Ready {
