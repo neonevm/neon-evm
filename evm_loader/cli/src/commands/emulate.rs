@@ -128,6 +128,7 @@ pub fn execute(
             gasometer.record_additional_resize_iterations(additional_iterations);
 
             storage.apply_actions(actions.unwrap());
+            storage.apply_accounts_operations(accounts_operations);
 
             debug!("Applies done, {} of gas used", gasometer.used_gas());
             "succeed".to_string()

@@ -21,6 +21,7 @@ use evm_loader::{
     account_storage::{AccountStorage}, precompile::is_precompile_address,
 };
 use evm_loader::account::ether_contract;
+use evm_loader::account_storage::{AccountOperation, AccountsOperations};
 
 
 use crate::Config;
@@ -41,7 +42,7 @@ pub struct NeonAccount {
     new: bool,
     size: usize,
     size_current: usize,
-    additional_resize_steps: bool,
+    additional_resize_steps: usize,
     #[serde(skip)]
     data: Option<Account>,
 }
@@ -61,7 +62,7 @@ impl NeonAccount {
                 new: false,
                 size: account.data.len(),
                 size_current: account.data.len(),
-                additional_resize_steps: false,
+                additional_resize_steps: 0,
                 data: Some(account)
             }
         }
@@ -75,7 +76,7 @@ impl NeonAccount {
                 new: true,
                 size: 0,
                 size_current: 0,
-                additional_resize_steps: false,
+                additional_resize_steps: 0,
                 data: None
             }
         }
@@ -199,15 +200,8 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::EvmIncrementNonce { address } => {
                     self.add_ethereum_account(&address, true);
                 },
-                Action::EvmSetCode { address, code, .. } => {
+                Action::EvmSetCode { address, .. } => {
                     self.add_ethereum_account(&address, true);
-
-                    let mut accounts = self.accounts.borrow_mut();
-                    accounts.entry(address).and_modify(|a| {
-                        a.size = EthereumAccount::space_needed(code.len());
-                        a.additional_resize_steps = a.size
-                            .saturating_sub(a.size_current) / MAX_PERMITTED_DATA_INCREASE > 0;
-                    });
                 },
                 Action::EvmSelfDestruct { address } => {
                     self.add_ethereum_account(&address, true);
@@ -220,6 +214,25 @@ impl<'a> EmulatorAccountStorage<'a> {
                     }
                 }
             }
+        }
+    }
+
+    pub fn apply_accounts_operations(&self, operations: AccountsOperations) {
+        let mut accounts = self.accounts.borrow_mut();
+        for (address, operation) in operations {
+            let new_size = match operation {
+                AccountOperation::Create { space } => space,
+                AccountOperation::Resize { to, .. } => to,
+            };
+            accounts.entry(address).and_modify(|a| {
+                a.size = new_size;
+                a.additional_resize_steps = a.additional_resize_steps.max(
+                    new_size
+                        .saturating_sub(a.size_current)
+                        .saturating_sub(1)
+                        / MAX_PERMITTED_DATA_INCREASE,
+                );
+            });
         }
     }
 
