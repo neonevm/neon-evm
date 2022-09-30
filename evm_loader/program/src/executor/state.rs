@@ -63,14 +63,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: BorshDeserialize::deserialize(buffer)?,
             stack: BorshDeserialize::deserialize(buffer)?,
             is_static: BorshDeserialize::deserialize(buffer)?,
-            // In order to support for previous versions format, we temporary ignore errors.
-            // In the future it will be okay to handle errors the way as for other fields.
-            exit_result: BorshDeserialize::deserialize(buffer)
-                .map_err(|err| {
-                    solana_program::msg!("exit_result deserialization error: {:?}", err);
-                    err
-                })
-                .unwrap_or_default(),
+            exit_result: BorshDeserialize::deserialize(buffer)?,
         })
     }
 
