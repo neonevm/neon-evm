@@ -386,6 +386,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                     program_id if spl_associated_token_account::check_id(program_id) => {
                         crate::external_programs::spl_associated_token::emulate(instruction, meta, &mut accounts)?;
                     },
+                    program_id if mpl_token_metadata::check_id(program_id) => {
+                        crate::external_programs::metaplex::emulate(instruction, meta, &mut accounts)?;
+                    },
                     _ => {
                         return Err!(ProgramError::IncorrectProgramId; "Unknown external program: {}", program_id);
                     }
