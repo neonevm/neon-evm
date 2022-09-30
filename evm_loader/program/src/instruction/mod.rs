@@ -84,19 +84,19 @@ impl EvmInstruction {
     /// Will return `ProgramError::InvalidInstructionData` if can't parse `tag`
     pub const fn parse(tag: &u8) -> Result<Self, ProgramError> {
         Ok(match tag {
-            0x0f => Self::ERC20CreateTokenAccount,
-            0x1e => Self::CollectTreasure,
-            0x1f => Self::TransactionExecuteFromInstruction,
-            0x20 => Self::TransactionStepFromInstruction,
-            0x21 => Self::TransactionStepFromAccount,
-            0x22 => Self::TransactionStepFromAccountNoChainId,
-            0x23 => Self::Cancel,
-            0x24 => Self::HolderCreate,
-            0x25 => Self::HolderDelete,
-            0x26 => Self::HolderWrite,
-            0x27 => Self::DepositV03,
-            0x28 => Self::CreateAccountV03,
-            0x29 => Self::Migrate03AccountFromV2ToV3,
+            0x0f => Self::ERC20CreateTokenAccount,                  // 15
+            0x1e => Self::CollectTreasure,                          // 30
+            0x1f => Self::TransactionExecuteFromInstruction,        // 31
+            0x20 => Self::TransactionStepFromInstruction,           // 32
+            0x21 => Self::TransactionStepFromAccount,               // 33
+            0x22 => Self::TransactionStepFromAccountNoChainId,      // 34
+            0x23 => Self::Cancel,                                   // 35
+            0x24 => Self::HolderCreate,                             // 36
+            0x25 => Self::HolderDelete,                             // 37
+            0x26 => Self::HolderWrite,                              // 38
+            0x27 => Self::DepositV03,                               // 39
+            0x28 => Self::CreateAccountV03,                         // 40
+            0x29 => Self::Migrate03AccountFromV2ToV3,               // 41
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
