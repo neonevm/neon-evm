@@ -1,5 +1,4 @@
 use evm::{H160};
-use evm_loader::account::ether_contract::ContractExtension;
 
 use evm_loader::account::EthereumAccount;
 

@@ -6,7 +6,6 @@ use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
-use crate::account::ether_contract::ContractExtension;
 
 mod base;
 mod apply;

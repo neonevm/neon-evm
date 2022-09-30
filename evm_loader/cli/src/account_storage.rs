@@ -21,7 +21,6 @@ use evm_loader::{
     account_storage::{AccountStorage}, precompile::is_precompile_address,
 };
 use evm_loader::account::ether_contract;
-use evm_loader::account::ether_contract::ContractExtension;
 
 
 use crate::Config;

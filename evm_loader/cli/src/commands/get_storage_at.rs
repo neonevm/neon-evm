@@ -6,7 +6,6 @@ use evm_loader::{
     account::{EthereumStorage, ACCOUNT_SEED_VERSION},
     config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
 };
-use evm_loader::account::ether_contract::ContractExtension;
 use evm_loader::account::EthereumAccount;
 
 use crate::{

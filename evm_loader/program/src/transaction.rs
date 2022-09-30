@@ -5,7 +5,6 @@ use solana_program::{
     program_error::{ProgramError},
     secp256k1_recover::{secp256k1_recover},
 };
-use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::ProgramAccountStorage;
 use crate::utils::{keccak256_digest};
 

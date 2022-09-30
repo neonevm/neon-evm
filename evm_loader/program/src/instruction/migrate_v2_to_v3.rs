@@ -11,7 +11,7 @@ use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
 use crate::account::{AccountData, ether_account, ether_contract, EthereumAccount, Operator, Packable, program};
-use crate::account::ether_contract::{ContractData, ContractExtension};
+use crate::account::ether_contract::ContractData;
 use crate::error::EvmLoaderError;
 
 const OPERATOR_PUBKEY: Pubkey = pubkey!("6sXBjtBYNbUCKFq3CuAg7LHw9DJCvXujRUEFgK9TuzKx");

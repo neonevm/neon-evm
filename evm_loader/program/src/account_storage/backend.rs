@@ -5,7 +5,6 @@ use solana_program::{
     sysvar::recent_blockhashes
 };
 use crate::account::{EthereumAccount, EthereumStorage};
-use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};

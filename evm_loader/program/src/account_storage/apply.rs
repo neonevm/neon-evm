@@ -11,7 +11,6 @@ use solana_program::system_instruction;
 use solana_program::sysvar::Sysvar;
 
 use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
-use crate::account::ether_contract::ContractExtension;
 use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};

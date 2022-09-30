@@ -93,16 +93,27 @@ impl<'acc> ContractData<'_, 'acc> {
     }
 }
 
-pub trait ContractExtension<'this, 'acc> {
-    fn is_contract(&self) -> bool {
+impl<'this, 'acc> EthereumAccount<'acc> {
+    #[must_use]
+    pub fn is_contract(&self) -> bool {
         self.code_size() != 0
     }
 
-    fn code_size(&self) -> usize;
-    fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>>;
+    #[must_use]
+    pub fn code_size(&self) -> usize {
+        self.code_size as usize
+    }
 
     #[must_use]
-    fn space_needed(code_size: usize) -> usize {
+    pub fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>> {
+        if !self.is_contract() {
+            return None;
+        }
+        Some(ContractData { account: self })
+    }
+
+    #[must_use]
+    pub fn space_needed(code_size: usize) -> usize {
         EthereumAccount::SIZE +
             if code_size > 0 {
                 code_size + Valids::size_needed(code_size) + ContractData::INTERNAL_STORAGE_SIZE
@@ -112,20 +123,7 @@ pub trait ContractExtension<'this, 'acc> {
     }
 
     #[must_use]
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         Self::space_needed(self.code_size())
-    }
-}
-
-impl<'this, 'acc> ContractExtension<'this, 'acc> for EthereumAccount<'acc> {
-    fn code_size(&self) -> usize {
-        self.code_size as usize
-    }
-
-    fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>> {
-        if !self.is_contract() {
-            return None;
-        }
-        Some(ContractData { account: self })
     }
 }

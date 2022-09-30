@@ -3,7 +3,6 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey, program_pack::Pack
 };
-use crate::account::ether_contract::ContractExtension;
 
 struct Accounts<'a> {
     operator: Operator<'a>,
