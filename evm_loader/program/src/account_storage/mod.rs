@@ -127,54 +127,27 @@ pub trait AccountStorage {
         for action in actions {
             let (address, code_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0),
-                Action::EvmSetCode { address, code, .. } =>
-                    (address, code.len()),
+                Action::EvmSetCode { address, code, .. } => (address, code.len()),
                 _ => continue,
             };
 
             let space_needed = EthereumAccount::space_needed(code_size);
             if let Some(space_current) = self.solana_account_space(address) {
-                match operations.remove(address) {
-                    None => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Resize {
-                                from: space_current,
-                                to: space_current.max(space_needed),
-                            },
-                        );
-                    },
-
-                    Some(AccountOperation::Resize { from, to }) => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Resize {
-                                from,
-                                to: space_needed.max(to),
-                            },
-                        );
-                    }
-
-                    _ => unreachable!(),
+                if let Some(AccountOperation::Resize { to, ..}) = operations.get_mut(address) {
+                    *to = space_needed.max(*to);
+                } else {
+                    operations.insert(
+                        *address,
+                        AccountOperation::Resize {
+                            from: space_current,
+                            to: space_current.max(space_needed),
+                        },
+                    );
                 }
+            } else if let Some(AccountOperation::Create { space }) = operations.get_mut(address) {
+                *space = space_needed.max(*space);
             } else {
-                match operations.remove(address) {
-                    None => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Create { space: space_needed },
-                        );
-                    },
-
-                    Some(AccountOperation::Create { space }) => {
-                        operations.insert(
-                            *address,
-                            AccountOperation::Create { space: space_needed.max(space) },
-                        );
-                    },
-
-                    _ => unreachable!(),
-                }
+                operations.insert(*address, AccountOperation::Create { space: space_needed });
             }
         }
 
