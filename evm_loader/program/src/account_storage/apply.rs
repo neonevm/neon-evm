@@ -181,6 +181,8 @@ impl<'a> ProgramAccountStorage<'a> {
                 AccountOperation::Resize { from, to } => {
                     debug_print!("Resizing account (from = {}, to = {})", from, to);
 
+                    assert_eq!(solana_account.owner, self.program_id);
+
                     let rent = Rent::get()?;
                     let lamports_needed = rent.minimum_balance(
                         to.min(from.saturating_add(MAX_PERMITTED_DATA_INCREASE)),
