@@ -5,7 +5,7 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::{AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -68,7 +68,7 @@ pub fn do_begin<'a>(
         }
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer, None)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
 }
 
 pub fn do_continue<'a>(
@@ -86,7 +86,7 @@ pub fn do_continue<'a>(
         execute_steps(executor, step_count, &mut storage)
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer, None)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
 }
 
 
@@ -148,22 +148,18 @@ fn finalize<'a>(
     results: Option<EvmResults>,
     mut used_gas: U256,
     mut gasometer: Gasometer,
-    accounts_operations: Option<AccountsOperations>,
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    let accounts_operations = accounts_operations.map_or_else(
-        || results.as_ref().map_or_else(
-            HashMap::default,
-            |(_, _, actions)| {
-                let accounts_operations = account_storage.calc_acc_changes(actions);
-                gasometer.record_accounts_operations(&accounts_operations);
-                used_gas = gasometer.used_gas();
+    let accounts_operations = results.as_ref().map_or_else(
+        HashMap::default,
+        |(_, _, actions)| {
+            let accounts_operations = account_storage.calc_acc_changes(actions);
+            gasometer.record_accounts_operations(&accounts_operations);
+            used_gas = gasometer.used_gas();
 
-                accounts_operations
-            }
-        ),
-        |accounts_operations| accounts_operations,
+            accounts_operations
+        }
     );
 
     // The only place where checked math is required.
@@ -175,20 +171,12 @@ fn finalize<'a>(
         let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
         let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used);
 
-        return finalize(
-            accounts,
-            storage,
-            account_storage,
-            out_of_gas,
-            remaining_gas,
-            gasometer,
-            Some(accounts_operations),
-        );
+        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas, gasometer);
     }
 
-    let results = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
-        Ok(()) => results,
-        Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
+    let (results, accounts_operations) = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
+        Ok(()) => (results, Some(accounts_operations)),
+        Err(ProgramError::InsufficientFunds) => (Some((vec![], ExitError::OutOfFund.into(), None)), None),
         Err(e) => return Err(e)
     };
     solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);

@@ -120,18 +120,19 @@ fn execute<'a>(
 
     let gas_cost = used_gas.saturating_mul(trx.gas_price);
     let payment_result = account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost);
-    let (exit_reason, return_value, apply_state) = match payment_result {
-        Ok(()) => {
-            (exit_reason, return_value, apply_state)
-        },
-        Err(ProgramError::InsufficientFunds) => {
-            let exit_reason = evm::ExitError::OutOfFund.into();
-            let return_value = vec![];
+    let (exit_reason, return_value, apply_state, accounts_operations) =
+        match payment_result {
+            Ok(()) => {
+                (exit_reason, return_value, apply_state, Some(accounts_operations))
+            },
+            Err(ProgramError::InsufficientFunds) => {
+                let exit_reason = evm::ExitError::OutOfFund.into();
+                let return_value = vec![];
 
-            (exit_reason, return_value, None)
-        },
-        Err(e) => return Err(e) 
-    };
+                (exit_reason, return_value, None, None)
+            },
+            Err(e) => return Err(e)
+        };
 
     let apply_state = apply_state.unwrap_or_else(
         || vec![Action::EvmIncrementNonce { address: caller_address }],
