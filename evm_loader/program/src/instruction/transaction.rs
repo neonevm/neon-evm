@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use evm::{ExitError, ExitReason, H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -151,16 +150,16 @@ fn finalize<'a>(
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    let accounts_operations = results.as_ref().map_or_else(
-        HashMap::default,
-        |(_, _, actions)| {
-            let accounts_operations = account_storage.calc_acc_changes(actions);
+    let accounts_operations = match results {
+        None => AccountsOperations::default(),
+        Some((_, _, ref actions)) => {
+            let accounts_operations = account_storage.calc_accounts_operations(actions);
             gasometer.record_accounts_operations(&accounts_operations);
             used_gas = gasometer.used_gas();
 
             accounts_operations
-        }
-    );
+        },
+    };
 
     // The only place where checked math is required.
     // Saturating math should be used everywhere else for gas calculation.

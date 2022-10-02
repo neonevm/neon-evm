@@ -106,7 +106,7 @@ fn execute<'a>(
             None
         };
 
-        let accounts_operations = account_storage.calc_acc_changes(&apply);
+        let accounts_operations = account_storage.calc_accounts_operations(&apply);
 
         gasometer.record_accounts_operations(&accounts_operations);
 

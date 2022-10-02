@@ -110,7 +110,7 @@ impl Gasometer {
         &mut self,
         accounts_operations: &AccountsOperations,
     ) {
-        for operation in accounts_operations.values() {
+        for (_address, operation) in accounts_operations {
             match operation {
                 AccountOperation::Create { space } => self.record_account_rent(*space),
 
@@ -122,7 +122,7 @@ impl Gasometer {
     }
 
     pub fn record_accounts_operations(&mut self, accounts_operations: &AccountsOperations) {
-        for operation in accounts_operations.values() {
+        for (_address, operation) in accounts_operations {
             match operation {
                 AccountOperation::Create { space } => self.record_account_rent(
                     (*space).min(MAX_PERMITTED_DATA_INCREASE),

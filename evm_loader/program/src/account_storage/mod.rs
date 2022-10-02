@@ -23,7 +23,7 @@ pub enum AccountOperation {
     },
 }
 
-pub type AccountsOperations = HashMap<H160, AccountOperation>;
+pub type AccountsOperations = Vec<(H160, AccountOperation)>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountsReadiness {
@@ -113,17 +113,16 @@ pub trait AccountStorage {
     /// Solana account data len
     fn solana_account_space(&self, address: &H160) -> Option<usize>;
 
-    fn calc_acc_changes(
+    fn calc_accounts_operations(
         &self,
         actions: &Option<Vec<Action>>,
     ) -> AccountsOperations {
-        let mut operations = HashMap::new();
-
         let actions = match actions {
-            None => return operations,
+            None => return AccountsOperations::default(),
             Some(actions) => actions,
         };
 
+        let mut accounts = HashMap::new();
         for action in actions {
             let (address, code_size) = match action {
                 Action::NeonTransfer { target, .. } => (target, 0),
@@ -132,25 +131,21 @@ pub trait AccountStorage {
             };
 
             let space_needed = EthereumAccount::space_needed(code_size);
-            if let Some(space_current) = self.solana_account_space(address) {
-                if let Some(AccountOperation::Resize { to, ..}) = operations.get_mut(address) {
-                    *to = space_needed.max(*to);
-                } else {
-                    operations.insert(
-                        *address,
-                        AccountOperation::Resize {
-                            from: space_current,
-                            to: space_current.max(space_needed),
-                        },
-                    );
-                }
-            } else if let Some(AccountOperation::Create { space }) = operations.get_mut(address) {
-                *space = space_needed.max(*space);
-            } else {
-                operations.insert(*address, AccountOperation::Create { space: space_needed });
+            if let Some(max_size) = accounts.get_mut(&address) {
+                *max_size = space_needed.max(*max_size);
+                continue;
             }
+            accounts.insert(address, space_needed);
         }
 
-        operations
+        accounts.into_iter()
+            .map(|(address, space_needed)| {
+                let operation = self.solana_account_space(address).map_or(
+                    AccountOperation::Create { space: space_needed },
+                    |space_current|
+                        AccountOperation::Resize { from: space_current, to: space_needed },
+                );
+                (*address, operation)
+            }).collect()
     }
 }

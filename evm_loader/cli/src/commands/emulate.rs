@@ -117,7 +117,7 @@ pub fn execute(
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            let accounts_operations = storage.calc_acc_changes(&actions);
+            let accounts_operations = storage.calc_accounts_operations(&actions);
             gasometer.record_accounts_operations_for_emulation(&accounts_operations);
 
             let max_resize = calc_max_resize(&accounts_operations);
@@ -176,7 +176,7 @@ pub fn execute(
 
 fn calc_max_resize(accounts_operations: &AccountsOperations) -> usize {
     let mut max_resize = 0;
-    for operation in accounts_operations.values() {
+    for (_address, operation) in accounts_operations {
         let resize = match operation {
             AccountOperation::Create { space } => *space,
             AccountOperation::Resize { from, to } => to.saturating_sub(*from),
