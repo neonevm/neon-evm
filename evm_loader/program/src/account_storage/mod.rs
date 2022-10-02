@@ -139,13 +139,13 @@ pub trait AccountStorage {
         }
 
         accounts.into_iter()
-            .map(|(address, space_needed)| {
-                let operation = self.solana_account_space(address).map_or(
-                    AccountOperation::Create { space: space_needed },
-                    |space_current|
-                        AccountOperation::Resize { from: space_current, to: space_needed },
-                );
-                (*address, operation)
-            }).collect()
+            .filter_map(|(address, space_needed)|
+                match self.solana_account_space(address) {
+                    None => Some((*address, AccountOperation::Create { space: space_needed })),
+                    Some(space_current) if space_current < space_needed =>
+                        Some((*address, AccountOperation::Resize { from: space_current, to: space_needed })),
+                    _ => None,
+                }
+            ).collect()
     }
 }
