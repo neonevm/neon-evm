@@ -46,7 +46,7 @@ pub fn execute(
     }
 
     let cancel_with_nonce_instruction = Instruction::new_with_bincode(
-        config.evm_loader, &(21_u8, storage.transaction_hash), accounts_meta
+        config.evm_loader, &(0x15_u8, storage.transaction_hash), accounts_meta
     );
 
     let instructions = vec![cancel_with_nonce_instruction];

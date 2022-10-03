@@ -19,13 +19,11 @@ use crate::{
         create_program_address,
         create_ether_account,
         deposit,
-        migrate_account,
         get_ether_account_data,
         cancel_trx,
         get_neon_elf,
         collect_treasury,
         get_storage_at,
-        update_valids_table,
     },
 };
 
@@ -544,19 +542,6 @@ fn main() {
                 )
         )
         .subcommand(
-            SubCommand::with_name("migrate-account")
-                .about("Migrates account internal structure to v2")
-                .arg(
-                    Arg::with_name("ether")
-                        .index(1)
-                        .value_name("ETHER")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_h160)
-                        .help("Ethereum address"),
-                )
-        )
-        .subcommand(
             SubCommand::with_name("get-ether-account-data")
                 .about("Get values stored in associated with given address account data")
                 .arg(
@@ -615,18 +600,6 @@ fn main() {
                         .value_name("index")
                         .takes_value(true)
                         .validator(is_valid_u256)
-                        .required(true),
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("update-valids-table")
-                .about("Update Valids Table")
-                .arg(
-                    Arg::with_name("contract_id")
-                        .index(1)
-                        .value_name("contract_id")
-                        .takes_value(true)
-                        .validator(is_valid_h160)
                         .required(true),
                 )
         )
@@ -760,10 +733,6 @@ fn main() {
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 deposit::execute(&config, amount, &ether)
             }
-            ("migrate-account", Some(arg_matches)) => {
-                let ether = h160_of(arg_matches, "ether").unwrap();
-                migrate_account::execute(&config, &ether)
-            }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 get_ether_account_data::execute(&config, &ether);
@@ -785,10 +754,6 @@ fn main() {
                 let index = u256_of(arg_matches, "index").unwrap();
                 get_storage_at::execute(&config, contract_id, &index);
                 Ok(())
-            }
-            ("update-valids-table", Some(arg_matches)) => {
-                let contract_id = h160_of(arg_matches, "contract_id").unwrap();
-                update_valids_table::execute(&config, contract_id)
             }
             _ => unreachable!(),
         };

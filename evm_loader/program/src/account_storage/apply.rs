@@ -1,16 +1,19 @@
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use evm::{H160, U256};
-use solana_program::instruction::Instruction;
-use solana_program::{
-    program_error::ProgramError,
-};
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
-use crate::account_storage::{Account, AccountStorage, ProgramAccountStorage};
-use crate::executor::{Action, AccountMeta};
-use crate::config::STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT;
-use solana_program::program::{invoke_signed_unchecked};
 
+use evm::{H160, U256};
+use solana_program::entrypoint::{MAX_PERMITTED_DATA_INCREASE, ProgramResult};
+use solana_program::instruction::Instruction;
+use solana_program::program::{invoke, invoke_signed_unchecked};
+use solana_program::program_error::ProgramError;
+use solana_program::rent::Rent;
+use solana_program::system_instruction;
+use solana_program::sysvar::Sysvar;
+
+use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
+use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
+use crate::executor::{AccountMeta, Action};
 
 impl<'a> ProgramAccountStorage<'a> {
     pub fn transfer_gas_payment(
@@ -18,7 +21,7 @@ impl<'a> ProgramAccountStorage<'a> {
         origin: H160,
         mut operator: EthereumAccount<'a>,
         value: U256,
-    ) -> Result<(), ProgramError> {
+    ) -> ProgramResult {
         let origin_balance = self.balance(&origin);
         if origin_balance < value {
             self.transfer_gas_payment(origin, operator, origin_balance)?;
@@ -30,7 +33,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         if self.ethereum_accounts.contains_key(&operator.address) {
-            self.transfer_neon_tokens(origin, operator.address, value)?;
+            self.transfer_neon_tokens(&origin, &operator.address, value)?;
             core::mem::drop(operator);
         } else {
             let origin_account = self.ethereum_account_mut(&origin);
@@ -49,16 +52,26 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
         actions: Vec<Action>,
-    ) -> Result<(), ProgramError> {
-
+        accounts_operations: AccountsOperations,
+    ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
+
+        if self.process_accounts_operations(
+            system_program,
+            neon_program,
+            operator,
+            accounts_operations,
+        )? == AccountsReadiness::NeedMoreReallocations {
+            debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
+            return Ok(AccountsReadiness::NeedMoreReallocations);
+        }
 
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
         for action in actions {
             match action {
                 Action::NeonTransfer { source, target, value } => {
-                    self.transfer_neon_tokens(source, target, value)?;
+                    self.transfer_neon_tokens(&source, &target, value)?;
                 },
                 Action::NeonWithdraw { source, value } => {
                     let account = self.ethereum_account_mut(&source);
@@ -109,11 +122,13 @@ impl<'a> ProgramAccountStorage<'a> {
 
         for (address, storage) in storage {
             for (key, value) in storage {
-                if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+                if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                     let index: usize = key.as_usize() * 32;
-                    
-                    let contract = self.ethereum_contract_mut(&address);
-                    value.to_big_endian(&mut contract.extension.storage[index..index+32]);
+                    let account = self.ethereum_account(&address)
+                        .expect("Account not found");
+                    let contract = account.contract_data()
+                        .expect("Contract expected");
+                    value.to_big_endian(&mut contract.storage()[index..index+32]);
                 } else {
                     self.update_storage_infinite(address, key, value, operator, system_program)?;
                 }
@@ -122,46 +137,142 @@ impl<'a> ProgramAccountStorage<'a> {
 
         debug_print!("Applies done");
 
-        Ok(())
+        Ok(AccountsReadiness::Ready)
+    }
+
+    fn process_accounts_operations(
+        &mut self,
+        system_program: &program::System<'a>,
+        neon_program: &program::Neon<'a>,
+        operator: &Operator<'a>,
+        accounts_operations: AccountsOperations,
+    ) -> Result<AccountsReadiness, ProgramError> {
+        let mut accounts_readiness = AccountsReadiness::Ready;
+        for (address, operation) in accounts_operations {
+            let (solana_address, bump_seed) = self.calc_solana_address(&address);
+            let solana_account = self.solana_account(&solana_address)
+                .ok_or_else(||
+                    E!(
+                        ProgramError::UninitializedAccount;
+                        "Account {} - corresponding Solana account was not provided",
+                        address
+                    )
+                )?;
+            match operation {
+                AccountOperation::Create { space } => {
+                    debug_print!("Creating account (space = {})", space);
+                    EthereumAccount::create_account(
+                        system_program,
+                        neon_program.key,
+                        operator,
+                        address,
+                        solana_account,
+                        bump_seed,
+                        MAX_PERMITTED_DATA_INCREASE.min(space),
+                    )?;
+
+                    self.add_ether_account(neon_program.key, solana_account)?;
+
+                    if space > MAX_PERMITTED_DATA_INCREASE {
+                        accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+                    }
+                }
+
+                AccountOperation::Resize { from, to } => {
+                    debug_print!("Resizing account (from = {}, to = {})", from, to);
+
+                    assert_eq!(solana_account.owner, self.program_id);
+
+                    let rent = Rent::get()?;
+                    let lamports_needed = rent.minimum_balance(
+                        to.min(from.saturating_add(MAX_PERMITTED_DATA_INCREASE)),
+                    );
+                    let lamports_current = solana_account.lamports();
+                    if lamports_current < lamports_needed {
+                        invoke(
+                            &system_instruction::transfer(
+                                operator.key,
+                                solana_account.key,
+                                lamports_needed.saturating_sub(lamports_current),
+                            ),
+                            &[
+                                (*operator.info).clone(),
+                                solana_account.clone(),
+                                (*system_program).clone(),
+                            ],
+                        )?;
+                    }
+
+                    let max_possible_space_per_instruction = to
+                        .min(from + MAX_PERMITTED_DATA_INCREASE);
+                    solana_account.realloc(max_possible_space_per_instruction, false)?;
+
+                    if max_possible_space_per_instruction < to {
+                        accounts_readiness = AccountsReadiness::NeedMoreReallocations;
+                    }
+                }
+            };
+        }
+
+        Ok(accounts_readiness)
     }
 
     /// Delete all data in the account.
-    fn delete_account(&mut self, address: H160) -> Result<(), ProgramError> {
+    fn delete_account(&mut self, address: H160) -> ProgramResult {
         let account = self.ethereum_account_mut(&address);
 
         assert_eq!(account.balance, U256::zero()); // balance should be moved by executor
         account.trx_count = 0;
-
-
-        let contract = self.ethereum_contract_mut(&address);
-
-        contract.code_size = 0;
-        contract.generation = contract.generation.checked_add(1)
+        account.generation = account.generation.checked_add(1)
             .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Account {} - generation overflow", address))?;
 
-        contract.extension.code.fill(0);
-        contract.extension.valids.fill(0);
-        contract.extension.storage.fill(0);
+        if let Some(contract) = account.contract_data() {
+            contract.extension_borrow_mut().fill(0);
+        }
+
+        account.code_size = 0;
 
         Ok(())
     }
 
-    fn deploy_contract(&mut self, address: H160, code: &[u8], valids: &[u8]) -> Result<(), ProgramError> {
-        if let Some(account) = self.ethereum_accounts.get_mut(&address) {
+    fn deploy_contract(
+        &mut self,
+        address: H160,
+        code: &[u8],
+        valids: &[u8],
+    ) -> ProgramResult {
+        let account = self.ethereum_accounts.get_mut(&address)
+            .ok_or_else(|| E!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address))?;
 
-            let contract = match account {
-                Account::User(_) => return Err!(ProgramError::InvalidArgument; "Account {} - is not contract account", address),
-                Account::Contract(_, contract) => contract
-            };
+        assert_eq!(
+            account.code_size,
+            0,
+            "Contract already deployed to address {} (code_size = {})!",
+            account.address,
+            account.code_size,
+        );
 
-            contract.code_size = code.len().try_into().expect("code.len() never exceeds u32::max");
+        let space_needed = EthereumAccount::space_needed(code.len());
+        let space_actual = account.info.data_len();
+        assert!(
+            space_actual >= space_needed,
+            "Not enough space for account deployment at address {} \
+                (code size: {}, space needed: {}, actual space: {})",
+            account.address,
+            code.len(),
+            space_needed,
+            space_actual,
+        );
 
-            contract.reload_extension()?;
-            contract.extension.code.copy_from_slice(code);
-            contract.extension.valids.copy_from_slice(valids);
-        } else {
-            return Err!(ProgramError::UninitializedAccount; "Account {} - is not initialized", address);
-        }
+        account.code_size = code.len()
+            .try_into()
+            .expect("code.len() never exceeds u32::max");
+
+        let contract = account.contract_data()
+            .expect("Contract data must be available at this point");
+
+        contract.code().copy_from_slice(code);
+        contract.valids().copy_from_slice(valids);
 
         Ok(())
     }
@@ -173,7 +284,7 @@ impl<'a> ProgramAccountStorage<'a> {
         value: U256,
         operator: &Operator<'a>,
         system_program: &program::System<'a>,
-    ) -> Result<(), ProgramError> {
+    ) -> ProgramResult {
         #[allow(clippy::cast_possible_truncation)]
         let subindex = (index & U256::from(0xFF)).as_u64() as u8;
         let index = index & !U256::from(0xFF);
@@ -212,26 +323,26 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
 
-    fn transfer_neon_tokens(&mut self, source: H160, target: H160, value: U256) -> Result<(), ProgramError> {
-        solana_program::msg!("Transfer {} NEONs from {} to {}", value, source, target);
+    fn transfer_neon_tokens(&mut self, source: &H160, target: &H160, value: U256) -> ProgramResult {
+        debug_print!("Transfer {} NEONs from {} to {}", value, source, target);
 
         if source == target {
             return Ok(())
         }
 
-        if !self.ethereum_accounts.contains_key(&source) {
+        if !self.ethereum_accounts.contains_key(source) {
             return Err!(ProgramError::InvalidArgument; "Account {} - expect initialized", source);
         }
-        if !self.ethereum_accounts.contains_key(&target) {
+        if !self.ethereum_accounts.contains_key(target) {
             return Err!(ProgramError::InvalidArgument; "Account {} - expect initialized", source);
         }
 
-        if self.balance(&source) < value {
+        if self.balance(source) < value {
             return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds, required = {}", source, value)
         }
 
-        self.ethereum_account_mut(&source).balance -= value;
-        self.ethereum_account_mut(&target).balance += value;
+        self.ethereum_account_mut(source).balance -= value;
+        self.ethereum_account_mut(target).balance += value;
 
         Ok(())
     }
