@@ -52,20 +52,18 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
         actions: Vec<Action>,
-        accounts_operations: Option<AccountsOperations>,
+        accounts_operations: AccountsOperations,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
-        if let Some(accounts_operations) = accounts_operations {
-            if self.process_accounts_operations(
-                system_program,
-                neon_program,
-                operator,
-                accounts_operations,
-            )? == AccountsReadiness::NeedMoreReallocations {
-                debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
-                return Ok(AccountsReadiness::NeedMoreReallocations);
-            }
+        if self.process_accounts_operations(
+            system_program,
+            neon_program,
+            operator,
+            accounts_operations,
+        )? == AccountsReadiness::NeedMoreReallocations {
+            debug_print!("Applies postponed: need to reallocate accounts in the next transaction(s)");
+            return Ok(AccountsReadiness::NeedMoreReallocations);
         }
 
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();

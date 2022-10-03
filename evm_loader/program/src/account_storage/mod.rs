@@ -118,7 +118,7 @@ pub trait AccountStorage {
         actions: &Option<Vec<Action>>,
     ) -> AccountsOperations {
         let actions = match actions {
-            None => return AccountsOperations::default(),
+            None => return vec![],
             Some(actions) => actions,
         };
 

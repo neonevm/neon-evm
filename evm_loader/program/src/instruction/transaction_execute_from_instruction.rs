@@ -112,7 +112,7 @@ fn execute<'a>(
 
         let used_gas = gasometer.used_gas();
         if used_gas > trx.gas_limit {
-            (evm::ExitError::OutOfGas.into(), vec![], None, accounts_operations, trx.gas_limit)
+            (evm::ExitError::OutOfGas.into(), vec![], None, vec![], trx.gas_limit)
         } else {
             (exit_reason, result, apply, accounts_operations, used_gas)
         }
@@ -123,13 +123,13 @@ fn execute<'a>(
     let (exit_reason, return_value, apply_state, accounts_operations) =
         match payment_result {
             Ok(()) => {
-                (exit_reason, return_value, apply_state, Some(accounts_operations))
+                (exit_reason, return_value, apply_state, accounts_operations)
             },
             Err(ProgramError::InsufficientFunds) => {
                 let exit_reason = evm::ExitError::OutOfFund.into();
                 let return_value = vec![];
 
-                (exit_reason, return_value, None, None)
+                (exit_reason, return_value, None, vec![])
             },
             Err(e) => return Err(e)
         };

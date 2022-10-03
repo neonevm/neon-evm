@@ -4,7 +4,7 @@ use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
-use crate::account_storage::{AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -151,7 +151,7 @@ fn finalize<'a>(
     debug_print!("finalize");
 
     let accounts_operations = match results {
-        None => AccountsOperations::default(),
+        None => vec![],
         Some((_, _, ref actions)) => {
             let accounts_operations = account_storage.calc_accounts_operations(actions);
             gasometer.record_accounts_operations(&accounts_operations);
@@ -174,8 +174,8 @@ fn finalize<'a>(
     }
 
     let (results, accounts_operations) = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
-        Ok(()) => (results, Some(accounts_operations)),
-        Err(ProgramError::InsufficientFunds) => (Some((vec![], ExitError::OutOfFund.into(), None)), None),
+        Ok(()) => (results, accounts_operations),
+        Err(ProgramError::InsufficientFunds) => (Some((vec![], ExitError::OutOfFund.into(), None)), vec![]),
         Err(e) => return Err(e)
     };
     solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
