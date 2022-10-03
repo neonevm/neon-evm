@@ -67,14 +67,6 @@ pub enum EvmInstruction {
 
     /// Cancel Transaction
     Cancel,
-
-    /// Merges contract with account and converts account to the version 3 format.
-    /// # Account references
-    ///   0. [WRITE, SIGNER] Operator account.
-    ///   1. [] System Program.
-    ///   2. [WRITE] Neon account to convert.
-    ///   3. [WRITE] (optional) Neon contract to convert.
-    Migrate03AccountFromV2ToV3,
 }
 
 impl EvmInstruction {
@@ -96,7 +88,6 @@ impl EvmInstruction {
             0x26 => Self::HolderWrite,                              // 38
             0x27 => Self::DepositV03,                               // 39
             0x28 => Self::CreateAccountV03,                         // 40
-            0x29 => Self::Migrate03AccountFromV2ToV3,               // 41
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -117,4 +108,3 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod transaction;
 pub mod collect_treasury;
-pub mod migrate_v2_to_v3;
