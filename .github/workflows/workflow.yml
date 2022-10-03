@@ -1,0 +1,46 @@
+name: Deploy image
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  repository_dispatch:
+env:
+  DHUBU: ${{secrets.DHUBU}}
+  DHUBP: ${{secrets.DHUBP}}
+  BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+jobs:
+  prepare-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v6
+
+      - name: install python libs
+        run: pip install docker==5.0.3
+  publish-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: build docker image
+        run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA}
+
+      - name: publish image
+        run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: run tests
+        run: python ./.github/workflows/deploy.py run_tests --github_sha=${GITHUB_SHA}
+
+      - name: trigger proxy docker image
+        run: python ./.github/workflows/deploy.py trigger_proxy_action --github_sha=${GITHUB_SHA} --branch=${GITHUB_REF} --token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: send notification to slack
+        if: ${{ failure() }}
+        run: python ./.github/workflows/deploy.py send_notification --url=${{secrets.SLACK_EVM_CHANNEL_URL}} --build_url=${BUILD_URL}
