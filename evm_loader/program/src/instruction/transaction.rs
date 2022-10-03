@@ -2,16 +2,16 @@ use evm::{ExitError, ExitReason, H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
-use crate::account::{EthereumAccount, Operator, program, State,  Treasury};
-use crate::account_storage::{ProgramAccountStorage};
-use crate::executor::{Machine, Action};
+
+use crate::account::{EthereumAccount, Operator, program, State, Treasury};
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
 use crate::executor::LAMPORTS_PER_SIGNATURE;
 
 /// Current cap of transaction accounts
 const TX_ACCOUNT_CNT: u64 = 30;
-
 
 pub struct Accounts<'a> {
     pub operator: Operator<'a>,
@@ -33,14 +33,15 @@ pub fn do_begin<'a>(
     alt_cost: u64,
 ) -> ProgramResult {
     debug_print!("do_begin");
+
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
     check_ethereum_transaction(account_storage, &caller, &trx)?;
-    account_storage.check_for_blocked_accounts(false)?;
+    account_storage.check_for_blocked_accounts()?;
     account_storage.block_accounts(true)?;
 
 
-    let (results, used_gas) = {
+    let (results, gasometer) = {
         let mut executor = Machine::new(caller, account_storage)?;
         executor.gasometer_mut().record_iterative_overhead();
         executor.gasometer_mut().record_transaction_size(&trx);
@@ -60,13 +61,13 @@ pub fn do_begin<'a>(
                 let result = vec![];
                 let exit_reason = ExitError::OutOfFund.into();
 
-                (Some((result, exit_reason, None)), executor.used_gas())
+                (Some((result, exit_reason, None)), executor.take_gasometer())
             }
             Err(e) => return Err(e)
         }
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
 }
 
 pub fn do_continue<'a>(
@@ -75,14 +76,16 @@ pub fn do_continue<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
 ) -> ProgramResult {
+    debug_print!("do_continue");
+
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (results, used_gas) = {
+    let (results, gasometer) = {
         let executor = Machine::restore(&storage, account_storage)?;
         execute_steps(executor, step_count, &mut storage)
     };
 
-    finalize(accounts, storage, account_storage, results, used_gas)
+    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
 }
 
 
@@ -92,25 +95,26 @@ fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
     step_count: u64,
     storage: &mut State
-) -> (Option<EvmResults>, U256) {
-
+) -> (Option<EvmResults>, Gasometer) {
     match executor.execute_n_steps(step_count) {
         Ok(_) => { // step limit
-            let used_gas = executor.used_gas();
             executor.save_into(storage);
 
-            (None, used_gas)
+            (None, executor.take_gasometer())
         },
         Err((result, reason)) => { // transaction complete
-            let used_gas = executor.used_gas();
+            let (apply_state, gasometer) = if reason.is_succeed() {
+                // TODO: Save only when there is needed to repeat transaction.
+                executor.save_into(storage);
 
-            let apply_state = if reason.is_succeed() {
-                Some(executor.into_state_actions())
+                let (actions, gasometer) = executor.into_state_actions_and_gasometer();
+
+                (Some(actions), gasometer)
             } else {
-                None
+                (None, executor.take_gasometer())
             };
 
-            (Some((result, reason, apply_state)), used_gas)
+            (Some((result, reason, apply_state)), gasometer)
         }
     }
 }
@@ -141,41 +145,57 @@ fn finalize<'a>(
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
     results: Option<EvmResults>,
-    used_gas: U256,
+    mut used_gas: U256,
+    mut gasometer: Gasometer,
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    // The only place where checked math is requiered.
-    // Saturating math should be used everywhere else for gas calculation
+    let accounts_operations = match results {
+        None => vec![],
+        Some((_, _, ref actions)) => {
+            let accounts_operations = account_storage.calc_accounts_operations(actions);
+            gasometer.record_accounts_operations(&accounts_operations);
+            used_gas = gasometer.used_gas();
+
+            accounts_operations
+        },
+    };
+
+    // The only place where checked math is required.
+    // Saturating math should be used everywhere else for gas calculation.
     let total_used_gas = storage.gas_used.checked_add(used_gas);
 
     // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas
-    if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit))  {
+    if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit)) {
         let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
         let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used);
 
-        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas);
+        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas, gasometer);
     }
 
-    let results = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
-        Ok(()) => results,
-        Err(ProgramError::InsufficientFunds) => Some((vec![], ExitError::OutOfFund.into(), None)),
+    let (results, accounts_operations) = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {
+        Ok(()) => (results, accounts_operations),
+        Err(ProgramError::InsufficientFunds) => (Some((vec![], ExitError::OutOfFund.into(), None)), vec![]),
         Err(e) => return Err(e)
     };
     solana_program::log::sol_log_data(&[b"IX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
     if let Some((result, exit_reason, apply_state)) = results {
-        if let Some(apply_state) = apply_state {
-            account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
-        } else {
-            let apply_actions = vec![Action::EvmIncrementNonce { address: storage.caller }];
-            account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
+        let apply_state = apply_state.unwrap_or_else(
+            || vec![Action::EvmIncrementNonce { address: storage.caller }],
+        );
+        if account_storage.apply_state_change(
+            &accounts.neon_program,
+            &accounts.system_program,
+            &accounts.operator,
+            apply_state,
+            accounts_operations,
+        )? == AccountsReadiness::Ready {
+            accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
+
+            account_storage.block_accounts(false)?;
+            storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
         }
-
-        accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
-
-        account_storage.block_accounts(false)?;
-        storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
     }
 
     Ok(())

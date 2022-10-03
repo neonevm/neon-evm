@@ -10,7 +10,6 @@ from typing import NamedTuple, Tuple, Union
 
 import rlp
 from base58 import b58encode
-
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
 from solana._layouts.system_instructions import SYSTEM_INSTRUCTIONS_LAYOUT, InstructionType as SystemInstructionType
@@ -20,6 +19,7 @@ from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed, Processed
 from solana.rpc.types import TxOpts
+from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
 
 from spl.token.constants import TOKEN_PROGRAM_ID
@@ -30,7 +30,6 @@ from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, TREASUR
     SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
-
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 solana_client = Client(SOLANA_URL)
@@ -293,44 +292,6 @@ class EvmLoader:
         self.acc = acc
         print("Evm loader program: {}".format(self.loader_id))
 
-    def airdrop_neon_tokens(self, user_ether_address: Union[str, bytes], amount: int) -> None:
-        operator = self.acc.get_acc()
-
-        (neon_evm_authority, _) = PublicKey.find_program_address([b"Deposit"], PublicKey(self.loader_id))
-        pool_token_account = get_associated_token_address(neon_evm_authority, NEON_TOKEN_MINT_ID)
-        source_token_account = get_associated_token_address(operator.public_key(), NEON_TOKEN_MINT_ID)
-        (user_solana_address, _) = self.ether2program(user_ether_address)
-
-        pool_account_exists = solana_client.get_account_info(
-            pool_token_account, commitment=Processed
-        )["result"]["value"] is not None
-        print("Pool Account Exists: ", pool_account_exists)
-
-        trx = TransactionWithComputeBudget()
-        if not pool_account_exists:
-            trx.add(create_associated_token_account(operator.public_key(), neon_evm_authority, NEON_TOKEN_MINT_ID))
-
-        trx.add(approve(ApproveParams(
-            program_id=TOKEN_PROGRAM_ID,
-            source=source_token_account,
-            delegate=neon_evm_authority,
-            owner=operator.public_key(),
-            amount=amount * (10 ** 9),
-        )))
-        trx.add(TransactionInstruction(
-            program_id=self.loader_id,
-            data=bytes.fromhex("19"),
-            keys=[
-                AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=pool_token_account, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=user_solana_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=neon_evm_authority, is_signer=False, is_writable=False),
-                AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            ]
-        ))
-        result = send_transaction(solana_client, trx, operator)
-        print("Airdrop transaction: ", result)
-
     def deploy(self, contract_path, config=None):
         print(f'Deploy contract from path: {contract_path}')
         if config is None:
@@ -345,27 +306,34 @@ class EvmLoader:
     def create_ether_account(self, ether):
         (trx, sol) = self.create_ether_account_trx(ether)
         signer = Keypair.from_secret_key(self.acc.get_acc().secret_key())
-        result = send_transaction(solana_client, trx, signer)
+        send_transaction(solana_client, trx, signer)
         return sol
 
-    def ether2seed(self, ether):
+    @staticmethod
+    def ether2hex(ether: Union[str, bytes]):
         if isinstance(ether, str):
             if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-        seed = b58encode(ACCOUNT_SEED_VERSION + bytes.fromhex(ether)).decode('utf8')
+                return ether[2:]
+            return ether
+        return ether.hex()
+
+    @staticmethod
+    def ether2bytes(ether: Union[str, bytes]):
+        if isinstance(ether, str):
+            if ether.startswith('0x'):
+                return bytes.fromhex(ether[2:])
+            return bytes.fromhex(ether)
+        return ether
+
+    def ether2seed(self, ether: Union[str, bytes]):
+        seed = b58encode(ACCOUNT_SEED_VERSION + self.ether2bytes(ether)).decode('utf8')
         acc = account_with_seed(self.acc.get_acc().public_key(), seed, PublicKey(self.loader_id))
-        print('ether2program: {} {} => {}'.format(ether, 255, acc))
+        print('ether2program: {} {} => {}'.format(self.ether2hex(ether), 255, acc))
         return acc, 255
 
-    def ether2program(self, ether):
-        if isinstance(ether, str):
-            if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-        output = neon_cli().call("create-program-address --evm_loader {} {}".format(self.loader_id, ether))
+    def ether2program(self, ether: Union[str, bytes]) -> Tuple[str, int]:
+        output = neon_cli().call("create-program-address --evm_loader {} {}"
+                                 .format(self.loader_id, self.ether2hex(ether)))
         items = output.rstrip().split(' ')
         return items[0], int(items[1])
 
@@ -388,38 +356,21 @@ class EvmLoader:
         else:
             return program[0], ether, code[0]
 
-    def create_ether_account_trx(self, ether: Union[str, bytes], code_acc=None) -> Tuple[Transaction, str]:
-        if isinstance(ether, str):
-            if ether.startswith('0x'):
-                ether = ether[2:]
-        else:
-            ether = ether.hex()
-
+    def create_ether_account_trx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
         (sol, nonce) = self.ether2program(ether)
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
 
         base = self.acc.get_acc().public_key()
-        data = bytes.fromhex('18') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=bytes.fromhex(ether), nonce=nonce))
+        data = bytes.fromhex('28') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
         trx = TransactionWithComputeBudget()
-        if code_acc is None:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                ]))
-        else:
-            trx.add(TransactionInstruction(
-                program_id=self.loader_id,
-                data=data,
-                keys=[
-                    AccountMeta(pubkey=base, is_signer=True, is_writable=True),
-                    AccountMeta(pubkey=SYSTEM_ADDRESS, is_signer=False, is_writable=False),
-                    AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=PublicKey(code_acc), is_signer=False, is_writable=True),
-                ]))
+        trx.add(TransactionInstruction(
+            program_id=self.loader_id,
+            data=data,
+            keys=[
+                AccountMeta(pubkey=base, is_signer=True, is_writable=True),
+                AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
+                AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
+            ]))
         return trx, sol
 
 
@@ -430,12 +381,11 @@ def get_solana_balance(account):
 class AccountInfo(NamedTuple):
     ether: eth_keys.PublicKey
     trx_count: int
-    code_account: PublicKey
 
     @staticmethod
     def from_bytes(data: bytes):
         cont = ACCOUNT_INFO_LAYOUT.parse(data)
-        return AccountInfo(cont.ether, cont.trx_count, PublicKey(cont.code_account))
+        return AccountInfo(cont.ether, cont.trx_count)
 
 
 def get_account_data(solana_client: Client, account: Union[str, PublicKey, Keypair], expected_length: int) -> bytes:

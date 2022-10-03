@@ -60,6 +60,7 @@ pub fn execute(
         config,
         signer_token_pubkey,
         evm_pool_pubkey,
+        ether_address,
         ether_pubkey,
     ));
 
@@ -98,7 +99,7 @@ fn create_ether_account_instruction(
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(24_u8, ether_address.as_fixed_bytes(), nonce),
+        &(0x1e_u8, ether_address.as_fixed_bytes(), nonce, 0_u32),
         vec![
             AccountMeta::new(config.signer.pubkey(), true),
             AccountMeta::new_readonly(system_program::id(), false),
@@ -136,16 +137,19 @@ fn deposit_instruction(
     config: &Config,
     source_pubkey: Pubkey,
     destination_pubkey: Pubkey,
+    ether_address: &H160,
     ether_account_pubkey: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(39_u8),
+        &(0x27_u8, ether_address.as_fixed_bytes()),
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),
             AccountMeta::new(ether_account_pubkey, false),
             AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new(config.signer.pubkey(), true),
+            AccountMeta::new_readonly(system_program::id(), false),
         ],
     )
 }

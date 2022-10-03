@@ -10,5 +10,6 @@ cat << EOF
           NEON_EVM_COMMIT: "${BUILDKITE_COMMIT}"
           NEON_EVM_BRANCH: "${BUILDKITE_BRANCH}"
           NEON_EVM_REPO: "${BUILDKITE_REPO}"
+          FAUCET_COMMIT: "${FAUCET_COMMIT:-latest}"
 EOF
 

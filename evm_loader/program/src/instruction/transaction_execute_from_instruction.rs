@@ -1,13 +1,13 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury};
 use crate::transaction::{check_ethereum_transaction, Transaction, recover_caller_address};
-use crate::account_storage::ProgramAccountStorage;
+use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use arrayref::{array_ref};
 use evm::{H160};
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::executor::{Machine, Action};
+use crate::executor::{Action, Machine};
 
 
 struct Accounts<'a> {
@@ -61,7 +61,7 @@ fn validate(
     caller_address: &H160,
 ) -> ProgramResult {
     check_ethereum_transaction(account_storage, caller_address, trx)?;
-    account_storage.check_for_blocked_accounts(true)?;
+    account_storage.check_for_blocked_accounts()?;
 
     if trx.to.is_none() { // WHY!?
         return Err!(ProgramError::InvalidArgument; "Deploy transactions are not allowed")
@@ -78,12 +78,16 @@ fn execute<'a>(
 ) -> ProgramResult {
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (exit_reason, return_value, apply_state, used_gas) = {
+    let (exit_reason, return_value, apply_state, accounts_operations, used_gas) = {
         let mut executor = Machine::new(caller_address, account_storage)?;
 
         executor.call_begin(
             caller_address,
-            trx.to.expect("This is function call or transfer"),
+            trx.to
+                .expect(
+                    "This transaction must be a function call or transfer. \
+                    Deploy transactions are not allowed here."
+                ),
             trx.call_data,
             trx.value,
             trx.gas_limit,
@@ -95,43 +99,60 @@ fn execute<'a>(
         let steps_executed = executor.get_steps_executed();
         executor.gasometer_mut().pad_evm_steps(steps_executed);
 
-        let used_gas = executor.used_gas();
-        if used_gas > trx.gas_limit {
-            (evm::ExitError::OutOfGas.into(), vec![], None, trx.gas_limit)
+        let (actions, mut gasometer) = executor.into_state_actions_and_gasometer();
+        let apply = if exit_reason.is_succeed() {
+            Some(actions)
         } else {
-            let apply = if exit_reason.is_succeed() {
-                Some(executor.into_state_actions())
-            } else {
-                None
-            };
+            None
+        };
 
-            (exit_reason, result, apply, used_gas)
+        let accounts_operations = account_storage.calc_accounts_operations(&apply);
+
+        gasometer.record_accounts_operations(&accounts_operations);
+
+        let used_gas = gasometer.used_gas();
+        if used_gas > trx.gas_limit {
+            (evm::ExitError::OutOfGas.into(), vec![], None, vec![], trx.gas_limit)
+        } else {
+            (exit_reason, result, apply, accounts_operations, used_gas)
         }
     };
 
-
     let gas_cost = used_gas.saturating_mul(trx.gas_price);
     let payment_result = account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost);
-    let (exit_reason, return_value, apply_state) = match payment_result {
-        Ok(()) => {
-            (exit_reason, return_value, apply_state)
-        },
-        Err(ProgramError::InsufficientFunds) => {
-            let exit_reason = evm::ExitError::OutOfFund.into();
-            let return_value = vec![];
+    let (exit_reason, return_value, apply_state, accounts_operations) =
+        match payment_result {
+            Ok(()) => {
+                (exit_reason, return_value, apply_state, accounts_operations)
+            },
+            Err(ProgramError::InsufficientFunds) => {
+                let exit_reason = evm::ExitError::OutOfFund.into();
+                let return_value = vec![];
 
-            (exit_reason, return_value, None)
-        },
-        Err(e) => return Err(e) 
-    };
+                (exit_reason, return_value, None, vec![])
+            },
+            Err(e) => return Err(e)
+        };
 
+    let apply_state = apply_state.unwrap_or_else(
+        || vec![Action::EvmIncrementNonce { address: caller_address }],
+    );
 
-    if let Some(apply_state) = apply_state {
-        account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_state)?;
-    } else {
-        let apply_actions = vec![Action::EvmIncrementNonce { address: caller_address }];
-        account_storage.apply_state_change(&accounts.neon_program, &accounts.system_program, &accounts.operator, apply_actions)?;
-    }
+    let accounts_readiness = account_storage.apply_state_change(
+        &accounts.neon_program,
+        &accounts.system_program,
+        &accounts.operator,
+        apply_state,
+        accounts_operations,
+    )?;
+
+    assert_eq!(
+        accounts_readiness,
+        AccountsReadiness::Ready,
+        "Deployment of contract which needs more than 10kb of account space needs several \
+            transactions for reallocation and cannot be performed in a single instruction. \
+            That's why you have to use iterative transaction for the deployment.",
+    );
 
     accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
     
