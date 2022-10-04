@@ -88,7 +88,7 @@ impl<'a> solana_program::account_info::IntoAccountInfo<'a> for &'a mut OwnedAcco
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct AccountMeta {
     pub key: Pubkey,
     pub is_signer: bool,

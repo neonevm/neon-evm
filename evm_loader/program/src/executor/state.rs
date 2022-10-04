@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use evm::{H160, U256, H256, ExitError};
+use evm::{H160, U256, H256, ExitError, ExitReason};
 use solana_program::instruction::Instruction;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
@@ -23,6 +23,7 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     actions: Vec<Action>,
     stack: Vec<usize>,
     is_static: u32,
+    exit_result: Option<(Vec<u8>, ExitReason)>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -41,6 +42,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: Vec::new(),
             stack: Vec::new(),
             is_static: 0_u32,
+            exit_result: None,
         }
     }
 
@@ -49,6 +51,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.serialize(writer)?;
         self.stack.serialize(writer)?;
         self.is_static.serialize(writer)?;
+        self.exit_result.serialize(writer)?;
 
         Ok(())
     }
@@ -60,6 +63,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: BorshDeserialize::deserialize(buffer)?,
             stack: BorshDeserialize::deserialize(buffer)?,
             is_static: BorshDeserialize::deserialize(buffer)?,
+            exit_result: BorshDeserialize::deserialize(buffer)?,
         })
     }
 
@@ -386,6 +390,9 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                     program_id if spl_associated_token_account::check_id(program_id) => {
                         crate::external_programs::spl_associated_token::emulate(instruction, meta, &mut accounts)?;
                     },
+                    program_id if mpl_token_metadata::check_id(program_id) => {
+                        crate::external_programs::metaplex::emulate(instruction, meta, &mut accounts)?;
+                    },
                     _ => {
                         return Err!(ProgramError::IncorrectProgramId; "Unknown external program: {}", program_id);
                     }
@@ -418,4 +425,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
+    pub fn set_exit_result(&mut self, result: Option<(Vec<u8>, ExitReason)>) {
+        self.exit_result = result;
+    }
+
+    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
+        &self.exit_result
+    }
 }

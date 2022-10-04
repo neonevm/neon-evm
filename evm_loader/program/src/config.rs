@@ -863,8 +863,8 @@ pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
 pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
 /// Gas limit multiplier for transactions without chain id
 pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
-/// Amount of storage enties strored in the contract account
-pub const STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
+/// Amount of storage entries stored in the contract account
+pub const STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
 
 cfg_if! {
     if #[cfg(feature = "emergency")] {
@@ -888,7 +888,7 @@ neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_U
 neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
 neon_elf_param!( NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, formatcp!("{:?}", GAS_LIMIT_MULTIPLIER_NO_CHAINID));
-neon_elf_param!( NEON_STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT, formatcp!("{:?}", STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT));
+neon_elf_param!( NEON_STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT, formatcp!("{:?}", STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT));
 
 /// Chain ID
 #[must_use]

@@ -17,7 +17,6 @@ class Contract:
     eth_address: bytes
     solana_address: PublicKey
     nonce: int
-    code_solana_address: PublicKey
     seed: str
 
 
@@ -26,17 +25,14 @@ def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     user_nonce = get_transaction_count(solana_client, user.solana_account_address)
     contract_eth_address = keccak_256(pack([user.eth_address, user_nonce or None])).digest()[-20:]
     contract_solana_address, contract_nonce = evm_loader.ether2program(contract_eth_address)
-    contract_code_address, _ = evm_loader.ether2seed(contract_eth_address)
     seed = b58encode(ACCOUNT_SEED_VERSION + contract_eth_address).decode('utf8')
     print(f"Contract addresses: "
           f"  eth {contract_eth_address.hex()}, "
           f"  solana {contract_solana_address}"
-          f"  code {contract_code_address}"
           f"  nonce {contract_nonce}"
           f"  user nonce {user_nonce}"
           f"  seed {seed}")
-    return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_nonce,
-                    PublicKey(contract_code_address), seed)
+    return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_nonce, seed)
 
 
 def make_eth_transaction(to_addr: str, data: bytes, signer: Keypair, from_solana_user: PublicKey, user_eth_address: bytes):

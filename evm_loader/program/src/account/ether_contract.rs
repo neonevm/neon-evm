@@ -1,130 +1,89 @@
 use std::cell::RefMut;
-use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use solana_program::program_error::ProgramError;
-use solana_program::pubkey::Pubkey;
-use crate::hamt::Hamt;
-use super::{ Packable, AccountExtension };
+use std::mem::size_of;
 
-/// Ethereum contract data account
-#[deprecated]
-#[derive(Debug)]
-pub struct DataV1 {
-    /// Solana account with ethereum account data associated with this code data
-    pub owner: Pubkey,
-    /// Contract code size
-    pub code_size: u32,
+use evm::{U256, Valids};
+
+use crate::account::EthereumAccount;
+use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
+
+pub struct ContractData<'this, 'acc> {
+    account: &'this EthereumAccount<'acc>,
 }
 
-#[deprecated]
-#[derive(Debug)]
-pub struct ExtensionV1<'a> {
-    pub code: RefMut<'a, [u8]>,
-    pub valids: RefMut<'a, [u8]>,
-    pub storage: Hamt<'a>
-}
+impl<'acc> ContractData<'_, 'acc> {
+    pub const INTERNAL_STORAGE_SIZE: usize =
+        size_of::<U256>() * STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT as usize;
 
-#[allow(deprecated)]
-impl<'a> AccountExtension<'a, DataV1> for ExtensionV1<'a> {
-    fn unpack(data: &DataV1, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
-        let code_size = data.code_size as usize;
-        let valids_size = (code_size / 8) + 1;
-
-        let (code, rest) = RefMut::map_split(remaining, |r| r.split_at_mut(code_size));
-        let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
-
-        Ok(Self { code, valids, storage: Hamt::new(storage)? })
-    }
-}
-
-#[allow(deprecated)]
-impl Packable for DataV1 {
-    /// Contract struct tag
-    const TAG: u8 = super::_TAG_CONTRACT_V1;
-    /// Contract struct serialized size
-    const SIZE: usize = 32 + 4;
-
-    /// Deserialize `Contract` struct from input data
     #[must_use]
-    fn unpack(input: &[u8]) -> Self {
-        #[allow(clippy::use_self)]
-        let data = array_ref![input, 0, DataV1::SIZE];
-        let (owner, code_size) = array_refs![data, 32, 4];
-
-        Self {
-            owner: Pubkey::new_from_array(*owner),
-            code_size: u32::from_le_bytes(*code_size),
-        }
+    pub fn code(&self) -> RefMut<'acc, [u8]> {
+        self.extension_part_borrow_mut(0, self.account.code_size as usize)
     }
 
-    /// Serialize `Contract` struct into given destination
-    fn pack(&self, dst: &mut [u8]) {
-        #[allow(clippy::use_self)]
-        let data = array_mut_ref![dst, 0, DataV1::SIZE];
-        let (owner_dst, code_size_dst) = mut_array_refs![data, 32, 4];
-        owner_dst.copy_from_slice(self.owner.as_ref());
-        *code_size_dst = self.code_size.to_le_bytes();
-    }
-}
-
-
-/// Ethereum contract data account
-#[derive(Debug)]
-pub struct Data {
-    /// Solana account with ethereum account data associated with this code data
-    pub owner: Pubkey,
-    /// Contract code size
-    pub code_size: u32,
-    /// Contract generation, increment on suicide
-    pub generation: u32
-}
-
-
-#[derive(Debug)]
-pub struct Extension<'a> {
-    pub code: RefMut<'a, [u8]>,
-    pub valids: RefMut<'a, [u8]>,
-    pub storage: RefMut<'a, [u8]>,
-}
-
-impl<'a> AccountExtension<'a, Data> for Extension<'a> {
-    fn unpack(data: &Data, remaining: RefMut<'a, [u8]>) -> Result<Self, ProgramError> {
-        let code_size = data.code_size as usize;
-        let valids_size = (code_size / 8) + 1;
-
-        let (code, rest) = RefMut::map_split(remaining, |r| r.split_at_mut(code_size));
-        let (valids, storage) = RefMut::map_split(rest, |r| r.split_at_mut(valids_size));
-
-        Ok(Self { code, valids, storage })
-    }
-}
-
-impl Packable for Data {
-    /// Contract struct tag
-    const TAG: u8 = super::TAG_CONTRACT;
-    /// Contract struct serialized size
-    const SIZE: usize = 32 + 4 + 4;
-
-    /// Deserialize `Contract` struct from input data
     #[must_use]
-    fn unpack(input: &[u8]) -> Self {
-        #[allow(clippy::use_self)]
-        let data = array_ref![input, 0, Data::SIZE];
-        let (owner, code_size, generation) = array_refs![data, 32, 4, 4];
-
-        Self {
-            owner: Pubkey::new_from_array(*owner),
-            code_size: u32::from_le_bytes(*code_size),
-            generation: u32::from_le_bytes(*generation),
-        }
+    pub fn valids(&self) -> RefMut<'acc, [u8]> {
+        self.extension_part_borrow_mut(
+            self.account.code_size as usize,
+            Valids::size_needed(self.account.code_size as usize),
+        )
     }
 
-    /// Serialize `Contract` struct into given destination
-    fn pack(&self, dst: &mut [u8]) {
-        #[allow(clippy::use_self)]
-        let data = array_mut_ref![dst, 0, Data::SIZE];
-        let (owner, code_size, generation) = mut_array_refs![data, 32, 4, 4];
-        owner.copy_from_slice(self.owner.as_ref());
-        *code_size = self.code_size.to_le_bytes();
-        *generation = self.generation.to_le_bytes();
+    #[must_use]
+    pub fn storage(&self) -> RefMut<'acc, [u8]> {
+        let valids_size = Valids::size_needed(self.account.code_size as usize);
+        self.extension_part_borrow_mut(
+            self.account.code_size as usize + valids_size,
+            Self::INTERNAL_STORAGE_SIZE,
+        )
+    }
+
+    #[must_use]
+    pub fn extension_borrow_mut(&self) -> RefMut<'acc, [u8]> {
+        RefMut::map(
+            self.account.info.data.borrow_mut(),
+            |slice| &mut slice[EthereumAccount::SIZE..],
+        )
+    }
+
+    #[must_use]
+    fn extension_part_borrow_mut(&self, offset: usize, len: usize) -> RefMut<'acc, [u8]> {
+        RefMut::map(
+            self.extension_borrow_mut(),
+            |slice| &mut slice[offset..][..len],
+        )
+    }
+}
+
+impl<'this, 'acc> EthereumAccount<'acc> {
+    #[must_use]
+    pub fn is_contract(&self) -> bool {
+        self.code_size() != 0
+    }
+
+    #[must_use]
+    pub fn code_size(&self) -> usize {
+        self.code_size as usize
+    }
+
+    #[must_use]
+    pub fn contract_data(&'this self) -> Option<ContractData<'this, 'acc>> {
+        if !self.is_contract() {
+            return None;
+        }
+        Some(ContractData { account: self })
+    }
+
+    #[must_use]
+    pub fn space_needed(code_size: usize) -> usize {
+        EthereumAccount::SIZE +
+            if code_size > 0 {
+                code_size + Valids::size_needed(code_size) + ContractData::INTERNAL_STORAGE_SIZE
+            } else {
+                0
+            }
+    }
+
+    #[must_use]
+    pub fn size(&self) -> usize {
+        Self::space_needed(self.code_size())
     }
 }
