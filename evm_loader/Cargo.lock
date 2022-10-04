@@ -1138,6 +1138,7 @@ dependencies = [
  "const_format",
  "environmental",
  "evm",
+ "evm-loader-macro",
  "evm-runtime",
  "hex",
  "log",
@@ -1148,6 +1149,15 @@ dependencies = [
  "spl-associated-token-account",
  "spl-token",
  "thiserror",
+]
+
+[[package]]
+name = "evm-loader-macro"
+version = "1.0.0"
+dependencies = [
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "syn 1.0.99",
 ]
 
 [[package]]
