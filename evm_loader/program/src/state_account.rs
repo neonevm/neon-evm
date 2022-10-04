@@ -13,7 +13,9 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
+use crate::account::TAG_ACCOUNT_V3;
 
+const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
 pub enum Deposit<'a> {
     ReturnToOperator(Operator<'a>),
@@ -141,7 +143,7 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn accounts(&self) -> Result<Vec<(bool, Pubkey)>, ProgramError> {
+    pub fn accounts(&self) -> Result<Vec<(bool, bool, Pubkey)>, ProgramError> {
         let (begin, end) = self.accounts_region();
 
         let account_data = self.info.try_borrow_data()?;
@@ -150,10 +152,10 @@ impl<'a> State<'a> {
         }
 
         let keys_storage = &account_data[begin..end];
-        let chunks = keys_storage.chunks_exact(1 + 32);
+        let chunks = keys_storage.chunks_exact(ACCOUNT_CHUNK_LEN);
         let accounts = chunks
-            .map(|c| c.split_at(1))
-            .map(|(writable, key)| (writable[0] > 0, Pubkey::new(key)))
+            .map(|c| c.split_at(2))
+            .map(|(meta, key)| (meta[0] > 0, meta[1] > 0, Pubkey::new(key)))
             .collect();
 
         Ok(accounts)
@@ -170,10 +172,11 @@ impl<'a> State<'a> {
         }
 
         let accounts_storage = &mut account_data[begin..end];
-        let accounts_storage = accounts_storage.chunks_exact_mut(1 + 32);
+        let accounts_storage = accounts_storage.chunks_exact_mut(ACCOUNT_CHUNK_LEN);
         for (info, account_storage) in accounts.iter().zip(accounts_storage) {
             account_storage[0] = u8::from(info.is_writable);
-            account_storage[1..].copy_from_slice(info.key.as_ref());
+            account_storage[1] = u8::from(Self::account_exists(info));
+            account_storage[2..].copy_from_slice(info.key.as_ref());
         }
 
         Ok(())
@@ -185,13 +188,22 @@ impl<'a> State<'a> {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
         }
 
-        for ((writable, key), info) in blocked_accounts.into_iter().zip(accounts) {
+        for ((writable, exists, key), info) in blocked_accounts.into_iter().zip(accounts) {
             if key != *info.key {
                 return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", key, info.key);
             }
 
             if writable != info.is_writable {
                 return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, writable);
+            }
+
+            if !exists && Self::account_exists(info) {
+                return Err!(
+                    ProgramError::AccountAlreadyInitialized;
+                    "Blocked nonexistent account {} was created/initialized outside current transaction. \
+                    Transaction is being cancelled in order to prevent possible data corruption.",
+                    info.key
+                );
             }
         }
 
@@ -217,8 +229,14 @@ impl<'a> State<'a> {
     #[must_use]
     fn accounts_region(&self) -> (usize, usize) {
         let begin = Self::SIZE;
-        let end = begin + self.accounts_len * (1 + 32);
+        let end = begin + self.accounts_len * (ACCOUNT_CHUNK_LEN);
 
         (begin, end)
+    }
+
+    #[must_use]
+    fn account_exists(info: &AccountInfo) -> bool {
+        !solana_program::system_program::check_id(info.owner)
+            && (info.data_is_empty() || info.data.borrow()[0] == TAG_ACCOUNT_V3)
     }
 }

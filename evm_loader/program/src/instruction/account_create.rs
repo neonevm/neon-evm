@@ -45,7 +45,7 @@ fn validate(program_id: &Pubkey, accounts: &Accounts, address: &H160) -> Result<
 }
 
 fn execute(program_id: &Pubkey, accounts: &Accounts, address: H160, bump_seed: u8) -> ProgramResult {
-    EthereumAccount::create_account(
+    EthereumAccount::create_and_init_account(
         &accounts.system_program,
         program_id,
         &accounts.operator,

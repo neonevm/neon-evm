@@ -34,7 +34,7 @@ pub fn execute(
     ];
 
     let remaining_accounts = storage.accounts()?;
-    for (writable, key) in remaining_accounts {
+    for (writable, _exists, key) in remaining_accounts {
         if writable {
             accounts_meta.push(AccountMeta::new(key, false));
         } else {

@@ -51,8 +51,8 @@ const TAG_FINALIZED_STATE: u8 = 5;
 const TAG_HOLDER: u8 = 6;
 */
 
-const TAG_EMPTY: u8 = 0;
-const TAG_ACCOUNT_V3: u8 = 11;
+pub const TAG_EMPTY: u8 = 0;
+pub const TAG_ACCOUNT_V3: u8 = 11;
 const TAG_STATE: u8 = 21;
 const TAG_FINALIZED_STATE: u8 = 31;
 const TAG_CONTRACT_STORAGE: u8 = 41;
@@ -155,7 +155,7 @@ where
         system_program: &System<'a>,
         program_id: &Pubkey,
         operator: &Operator<'a>,
-        address: H160,
+        address: &H160,
         info: &'a AccountInfo<'a>,
         bump_seed: u8,
         space: usize,
@@ -181,6 +181,20 @@ where
             program_seeds,
             space,
         )?;
+
+        Ok(())
+    }
+
+    pub fn create_and_init_account(
+        system_program: &System<'a>,
+        program_id: &Pubkey,
+        operator: &Operator<'a>,
+        address: H160,
+        info: &'a AccountInfo<'a>,
+        bump_seed: u8,
+        space: usize,
+    ) -> ProgramResult {
+        Self::create_account(system_program, program_id, operator, &address, info, bump_seed, space)?;
 
         EthereumAccount::init(
             info,

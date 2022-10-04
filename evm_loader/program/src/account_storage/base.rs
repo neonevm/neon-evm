@@ -1,5 +1,5 @@
 use std::cell::{RefCell};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use evm::{H160};
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
@@ -8,7 +8,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{EthereumAccount, Operator, program};
+use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
@@ -57,7 +57,7 @@ impl<'a> ProgramAccountStorage<'a> {
             clock: Clock::get()?,
             solana_accounts,
             ethereum_accounts,
-            empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
+            empty_ethereum_accounts: RefCell::new(BTreeMap::new()),
         })
     }
 
@@ -73,21 +73,25 @@ impl<'a> ProgramAccountStorage<'a> {
         self.ethereum_accounts.remove(address)
     }
 
-    fn panic_if_account_not_exists(&self, address: &H160) {
+    pub(crate) fn panic_if_account_not_exists(&self, address: &H160) {
         if self.ethereum_accounts.contains_key(address) {
             return;
         }
 
         let mut empty_accounts = self.empty_ethereum_accounts.borrow_mut();
-        if empty_accounts.contains(address) {
+        if empty_accounts.contains_key(address) {
             return;
         }
 
-        let (solana_address, _) = self.calc_solana_address(address);
+        let (solana_address, bump_seed) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
-            assert!(system_program::check_id(account.owner), "Empty ethereum account {} must belong to the system program", address);
+            if !system_program::check_id(account.owner) &&
+                (account.data_is_empty() || account.data.borrow()[0] != TAG_EMPTY)
+            {
+                panic!("Empty ethereum account {} must belong to the system program or be uninitialized", address);
+            }
 
-            empty_accounts.insert(*address);
+            empty_accounts.insert(*address, (solana_address, bump_seed));
             return;
         }
 
