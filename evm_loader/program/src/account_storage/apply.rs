@@ -350,29 +350,30 @@ impl<'a> ProgramAccountStorage<'a> {
     fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
         self.panic_if_account_not_exists(address);
 
-        let ether_account = match self.empty_ethereum_accounts.borrow().get(address) {
-            None => return Ok(()),
+        let ether_account =
+            match self.empty_ethereum_accounts.borrow_mut().remove(address) {
+                None => return Ok(()),
 
-            Some((solana_address, bump_seed)) => {
-                let info = self.solana_account(solana_address)
-                    .ok_or_else(
-                        || E!(
-                        ProgramError::InvalidArgument;
-                        "Account {} not found in the list of Solana accounts",
-                        solana_address
-                    )
-                    )?;
+                Some((solana_address, bump_seed)) => {
+                    let info = self.solana_account(&solana_address)
+                        .ok_or_else(
+                            || E!(
+                                ProgramError::InvalidArgument;
+                                "Account {} not found in the list of Solana accounts",
+                                solana_address
+                            )
+                        )?;
 
-                EthereumAccount::init(
-                    info,
-                    ether_account::Data {
-                        address: *address,
-                        bump_seed: *bump_seed,
-                        ..Default::default()
-                    },
-                )?
-            },
-        };
+                    EthereumAccount::init(
+                        info,
+                        ether_account::Data {
+                            address: *address,
+                            bump_seed,
+                            ..Default::default()
+                        },
+                    )?
+                },
+            };
 
         self.add_ether_account(ether_account)
     }
