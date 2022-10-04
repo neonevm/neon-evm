@@ -10,7 +10,7 @@ use solana_program::rent::Rent;
 use solana_program::system_instruction;
 use solana_program::sysvar::Sysvar;
 
-use crate::account::{ACCOUNT_SEED_VERSION, ether_account, EthereumAccount, EthereumStorage, Operator, program, TAG_EMPTY};
+use crate::account::{ACCOUNT_SEED_VERSION, ether_account, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -172,9 +172,6 @@ impl<'a> ProgramAccountStorage<'a> {
                         bump_seed,
                         MAX_PERMITTED_DATA_INCREASE.min(space),
                     )?;
-                    solana_account.data.borrow_mut()[0] = TAG_EMPTY;
-
-                    self.add_ether_account(neon_program.key, solana_account)?;
 
                     if space > MAX_PERMITTED_DATA_INCREASE {
                         accounts_readiness = AccountsReadiness::NeedMoreReallocations;
@@ -350,29 +347,33 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn create_account_if_not_exists(&self, address: &H160) -> ProgramResult {
+    fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
         self.panic_if_account_not_exists(address);
 
-        if let Some((solana_address, bump_seed)) = self.empty_ethereum_accounts.borrow().get(address) {
-            let info = self.solana_account(solana_address)
-                .ok_or_else(
-                    || E!(
+        let ether_account = match self.empty_ethereum_accounts.borrow().get(address) {
+            None => return Ok(()),
+
+            Some((solana_address, bump_seed)) => {
+                let info = self.solana_account(solana_address)
+                    .ok_or_else(
+                        || E!(
                         ProgramError::InvalidArgument;
                         "Account {} not found in the list of Solana accounts",
                         solana_address
                     )
-                )?;
+                    )?;
 
-            EthereumAccount::init(
-                info,
-                ether_account::Data {
-                    address: *address,
-                    bump_seed: *bump_seed,
-                    ..Default::default()
-                },
-            )?;
-        }
+                EthereumAccount::init(
+                    info,
+                    ether_account::Data {
+                        address: *address,
+                        bump_seed: *bump_seed,
+                        ..Default::default()
+                    },
+                )?
+            },
+        };
 
-        Ok(())
+        self.add_ether_account(ether_account)
     }
 }

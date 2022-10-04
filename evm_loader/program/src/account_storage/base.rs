@@ -61,8 +61,7 @@ impl<'a> ProgramAccountStorage<'a> {
         })
     }
 
-    pub fn add_ether_account(&mut self, program_id: &Pubkey, info: &'a AccountInfo<'a>) -> ProgramResult {
-        let ether_account = EthereumAccount::from_account(program_id, info)?;
+    pub fn add_ether_account(&mut self, ether_account: EthereumAccount<'a>) -> ProgramResult {
         let previous = self.ethereum_accounts.insert(ether_account.address, ether_account);
         assert!(previous.is_none());
 
