@@ -51,9 +51,6 @@ fn process_instruction<'a>(
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)
         }
-        EvmInstruction::ERC20CreateTokenAccount => {
-            instruction::erc20_account_create::process(program_id, accounts, instruction)
-        }
         EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
         }

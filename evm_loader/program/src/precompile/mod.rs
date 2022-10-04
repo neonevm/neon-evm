@@ -15,11 +15,12 @@ mod blake2_f;
 
 mod query_account;
 mod neon_token;
-mod erc20_wrapper;
 mod spl_token;
 mod metaplex;
 
-const SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+#[deprecated]
+const _SYSTEM_ACCOUNT_ERC20_WRAPPER: H160 =     H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01]);
+
 const SYSTEM_ACCOUNT_QUERY: H160 =             H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 const SYSTEM_ACCOUNT_NEON_TOKEN: H160 =        H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03]);
 const SYSTEM_ACCOUNT_SPL_TOKEN: H160 =         H160([0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04]);
@@ -38,8 +39,7 @@ const SYSTEM_ACCOUNT_BLAKE2F: H160 =           H160([0, 0, 0, 0, 0, 0, 0, 0, 0, 
 /// Is precompile address
 #[must_use]
 pub fn is_precompile_address(address: &H160) -> bool {
-           *address == SYSTEM_ACCOUNT_ERC20_WRAPPER
-        || *address == SYSTEM_ACCOUNT_QUERY
+           *address == SYSTEM_ACCOUNT_QUERY
         || *address == SYSTEM_ACCOUNT_NEON_TOKEN
         || *address == SYSTEM_ACCOUNT_SPL_TOKEN
         || *address == SYSTEM_ACCOUNT_METAPLEX
@@ -65,9 +65,6 @@ pub fn call_precompile<B: AccountStorage>(
     state: &mut ExecutorState<B>,
     gasometer: &mut Gasometer
 ) -> Option<PrecompileResult> {
-    if address == SYSTEM_ACCOUNT_ERC20_WRAPPER {
-        return Some(erc20_wrapper::erc20_wrapper(input, context, state, gasometer));
-    }
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account::query_account(input, state));
     }

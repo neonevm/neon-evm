@@ -400,12 +400,6 @@ dependencies = [
 
 [[package]]
 name = "bs58"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
-
-[[package]]
-name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
@@ -1139,7 +1133,6 @@ dependencies = [
  "arrayref",
  "bincode",
  "borsh",
- "bs58 0.3.1",
  "bytes",
  "cfg-if",
  "const_format",
@@ -1149,8 +1142,6 @@ dependencies = [
  "hex",
  "log",
  "mpl-token-metadata",
- "num-derive",
- "num-traits",
  "ripemd160",
  "rlp",
  "solana-program",
@@ -2005,7 +1996,7 @@ dependencies = [
  "arrayref",
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "chrono",
  "clap 2.33.3",
  "ethereum-types",
@@ -3234,7 +3225,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "bv",
  "lazy_static",
  "serde",
@@ -3293,7 +3284,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c62f87b1960306cc93578746d218647f7be0c94e7cec06254a66f500a5502fc"
 dependencies = [
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "clap 2.33.3",
  "console",
  "const_format",
@@ -3383,7 +3374,7 @@ dependencies = [
  "async-trait",
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "bytes",
  "clap 2.33.3",
  "crossbeam-channel",
@@ -3474,7 +3465,7 @@ dependencies = [
  "ahash",
  "blake3",
  "block-buffer 0.9.0",
- "bs58 0.4.0",
+ "bs58",
  "bv",
  "byteorder",
  "cc",
@@ -3607,7 +3598,7 @@ dependencies = [
  "blake3",
  "borsh",
  "borsh-derive",
- "bs58 0.4.0",
+ "bs58",
  "bv",
  "bytemuck",
  "cc",
@@ -3711,7 +3702,7 @@ dependencies = [
  "bincode",
  "bitflags",
  "borsh",
- "bs58 0.4.0",
+ "bs58",
  "bytemuck",
  "byteorder",
  "chrono",
@@ -3757,7 +3748,7 @@ version = "1.11.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65de9f24bb8c335992e7d627c0c4570138c9539bb298eecd4af7c01183db520b"
 dependencies = [
- "bs58 0.4.0",
+ "bs58",
  "proc-macro2 1.0.40",
  "quote 1.0.20",
  "rustversion",
@@ -3803,7 +3794,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "borsh",
- "bs58 0.4.0",
+ "bs58",
  "lazy_static",
  "log",
  "serde",
