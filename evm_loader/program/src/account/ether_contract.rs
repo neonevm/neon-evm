@@ -16,24 +16,28 @@ impl<'acc> ContractData<'_, 'acc> {
 
     #[must_use]
     pub fn code(&self) -> RefMut<'acc, [u8]> {
-        self.extension_part_borrow_mut(0, self.account.code_size as usize)
+        let offset = Self::INTERNAL_STORAGE_SIZE;
+        let len = self.account.code_size as usize;
+
+        self.extension_part_borrow_mut(offset, len)
     }
 
     #[must_use]
     pub fn valids(&self) -> RefMut<'acc, [u8]> {
-        self.extension_part_borrow_mut(
-            self.account.code_size as usize,
-            Valids::size_needed(self.account.code_size as usize),
-        )
+        let code_size = self.account.code_size as usize;
+
+        let offset = Self::INTERNAL_STORAGE_SIZE + code_size;
+        let len = Valids::size_needed(code_size);
+
+        self.extension_part_borrow_mut(offset, len)
     }
 
     #[must_use]
     pub fn storage(&self) -> RefMut<'acc, [u8]> {
-        let valids_size = Valids::size_needed(self.account.code_size as usize);
-        self.extension_part_borrow_mut(
-            self.account.code_size as usize + valids_size,
-            Self::INTERNAL_STORAGE_SIZE,
-        )
+        let offset = 0;
+        let len = Self::INTERNAL_STORAGE_SIZE;
+
+        self.extension_part_borrow_mut(offset, len)
     }
 
     #[must_use]
