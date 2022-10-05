@@ -68,10 +68,6 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    pub fn remove_ether_account(&mut self, address: &H160) -> Option<EthereumAccount<'a>> {
-        self.ethereum_accounts.remove(address)
-    }
-
     pub(crate) fn panic_if_account_not_exists(&self, address: &H160) {
         if self.ethereum_accounts.contains_key(address) {
             return;
