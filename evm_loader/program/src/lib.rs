@@ -15,7 +15,6 @@ pub mod error;
 pub mod account;
 pub mod account_storage;
 pub mod config;
-pub mod config_macro;
 pub mod entrypoint;
 pub mod executor;
 pub mod external_programs;
