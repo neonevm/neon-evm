@@ -22,14 +22,18 @@ impl Parse for OperatorsWhitelistInput {
 pub fn operators_whitelist(tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as OperatorsWhitelistInput);
 
-    let mut operators: Vec<String> = input.list.iter().map(LitStr::value).collect();
+    let mut operators: Vec<Vec<u8>> = input.list.iter()
+        .map(LitStr::value)
+        .map(|key| bs58::decode(key).into_vec().unwrap())
+        .collect();
+
     operators.sort_unstable();
 
     let len = operators.len();
 
     quote! {
         pub static AUTHORIZED_OPERATOR_LIST: [::solana_program::pubkey::Pubkey; #len] = [
-            #(::solana_program::pubkey!(#operators),)*
+            #(::solana_program::pubkey::Pubkey::new_from_array([#((#operators),)*]),)*
         ];
     }.into()
 }
