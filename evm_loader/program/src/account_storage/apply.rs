@@ -376,6 +376,7 @@ impl<'a> ProgramAccountStorage<'a> {
                         ether_account::Data {
                             address: *address,
                             bump_seed,
+                            rw_blocked: true,
                             ..Default::default()
                         },
                     )?
