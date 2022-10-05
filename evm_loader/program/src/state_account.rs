@@ -13,7 +13,7 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
-use crate::account::TAG_ACCOUNT_V3;
+use crate::account::TAG_EMPTY;
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
@@ -75,7 +75,7 @@ impl<'a> State<'a> {
         let mut storage = State::init(info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
-        storage.write_accounts(accounts.remaining_accounts)?;
+        storage.write_accounts(program_id, accounts.remaining_accounts)?;
         Ok(storage)
     }
 
@@ -94,7 +94,7 @@ impl<'a> State<'a> {
         }
 
         let mut storage = State::from_account(program_id, info)?;
-        storage.check_accounts(accounts)?;
+        storage.check_accounts(program_id, accounts)?;
 
         let clock = Clock::get()?;
         if (*operator.key != storage.operator) && ((clock.slot - storage.slot) <= OPERATOR_PRIORITY_SLOTS) {
@@ -161,7 +161,7 @@ impl<'a> State<'a> {
         Ok(accounts)
     }
 
-    fn write_accounts(&mut self, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    fn write_accounts(&mut self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
         assert_eq!(self.accounts_len, accounts.len()); // should be always true
 
         let (begin, end) = self.accounts_region();
@@ -175,14 +175,14 @@ impl<'a> State<'a> {
         let accounts_storage = accounts_storage.chunks_exact_mut(ACCOUNT_CHUNK_LEN);
         for (info, account_storage) in accounts.iter().zip(accounts_storage) {
             account_storage[0] = u8::from(info.is_writable);
-            account_storage[1] = u8::from(Self::account_exists(info));
+            account_storage[1] = u8::from(Self::account_exists(program_id, info));
             account_storage[2..].copy_from_slice(info.key.as_ref());
         }
 
         Ok(())
     }
 
-    fn check_accounts(&self, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    fn check_accounts(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
         let blocked_accounts = self.accounts()?;
         if blocked_accounts.len() != accounts.len() {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
@@ -197,7 +197,7 @@ impl<'a> State<'a> {
                 return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, writable);
             }
 
-            if !exists && Self::account_exists(info) {
+            if !exists && Self::account_exists(program_id, info) {
                 return Err!(
                     ProgramError::AccountAlreadyInitialized;
                     "Blocked nonexistent account {} was created/initialized outside current transaction. \
@@ -229,14 +229,13 @@ impl<'a> State<'a> {
     #[must_use]
     fn accounts_region(&self) -> (usize, usize) {
         let begin = Self::SIZE;
-        let end = begin + self.accounts_len * (ACCOUNT_CHUNK_LEN);
+        let end = begin + self.accounts_len * ACCOUNT_CHUNK_LEN;
 
         (begin, end)
     }
 
     #[must_use]
-    fn account_exists(info: &AccountInfo) -> bool {
-        !solana_program::system_program::check_id(info.owner)
-            && (info.data_is_empty() || info.data.borrow()[0] == TAG_ACCOUNT_V3)
+    fn account_exists(program_id: &Pubkey, info: &AccountInfo) -> bool {
+        info.owner == program_id && !info.data_is_empty() && info.data.borrow()[0] != TAG_EMPTY
     }
 }
