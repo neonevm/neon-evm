@@ -66,14 +66,22 @@ impl<'a> ProgramAccountStorage<'a> {
             return Ok(AccountsReadiness::NeedMoreReallocations);
         }
 
+        for action in &actions {
+            let address = match action {
+                Action::NeonTransfer { target, .. } => target,
+                Action::EvmSetCode { address, .. } => address,
+                _ => continue,
+            };
+            self.create_account_if_not_exists(address)?;
+        }
+
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
         for action in actions {
             match action {
                 Action::NeonTransfer { source, target, value } => {
-                    self.create_account_if_not_exists(&target)?;
                     self.transfer_neon_tokens(&source, &target, value)?;
-                },
+                }
                 Action::NeonWithdraw { source, value } => {
                     let account = self.ethereum_account_mut(&source);
                     if account.balance < value {
@@ -81,31 +89,29 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
 
                     account.balance -= value;
-                },
+                }
                 Action::EvmLog { address, topics, data } => {
                     neon_program.on_event(address, &topics, &data)?;
-                },
+                }
                 Action::EvmSetStorage { address, key, value } => {
                     storage.entry(address).or_default().push((key, value));
-                },
+                }
                 Action::EvmIncrementNonce { address } => {
-                    self.create_account_if_not_exists(&address)?;
                     let account = self.ethereum_account_mut(&address, "EvmIncrementNonce");
                     if account.trx_count == u64::MAX {
                         return Err!(ProgramError::InvalidAccountData; "Account {} - nonce overflow", account.address);
                     }
 
                     account.trx_count += 1;
-                },
+                }
                 Action::EvmSetCode { address, code, valids } => {
-                    self.create_account_if_not_exists(&address)?;
                     self.deploy_contract(address, &code, &valids)?;
-                },
+                }
                 Action::EvmSelfDestruct { address } => {
                     storage.remove(&address);
 
                     self.delete_account(address)?;
-                },
+                }
                 Action::ExternalInstruction { program_id, instruction, accounts, seeds } => {
                     let seeds: Vec<&[u8]> = seeds.iter().map(|seed| &seed[..]).collect();
                     let accounts: Vec<_> = accounts.into_iter().map(AccountMeta::into_solana_meta).collect();
