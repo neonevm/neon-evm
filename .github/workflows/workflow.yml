@@ -19,7 +19,9 @@ jobs:
       - name: install python libs
         run: pip install docker==5.0.3
   publish-image:
-    runs-on: ubuntu-latest
+    needs:
+      - prepare-env
+    runs-on: ${{ needs.prepare-env.outputs.runner }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -30,7 +32,9 @@ jobs:
       - name: publish image
         run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
   run-tests:
-    runs-on: ubuntu-latest
+    needs:
+      - publish-image
+    runs-on: ${{ needs.publish-image.outputs.runner }}
     steps:
       - uses: actions/checkout@v3
         with:
