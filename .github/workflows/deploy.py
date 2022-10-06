@@ -28,9 +28,10 @@ ERR_MSG_TPL = {
 DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
+SOLANA_REVISION = 'v1.11.10'
 
-client = docker.from_env()
-api_client = docker.APIClient()
+
+docker_client = docker.APIClient()
 
 
 @click.group()
@@ -41,16 +42,15 @@ def cli():
 @cli.command(name="build_docker_image")
 @click.option('--github_sha')
 def build_docker_image(github_sha):
-    solana_revision = 'v1.11.10'
-    solana_image = f'solanalabs/solana:{solana_revision}'
-    client.images.pull(solana_image)
+    solana_image = f'solanalabs/solana:{SOLANA_REVISION}'
+    docker_client.images.pull(solana_image)
     buildargs = {"REVISION": github_sha,
                  "SOLANA_IMAGE": solana_image,
-                 "SOLANA_REVISION": solana_revision}
+                 "SOLANA_REVISION": SOLANA_REVISION}
 
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
-    output = api_client.build(tag=tag, buildargs=buildargs, path="./")
+    output = docker_client.build(tag=tag, buildargs=buildargs, path="./")
 
     for line in output:
         if 'stream' in str(line):
@@ -68,10 +68,15 @@ def publish_image(branch, github_sha):
     else:
         tag = branch.split('/')[-1]
 
-    image = client.images.get(f"{IMAGE_NAME}:{github_sha}")
+    docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+
+    image = docker_client.images.get(f"{IMAGE_NAME}:{github_sha}")
+
     image.tag(f"{IMAGE_NAME}:{github_sha}", tag)
-    client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
-    client.images.push(f"{IMAGE_NAME}:{tag}")
+    docker_client.images.push(f"{IMAGE_NAME}:{tag}")
+
+    image.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
+    docker_client.images.push(f"{IMAGE_NAME}:{github_sha}")
 
 
 @cli.command(name="run_tests")
@@ -92,7 +97,7 @@ def run_tests(github_sha):
 
     try:
         click.echo("start tests")
-        container = client.containers.get("solana")
+        container = docker_client.containers.get("solana")
         logs = container.exec_run(cmd="/opt/deploy-test.sh")
         click.echo(logs)
     except:
