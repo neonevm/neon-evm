@@ -13,7 +13,7 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
-use crate::account::TAG_EMPTY;
+use crate::account::TAG_ACCOUNT_V3;
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
@@ -236,6 +236,6 @@ impl<'a> State<'a> {
 
     #[must_use]
     fn account_exists(program_id: &Pubkey, info: &AccountInfo) -> bool {
-        info.owner == program_id && !info.data_is_empty() && info.data.borrow()[0] != TAG_EMPTY
+        info.owner == program_id && !info.data_is_empty() && info.data.borrow()[0] == TAG_ACCOUNT_V3
     }
 }
