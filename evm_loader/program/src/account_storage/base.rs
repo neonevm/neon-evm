@@ -81,7 +81,8 @@ impl<'a> ProgramAccountStorage<'a> {
         let (solana_address, bump_seed) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
             if !system_program::check_id(account.owner) &&
-                (account.data_is_empty() || account.data.borrow()[0] != TAG_EMPTY)
+                (account.owner != self.program_id() ||
+                !account.data_is_empty() && account.data.borrow()[0] != TAG_EMPTY)
             {
                 panic!("Empty ethereum account {} must belong to the system program or be uninitialized", address);
             }
