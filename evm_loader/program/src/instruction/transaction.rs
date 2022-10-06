@@ -38,7 +38,7 @@ pub fn do_begin<'a>(
 
     check_ethereum_transaction(account_storage, &caller, &trx)?;
     account_storage.check_for_blocked_accounts()?;
-    account_storage.block_accounts(true)?;
+    account_storage.block_accounts(true);
 
 
     let (results, gasometer) = {
@@ -193,7 +193,7 @@ fn finalize<'a>(
         )? == AccountsReadiness::Ready {
             accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
 
-            account_storage.block_accounts(false)?;
+            account_storage.block_accounts(false);
             storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
         }
     }

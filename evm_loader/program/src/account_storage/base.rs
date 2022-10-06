@@ -107,12 +107,10 @@ impl<'a> ProgramAccountStorage<'a> {
         self.ethereum_accounts.get_mut(address).unwrap() // mutable accounts always present
     }
 
-    pub fn block_accounts(&mut self, block: bool) -> Result<(), ProgramError> {
+    pub fn block_accounts(&mut self, block: bool) {
         for account in &mut self.ethereum_accounts.values_mut() {
             account.rw_blocked = block;
         }
-
-        Ok(())
     }
 
     pub fn check_for_blocked_accounts(&self) -> Result<(), ProgramError> {

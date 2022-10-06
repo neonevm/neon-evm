@@ -56,7 +56,7 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller);
     caller_account.trx_count += 1;
 
-    account_storage.block_accounts(false)?;
+    account_storage.block_accounts(false);
     accounts.storage.finalize(Deposit::Burn(accounts.incinerator))?;
 
     Ok(())
