@@ -25,6 +25,9 @@ jobs:
     needs:
       - prepare-env
     runs-on: ${{ needs.prepare-env.outputs.runner }}
+    env:
+      NETWORK: ${{ needs.prepare-env.outputs.network }}
+      RUNNER: ${{ needs.prepare-env.outputs.runner }}
     steps:
       - uses: actions/checkout@v3
         with:
