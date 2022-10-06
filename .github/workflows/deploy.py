@@ -43,7 +43,7 @@ def cli():
 @click.option('--github_sha')
 def build_docker_image(github_sha):
     solana_image = f'solanalabs/solana:{SOLANA_REVISION}'
-    docker_client.images.pull(solana_image)
+    docker_client.pull(solana_image)
     buildargs = {"REVISION": github_sha,
                  "SOLANA_IMAGE": solana_image,
                  "SOLANA_REVISION": SOLANA_REVISION}
@@ -70,13 +70,13 @@ def publish_image(branch, github_sha):
 
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
 
-    image = docker_client.images.get(f"{IMAGE_NAME}:{github_sha}")
+    image = docker_client.get_image(f"{IMAGE_NAME}:{github_sha}")
 
     image.tag(f"{IMAGE_NAME}:{github_sha}", tag)
-    docker_client.images.push(f"{IMAGE_NAME}:{tag}")
+    docker_client.push(f"{IMAGE_NAME}:{tag}")
 
     image.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
-    docker_client.images.push(f"{IMAGE_NAME}:{github_sha}")
+    docker_client.push(f"{IMAGE_NAME}:{github_sha}")
 
 
 @cli.command(name="run_tests")
@@ -97,8 +97,8 @@ def run_tests(github_sha):
 
     try:
         click.echo("start tests")
-        container = docker_client.containers.get("solana")
-        logs = container.exec_run(cmd="/opt/deploy-test.sh")
+        logs = docker_client.exec_create(
+            container="solana", cmd="/opt/deploy-test.sh")
         click.echo(logs)
     except:
         raise "Solana container is not run"
