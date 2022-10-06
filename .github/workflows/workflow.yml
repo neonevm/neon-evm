@@ -9,7 +9,7 @@ env:
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
 jobs:
-  prepare-env:
+  deploy-neon-evm:
     runs-on: ubuntu-latest
     steps:
       - name: Get branch name
@@ -19,43 +19,6 @@ jobs:
       - name: install python libs
         run: pip install docker==5.0.3
 
-      - name: Setup env
-        id: setup
-        run: |
-          # $1 - inputs
-          # $2 - env.VAR
-          function setVar {
-            if [ -z "$1" ]
-              then
-                RESULT="$2"
-              else
-                RESULT="$1"
-            fi
-            echo $RESULT
-          }
-
-          NETWORK=$( setVar "${{ github.event.inputs.network }}" "${{ env.NETWORK }}" )
-          RUNNER=$( setVar "${{ github.event.inputs.runner }}" "${{ env.RUNNER }}" )
-
-          echo "Network: ${NETWORK}"
-          echo "Runner: ${RUNNER}"
-          echo "Build url: ${{ env.BUILD_URL }}"
-
-          echo "::set-output name=network::${NETWORK}"
-          echo "::set-output name=runner::${RUNNER}"
-          echo "::set-output name=jobs::${JOBS_NUMBER}"
-    outputs:
-      network: ${{ steps.setup.outputs.network }}
-      runner: ${{ steps.setup.outputs.runner }}
-
-  publish-image:
-    needs:
-      - prepare-env
-    runs-on: ${{ needs.prepare-env.outputs.runner }}
-    env:
-      NETWORK: ${{ needs.prepare-env.outputs.network }}
-      RUNNER: ${{ needs.prepare-env.outputs.runner }}
-    steps:
       - uses: actions/checkout@v3
         with:
           submodules: "true"
@@ -65,17 +28,7 @@ jobs:
 
       - name: publish image
         run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
-    outputs:
-      network: ${{ steps.setup.outputs.network }}
-      runner: ${{ steps.setup.outputs.runner }}
-  run-tests:
-    needs:
-      - publish-image
-    runs-on: ${{ needs.publish-image.outputs.runner }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: "true"
+
       - name: run tests
         run: python ./.github/workflows/deploy.py run_tests --github_sha=${GITHUB_SHA}
 
