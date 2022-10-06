@@ -18,6 +18,9 @@ jobs:
 
       - name: install python libs
         run: pip install docker==5.0.3
+    outputs:
+      network: ${{ steps.setup.outputs.network }}
+      runner: ${{ steps.setup.outputs.runner }}
   publish-image:
     needs:
       - prepare-env
@@ -31,6 +34,9 @@ jobs:
 
       - name: publish image
         run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
+    outputs:
+      network: ${{ steps.setup.outputs.network }}
+      runner: ${{ steps.setup.outputs.runner }}
   run-tests:
     needs:
       - publish-image
