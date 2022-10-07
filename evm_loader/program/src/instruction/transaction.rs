@@ -67,7 +67,7 @@ pub fn do_begin<'a>(
         }
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
+    finalize(accounts, storage, account_storage, results, gasometer)
 }
 
 pub fn do_continue<'a>(
@@ -85,7 +85,7 @@ pub fn do_continue<'a>(
         execute_steps(executor, step_count, &mut storage)
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer.used_gas(), gasometer)
+    finalize(accounts, storage, account_storage, results, gasometer)
 }
 
 
@@ -144,33 +144,31 @@ fn finalize<'a>(
     accounts: Accounts<'a>,
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
-    results: Option<EvmResults>,
-    mut used_gas: U256,
+    mut results: Option<EvmResults>,
     mut gasometer: Gasometer,
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    let accounts_operations = match results {
-        None => vec![],
-        Some((_, _, ref actions)) => {
+    let mut accounts_operations = match &results {
+        Some((_, _, Some(actions))) => {
             let accounts_operations = account_storage.calc_accounts_operations(actions);
             gasometer.record_accounts_operations(&accounts_operations);
-            used_gas = gasometer.used_gas();
 
             accounts_operations
         },
+        _ => vec![],
     };
 
+    let mut used_gas = gasometer.used_gas();
     // The only place where checked math is required.
     // Saturating math should be used everywhere else for gas calculation.
     let total_used_gas = storage.gas_used.checked_add(used_gas);
 
     // Integer overflow or more than gas_limit. Consume remaining gas and revert transaction with Out of Gas
     if total_used_gas.is_none() || (total_used_gas > Some(storage.gas_limit)) {
-        let out_of_gas = Some((vec![], ExitError::OutOfGas.into(), None));
-        let remaining_gas = storage.gas_limit.saturating_sub(storage.gas_used);
-
-        return finalize(accounts, storage, account_storage, out_of_gas, remaining_gas, gasometer);
+        results = Some((vec![], ExitError::OutOfGas.into(), None));
+        accounts_operations = vec![];
+        used_gas = storage.gas_limit.saturating_sub(storage.gas_used);
     }
 
     let (results, accounts_operations) = match pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage) {

@@ -100,15 +100,14 @@ fn execute<'a>(
         executor.gasometer_mut().pad_evm_steps(steps_executed);
 
         let (actions, mut gasometer) = executor.into_state_actions_and_gasometer();
-        let apply = if exit_reason.is_succeed() {
-            Some(actions)
+        let (apply, accounts_operations) = if exit_reason.is_succeed() {
+            let accounts_operations = account_storage.calc_accounts_operations(&actions);
+            gasometer.record_accounts_operations(&accounts_operations);
+
+            (Some(actions), accounts_operations)
         } else {
-            None
+            (None, vec![])
         };
-
-        let accounts_operations = account_storage.calc_accounts_operations(&apply);
-
-        gasometer.record_accounts_operations(&accounts_operations);
 
         let used_gas = gasometer.used_gas();
         if used_gas > trx.gas_limit {

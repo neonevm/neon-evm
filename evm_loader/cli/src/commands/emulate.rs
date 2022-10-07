@@ -117,6 +117,7 @@ pub fn execute(
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
+            let actions = actions.expect("`actions` expected to be set here");
             let accounts_operations = storage.calc_accounts_operations(&actions);
             gasometer.record_accounts_operations_for_emulation(&accounts_operations);
 
@@ -127,7 +128,7 @@ pub fn execute(
             debug!("max_resize = {}, additional_iterations = {}", max_resize, additional_iterations);
             gasometer.record_additional_resize_iterations(additional_iterations);
 
-            storage.apply_actions(actions.unwrap());
+            storage.apply_actions(actions);
             storage.apply_accounts_operations(accounts_operations);
 
             debug!("Applies done, {} of gas used", gasometer.used_gas());
