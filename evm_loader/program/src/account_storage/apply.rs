@@ -97,7 +97,7 @@ impl<'a> ProgramAccountStorage<'a> {
                     storage.entry(address).or_default().push((key, value));
                 }
                 Action::EvmIncrementNonce { address } => {
-                    let account = self.ethereum_account_mut(&address, "EvmIncrementNonce");
+                    let account = self.ethereum_account_mut(&address);
                     if account.trx_count == u64::MAX {
                         return Err!(ProgramError::InvalidAccountData; "Account {} - nonce overflow", account.address);
                     }
