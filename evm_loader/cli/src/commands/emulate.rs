@@ -1,7 +1,6 @@
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason};
-use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::executor::Machine;
 
 use crate::{
@@ -14,7 +13,7 @@ use crate::{
 };
 
 use solana_sdk::pubkey::Pubkey;
-use evm_loader::account_storage::{AccountOperation, AccountsOperations, AccountStorage};
+use evm_loader::account_storage::AccountStorage;
 use crate::{errors};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -118,18 +117,14 @@ pub fn execute(
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
             let actions = actions.expect("`actions` expected to be set here");
+
+            storage.add_used_accounts(&actions);
+
             let accounts_operations = storage.calc_accounts_operations(&actions);
             gasometer.record_accounts_operations_for_emulation(&accounts_operations);
-
-            let max_resize = calc_max_resize(&accounts_operations);
-            let additional_iterations = (
-                (max_resize + MAX_PERMITTED_DATA_INCREASE - 1) / MAX_PERMITTED_DATA_INCREASE
-            ).saturating_sub(1);
-            debug!("max_resize = {}, additional_iterations = {}", max_resize, additional_iterations);
-            gasometer.record_additional_resize_iterations(additional_iterations);
-
-            storage.apply_actions(actions);
-            storage.apply_accounts_operations(accounts_operations);
+            let additional_resize_iterations = storage.apply_accounts_operations(accounts_operations);
+            debug!("additional_resize_iterations = {}", additional_resize_iterations);
+            gasometer.record_additional_resize_iterations(additional_resize_iterations);
 
             debug!("Applies done, {} of gas used", gasometer.used_gas());
             "succeed".to_string()
@@ -173,16 +168,4 @@ pub fn execute(
     println!("{}", js);
 
     Ok(())
-}
-
-fn calc_max_resize(accounts_operations: &AccountsOperations) -> usize {
-    let mut max_resize = 0;
-    for (_address, operation) in accounts_operations {
-        let resize = match operation {
-            AccountOperation::Create { space } => *space,
-            AccountOperation::Resize { from, to } => to.saturating_sub(*from),
-        };
-        max_resize = max_resize.max(resize);
-    }
-    max_resize
 }

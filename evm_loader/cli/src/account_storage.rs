@@ -175,41 +175,41 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn apply_actions(&self, actions: Vec<Action>) {
+    pub fn add_used_accounts(&self, actions: &Vec<Action>) {
         for action in actions {
             #[allow(clippy::match_same_arms)]
             match action {
                 Action::NeonTransfer { source, target, .. } => {
-                    self.add_ethereum_account(&source, true);
-                    self.add_ethereum_account(&target, true);
+                    self.add_ethereum_account(source, true);
+                    self.add_ethereum_account(target, true);
                 },
                 Action::NeonWithdraw { source, .. } => {
-                    self.add_ethereum_account(&source, true);
+                    self.add_ethereum_account(source, true);
                 },
                 Action::EvmLog { .. } => {},
                 Action::EvmSetStorage { address, key, .. } => {
-                    if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
-                        self.add_ethereum_account(&address, true);
+                    if key < &U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
+                        self.add_ethereum_account(address, true);
                     } else {
-                        let index = key & !U256::from(0xFF);
+                        let index = *key & !U256::from(0xFF);
 
-                        let (storage_account, _) = self.get_storage_address(&address, &index);
+                        let (storage_account, _) = self.get_storage_address(address, &index);
                         self.add_solana_account(storage_account, true);
                     }
                 },
                 Action::EvmIncrementNonce { address } => {
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 },
                 Action::EvmSetCode { address, .. } => {
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 },
                 Action::EvmSelfDestruct { address } => {
-                    self.add_ethereum_account(&address, true);
+                    self.add_ethereum_account(address, true);
                 },
                 Action::ExternalInstruction { program_id, accounts, .. } => {
-                    self.add_solana_account(program_id, false);
+                    self.add_solana_account(*program_id, false);
 
-                    for account in &accounts {
+                    for account in accounts {
                         self.add_solana_account(account.key, account.is_writable);
                     }
                 }
@@ -217,8 +217,10 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn apply_accounts_operations(&self, operations: AccountsOperations) {
+    #[must_use]
+    pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> usize {
         let mut accounts = self.accounts.borrow_mut();
+        let mut max_additional_resize_steps = 0;
         for (address, operation) in operations {
             let new_size = match operation {
                 AccountOperation::Create { space } => space,
@@ -226,14 +228,14 @@ impl<'a> EmulatorAccountStorage<'a> {
             };
             accounts.entry(address).and_modify(|a| {
                 a.size = new_size;
-                a.additional_resize_steps = a.additional_resize_steps.max(
-                    new_size
-                        .saturating_sub(a.size_current)
-                        .saturating_sub(1)
-                        / MAX_PERMITTED_DATA_INCREASE,
-                );
+                a.additional_resize_steps = new_size
+                    .saturating_sub(a.size_current)
+                    .saturating_sub(1)
+                    / MAX_PERMITTED_DATA_INCREASE;
+                max_additional_resize_steps = max_additional_resize_steps.max(a.additional_resize_steps);
             });
         }
+        max_additional_resize_steps
     }
 
     fn ethereum_account_map_or<F, R>(&self, address: &H160, default: R, f: F) -> R
