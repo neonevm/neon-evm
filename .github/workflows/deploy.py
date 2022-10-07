@@ -70,12 +70,10 @@ def publish_image(branch, github_sha):
 
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
 
-    image = docker_client.get_image(f"{IMAGE_NAME}:{github_sha}")
-
-    image.tag(f"{IMAGE_NAME}:{github_sha}", tag)
+    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", tag)
     docker_client.push(f"{IMAGE_NAME}:{tag}")
 
-    image.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
+    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
     docker_client.push(f"{IMAGE_NAME}:{github_sha}")
 
 
@@ -110,17 +108,18 @@ def run_tests(github_sha):
 @click.option('--token')
 @click.option('--is_draft')
 def trigger_proxy_action(branch, github_sha, token, is_draft):
+
+    if branch == "develop" and not is_draft:
+        full_test_suite = True
+    else:
+        full_test_suite = False
+
     proxy_endpoint = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
     proxy_endpoint = "https://api.github.com/repos/kristinaNikolaeva/playwright_autotests"
     proxy_branches_obj = requests.get(f"{proxy_endpoint}/branches").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
     if branch not in proxy_branches:
         branch = 'develop'
-
-    if branch == "develop" and not is_draft:
-        full_test_suite = True
-    else:
-        full_test_suite = False
 
     data = {"ref": f"refs/heads/{branch}",
             "inputs": {"full_test_suite": full_test_suite}}
