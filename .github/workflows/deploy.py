@@ -118,11 +118,14 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
     proxy_endpoint = "https://api.github.com/repos/kristinaNikolaeva/playwright_autotests"
     proxy_branches_obj = requests.get(f"{proxy_endpoint}/branches").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
-    if branch not in proxy_branches:
-        branch = 'develop'
 
-    data = {"ref": f"refs/heads/{branch}",
-            "inputs": {"full_test_suite": full_test_suite}}
+    proxy_branch = branch
+    if proxy_branch not in proxy_branches:
+        proxy_branch = 'develop'
+
+    data = {"ref": f"refs/heads/{proxy_branch}",
+            "inputs": {"full_test_suite": full_test_suite},
+            "neon_evm_commit": github_sha, "neon_evm_branch": branch}
     headers = {'Authorization': f'Bearer {token}',
                'Content-Type': "application/json"}
     response = requests.post(
