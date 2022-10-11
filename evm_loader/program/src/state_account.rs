@@ -13,6 +13,7 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
+use std::collections::HashMap;
 use crate::account::TAG_ACCOUNT_V3;
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
@@ -22,6 +23,12 @@ pub enum Deposit<'a> {
     Burn(Incinerator<'a>),
 }
 
+pub struct BlockedAccountMeta {
+    pub exists: bool,
+    pub is_writable: bool,
+}
+
+pub type BlockedAccounts = HashMap<Pubkey, BlockedAccountMeta>;
 
 impl <'a> FinalizedState<'a> {
     #[must_use]
@@ -75,7 +82,7 @@ impl<'a> State<'a> {
         let mut storage = State::init(info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
-        storage.write_accounts(program_id, accounts.remaining_accounts)?;
+        storage.write_blocked_accounts(program_id, accounts.remaining_accounts)?;
         Ok(storage)
     }
 
@@ -83,8 +90,9 @@ impl<'a> State<'a> {
         program_id: &Pubkey,
         info: &'a AccountInfo<'a>,
         operator: &Operator,
-        accounts: &[AccountInfo],
-    ) -> Result<Self, ProgramError> {
+        remaining_accounts: &[AccountInfo],
+        is_cancelling: bool,
+    ) -> Result<(Self, BlockedAccounts), ProgramError> {
         let account_tag = crate::account::tag(program_id, info)?;
         if account_tag == FinalizedState::TAG {
             return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
@@ -94,7 +102,7 @@ impl<'a> State<'a> {
         }
 
         let mut storage = State::from_account(program_id, info)?;
-        storage.check_accounts(program_id, accounts)?;
+        let blocked_accounts = storage.check_blocked_accounts(program_id, remaining_accounts, is_cancelling)?;
 
         let clock = Clock::get()?;
         if (*operator.key != storage.operator) && ((clock.slot - storage.slot) <= OPERATOR_PRIORITY_SLOTS) {
@@ -106,7 +114,7 @@ impl<'a> State<'a> {
             storage.slot = clock.slot;
         }
 
-        Ok(storage)
+        Ok((storage, blocked_accounts))
     }
 
     pub fn finalize(self, deposit: Deposit<'a>) -> Result<FinalizedState<'a>, ProgramError> {
@@ -143,8 +151,8 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn accounts(&self) -> Result<Vec<(bool, bool, Pubkey)>, ProgramError> {
-        let (begin, end) = self.accounts_region();
+    pub fn blocked_accounts(&self) -> Result<BlockedAccounts, ProgramError> {
+        let (begin, end) = self.blocked_accounts_region();
 
         let account_data = self.info.try_borrow_data()?;
         if account_data.len() < end {
@@ -155,16 +163,22 @@ impl<'a> State<'a> {
         let chunks = keys_storage.chunks_exact(ACCOUNT_CHUNK_LEN);
         let accounts = chunks
             .map(|c| c.split_at(2))
-            .map(|(meta, key)| (meta[0] > 0, meta[1] > 0, Pubkey::new(key)))
+            .map(|(meta, key)| (
+                Pubkey::new(key),
+                BlockedAccountMeta {
+                    exists: meta[1] != 0,
+                    is_writable: meta[0] != 0,
+                },
+            ))
             .collect();
 
         Ok(accounts)
     }
 
-    fn write_accounts(&mut self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    fn write_blocked_accounts(&mut self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
         assert_eq!(self.accounts_len, accounts.len()); // should be always true
 
-        let (begin, end) = self.accounts_region();
+        let (begin, end) = self.blocked_accounts_region();
 
         let mut account_data = self.info.try_borrow_mut_data()?;
         if account_data.len() < end {
@@ -182,22 +196,26 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    fn check_accounts(&self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
-        let blocked_accounts = self.accounts()?;
-        if blocked_accounts.len() != accounts.len() {
+    fn check_blocked_accounts(
+        &self,
+        program_id: &Pubkey,
+        remaining_accounts: &[AccountInfo],
+        is_cancelling: bool,
+    ) -> Result<BlockedAccounts, ProgramError> {
+        let blocked_accounts = self.blocked_accounts()?;
+        if blocked_accounts.len() != remaining_accounts.len() {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
         }
 
-        for ((writable, exists, key), info) in blocked_accounts.into_iter().zip(accounts) {
-            if key != *info.key {
-                return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", key, info.key);
+        for info in remaining_accounts {
+            let blocked_account = blocked_accounts.get(info.key)
+                .ok_or_else(|| E!(ProgramError::InvalidAccountData; "Account {} not found in the blocked accounts list", info.key))?;
+
+            if blocked_account.is_writable != info.is_writable {
+                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, blocked_account.is_writable);
             }
 
-            if writable != info.is_writable {
-                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, writable);
-            }
-
-            if !exists && Self::account_exists(program_id, info) {
+            if !is_cancelling && !blocked_account.exists && Self::account_exists(program_id, info) {
                 return Err!(
                     ProgramError::AccountAlreadyInitialized;
                     "Blocked nonexistent account {} was created/initialized outside current transaction. \
@@ -207,12 +225,12 @@ impl<'a> State<'a> {
             }
         }
 
-        Ok(())
+        Ok(blocked_accounts)
     }
 
     #[must_use]
     pub fn evm_state_data(&self) -> Ref<[u8]> {
-        let (_, accounts_region_end) = self.accounts_region();
+        let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow();
         Ref::map(data, |d| &d[accounts_region_end..])
@@ -220,14 +238,14 @@ impl<'a> State<'a> {
 
     #[must_use]
     pub fn evm_state_mut_data(&mut self) -> RefMut<[u8]> {
-        let (_, accounts_region_end) = self.accounts_region();
+        let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow_mut();
         RefMut::map(data, |d| &mut d[accounts_region_end..])
     }
 
     #[must_use]
-    fn accounts_region(&self) -> (usize, usize) {
+    fn blocked_accounts_region(&self) -> (usize, usize) {
         let begin = Self::SIZE;
         let end = begin + self.accounts_len * ACCOUNT_CHUNK_LEN;
 

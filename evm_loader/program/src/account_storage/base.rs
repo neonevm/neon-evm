@@ -10,6 +10,7 @@ use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
 use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
+use crate::state_account::BlockedAccounts;
 
 
 impl<'a> ProgramAccountStorage<'a> {
@@ -51,7 +52,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
 
-        Ok(Self{
+        Ok(Self {
             program_id,
             operator: operator.key,
             clock: Clock::get()?,
@@ -110,6 +111,17 @@ impl<'a> ProgramAccountStorage<'a> {
     pub fn block_accounts(&mut self, block: bool) {
         for account in &mut self.ethereum_accounts.values_mut() {
             account.rw_blocked = block;
+        }
+    }
+
+    pub fn unblock_accounts(&mut self, blocked_accounts: &BlockedAccounts) {
+        for account in &mut self.ethereum_accounts.values_mut() {
+            if blocked_accounts.get(account.info.key)
+                .filter(|blocked_account| blocked_account.exists)
+                .is_some()
+            {
+                account.rw_blocked = false;
+            }
         }
     }
 

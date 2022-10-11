@@ -75,7 +75,13 @@ pub fn execute<'a>(
             do_begin(step_count, accounts, storage, account_storage, trx, caller, alt_cost)
         }
         State::TAG => {
-            let storage = State::restore(program_id, holder_or_storage_info, &accounts.operator, accounts.remaining_accounts)?;
+            let (storage, _blocked_accounts) = State::restore(
+                program_id,
+                holder_or_storage_info,
+                &accounts.operator,
+                accounts.remaining_accounts,
+                false,
+            )?;
 
             solana_program::log::sol_log_data(&[b"HASH", &storage.transaction_hash]);
 

@@ -5,7 +5,7 @@ use solana_program::{
     pubkey::Pubkey,
 };
 use crate::account_storage::ProgramAccountStorage;
-use crate::state_account::Deposit;
+use crate::state_account::{BlockedAccounts, Deposit};
 
 struct Accounts<'a> {
     storage: State<'a>,
@@ -22,7 +22,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     let incinerator = Incinerator::from_account(&accounts[2])?;
     let remaining_accounts = &accounts[3..];
 
-    let storage = State::restore(program_id, storage_info, &operator, remaining_accounts)?;
+    let (storage, blocked_accounts) = State::restore(program_id, storage_info, &operator, remaining_accounts, true)?;
 
     let accounts = Accounts { storage, operator, incinerator, remaining_accounts };
     let transaction_hash = array_ref![instruction, 0, 32];
@@ -30,7 +30,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
     solana_program::log::sol_log_data(&[b"HASH", transaction_hash]);
 
     validate(&accounts, transaction_hash)?;
-    execute(program_id, accounts)
+    execute(program_id, accounts, &blocked_accounts)
 }
 
 fn validate(accounts: &Accounts, transaction_hash: &[u8; 32]) -> ProgramResult {
@@ -43,7 +43,11 @@ fn validate(accounts: &Accounts, transaction_hash: &[u8; 32]) -> ProgramResult {
     Ok(())
 }
 
-fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult {
+fn execute<'a>(
+    program_id: &'a Pubkey,
+    accounts: Accounts<'a>,
+    blocked_accounts: &BlockedAccounts,
+) -> ProgramResult {
     let used_gas = accounts.storage.gas_used;
     solana_program::log::sol_log_data(&[b"CL_TX_GAS", used_gas.as_u64().to_le_bytes().as_slice()]);
 
@@ -56,7 +60,7 @@ fn execute<'a>(program_id: &'a Pubkey, accounts: Accounts<'a>) -> ProgramResult 
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller);
     caller_account.trx_count += 1;
 
-    account_storage.block_accounts(false);
+    account_storage.unblock_accounts(blocked_accounts);
     accounts.storage.finalize(Deposit::Burn(accounts.incinerator))?;
 
     Ok(())
