@@ -1,7 +1,6 @@
 ARG SOLANA_IMAGE
 # Install BPF SDK
 FROM solanalabs/rust:1.64.0 AS builder
-RUN rustup component add clippy
 WORKDIR /opt
 ARG SOLANA_REVISION
 RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
