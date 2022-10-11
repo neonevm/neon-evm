@@ -1,6 +1,7 @@
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason};
+use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::executor::Machine;
 
 use crate::{
@@ -13,6 +14,7 @@ use crate::{
 };
 
 use solana_sdk::pubkey::Pubkey;
+use evm_loader::account_storage::{AccountOperation, AccountsOperations, AccountStorage};
 use crate::{errors};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -50,7 +52,7 @@ pub fn execute(
         program_id
     };
 
-    let (exit_reason, result, actions, steps_executed, used_gas) = {
+    let (exit_reason, result, actions, steps_executed, mut gasometer) = {
         let gas_limit = U256::from(999_999_999_999_u64);
         let mut executor = Machine::new(caller_id, &storage)?;
         debug!("Executor initialized");
@@ -81,10 +83,13 @@ pub fn execute(
                     caller_id,
                     &hex::encode(data.clone().unwrap_or_default()),
                     value);
-                executor.create_begin(caller_id,
+                executor.create_begin(
+                    caller_id,
                     data.unwrap_or_default(),
                     value.unwrap_or_default(),
-                    gas_limit, U256::zero())?;
+                    gas_limit,
+                    U256::zero(),
+                )?;
                 match executor.execute_n_steps(max_steps_to_execute){
                     Ok(()) => {
                         info!("too many steps");
@@ -94,27 +99,38 @@ pub fn execute(
                 }
             }
         };
-        debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
-        debug!("{} steps executed", executor.get_steps_executed());
-        debug!("{} used gas", executor.used_gas());
-
         let steps_executed = executor.get_steps_executed();
-        let used_gas = executor.used_gas();
-        let actions = executor.into_state_actions();
+        debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
+        debug!("{} steps executed", steps_executed);
+        debug!("{} used gas by executor", executor.used_gas());
+
         if exit_reason.is_succeed() {
             debug!("Succeed execution");
-            (exit_reason, result, Some(actions), steps_executed, used_gas)
+            let (actions, gasometer) = executor.into_state_actions_and_gasometer();
+            (exit_reason, result, Some(actions), steps_executed, gasometer)
         } else {
-            (exit_reason, result, None, steps_executed, used_gas)
+            let gasometer = executor.take_gasometer();
+            (exit_reason, result, None, steps_executed, gasometer)
         }
     };
 
     debug!("Call done");
     let status = match exit_reason {
         ExitReason::Succeed(_) => {
-            storage.apply_actions(actions.unwrap());
+            let accounts_operations = storage.calc_accounts_operations(&actions);
+            gasometer.record_accounts_operations_for_emulation(&accounts_operations);
 
-            debug!("Applies done");
+            let max_resize = calc_max_resize(&accounts_operations);
+            let additional_iterations = (
+                (max_resize + MAX_PERMITTED_DATA_INCREASE - 1) / MAX_PERMITTED_DATA_INCREASE
+            ).saturating_sub(1);
+            debug!("max_resize = {}, additional_iterations = {}", max_resize, additional_iterations);
+            gasometer.record_additional_resize_iterations(additional_iterations);
+
+            storage.apply_actions(actions.unwrap());
+            storage.apply_accounts_operations(accounts_operations);
+
+            debug!("Applies done, {} of gas used", gasometer.used_gas());
             "succeed".to_string()
         }
         ExitReason::Error(_) => "error".to_string(),
@@ -150,7 +166,7 @@ pub fn execute(
         "exit_status": status,
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,
-        "used_gas": used_gas.as_u64(),
+        "used_gas": gasometer.used_gas().as_u64(),
     });
 
     println!("{}", js);
@@ -158,3 +174,14 @@ pub fn execute(
     Ok(())
 }
 
+fn calc_max_resize(accounts_operations: &AccountsOperations) -> usize {
+    let mut max_resize = 0;
+    for (_address, operation) in accounts_operations {
+        let resize = match operation {
+            AccountOperation::Create { space } => *space,
+            AccountOperation::Resize { from, to } => to.saturating_sub(*from),
+        };
+        max_resize = max_resize.max(resize);
+    }
+    max_resize
+}

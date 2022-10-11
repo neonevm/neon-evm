@@ -13,7 +13,7 @@ from ..solana_utils import EVM_LOADER, solana_client, \
     send_transaction, create_account_with_seed, get_transaction_count, EvmLoader, \
     wait_confirm_transaction
 from .storage import create_holder, create_holder_account
-from .instructions import TransactionWithComputeBudget, make_WriteHolder, make_CreateAccountV02, make_ExecuteTrxFromAccountDataIterativeOrContinue
+from .instructions import TransactionWithComputeBudget, make_WriteHolder, make_ExecuteTrxFromAccountDataIterativeOrContinue
 from ..conftest import Caller, TreasuryPool
 from .ethereum import create_contract_address, Contract
 
@@ -53,19 +53,7 @@ def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pa
         offset += len(part)
     for rcpt in receipts:
         wait_confirm_transaction(solana_client, rcpt)
-    return offset
-
-
-def create_contract_accounts(seed: str, code_size: int, contract: Contract, operator: Keypair):
-    print("Creating contract accounts")
-    trx = Transaction()
-    trx.add(
-        create_account_with_seed(operator.public_key, operator.public_key, seed, 10 ** 9,
-                                 code_size, PublicKey(EVM_LOADER)))
-
-    trx.add(make_CreateAccountV02(operator, contract.solana_address, contract.eth_address, contract.nonce, contract.code_solana_address))
-    receipt = send_transaction(solana_client, trx, operator)["result"]
-    return receipt
+    return len(contract_code)
 
 
 def deploy_contract_step(
@@ -82,7 +70,7 @@ def deploy_contract_step(
 
     trx.add(make_ExecuteTrxFromAccountDataIterativeOrContinue(
         operator, evm_loader, holder_address, treasury.account, treasury.buffer, step_count,
-        [contract.solana_address, contract.code_solana_address, user.solana_account_address]
+        [contract.solana_address, user.solana_account_address]
     ))
     receipt = send_transaction(solana_client, trx, operator)["result"]
     return receipt
@@ -96,7 +84,6 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
     size = write_transaction_to_holder_account(user, contract_path, holder_acc, operator)
-    create_contract_accounts(contract.seed, size + 1 + 32 + 4 + 2048, contract, operator)
 
     contract_deployed = False
     while not contract_deployed:

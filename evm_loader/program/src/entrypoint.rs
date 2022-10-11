@@ -42,9 +42,6 @@ fn process_instruction<'a>(
         .ok_or_else(|| E!(ProgramError::InvalidInstructionData; "Invalid instruction - {:?}", instruction_data))?;
 
     let result = match EvmInstruction::parse(tag)? {
-        EvmInstruction::CreateAccountV02 => {
-            instruction::account_create::process(program_id, accounts, instruction)
-        }
         EvmInstruction::HolderCreate => {
             instruction::account_holder_create::process(program_id, accounts, instruction)
         }
@@ -54,23 +51,8 @@ fn process_instruction<'a>(
         EvmInstruction::HolderWrite => {
             instruction::account_holder_write::process(program_id, accounts, instruction)
         }
-        EvmInstruction::ResizeContractAccount => {
-            instruction::account_resize::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::ERC20CreateTokenAccount => {
-            instruction::erc20_account_create::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::Deposit => {
+        EvmInstruction::DepositV03 => {
             instruction::neon_tokens_deposit::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::Deposit2 => {
-            instruction::neon_tokens_deposit_2::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::MigrateAccount => {
-            instruction::migrate_account::process(program_id, accounts, instruction)
-        }
-        EvmInstruction::UpdateValidsTable => {
-            instruction::update_valids_table::process(program_id, accounts, instruction)
         }
         EvmInstruction::Cancel => {
             instruction::transaction_cancel::process(program_id, accounts, instruction)
@@ -80,13 +62,16 @@ fn process_instruction<'a>(
         }
         EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::TransactionStepFromAccount => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
-        },
+        }
         EvmInstruction::TransactionStepFromAccountNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
-        },
+        }
+        EvmInstruction::CreateAccountV03 => {
+            instruction::account_create::process(program_id, accounts, instruction)
+        }
         EvmInstruction::CollectTreasure => {
             instruction::collect_treasury::process(program_id, accounts, instruction)
         }

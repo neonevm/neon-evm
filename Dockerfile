@@ -15,7 +15,6 @@ ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/b
 FROM builder AS evm-loader-builder
 COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
-RUN cd program && /opt/evm_loader/ci_checks.sh
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
 RUN cargo +nightly clippy && \
@@ -53,9 +52,8 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -y install vim less openssl ca-certificates curl python3 python3-pip parallel && \
     rm -rf /var/lib/apt/lists/*
 
-COPY evm_loader/tests/requirements.txt solana-py.patch /tmp/
+COPY evm_loader/tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
-#RUN cd /usr/local/lib/python3.8/dist-packages/ && patch -p0 </tmp/solana-py.patch
 
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt update & apt install -y nodejs

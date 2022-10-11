@@ -7,11 +7,10 @@ use solana_program::{
     program::{invoke, invoke_signed}, system_instruction,
     rent::Rent, sysvar::Sysvar
 };
-use super::{Operator, EthereumAccount, sysvar, token};
+use super::{Operator};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
 
-use crate::account::ACCOUNT_SEED_VERSION;
 
 
 pub struct Neon<'a> (&'a AccountInfo<'a>);
@@ -225,118 +224,6 @@ impl<'a> Token<'a> {
         }
 
         Ok(Self ( info ))
-    }
-
-    pub fn initialize_account(
-        &self,
-        account: &AccountInfo<'a>,
-        mint: &token::Mint<'a>,
-        owner: &EthereumAccount<'a>,
-        rent: &sysvar::Rent<'a>,
-    ) -> Result<(), ProgramError> {
-        let instruction = spl_token::instruction::initialize_account(
-            &spl_token::id(),
-            account.key,
-            mint.info.key,
-            owner.info.key
-        )?;
-        let accounts = &[
-            account.clone(),
-            mint.info.clone(),
-            owner.info.clone(),
-            self.0.clone(),
-            rent.info.clone(),
-        ];
-
-        invoke(&instruction, accounts)
-    }
-
-    pub fn transfer(
-        &self,
-        authority: &EthereumAccount<'a>,
-        source: &AccountInfo<'a>,
-        target: &AccountInfo<'a>,
-        value: u64
-    ) -> Result<(), ProgramError> {
-        let instruction = spl_token::instruction::transfer(
-            &spl_token::id(),
-            source.key,
-            target.key,
-            authority.info.key,
-            &[],
-            value
-        )?;
-        let accounts = &[
-            source.clone(),
-            target.clone(),
-            authority.info.clone(),
-            self.0.clone(),
-        ];
-        let seeds: &[&[u8]] = &[
-            &[ACCOUNT_SEED_VERSION],
-            authority.address.as_bytes(),
-            &[authority.bump_seed]
-        ];
-
-        invoke_signed(&instruction, accounts, &[seeds])
-    }
-
-    pub fn approve(
-        &self,
-        authority: &EthereumAccount<'a>,
-        source: &AccountInfo<'a>,
-        delegate: &AccountInfo<'a>,
-        value: u64
-    ) -> Result<(), ProgramError> {
-        let instruction = spl_token::instruction::approve(
-            &spl_token::id(),
-            source.key,
-            delegate.key,
-            authority.info.key,
-            &[],
-            value
-        )?;
-        let accounts = &[
-            source.clone(),
-            delegate.clone(),
-            authority.info.clone(),
-            self.0.clone(),
-        ];
-        let seeds: &[&[u8]] = &[
-            &[ACCOUNT_SEED_VERSION],
-            authority.address.as_bytes(),
-            &[authority.bump_seed]
-        ];
-
-        invoke_signed(&instruction, accounts, &[seeds])
-    }
-
-    pub fn close_account(
-        &self,
-        authority: &EthereumAccount<'a>,
-        account: &AccountInfo<'a>,
-        destination: &AccountInfo<'a>,
-    ) -> Result<(), ProgramError> {
-        let instruction = spl_token::instruction::close_account(
-            &spl_token::id(),
-            account.key,
-            destination.key,
-            authority.info.key,
-            &[]
-        )?;
-        let accounts = &[
-            destination.clone(),
-            account.clone(),
-            authority.info.clone(),
-            self.0.clone(),
-        ];
-        let seeds: &[&[u8]] = &[
-            &[ACCOUNT_SEED_VERSION],
-            authority.address.as_bytes(),
-            &[authority.bump_seed]
-        ];
-
-        invoke_signed(&instruction, accounts, &[seeds])
     }
 }
 

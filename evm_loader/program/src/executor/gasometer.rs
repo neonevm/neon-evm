@@ -6,18 +6,18 @@ use solana_program::{
     rent::Rent,
     program_error::ProgramError,
 };
+use solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use crate::{
-    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT},
+    config::{HOLDER_MSG_SIZE, PAYMENT_TO_TREASURE, STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
     account_storage::AccountStorage,
     transaction::Transaction, 
-    account::{EthereumAccount}
 };
+use crate::account_storage::{AccountOperation, AccountsOperations};
 
 use super::ExecutorState;
 
 pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 
-const CREATE_ACCOUNT_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const WRITE_TO_HOLDER_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const CANCEL_TRX_COST: u64 = LAMPORTS_PER_SIGNATURE;
 const LAST_ITERATION_COST: u64 = LAMPORTS_PER_SIGNATURE;
@@ -90,7 +90,7 @@ impl Gasometer {
     where
         B: AccountStorage
     {
-        if key < U256::from(STORAGE_ENTIRIES_IN_CONTRACT_ACCOUNT) {
+        if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
             return;
         }
 
@@ -103,53 +103,58 @@ impl Gasometer {
         }
 
         let data_len = 1/*tag*/ + 1/*subindex*/ + 32/*value*/;
-        let rent = self.rent.minimum_balance(data_len);
-
-        self.gas = self.gas.saturating_add(rent);
+        self.record_account_rent(data_len);
     }
 
-    pub fn record_deploy<B>(&mut self, state: &ExecutorState<B>, address: H160)
-    where
-        B: AccountStorage
-    {
-        let (account_space, contract_space) = state.backend.solana_accounts_space(&address);
-        let account_rent = self.rent.minimum_balance(account_space);
-        let contract_rent = self.rent.minimum_balance(contract_space);
+    pub fn record_accounts_operations_for_emulation(
+        &mut self,
+        accounts_operations: &AccountsOperations,
+    ) {
+        for (_address, operation) in accounts_operations {
+            match operation {
+                AccountOperation::Create { space } => self.record_account_rent(*space),
 
-        self.gas = self.gas
-            .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST)
-            .saturating_add(contract_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST);
-    }
-
-    pub fn record_transfer<B>(&mut self, state: &ExecutorState<B>, target: H160, value: U256)
-    where
-        B: AccountStorage
-    {
-        if value.is_zero() {
-            return;
+                AccountOperation::Resize { from, to } => {
+                    self.record_account_rent_diff(*from, *to);
+                }
+            }
         }
-
-        let account_is_empty =
-            state.balance(&target).is_zero() &&
-            state.nonce(&target).is_zero();
-
-        if !account_is_empty {
-            return;
-        }
-
-        let account_rent = self.rent.minimum_balance(EthereumAccount::SIZE);
-
-        self.gas = self.gas
-            .saturating_add(account_rent)
-            .saturating_add(CREATE_ACCOUNT_TRX_COST);
     }
 
-    pub fn record_account_rent(&mut self, data_len: usize)
-    {
+    pub fn record_accounts_operations(&mut self, accounts_operations: &AccountsOperations) {
+        for (_address, operation) in accounts_operations {
+            match operation {
+                AccountOperation::Create { space } => self.record_account_rent(
+                    (*space).min(MAX_PERMITTED_DATA_INCREASE),
+                ),
+
+                AccountOperation::Resize { from, to } => {
+                    self.record_account_rent_diff(
+                        *from,
+                        (*to).min(from.saturating_add(MAX_PERMITTED_DATA_INCREASE)),
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn record_additional_resize_iterations(&mut self, iteration_count: usize) {
+        let cost = (PAYMENT_TO_TREASURE + LAMPORTS_PER_SIGNATURE).saturating_mul(
+            iteration_count as u64,
+        );
+        self.gas = self.gas.saturating_add(cost);
+    }
+
+    pub fn record_account_rent(&mut self, data_len: usize) {
         let account_rent = self.rent.minimum_balance(data_len);
         self.gas = self.gas.saturating_add(account_rent);
+    }
+
+    pub fn record_account_rent_diff(&mut self, data_len_old: usize, data_len_new: usize) {
+        assert!(data_len_new >= data_len_old);
+        let account_rent_old = self.rent.minimum_balance(data_len_old);
+        let account_rent_new = self.rent.minimum_balance(data_len_new);
+        self.gas = self.gas.saturating_add(account_rent_new.saturating_sub(account_rent_old));
     }
 
     pub fn record_lamports_used(&mut self, lamports: u64)
