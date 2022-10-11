@@ -16,7 +16,7 @@ COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo +nightly clippy && \
+RUN cargo clippy && \
     cargo build --release && \
     cargo build-sbf --arch bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-sbf --arch bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
