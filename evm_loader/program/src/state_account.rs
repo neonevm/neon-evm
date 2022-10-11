@@ -151,7 +151,7 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn blocked_accounts(&self) -> Result<BlockedAccounts, ProgramError> {
+    pub fn read_blocked_accounts(&self) -> Result<BlockedAccounts, ProgramError> {
         let (begin, end) = self.blocked_accounts_region();
 
         let account_data = self.info.try_borrow_data()?;
@@ -202,7 +202,7 @@ impl<'a> State<'a> {
         remaining_accounts: &[AccountInfo],
         is_cancelling: bool,
     ) -> Result<BlockedAccounts, ProgramError> {
-        let blocked_accounts = self.blocked_accounts()?;
+        let blocked_accounts = self.read_blocked_accounts()?;
         if blocked_accounts.len() != remaining_accounts.len() {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
         }
