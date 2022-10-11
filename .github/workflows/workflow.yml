@@ -33,7 +33,7 @@ jobs:
         run: python ./.github/workflows/deploy.py run_tests --github_sha=${GITHUB_SHA}
 
       - name: trigger proxy docker image
-        run: python ./.github/workflows/deploy.py trigger_proxy_action --github_sha=${GITHUB_SHA} --branch=${GITHUB_REF} --token=${{ github.token }}
+        run: python ./.github/workflows/deploy.py trigger_proxy_action --github_sha=${GITHUB_SHA} --branch=${GITHUB_REF} --token=${{secret.CI_TOKEN }}
 
       - name: send notification to slack
         if: ${{ failure() }}

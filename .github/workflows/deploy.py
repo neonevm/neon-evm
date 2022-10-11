@@ -95,8 +95,9 @@ def run_tests(github_sha):
 
     try:
         click.echo("start tests")
-        logs = docker_client.exec_create(
+        exec_id = docker_client.exec_create(
             container="solana", cmd="/opt/deploy-test.sh")
+        logs = docker_client.exec_start(exec_id['Id'])
         click.echo(logs)
     except:
         raise "Solana container is not run"
