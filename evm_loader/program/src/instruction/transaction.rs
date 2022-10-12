@@ -5,6 +5,7 @@ use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
+use crate::config::EVM_STEPS_MIN;
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -30,6 +31,10 @@ pub fn do_begin<'a>(
     caller: H160,
 ) -> ProgramResult {
     debug_print!("do_begin");
+
+    if (step_count < EVM_STEPS_MIN) && (trx.gas_price > U256::zero()) {
+        return Err!(ProgramError::InvalidArgument; "Step limit {step_count} below minimum {EVM_STEPS_MIN}");
+    }
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
@@ -61,6 +66,10 @@ pub fn do_continue<'a>(
     gasometer: Gasometer,
 ) -> ProgramResult {
     debug_print!("do_continue");
+
+    if (step_count < EVM_STEPS_MIN) && (storage.gas_price > U256::zero()) {
+        return Err!(ProgramError::InvalidArgument; "Step limit {step_count} below minimum {EVM_STEPS_MIN}");
+    }
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
