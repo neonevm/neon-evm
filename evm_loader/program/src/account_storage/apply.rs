@@ -24,7 +24,6 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> ProgramResult {
         let origin_balance = self.balance(&origin);
         if origin_balance < value {
-            self.transfer_gas_payment(origin, operator, origin_balance)?;
             return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds", origin);
         }
 
@@ -52,10 +51,10 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
         actions: Vec<Action>,
-        accounts_operations: AccountsOperations,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
+        let accounts_operations = self.calc_accounts_operations(&actions);
         if self.process_accounts_operations(
             system_program,
             neon_program,
@@ -103,7 +102,7 @@ impl<'a> ProgramAccountStorage<'a> {
 
                     self.delete_account(address)?;
                 },
-                Action::ExternalInstruction { program_id, instruction, accounts, seeds } => {
+                Action::ExternalInstruction { program_id, instruction, accounts, seeds, .. } => {
                     let seeds: Vec<&[u8]> = seeds.iter().map(|seed| &seed[..]).collect();
                     let accounts: Vec<_> = accounts.into_iter().map(AccountMeta::into_solana_meta).collect();
 
