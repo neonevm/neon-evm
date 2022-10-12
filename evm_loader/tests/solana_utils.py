@@ -201,14 +201,26 @@ class neon_cli:
             print(f"ERR: neon-cli error {err}")
             raise
 
-    def emulate(self, loader_id, arguments):
+    def emulate(self, loader_id, arguments, data=None):
         cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
                                                                                               loader_id,
                                                                                               SOLANA_URL,
                                                                                               arguments)
         print('cmd:', cmd)
+        print ("data:", data)
         try:
-            output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+            if data:
+                proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                             universal_newlines=True)
+            else:
+                proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                             universal_newlines=True)
+            if proc_result.stderr is not None:
+                print(proc_result.stderr)
+            output = proc_result.stdout
+            if not output:
+                proc_result.check_returncode()
+
             without_empty_lines = os.linesep.join([s for s in output.splitlines() if s])
             last_line = without_empty_lines.splitlines()[-1]
             return last_line
