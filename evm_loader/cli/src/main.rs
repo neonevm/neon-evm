@@ -448,7 +448,7 @@ fn main() {
                     Arg::with_name("value")
                         .value_name("VALUE")
                         .takes_value(true)
-                        .index(4)
+                        .index(3)
                         .required(false)
                         .validator(is_amount::<U256, _>)
                         .help("Transaction value")

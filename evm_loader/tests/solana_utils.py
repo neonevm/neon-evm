@@ -6,7 +6,7 @@ import math
 import time
 import pathlib
 from hashlib import sha256
-from typing import NamedTuple, Tuple, Union
+from typing import NamedTuple, Tuple, Union, List
 
 import rlp
 from base58 import b58encode
@@ -201,11 +201,19 @@ class neon_cli:
             print(f"ERR: neon-cli error {err}")
             raise
 
-    def emulate(self, loader_id, arguments, data=None):
-        cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
-                                                                                              loader_id,
-                                                                                              SOLANA_URL,
-                                                                                              arguments)
+    def emulate(self, loader_id, sender, contract, data):
+        # cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
+        #                                                                                       loader_id,
+        #                                                                                       SOLANA_URL,
+        #                                                                                       arguments)
+        cmd = ["neon-cli",
+               "--commitment=recent",
+               "--url", SOLANA_URL,
+               f"--evm_loader={loader_id}",
+               "emulate",
+               sender,
+               contract
+               ]
         print('cmd:', cmd)
         print ("data:", data)
         try:
