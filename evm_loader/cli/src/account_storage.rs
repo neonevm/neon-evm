@@ -191,7 +191,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                     self.add_ethereum_account(&source, true);
                 },
                 Action::EvmLog { .. } => {},
-                Action::EvmSetStorage { address, key, .. } => {
+                Action::EvmSetStorage { address, key, value } => {
                     if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
@@ -200,8 +200,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                         let (storage_account, _) = self.get_storage_address(&address, &index);
                         self.add_solana_account(storage_account, true);
 
-                        let cost = rent.minimum_balance(EthereumStorage::SIZE);
-                        gas = gas.saturating_add(cost);
+                        if self.storage(&address, &index).is_zero() {
+                            let cost = rent.minimum_balance(2 + std::mem::size_of_val(&value));
+                            gas = gas.saturating_add(cost);
+                        }
                     }
                 },
                 Action::EvmIncrementNonce { address } => {

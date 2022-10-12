@@ -1,7 +1,7 @@
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason};
-use evm_loader::{executor::Machine, config::EVM_STEPS_MIN};
+use evm_loader::{executor::{Machine, LAMPORTS_PER_SIGNATURE}, config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE}};
 
 use crate::{
     account_storage::{
@@ -108,9 +108,11 @@ pub fn execute(
 
     let accounts_operations = storage.calc_accounts_operations(&actions);
 
-    let steps_gas = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
+    let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
+    let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
     let actions_gas = storage.apply_actions(actions);
     let accounts_gas = storage.apply_accounts_operations(accounts_operations);
+    debug!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
     debug!("Call done");
     let status = match exit_reason {
