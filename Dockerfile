@@ -1,8 +1,6 @@
 ARG SOLANA_IMAGE
 # Install BPF SDK
-FROM solanalabs/rust:1.63.0 AS builder
-RUN rustup toolchain install nightly
-RUN rustup component add clippy --toolchain nightly
+FROM solanalabs/rust:1.64.0 AS builder
 WORKDIR /opt
 ARG SOLANA_REVISION
 RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
@@ -17,7 +15,7 @@ COPY ./evm_loader/ /opt/evm_loader/
 WORKDIR /opt/evm_loader
 ARG REVISION
 ENV NEON_REVISION=${REVISION}
-RUN cargo +nightly clippy && \
+RUN cargo clippy --release && \
     cargo build --release && \
     cargo build-sbf --arch bpf --features no-logs,devnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-devnet.so && \
     cargo build-sbf --arch bpf --features no-logs,testnet && cp target/deploy/evm_loader.so target/deploy/evm_loader-testnet.so && \
