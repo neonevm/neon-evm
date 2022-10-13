@@ -171,10 +171,10 @@ contract ERC20ForSpl {
     }
 
     function claim(bytes32 from, uint64 amount) external returns (bool) {
-        return this.claimTo(from, msg.sender, amount);
+        return claimTo(from, msg.sender, amount);
     }
 
-    function claimTo(bytes32 from, address to, uint64 amount) external returns (bool) {
+    function claimTo(bytes32 from, address to, uint64 amount) public returns (bool) {
         bytes32 toSolana = _solanaAccount(to);
 
         if (!_splToken.exists(toSolana)) {
