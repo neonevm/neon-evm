@@ -232,7 +232,9 @@ impl<'a> EmulatorAccountStorage<'a> {
                     .saturating_sub(a.size_current)
                     .saturating_sub(1)
                     / MAX_PERMITTED_DATA_INCREASE;
-                max_additional_resize_steps = max_additional_resize_steps.max(a.additional_resize_steps);
+                if max_additional_resize_steps < a.additional_resize_steps {
+                    max_additional_resize_steps = a.additional_resize_steps;
+                }
             });
         }
         max_additional_resize_steps
