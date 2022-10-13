@@ -1,5 +1,6 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
 use crate::error::EvmLoaderError;
+use crate::executor::Gasometer;
 use crate::transaction::{ Transaction, recover_caller_address};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
@@ -9,7 +10,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult,
     pubkey::Pubkey,
 };
-use crate::instruction::transaction::{Accounts, do_begin, do_continue, alt_cost};
+use crate::instruction::transaction::{Accounts, do_begin, do_continue};
 
 
 pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], instruction: &[u8]) -> ProgramResult {
@@ -17,7 +18,6 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
     let treasury_index = u32::from_le_bytes(*array_ref![instruction, 0, 4]);
     let step_count = u64::from(u32::from_le_bytes(*array_ref![instruction, 4, 4]));
-    let alt_gas_used = alt_cost(accounts.len() as u64);
 
     let holder_or_storage_info = &accounts[0];
 
@@ -27,7 +27,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         operator_ether_account: EthereumAccount::from_account(program_id, &accounts[3])?,
         system_program: program::System::from_account(&accounts[4])?,
         neon_program: program::Neon::from_account(program_id, &accounts[5])?,
-        remaining_accounts: &accounts[6..]
+        remaining_accounts: &accounts[6..],
+        all_accounts: accounts,
     };
 
     let mut account_storage = ProgramAccountStorage::new(
@@ -37,7 +38,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         accounts.remaining_accounts,
     )?;
 
-    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, None, alt_gas_used)
+    execute(program_id, holder_or_storage_info, accounts, &mut account_storage, step_count, None)
 }
 
 pub fn execute<'a>(
@@ -47,7 +48,6 @@ pub fn execute<'a>(
     account_storage: &mut ProgramAccountStorage<'a>,
     step_count: u64,
     gas_multiplier: Option<U256>,
-    alt_cost: u64,
 ) -> ProgramResult {
     match crate::account::tag(program_id, holder_or_storage_info)? {
         Holder::TAG => {
@@ -72,14 +72,23 @@ pub fn execute<'a>(
                 storage.gas_limit = storage.gas_limit.saturating_mul(gas_multiplier);
             }
 
-            do_begin(step_count, accounts, storage, account_storage, trx, caller, alt_cost)
+            let mut gasometer = Gasometer::new(None, &accounts.operator)?;
+            gasometer.record_solana_transaction_cost();
+            gasometer.record_address_lookup_table(accounts.all_accounts);
+            gasometer.record_iterative_overhead();
+            gasometer.record_write_to_holder(&trx);
+
+            do_begin(step_count, accounts, storage, account_storage, gasometer, trx, caller)
         }
         State::TAG => {
             let storage = State::restore(program_id, holder_or_storage_info, &accounts.operator, accounts.remaining_accounts)?;
 
             solana_program::log::sol_log_data(&[b"HASH", &storage.transaction_hash]);
 
-            do_continue(step_count, accounts, storage, account_storage)
+            let mut gasometer = Gasometer::new(Some(storage.gas_used), &accounts.operator)?;
+            gasometer.record_solana_transaction_cost();
+
+            do_continue(step_count, accounts, storage, account_storage, gasometer)
         }
         FinalizedState::TAG => {
             Err!(EvmLoaderError::StorageAccountFinalized.into(); "Transaction already finalized")

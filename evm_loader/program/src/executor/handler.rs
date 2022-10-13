@@ -5,7 +5,7 @@ use crate::{
     event, account_storage::AccountStorage, precompile::{call_precompile, is_precompile_address}
 };
 
-use super::{state::ExecutorState, gasometer::Gasometer};
+use super::{state::ExecutorState};
 
 
 pub struct CallInterrupt {
@@ -27,7 +27,6 @@ pub struct CreateInterrupt {
 /// Stack-based executor.
 pub struct Executor<'a, B: AccountStorage> {
     pub state: ExecutorState<'a, B>,
-    pub gasometer: Gasometer,
     pub origin: H160,
     pub gas_limit: U256,
     pub gas_price: U256,
@@ -164,7 +163,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
     }
 
     fn gas_left(&self) -> U256 {
-        self.gas_limit.saturating_sub(self.gasometer.used_gas_total())
+        self.gas_limit
     }
 
     fn gas_price(&self) -> U256 {
@@ -208,8 +207,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         if self.state.is_static_context() {
             return Err(ExitError::StaticModeViolation);
         }
-
-        self.gasometer.record_storage_write(&self.state, address, index, value);
 
         self.state.set_storage(address, index, value);
         Ok(())
@@ -315,7 +312,7 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             }
         }
 
-        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state, &mut self.gasometer);
+        let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
         if let Some(Capture::Exit(exit_value)) = precompile_result {
             return Capture::Exit(exit_value);
         }

@@ -155,12 +155,18 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.push(withdraw);
     }
 
-    pub fn queue_external_instruction(&mut self, instruction: Instruction, seeds: Vec<Vec<u8>>) {
+    pub fn queue_external_instruction(
+        &mut self,
+        instruction: Instruction,
+        seeds: Vec<Vec<u8>>,
+        allocate: usize
+    ) {
         let action = Action::ExternalInstruction {
             program_id: instruction.program_id,
             instruction: instruction.data,
             accounts: instruction.accounts.into_iter().map(AccountMeta::from_solana_meta).collect(),
-            seeds
+            seeds,
+            allocate
         };
         
         self.actions.push(action);

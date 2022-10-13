@@ -7,7 +7,7 @@ use spl_associated_token_account::get_associated_token_address;
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState, Gasometer}
+    executor::{ExecutorState}
 };
 
 
@@ -22,8 +22,7 @@ const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
 pub fn neon_token<B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
-    state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer
+    state: &mut ExecutorState<B>
 )
     -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
@@ -55,7 +54,7 @@ pub fn neon_token<B: AccountStorage>(
         let destination = Pubkey::new_from_array(*destination);
 
 
-        if withdraw(state, gasometer, source, destination, context.apparent_value).is_err() {
+        if withdraw(state, source, destination, context.apparent_value).is_err() {
             let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
             return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
         }
@@ -73,7 +72,6 @@ pub fn neon_token<B: AccountStorage>(
 
 fn withdraw<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     source: H160,
     target: Pubkey,
     value: U256
@@ -103,15 +101,13 @@ fn withdraw<B: AccountStorage>(
     if !spl_token::check_id(&account.owner) {
         use spl_associated_token_account::instruction::create_associated_token_account;
 
-        gasometer.record_account_rent(spl_token::state::Account::LEN);
-
         let create_associated = create_associated_token_account(
             state.backend.operator(),
             &target,
             state.backend.neon_token_mint(),
             &spl_token::ID
         );
-        state.queue_external_instruction(create_associated, vec![]);
+        state.queue_external_instruction(create_associated, vec![], spl_token::state::Account::LEN);
     }
 
 
@@ -129,7 +125,7 @@ fn withdraw<B: AccountStorage>(
         crate::config::token_mint::decimals()
     ).unwrap();
     let transfer_seeds = vec![ b"Deposit".to_vec(), vec![bump_seed] ];
-    state.queue_external_instruction(transfer, transfer_seeds);
+    state.queue_external_instruction(transfer, transfer_seeds, 0);
 
 
     state.withdraw(source, value);

@@ -1,13 +1,13 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury};
 use crate::transaction::{check_ethereum_transaction, Transaction, recover_caller_address};
-use crate::account_storage::{AccountsReadiness, AccountStorage, ProgramAccountStorage};
+use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
 use arrayref::{array_ref};
 use evm::{H160};
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use crate::executor::{Action, Machine};
+use crate::executor::{Machine, Gasometer};
 
 
 struct Accounts<'a> {
@@ -17,6 +17,7 @@ struct Accounts<'a> {
     system_program: program::System<'a>,
     neon_program: program::Neon<'a>,
     remaining_accounts: &'a [AccountInfo<'a>],
+    all_accounts: &'a [AccountInfo<'a>],
 }
 
 /// Execute Ethereum transaction in a single Solana transaction
@@ -34,7 +35,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         operator_ether_account: EthereumAccount::from_account(program_id, &accounts[2])?,
         system_program: program::System::from_account(&accounts[3])?,
         neon_program: program::Neon::from_account(program_id, &accounts[4])?,
-        remaining_accounts: &accounts[5..]
+        remaining_accounts: &accounts[5..],
+        all_accounts: accounts,
     };
 
     let trx = Transaction::from_rlp(messsage)?;
@@ -76,9 +78,13 @@ fn execute<'a>(
     trx: Transaction,
     caller_address: H160,
 ) -> ProgramResult {
+    let mut gasometer = Gasometer::new(None, &accounts.operator)?;
+    gasometer.record_solana_transaction_cost();
+    gasometer.record_address_lookup_table(accounts.all_accounts);
+
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (exit_reason, return_value, apply_state, accounts_operations, used_gas) = {
+    let (exit_reason, return_value, apply_state) = {
         let mut executor = Machine::new(caller_address, account_storage)?;
 
         executor.call_begin(
@@ -95,55 +101,16 @@ fn execute<'a>(
         )?;
 
         let (result, exit_reason) = executor.execute();
+        let actions = executor.into_state_actions();
 
-        let steps_executed = executor.get_steps_executed();
-        executor.gasometer_mut().pad_evm_steps(steps_executed);
-
-        let (actions, mut gasometer) = executor.into_state_actions_and_gasometer();
-        let apply = if exit_reason.is_succeed() {
-            Some(actions)
-        } else {
-            None
-        };
-
-        let accounts_operations = account_storage.calc_accounts_operations(&apply);
-
-        gasometer.record_accounts_operations(&accounts_operations);
-
-        let used_gas = gasometer.used_gas();
-        if used_gas > trx.gas_limit {
-            (evm::ExitError::OutOfGas.into(), vec![], None, vec![], trx.gas_limit)
-        } else {
-            (exit_reason, result, apply, accounts_operations, used_gas)
-        }
+        (exit_reason, result, actions)
     };
-
-    let gas_cost = used_gas.saturating_mul(trx.gas_price);
-    let payment_result = account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost);
-    let (exit_reason, return_value, apply_state, accounts_operations) =
-        match payment_result {
-            Ok(()) => {
-                (exit_reason, return_value, apply_state, accounts_operations)
-            },
-            Err(ProgramError::InsufficientFunds) => {
-                let exit_reason = evm::ExitError::OutOfFund.into();
-                let return_value = vec![];
-
-                (exit_reason, return_value, None, vec![])
-            },
-            Err(e) => return Err(e)
-        };
-
-    let apply_state = apply_state.unwrap_or_else(
-        || vec![Action::EvmIncrementNonce { address: caller_address }],
-    );
 
     let accounts_readiness = account_storage.apply_state_change(
         &accounts.neon_program,
         &accounts.system_program,
         &accounts.operator,
         apply_state,
-        accounts_operations,
     )?;
 
     assert_eq!(
@@ -153,6 +120,19 @@ fn execute<'a>(
             transactions for reallocation and cannot be performed in a single instruction. \
             That's why you have to use iterative transaction for the deployment.",
     );
+
+    gasometer.record_operator_expenses(&accounts.operator);
+    let used_gas = gasometer.used_gas();
+    let gas_limit = trx.gas_limit;
+
+    if used_gas > gas_limit {
+        return Err!(ProgramError::InvalidArgument; "Out of gas used - {used_gas}, limit - {gas_limit}")
+    }
+
+    solana_program::log::sol_log_data(&[b"IX_GAS", &used_gas.as_u64().to_le_bytes()]);
+
+    let gas_cost = used_gas.saturating_mul(trx.gas_price);
+    account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost)?;
 
     accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
     
