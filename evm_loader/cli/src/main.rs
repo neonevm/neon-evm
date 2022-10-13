@@ -292,27 +292,6 @@ fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
         .map_err(|e| e.to_string())
 }
 
-// Return hexdata for an argument
-fn hexdata_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<u8>> {
-    matches.value_of(name).and_then(|value| {
-        if value.to_lowercase() == "none" {
-            return None;
-        }
-        hex::decode(make_clean_hex(value)).ok()
-    })
-}
-
-// Return an error if string cannot be parsed as a hexdata
-fn is_valid_hexdata<T>(string: T) -> Result<(), String> where T: AsRef<str>,
-{
-    if string.as_ref().to_lowercase() == "none" {
-        return Ok(());
-    }
-
-    hex::decode(make_clean_hex(string.as_ref())).map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
 fn is_amount<T, U>(amount: U) -> Result<(), String>
     where
         T: std::str::FromStr,
@@ -325,6 +304,22 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
             "Unable to parse input amount as {}, provided: {}",
             std::any::type_name::<T>(), amount
         ))
+    }
+}
+
+fn read_stdin() -> Option<Vec<u8>>{
+    let mut data = String::new();
+
+    if let Ok(len) = std::io::stdin().read_line(&mut data){
+        if len == 0{
+            return None
+        }
+        let data = make_clean_hex(data.as_str());
+        let bin = hex::decode(data).unwrap();
+        Some(bin)
+    }
+    else{
+        None
     }
 }
 
@@ -450,19 +445,10 @@ fn main() {
                         .help("The contract that executes the transaction or 'deploy'")
                 )
                 .arg(
-                    Arg::with_name("data")
-                        .value_name("DATA")
-                        .takes_value(true)
-                        .index(3)
-                        .required(false)
-                        .validator(is_valid_hexdata)
-                        .help("Transaction data or 'None'")
-                )
-                .arg(
                     Arg::with_name("value")
                         .value_name("VALUE")
                         .takes_value(true)
-                        .index(4)
+                        .index(3)
                         .required(false)
                         .validator(is_amount::<U256, _>)
                         .help("Transaction value")
@@ -691,7 +677,7 @@ fn main() {
             ("emulate", Some(arg_matches)) => {
                 let contract = h160_or_deploy_of(arg_matches, "contract");
                 let sender = h160_of(arg_matches, "sender").unwrap();
-                let data = hexdata_of(arg_matches, "data");
+                let data = read_stdin();
                 let value = value_of(arg_matches, "value");
 
                 // Read ELF params only if token_mint or chain_id is not set.
