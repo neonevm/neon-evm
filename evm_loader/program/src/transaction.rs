@@ -1,4 +1,5 @@
-use bytes::BytesMut;
+use std::convert::TryInto;
+
 use evm::{H160, U256};
 use solana_program::{
     entrypoint::{ProgramResult},
@@ -97,20 +98,45 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
     let payload_info = transaction.payload_info()?;
     let (_, v_offset) = transaction.at_with_offset(6)?;
 
-    let list_len = if chain_id.is_some() { 9 } else { 6 };
+    let middle = &raw[payload_info.header_len..v_offset];
 
-    let buffer = BytesMut::with_capacity(raw.len());
+    let trailer = chain_id.map_or_else(
+        Vec::new,
+        |chain_id| {
+            let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
+            let mut buffer = [0_u8; 32];
+            chain_id.to_big_endian(&mut buffer);
+    
+            let mut trailer = Vec::with_capacity(34);
+            trailer.extend_from_slice(&buffer[leading_empty_bytes..]);
+            trailer.extend_from_slice(&[0x80, 0x80]);
+    
+            trailer
+        }
+    );
 
-    let mut rlp = rlp::RlpStream::new_list_with_buffer(buffer, list_len);
-    rlp.append_raw(&raw[payload_info.header_len..v_offset], 6);
+    let header: Vec<u8> = {
+        let len = middle.len() + trailer.len();
+        if len <= 55 {
+            let len: u8 = len.try_into().unwrap();
+            vec![0xC0 + len]
+        } else {
+            let len = len as u64;
 
-    if let Some(chain_id) = chain_id {
-        rlp.append(&chain_id);
-        rlp.append_empty_data();
-        rlp.append_empty_data();
-    }
+            let leading_empty_bytes = (len.leading_zeros() as usize) / 8;
+            let len_bytes: u8 = (std::mem::size_of::<u64>() - leading_empty_bytes).try_into().unwrap();
 
-    let hash = solana_program::keccak::hash(&rlp.out()).to_bytes();
+            let mut header = Vec::with_capacity(10);
+            header.extend_from_slice(&[0xF7 + len_bytes]);
+            header.extend_from_slice(&len.to_be_bytes()[leading_empty_bytes..]);
+
+            header
+        }
+    };
+
+    let hash = solana_program::keccak::hashv(
+        &[&header, middle, &trailer]
+    ).to_bytes();
 
     Ok(hash)
 }
