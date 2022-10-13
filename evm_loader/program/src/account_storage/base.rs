@@ -8,7 +8,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
+use crate::account::{EthereumAccount, Operator, program, TAG_ACCOUNT_V3};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::state_account::BlockedAccounts;
 
@@ -81,12 +81,11 @@ impl<'a> ProgramAccountStorage<'a> {
 
         let (solana_address, bump_seed) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
-            if !system_program::check_id(account.owner) &&
-                (account.owner != self.program_id() ||
-                !account.data_is_empty() && account.data.borrow()[0] != TAG_EMPTY)
-            {
-                panic!("Empty ethereum account {} must belong to the system program or be uninitialized", address);
-            }
+            assert!(
+                self.is_account_empty(account),
+                "Empty ethereum account {} must belong to the system program or be uninitialized",
+                address,
+            );
 
             empty_accounts.insert(*address, (solana_address, bump_seed));
             return;
@@ -114,7 +113,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
     }
 
-    pub fn unblock_accounts(&mut self, blocked_accounts: &BlockedAccounts) {
+    pub fn cancel_transaction_unblock_accounts(&mut self, blocked_accounts: &BlockedAccounts) {
         for account in &mut self.ethereum_accounts.values_mut() {
             if blocked_accounts.get(account.info.key)
                 .filter(|blocked_account| blocked_account.exists)
@@ -131,5 +130,11 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn is_account_empty(&self, account: &AccountInfo) -> bool {
+        system_program::check_id(account.owner) ||
+            (account.owner == self.program_id() &&
+                (account.data_is_empty() || account.data.borrow()[0] != TAG_ACCOUNT_V3))
     }
 }

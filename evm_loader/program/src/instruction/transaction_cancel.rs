@@ -60,7 +60,7 @@ fn execute<'a>(
     let caller_account = account_storage.ethereum_account_mut(&accounts.storage.caller);
     caller_account.trx_count += 1;
 
-    account_storage.unblock_accounts(blocked_accounts);
+    account_storage.cancel_transaction_unblock_accounts(blocked_accounts);
     accounts.storage.finalize(Deposit::Burn(accounts.incinerator))?;
 
     Ok(())
