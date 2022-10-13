@@ -1,4 +1,4 @@
-use evm::{ExitReason, H160, U256};
+use evm::{H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
@@ -6,7 +6,7 @@ use solana_program::program_error::ProgramError;
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
 use crate::config::EVM_STEPS_MIN;
-use crate::executor::{Action, Gasometer, Machine};
+use crate::executor::{Action, EvmExitResult, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
 
@@ -82,7 +82,7 @@ pub fn do_continue<'a>(
 }
 
 
-type EvmResults = (Vec<u8>, ExitReason, Vec<Action>);
+type EvmResults = (EvmExitResult, Vec<Action>);
 
 fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
@@ -99,7 +99,7 @@ fn execute_steps(
         Err((result, reason)) => { // transaction complete
             let actions = executor.into_state_actions();
 
-            Some((result, reason, actions))
+            Some(((result, reason), actions))
         }
     }
 }
@@ -134,7 +134,7 @@ fn finalize<'a>(
 ) -> ProgramResult {
     debug_print!("finalize");
 
-    let results = if let Some((result, exit_reason, apply_state)) = results {
+    let results = if let Some(((result, exit_reason), apply_state)) = results {
         if account_storage.apply_state_change(
             &accounts.neon_program,
             &accounts.system_program,

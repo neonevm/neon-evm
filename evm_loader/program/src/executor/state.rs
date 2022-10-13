@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use evm::{H160, U256, H256, ExitError, ExitReason};
 use solana_program::instruction::Instruction;
@@ -14,6 +15,7 @@ use super::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use super::action::Action;
 use super::cache::Cache;
 
+pub type EvmExitResult = (Rc<Vec<u8>>, ExitReason);
 
 /// Represents the state of executor abstracted away from a self.backend.
 /// UPDATE `serialize/deserialize` WHEN THIS STRUCTURE CHANGES
@@ -23,7 +25,7 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     actions: Vec<Action>,
     stack: Vec<usize>,
     is_static: u32,
-    exit_result: Option<(Vec<u8>, ExitReason)>,
+    exit_result: Option<EvmExitResult>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -431,11 +433,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
-    pub fn set_exit_result(&mut self, result: Option<(Vec<u8>, ExitReason)>) {
+    pub fn set_exit_result(&mut self, result: Option<EvmExitResult>) {
         self.exit_result = result;
     }
 
-    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
+    pub fn exit_result(&self) -> &Option<EvmExitResult> {
         &self.exit_result
     }
 }

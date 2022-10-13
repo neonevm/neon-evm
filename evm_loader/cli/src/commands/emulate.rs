@@ -124,7 +124,7 @@ pub fn execute(
     };
 
     info!("{}", status);
-    info!("{}", hex::encode(&result));
+    info!("{}", hex::encode(result.as_ref()));
 
     let accounts: Vec<NeonAccount> = storage.accounts
         .borrow()
@@ -142,7 +142,7 @@ pub fn execute(
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": [],
-        "result": hex::encode(result),
+        "result": hex::encode(result.as_ref()),
         "exit_status": status,
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,

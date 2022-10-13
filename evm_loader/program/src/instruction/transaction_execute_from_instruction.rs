@@ -84,7 +84,7 @@ fn execute<'a>(
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (exit_reason, return_value, apply_state) = {
+    let ((exit_reason, return_value), apply_state) = {
         let mut executor = Machine::new(caller_address, account_storage)?;
 
         executor.call_begin(
@@ -103,7 +103,7 @@ fn execute<'a>(
         let (result, exit_reason) = executor.execute();
         let actions = executor.into_state_actions();
 
-        (exit_reason, result, actions)
+        ((exit_reason, result), actions)
     };
 
     let accounts_readiness = account_storage.apply_state_change(

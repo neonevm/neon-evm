@@ -12,3 +12,4 @@ pub use action::Action;
 pub use state::ExecutorState;
 pub use gasometer::{Gasometer, LAMPORTS_PER_SIGNATURE};
 pub use machine::Machine;
+pub use state::EvmExitResult;

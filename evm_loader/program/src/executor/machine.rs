@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use borsh::{BorshSerialize, BorshDeserialize};
 use evm::{H160, U256, ExitReason, Capture, ExitFatal, Resolve, CONFIG, Control, ExitError, Handler};
 use solana_program::{program_error::ProgramError, entrypoint::ProgramResult};
@@ -6,6 +7,7 @@ use crate::{
     emit_exit,
     account_storage::AccountStorage
 };
+use crate::executor::state::EvmExitResult;
 
 use super::{
     handler::{CallInterrupt, CreateInterrupt, Executor}, 
@@ -141,13 +143,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[inline]
     fn process_capture(
         capture: Capture<ExitReason, Resolve<Executor<B>>>,
-    ) -> (RuntimeApply, Option<(Vec<u8>, ExitReason)>) {
+    ) -> (RuntimeApply, Option<EvmExitResult>) {
         match capture {
             Capture::Exit(reason) => {
+                let exit_result = Some((Rc::default(), reason));
                 if reason == ExitReason::StepLimitReached {
-                    (RuntimeApply::Continue, Some((vec![], reason)))
+                    (RuntimeApply::Continue, exit_result)
                 } else {
-                    (RuntimeApply::Exit(reason), Some((vec![], reason)))
+                    (RuntimeApply::Exit(reason), exit_result)
                 }
             },
             Capture::Trap(interrupt) => {
@@ -175,7 +178,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let mut steps_executed = 0;
         loop {
             if steps_executed >= max_steps {
-                self.state_mut().set_exit_result(Some((vec![], ExitReason::StepLimitReached)));
+                self.state_mut().set_exit_result(Some((Rc::default(), ExitReason::StepLimitReached)));
                 return (steps_executed, RuntimeApply::Continue);
             }
             if let Err(capture) = runtime.step(&mut self.executor) {
@@ -208,14 +211,14 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         (steps_executed, apply_result)
     }
 
-    fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+    fn apply_call(&mut self, interrupt: CallInterrupt) -> Result<(), EvmExitResult> {
         let code = self.executor.code(interrupt.code_address);
         let valids = self.executor.valids(interrupt.code_address);
 
         self.executor.state.enter(interrupt.is_static);
 
         if let Some(transfer) = interrupt.transfer {
-            self.executor.transfer(transfer).map_err(|e| (Vec::new(), e.into()))?;
+            self.executor.transfer(transfer).map_err(|e| (Rc::default(), e.into()))?;
         }
 
         let instance = evm::Runtime::new(
@@ -229,7 +232,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
-    fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), (Vec<u8>, ExitReason)> {
+    fn apply_create(&mut self, interrupt: CreateInterrupt) -> Result<(), EvmExitResult> {
         self.executor.state.enter( false);
 
         if CONFIG.create_increase_nonce {
@@ -237,7 +240,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
 
         if let Some(transfer) = interrupt.transfer {
-            self.executor.transfer(transfer).map_err(|e| (Vec::new(), e.into()))?;
+            self.executor.transfer(transfer).map_err(|e| (Rc::default(), e.into()))?;
         }
 
         let valids = evm::Valids::compute(&interrupt.init_code);
@@ -252,26 +255,26 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         Ok(())
     }
 
-    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+    fn apply_exit_call(&mut self, exited_runtime: &evm::Runtime, reason: ExitReason) -> Result<(), EvmExitResult> {
         if reason.is_succeed() {
             self.executor.state.exit_commit();
         }
         
         let return_value = exited_runtime.machine().return_value();
         if self.runtime.is_empty() {
-            return Err((return_value, reason));
+            return Err((Rc::new(return_value), reason));
         }
 
         let (runtime, _) = self.runtime.last_mut().unwrap();
 
         match evm::save_return_value(runtime, reason, return_value, &self.executor) {
             Control::Continue => Ok(()),
-            Control::Exit(reason) => Err((Vec::new(), reason)),
+            Control::Exit(reason) => Err((Rc::default(), reason)),
             _ => unreachable!()
         }
     }
 
-    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), (Vec<u8>, ExitReason)> {
+    fn apply_exit_create(&mut self, exited_runtime: &evm::Runtime, mut reason: ExitReason, address: H160) -> Result<(), EvmExitResult> {
 
         if reason.is_succeed() {
             match CONFIG.create_contract_limit {
@@ -291,24 +294,24 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             Some((runtime, _)) => runtime,
             None => return match reason {
                 ExitReason::Revert(_) => {
-                    let return_value = exited_runtime.machine().return_value();
+                    let return_value = Rc::new(exited_runtime.machine().return_value());
                     Err((return_value, reason))
                 },
-                _ => Err((Vec::<u8>::new(), reason))
+                _ => Err((Rc::default(), reason))
             }
         };
 
         match evm::save_created_address(runtime, reason, Some(address), &self.executor) {
             Control::Continue => Ok(()),
-            Control::Exit(reason) => Err((Vec::new(), reason)),
+            Control::Exit(reason) => Err((Rc::default(), reason)),
             _ => unreachable!()
         }
     }
 
-    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), (Vec<u8>, ExitReason)> {
+    fn apply_exit(&mut self, reason: ExitReason) -> Result<(), EvmExitResult> {
         let (exited_runtime, create_reason) = match self.runtime.pop() {
             Some((runtime, reason)) => (runtime, reason),
-            None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
+            None => return Err((Rc::default(), ExitFatal::NotSupported.into()))
         };
 
         emit_exit!(exited_runtime.machine().return_value(), reason);
@@ -326,7 +329,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Executes current program with all available steps.
     /// # Errors
     /// Terminates execution if a step encounters an error.
-    pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
+    pub fn execute(&mut self) -> EvmExitResult {
         loop {
             if let Err(result) = self.execute_n_steps(u64::MAX) {
                 return result;
@@ -344,7 +347,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Error` if returns a normal EVM error
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
-    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
+    pub fn execute_n_steps(&mut self, n: u64) -> Result<(), EvmExitResult> {
         if let Some(result) = self.state_mut().exit_result() {
             if result.1 != ExitReason::StepLimitReached {
                 debug_print!(
