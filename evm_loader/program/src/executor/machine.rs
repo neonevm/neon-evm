@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     handler::{CallInterrupt, CreateInterrupt, Executor}, 
-    state::ExecutorState, gasometer::Gasometer, action::Action
+    state::ExecutorState, action::Action
 };
 
 /// Represents reason of an Ethereum transaction.
@@ -43,10 +43,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Creates instance of the Machine.
     pub fn new(origin: H160, backend: &'a B) -> Result<Self, ProgramError> {
         let state = ExecutorState::new(backend);
-        let gasometer = Gasometer::new(None)?;
-        
+
         let executor = Executor { 
-            origin, state, gasometer, 
+            origin, state, 
             gas_limit: U256::zero(), gas_price: U256::zero() 
         };
         Ok(Self { executor, runtime: Vec::new(), steps_executed: 0 })
@@ -71,11 +70,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let runtime = BorshDeserialize::deserialize(&mut buffer).unwrap();
         let state = ExecutorState::deserialize(&mut buffer, backend).unwrap();
 
-        let gasometer = Gasometer::new(Some(storage.gas_used))?;
         let executor = Executor { 
             origin: storage.caller,
             state,
-            gasometer,
             gas_limit: storage.gas_limit,
             gas_price: storage.gas_price,
         };
@@ -353,9 +350,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 debug_print!(
                     "Skipping VM execution due to the previous execution result stored to state"
                 );
-                let result = result.clone();
-                self.gasometer_mut().record_additional_resize_iterations(1);
-                return Err(result);
+                return Err(result.clone());
             }
         }
 
@@ -366,7 +361,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             steps += steps_executed;
 
             self.steps_executed += steps_executed;
-            self.executor.gasometer.record_evm_steps(steps_executed);
 
             match apply {
                 RuntimeApply::Continue => (),
@@ -385,32 +379,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.steps_executed
     }
 
-    /// Returns amount of used gas
-    #[must_use]
-    pub fn used_gas(&self) -> U256 {
-        self.executor.gasometer.used_gas()
-    }
-
-    /// Consumes Machine and takes gasometer
-    #[must_use]
-    pub fn take_gasometer(self) -> Gasometer {
-        self.executor.gasometer
-    }
-
-    /// Returns gasometer mutable reference
-    #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.executor.gasometer
-    }
-
     #[must_use]
     pub fn into_state_actions(self) -> Vec<Action> {
         self.executor.state.into_actions()
-    }
-
-    #[must_use]
-    pub fn into_state_actions_and_gasometer(self) -> (Vec<Action>, Gasometer) {
-        (self.executor.state.into_actions(), self.executor.gasometer)
     }
 
     #[must_use]

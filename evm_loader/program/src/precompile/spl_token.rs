@@ -8,7 +8,7 @@ use solana_program::{
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState, Gasometer, OwnedAccountInfo}, account::ACCOUNT_SEED_VERSION,
+    executor::{ExecutorState, OwnedAccountInfo}, account::ACCOUNT_SEED_VERSION,
 };
 
 // [0xa9, 0xc1, 0x58, 0x06] : "approve(bytes32,bytes32,uint64)",
@@ -33,7 +33,6 @@ pub fn spl_token<B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer
 ) -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
     if !context.apparent_value.is_zero() {
@@ -58,26 +57,26 @@ pub fn spl_token<B: AccountStorage>(
             let seed = read_salt(input);
             let decimals = read_u8(&input[32..]);
 
-            initialize_mint(context, state, gasometer, seed, decimals, None, None)
+            initialize_mint(context, state, seed, decimals, None, None)
         }
         [0xc3, 0xf3, 0xf2, 0xf2] => { // initializeMint(bytes32 seed, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority)
             let seed = read_salt(input);
             let decimals = read_u8(&input[32..]);
             let mint_authority = read_pubkey(&input[64..]);
             let freeze_authority = read_pubkey(&input[96..]);
-            initialize_mint(context, state, gasometer, seed, decimals, Some(mint_authority), Some(freeze_authority))
+            initialize_mint(context, state, seed, decimals, Some(mint_authority), Some(freeze_authority))
         }
         [0xda, 0xa1, 0x2c, 0x5c] => { // initializeAccount(bytes32 seed, bytes32 mint)
             let seed = read_salt(input);
             let mint = read_pubkey(&input[32..]);
 
-            initialize_account(context, state, gasometer, seed, mint, None)
+            initialize_account(context, state, seed, mint, None)
         }
         [0xfc, 0x86, 0xb7, 0x17] => { // initializeAccount(bytes32 seed, bytes32 mint, bytes32 owner)
             let seed = read_salt(input);
             let mint = read_pubkey(&input[32..]);
             let owner = read_pubkey(&input[64..]);
-            initialize_account(context, state, gasometer, seed, mint, Some(owner))
+            initialize_account(context, state, seed, mint, Some(owner))
         }
         [0x57, 0x82, 0xa0, 0x43] => { // closeAccount(bytes32 account)
             let account = read_pubkey(input);
@@ -168,7 +167,6 @@ fn read_salt(input: &[u8]) -> &[u8; 32] {
 
 fn create_account<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     account: &OwnedAccountInfo,
     space: usize,
     seeds: Vec<Vec<u8>>
@@ -180,20 +178,16 @@ fn create_account<B: AccountStorage>(
         let required_lamports = minimum_balance.saturating_sub(account.lamports);
         
         if required_lamports > 0 {
-            gasometer.record_lamports_used(required_lamports);
-
             let transfer = system_instruction::transfer(state.backend.operator(), &account.key, required_lamports);
-            state.queue_external_instruction(transfer, vec![]);
+            state.queue_external_instruction(transfer, vec![], 0);
         }
 
         let allocate = system_instruction::allocate(&account.key, space.try_into().unwrap());
-        state.queue_external_instruction(allocate, seeds.clone());
+        state.queue_external_instruction(allocate, seeds.clone(), space);
 
         let assign = system_instruction::assign(&account.key, &spl_token::ID);
-        state.queue_external_instruction(assign, seeds);
+        state.queue_external_instruction(assign, seeds, 0);
     } else {
-        gasometer.record_account_rent(space);
-
         let create_account = system_instruction::create_account(
             state.backend.operator(),
             &account.key,
@@ -201,7 +195,7 @@ fn create_account<B: AccountStorage>(
             space.try_into().unwrap(),
             &spl_token::ID,
         );
-        state.queue_external_instruction(create_account, seeds);
+        state.queue_external_instruction(create_account, seeds, space);
     }
 
     Ok(())
@@ -210,7 +204,6 @@ fn create_account<B: AccountStorage>(
 fn initialize_mint<B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     seed: &[u8],
     decimals: u8,
     mint_authority: Option<Pubkey>,
@@ -240,7 +233,7 @@ fn initialize_mint<B: AccountStorage>(
         vec![bump_seed]
     ];
 
-    create_account(state, gasometer, &account, spl_token::state::Mint::LEN, seeds)?;
+    create_account(state, &account, spl_token::state::Mint::LEN, seeds)?;
 
     let initialize_mint = spl_token::instruction::initialize_mint(
         &spl_token::ID,
@@ -249,7 +242,7 @@ fn initialize_mint<B: AccountStorage>(
         Some(&freeze_authority.unwrap_or(signer_pubkey)),
         decimals
     )?;
-    state.queue_external_instruction(initialize_mint, vec![]);
+    state.queue_external_instruction(initialize_mint, vec![], 0);
 
     Ok(mint_key.to_bytes().to_vec())
 }
@@ -257,7 +250,6 @@ fn initialize_mint<B: AccountStorage>(
 fn initialize_account<B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     seed: &[u8],
     mint: Pubkey,
     owner: Option<Pubkey>,
@@ -286,7 +278,7 @@ fn initialize_account<B: AccountStorage>(
         vec![bump_seed]
     ];
 
-    create_account(state, gasometer, &account, spl_token::state::Account::LEN, seeds)?;
+    create_account(state, &account, spl_token::state::Account::LEN, seeds)?;
 
     let initialize_mint = spl_token::instruction::initialize_account2(
         &spl_token::ID,
@@ -294,7 +286,7 @@ fn initialize_account<B: AccountStorage>(
         &mint,
         &owner.unwrap_or(signer_pubkey)
     )?;
-    state.queue_external_instruction(initialize_mint, vec![]);
+    state.queue_external_instruction(initialize_mint, vec![], 0);
 
     Ok(account_key.to_bytes().to_vec())
 }
@@ -321,7 +313,7 @@ fn close_account<B: AccountStorage>(
         &signer_pubkey,
         &[]
     )?;
-    state.queue_external_instruction(close_account, seeds);
+    state.queue_external_instruction(close_account, seeds, 0);
 
     Ok(vec![])
 }
@@ -351,7 +343,7 @@ fn approve<B: AccountStorage>(
         &[],
         amount
     )?;
-    state.queue_external_instruction(approve, seeds);
+    state.queue_external_instruction(approve, seeds, 0);
 
     Ok(vec![])
 }
@@ -377,7 +369,7 @@ fn revoke<B: AccountStorage>(
         &signer_pubkey,
         &[]
     )?;
-    state.queue_external_instruction(revoke, seeds);
+    state.queue_external_instruction(revoke, seeds, 0);
 
     Ok(vec![])
 }
@@ -407,7 +399,7 @@ fn transfer<B: AccountStorage>(
         &[],
         amount
     )?;
-    state.queue_external_instruction(transfer, seeds);
+    state.queue_external_instruction(transfer, seeds, 0);
 
     Ok(vec![])
 }
@@ -441,7 +433,7 @@ fn mint<B: AccountStorage>(
         &[],
         amount
     )?;
-    state.queue_external_instruction(mint_to, seeds);
+    state.queue_external_instruction(mint_to, seeds, 0);
 
     Ok(vec![])
 }
@@ -475,7 +467,7 @@ fn burn<B: AccountStorage>(
         &[],
         amount
     )?;
-    state.queue_external_instruction(burn, seeds);
+    state.queue_external_instruction(burn, seeds, 0);
 
     Ok(vec![])
 }
@@ -507,7 +499,7 @@ fn freeze<B: AccountStorage>(
         &signer_pubkey,
         &[],
     )?;
-    state.queue_external_instruction(freeze, seeds);
+    state.queue_external_instruction(freeze, seeds, 0);
 
     Ok(vec![])
 }
@@ -539,7 +531,7 @@ fn thaw<B: AccountStorage>(
         &signer_pubkey,
         &[],
     )?;
-    state.queue_external_instruction(thaw, seeds);
+    state.queue_external_instruction(thaw, seeds, 0);
 
     Ok(vec![])
 }

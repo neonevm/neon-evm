@@ -11,12 +11,12 @@ use solana_sdk::{
     account_info::AccountInfo,
     pubkey::{Pubkey},
     pubkey,
-    sysvar::recent_blockhashes,
+    sysvar::{recent_blockhashes, Sysvar}, rent::Rent,
 };
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
-    config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
-    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial},
+    config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT, PAYMENT_TO_TREASURE},
+    executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial, LAMPORTS_PER_SIGNATURE},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage},
     account_storage::{AccountStorage}, precompile::is_precompile_address,
 };
@@ -175,52 +175,70 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
     }
 
-    pub fn add_used_accounts(&self, actions: &Vec<Action>) {
+    #[must_use]
+    pub fn apply_actions(&self, actions: Vec<Action>) -> u64 {
+        let mut gas = 0_u64;
+        let rent = Rent::get().unwrap();
+
         for action in actions {
             #[allow(clippy::match_same_arms)]
             match action {
                 Action::NeonTransfer { source, target, .. } => {
-                    self.add_ethereum_account(source, true);
-                    self.add_ethereum_account(target, true);
+                    self.add_ethereum_account(&source, true);
+                    self.add_ethereum_account(&target, true);
                 },
                 Action::NeonWithdraw { source, .. } => {
-                    self.add_ethereum_account(source, true);
+                    self.add_ethereum_account(&source, true);
                 },
                 Action::EvmLog { .. } => {},
-                Action::EvmSetStorage { address, key, .. } => {
-                    if key < &U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
-                        self.add_ethereum_account(address, true);
+                Action::EvmSetStorage { address, key, value } => {
+                    if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
+                        self.add_ethereum_account(&address, true);
                     } else {
-                        let index = *key & !U256::from(0xFF);
+                        let index = key & !U256::from(0xFF);
 
-                        let (storage_account, _) = self.get_storage_address(address, &index);
+                        let (storage_account, _) = self.get_storage_address(&address, &index);
                         self.add_solana_account(storage_account, true);
+
+                        if self.storage(&address, &index).is_zero() {
+                            let cost = rent.minimum_balance(2 + std::mem::size_of_val(&value));
+                            gas = gas.saturating_add(cost);
+                        }
                     }
                 },
                 Action::EvmIncrementNonce { address } => {
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(&address, true);
                 },
                 Action::EvmSetCode { address, .. } => {
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(&address, true);
                 },
                 Action::EvmSelfDestruct { address } => {
-                    self.add_ethereum_account(address, true);
+                    self.add_ethereum_account(&address, true);
                 },
-                Action::ExternalInstruction { program_id, accounts, .. } => {
-                    self.add_solana_account(*program_id, false);
+                Action::ExternalInstruction { program_id, accounts, allocate, .. } => {
+                    self.add_solana_account(program_id, false);
 
                     for account in accounts {
                         self.add_solana_account(account.key, account.is_writable);
                     }
+
+                    let cost = rent.minimum_balance(allocate);
+                    gas = gas.saturating_add(cost);
                 }
             }
         }
+
+        gas
     }
 
     #[must_use]
-    pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> usize {
+    pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> u64 {
+        let mut gas = 0_u64;
+        let rent = Rent::get().unwrap();
+
+        let mut iterations = 0_usize;
+
         let mut accounts = self.accounts.borrow_mut();
-        let mut max_additional_resize_steps = 0;
         for (address, operation) in operations {
             let new_size = match operation {
                 AccountOperation::Create { space } => space,
@@ -232,12 +250,16 @@ impl<'a> EmulatorAccountStorage<'a> {
                     .saturating_sub(a.size_current)
                     .saturating_sub(1)
                     / MAX_PERMITTED_DATA_INCREASE;
-                if max_additional_resize_steps < a.additional_resize_steps {
-                    max_additional_resize_steps = a.additional_resize_steps;
-                }
+                iterations = iterations.max(a.additional_resize_steps);
             });
+
+            let allocate_cost = rent.minimum_balance(new_size);
+            gas = gas.saturating_add(allocate_cost);
         }
-        max_additional_resize_steps
+
+        let iterations_cost = (iterations as u64) * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
+
+        gas.saturating_add(iterations_cost)
     }
 
     fn ethereum_account_map_or<F, R>(&self, address: &H160, default: R, f: F) -> R

@@ -115,7 +115,7 @@ pub trait AccountStorage {
 
     fn calc_accounts_operations(
         &self,
-        actions: &Vec<Action>,
+        actions: &[Action],
     ) -> AccountsOperations {
         let mut accounts = HashMap::new();
         for action in actions {

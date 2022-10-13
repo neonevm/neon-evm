@@ -1,7 +1,7 @@
 use log::{debug, info};
 
 use evm::{H160, U256, ExitReason};
-use evm_loader::executor::Machine;
+use evm_loader::{executor::{Machine, LAMPORTS_PER_SIGNATURE}, config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE}};
 
 use crate::{
     account_storage::{
@@ -51,7 +51,7 @@ pub fn execute(
         program_id
     };
 
-    let (exit_reason, result, actions, steps_executed, mut gasometer) = {
+    let (exit_reason, result, actions, steps_executed) = {
         let gas_limit = U256::from(999_999_999_999_u64);
         let mut executor = Machine::new(caller_id, &storage)?;
         debug!("Executor initialized");
@@ -101,46 +101,30 @@ pub fn execute(
         let steps_executed = executor.get_steps_executed();
         debug!("Execute done, exit_reason={:?}, result={:?}", exit_reason, result);
         debug!("{} steps executed", steps_executed);
-        debug!("{} used gas by executor", executor.used_gas());
 
-        if exit_reason.is_succeed() {
-            debug!("Succeed execution");
-            let (actions, gasometer) = executor.into_state_actions_and_gasometer();
-            (exit_reason, result, Some(actions), steps_executed, gasometer)
-        } else {
-            let gasometer = executor.take_gasometer();
-            (exit_reason, result, None, steps_executed, gasometer)
-        }
+        let actions = executor.into_state_actions();
+        (exit_reason, result, actions, steps_executed)
     };
+
+    let accounts_operations = storage.calc_accounts_operations(&actions);
+
+    let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
+    let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
+    let actions_gas = storage.apply_actions(actions);
+    let accounts_gas = storage.apply_accounts_operations(accounts_operations);
+    debug!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");
 
     debug!("Call done");
     let status = match exit_reason {
-        ExitReason::Succeed(_) => {
-            let actions = actions.expect("`actions` expected to be set here");
-
-            storage.add_used_accounts(&actions);
-
-            let accounts_operations = storage.calc_accounts_operations(&actions);
-            gasometer.record_accounts_operations_for_emulation(&accounts_operations);
-            let additional_resize_iterations = storage.apply_accounts_operations(accounts_operations);
-            debug!("additional_resize_iterations = {}", additional_resize_iterations);
-            gasometer.record_additional_resize_iterations(additional_resize_iterations);
-
-            debug!("Applies done, {} of gas used", gasometer.used_gas());
-            "succeed".to_string()
-        }
+        ExitReason::Succeed(_) => "succeed".to_string(),
         ExitReason::Error(_) => "error".to_string(),
         ExitReason::Revert(_) => "revert".to_string(),
         ExitReason::Fatal(_) => "fatal".to_string(),
         ExitReason::StepLimitReached => unreachable!(),
     };
 
-    info!("{}", &status);
-    info!("{}", &hex::encode(&result));
-
-    if !exit_reason.is_succeed() {
-        debug!("Not succeed execution");
-    }
+    info!("{}", status);
+    info!("{}", hex::encode(&result));
 
     let accounts: Vec<NeonAccount> = storage.accounts
         .borrow()
@@ -158,11 +142,11 @@ pub fn execute(
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": [],
-        "result": &hex::encode(&result),
+        "result": hex::encode(result),
         "exit_status": status,
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,
-        "used_gas": gasometer.used_gas().as_u64(),
+        "used_gas": steps_gas + actions_gas + accounts_gas
     });
 
     println!("{}", js);
