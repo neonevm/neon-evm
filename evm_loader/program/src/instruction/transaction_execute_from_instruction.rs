@@ -143,6 +143,7 @@ fn execute<'a>(
         &accounts.operator,
         apply_state,
         accounts_operations,
+        false,
     )?;
 
     assert_eq!(

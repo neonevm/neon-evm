@@ -188,6 +188,7 @@ fn finalize<'a>(
             &accounts.operator,
             apply_state,
             accounts_operations,
+            true,
         )? == AccountsReadiness::Ready {
             accounts.neon_program.on_return(exit_reason, storage.gas_used, &result);
 
