@@ -853,6 +853,8 @@ pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 pub const STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
 /// Minimum number of EVM steps for iterative transaction
 pub const EVM_STEPS_MIN: u64 = 500;
+/// Maximum number of EVM steps in a last iteration
+pub const EVM_STEPS_LAST_ITERATION_MAX: u64 = 0;
 
 cfg_if! {
     if #[cfg(feature = "emergency")] {
