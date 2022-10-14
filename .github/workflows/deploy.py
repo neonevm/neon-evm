@@ -1,4 +1,5 @@
 import os
+import re
 
 import click
 import docker
@@ -58,31 +59,50 @@ def build_docker_image(github_sha):
 
 
 @cli.command(name="publish_image")
-@click.option('--branch')
 @click.option('--github_sha')
-def publish_image(branch, github_sha):
-    if branch == 'master':
+def publish_image(github_sha):
+    docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+
+
+@cli.command(name="finalize_image")
+@click.option('--head_ref_branch')
+@click.option('--github_ref')
+@click.option('--github_sha')
+def finalize_image(head_ref_branch, github_ref, github_sha):
+    if 'refs/tags/' in github_ref:
+        tag = github_ref.replace("refs/tags/", "")
+    elif github_ref == 'refs/heads/master':
         tag = 'stable'
-    elif branch == 'develop':
+    elif github_ref == 'refs/heads/develop':
         tag = 'latest'
     else:
-        tag = branch.split('/')[-1]
+        tag = head_ref_branch.split('/')[-1]
 
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+    out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", tag)
-    docker_client.push(f"{IMAGE_NAME}:{tag}")
-
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
-    docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
+    out = docker_client.push(f"{IMAGE_NAME}:{tag}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
 
 @cli.command(name="run_tests")
 @click.option('--github_sha')
-def run_tests(github_sha):
+@click.option('--run_number')
+def run_tests(github_sha, run_number):
     image_name = f"{IMAGE_NAME}:{github_sha}"
 
     os.environ["EVM_LOADER_IMAGE"] = image_name
+    os.environ["RUN_NUMBER"] = run_number
 
     command = "docker-compose -f ./evm_loader/docker-compose-test.yml down --timeout 1"
     click.echo(f"run command: {command}")
@@ -99,39 +119,63 @@ def run_tests(github_sha):
             container="solana", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
         click.echo(logs)
+        for line in logs:
+            if 'ERROR ' in str(line) or 'FAILED ' in str(line):
+                raise RuntimeError("Test are failed")
+
     except:
-        raise "Solana container is not run"
+        raise RuntimeError("Solana container is not run")
+
+    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down --timeout 1"
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+
+@cli.command(name="check_proxy_tag")
+@click.option('--github_ref')
+def check_proxy_tag(github_ref):
+    proxy_tag = re.sub('\d{1,2}$', 'x',  github_ref.replace("refs/tags/", ""))
+    response = requests.get(
+        url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/proxy/tags/{proxy_tag}")
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Proxy image with {proxy_tag} tag isn't found. Response: {response.json()}")
+    click.echo(f"Proxy image with tag {proxy_tag} is found")
 
 
 @cli.command(name="trigger_proxy_action")
-@click.option('--branch')
+@click.option('--head_ref_branch')
+@click.option('--base_ref_branch')
+@click.option('--github_ref')
 @click.option('--github_sha')
 @click.option('--token')
 @click.option('--is_draft')
-def trigger_proxy_action(branch, github_sha, token, is_draft):
+def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft):
 
-    if branch == "develop" and not is_draft:
-        full_test_suite = True
+    if base_ref_branch == "develop" and not is_draft:
+        full_test_suite = "True"
     else:
-        full_test_suite = False
+        full_test_suite = "False"
 
     proxy_endpoint = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
-    proxy_endpoint = "https://api.github.com/repos/kristinaNikolaeva/playwright_autotests"
-    proxy_branches_obj = requests.get(f"{proxy_endpoint}/branches").json()
+    proxy_branches_obj = requests.get(
+        f"{proxy_endpoint}/branches?per_page=100").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
-
-    proxy_branch = branch
+    proxy_branch = head_ref_branch
     if proxy_branch not in proxy_branches:
         proxy_branch = 'develop'
 
-    data = {"ref": f"refs/heads/{proxy_branch}",
-            "inputs": {"full_test_suite": full_test_suite},
-            "neon_evm_commit": github_sha, "neon_evm_branch": branch}
-    headers = {'Authorization': f'Bearer {token}',
-               'Content-Type': "application/json"}
+    data = {"ref": proxy_branch,
+            "inputs": {"full_test_suite": full_test_suite,
+                       "neon_evm_commit": github_sha,
+                       "neon_evm_branch": github_ref}
+            }
+    headers = {"Authorization": f"Bearer {token}",
+               "Accept": "application/vnd.github+json"}
     response = requests.post(
-        f"{proxy_endpoint}/actions/workflows/init.yml/dispatches", json=data, headers=headers)
-    print(response)
+        f"{proxy_endpoint}/actions/workflows/pipeline.yml/dispatches", json=data, headers=headers)
+    print(data)
+    print(headers)
     print(response.status_code)
     if response.status_code != 204:
         raise "proxy-model.py action is not triggered"
