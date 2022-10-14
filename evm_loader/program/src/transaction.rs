@@ -103,14 +103,33 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
     let trailer = chain_id.map_or_else(
         Vec::new,
         |chain_id| {
-            let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
-            let mut buffer = [0_u8; 32];
-            chain_id.to_big_endian(&mut buffer);
-    
-            let mut trailer = Vec::with_capacity(34);
-            trailer.extend_from_slice(&buffer[leading_empty_bytes..]);
+            let chain_id = {
+                let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
+                let mut buffer = [0_u8; 32];
+                chain_id.to_big_endian(&mut buffer);
+                buffer[leading_empty_bytes..].to_vec()
+            };
+
+            let mut trailer = Vec::with_capacity(64);
+            match chain_id.len() {
+                0 => {
+                    trailer.extend_from_slice(&[0x80]);
+                },
+                1 if chain_id[0] < 0x80 => {
+                    trailer.extend_from_slice(&chain_id);
+                },
+                len @ 1..=55 => {
+                    let len: u8 = len.try_into().unwrap();
+
+                    trailer.extend_from_slice(&[0x80 + len]);
+                    trailer.extend_from_slice(&chain_id);
+                },
+                _ => {
+                    unreachable!("chain_id.len() <= 32")
+                }
+            }
+
             trailer.extend_from_slice(&[0x80, 0x80]);
-    
             trailer
         }
     );
@@ -121,14 +140,16 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
             let len: u8 = len.try_into().unwrap();
             vec![0xC0 + len]
         } else {
-            let len = len as u64;
-
-            let leading_empty_bytes = (len.leading_zeros() as usize) / 8;
-            let len_bytes: u8 = (std::mem::size_of::<u64>() - leading_empty_bytes).try_into().unwrap();
+            let len_bytes = {
+                let leading_empty_bytes = (len.leading_zeros() as usize) / 8;
+                let bytes = len.to_be_bytes();
+                bytes[leading_empty_bytes..].to_vec()
+            };
+            let len_bytes_len: u8 = len_bytes.len().try_into().unwrap();
 
             let mut header = Vec::with_capacity(10);
-            header.extend_from_slice(&[0xF7 + len_bytes]);
-            header.extend_from_slice(&len.to_be_bytes()[leading_empty_bytes..]);
+            header.extend_from_slice(&[0xF7 + len_bytes_len]);
+            header.extend_from_slice(&len_bytes);
 
             header
         }
