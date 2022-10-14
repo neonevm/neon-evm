@@ -10,31 +10,54 @@ env:
 
 jobs:
   deploy-neon-evm:
-    runs-on: ubuntu-latest
+    runs-on: build-runner
     steps:
       - name: Get branch name
         id: branch-name
         uses: tj-actions/branch-names@v6
-
-      - name: install python libs
-        run: pip install docker==5.0.3
 
       - uses: actions/checkout@v3
         with:
           submodules: "true"
 
       - name: build docker image
-        run: python ./.github/workflows/deploy.py build_docker_image --github_sha=${GITHUB_SHA}
+        run: |
+          python ./.github/workflows/deploy.py build_docker_image \
+          --github_sha=${GITHUB_SHA}
 
       - name: publish image
-        run: python ./.github/workflows/deploy.py publish_image --branch=${GITHUB_REF} --github_sha=${GITHUB_SHA}
+        run: |
+          python ./.github/workflows/deploy.py publish_image \
+          --github_sha=${GITHUB_SHA}
 
       - name: run tests
         run: python ./.github/workflows/deploy.py run_tests --github_sha=${GITHUB_SHA}
 
-      - name: trigger proxy docker image
-        run: python ./.github/workflows/deploy.py trigger_proxy_action --github_sha=${GITHUB_SHA} --branch=${GITHUB_REF} --token=${{secrets.CI_TOKEN }}
+      - name: finalize image
+        run: |
+          python ./.github/workflows/deploy.py finalize_image \
+          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --github_ref=${GITHUB_REF} \
+          --base_ref_branch=${{ steps.branch-name.outputs.base_ref_branch }} \
+          --github_sha=${GITHUB_SHA}
 
-      - name: send notification to slack
-        if: ${{ failure() }}
-        run: python ./.github/workflows/deploy.py send_notification --url=${{secrets.SLACK_EVM_CHANNEL_URL}} --build_url=${BUILD_URL}
+      - name: Check that the proxy image with the same tag exist
+        if: ${{ startsWith(github.sha , 'refs/tags/') }}
+        run: |
+          python ./.github/workflows/deploy.py check_proxy_tag \
+          --github_ref=${GITHUB_REF}
+
+      - name: trigger proxy docker image
+        run: |
+          python ./.github/workflows/deploy.py trigger_proxy_action \
+          --github_sha=${GITHUB_SHA} \
+          --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --token=${{secrets.GHTOKEN }} \
+          --is_draft=${{github.event.pull_request.draft}}
+
+      # - name: send notification to slack
+      #   if: ${{ failure() }}
+      #   run: |
+      #     python ./.github/workflows/deploy.py send_notification \
+      #     --url=${{secrets.SLACK_EVM_CHANNEL_URL}} \
+      #     --build_url=${BUILD_URL}

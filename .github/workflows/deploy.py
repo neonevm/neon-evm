@@ -1,4 +1,5 @@
 import os
+import re
 
 import click
 import docker
@@ -57,24 +58,42 @@ def build_docker_image(github_sha):
             click.echo(str(line).strip('\n'))
 
 
-@cli.command(name="publish_image")
-@click.option('--branch')
-@click.option('--github_sha')
-def publish_image(branch, github_sha):
-    if branch == 'master':
+@ cli.command(name="publish_image")
+@ click.option('--github_sha')
+def publish_image(github_sha):
+    docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+    out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+
+
+@ cli.command(name="finalize_image")
+@ click.option('--head_ref_branch')
+@ click.option('--base_ref_branch')
+@ click.option('--github_ref')
+@ click.option('--github_sha')
+def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
+    if 'refs/tags/' in github_ref:
+        tag = github_ref.replace("refs/tags/", "")
+    elif base_ref_branch == 'master':
         tag = 'stable'
-    elif branch == 'develop':
+    elif base_ref_branch == 'develop':
         tag = 'latest'
     else:
-        tag = branch.split('/')[-1]
+        tag = head_ref_branch.split('/')[-1]
 
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
+    out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", tag)
-    docker_client.push(f"{IMAGE_NAME}:{tag}")
-
-    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", github_sha)
-    docker_client.push(f"{IMAGE_NAME}:{github_sha}")
+    docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
+    out = docker_client.push(f"{IMAGE_NAME}:{tag}")
+    if "error" in out:
+        raise RuntimeError(
+            f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
 
 
 @cli.command(name="run_tests")
@@ -103,6 +122,18 @@ def run_tests(github_sha):
         raise "Solana container is not run"
 
 
+@ cli.command(name="check_proxy_tag")
+@ click.option('--github_ref')
+def check_proxy_tag(github_ref):
+    proxy_tag = re.sub('\d{1,2}$', 'x',  github_ref.replace("refs/tags/", ""))
+    response = requests.get(
+        url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/proxy/tags/{proxy_tag}")
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Proxy image with {proxy_tag} tag isn't found. Response: {response.json()}")
+    click.echo(f"Proxy image with tag {proxy_tag} is found")
+
+
 @cli.command(name="trigger_proxy_action")
 @click.option('--branch')
 @click.option('--github_sha')
@@ -116,22 +147,27 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
         full_test_suite = False
 
     proxy_endpoint = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
-    proxy_endpoint = "https://api.github.com/repos/kristinaNikolaeva/playwright_autotests"
-    proxy_branches_obj = requests.get(f"{proxy_endpoint}/branches").json()
+    proxy_branches_obj = requests.get(
+        f"{proxy_endpoint}/branches?per_page=100").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
-
+    print(proxy_branches)
+    print(branch)
     proxy_branch = branch
     if proxy_branch not in proxy_branches:
         proxy_branch = 'develop'
 
-    data = {"ref": f"refs/heads/{proxy_branch}",
-            "inputs": {"full_test_suite": full_test_suite},
-            "neon_evm_commit": github_sha, "neon_evm_branch": branch}
-    headers = {'Authorization': f'Bearer {token}',
-               'Content-Type': "application/json"}
+    data = {"ref": proxy_branch,
+            "inputs": {"full_test_suite": full_test_suite,
+                       "neon_evm_commit": github_sha,
+                       "neon_evm_branch": branch}
+            }
+    headers = {"Authorization": f"Bearer {token}",
+               "Accept": "application/vnd.github+json"}
     response = requests.post(
         f"{proxy_endpoint}/actions/workflows/init.yml/dispatches", json=data, headers=headers)
-    print(response)
+    print(data)
+    print(headers)
+    print(response.json())
     print(response.status_code)
     if response.status_code != 204:
         raise "proxy-model.py action is not triggered"
