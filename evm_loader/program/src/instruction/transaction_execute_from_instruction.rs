@@ -111,7 +111,6 @@ fn execute<'a>(
         &accounts.system_program,
         &accounts.operator,
         apply_state,
-        false,
     )?;
 
     assert_eq!(

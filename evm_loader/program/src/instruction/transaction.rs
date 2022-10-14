@@ -140,7 +140,6 @@ fn finalize<'a>(
             &accounts.system_program,
             &accounts.operator,
             apply_state,
-            true,
         )? == AccountsReadiness::Ready {
             Some((result, exit_reason))
         } else {

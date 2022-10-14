@@ -51,7 +51,6 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
         actions: Vec<Action>,
-        in_iterative: bool,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
@@ -72,7 +71,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 Action::EvmSetCode { address, .. } => address,
                 _ => continue,
             };
-            self.create_account_if_not_exists(address, in_iterative)?;
+            self.create_account_if_not_exists(address)?;
         }
 
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
@@ -354,7 +353,7 @@ impl<'a> ProgramAccountStorage<'a> {
         Ok(())
     }
 
-    fn create_account_if_not_exists(&mut self, address: &H160, rw_blocked: bool) -> ProgramResult {
+    fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
         self.panic_if_account_not_exists(address);
 
         let ether_account =
@@ -376,7 +375,6 @@ impl<'a> ProgramAccountStorage<'a> {
                         ether_account::Data {
                             address: *address,
                             bump_seed,
-                            rw_blocked,
                             ..Default::default()
                         },
                     )?

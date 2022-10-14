@@ -13,7 +13,6 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
-use std::collections::HashMap;
 use crate::account::TAG_ACCOUNT_V3;
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
@@ -24,11 +23,12 @@ pub enum Deposit<'a> {
 }
 
 pub struct BlockedAccountMeta {
+    pub key: Pubkey,
     pub exists: bool,
     pub is_writable: bool,
 }
 
-pub type BlockedAccounts = HashMap<Pubkey, BlockedAccountMeta>;
+pub type BlockedAccounts = Vec<BlockedAccountMeta>;
 
 impl <'a> FinalizedState<'a> {
     #[must_use]
@@ -163,13 +163,13 @@ impl<'a> State<'a> {
         let chunks = keys_storage.chunks_exact(ACCOUNT_CHUNK_LEN);
         let accounts = chunks
             .map(|c| c.split_at(2))
-            .map(|(meta, key)| (
-                Pubkey::new(key),
+            .map(|(meta, key)|
                 BlockedAccountMeta {
+                    key: Pubkey::new(key),
                     exists: meta[1] != 0,
                     is_writable: meta[0] != 0,
-                },
-            ))
+                }
+            )
             .collect();
 
         Ok(accounts)
@@ -207,15 +207,16 @@ impl<'a> State<'a> {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
         }
 
-        for info in remaining_accounts {
-            let blocked_account = blocked_accounts.get(info.key)
-                .ok_or_else(|| E!(ProgramError::InvalidAccountData; "Account {} not found in the blocked accounts list", info.key))?;
-
-            if blocked_account.is_writable != info.is_writable {
-                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, blocked_account.is_writable);
+        for (blocked, info) in blocked_accounts.iter().zip(remaining_accounts) {
+            if blocked.key != *info.key {
+                return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", blocked.key, info.key);
             }
 
-            if !is_cancelling && !blocked_account.exists && Self::account_exists(program_id, info) {
+            if blocked.is_writable != info.is_writable {
+                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, blocked.is_writable);
+            }
+
+            if !is_cancelling && !blocked.exists && Self::account_exists(program_id, info) {
                 return Err!(
                     ProgramError::AccountAlreadyInitialized;
                     "Blocked nonexistent account {} was created/initialized outside current transaction. \

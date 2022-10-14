@@ -34,11 +34,11 @@ pub fn execute(
     ];
 
     let blocked_accounts = storage.read_blocked_accounts()?;
-    for (key, blocked_account_meta) in blocked_accounts {
+    for blocked_account_meta in blocked_accounts {
         if blocked_account_meta.is_writable {
-            accounts_meta.push(AccountMeta::new(key, false));
+            accounts_meta.push(AccountMeta::new(blocked_account_meta.key, false));
         } else {
-            accounts_meta.push(AccountMeta::new_readonly(key, false));
+            accounts_meta.push(AccountMeta::new_readonly(blocked_account_meta.key, false));
         }
     }
     for meta in &accounts_meta {
