@@ -5,7 +5,7 @@ use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
-use crate::config::EVM_STEPS_MIN;
+use crate::config::{EVM_STEPS_MIN, EVM_STEPS_LAST_ITERATION_MAX};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -22,7 +22,6 @@ pub struct Accounts<'a> {
 
 
 pub fn do_begin<'a>(
-    step_count: u64,
     accounts: Accounts<'a>,
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
@@ -31,10 +30,6 @@ pub fn do_begin<'a>(
     caller: H160,
 ) -> ProgramResult {
     debug_print!("do_begin");
-
-    if (step_count < EVM_STEPS_MIN) && (trx.gas_price > U256::zero()) {
-        return Err!(ProgramError::InvalidArgument; "Step limit {step_count} below minimum {EVM_STEPS_MIN}");
-    }
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
@@ -52,7 +47,7 @@ pub fn do_begin<'a>(
             executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
         }?;
 
-        execute_steps(executor, step_count, &mut storage)
+        execute_steps(executor, 0, &mut storage)
     };
 
     finalize(accounts, storage, account_storage, results, gasometer)
@@ -92,16 +87,19 @@ fn execute_steps(
     let result = executor.execute_n_steps(step_count);
     executor.save_into(storage);
 
-    match result {
-        Ok(()) => { // step limit
-            None
-        },
-        Err((result, reason)) => { // transaction complete
-            let actions = executor.into_state_actions();
-
-            Some((result, reason, actions))
-        }
+    if result.is_ok() { // step limit
+        return None;
     }
+
+    let steps = executor.get_steps_executed();
+    if steps > EVM_STEPS_LAST_ITERATION_MAX {
+        return None;
+    }
+
+    let (return_value, reason) = result.unwrap_err();
+    let actions = executor.into_state_actions();
+ 
+    Some((return_value, reason, actions))
 }
 
 fn pay_gas_cost<'a>(

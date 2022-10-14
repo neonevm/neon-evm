@@ -171,10 +171,14 @@ contract ERC20ForSpl {
     }
 
     function claim(bytes32 from, uint64 amount) external returns (bool) {
-        bytes32 toSolana = _solanaAccount(msg.sender);
+        return claimTo(from, msg.sender, amount);
+    }
+
+    function claimTo(bytes32 from, address to, uint64 amount) public returns (bool) {
+        bytes32 toSolana = _solanaAccount(to);
 
         if (!_splToken.exists(toSolana)) {
-            _splToken.initializeAccount(_salt(msg.sender), tokenMint);
+            _splToken.initializeAccount(_salt(to), tokenMint);
         }
 
         // spl-token transaction will be signed by tx.origin
@@ -185,7 +189,7 @@ contract ERC20ForSpl {
 
         require(status, "ERC20: claim failed");
 
-        emit Transfer(address(0), msg.sender, amount);
+        emit Transfer(address(0), to, amount);
 
         return true;
     }

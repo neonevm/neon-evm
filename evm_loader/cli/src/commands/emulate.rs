@@ -109,7 +109,7 @@ pub fn execute(
     let accounts_operations = storage.calc_accounts_operations(&actions);
 
     let max_iterations = (steps_executed + (EVM_STEPS_MIN - 1)) / EVM_STEPS_MIN;
-    let steps_gas = max_iterations * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
+    let steps_gas = (max_iterations + 2) * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
     let actions_gas = storage.apply_actions(actions);
     let accounts_gas = storage.apply_accounts_operations(accounts_operations);
     debug!("Gas - steps: {steps_gas}, actions: {actions_gas}, accounts: {accounts_gas}");

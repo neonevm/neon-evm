@@ -78,7 +78,7 @@ pub fn execute<'a>(
             gasometer.record_iterative_overhead();
             gasometer.record_write_to_holder(&trx);
 
-            do_begin(step_count, accounts, storage, account_storage, gasometer, trx, caller)
+            do_begin(accounts, storage, account_storage, gasometer, trx, caller)
         }
         State::TAG => {
             let (storage, _blocked_accounts) = State::restore(

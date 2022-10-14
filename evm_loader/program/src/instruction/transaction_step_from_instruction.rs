@@ -52,7 +52,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             gasometer.record_address_lookup_table(accounts.all_accounts);
             gasometer.record_iterative_overhead();
 
-            do_begin(step_count, accounts, storage, &mut account_storage, gasometer, trx, caller)
+            do_begin(accounts, storage, &mut account_storage, gasometer, trx, caller)
         },
         State::TAG => {
             let (storage, _blocked_accounts) = State::restore(
