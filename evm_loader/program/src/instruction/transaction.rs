@@ -5,7 +5,7 @@ use solana_program::program_error::ProgramError;
 
 use crate::account::{EthereumAccount, Operator, program, State, Treasury};
 use crate::account_storage::{AccountsReadiness, ProgramAccountStorage};
-use crate::config::{EVM_STEPS_MIN, EVM_STEPS_LAST_ITERATION_MAX};
+use crate::config::{EVM_STEPS_MIN, EVM_STEPS_LAST_ITERATION_MAX, PAYMENT_TO_TREASURE};
 use crate::executor::{Action, Gasometer, Machine};
 use crate::state_account::Deposit;
 use crate::transaction::{check_ethereum_transaction, Transaction};
@@ -31,14 +31,11 @@ pub fn do_begin<'a>(
 ) -> ProgramResult {
     debug_print!("do_begin");
 
-    accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
-
     check_ethereum_transaction(account_storage, &caller, &trx)?;
     account_storage.check_for_blocked_accounts()?;
     account_storage.block_accounts(true)?;
 
-
-    let results = {
+    {
         let mut executor = Machine::new(caller, account_storage)?;
 
         if let Some(code_address) = trx.to {
@@ -47,10 +44,10 @@ pub fn do_begin<'a>(
             executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
         }?;
 
-        execute_steps(executor, 0, &mut storage)
+        executor.save_into(&mut storage);
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer)
+    finalize(0, accounts, storage, account_storage, None, gasometer)
 }
 
 pub fn do_continue<'a>(
@@ -66,14 +63,12 @@ pub fn do_continue<'a>(
         return Err!(ProgramError::InvalidArgument; "Step limit {step_count} below minimum {EVM_STEPS_MIN}");
     }
 
-    accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
-
-    let results = {
+    let (steps_executed, results) = {
         let executor = Machine::restore(&storage, account_storage)?;
         execute_steps(executor, step_count, &mut storage)
     };
 
-    finalize(accounts, storage, account_storage, results, gasometer)
+    finalize(steps_executed, accounts, storage, account_storage, results, gasometer)
 }
 
 
@@ -83,23 +78,26 @@ fn execute_steps(
     mut executor: Machine<ProgramAccountStorage>,
     step_count: u64,
     storage: &mut State
-) -> Option<EvmResults> {
+) -> (u64, Option<EvmResults>) {
     let result = executor.execute_n_steps(step_count);
-    executor.save_into(storage);
+    let steps_executed = executor.get_steps_executed();
 
-    if result.is_ok() { // step limit
-        return None;
+    if steps_executed > 0 {
+        executor.save_into(storage);
     }
 
-    let steps = executor.get_steps_executed();
-    if steps > EVM_STEPS_LAST_ITERATION_MAX {
-        return None;
+    if result.is_ok() { // step limit
+        return (steps_executed, None);
+    }
+
+    if steps_executed > EVM_STEPS_LAST_ITERATION_MAX {
+        return (steps_executed, None);
     }
 
     let (return_value, reason) = result.unwrap_err();
     let actions = executor.into_state_actions();
  
-    Some((return_value, reason, actions))
+    (steps_executed, Some((return_value, reason, actions)))
 }
 
 fn pay_gas_cost<'a>(
@@ -124,6 +122,7 @@ fn pay_gas_cost<'a>(
 }
 
 fn finalize<'a>(
+    steps_executed: u64,
     accounts: Accounts<'a>,
     mut storage: State<'a>,
     account_storage: &mut ProgramAccountStorage<'a>,
@@ -131,6 +130,10 @@ fn finalize<'a>(
     mut gasometer: Gasometer,
 ) -> ProgramResult {
     debug_print!("finalize");
+
+    if steps_executed > 0 {
+        accounts.system_program.transfer(&accounts.operator, &accounts.treasury, PAYMENT_TO_TREASURE)?;
+    }
 
     let results = if let Some((result, exit_reason, apply_state)) = results {
         if account_storage.apply_state_change(
