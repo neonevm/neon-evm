@@ -115,13 +115,8 @@ pub trait AccountStorage {
 
     fn calc_accounts_operations(
         &self,
-        actions: &Option<Vec<Action>>,
+        actions: &[Action],
     ) -> AccountsOperations {
-        let actions = match actions {
-            None => return vec![],
-            Some(actions) => actions,
-        };
-
         let mut accounts = HashMap::new();
         for action in actions {
             let (address, code_size) = match action {

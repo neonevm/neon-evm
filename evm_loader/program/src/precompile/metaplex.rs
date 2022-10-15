@@ -7,7 +7,7 @@ use mpl_token_metadata::state::{Creator, Metadata, TokenStandard, TokenMetadataA
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState, Gasometer}, account::ACCOUNT_SEED_VERSION,
+    executor::{ExecutorState}, account::ACCOUNT_SEED_VERSION,
 };
 
 // "[0xc5, 0x73, 0x50, 0xc6]": "createMetadata(bytes32,string,string,string)",
@@ -20,7 +20,6 @@ pub fn metaplex<B: AccountStorage>(
     input: &[u8],
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer
 ) -> Capture<(ExitReason, Vec<u8>), Infallible>
 {
     if !context.apparent_value.is_zero() {
@@ -46,21 +45,21 @@ pub fn metaplex<B: AccountStorage>(
             let symbol = read_string(input, 64);
             let uri = read_string(input, 96);
 
-            create_metadata(context, state, gasometer, mint, name, symbol, uri)
+            create_metadata(context, state, mint, name, symbol, uri)
         }
         [0x4a, 0xe8, 0xb6, 0x6b] => { // "createMasterEdition(bytes32,uint64)"
             let mint = read_pubkey(input);
             let max_supply = read_u64(&input[32..]);
 
-            create_master_edition(context, state, gasometer, mint, Some(max_supply))
+            create_master_edition(context, state, mint, Some(max_supply))
         }
         [0x23, 0x5b, 0x2b, 0x94] => { // "isNFT(bytes32)"
             let mint = read_pubkey(input);
-            is_nft(context, state, gasometer, mint)
+            is_nft(context, state, mint)
         }
         [0x9e, 0xd1, 0x9d, 0xdb] => { // "uri(bytes32)"
             let mint = read_pubkey(input);
-            uri(context, state, gasometer, mint)
+            uri(context, state, mint)
         }
         _ => {
             Ok(vec![])
@@ -101,7 +100,6 @@ fn read_string(input: &[u8], offset_position: usize) -> String {
 fn create_metadata<B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     mint: Pubkey,
     name: String,
     symbol: String,
@@ -112,9 +110,6 @@ fn create_metadata<B: AccountStorage>(
         return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
     }
 
-    gasometer.record_account_rent(mpl_token_metadata::state::MAX_METADATA_LEN);
-
-    
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -143,7 +138,7 @@ fn create_metadata<B: AccountStorage>(
         None,  // Uses
         None,  // Collection Details
     );
-    state.queue_external_instruction(instruction, seeds);
+    state.queue_external_instruction(instruction, seeds, mpl_token_metadata::state::MAX_METADATA_LEN);
 
     Ok(metadata_pubkey.to_bytes().to_vec())
 }
@@ -152,7 +147,6 @@ fn create_metadata<B: AccountStorage>(
 fn create_master_edition<B: AccountStorage>(
     context: &evm::Context,
     state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer,
     mint: Pubkey,
     max_supply: Option<u64>,
 ) -> Result<Vec<u8>, ProgramError>
@@ -161,9 +155,6 @@ fn create_master_edition<B: AccountStorage>(
         return Err!(ProgramError::InvalidArgument; "Action is not allowed in static context")
     }
 
-    gasometer.record_account_rent(mpl_token_metadata::state::MAX_MASTER_EDITION_LEN);
-
-    
     let signer = context.caller;
     let (signer_pubkey, bump_seed) = state.backend.solana_address(&signer);
 
@@ -182,7 +173,7 @@ fn create_master_edition<B: AccountStorage>(
         *state.backend.operator(),
         max_supply,
     );
-    state.queue_external_instruction(instruction, seeds);
+    state.queue_external_instruction(instruction, seeds, mpl_token_metadata::state::MAX_MASTER_EDITION_LEN);
 
     Ok(edition_pubkey.to_bytes().to_vec())
 }
@@ -191,7 +182,6 @@ fn create_master_edition<B: AccountStorage>(
 fn is_nft<B: AccountStorage>(
     _context: &evm::Context,
     state: &mut ExecutorState<B>,
-    _gasometer: &mut Gasometer,
     mint: Pubkey,
 ) -> Result<Vec<u8>, ProgramError>
 {
@@ -221,7 +211,6 @@ fn is_nft<B: AccountStorage>(
 fn uri<B: AccountStorage>(
     _context: &evm::Context,
     state: &mut ExecutorState<B>,
-    _gasometer: &mut Gasometer,
     mint: Pubkey,
 ) -> Result<Vec<u8>, ProgramError>
 {

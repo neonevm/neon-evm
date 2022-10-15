@@ -851,6 +851,10 @@ pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
 pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 /// Amount of storage entries stored in the contract account
 pub const STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
+/// Minimum number of EVM steps for iterative transaction
+pub const EVM_STEPS_MIN: u64 = 500;
+/// Maximum number of EVM steps in a last iteration
+pub const EVM_STEPS_LAST_ITERATION_MAX: u64 = 0;
 
 cfg_if! {
     if #[cfg(feature = "emergency")] {
@@ -875,6 +879,7 @@ neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_H
 neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
 neon_elf_param!( NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, formatcp!("{:?}", GAS_LIMIT_MULTIPLIER_NO_CHAINID));
 neon_elf_param!( NEON_STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT, formatcp!("{:?}", STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT));
+neon_elf_param!( NEON_EVM_STEPS_MIN, formatcp!("{:?}", EVM_STEPS_MIN));
 
 /// Chain ID
 #[must_use]

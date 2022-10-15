@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use evm::{H160, Capture, ExitReason};
 
-use crate::{account_storage::AccountStorage, executor::{ExecutorState, Gasometer}};
+use crate::{account_storage::AccountStorage, executor::ExecutorState};
 
 
 mod ecrecover;
@@ -62,20 +62,19 @@ pub fn call_precompile<B: AccountStorage>(
     address: H160,
     input: &[u8],
     context: &evm::Context,
-    state: &mut ExecutorState<B>,
-    gasometer: &mut Gasometer
+    state: &mut ExecutorState<B>
 ) -> Option<PrecompileResult> {
     if address == SYSTEM_ACCOUNT_QUERY {
         return Some(query_account::query_account(input, state));
     }
     if address == SYSTEM_ACCOUNT_NEON_TOKEN {
-        return Some(neon_token::neon_token(input, context, state, gasometer));
+        return Some(neon_token::neon_token(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_SPL_TOKEN {
-        return Some(spl_token::spl_token(input, context, state, gasometer));
+        return Some(spl_token::spl_token(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_METAPLEX {
-        return Some(metaplex::metaplex(input, context, state, gasometer));
+        return Some(metaplex::metaplex(input, context, state));
     }
     if address == SYSTEM_ACCOUNT_ECRECOVER {
         return Some(ecrecover::ecrecover(input));

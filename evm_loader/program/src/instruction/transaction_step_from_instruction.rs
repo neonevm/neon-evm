@@ -1,4 +1,5 @@
 use crate::account::{Operator, program, EthereumAccount, Treasury, State, Holder, FinalizedState};
+use crate::executor::Gasometer;
 use crate::transaction::{Transaction, recover_caller_address};
 use crate::account_storage::ProgramAccountStorage;
 use arrayref::{array_ref};
@@ -25,7 +26,8 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
         operator_ether_account: EthereumAccount::from_account(program_id, &accounts[3])?,
         system_program: program::System::from_account(&accounts[4])?,
         neon_program: program::Neon::from_account(program_id, &accounts[5])?,
-        remaining_accounts: &accounts[6..]
+        remaining_accounts: &accounts[6..],
+        all_accounts: accounts
     };
 
     let mut account_storage = ProgramAccountStorage::new(
@@ -45,13 +47,21 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
 
             let storage = State::new(program_id, storage_info, &accounts, caller, &trx)?;
 
-            do_begin(step_count, accounts, storage, &mut account_storage, trx, caller, 0)
+            let mut gasometer = Gasometer::new(None, &accounts.operator)?;
+            gasometer.record_solana_transaction_cost();
+            gasometer.record_address_lookup_table(accounts.all_accounts);
+            gasometer.record_iterative_overhead();
+
+            do_begin(accounts, storage, &mut account_storage, gasometer, trx, caller)
         },
         State::TAG => {
             let storage = State::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
             solana_program::log::sol_log_data(&[b"HASH", &storage.transaction_hash]);
 
-            do_continue(step_count, accounts, storage, &mut account_storage)
+            let mut gasometer = Gasometer::new(Some(storage.gas_used), &accounts.operator)?;
+            gasometer.record_solana_transaction_cost();
+
+            do_continue(step_count, accounts, storage, &mut account_storage, gasometer)
         },
         _ => Err!(ProgramError::InvalidAccountData; "Account {} - expected Holder or State", storage_info.key)
     }

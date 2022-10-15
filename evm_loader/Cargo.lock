@@ -1133,7 +1133,6 @@ dependencies = [
  "arrayref",
  "bincode",
  "borsh",
- "bytes",
  "cfg-if",
  "const_format",
  "environmental",

@@ -46,7 +46,7 @@ class TestStorageAccountAccess:
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
                 instruction,
-                operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 10,
+                operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 0,
                 [
                     deployed_contract.solana_address,
                     user_account.solana_account_address,
@@ -59,20 +59,21 @@ class TestStorageAccountAccess:
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
         assert parsed_data.caller == user_account.eth_address
-        #
-        # # finish transaction and check storage is finalized
-        trx = TransactionWithComputeBudget()
-        trx.add(
-            make_PartialCallOrContinueFromRawEthereumTX(
-                instruction,
-                operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
-                [
-                    deployed_contract.solana_address,
-                    user_account.solana_account_address,
-                ]
+        
+        for _ in range(2):
+            trx = TransactionWithComputeBudget()
+            trx.add(
+                make_PartialCallOrContinueFromRawEthereumTX(
+                    instruction,
+                    operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
+                    [
+                        deployed_contract.solana_address,
+                        user_account.solana_account_address,
+                    ]
+                )
             )
-        )
-        receipt = send_transaction(solana_client, trx, operator_keypair)
+            receipt = send_transaction(solana_client, trx, operator_keypair)
+
         account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
         parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_FINALIZED_STATE
@@ -147,18 +148,20 @@ class TestStorageAccountAccess:
             )
             instruction = eth_transaction.rawTransaction
 
-            trx = TransactionWithComputeBudget()
-            trx.add(
-                make_PartialCallOrContinueFromRawEthereumTX(
-                    instruction,
-                    operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
-                    [
-                        deployed_contract.solana_address,
-                        user_account.solana_account_address,
-                    ]
+            for _ in range(3):
+                trx = TransactionWithComputeBudget()
+                trx.add(
+                    make_PartialCallOrContinueFromRawEthereumTX(
+                        instruction,
+                        operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1000,
+                        [
+                            deployed_contract.solana_address,
+                            user_account.solana_account_address,
+                        ]
+                    )
                 )
-            )
-            send_transaction(solana_client, trx, operator_keypair)
+                send_transaction(solana_client, trx, operator_keypair)
+
             account_data = base64.b64decode(
                 solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
             parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
