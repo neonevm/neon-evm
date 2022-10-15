@@ -14,12 +14,12 @@ contract ERC20ForSplFactory {
         return allErc20ForSpl.length;
     }
 
-    function createErc20ForSpl(string memory _name, string memory _symbol, bytes32 _mint) public returns (address erc20spl) {
+    function createErc20ForSpl(bytes32 _mint) public returns (address erc20spl) {
 
         require(getErc20ForSpl[_mint] == address(0), 'ERC20 SPL Factory: ERC20_SPL_EXISTS');
 
         bytes memory bytecode = type(ERC20ForSpl).creationCode;
-        bytecode = abi.encodePacked(bytecode, abi.encode(_name, _symbol, _mint));
+        bytecode = abi.encodePacked(bytecode, abi.encode(_mint));
         bytes32 salt = keccak256(abi.encodePacked(_mint));
         assembly {
             erc20spl := create2(0, add(bytecode, 32), mload(bytecode), salt)
