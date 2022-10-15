@@ -205,12 +205,12 @@ fn is_initialized<B: AccountStorage>(
 }
 
 fn is_nft<B: AccountStorage>(
-    _context: &evm::Context,
+    context: &evm::Context,
     state: &mut ExecutorState<B>,
     mint: Pubkey,
 ) -> Result<Vec<u8>, ProgramError>
 {
-    let is_nft = metadata(_context, state, mint)?
+    let is_nft = metadata(context, state, mint)?
         .map_or_else(|| false, |m| m.token_standard == Some(TokenStandard::NonFungible));
 
     Ok(to_solidity_bool(is_nft))
@@ -223,7 +223,7 @@ fn uri<B: AccountStorage>(
 ) -> Result<Vec<u8>, ProgramError>
 {
     let uri = metadata(context, state, mint)?
-        .map_or_else(|| String::new(), |m| m.data.uri);
+        .map_or_else(String::new, |m| m.data.uri);
 
     Ok(to_solidity_string(uri.trim_end_matches('\0')))
 }
@@ -235,7 +235,7 @@ fn token_name<B: AccountStorage>(
 ) -> Result<Vec<u8>, ProgramError>
 {
     let token_name = metadata(context, state, mint)?
-        .map_or_else(|| String::new(), |m| m.data.name);
+        .map_or_else(String::new, |m| m.data.name);
 
     Ok(to_solidity_string(token_name.trim_end_matches('\0')))
 }
@@ -247,7 +247,7 @@ fn symbol<B: AccountStorage>(
 ) -> Result<Vec<u8>, ProgramError>
 {
     let symbol = metadata(context, state, mint)?
-        .map_or_else(|| String::new(), |m| m.data.symbol);
+        .map_or_else(String::new, |m| m.data.symbol);
 
     Ok(to_solidity_string(symbol.trim_end_matches('\0')))
 }
