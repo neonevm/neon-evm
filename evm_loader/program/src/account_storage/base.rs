@@ -7,7 +7,7 @@ use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{EthereumAccount, Operator, program, TAG_ACCOUNT_V3};
+use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
@@ -115,6 +115,6 @@ impl<'a> ProgramAccountStorage<'a> {
     pub fn is_account_empty(&self, account: &AccountInfo) -> bool {
         system_program::check_id(account.owner) ||
             (account.owner == self.program_id() &&
-                (account.data_is_empty() || account.data.borrow()[0] != TAG_ACCOUNT_V3))
+                (account.data_is_empty() || account.data.borrow()[0] == TAG_EMPTY))
     }
 }
