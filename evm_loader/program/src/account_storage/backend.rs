@@ -137,7 +137,10 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
                 let (solana_address, _bump_seed) = self.calc_solana_address(address);
                 self.solana_accounts.get(&solana_address)
                     .filter(|info| !solana_program::system_program::check_id(info.owner))
-                    .map(|info| info.data_len())
+                    .map(|info| {
+                        assert_eq!(info.owner, self.program_id());
+                        info.data_len()
+                    })
             })
     }
 
