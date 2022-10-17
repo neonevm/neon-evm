@@ -101,7 +101,7 @@ fn create_metadata_accounts_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pub
 
     {
         let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
-        metadata.serialize(&mut metadata_account.data)?;
+        metadata.serialize(&mut metadata_account.data.as_mut_slice())?;
     }
 
     Ok(())
@@ -156,14 +156,14 @@ fn create_master_edition_v3(meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey
         edition_account.lamports = edition_account.lamports.max(rent.minimum_balance(MAX_MASTER_EDITION_LEN));
 
         let edition = MasterEditionV2 { key: Key::MasterEditionV2, supply: 0, max_supply: args.max_supply };
-        edition.serialize(&mut edition_account.data)?;
+        edition.serialize(&mut edition_account.data.as_mut_slice())?;
     }
 
     {
         let metadata_account = accounts.get_mut(metadata_account_key).unwrap();
 
         metadata.token_standard = Some(TokenStandard::NonFungible);
-        metadata.serialize(&mut metadata_account.data)?;
+        metadata.serialize(&mut metadata_account.data.as_mut_slice())?;
     }
 
     {

@@ -269,7 +269,6 @@ fn metadata<B: AccountStorage>(
             None
         }
     };
-    debug_print!("metadata: {:?}", result);
     Ok(result)
 }
 

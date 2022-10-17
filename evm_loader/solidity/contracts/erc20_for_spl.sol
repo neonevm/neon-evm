@@ -243,7 +243,8 @@ contract ERC20ForSplMintable is ERC20ForSpl {
         string memory _symbol,
         uint8 _decimals
     ) private returns (bytes32) {
-        _metaplex.createMetadata(findMintAccount(), _name, _symbol, "");
-        return _splToken.initializeMint(bytes32(0), _decimals);
+        bytes32 mintAddress = _splToken.initializeMint(bytes32(0), _decimals);
+        _metaplex.createMetadata(mintAddress, _name, _symbol, "");
+        return mintAddress;
     }
 }
