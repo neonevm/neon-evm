@@ -358,10 +358,7 @@ impl<'a> ProgramAccountStorage<'a> {
             return Ok(());
         }
 
-        let (solana_address, bump_seed) = self.empty_ethereum_accounts.borrow_mut()
-            .remove(address)
-            .unwrap_or_else(|| self.calc_solana_address(address));
-
+        let (solana_address, bump_seed) = self.calc_solana_address(address);
         let info = self.solana_account(&solana_address)
             .ok_or_else(
                 || E!(
@@ -380,6 +377,8 @@ impl<'a> ProgramAccountStorage<'a> {
             },
         )?;
 
-        self.add_ether_account(ether_account)
+        self.ethereum_accounts.insert(ether_account.address, ether_account);
+
+        Ok(())
     }
 }
