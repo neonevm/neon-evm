@@ -354,32 +354,31 @@ impl<'a> ProgramAccountStorage<'a> {
     }
 
     fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
-        self.panic_if_account_not_exists(address);
+        if self.ethereum_accounts.contains_key(address) {
+            return Ok(());
+        }
 
-        let ether_account =
-            match self.empty_ethereum_accounts.borrow_mut().remove(address) {
-                None => return Ok(()),
+        let (solana_address, bump_seed) = self.empty_ethereum_accounts.borrow_mut()
+            .remove(address)
+            .unwrap_or_else(|| self.calc_solana_address(address));
 
-                Some((solana_address, bump_seed)) => {
-                    let info = self.solana_account(&solana_address)
-                        .ok_or_else(
-                            || E!(
-                                ProgramError::InvalidArgument;
-                                "Account {} not found in the list of Solana accounts",
-                                solana_address
-                            )
-                        )?;
+        let info = self.solana_account(&solana_address)
+            .ok_or_else(
+                || E!(
+                    ProgramError::InvalidArgument;
+                    "Account {} not found in the list of Solana accounts",
+                    solana_address
+                )
+            )?;
 
-                    EthereumAccount::init(
-                        info,
-                        ether_account::Data {
-                            address: *address,
-                            bump_seed,
-                            ..Default::default()
-                        },
-                    )?
-                },
-            };
+        let ether_account = EthereumAccount::init(
+            info,
+            ether_account::Data {
+                address: *address,
+                bump_seed,
+                ..Default::default()
+            },
+        )?;
 
         self.add_ether_account(ether_account)
     }
