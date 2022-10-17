@@ -1,5 +1,5 @@
 use std::cell::{RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use evm::{H160};
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
@@ -56,7 +56,7 @@ impl<'a> ProgramAccountStorage<'a> {
             clock: Clock::get()?,
             solana_accounts,
             ethereum_accounts,
-            empty_ethereum_accounts: RefCell::new(BTreeMap::new()),
+            empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
         })
     }
 
@@ -66,11 +66,11 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         let mut empty_accounts = self.empty_ethereum_accounts.borrow_mut();
-        if empty_accounts.contains_key(address) {
+        if empty_accounts.contains(address) {
             return;
         }
 
-        let (solana_address, bump_seed) = self.calc_solana_address(address);
+        let (solana_address, _bump_seed) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
             assert!(
                 self.is_account_empty(account),
@@ -78,7 +78,7 @@ impl<'a> ProgramAccountStorage<'a> {
                 address,
             );
 
-            empty_accounts.insert(*address, (solana_address, bump_seed));
+            empty_accounts.insert(*address);
             return;
         }
 

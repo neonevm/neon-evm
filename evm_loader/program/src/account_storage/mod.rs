@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION};
 use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
@@ -38,7 +38,7 @@ pub struct ProgramAccountStorage<'a> {
 
     solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
     ethereum_accounts: BTreeMap<H160, EthereumAccount<'a>>,
-    empty_ethereum_accounts: RefCell<BTreeMap<H160, (Pubkey, u8)>>,
+    empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
 }
 
 /// Account storage
