@@ -15,7 +15,7 @@ use solana_sdk::{
 };
 use solana_sdk::entrypoint::MAX_PERMITTED_DATA_INCREASE;
 use evm_loader::{
-    config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT, PAYMENT_TO_TREASURE},
+    config::{STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT},
     executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial, LAMPORTS_PER_SIGNATURE},
     account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage},
     account_storage::{AccountStorage}, precompile::is_precompile_address,
@@ -257,7 +257,7 @@ impl<'a> EmulatorAccountStorage<'a> {
             gas = gas.saturating_add(allocate_cost);
         }
 
-        let iterations_cost = (iterations as u64) * (LAMPORTS_PER_SIGNATURE + PAYMENT_TO_TREASURE);
+        let iterations_cost = (iterations as u64) * LAMPORTS_PER_SIGNATURE;
 
         gas.saturating_add(iterations_cost)
     }
