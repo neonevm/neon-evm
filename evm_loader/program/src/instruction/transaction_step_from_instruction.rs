@@ -55,7 +55,13 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
             do_begin(accounts, storage, &mut account_storage, gasometer, trx, caller)
         },
         State::TAG => {
-            let storage = State::restore(program_id, storage_info, &accounts.operator, accounts.remaining_accounts)?;
+            let (storage, _blocked_accounts) = State::restore(
+                program_id,
+                storage_info,
+                &accounts.operator,
+                accounts.remaining_accounts,
+                false,
+            )?;
             solana_program::log::sol_log_data(&[b"HASH", &storage.transaction_hash]);
 
             let mut gasometer = Gasometer::new(Some(storage.gas_used), &accounts.operator)?;

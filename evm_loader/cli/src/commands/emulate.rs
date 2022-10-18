@@ -13,7 +13,7 @@ use crate::{
 };
 
 use solana_sdk::pubkey::Pubkey;
-use evm_loader::account_storage::{AccountStorage};
+use evm_loader::account_storage::AccountStorage;
 use crate::{errors};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]

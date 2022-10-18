@@ -143,7 +143,7 @@ fn execute<'a>(
     invoke_signed(&instruction, account_infos, signers_seeds)?;
 
     if solana_program::system_program::check_id(accounts.ethereum_account.owner) {
-        EthereumAccount::create_account(
+        EthereumAccount::create_and_init_account(
             &accounts.system_program,
             program_id,
             &accounts.operator,
