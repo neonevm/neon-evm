@@ -33,7 +33,7 @@ pub fn do_begin<'a>(
 
     check_ethereum_transaction(account_storage, &caller, &trx)?;
     account_storage.check_for_blocked_accounts()?;
-    account_storage.block_accounts(true)?;
+    account_storage.block_accounts(true);
 
     {
         let mut executor = Machine::new(caller, account_storage)?;
@@ -167,7 +167,7 @@ fn finalize<'a>(
     if let Some((result, status)) = results {
         accounts.neon_program.on_return(status, total_used_gas, &result);
 
-        account_storage.block_accounts(false)?;
+        account_storage.block_accounts(false);
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;
     }
 

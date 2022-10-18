@@ -131,7 +131,17 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn solana_account_space(&self, address: &H160) -> Option<usize> {
-        self.ethereum_account(address).map(|account| account.info.data_len())
+        self.ethereum_account(address)
+            .map(|account| account.info.data_len())
+            .or_else(|| {
+                let (solana_address, _bump_seed) = self.calc_solana_address(address);
+                self.solana_accounts.get(&solana_address)
+                    .filter(|info| !solana_program::system_program::check_id(info.owner))
+                    .map(|info| {
+                        assert_eq!(info.owner, self.program_id());
+                        info.data_len()
+                    })
+            })
     }
 
     fn solana_address(&self, address: &H160) -> (Pubkey, u8) {
