@@ -47,7 +47,7 @@ mpl-token-metadata = { version = "=1.3.2", default_features = false, features = 
 thiserror = "1.0"
 arrayref = "0.3.6"
 hex = "0.4.2"
-ripemd160 = "0.10.0"
+ripemd = "0.1"
 rlp = "0.5"
 borsh = "0.9"
 bincode = "1.3.3"
