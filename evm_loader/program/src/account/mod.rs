@@ -47,7 +47,6 @@ const TAG_CONTRACT_STORAGE: u8 = 6;
 const TAG_STATE_V1: u8 = 3;
 const TAG_STATE_V2: u8 = 30;
 const TAG_STATE_V3: u8 = 21;
-const TAG_STATE_V4: u8 = 22; ← With exit_result & exit_reason stored
 const TAG_ERC20_ALLOWANCE: u8 = 4;
 const TAG_FINALIZED_STATE: u8 = 5;
 const TAG_HOLDER: u8 = 6;
@@ -55,7 +54,7 @@ const TAG_HOLDER: u8 = 6;
 
 pub const TAG_EMPTY: u8 = 0;
 pub const TAG_ACCOUNT_V3: u8 = 11;
-const TAG_STATE: u8 = 23;
+const TAG_STATE: u8 = 22;
 const TAG_FINALIZED_STATE: u8 = 31;
 const TAG_CONTRACT_STORAGE: u8 = 41;
 const TAG_HOLDER: u8 = 51;
