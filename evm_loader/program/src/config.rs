@@ -4,7 +4,10 @@
 use cfg_if::cfg_if;
 use const_format::formatcp;
 use evm::U256;
-use evm_loader_macro::{net_specific_config_parser, declare_param_id, neon_elf_param, operators_whitelist};
+use evm_loader_macro::{
+    common_config_parser, declare_param_id, neon_elf_param, net_specific_config_parser,
+    operators_whitelist,
+};
 
 use crate::account::ACCOUNT_SEED_VERSION;
 
@@ -24,28 +27,7 @@ cfg_if! {
     }
 }
 
-/// `PAYMENT_TO_COLLATERAL_POOL`
-pub const PAYMENT_TO_TREASURE: u64 = 5000;
-/// `PAYMENT_TO_DEPOSIT`
-pub const PAYMENT_TO_DEPOSIT: u64 = 5000;
-/// `OPERATOR_PRIORITY_SLOTS`
-pub const OPERATOR_PRIORITY_SLOTS: u64 = 16;
-/// `the message size that is used to holder-account filling`
-pub const HOLDER_MSG_SIZE: u64 = 950;
-/// `OPERATOR_PRIORITY_SLOTS`
-pub const COMPUTE_BUDGET_UNITS: u32 = 500_000;
-/// `OPERATOR_PRIORITY_SLOTS`
-pub const COMPUTE_BUDGET_HEAP_FRAME: u32 = 256 * 1024;
-/// Additional fee for `request units` instruction
-pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
-/// Gas limit multiplier for transactions without chain id
-pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
-/// Amount of storage entries stored in the contract account
-pub const STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
-/// Minimum number of EVM steps for iterative transaction
-pub const EVM_STEPS_MIN: u64 = 500;
-/// Maximum number of EVM steps in a last iteration
-pub const EVM_STEPS_LAST_ITERATION_MAX: u64 = 0;
+common_config_parser!("config/common.toml");
 
 cfg_if! {
     if #[cfg(feature = "emergency")] {
