@@ -35,17 +35,15 @@ pub fn do_begin<'a>(
     account_storage.check_for_blocked_accounts()?;
     account_storage.block_accounts(true)?;
 
-    {
-        let mut executor = Machine::new(caller, account_storage)?;
+    let mut executor = Machine::new(caller, account_storage)?;
 
-        if let Some(code_address) = trx.to {
-            executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
-        } else {
-            executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
-        }?;
+    if let Some(code_address) = trx.to {
+        executor.call_begin(caller, code_address, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
+    } else {
+        executor.create_begin(caller, trx.call_data, trx.value, trx.gas_limit, trx.gas_price)
+    }?;
 
-        executor.save_into(&mut storage);
-    };
+    executor.save_into(&mut storage);
 
     finalize(0, accounts, storage, account_storage, None, gasometer)
 }
@@ -63,41 +61,47 @@ pub fn do_continue<'a>(
         return Err!(ProgramError::InvalidArgument; "Step limit {step_count} below minimum {EVM_STEPS_MIN}");
     }
 
-    let (steps_executed, results) = {
-        let executor = Machine::restore(&storage, account_storage)?;
-        execute_steps(executor, step_count, &mut storage)
+    let mut executor = Machine::restore(&storage, account_storage)?;
+    let result = execute_steps(&mut executor, step_count);
+    let steps_executed = executor.get_steps_executed();
+
+    if steps_executed > 0 {
+        executor.save_into(&mut storage);
+    }
+
+    let results = match result {
+        Ok(()) => None, // step limit
+        Err(_) if steps_executed > EVM_STEPS_LAST_ITERATION_MAX => None,
+        Err(reason) => Some((reason, executor.into_state_actions())),
     };
 
     finalize(steps_executed, accounts, storage, account_storage, results, gasometer)
 }
 
 
-type EvmResults = (Vec<u8>, ExitReason, Vec<Action>);
+type EvmResults = (ExitReason, Vec<Action>);
 
 fn execute_steps(
-    mut executor: Machine<ProgramAccountStorage>,
+    executor: &mut Machine<ProgramAccountStorage>,
     step_count: u64,
-    storage: &mut State
-) -> (u64, Option<EvmResults>) {
-    let result = executor.execute_n_steps(step_count);
-    let steps_executed = executor.get_steps_executed();
-
-    if steps_executed > 0 {
-        executor.save_into(storage);
+) -> Result<(), ExitReason> {
+    if let Some(reason) = executor.state_mut().exit_reason() {
+        if reason != &ExitReason::StepLimitReached {
+            debug_print!(
+                "Skipping VM execution due to the previous execution result stored to state"
+            );
+            return Err(*reason);
+        }
     }
 
-    if result.is_ok() { // step limit
-        return (steps_executed, None);
+    let result = executor.execute_n_steps(step_count)
+        .map_err(|(_result, exit_reason)| exit_reason);
+
+    if let Err(exit_reason) = &result {
+        executor.state_mut().set_exit_reason(Some(*exit_reason));
     }
 
-    if steps_executed > EVM_STEPS_LAST_ITERATION_MAX {
-        return (steps_executed, None);
-    }
-
-    let (return_value, reason) = result.unwrap_err();
-    let actions = executor.into_state_actions();
- 
-    (steps_executed, Some((return_value, reason, actions)))
+    result
 }
 
 fn pay_gas_cost<'a>(
@@ -135,14 +139,14 @@ fn finalize<'a>(
         accounts.system_program.transfer(&accounts.operator, &accounts.treasury, PAYMENT_TO_TREASURE)?;
     }
 
-    let results = if let Some((result, exit_reason, apply_state)) = results {
+    let exit_reason_opt = if let Some((exit_reason, apply_state)) = results {
         if account_storage.apply_state_change(
             &accounts.neon_program,
             &accounts.system_program,
             &accounts.operator,
             apply_state,
         )? == AccountsReadiness::Ready {
-            Some((result, exit_reason))
+            Some(exit_reason)
         } else {
             None
         }
@@ -164,8 +168,8 @@ fn finalize<'a>(
     pay_gas_cost(used_gas, accounts.operator_ether_account, &mut storage, account_storage)?;
 
 
-    if let Some((result, status)) = results {
-        accounts.neon_program.on_return(status, total_used_gas, &result);
+    if let Some(exit_reason) = exit_reason_opt {
+        accounts.neon_program.on_return(exit_reason, total_used_gas);
 
         account_storage.block_accounts(false)?;
         storage.finalize(Deposit::ReturnToOperator(accounts.operator))?;

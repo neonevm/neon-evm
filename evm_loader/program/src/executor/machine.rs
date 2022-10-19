@@ -141,26 +141,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[inline]
     fn process_capture(
         capture: Capture<ExitReason, Resolve<Executor<B>>>,
-    ) -> (RuntimeApply, Option<(Vec<u8>, ExitReason)>) {
+    ) -> RuntimeApply {
         match capture {
-            Capture::Exit(reason) => {
-                if reason == ExitReason::StepLimitReached {
-                    (RuntimeApply::Continue, Some((vec![], reason)))
-                } else {
-                    (RuntimeApply::Exit(reason), Some((vec![], reason)))
-                }
-            },
-            Capture::Trap(interrupt) => {
-                match interrupt {
-                    Resolve::Call(interrupt, resolve) => {
-                        std::mem::forget(resolve);
-                        (RuntimeApply::Call(interrupt), None)
-                    },
-                    Resolve::Create(interrupt, resolve) => {
-                        std::mem::forget(resolve);
-                        (RuntimeApply::Create(interrupt), None)
-                    },
-                }
+            Capture::Exit(ExitReason::StepLimitReached) => RuntimeApply::Continue,
+            Capture::Exit(reason) => RuntimeApply::Exit(reason),
+            Capture::Trap(Resolve::Call(interrupt, resolve)) => {
+                std::mem::forget(resolve);
+                RuntimeApply::Call(interrupt)
+            }
+            Capture::Trap(Resolve::Create(interrupt, resolve)) => {
+                std::mem::forget(resolve);
+                RuntimeApply::Create(interrupt)
             }
         }
     }
@@ -179,11 +170,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 return (steps_executed, RuntimeApply::Continue);
             }
             if let Err(capture) = runtime.step(&mut self.executor) {
-                let (apply_result, exit_result) = Self::process_capture(capture);
-
-                if exit_result.is_some() {
-                    self.state_mut().set_exit_result(exit_result);
-                }
+                let apply_result = Self::process_capture(capture);
 
                 return (steps_executed, apply_result);
             }
@@ -199,11 +186,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         };
 
         let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
-        let (apply_result, exit_result) = Self::process_capture(capture);
-
-        if exit_result.is_some() {
-            self.state_mut().set_exit_result(exit_result);
-        }
+        let apply_result = Self::process_capture(capture);
 
         (steps_executed, apply_result)
     }
@@ -326,10 +309,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Executes current program with all available steps.
     /// # Errors
     /// Terminates execution if a step encounters an error.
-    pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
+    pub fn execute(&mut self) -> ExitReason {
         loop {
-            if let Err(result) = self.execute_n_steps(u64::MAX) {
-                return result;
+            if let Err((_result, exit_reason)) = self.execute_n_steps(u64::MAX) {
+                return exit_reason;
             }
         }
     }
@@ -345,17 +328,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
-        if let Some(result) = self.state_mut().exit_result() {
-            if result.1 != ExitReason::StepLimitReached {
-                debug_print!(
-                    "Skipping VM execution due to the previous execution result stored to state"
-                );
-                return Err(result.clone());
-            }
-        }
-
         let mut steps = 0_u64;
-
         while steps < n {
             let (steps_executed, apply) = self.run(n - steps);
             steps += steps_executed;
