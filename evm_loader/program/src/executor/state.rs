@@ -23,7 +23,7 @@ pub struct ExecutorState<'a, B: AccountStorage> {
     actions: Vec<Action>,
     stack: Vec<usize>,
     is_static: u32,
-    exit_result: Option<(Vec<u8>, ExitReason)>,
+    exit_reason: Option<ExitReason>,
 }
 
 impl<'a, B: AccountStorage> ExecutorState<'a, B> {
@@ -42,7 +42,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: Vec::new(),
             stack: Vec::new(),
             is_static: 0_u32,
-            exit_result: None,
+            exit_reason: None,
         }
     }
 
@@ -51,7 +51,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         self.actions.serialize(writer)?;
         self.stack.serialize(writer)?;
         self.is_static.serialize(writer)?;
-        self.exit_result.serialize(writer)?;
+        self.exit_reason.serialize(writer)?;
 
         Ok(())
     }
@@ -63,7 +63,7 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             actions: BorshDeserialize::deserialize(buffer)?,
             stack: BorshDeserialize::deserialize(buffer)?,
             is_static: BorshDeserialize::deserialize(buffer)?,
-            exit_result: BorshDeserialize::deserialize(buffer)?,
+            exit_reason: BorshDeserialize::deserialize(buffer)?,
         })
     }
 
@@ -431,11 +431,11 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
             .ok_or_else(|| E!(ProgramError::NotEnoughAccountKeys; "Account cache: account {} is not cached", address))
     }
 
-    pub fn set_exit_result(&mut self, result: Option<(Vec<u8>, ExitReason)>) {
-        self.exit_result = result;
+    pub fn set_exit_reason(&mut self, reason: Option<ExitReason>) {
+        self.exit_reason = reason;
     }
 
-    pub fn exit_result(&self) -> &Option<(Vec<u8>, ExitReason)> {
-        &self.exit_result
+    pub fn exit_reason(&self) -> &Option<ExitReason> {
+        &self.exit_reason
     }
 }
