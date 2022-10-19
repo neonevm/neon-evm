@@ -6,7 +6,7 @@ use evm::{Capture, ExitReason};
 pub fn ripemd160(
     input: &[u8]
 ) -> Capture<(ExitReason, Vec<u8>), Infallible> {
-    use ripemd160::{Digest, Ripemd160};
+    use ripemd::{Digest, Ripemd160};
     debug_print!("ripemd160");
 
     let mut hasher = Ripemd160::new();
