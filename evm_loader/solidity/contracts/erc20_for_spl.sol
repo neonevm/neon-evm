@@ -3,68 +3,17 @@
 pragma solidity >= 0.7.0;
 pragma abicoder v2;
 
-interface SPLToken {
+import './SPLToken.sol';
+import './Metaplex.sol';
 
-    enum AccountState {
-        Uninitialized,
-        Initialized,
-        Frozen
-    }
-
-    struct Account {
-        bytes32 mint;
-        bytes32 owner;
-        uint64 amount;
-        bytes32 delegate;
-        uint64 delegated_amount;
-        bytes32 close_authority;
-        AccountState state;
-    }
-
-    struct Mint {
-        uint64 supply;
-        uint8 decimals;
-        bool isInitialized;
-        bytes32 freezeAuthority;
-        bytes32 mintAuthority;
-    }
-
-    function findAccount(bytes32 salt) external pure returns(bytes32);
-
-    function exists(bytes32 account) external view returns(bool);
-    function getAccount(bytes32 account) external view returns(Account memory);
-    function getMint(bytes32 account) external view returns(Mint memory);
-
-    function initializeMint(bytes32 salt, uint8 decimals) external returns(bytes32);
-    function initializeMint(bytes32 salt, uint8 decimals, bytes32 mint_authority, bytes32 freeze_authority) external returns(bytes32);
-
-    function initializeAccount(bytes32 salt, bytes32 mint) external returns(bytes32);
-    function initializeAccount(bytes32 salt, bytes32 mint, bytes32 owner) external returns(bytes32);
-
-    function closeAccount(bytes32 account) external;
-
-    function mintTo(bytes32 account, uint64 amount) external;
-    function burn(bytes32 account, uint64 amount) external;
-
-    function approve(bytes32 source, bytes32 target, uint64 amount) external;
-    function revoke(bytes32 source) external;
-
-    function transfer(bytes32 source, bytes32 target, uint64 amount) external;
-
-    function freeze(bytes32 account) external;
-    function thaw(bytes32 account) external;
-}
-
+SPLToken constant _splToken = SPLToken(0xFf00000000000000000000000000000000000004);
+Metaplex constant _metaplex = Metaplex(0xff00000000000000000000000000000000000005);
 
 contract ERC20ForSpl {
-    SPLToken constant _splToken = SPLToken(0xFf00000000000000000000000000000000000004);
 
-    string public name;
-    string public symbol;
     bytes32 immutable public tokenMint;
 
     mapping(address => mapping(address => uint256)) private _allowances;
-
 
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -72,12 +21,19 @@ contract ERC20ForSpl {
     event ApprovalSolana(address indexed owner, bytes32 indexed spender, uint64 amount);
     event TransferSolana(address indexed from, bytes32 indexed to, uint64 amount);
 
-    constructor(string memory _name, string memory _symbol, bytes32 _tokenMint) {
+    constructor(bytes32 _tokenMint) {
         require(_splToken.getMint(_tokenMint).isInitialized, "ERC20: invalid token mint");
+        require(_metaplex.isInitialized(_tokenMint), "ERC20: missing MetaPlex metadata");
 
-        name = _name;
-        symbol = _symbol;
         tokenMint = _tokenMint;
+    }
+
+    function name() public view returns (string memory) {
+        return _metaplex.name(tokenMint);
+    }
+
+    function symbol() public view returns (string memory) {
+        return _metaplex.symbol(tokenMint);
     }
 
     function decimals() public view returns (uint8) {
@@ -258,11 +214,7 @@ contract ERC20ForSplMintable is ERC20ForSpl {
         string memory _symbol,
         uint8 _decimals,
         address _mint_authority
-    ) ERC20ForSpl(
-        _name,
-        _symbol, 
-        _splToken.initializeMint(bytes32(0), _decimals)
-    ) {
+    ) ERC20ForSpl(_initialize(_name, _symbol, _decimals)) {
         _admin = _mint_authority;
     }
 
@@ -284,5 +236,15 @@ contract ERC20ForSplMintable is ERC20ForSpl {
         _splToken.mintTo(toSolana, uint64(amount));
 
         emit Transfer(address(0), to, amount);
+    }
+
+    function _initialize(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) private returns (bytes32) {
+        bytes32 mintAddress = _splToken.initializeMint(bytes32(0), _decimals);
+        _metaplex.createMetadata(mintAddress, _name, _symbol, "");
+        return mintAddress;
     }
 }

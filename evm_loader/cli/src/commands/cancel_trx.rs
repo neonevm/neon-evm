@@ -33,12 +33,12 @@ pub fn execute(
         AccountMeta::new(incinerator::id(), false),             // Incinerator
     ];
 
-    let remaining_accounts = storage.accounts()?;
-    for (writable, key) in remaining_accounts {
-        if writable {
-            accounts_meta.push(AccountMeta::new(key, false));
+    let blocked_accounts = storage.read_blocked_accounts()?;
+    for blocked_account_meta in blocked_accounts {
+        if blocked_account_meta.is_writable {
+            accounts_meta.push(AccountMeta::new(blocked_account_meta.key, false));
         } else {
-            accounts_meta.push(AccountMeta::new_readonly(key, false));
+            accounts_meta.push(AccountMeta::new_readonly(blocked_account_meta.key, false));
         }
     }
     for meta in &accounts_meta {

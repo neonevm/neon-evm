@@ -218,7 +218,7 @@ impl<'a> EmulatorAccountStorage<'a> {
                 Action::ExternalInstruction { program_id, accounts, allocate, .. } => {
                     self.add_solana_account(program_id, false);
 
-                    for account in &accounts {
+                    for account in accounts {
                         self.add_solana_account(account.key, account.is_writable);
                     }
 
@@ -246,13 +246,10 @@ impl<'a> EmulatorAccountStorage<'a> {
             };
             accounts.entry(address).and_modify(|a| {
                 a.size = new_size;
-                a.additional_resize_steps = a.additional_resize_steps.max(
-                    new_size
-                        .saturating_sub(a.size_current)
-                        .saturating_sub(1)
-                        / MAX_PERMITTED_DATA_INCREASE,
-                );
-
+                a.additional_resize_steps = new_size
+                    .saturating_sub(a.size_current)
+                    .saturating_sub(1)
+                    / MAX_PERMITTED_DATA_INCREASE;
                 iterations = iterations.max(a.additional_resize_steps);
             });
 
@@ -261,9 +258,8 @@ impl<'a> EmulatorAccountStorage<'a> {
         }
 
         let iterations_cost = (iterations as u64) * LAMPORTS_PER_SIGNATURE;
-        gas = gas.saturating_add(iterations_cost);
 
-        gas
+        gas.saturating_add(iterations_cost)
     }
 
     fn ethereum_account_map_or<F, R>(&self, address: &H160, default: R, f: F) -> R
