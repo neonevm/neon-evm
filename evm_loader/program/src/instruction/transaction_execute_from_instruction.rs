@@ -84,7 +84,7 @@ fn execute<'a>(
 
     accounts.system_program.transfer(&accounts.operator, &accounts.treasury, crate::config::PAYMENT_TO_TREASURE)?;
 
-    let (exit_reason, return_value, apply_state) = {
+    let (exit_reason, apply_state) = {
         let mut executor = Machine::new(caller_address, account_storage)?;
 
         executor.call_begin(
@@ -100,10 +100,10 @@ fn execute<'a>(
             trx.gas_price,
         )?;
 
-        let (result, exit_reason) = executor.execute();
+        let exit_reason = executor.execute();
         let actions = executor.into_state_actions();
 
-        (exit_reason, result, actions)
+        (exit_reason, actions)
     };
 
     let accounts_readiness = account_storage.apply_state_change(
@@ -134,7 +134,7 @@ fn execute<'a>(
     let gas_cost = used_gas.saturating_mul(trx.gas_price);
     account_storage.transfer_gas_payment(caller_address, accounts.operator_ether_account, gas_cost)?;
 
-    accounts.neon_program.on_return(exit_reason, used_gas, &return_value);
+    accounts.neon_program.on_return(exit_reason, used_gas);
     
     Ok(())
 }
