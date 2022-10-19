@@ -1142,7 +1142,7 @@ dependencies = [
  "hex",
  "log",
  "mpl-token-metadata",
- "ripemd160",
+ "ripemd",
  "rlp",
  "solana-program",
  "spl-associated-token-account",
@@ -2793,14 +2793,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ripemd160"
-version = "0.9.1"
+name = "ripemd"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eca4ecc81b7f313189bf73ce724400a07da2a6dac19588b03c8bd76a2dcc251"
+checksum = "74e2ee464e763f6527991a6d532142e3c2016eb9907cc081401c11862c26a840"
 dependencies = [
- "block-buffer 0.9.0",
- "digest 0.9.0",
- "opaque-debug 0.3.0",
+ "digest 0.10.3",
 ]
 
 [[package]]
