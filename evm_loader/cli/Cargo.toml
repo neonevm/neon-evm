@@ -28,7 +28,6 @@ arrayref = "0.3.6"
 serde = "1.0.144"
 serde_json = "1.0.85"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
-libsecp256k1 = { version = "0.6.0", default-features = false, features = ["static-context", "hmac"] }
 log = "0.4.17"
 fern = "0.6"
 rlp = "0.5"

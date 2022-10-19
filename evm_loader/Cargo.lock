@@ -2016,7 +2016,6 @@ dependencies = [
  "getrandom 0.1.16",
  "goblin 0.4.3",
  "hex",
- "libsecp256k1",
  "log",
  "rand 0.8.5",
  "rlp",
