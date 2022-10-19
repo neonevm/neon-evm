@@ -1,15 +1,24 @@
 use std::collections::BTreeMap;
 
 use crate::executor::{OwnedAccountInfo, AccountMeta};
+use borsh::BorshDeserialize;
 use solana_program::{
     entrypoint::ProgramResult,
     pubkey::Pubkey,
     program_error::ProgramError, rent::Rent, sysvar::Sysvar, program_pack::Pack
 };
+use spl_associated_token_account::instruction::AssociatedTokenAccountInstruction;
 
 
 pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap<Pubkey, OwnedAccountInfo>) -> ProgramResult {
-    if !instruction.is_empty() {
+    let instruction = if instruction.is_empty() {
+        AssociatedTokenAccountInstruction::Create
+    } else {
+        AssociatedTokenAccountInstruction::try_from_slice(instruction)
+            .map_err(|_| ProgramError::InvalidInstructionData)?
+    };
+    
+    if instruction != AssociatedTokenAccountInstruction::Create {
         return Err!(ProgramError::InvalidInstructionData; "Unknown spl_associated_token instruction");
     }
 
