@@ -5,7 +5,7 @@ use std::env;
 use std::path::PathBuf;
 
 use config_parser::{AccountWhitelists, CollateralPoolBase, NetSpecificConfig, TokenMint};
-use proc_macro::{Span, TokenStream};
+use proc_macro::TokenStream;
 use proc_macro2::Span as Span2;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
