@@ -1155,6 +1155,7 @@ name = "evm-loader-macro"
 version = "1.0.0"
 dependencies = [
  "bs58",
+ "proc-macro2 1.0.40",
  "quote 1.0.20",
  "serde",
  "syn 1.0.99",
