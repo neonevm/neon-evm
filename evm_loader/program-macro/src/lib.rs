@@ -1,7 +1,7 @@
 mod config_parser;
 
 use config_parser::{
-    AccountWhitelists, CollateralPoolBase, CommonConfig, NetSpecificConfig, TokenMint,
+    AccountWhitelists, CollateralPoolBase, CommonConfig, ElfParams, NetSpecificConfig, TokenMint,
 };
 use proc_macro::TokenStream;
 use syn::parse::{Parse, ParseStream};
@@ -206,5 +206,11 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
     let config = parse_macro_input!(tokens as CommonConfig);
+    config.token_stream
+}
+
+#[proc_macro]
+pub fn elf_config_parser(tokens: TokenStream) -> TokenStream {
+    let config = parse_macro_input!(tokens as ElfParams);
     config.token_stream
 }

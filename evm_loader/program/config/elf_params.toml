@@ -1,0 +1,12 @@
+[env]
+neon_pkg_version = "CARGO_PKG_VERSION"
+neon_revision = "NEON_REVISION"
+
+[extra]
+neon_seed_version = "ACCOUNT_SEED_VERSION"
+neon_token_mint_decimals = "token_mint::DECIMALS"
+neon_chain_id = "CHAIN_ID"
+neon_pool_count = "collateral_pool_base::NEON_POOL_COUNT"
+neon_compute_units = "COMPUTE_BUDGET_UNITS"
+neon_heap_frame = "COMPUTE_BUDGET_HEAP_FRAME"
+neon_additional_fee = "REQUEST_UNITS_ADDITIONAL_FEE"
