@@ -53,12 +53,7 @@ RUN apt-get update && \
 COPY evm_loader/tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
-RUN apt update & apt install -y nodejs
-RUN npm install -g npm@8.6.0
-COPY /evm_loader/solidity/ /opt/contracts/
-WORKDIR /opt/contracts
-RUN npm install
+COPY /evm_loader/solidity/ /opt/contracts/contracts/
 WORKDIR /opt
 
 COPY --from=solana \
@@ -91,8 +86,7 @@ COPY evm_loader/*.py \
     evm_loader/permission_denial_token_keypair.json \
     evm_loader/utils/set_single_acct_permission.sh \
     evm_loader/utils/set_many_accts_permission.sh \
-    evm_loader/deploy-contracts.sh \
-    evm_loader/get_deployer_address.py /opt/
+    /opt/
 
 COPY evm_loader/tests /opt/tests
 COPY evm_loader/evm_loader-keypair.json /opt/
