@@ -1,12 +1,9 @@
 mod config_parser;
 
-use std::collections::HashMap;
-use std::env;
-use std::path::PathBuf;
-
-use config_parser::{AccountWhitelists, CollateralPoolBase, NetSpecificConfig, TokenMint};
+use config_parser::{
+    AccountWhitelists, CollateralPoolBase, CommonConfig, NetSpecificConfig, TokenMint,
+};
 use proc_macro::TokenStream;
-use proc_macro2::Span as Span2;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, Expr, Ident, LitStr, Result, Token};
@@ -134,13 +131,6 @@ pub fn declare_param_id(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
-    let file_relative_path = parse_macro_input!(tokens as LitStr);
-    let mut file_path: PathBuf = PathBuf::new();
-    file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
-    file_path.push(file_relative_path.value());
-    let file_contents = std::fs::read(&file_path)
-        .unwrap_or_else(|_| panic!("{} should be a valid path", file_path.display()));
-
     let NetSpecificConfig {
         chain_id,
         operators_whitelist,
@@ -162,7 +152,7 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
                 neon_minimal_client_allowance_balance,
                 neon_minimal_contract_allowance_balance,
             },
-    } = toml::from_slice(&file_contents).expect("File should parse to a Config");
+    } = parse_macro_input!(tokens as NetSpecificConfig);
 
     quote! {
         /// Supported CHAIN_ID value for transactions
@@ -215,41 +205,6 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
-    let file_relative_path = parse_macro_input!(tokens as LitStr);
-    let mut file_path: PathBuf = PathBuf::new();
-    file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
-    file_path.push(file_relative_path.value());
-    let file_contents = std::fs::read(&file_path)
-        .unwrap_or_else(|_| panic!("{} should be a valid path", file_path.display()));
-
-    let parsed_toml: HashMap<String, HashMap<String, toml::Value>> =
-        toml::from_slice(&file_contents)
-            .unwrap_or_else(|_| panic!("{} should parse to a valid TOML", file_path.display()));
-
-    let variables: Vec<_> = parsed_toml
-        .into_iter()
-        .flat_map(|(r#type, variables)| {
-            variables.into_iter().map(move |(name, value)| {
-                let ident_name = Ident::new(&name.to_uppercase(), Span2::call_site());
-                let ident_type = Ident::new(&r#type, Span2::call_site());
-                match value {
-                    toml::Value::Float(v) => {
-                        quote! { pub const #ident_name: #ident_type = #v as #ident_type; }
-                    }
-                    toml::Value::Integer(v) => {
-                        quote! { pub const #ident_name: #ident_type = #v as #ident_type; }
-                    }
-                    toml::Value::String(v) => {
-                        quote! { pub const #ident_name: #ident_type = #v; }
-                    }
-                    toml::Value::Boolean(v) => {
-                        quote! { pub const #ident_name: #ident_type = #v; }
-                    }
-                    _ => panic!("Unsupported TOML value {:?}", value),
-                }
-            })
-        })
-        .collect();
-
-    quote! {#(#variables)*}.into()
+    let config = parse_macro_input!(tokens as CommonConfig);
+    config.token_stream
 }
