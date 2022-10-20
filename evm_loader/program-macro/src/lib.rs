@@ -247,7 +247,7 @@ pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
                     toml::Value::Boolean(v) => {
                         quote! { pub const #ident_name: #ident_type = #v; }
                     }
-                    _ => panic!("Unsupported TOML type"),
+                    _ => panic!("Unsupported TOML value {:?}", value),
                 }
             })
         })
