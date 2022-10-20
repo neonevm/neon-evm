@@ -139,7 +139,7 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
     file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
     file_path.push(file_relative_path.value());
     let file_contents = std::fs::read(&file_path)
-        .expect(&format!("{} should be a valid path", file_path.display()));
+        .unwrap_or_else(|_| panic!("{} should be a valid path", file_path.display()));
 
     let NetSpecificConfig {
         chain_id,
@@ -220,13 +220,11 @@ pub fn common_config_parser(tokens: TokenStream) -> TokenStream {
     file_path.push(env::var("CARGO_MANIFEST_DIR").unwrap());
     file_path.push(file_relative_path.value());
     let file_contents = std::fs::read(&file_path)
-        .expect(&format!("{} should be a valid path", file_path.display()));
+        .unwrap_or_else(|_| panic!("{} should be a valid path", file_path.display()));
 
     let parsed_toml: HashMap<String, HashMap<String, toml::Value>> =
-        toml::from_slice(&file_contents).expect(&format!(
-            "{} should parse to a valid TOML",
-            file_path.display()
-        ));
+        toml::from_slice(&file_contents)
+            .unwrap_or_else(|_| panic!("{} should parse to a valid TOML", file_path.display()));
 
     let variables: Vec<_> = parsed_toml
         .into_iter()
