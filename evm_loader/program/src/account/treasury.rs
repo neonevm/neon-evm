@@ -27,6 +27,7 @@ impl<'a> Treasury<'a> {
         Ok(Self { info, bump_seed })
     }
 
+    #[must_use]
     pub fn address(program_id: &Pubkey, index: u32) -> (Pubkey, u8) {
         Pubkey::find_program_address(
             &[TREASURY_POOL_SEED.as_bytes(), &index.to_le_bytes()],
@@ -34,6 +35,7 @@ impl<'a> Treasury<'a> {
         )
     }
 
+    #[must_use]
     pub fn get_bump_seed(&self) -> u8 {self.bump_seed}
 }
 
@@ -64,10 +66,12 @@ impl<'a> MainTreasury<'a> {
         Ok(Self { info, bump_seed })
     }
 
+    #[must_use]
     pub fn address(program_id: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[TREASURY_POOL_SEED.as_bytes()], program_id)
     }
 
+    #[must_use]
     pub fn get_bump_seed(&self) -> u8 {self.bump_seed}
 }
 

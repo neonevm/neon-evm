@@ -17,7 +17,7 @@ use solana_program::{
 
 struct Accounts<'a> {
     main_treasury: &'a AccountInfo<'a>,
-    _program_data: &'a AccountInfo<'a>,
+    program_data: &'a AccountInfo<'a>,
     program_upgrade_auth: &'a AccountInfo<'a>,
     token_program: Token<'a>,
     system_program: System<'a>,
@@ -29,7 +29,7 @@ impl<'a> Accounts<'a> {
     pub fn from_slice(accounts: &'a [AccountInfo<'a>]) -> Result<Accounts<'a>, ProgramError> {
         Ok(Accounts {
             main_treasury: &accounts[0],
-            _program_data: &accounts[1],
+            program_data: &accounts[1],
             program_upgrade_auth: &accounts[2],
             token_program: Token::from_account(&accounts[3])?,
             system_program: System::from_account(&accounts[4])?,
@@ -87,7 +87,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         return Err!(ProgramError::InvalidArgument; "Account {} - not spl-token program", accounts.token_program.key);
     }
 
-    let expected_upgrade_auth_key = get_program_upgrade_authority(program_id, accounts._program_data)?;
+    let expected_upgrade_auth_key = get_program_upgrade_authority(program_id, accounts.program_data)?;
     if *accounts.program_upgrade_auth.key != expected_upgrade_auth_key {
         return Err!(ProgramError::InvalidArgument; "Account {} - invalid program upgrade authority", accounts.program_upgrade_auth.key);
     }
@@ -99,14 +99,14 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], _ins
         &spl_token::id(),
         &accounts.payer,
         accounts.main_treasury,
-        &[&TREASURY_POOL_SEED.as_bytes(), &[bump_seed]],
+        &[TREASURY_POOL_SEED.as_bytes(), &[bump_seed]],
         spl_token::state::Account::LEN,
     )?;
 
     accounts.token_program.create_account(
         accounts.main_treasury,
         accounts.mint,
-        &accounts.program_upgrade_auth,
+        accounts.program_upgrade_auth,
     )?;
 
     Ok(())

@@ -33,7 +33,7 @@ pub fn process<'a>(program_id: &'a Pubkey, accounts: &'a [AccountInfo<'a>], inst
                 available_lamports
             ),
             &[treasury.clone(), main_treasury.clone(), system.clone()],
-            &[&[&TREASURY_POOL_SEED.as_bytes(), &treasury_index.to_le_bytes(), &[treasury.get_bump_seed()]]]
+            &[&[TREASURY_POOL_SEED.as_bytes(), &treasury_index.to_le_bytes(), &[treasury.get_bump_seed()]]]
         )?;
     };
 
