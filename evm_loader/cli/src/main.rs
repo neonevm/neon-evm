@@ -23,6 +23,7 @@ use crate::{
         cancel_trx,
         get_neon_elf,
         collect_treasury,
+        create_main_treasury,
         get_storage_at,
     },
 };
@@ -423,6 +424,14 @@ fn main() {
                 .global(true)
                 .help("Logging level"),
         )
+        .arg(
+            Arg::with_name("fee_payer")
+                .long("fee-payer")
+                .value_name("FEE_PAYER")
+                .takes_value(true)
+                .global(true)
+                .help("Fee payer for transaction"),
+        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
@@ -568,6 +577,10 @@ fn main() {
         .subcommand(
             SubCommand::with_name("collect-treasury")
                 .about("Collect lamports from auxiliary treasury accounts to the main treasury balance")
+        )
+        .subcommand(
+            SubCommand::with_name("create-main-treasury")
+                .about("Create main treasury balance")
         )
         .subcommand(
             SubCommand::with_name("get-storage-at")
@@ -734,6 +747,9 @@ fn main() {
             }
             ("collect-treasury", Some(_)) => {
                 collect_treasury::execute(&config)
+            }
+            ("create-main-treasury", Some(_)) => {
+                create_main_treasury::execute(&config)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();

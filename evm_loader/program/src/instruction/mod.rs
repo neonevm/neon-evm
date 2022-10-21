@@ -29,6 +29,9 @@ pub enum EvmInstruction {
     CreateAccountV03,
 
     /// Collect lamports from treasury pool accounts to main pool balance
+    ///   0. `[WRITE]` Main treasury balance: PDA["treasury_pool"]
+    ///   1. `[WRITE]` Auxiliary treasury balance: PDA["treasury_pool", index.to_le_bytes()]
+    ///   2. `[]` System program
     CollectTreasure,
 
     /// Create Holder Account
@@ -54,6 +57,16 @@ pub enum EvmInstruction {
 
     /// Cancel Transaction
     Cancel,
+
+    /// CreateMainTreasury
+    ///   0. `[WRITE]` Main treasury balance: PDA["treasury_pool"]
+    ///   1. `[]` Program data (to get program upgrade-authority)
+    ///   2. `[SIGNER]` Owner for account (upgrade program authority)
+    ///   3. `[]` SPL token program id
+    ///   4. `[]` System program
+    ///   5. `[]` wSOL mint
+    ///   6. `[WRITE,SIGNER]` Payer
+    CreateMainTreasury,
 }
 
 impl EvmInstruction {
@@ -74,6 +87,7 @@ impl EvmInstruction {
             0x26 => Self::HolderWrite,                              // 38
             0x27 => Self::DepositV03,                               // 39
             0x28 => Self::CreateAccountV03,                         // 40
+            0x29 => Self::CreateMainTreasury,                       // 41
 
             _ => return Err(ProgramError::InvalidInstructionData),
         })
@@ -93,3 +107,4 @@ pub mod transaction_step_from_account;
 pub mod transaction_step_from_account_no_chainid;
 pub mod transaction;
 pub mod collect_treasury;
+pub mod create_main_treasury;

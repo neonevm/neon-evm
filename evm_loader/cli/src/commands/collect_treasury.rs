@@ -5,13 +5,11 @@ use crate::{
     errors::NeonCliError,
 };
 
-use std::str::FromStr;
-
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
-    pubkey::Pubkey,
     transaction::Transaction,
+    system_program,
 };
 
 use solana_cli::{
@@ -20,29 +18,23 @@ use solana_cli::{
 
 use spl_token::instruction::sync_native;
 
-use evm_loader::config::collateral_pool_base;
+use evm_loader::account::{MainTreasury, Treasury};
 
 pub fn execute(
     config: &Config,
 ) -> Result<(), NeonCliError> {
     let neon_params = read_elf_parameters_from_account(config)?;
 
-    let pool_base = neon_params.get("NEON_POOL_BASE")
-        .and_then(|value| Pubkey::from_str(value.as_str()).ok())
-        .ok_or(NeonCliError::IncorrectProgram(config.evm_loader))?;
-
-    let pool_count: u32 = neon_params.get("NEON_POOL_COUNT")
+    let pool_count: u32 = neon_params.get("NEON_TREASURY_COUNT")
         .and_then(|value| value.parse().ok())
         .ok_or(NeonCliError::IncorrectProgram(config.evm_loader))?;
 
-    let main_balance_address = Pubkey::create_with_seed(&pool_base, collateral_pool_base::MAIN_BALANCE_SEED, &spl_token::id())?;
+    let main_balance_address = MainTreasury::address(&config.evm_loader).0;
 
-    info!("NEON_POOL_BASE: {}", pool_base);
     info!("Main pool balance: {}", main_balance_address);
 
     for i in 0..pool_count {
-        let aux_balance_seed = format!("{}{}", collateral_pool_base::PREFIX, i);
-        let aux_balance_address = Pubkey::create_with_seed(&pool_base, &aux_balance_seed, &config.evm_loader)?;
+        let (aux_balance_address, _) = Treasury::address(&config.evm_loader, i);
 
         if let Some(aux_balance_account) = config.rpc_client.get_account_with_commitment(&aux_balance_address, config.commitment)?.value {
             let minimal_balance = config.rpc_client.get_minimum_balance_for_rent_exemption(aux_balance_account.data.len())?;
@@ -57,6 +49,7 @@ pub fn execute(
                             vec![
                                 AccountMeta::new(main_balance_address, false),
                                 AccountMeta::new(aux_balance_address, false),
+                                AccountMeta::new_readonly(system_program::id(), false),
                             ],
                         ),
                     ],
@@ -94,4 +87,3 @@ pub fn execute(
 
     Ok(())
 }
-

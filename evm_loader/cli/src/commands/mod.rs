@@ -7,3 +7,4 @@ pub mod get_ether_account_data;
 pub mod get_neon_elf;
 pub mod get_storage_at;
 pub mod collect_treasury;
+pub mod create_main_treasury;
