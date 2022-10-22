@@ -4,8 +4,7 @@ FROM solanalabs/rust:1.64.0 AS builder
 WORKDIR /opt
 ARG SOLANA_REVISION
 # TODO: make connection insecure to solve with expired certificate
-#RUN sh -c "$(curl --insecure -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
-RUN sh install-v1.11.10 && \
+RUN sh -c "$(curl -ksSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
