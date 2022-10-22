@@ -108,7 +108,7 @@ spl_cli = SplToken(SOLANA_URL)
 
 def create_treasury_pool_address(pool_index):
     return PublicKey.find_program_address(
-        (bytes(TREASURY_POOL_SEED), pool_index.to_bytes(4,'little'),
+        (bytes(TREASURY_POOL_SEED), pool_index.to_bytes(4,'little')),
         PublicKey(EVM_LOADER)
     )
 
