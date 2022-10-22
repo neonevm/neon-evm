@@ -796,7 +796,7 @@ neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECI
 neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
-neon_elf_param!( NEON_TREASURY_SEED         , formatcp!("{:?}", TREASURY_POOL_SEED));
+neon_elf_param!( NEON_TREASURY_SEED         , formatcp!("{}", TREASURY_POOL_SEED));
 neon_elf_param!( NEON_TREASURY_COUNT        , formatcp!("{:?}", TREASURY_POOL_COUNT));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));

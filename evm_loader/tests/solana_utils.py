@@ -106,11 +106,11 @@ class SplToken:
 spl_cli = SplToken(SOLANA_URL)
 
 
-def create_treasury_pool_address(pool_index):
+def create_treasury_pool_address(pool_index, evm_loader=EVM_LOADER):
     return PublicKey.find_program_address(
-        (bytes(TREASURY_POOL_SEED), pool_index.to_bytes(4,'little')),
-        PublicKey(EVM_LOADER)
-    )
+        [bytes(TREASURY_POOL_SEED,'utf8'), pool_index.to_bytes(4,'little')],
+        PublicKey(evm_loader)
+    )[0]
 
 def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
@@ -447,11 +447,11 @@ def send_transaction(client, trx, acc, wait_status=Confirmed):
     tx = result["result"]
     print("Result: {}".format(result))
     wait_confirm_transaction(client, tx)
-    for _ in range(6):
+    for _ in range(60):
         receipt = client.get_confirmed_transaction(tx)
         if receipt["result"] is not None:
             break
-        time.sleep(10)
+        time.sleep(1)
     else:
         raise AssertionError(f"Can't get confirmed transaction ")
     return receipt

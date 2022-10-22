@@ -56,4 +56,4 @@ DeployToken "Neon Token" NEON_TOKEN_MINT neon_token_keypair.json
 export NEON_TOKEN_MINT=$NEON_TOKEN_MINT
 
 echo "Creating EVM Loader token bank..."
-python3 neon_pool_generator.py $EVM_LOADER $NEON_TOKEN_MINT
+python3 neon_pool_generator.py $EVM_LOADER $NEON_TOKEN_MINT $NEON_TREASURY_COUNT create
