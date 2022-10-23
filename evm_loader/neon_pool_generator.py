@@ -26,7 +26,7 @@ for index in range(treasury_count):
     treasury_account_info = solana_client.get_account_info(treasury_account)['result']['value']
     lamports = treasury_account_info['lamports'] if treasury_account_info is not None else 0
     if lamports >= min_lamports:
-        print(f'{index} {treasury_account} Ok {lamports}')
+        pass
     elif create_mode:
         trx = TransactionWithComputeBudget()
         trx.add(transfer(TransferParams(
@@ -39,7 +39,6 @@ for index in range(treasury_count):
         trx_results.append(result['result'])
         print(f'{index} {treasury_account} Funded {result}')
     else:
-        print(f'{index} {treasury_account} Missed {min_lamports-lamports}')
         all_exists = False
 for trx in trx_results:
     wait_confirm_transaction(solana_client, trx, confirmations=1)

@@ -424,14 +424,6 @@ fn main() {
                 .global(true)
                 .help("Logging level"),
         )
-        .arg(
-            Arg::with_name("fee_payer")
-                .long("fee-payer")
-                .value_name("FEE_PAYER")
-                .takes_value(true)
-                .global(true)
-                .help("Fee payer for transaction"),
-        )
         .subcommand(
             SubCommand::with_name("emulate")
                 .about("Emulate execution of Ethereum transaction")
