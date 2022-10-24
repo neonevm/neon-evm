@@ -26,8 +26,8 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
 from .utils.instructions import TransactionWithComputeBudget
-from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
-    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
+from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
+    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -106,11 +106,11 @@ class SplToken:
 spl_cli = SplToken(SOLANA_URL)
 
 
-def create_treasury_pool_address(collateral_pool_index):
-    collateral_seed_prefix = "collateral_seed_"
-    seed = collateral_seed_prefix + str(collateral_pool_index)
-    return account_with_seed(PublicKey(TREASURY_POOL_BASE), seed, PublicKey(EVM_LOADER))
-
+def create_treasury_pool_address(pool_index, evm_loader=EVM_LOADER):
+    return PublicKey.find_program_address(
+        [bytes(TREASURY_POOL_SEED,'utf8'), pool_index.to_bytes(4,'little')],
+        PublicKey(evm_loader)
+    )[0]
 
 def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
@@ -447,11 +447,11 @@ def send_transaction(client, trx, acc, wait_status=Confirmed):
     tx = result["result"]
     print("Result: {}".format(result))
     wait_confirm_transaction(client, tx)
-    for _ in range(6):
+    for _ in range(60):
         receipt = client.get_confirmed_transaction(tx)
         if receipt["result"] is not None:
             break
-        time.sleep(10)
+        time.sleep(1)
     else:
         raise AssertionError(f"Can't get confirmed transaction ")
     return receipt

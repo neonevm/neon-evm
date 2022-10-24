@@ -225,6 +225,24 @@ impl<'a> Token<'a> {
 
         Ok(Self ( info ))
     }
+
+    pub fn create_account(
+        &self,
+        account: &AccountInfo<'a>,
+        mint: &AccountInfo<'a>,
+        owner: &AccountInfo<'a>
+    ) -> Result<(), ProgramError> {
+        invoke(
+            &spl_token::instruction::initialize_account3(
+                self.0.key,
+                account.key,
+                mint.key,
+                owner.key
+            )?,
+            &[account.clone(), mint.clone()]
+        )
+    }
+
 }
 
 impl<'a> Deref for Token<'a> {
