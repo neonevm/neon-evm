@@ -12,16 +12,17 @@ use evm_loader_macro::{
 
 use crate::account::ACCOUNT_SEED_VERSION;
 
+/// Seed to generate PDA for treasury balances 
 pub const TREASURY_POOL_SEED: &str = "treasury_pool";
+
+/// Count of balances in treasury pool
+pub const TREASURY_POOL_COUNT: u32 = 128;
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245_022_934;
-
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 128;
 
         // NOTE: when expanding this list, add same addresses to the 
         // alpha configuration as well
@@ -60,9 +61,6 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245_022_923;
 
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 128;
-
         operators_whitelist![
             "NeonPQFrw5stVvs1rFLDxALWUBDCnSPsWBP83RfNUKK",
             "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -97,9 +95,6 @@ cfg_if! {
 
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245_022_940;
-
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 128;
 
         operators_whitelist![
             "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -360,9 +355,6 @@ cfg_if! {
 
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 245_022_926;
-
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 128;
 
         operators_whitelist![
             "NeoQM3utcHGxhKT41Nq81g8t4xGcPNFpkAgYj1N2N8v",
@@ -630,9 +622,6 @@ cfg_if! {
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 111;
 
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 10;
-
         operators_whitelist![
             "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
             "BMp6gEnveANdvSvspESJUrNczuHz1GF5UQKjVLCkAZih",
@@ -694,9 +683,6 @@ cfg_if! {
 
         /// Supported CHAIN_ID value for transactions
         pub const CHAIN_ID: u64 = 111;
-
-        /// Count of balances in treasury pool
-        pub const TREASURY_POOL_COUNT: u32 = 128;
 
         operators_whitelist![
             "9kPRbbwKL5SYELF4cZqWWFmP88QkKys51DoaUBx8eK73",
