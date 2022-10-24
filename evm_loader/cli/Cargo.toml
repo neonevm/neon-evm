@@ -25,7 +25,7 @@ bs58 = "0.4.0"
 hex = "0.4.2"
 sha3 = "0.10"
 arrayref = "0.3.6"
-serde = "1.0.144"
+serde = "1.0.147"
 serde_json = "1.0.85"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
 log = "0.4.17"
