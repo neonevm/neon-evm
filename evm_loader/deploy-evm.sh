@@ -55,17 +55,5 @@ fi
 DeployToken "Neon Token" NEON_TOKEN_MINT neon_token_keypair.json
 export NEON_TOKEN_MINT=$NEON_TOKEN_MINT
 
-export COLLATERAL_POOL_BASE=$(solana address -k collateral-pool-keypair.json)
-if [ "$COLLATERAL_POOL_BASE" != "$NEON_POOL_BASE" ]; then
-  echo "Collateral pool address in evm_loader.so is $NEON_POOL_BASE"
-  echo "Collateral pool address in collateral-pool-keypair.json is  $COLLATERAL_POOL_BASE"
-  echo "Failed to create collateral pool"
-  exit 1
-fi
-
-echo "Creating collateral pool $NEON_POOL_BASE..."
-solana -k collateral-pool-keypair.json airdrop 1000
-python3 collateral_pool_generator.py collateral-pool-keypair.json $NEON_POOL_COUNT
-
 echo "Creating EVM Loader token bank..."
-python3 neon_pool_generator.py $EVM_LOADER $NEON_TOKEN_MINT
+python3 neon_pool_generator.py $EVM_LOADER $NEON_TOKEN_MINT $NEON_POOL_COUNT create

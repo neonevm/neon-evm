@@ -75,6 +75,9 @@ fn process_instruction<'a>(
         EvmInstruction::CollectTreasure => {
             instruction::collect_treasury::process(program_id, accounts, instruction)
         }
+        EvmInstruction::CreateMainTreasury => {
+            instruction::create_main_treasury::process(program_id, accounts, instruction)
+        }
     };
 
     solana_program::msg!("Total memory occupied: {}", BumpAllocator::occupied());
