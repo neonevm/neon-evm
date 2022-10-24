@@ -68,6 +68,8 @@ COPY --from=solana \
      /usr/bin/spl* \
      /opt/solana/bin/
 
+RUN /opt/solana/bin/solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /opt/solana/bin/metaplex.so --url mainnet-beta
+
 COPY evm_loader/solana-run-neon.sh \
      /opt/solana/bin/
 
