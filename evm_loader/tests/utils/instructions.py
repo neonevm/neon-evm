@@ -1,13 +1,12 @@
 import typing as tp
 
-from solana.publickey import PublicKey
+from eth_keys import keys as eth_keys
 from solana.keypair import Keypair
+from solana.publickey import PublicKey
 from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from eth_keys import keys as eth_keys
 
-from .constants import EVM_LOADER, SYSTEM_ADDRESS, SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS
-
+from .constants import EVM_LOADER, INCINERATOR_ADDRESS
 
 DEFAULT_UNITS = 500 * 1000
 DEFAULT_HEAP_FRAME = 256 * 1024
@@ -66,6 +65,38 @@ def make_WriteHolder(operator: PublicKey, holder_account: PublicKey, hash: bytes
                     AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=operator, is_signer=True, is_writable=False),
                 ])
+
+def make_ExecuteTrxFromInstruction(
+    operator: Keypair,
+    evm_loader: "EvmLoader",
+    treasury_address: PublicKey,
+    treasury_buffer: bytes,
+    message: bytes,
+    additional_accounts: tp.List[PublicKey]
+):
+    data = bytes.fromhex('1f') + treasury_buffer + message
+    operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
+    print("make_ExecuteTrxFromInstruction accounts")
+    print("Operator: ", operator.public_key)
+    print("Treasury: ", treasury_address)
+    print("Operator ether: ", operator_ether.hex())
+    print("Operator eth solana: ", evm_loader.ether2program(operator_ether)[0])
+    accounts = [
+        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
+        AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+        AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+    ]
+    for acc in additional_accounts:
+        print("Additional acc ", acc)
+        accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
+
+    return TransactionInstruction(
+            program_id=EVM_LOADER,
+            data=data,
+            keys=accounts
+        )
 
 
 def make_ExecuteTrxFromAccountDataIterativeOrContinue(
@@ -154,3 +185,41 @@ def make_Cancel(storage_address: PublicKey, operator: Keypair, hash: bytes, addi
         data=d,
         keys=accounts
     )
+
+
+def make_DepositV03(
+    ether_address: bytes,
+    solana_account: PublicKey,
+    source: PublicKey,
+    pool: PublicKey,
+    token_program: PublicKey,
+    operator_pubkey: PublicKey,
+) -> TransactionInstruction:
+    data = bytes.fromhex('27') + ether_address
+
+    accounts = [
+        AccountMeta(pubkey=source, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=pool, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=token_program, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=operator_pubkey, is_signer=True, is_writable=True),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+    ]
+
+    return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)
+
+
+def make_CreateAccountV03(
+    ether_address: bytes,
+    solana_account: PublicKey,
+    operator: Keypair,
+) -> TransactionInstruction:
+    data = bytes.fromhex('28') + ether_address
+
+    accounts = [
+        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
+    ]
+
+    return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)

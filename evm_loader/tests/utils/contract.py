@@ -19,7 +19,13 @@ from .ethereum import create_contract_address, Contract
 
 from web3.auto import w3
 
-def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pathlib.Path, str], holder_account: PublicKey, operator: Keypair) -> int:
+
+def write_transaction_to_holder_account(
+    user: Caller,
+    contract_path: tp.Union[pathlib.Path, str],
+    holder_account: PublicKey,
+    operator: Keypair
+) -> [int, bytes]:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
@@ -53,7 +59,8 @@ def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pa
         offset += len(part)
     for rcpt in receipts:
         wait_confirm_transaction(solana_client, rcpt)
-    return len(contract_code)
+
+    return [len(contract_code), signed_tx.hash]
 
 
 def deploy_contract_step(
@@ -73,6 +80,9 @@ def deploy_contract_step(
         [contract.solana_address, user.solana_account_address]
     ))
     receipt = send_transaction(solana_client, trx, operator)["result"]
+
+    print("Deployment receipt:", receipt)
+
     return receipt
 
 
@@ -83,7 +93,7 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
     # storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
-    size = write_transaction_to_holder_account(user, contract_path, holder_acc, operator)
+    _size, _tx_hash = write_transaction_to_holder_account(user, contract_path, holder_acc, operator)
 
     contract_deployed = False
     while not contract_deployed:

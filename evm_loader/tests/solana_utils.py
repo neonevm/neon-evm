@@ -1,14 +1,15 @@
 import base64
 import json
-import os
-import subprocess
 import math
-import time
+import os
 import pathlib
+import subprocess
+import time
 from hashlib import sha256
-from typing import NamedTuple, Tuple, Union, List
+from typing import NamedTuple, Tuple, Union
 
 import rlp
+import spl.token.instructions
 from base58 import b58encode
 from eth_keys import keys as eth_keys
 from sha3 import keccak_256
@@ -17,17 +18,15 @@ from solana.account import Account
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
-from solana.rpc.commitment import Confirmed, Processed
+from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
-from solana.system_program import SYS_PROGRAM_ID
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
-from .utils.instructions import TransactionWithComputeBudget
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
-    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
+    ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
+from .utils.instructions import TransactionWithComputeBudget, make_DepositV03, make_CreateAccountV03
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -366,15 +365,14 @@ class EvmLoader:
         ether = keccak_256(rlp.encode((caller_ether, trx_count))).digest()[-20:]
 
         program = self.ether2program(ether)
-        code = self.ether2seed(ether)
         info = solana_client.get_account_info(program[0])
         if info['result']['value'] is None:
             res = self.deploy(location)
-            return res['programId'], bytes.fromhex(res['ethereum'][2:]), res['codeId']
+            return res['programId'], bytes.fromhex(res['ethereum'][2:])
         elif info['result']['value']['owner'] != self.loader_id:
             raise Exception("Invalid owner for account {}".format(program))
         else:
-            return program[0], ether, code[0]
+            return program[0], ether
 
     def create_ether_account_trx(self, ether: Union[str, bytes]) -> Tuple[Transaction, str]:
         (sol, nonce) = self.ether2program(ether)
@@ -479,3 +477,60 @@ def make_new_user(evm_loader: EvmLoader):
     print(f'Account ether address: {caller_ether.hex()} {caller_nonce}', )
     print(f'Account solana address: {caller}')
     return Caller(key, caller, caller_ether, caller_nonce, caller_token)
+
+
+def deposit_neon(evm_loader: EvmLoader, operator_keypair: Keypair, ether_address: Union[str, bytes], amount: int):
+    ether_pubkey, _ether_bump_seed = evm_loader.ether2program(ether_address)
+
+    evm_token_authority, _auth_bump_seed = \
+        PublicKey.find_program_address([bytes("Deposit", encoding='utf-8')], PublicKey(evm_loader.loader_id))
+    evm_pool_key = get_associated_token_address(evm_token_authority, NEON_TOKEN_MINT_ID)
+
+    signer_token_pubkey = get_associated_token_address(operator_keypair.public_key, NEON_TOKEN_MINT_ID)
+
+    trx = Transaction()
+    trx.add(
+        spl.token.instructions.approve(
+            ApproveParams(
+                spl.token.constants.TOKEN_PROGRAM_ID,
+                signer_token_pubkey,
+                ether_pubkey,
+                operator_keypair.public_key,
+                amount,
+            )
+        )
+    )
+    trx.add(
+        make_DepositV03(
+            evm_loader.ether2bytes(ether_address),
+            ether_pubkey,
+            signer_token_pubkey,
+            evm_pool_key,
+            spl.token.constants.TOKEN_PROGRAM_ID,
+            operator_keypair.public_key,
+        )
+    )
+
+    receipt = send_transaction(solana_client, trx, operator_keypair)
+
+    return receipt
+
+
+def init_account(
+    ether_address: bytes,
+    solana_account: PublicKey,
+    operator: Keypair,
+):
+    trx = Transaction()
+    trx.add(
+        make_CreateAccountV03(
+            ether_address,
+            solana_account,
+            operator,
+        )
+    )
+    receipt = send_transaction(solana_client, trx, operator)
+    print("Create account receipt:", receipt)
+    assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+
+    return receipt

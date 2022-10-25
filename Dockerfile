@@ -28,16 +28,17 @@ RUN cargo clippy --release && \
     cargo build-sbf --arch bpf --features no-logs
 
 # Build Solidity contracts
-FROM ethereum/solc:0.7.0 AS solc
+FROM ethereum/solc:0.8.0 AS solc
 FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/tests/contracts/*.sol /opt/
+COPY evm_loader/solidity/*.sol /opt/
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
-RUN solc --output-dir . --bin *.sol && \
+RUN solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
 
