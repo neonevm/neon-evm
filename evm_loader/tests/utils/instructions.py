@@ -207,19 +207,3 @@ def make_DepositV03(
     ]
 
     return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)
-
-
-def make_CreateAccountV03(
-    ether_address: bytes,
-    solana_account: PublicKey,
-    operator: Keypair,
-) -> TransactionInstruction:
-    data = bytes.fromhex('28') + ether_address
-
-    accounts = [
-        AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
-        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
-        AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
-    ]
-
-    return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)

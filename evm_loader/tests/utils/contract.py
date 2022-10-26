@@ -24,7 +24,7 @@ from web3.auto import w3
 def make_deployment_transaction(
     user: Caller,
     contract_path: tp.Union[pathlib.Path, str],
-) -> [SignedTransaction, int]:
+) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
@@ -42,9 +42,7 @@ def make_deployment_transaction(
         'chainId': 111
     }
 
-    signed_tx = w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
-
-    return signed_tx, len(contract_code)
+    return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
 
 def write_transaction_to_holder_account(
@@ -98,7 +96,7 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
     # storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
-    signed_tx, _size = make_deployment_transaction(user, contract_path)
+    signed_tx = make_deployment_transaction(user, contract_path)
     write_transaction_to_holder_account(signed_tx, holder_acc, operator)
 
     contract_deployed = False

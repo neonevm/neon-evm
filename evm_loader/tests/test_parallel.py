@@ -30,7 +30,7 @@ def test_create_same_accounts(
 
     contract = create_contract_address(user_account, evm_loader)
     holder_acc = create_holder(operator_keypair)
-    deployment_tx, _size = make_deployment_transaction(user_account, "ERC20ForSplFactory.binary")
+    deployment_tx = make_deployment_transaction(user_account, "ERC20ForSplFactory.binary")
     write_transaction_to_holder_account(deployment_tx, holder_acc, operator_keypair)
 
     # First 2 iterations

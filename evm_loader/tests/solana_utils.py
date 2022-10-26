@@ -26,7 +26,7 @@ from spl.token.instructions import get_associated_token_address, approve, Approv
 
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
-from .utils.instructions import TransactionWithComputeBudget, make_DepositV03, make_CreateAccountV03
+from .utils.instructions import TransactionWithComputeBudget, make_DepositV03
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -512,25 +512,5 @@ def deposit_neon(evm_loader: EvmLoader, operator_keypair: Keypair, ether_address
     )
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
-
-    return receipt
-
-
-def init_account(
-    ether_address: bytes,
-    solana_account: PublicKey,
-    operator: Keypair,
-):
-    trx = Transaction()
-    trx.add(
-        make_CreateAccountV03(
-            ether_address,
-            solana_account,
-            operator,
-        )
-    )
-    receipt = send_transaction(solana_client, trx, operator)
-    print("Create account receipt:", receipt)
-    assert "success" in receipt["result"]["meta"]["logMessages"][-1]
 
     return receipt
