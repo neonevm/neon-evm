@@ -201,9 +201,9 @@ def make_DepositV03(
         AccountMeta(pubkey=source, is_signer=False, is_writable=True),
         AccountMeta(pubkey=pool, is_signer=False, is_writable=True),
         AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=token_program, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=token_program, is_signer=False, is_writable=False),
         AccountMeta(pubkey=operator_pubkey, is_signer=True, is_writable=True),
-        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
     ]
 
     return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)
@@ -218,7 +218,7 @@ def make_CreateAccountV03(
 
     accounts = [
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
-        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
         AccountMeta(pubkey=solana_account, is_signer=False, is_writable=True),
     ]
 
