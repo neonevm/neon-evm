@@ -135,7 +135,8 @@ impl Parse for CommonConfig {
 #[derive(Deserialize)]
 struct InternalElfParams {
     env: HashMap<String, String>,
-    extra: HashMap<String, String>,
+    extra_debug: HashMap<String, String>,
+    extra_display: HashMap<String, String>,
 }
 
 pub struct ElfParams {
@@ -159,7 +160,11 @@ impl Parse for ElfParams {
                 &format!("{} should be a valid path", file_path.display()),
             )
         })?;
-        let InternalElfParams { env, extra } = toml::from_slice(&file_contents)
+        let InternalElfParams {
+            env,
+            extra_debug,
+            extra_display,
+        } = toml::from_slice(&file_contents)
             .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
         let env_tokens = env
             .into_iter()
@@ -170,7 +175,7 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
-        let extra_tokens = extra
+        let extra_debug_tokens = extra_debug
             .into_iter()
             .map(|(name, value)| {
                 let name_ident: Ident = parse_str(&name.to_uppercase())?;
@@ -180,10 +185,21 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
+        let extra_display_tokens = extra_display
+            .into_iter()
+            .map(|(name, value)| {
+                let name_ident: Ident = parse_str(&name.to_uppercase())?;
+                let value_expr: Expr = parse_str(&value)?;
+                Ok(quote! { neon_elf_param!(#name_ident, formatcp!("{}", #value_expr)); })
+            })
+            .flatten_ok()
+            .try_collect::<_, Vec<_>, syn::Error>()?;
+
         Ok(ElfParams {
             token_stream: quote! {
                 #(#env_tokens)*
-                #(#extra_tokens)*
+                #(#extra_debug_tokens)*
+                #(#extra_display_tokens)*
             }
             .into(),
         })
