@@ -37,12 +37,6 @@ operators_whitelist = [
 neon_token_mint = "EjLGfD8mpxKLwGDi8AiTisAbGtWWM2L3htkJ6MpvS8Hk"
 decimals = 9
 
-[collateral_pool_base]
-neon_pool_base = "pBuoBvc4jeWcRvYABZaxtLZFfT2rnXW7G8ixLYc15bQ"
-prefix = "collateral_seed_"
-main_balance_seed = "treasury_pool"
-neon_pool_count = 10
-
 [account_whitelists]
 neon_permission_allowance_token = "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1"
 neon_permission_denial_token = "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX"

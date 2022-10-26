@@ -10,12 +10,6 @@ operators_whitelist = [
 neon_token_mint = "NeonTjSjsuo3rexg9o6vHuMXw62f9V7zvmu8M8Zut44"
 decimals = 9
 
-[collateral_pool_base]
-neon_pool_base = "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY"
-prefix = "collateral_seed_"
-main_balance_seed = "treasury_pool"
-neon_pool_count = 128
-
 [account_whitelists]
 neon_permission_allowance_token = "NeonPrG6tamsqnUwn1DEV9oi9e4JGbvSrgK6xKCiADf"
 neon_permission_denial_token = "NeonDdDx2MiiV3zwt5w1cDFii5Ru7TuKKh6p4Zjo3Ag"

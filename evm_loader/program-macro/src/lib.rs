@@ -1,8 +1,6 @@
 mod config_parser;
 
-use config_parser::{
-    AccountWhitelists, CollateralPoolBase, CommonConfig, ElfParams, NetSpecificConfig, TokenMint,
-};
+use config_parser::{AccountWhitelists, CommonConfig, ElfParams, NetSpecificConfig, TokenMint};
 use proc_macro::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -138,13 +136,6 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
             neon_token_mint,
             decimals,
         },
-        collateral_pool_base:
-            CollateralPoolBase {
-                neon_pool_base,
-                prefix,
-                main_balance_seed,
-                neon_pool_count,
-            },
         account_whitelists:
             AccountWhitelists {
                 neon_permission_allowance_token,
@@ -172,22 +163,6 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
 
-        }
-
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, #neon_pool_base);
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = #prefix;
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = #main_balance_seed;
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = #neon_pool_count;
         }
 
         /// Account whitelists: Permission tokens
