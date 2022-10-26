@@ -1,4 +1,4 @@
-use crate::error::EvmLoaderError;
+// use crate::error::EvmLoaderError;
 use solana_program::account_info::AccountInfo;
 use solana_program::program_error::ProgramError;
 use std::ops::Deref;
@@ -9,8 +9,8 @@ pub struct Operator<'a> {
 
 impl<'a> Operator<'a> {
     pub fn from_account(info: &'a AccountInfo<'a>) -> Result<Self, ProgramError> {
-        let is_authorized = crate::config::AUTHORIZED_OPERATOR_LIST
-            .binary_search(info.key).is_ok();
+        // let is_authorized = crate::config::AUTHORIZED_OPERATOR_LIST
+        //     .binary_search(info.key).is_ok();
 
         // if !is_authorized {
         //     return Err!(EvmLoaderError::UnauthorizedOperator.into(); "Account {} - expected authorized operator", info.key);
