@@ -3,6 +3,7 @@ import typing as tp
 import pathlib
 
 import pytest
+from eth_account.datastructures import SignedTransaction
 from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
@@ -20,12 +21,10 @@ from .ethereum import create_contract_address, Contract
 from web3.auto import w3
 
 
-def write_transaction_to_holder_account(
+def make_deployment_transaction(
     user: Caller,
     contract_path: tp.Union[pathlib.Path, str],
-    holder_account: PublicKey,
-    operator: Keypair
-) -> [int, bytes]:
+) -> [SignedTransaction, int]:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
@@ -45,6 +44,14 @@ def write_transaction_to_holder_account(
 
     signed_tx = w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
+    return signed_tx, len(contract_code)
+
+
+def write_transaction_to_holder_account(
+    signed_tx: SignedTransaction,
+    holder_account: PublicKey,
+    operator: Keypair
+):
     # Write transaction to transaction holder account
     offset = 0
     receipts = []
@@ -59,8 +66,6 @@ def write_transaction_to_holder_account(
         offset += len(part)
     for rcpt in receipts:
         wait_confirm_transaction(solana_client, rcpt)
-
-    return [len(contract_code), signed_tx.hash]
 
 
 def deploy_contract_step(
@@ -93,7 +98,8 @@ def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pat
     # storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
-    _size, _tx_hash = write_transaction_to_holder_account(user, contract_path, holder_acc, operator)
+    signed_tx, _size = make_deployment_transaction(user, contract_path)
+    write_transaction_to_holder_account(signed_tx, holder_acc, operator)
 
     contract_deployed = False
     while not contract_deployed:

@@ -8,8 +8,8 @@ from solana.rpc.core import RPCException
 from solana.transaction import Transaction
 
 from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon
-from .utils.contract import write_transaction_to_holder_account, deploy_contract_step
-from .utils.ethereum import create_contract_address, make_eth_transfer_transaction
+from .utils.contract import write_transaction_to_holder_account, deploy_contract_step, make_deployment_transaction
+from .utils.ethereum import create_contract_address, make_eth_transaction
 from .utils.instructions import make_Cancel, TransactionWithComputeBudget, make_ExecuteTrxFromInstruction
 from .utils.layouts import ACCOUNT_INFO_LAYOUT
 from .utils.storage import create_holder
@@ -30,8 +30,8 @@ def test_create_same_accounts(
 
     contract = create_contract_address(user_account, evm_loader)
     holder_acc = create_holder(operator_keypair)
-    _size, deployment_tx_hash = \
-        write_transaction_to_holder_account(user_account, "ERC20ForSplFactory.binary", holder_acc, operator_keypair)
+    deployment_tx, _size = make_deployment_transaction(user_account, "ERC20ForSplFactory.binary")
+    write_transaction_to_holder_account(deployment_tx, holder_acc, operator_keypair)
 
     # First 2 iterations
     for i in range(2):
@@ -84,7 +84,7 @@ def test_create_same_accounts(
         make_Cancel(
             holder_acc,
             operator_keypair,
-            deployment_tx_hash,
+            deployment_tx.hash,
             [contract.solana_address, user_account.solana_account_address],
         )
     )
@@ -122,7 +122,13 @@ def transfer(
     operator_keypair: Keypair,
     treasury_pool: TreasuryPool,
 ):
-    message = make_eth_transfer_transaction(src_account, dst_addr, value).rawTransaction
+    message = make_eth_transaction(
+        dst_addr,
+        bytes(),
+        src_account.solana_account,
+        src_account.solana_account_address,
+        value,
+    ).rawTransaction
 
     trx = TransactionWithComputeBudget()
     trx.add(
