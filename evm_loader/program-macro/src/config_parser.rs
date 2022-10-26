@@ -135,8 +135,8 @@ impl Parse for CommonConfig {
 #[derive(Deserialize)]
 struct InternalElfParams {
     env: HashMap<String, String>,
-    extra_debug: HashMap<String, String>,
-    extra_display: HashMap<String, String>,
+    debug_formatted: HashMap<String, String>,
+    display_formatted: HashMap<String, String>,
 }
 
 pub struct ElfParams {
@@ -162,8 +162,8 @@ impl Parse for ElfParams {
         })?;
         let InternalElfParams {
             env,
-            extra_debug,
-            extra_display,
+            debug_formatted: extra_debug,
+            display_formatted: extra_display,
         } = toml::from_slice(&file_contents)
             .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
         let env_tokens = env
@@ -175,7 +175,7 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
-        let extra_debug_tokens = extra_debug
+        let debug_tokens = extra_debug
             .into_iter()
             .map(|(name, value)| {
                 let name_ident: Ident = parse_str(&name.to_uppercase())?;
@@ -185,7 +185,7 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
-        let extra_display_tokens = extra_display
+        let display_tokens = extra_display
             .into_iter()
             .map(|(name, value)| {
                 let name_ident: Ident = parse_str(&name.to_uppercase())?;
@@ -198,8 +198,8 @@ impl Parse for ElfParams {
         Ok(ElfParams {
             token_stream: quote! {
                 #(#env_tokens)*
-                #(#extra_debug_tokens)*
-                #(#extra_display_tokens)*
+                #(#debug_tokens)*
+                #(#display_tokens)*
             }
             .into(),
         })
