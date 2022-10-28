@@ -114,7 +114,7 @@ def run_tests(github_sha):
     try:
         click.echo("start tests")
         exec_id = docker_client.exec_create(
-            container="neon_evm", cmd="/opt/deploy-test.sh")
+            container="solana", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
         click.echo(f'logs: {logs}')
         for line in logs:
@@ -124,7 +124,7 @@ def run_tests(github_sha):
     except:
         raise RuntimeError("Solana container is not run")
 
-    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down --timeout 1"
+    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down"
     click.echo(f"run command: {command}")
     subprocess.run(command, shell=True)
 
