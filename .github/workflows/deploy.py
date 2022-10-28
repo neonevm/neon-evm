@@ -152,7 +152,7 @@ def check_proxy_tag(github_ref):
 @click.option('--is_draft')
 def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft):
 
-    if base_ref_branch == "develop" and not is_draft:
+    if (base_ref_branch == "develop" and not is_draft) or github_ref in ['refs/heads/develop', 'refs/heads/master']:
         full_test_suite = "True"
     else:
         full_test_suite = "False"

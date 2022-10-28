@@ -50,7 +50,7 @@ jobs:
           --github_sha=${GITHUB_SHA}
 
       - name: Check that the proxy image with the same tag exist
-        if: ${{ startsWith(github.sha , 'refs/tags/') }}
+        if: ${{ startsWith(github.ref , 'refs/tags/') }}
         run: |
           python3 ./.github/workflows/deploy.py check_proxy_tag \
           --github_ref=${GITHUB_REF}
