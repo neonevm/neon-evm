@@ -24,6 +24,7 @@ from web3.auto import w3
 def make_deployment_transaction(
     user: Caller,
     contract_path: tp.Union[pathlib.Path, str],
+    gas: int = 999999999,
 ) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
@@ -35,7 +36,7 @@ def make_deployment_transaction(
     tx = {
         'to': None,
         'value': 0,
-        'gas': 999999999,
+        'gas': gas,
         'gasPrice': 0,
         'nonce': get_transaction_count(solana_client, user.solana_account_address),
         'data': contract_code,
@@ -48,7 +49,7 @@ def make_deployment_transaction(
 def write_transaction_to_holder_account(
     signed_tx: SignedTransaction,
     holder_account: PublicKey,
-    operator: Keypair
+    operator: Keypair,
 ):
     # Write transaction to transaction holder account
     offset = 0
@@ -59,21 +60,25 @@ def write_transaction_to_holder_account(
         trx = Transaction()
         trx.add(make_WriteHolder(operator.public_key, holder_account, signed_tx.hash, offset, part))
         receipts.append(
-            solana_client.send_transaction(trx, operator, opts=TxOpts(
-                skip_confirmation=True, preflight_commitment=Confirmed))["result"])
+            solana_client.send_transaction(
+                trx,
+                operator,
+                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
+            )["result"]
+        )
         offset += len(part)
     for rcpt in receipts:
         wait_confirm_transaction(solana_client, rcpt)
 
 
 def deploy_contract_step(
-        step_count: int,
-        treasury: TreasuryPool,
-        holder_address: PublicKey,
-        operator: Keypair,
-        evm_loader: EvmLoader,
-        contract: Contract,
-        user: Caller,
+    step_count: int,
+    treasury: TreasuryPool,
+    holder_address: PublicKey,
+    operator: Keypair,
+    evm_loader: EvmLoader,
+    contract: Contract,
+    user: Caller,
 ):
     print(f"Deploying contract with {step_count} steps")
     trx = TransactionWithComputeBudget()
@@ -89,7 +94,14 @@ def deploy_contract_step(
     return receipt
 
 
-def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pathlib.Path, str], evm_loader: EvmLoader, treasury_pool: TreasuryPool, step_count: int = 1000):
+def deploy_contract(
+    operator: Keypair,
+    user: Caller,
+    contract_path: tp.Union[pathlib.Path, str],
+    evm_loader: EvmLoader,
+    treasury_pool: TreasuryPool,
+    step_count: int = 1000,
+):
     print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)

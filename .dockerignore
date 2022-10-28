@@ -19,6 +19,6 @@ evm_loader/rust-evm/runtime/target
 evm_loader/rust-evm/src/target
 evm_loader/target
 
-evm_loader/tests/.idea
-evm_loader/tests/venv
-evm_loader/tests/__pycache__
+.idea
+venv
+__pycache__
