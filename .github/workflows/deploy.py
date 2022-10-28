@@ -58,8 +58,8 @@ def build_docker_image(github_sha):
             click.echo(str(line).strip('\n'))
 
 
-@ cli.command(name="publish_image")
-@ click.option('--github_sha')
+@cli.command(name="publish_image")
+@click.option('--github_sha')
 def publish_image(github_sha):
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
     out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
@@ -68,11 +68,11 @@ def publish_image(github_sha):
             f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
 
 
-@ cli.command(name="finalize_image")
-@ click.option('--head_ref_branch')
-@ click.option('--base_ref_branch')
-@ click.option('--github_ref')
-@ click.option('--github_sha')
+@cli.command(name="finalize_image")
+@click.option('--head_ref_branch')
+@click.option('--base_ref_branch')
+@click.option('--github_ref')
+@click.option('--github_sha')
 def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
     if 'refs/tags/' in github_ref:
         tag = github_ref.replace("refs/tags/", "")
@@ -118,12 +118,16 @@ def run_tests(github_sha):
             container="solana", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
         click.echo(logs)
+        for line in logs:
+            if 'ERROR ' in str(line) or 'FAILED ' in str(line):
+                raise RuntimeError("Test are failed")
+
     except:
-        raise "Solana container is not run"
+        raise RuntimeError("Solana container is not run")
 
 
-@ cli.command(name="check_proxy_tag")
-@ click.option('--github_ref')
+@cli.command(name="check_proxy_tag")
+@click.option('--github_ref')
 def check_proxy_tag(github_ref):
     proxy_tag = re.sub('\d{1,2}$', 'x',  github_ref.replace("refs/tags/", ""))
     response = requests.get(
@@ -150,8 +154,6 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
     proxy_branches_obj = requests.get(
         f"{proxy_endpoint}/branches?per_page=100").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
-    print(proxy_branches)
-    print(branch)
     proxy_branch = branch
     if proxy_branch not in proxy_branches:
         proxy_branch = 'develop'
@@ -164,7 +166,7 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
     headers = {"Authorization": f"Bearer {token}",
                "Accept": "application/vnd.github+json"}
     response = requests.post(
-        f"{proxy_endpoint}/actions/workflows/init.yml/dispatches", json=data, headers=headers)
+        f"{proxy_endpoint}/actions/workflows/pipeline.yml/dispatches", json=data, headers=headers)
     print(data)
     print(headers)
     print(response.json())

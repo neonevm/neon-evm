@@ -51,13 +51,13 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py trigger_proxy_action \
           --github_sha=${GITHUB_SHA} \
-          --branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --branch=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}}
 
-      # - name: send notification to slack
-      #   if: failure()
-      #   run: |
-      #     python3 ./.github/workflows/deploy.py send_notification \
-      #     --url=${{secrets.SLACK_EVM_CHANNEL_URL}} \
-      #     --build_url=${BUILD_URL}
+      - name: send notification to slack
+        if: failure()
+        run: |
+          python3 ./.github/workflows/deploy.py send_notification \
+          --url=${{secrets.SLACK_EVM_CHANNEL_URL}} \
+          --build_url=${BUILD_URL}
