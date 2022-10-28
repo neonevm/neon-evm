@@ -31,7 +31,10 @@ jobs:
           --github_sha=${GITHUB_SHA}
 
       - name: run tests
-        run: python3 ./.github/workflows/deploy.py run_tests --github_sha=${GITHUB_SHA}
+        run: |
+          python3 ./.github/workflows/deploy.py run_tests -\
+          -github_sha=${GITHUB_SHA} \
+          -run_number=${GITHUB_RUN_NUMBER}
 
       - name: finalize image
         run: |

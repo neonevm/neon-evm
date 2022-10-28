@@ -98,10 +98,12 @@ def finalize_image(head_ref_branch, base_ref_branch, github_ref, github_sha):
 
 @cli.command(name="run_tests")
 @click.option('--github_sha')
-def run_tests(github_sha):
+@click.option('--run_number')
+def run_tests(github_sha, run_number):
     image_name = f"{IMAGE_NAME}:{github_sha}"
 
     os.environ["EVM_LOADER_IMAGE"] = image_name
+    os.environ["RUN_NUMBER"] = run_number
 
     command = "docker-compose -f ./evm_loader/docker-compose-test.yml down --timeout 1"
     click.echo(f"run command: {command}")
@@ -125,6 +127,10 @@ def run_tests(github_sha):
     except:
         raise RuntimeError("Solana container is not run")
 
+    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down --timeout 1"
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
 
 @cli.command(name="check_proxy_tag")
 @click.option('--github_ref')
@@ -146,9 +152,9 @@ def check_proxy_tag(github_ref):
 def trigger_proxy_action(branch, github_sha, token, is_draft):
 
     if branch == "develop" and not is_draft:
-        full_test_suite = True
+        full_test_suite = "True"
     else:
-        full_test_suite = False
+        full_test_suite = "False"
 
     proxy_endpoint = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
     proxy_branches_obj = requests.get(
