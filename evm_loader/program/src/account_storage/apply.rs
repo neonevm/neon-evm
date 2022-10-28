@@ -10,7 +10,7 @@ use solana_program::rent::Rent;
 use solana_program::system_instruction;
 use solana_program::sysvar::Sysvar;
 
-use crate::account::{ACCOUNT_SEED_VERSION, EthereumAccount, EthereumStorage, Operator, program};
+use crate::account::{ACCOUNT_SEED_VERSION, ether_account, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -24,7 +24,6 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> ProgramResult {
         let origin_balance = self.balance(&origin);
         if origin_balance < value {
-            self.transfer_gas_payment(origin, operator, origin_balance)?;
             return Err!(ProgramError::InsufficientFunds; "Account {} - insufficient funds", origin);
         }
 
@@ -52,10 +51,10 @@ impl<'a> ProgramAccountStorage<'a> {
         system_program: &program::System<'a>,
         operator: &Operator<'a>,
         actions: Vec<Action>,
-        accounts_operations: AccountsOperations,
     ) -> Result<AccountsReadiness, ProgramError> {
         debug_print!("Applies begin");
 
+        let accounts_operations = self.calc_accounts_operations(&actions);
         if self.process_accounts_operations(
             system_program,
             neon_program,
@@ -66,13 +65,22 @@ impl<'a> ProgramAccountStorage<'a> {
             return Ok(AccountsReadiness::NeedMoreReallocations);
         }
 
+        for action in &actions {
+            let address = match action {
+                Action::NeonTransfer { target, .. } => target,
+                Action::EvmSetCode { address, .. } => address,
+                _ => continue,
+            };
+            self.create_account_if_not_exists(address)?;
+        }
+
         let mut storage: BTreeMap<H160, Vec<(U256, U256)>> = BTreeMap::new();
 
         for action in actions {
             match action {
                 Action::NeonTransfer { source, target, value } => {
                     self.transfer_neon_tokens(&source, &target, value)?;
-                },
+                }
                 Action::NeonWithdraw { source, value } => {
                     let account = self.ethereum_account_mut(&source);
                     if account.balance < value {
@@ -80,13 +88,13 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
 
                     account.balance -= value;
-                },
+                }
                 Action::EvmLog { address, topics, data } => {
                     neon_program.on_event(address, &topics, &data)?;
-                },
+                }
                 Action::EvmSetStorage { address, key, value } => {
                     storage.entry(address).or_default().push((key, value));
-                },
+                }
                 Action::EvmIncrementNonce { address } => {
                     let account = self.ethereum_account_mut(&address);
                     if account.trx_count == u64::MAX {
@@ -94,16 +102,16 @@ impl<'a> ProgramAccountStorage<'a> {
                     }
 
                     account.trx_count += 1;
-                },
+                }
                 Action::EvmSetCode { address, code, valids } => {
                     self.deploy_contract(address, &code, &valids)?;
-                },
+                }
                 Action::EvmSelfDestruct { address } => {
                     storage.remove(&address);
 
                     self.delete_account(address)?;
-                },
-                Action::ExternalInstruction { program_id, instruction, accounts, seeds } => {
+                }
+                Action::ExternalInstruction { program_id, instruction, accounts, seeds, .. } => {
                     let seeds: Vec<&[u8]> = seeds.iter().map(|seed| &seed[..]).collect();
                     let accounts: Vec<_> = accounts.into_iter().map(AccountMeta::into_solana_meta).collect();
 
@@ -165,13 +173,11 @@ impl<'a> ProgramAccountStorage<'a> {
                         system_program,
                         neon_program.key,
                         operator,
-                        address,
+                        &address,
                         solana_account,
                         bump_seed,
                         MAX_PERMITTED_DATA_INCREASE.min(space),
                     )?;
-
-                    self.add_ether_account(neon_program.key, solana_account)?;
 
                     if space > MAX_PERMITTED_DATA_INCREASE {
                         accounts_readiness = AccountsReadiness::NeedMoreReallocations;
@@ -346,5 +352,33 @@ impl<'a> ProgramAccountStorage<'a> {
 
         Ok(())
     }
-    
+
+    fn create_account_if_not_exists(&mut self, address: &H160) -> ProgramResult {
+        if self.ethereum_accounts.contains_key(address) {
+            return Ok(());
+        }
+
+        let (solana_address, bump_seed) = self.calc_solana_address(address);
+        let info = self.solana_account(&solana_address)
+            .ok_or_else(
+                || E!(
+                    ProgramError::InvalidArgument;
+                    "Account {} not found in the list of Solana accounts",
+                    solana_address
+                )
+            )?;
+
+        let ether_account = EthereumAccount::init(
+            info,
+            ether_account::Data {
+                address: *address,
+                bump_seed,
+                ..Default::default()
+            },
+        )?;
+
+        self.ethereum_accounts.insert(ether_account.address, ether_account);
+
+        Ok(())
+    }
 }

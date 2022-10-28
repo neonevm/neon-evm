@@ -1,6 +1,6 @@
 [package]
 name = "neon-cli"
-version = "0.12.0-dev"
+version = "0.13.0-dev"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
 
@@ -25,14 +25,13 @@ bs58 = "0.4.0"
 hex = "0.4.2"
 sha3 = "0.10"
 arrayref = "0.3.6"
-serde = "1.0.144"
+serde = "1.0.147"
 serde_json = "1.0.85"
 getrandom = { version = "0.1.16", default_features = false, features = ["dummy"] }
-libsecp256k1 = { version = "0.5.0", default-features = false, features = ["static-context", "hmac"] }
 log = "0.4.17"
 fern = "0.6"
 rlp = "0.5"
 rand = "0.8"
-ethereum-types = "0.11.0"
+ethereum-types = "0.14.0"
 base64 = { version = "0.13.0" }
 goblin = { version = "0.4.2" }

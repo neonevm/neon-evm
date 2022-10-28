@@ -12,6 +12,12 @@ use evm_loader_macro::{
 
 use crate::account::ACCOUNT_SEED_VERSION;
 
+/// Seed to generate PDA for treasury balances 
+pub const TREASURY_POOL_SEED: &str = "treasury_pool";
+
+/// Count of balances in treasury pool
+pub const TREASURY_POOL_COUNT: u32 = 128;
+
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
 
@@ -38,22 +44,6 @@ cfg_if! {
             /// Number of base 10 digits to the right of the decimal place
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
-        }
-
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -89,22 +79,6 @@ cfg_if! {
             /// Number of base 10 digits to the right of the decimal place
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
-        }
-
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "F4BYoes7Y6rs38QjNGC8F55bbohqt7G5qjzjDkzM4fiY");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -365,22 +339,6 @@ cfg_if! {
             /// Number of base 10 digits to the right of the decimal place
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
-        }
-
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 128;
         }
 
         /// Account whitelists: Permission tokens
@@ -649,22 +607,6 @@ cfg_if! {
             pub const fn decimals() -> u8 { DECIMALS }
         }
 
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "7SBdHNeF9FFYySEoszpjZXXQsAiwa5Lzpsz6nUJWusEx");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 128;
-        }
-
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
             use super::neon_elf_param;
@@ -725,22 +667,6 @@ cfg_if! {
             /// Number of base 10 digits to the right of the decimal place
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
-        }
-
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "pBuoBvc4jeWcRvYABZaxtLZFfT2rnXW7G8ixLYc15bQ");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
         }
 
         /// Account whitelists: Permission tokens
@@ -805,22 +731,6 @@ cfg_if! {
             pub const fn decimals() -> u8 { DECIMALS }
         }
 
-        /// Collateral pool base address
-        pub mod collateral_pool_base {
-            use super::declare_param_id;
-
-            declare_param_id!(NEON_POOL_BASE, "4sW3SZDJB7qXUyCYKA7pFL8eCTfm3REr8oSiKkww7MaT");
-
-            /// `COLLATERAL_SEED_PREFIX`
-            pub const PREFIX: &str = "collateral_seed_";
-
-            /// Treasury pool main balance seed
-            pub const MAIN_BALANCE_SEED: &str = "treasury_pool";
-
-            /// Count of balances in collaterail pool
-            pub const NEON_POOL_COUNT: u32 = 10;
-        }
-
         /// Account whitelists: Permission tokens
         pub mod account_whitelists {
             use super::neon_elf_param;
@@ -851,6 +761,10 @@ pub const REQUEST_UNITS_ADDITIONAL_FEE: u64 = 0;
 pub const GAS_LIMIT_MULTIPLIER_NO_CHAINID: u32 = 1000;
 /// Amount of storage entries stored in the contract account
 pub const STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT: u32 = 64;
+/// Minimum number of EVM steps for iterative transaction
+pub const EVM_STEPS_MIN: u64 = 500;
+/// Maximum number of EVM steps in a last iteration
+pub const EVM_STEPS_LAST_ITERATION_MAX: u64 = 0;
 
 cfg_if! {
     if #[cfg(feature = "emergency")] {
@@ -868,13 +782,15 @@ neon_elf_param!( NEON_TOKEN_MINT_DECIMALS   , formatcp!("{:?}", token_mint::DECI
 neon_elf_param!( NEON_PAYMENT_TO_TREASURE   , formatcp!("{:?}", PAYMENT_TO_TREASURE));
 neon_elf_param!( NEON_PAYMENT_TO_DEPOSIT    , formatcp!("{:?}", PAYMENT_TO_DEPOSIT));
 neon_elf_param!( NEON_CHAIN_ID              , formatcp!("{:?}", CHAIN_ID));
-neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", collateral_pool_base::NEON_POOL_COUNT));
+neon_elf_param!( NEON_POOL_SEED             , formatcp!("{}",   TREASURY_POOL_SEED));
+neon_elf_param!( NEON_POOL_COUNT            , formatcp!("{:?}", TREASURY_POOL_COUNT));
 neon_elf_param!( NEON_HOLDER_MSG_SIZE       , formatcp!("{:?}", HOLDER_MSG_SIZE));
 neon_elf_param!( NEON_COMPUTE_UNITS         , formatcp!("{:?}", COMPUTE_BUDGET_UNITS));
 neon_elf_param!( NEON_HEAP_FRAME            , formatcp!("{:?}", COMPUTE_BUDGET_HEAP_FRAME));
 neon_elf_param!( NEON_ADDITIONAL_FEE        , formatcp!("{:?}", REQUEST_UNITS_ADDITIONAL_FEE));
 neon_elf_param!( NEON_GAS_LIMIT_MULTIPLIER_NO_CHAINID, formatcp!("{:?}", GAS_LIMIT_MULTIPLIER_NO_CHAINID));
 neon_elf_param!( NEON_STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT, formatcp!("{:?}", STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT));
+neon_elf_param!( NEON_EVM_STEPS_MIN, formatcp!("{:?}", EVM_STEPS_MIN));
 
 /// Chain ID
 #[must_use]

@@ -6,7 +6,7 @@ import math
 import time
 import pathlib
 from hashlib import sha256
-from typing import NamedTuple, Tuple, Union
+from typing import NamedTuple, Tuple, Union, List
 
 import rlp
 from base58 import b58encode
@@ -26,8 +26,8 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, approve, ApproveParams, create_associated_token_account
 
 from .utils.instructions import TransactionWithComputeBudget
-from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_BASE, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
-    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION
+from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
+    SYS_INSTRUCT_ADDRESS, INCINERATOR_ADDRESS, ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -106,11 +106,11 @@ class SplToken:
 spl_cli = SplToken(SOLANA_URL)
 
 
-def create_treasury_pool_address(collateral_pool_index):
-    collateral_seed_prefix = "collateral_seed_"
-    seed = collateral_seed_prefix + str(collateral_pool_index)
-    return account_with_seed(PublicKey(TREASURY_POOL_BASE), seed, PublicKey(EVM_LOADER))
-
+def create_treasury_pool_address(pool_index, evm_loader=EVM_LOADER):
+    return PublicKey.find_program_address(
+        [bytes(TREASURY_POOL_SEED,'utf8'), pool_index.to_bytes(4,'little')],
+        PublicKey(evm_loader)
+    )[0]
 
 def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
     """Confirm a transaction."""
@@ -201,14 +201,34 @@ class neon_cli:
             print(f"ERR: neon-cli error {err}")
             raise
 
-    def emulate(self, loader_id, arguments):
-        cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
-                                                                                              loader_id,
-                                                                                              SOLANA_URL,
-                                                                                              arguments)
+    def emulate(self, loader_id, sender, contract, data):
+        # cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
+        #                                                                                       loader_id,
+        #                                                                                       SOLANA_URL,
+        #                                                                                       arguments)
+        cmd = ["neon-cli",
+               "--commitment=recent",
+               "--url", SOLANA_URL,
+               f"--evm_loader={loader_id}",
+               "emulate",
+               sender,
+               contract
+               ]
         print('cmd:', cmd)
+        print ("data:", data)
         try:
-            output = subprocess.check_output(cmd, shell=True, universal_newlines=True)
+            if data:
+                proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                             universal_newlines=True)
+            else:
+                proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                             universal_newlines=True)
+            if proc_result.stderr is not None:
+                print(proc_result.stderr)
+            output = proc_result.stdout
+            if not output:
+                proc_result.check_returncode()
+
             without_empty_lines = os.linesep.join([s for s in output.splitlines() if s])
             last_line = without_empty_lines.splitlines()[-1]
             return last_line
@@ -427,11 +447,11 @@ def send_transaction(client, trx, acc, wait_status=Confirmed):
     tx = result["result"]
     print("Result: {}".format(result))
     wait_confirm_transaction(client, tx)
-    for _ in range(6):
+    for _ in range(60):
         receipt = client.get_confirmed_transaction(tx)
         if receipt["result"] is not None:
             break
-        time.sleep(10)
+        time.sleep(1)
     else:
         raise AssertionError(f"Can't get confirmed transaction ")
     return receipt

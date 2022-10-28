@@ -25,7 +25,7 @@ impl<'a> Neon<'a> {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256, result: &[u8])
+    pub fn on_return(&self, exit_reason: ExitReason, used_gas: U256)
     {
         let (exit_message, exit_status) = match exit_reason {
             ExitReason::Succeed(success_code) => {
@@ -66,7 +66,6 @@ impl<'a> Neon<'a> {
 
         solana_program::msg!("{} exit_status={:#04X}", exit_message, exit_status);
         debug_print!("used gas {}", used_gas);
-        debug_print!("result {}", &hex::encode(result));
 
         let used_gas = if used_gas > U256::from(u64::MAX) { // Convert to u64 to not break ABI
             solana_program::msg!("Error: used gas {} exceeds u64::MAX", used_gas);
@@ -78,10 +77,11 @@ impl<'a> Neon<'a> {
         let mnemonic = b"RETURN";
         let exit_status = exit_status.to_le_bytes();
         let used_gas = used_gas.to_le_bytes();
-        let fields = [mnemonic.as_slice(),
-                      exit_status.as_slice(),
-                      used_gas.as_slice(),
-                      result];
+        let fields = [
+            mnemonic.as_slice(),
+            exit_status.as_slice(),
+            used_gas.as_slice(),
+        ];
         sol_log_data(&fields);
     }
 
@@ -225,6 +225,24 @@ impl<'a> Token<'a> {
 
         Ok(Self ( info ))
     }
+
+    pub fn create_account(
+        &self,
+        account: &AccountInfo<'a>,
+        mint: &AccountInfo<'a>,
+        owner: &AccountInfo<'a>
+    ) -> Result<(), ProgramError> {
+        invoke(
+            &spl_token::instruction::initialize_account3(
+                self.0.key,
+                account.key,
+                mint.key,
+                owner.key
+            )?,
+            &[account.clone(), mint.clone()]
+        )
+    }
+
 }
 
 impl<'a> Deref for Token<'a> {

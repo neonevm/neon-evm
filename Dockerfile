@@ -3,6 +3,7 @@ ARG SOLANA_IMAGE
 FROM solanalabs/rust:1.64.0 AS builder
 WORKDIR /opt
 ARG SOLANA_REVISION
+# TODO: make connection insecure to solve with expired certificate
 RUN sh -c "$(curl -sSfL https://release.solana.com/"${SOLANA_REVISION}"/install)" && \
     /root/.local/share/solana/install/active_release/bin/sdk/bpf/scripts/install.sh
 ENV PATH=/root/.local/share/solana/install/active_release/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -53,12 +54,7 @@ RUN apt-get update && \
 COPY evm_loader/tests/requirements.txt /tmp/
 RUN pip3 install -r /tmp/requirements.txt
 
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
-RUN apt update & apt install -y nodejs
-RUN npm install -g npm@8.6.0
-COPY /evm_loader/solidity/ /opt/contracts/
-WORKDIR /opt/contracts
-RUN npm install
+COPY /evm_loader/solidity/ /opt/contracts/contracts/
 WORKDIR /opt
 
 COPY --from=solana \
@@ -71,6 +67,8 @@ COPY --from=solana \
      /usr/bin/fetch-spl.sh \
      /usr/bin/spl* \
      /opt/solana/bin/
+
+RUN /opt/solana/bin/solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /opt/solana/bin/metaplex.so --url mainnet-beta
 
 COPY evm_loader/solana-run-neon.sh \
      /opt/solana/bin/
@@ -91,12 +89,10 @@ COPY evm_loader/*.py \
     evm_loader/permission_denial_token_keypair.json \
     evm_loader/utils/set_single_acct_permission.sh \
     evm_loader/utils/set_many_accts_permission.sh \
-    evm_loader/deploy-contracts.sh \
-    evm_loader/get_deployer_address.py /opt/
+    /opt/
 
 COPY evm_loader/tests /opt/tests
 COPY evm_loader/evm_loader-keypair.json /opt/
-COPY evm_loader/collateral_pool_generator.py evm_loader/collateral-pool-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
 COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
 

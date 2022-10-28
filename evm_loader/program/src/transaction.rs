@@ -1,4 +1,5 @@
-use bytes::BytesMut;
+use std::convert::TryInto;
+
 use evm::{H160, U256};
 use solana_program::{
     entrypoint::{ProgramResult},
@@ -97,20 +98,66 @@ fn signed_hash(transaction: &rlp::Rlp, chain_id: Option<U256>) -> Result<[u8; 32
     let payload_info = transaction.payload_info()?;
     let (_, v_offset) = transaction.at_with_offset(6)?;
 
-    let list_len = if chain_id.is_some() { 9 } else { 6 };
+    let middle = &raw[payload_info.header_len..v_offset];
 
-    let buffer = BytesMut::with_capacity(raw.len());
+    let trailer = chain_id.map_or_else(
+        Vec::new,
+        |chain_id| {
+            let chain_id = {
+                let leading_empty_bytes = (chain_id.leading_zeros() as usize) / 8;
+                let mut buffer = [0_u8; 32];
+                chain_id.to_big_endian(&mut buffer);
+                buffer[leading_empty_bytes..].to_vec()
+            };
 
-    let mut rlp = rlp::RlpStream::new_list_with_buffer(buffer, list_len);
-    rlp.append_raw(&raw[payload_info.header_len..v_offset], 6);
+            let mut trailer = Vec::with_capacity(64);
+            match chain_id.len() {
+                0 => {
+                    trailer.extend_from_slice(&[0x80]);
+                },
+                1 if chain_id[0] < 0x80 => {
+                    trailer.extend_from_slice(&chain_id);
+                },
+                len @ 1..=55 => {
+                    let len: u8 = len.try_into().unwrap();
 
-    if let Some(chain_id) = chain_id {
-        rlp.append(&chain_id);
-        rlp.append_empty_data();
-        rlp.append_empty_data();
-    }
+                    trailer.extend_from_slice(&[0x80 + len]);
+                    trailer.extend_from_slice(&chain_id);
+                },
+                _ => {
+                    unreachable!("chain_id.len() <= 32")
+                }
+            }
 
-    let hash = solana_program::keccak::hash(&rlp.out()).to_bytes();
+            trailer.extend_from_slice(&[0x80, 0x80]);
+            trailer
+        }
+    );
+
+    let header: Vec<u8> = {
+        let len = middle.len() + trailer.len();
+        if len <= 55 {
+            let len: u8 = len.try_into().unwrap();
+            vec![0xC0 + len]
+        } else {
+            let len_bytes = {
+                let leading_empty_bytes = (len.leading_zeros() as usize) / 8;
+                let bytes = len.to_be_bytes();
+                bytes[leading_empty_bytes..].to_vec()
+            };
+            let len_bytes_len: u8 = len_bytes.len().try_into().unwrap();
+
+            let mut header = Vec::with_capacity(10);
+            header.extend_from_slice(&[0xF7 + len_bytes_len]);
+            header.extend_from_slice(&len_bytes);
+
+            header
+        }
+    };
+
+    let hash = solana_program::keccak::hashv(
+        &[&header, middle, &trailer]
+    ).to_bytes();
 
     Ok(hash)
 }

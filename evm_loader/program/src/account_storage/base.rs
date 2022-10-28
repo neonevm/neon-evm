@@ -3,12 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use evm::{H160};
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
-use solana_program::entrypoint::ProgramResult;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{EthereumAccount, Operator, program};
+use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
@@ -51,7 +50,7 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
 
-        Ok(Self{
+        Ok(Self {
             program_id,
             operator: operator.key,
             clock: Clock::get()?,
@@ -61,19 +60,7 @@ impl<'a> ProgramAccountStorage<'a> {
         })
     }
 
-    pub fn add_ether_account(&mut self, program_id: &Pubkey, info: &'a AccountInfo<'a>) -> ProgramResult {
-        let ether_account = EthereumAccount::from_account(program_id, info)?;
-        let previous = self.ethereum_accounts.insert(ether_account.address, ether_account);
-        assert!(previous.is_none());
-
-        Ok(())
-    }
-
-    pub fn remove_ether_account(&mut self, address: &H160) -> Option<EthereumAccount<'a>> {
-        self.ethereum_accounts.remove(address)
-    }
-
-    fn panic_if_account_not_exists(&self, address: &H160) {
+    pub(crate) fn panic_if_account_not_exists(&self, address: &H160) {
         if self.ethereum_accounts.contains_key(address) {
             return;
         }
@@ -83,9 +70,13 @@ impl<'a> ProgramAccountStorage<'a> {
             return;
         }
 
-        let (solana_address, _) = self.calc_solana_address(address);
+        let (solana_address, _bump_seed) = self.calc_solana_address(address);
         if let Some(account) = self.solana_accounts.get(&solana_address) {
-            assert!(system_program::check_id(account.owner), "Empty ethereum account {} must belong to the system program", address);
+            assert!(
+                self.is_account_empty(account),
+                "Empty ethereum account {} must belong to the system program or be uninitialized",
+                address,
+            );
 
             empty_accounts.insert(*address);
             return;
@@ -107,12 +98,10 @@ impl<'a> ProgramAccountStorage<'a> {
         self.ethereum_accounts.get_mut(address).unwrap() // mutable accounts always present
     }
 
-    pub fn block_accounts(&mut self, block: bool) -> Result<(), ProgramError> {
+    pub fn block_accounts(&mut self, block: bool) {
         for account in &mut self.ethereum_accounts.values_mut() {
             account.rw_blocked = block;
         }
-
-        Ok(())
     }
 
     pub fn check_for_blocked_accounts(&self) -> Result<(), ProgramError> {
@@ -121,5 +110,11 @@ impl<'a> ProgramAccountStorage<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn is_account_empty(&self, account: &AccountInfo) -> bool {
+        system_program::check_id(account.owner) ||
+            (account.owner == self.program_id() &&
+                (account.data_is_empty() || account.data.borrow()[0] == TAG_EMPTY))
     }
 }

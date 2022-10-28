@@ -13,7 +13,7 @@ struct OperatorsWhitelistInput {
 
 impl Parse for OperatorsWhitelistInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let list = Punctuated::parse_terminated(&input)?;
+        let list = Punctuated::parse_terminated(input)?;
         Ok(Self{list})
     }
 }

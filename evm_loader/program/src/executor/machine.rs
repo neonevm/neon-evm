@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     handler::{CallInterrupt, CreateInterrupt, Executor}, 
-    state::ExecutorState, gasometer::Gasometer, action::Action
+    state::ExecutorState, action::Action
 };
 
 /// Represents reason of an Ethereum transaction.
@@ -43,10 +43,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Creates instance of the Machine.
     pub fn new(origin: H160, backend: &'a B) -> Result<Self, ProgramError> {
         let state = ExecutorState::new(backend);
-        let gasometer = Gasometer::new(None)?;
-        
+
         let executor = Executor { 
-            origin, state, gasometer, 
+            origin, state, 
             gas_limit: U256::zero(), gas_price: U256::zero() 
         };
         Ok(Self { executor, runtime: Vec::new(), steps_executed: 0 })
@@ -71,11 +70,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         let runtime = BorshDeserialize::deserialize(&mut buffer).unwrap();
         let state = ExecutorState::deserialize(&mut buffer, backend).unwrap();
 
-        let gasometer = Gasometer::new(Some(storage.gas_used))?;
         let executor = Executor { 
             origin: storage.caller,
             state,
-            gasometer,
             gas_limit: storage.gas_limit,
             gas_price: storage.gas_price,
         };
@@ -144,26 +141,17 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     #[inline]
     fn process_capture(
         capture: Capture<ExitReason, Resolve<Executor<B>>>,
-    ) -> (RuntimeApply, Option<(Vec<u8>, ExitReason)>) {
+    ) -> RuntimeApply {
         match capture {
-            Capture::Exit(reason) => {
-                if reason == ExitReason::StepLimitReached {
-                    (RuntimeApply::Continue, Some((vec![], reason)))
-                } else {
-                    (RuntimeApply::Exit(reason), Some((vec![], reason)))
-                }
-            },
-            Capture::Trap(interrupt) => {
-                match interrupt {
-                    Resolve::Call(interrupt, resolve) => {
-                        std::mem::forget(resolve);
-                        (RuntimeApply::Call(interrupt), None)
-                    },
-                    Resolve::Create(interrupt, resolve) => {
-                        std::mem::forget(resolve);
-                        (RuntimeApply::Create(interrupt), None)
-                    },
-                }
+            Capture::Exit(ExitReason::StepLimitReached) => RuntimeApply::Continue,
+            Capture::Exit(reason) => RuntimeApply::Exit(reason),
+            Capture::Trap(Resolve::Call(interrupt, resolve)) => {
+                std::mem::forget(resolve);
+                RuntimeApply::Call(interrupt)
+            }
+            Capture::Trap(Resolve::Create(interrupt, resolve)) => {
+                std::mem::forget(resolve);
+                RuntimeApply::Create(interrupt)
             }
         }
     }
@@ -182,11 +170,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
                 return (steps_executed, RuntimeApply::Continue);
             }
             if let Err(capture) = runtime.step(&mut self.executor) {
-                let (apply_result, exit_result) = Self::process_capture(capture);
-
-                if exit_result.is_some() {
-                    self.state_mut().set_exit_result(exit_result);
-                }
+                let apply_result = Self::process_capture(capture);
 
                 return (steps_executed, apply_result);
             }
@@ -202,11 +186,7 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         };
 
         let (steps_executed, capture) = runtime.run(max_steps, &mut self.executor);
-        let (apply_result, exit_result) = Self::process_capture(capture);
-
-        if exit_result.is_some() {
-            self.state_mut().set_exit_result(exit_result);
-        }
+        let apply_result = Self::process_capture(capture);
 
         (steps_executed, apply_result)
     }
@@ -329,10 +309,10 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// Executes current program with all available steps.
     /// # Errors
     /// Terminates execution if a step encounters an error.
-    pub fn execute(&mut self) -> (Vec<u8>, ExitReason) {
+    pub fn execute(&mut self) -> ExitReason {
         loop {
-            if let Err(result) = self.execute_n_steps(u64::MAX) {
-                return result;
+            if let Err((_result, exit_reason)) = self.execute_n_steps(u64::MAX) {
+                return exit_reason;
             }
         }
     }
@@ -348,25 +328,12 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
     /// - `Revert` if encountered an explicit revert
     /// - `Fatal` if encountered an error that is not supposed to be normal EVM errors
     pub fn execute_n_steps(&mut self, n: u64) -> Result<(), (Vec<u8>, ExitReason)> {
-        if let Some(result) = self.state_mut().exit_result() {
-            if result.1 != ExitReason::StepLimitReached {
-                debug_print!(
-                    "Skipping VM execution due to the previous execution result stored to state"
-                );
-                let result = result.clone();
-                self.gasometer_mut().record_additional_resize_iterations(1);
-                return Err(result);
-            }
-        }
-
         let mut steps = 0_u64;
-
         while steps < n {
             let (steps_executed, apply) = self.run(n - steps);
             steps += steps_executed;
 
             self.steps_executed += steps_executed;
-            self.executor.gasometer.record_evm_steps(steps_executed);
 
             match apply {
                 RuntimeApply::Continue => (),
@@ -385,32 +352,9 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         self.steps_executed
     }
 
-    /// Returns amount of used gas
-    #[must_use]
-    pub fn used_gas(&self) -> U256 {
-        self.executor.gasometer.used_gas()
-    }
-
-    /// Consumes Machine and takes gasometer
-    #[must_use]
-    pub fn take_gasometer(self) -> Gasometer {
-        self.executor.gasometer
-    }
-
-    /// Returns gasometer mutable reference
-    #[must_use]
-    pub fn gasometer_mut(&mut self) -> &mut Gasometer {
-        &mut self.executor.gasometer
-    }
-
     #[must_use]
     pub fn into_state_actions(self) -> Vec<Action> {
         self.executor.state.into_actions()
-    }
-
-    #[must_use]
-    pub fn into_state_actions_and_gasometer(self) -> (Vec<Action>, Gasometer) {
-        (self.executor.state.into_actions(), self.executor.gasometer)
     }
 
     #[must_use]

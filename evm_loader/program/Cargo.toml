@@ -3,7 +3,7 @@
 
 [package]
 name = "evm-loader"
-version = "0.12.0-dev"
+version = "0.13.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
@@ -47,9 +47,8 @@ mpl-token-metadata = { version = "=1.3.2", default_features = false, features = 
 thiserror = "1.0"
 arrayref = "0.3.6"
 hex = "0.4.2"
-ripemd160 = "0.9.1"
+ripemd = "0.1"
 rlp = "0.5"
-bytes = "1.2.1"
 borsh = "0.9"
 bincode = "1.3.3"
 evm = { version = "0.18.0", path = "../rust-evm", default_features = false }

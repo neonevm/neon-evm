@@ -13,13 +13,22 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
+use crate::account::TAG_ACCOUNT_V3;
 
+const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
 pub enum Deposit<'a> {
     ReturnToOperator(Operator<'a>),
     Burn(Incinerator<'a>),
 }
 
+pub struct BlockedAccountMeta {
+    pub key: Pubkey,
+    pub exists: bool,
+    pub is_writable: bool,
+}
+
+pub type BlockedAccounts = Vec<BlockedAccountMeta>;
 
 impl <'a> FinalizedState<'a> {
     #[must_use]
@@ -73,7 +82,7 @@ impl<'a> State<'a> {
         let mut storage = State::init(info, data)?;
 
         storage.make_deposit(&accounts.system_program, &accounts.operator)?;
-        storage.write_accounts(accounts.remaining_accounts)?;
+        storage.write_blocked_accounts(program_id, accounts.remaining_accounts)?;
         Ok(storage)
     }
 
@@ -81,8 +90,9 @@ impl<'a> State<'a> {
         program_id: &Pubkey,
         info: &'a AccountInfo<'a>,
         operator: &Operator,
-        accounts: &[AccountInfo],
-    ) -> Result<Self, ProgramError> {
+        remaining_accounts: &[AccountInfo],
+        is_cancelling: bool,
+    ) -> Result<(Self, BlockedAccounts), ProgramError> {
         let account_tag = crate::account::tag(program_id, info)?;
         if account_tag == FinalizedState::TAG {
             return Err!(EvmLoaderError::StorageAccountFinalized.into(); "Account {} - Storage Finalized", info.key);
@@ -92,7 +102,7 @@ impl<'a> State<'a> {
         }
 
         let mut storage = State::from_account(program_id, info)?;
-        storage.check_accounts(accounts)?;
+        let blocked_accounts = storage.check_blocked_accounts(program_id, remaining_accounts, is_cancelling)?;
 
         let clock = Clock::get()?;
         if (*operator.key != storage.operator) && ((clock.slot - storage.slot) <= OPERATOR_PRIORITY_SLOTS) {
@@ -104,7 +114,7 @@ impl<'a> State<'a> {
             storage.slot = clock.slot;
         }
 
-        Ok(storage)
+        Ok((storage, blocked_accounts))
     }
 
     pub fn finalize(self, deposit: Deposit<'a>) -> Result<FinalizedState<'a>, ProgramError> {
@@ -141,8 +151,8 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn accounts(&self) -> Result<Vec<(bool, Pubkey)>, ProgramError> {
-        let (begin, end) = self.accounts_region();
+    pub fn read_blocked_accounts(&self) -> Result<BlockedAccounts, ProgramError> {
+        let (begin, end) = self.blocked_accounts_region();
 
         let account_data = self.info.try_borrow_data()?;
         if account_data.len() < end {
@@ -150,19 +160,25 @@ impl<'a> State<'a> {
         }
 
         let keys_storage = &account_data[begin..end];
-        let chunks = keys_storage.chunks_exact(1 + 32);
+        let chunks = keys_storage.chunks_exact(ACCOUNT_CHUNK_LEN);
         let accounts = chunks
-            .map(|c| c.split_at(1))
-            .map(|(writable, key)| (writable[0] > 0, Pubkey::new(key)))
+            .map(|c| c.split_at(2))
+            .map(|(meta, key)|
+                BlockedAccountMeta {
+                    key: Pubkey::new(key),
+                    exists: meta[1] != 0,
+                    is_writable: meta[0] != 0,
+                }
+            )
             .collect();
 
         Ok(accounts)
     }
 
-    fn write_accounts(&mut self, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
+    fn write_blocked_accounts(&mut self, program_id: &Pubkey, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
         assert_eq!(self.accounts_len, accounts.len()); // should be always true
 
-        let (begin, end) = self.accounts_region();
+        let (begin, end) = self.blocked_accounts_region();
 
         let mut account_data = self.info.try_borrow_mut_data()?;
         if account_data.len() < end {
@@ -170,37 +186,52 @@ impl<'a> State<'a> {
         }
 
         let accounts_storage = &mut account_data[begin..end];
-        let accounts_storage = accounts_storage.chunks_exact_mut(1 + 32);
+        let accounts_storage = accounts_storage.chunks_exact_mut(ACCOUNT_CHUNK_LEN);
         for (info, account_storage) in accounts.iter().zip(accounts_storage) {
             account_storage[0] = u8::from(info.is_writable);
-            account_storage[1..].copy_from_slice(info.key.as_ref());
+            account_storage[1] = u8::from(Self::account_exists(program_id, info));
+            account_storage[2..].copy_from_slice(info.key.as_ref());
         }
 
         Ok(())
     }
 
-    fn check_accounts(&self, accounts: &[AccountInfo]) -> Result<(), ProgramError> {
-        let blocked_accounts = self.accounts()?;
-        if blocked_accounts.len() != accounts.len() {
+    fn check_blocked_accounts(
+        &self,
+        program_id: &Pubkey,
+        remaining_accounts: &[AccountInfo],
+        is_cancelling: bool,
+    ) -> Result<BlockedAccounts, ProgramError> {
+        let blocked_accounts = self.read_blocked_accounts()?;
+        if blocked_accounts.len() != remaining_accounts.len() {
             return Err!(ProgramError::NotEnoughAccountKeys; "Invalid number of accounts");
         }
 
-        for ((writable, key), info) in blocked_accounts.into_iter().zip(accounts) {
-            if key != *info.key {
-                return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", key, info.key);
+        for (blocked, info) in blocked_accounts.iter().zip(remaining_accounts) {
+            if blocked.key != *info.key {
+                return Err!(ProgramError::InvalidAccountData; "Expected account {}, found {}", blocked.key, info.key);
             }
 
-            if writable != info.is_writable {
-                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, writable);
+            if blocked.is_writable != info.is_writable {
+                return Err!(ProgramError::InvalidAccountData; "Expected account {} is_writable: {}", info.key, blocked.is_writable);
+            }
+
+            if !is_cancelling && !blocked.exists && Self::account_exists(program_id, info) {
+                return Err!(
+                    ProgramError::AccountAlreadyInitialized;
+                    "Blocked nonexistent account {} was created/initialized outside current transaction. \
+                    Transaction is being cancelled in order to prevent possible data corruption.",
+                    info.key
+                );
             }
         }
 
-        Ok(())
+        Ok(blocked_accounts)
     }
 
     #[must_use]
     pub fn evm_state_data(&self) -> Ref<[u8]> {
-        let (_, accounts_region_end) = self.accounts_region();
+        let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow();
         Ref::map(data, |d| &d[accounts_region_end..])
@@ -208,17 +239,22 @@ impl<'a> State<'a> {
 
     #[must_use]
     pub fn evm_state_mut_data(&mut self) -> RefMut<[u8]> {
-        let (_, accounts_region_end) = self.accounts_region();
+        let (_, accounts_region_end) = self.blocked_accounts_region();
 
         let data = self.info.data.borrow_mut();
         RefMut::map(data, |d| &mut d[accounts_region_end..])
     }
 
     #[must_use]
-    fn accounts_region(&self) -> (usize, usize) {
+    fn blocked_accounts_region(&self) -> (usize, usize) {
         let begin = Self::SIZE;
-        let end = begin + self.accounts_len * (1 + 32);
+        let end = begin + self.accounts_len * ACCOUNT_CHUNK_LEN;
 
         (begin, end)
+    }
+
+    #[must_use]
+    fn account_exists(program_id: &Pubkey, info: &AccountInfo) -> bool {
+        info.owner == program_id && !info.data_is_empty() && info.data.borrow()[0] == TAG_ACCOUNT_V3
     }
 }
