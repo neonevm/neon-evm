@@ -145,13 +145,15 @@ def check_proxy_tag(github_ref):
 
 
 @cli.command(name="trigger_proxy_action")
-@click.option('--branch')
+@click.option('--head_ref_branch')
+@click.option('--base_ref_branch')
+@click.option('--github_ref')
 @click.option('--github_sha')
 @click.option('--token')
 @click.option('--is_draft')
-def trigger_proxy_action(branch, github_sha, token, is_draft):
+def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft):
 
-    if branch == "develop" and not is_draft:
+    if base_ref_branch == "develop" and not is_draft:
         full_test_suite = "True"
     else:
         full_test_suite = "False"
@@ -160,14 +162,14 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
     proxy_branches_obj = requests.get(
         f"{proxy_endpoint}/branches?per_page=100").json()
     proxy_branches = [item["name"] for item in proxy_branches_obj]
-    proxy_branch = branch
+    proxy_branch = head_ref_branch
     if proxy_branch not in proxy_branches:
         proxy_branch = 'develop'
 
     data = {"ref": proxy_branch,
             "inputs": {"full_test_suite": full_test_suite,
                        "neon_evm_commit": github_sha,
-                       "neon_evm_branch": branch}
+                       "neon_evm_branch": github_ref}
             }
     headers = {"Authorization": f"Bearer {token}",
                "Accept": "application/vnd.github+json"}
@@ -175,7 +177,6 @@ def trigger_proxy_action(branch, github_sha, token, is_draft):
         f"{proxy_endpoint}/actions/workflows/pipeline.yml/dispatches", json=data, headers=headers)
     print(data)
     print(headers)
-    print(response.json())
     print(response.status_code)
     if response.status_code != 204:
         raise "proxy-model.py action is not triggered"
