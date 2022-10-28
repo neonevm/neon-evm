@@ -116,9 +116,9 @@ def run_tests(github_sha, run_number):
     try:
         click.echo("start tests")
         exec_id = docker_client.exec_create(
-            container="solana", cmd="/opt/deploy-test.sh")
+            container=f"solana-{run_number}", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
-        click.echo(logs)
+        click.echo(f'logs: {logs}')
         for line in logs:
             if 'ERROR ' in str(line) or 'FAILED ' in str(line):
                 raise RuntimeError("Test are failed")
