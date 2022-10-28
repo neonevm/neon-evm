@@ -165,10 +165,13 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     if proxy_branch not in proxy_branches:
         proxy_branch = 'develop'
 
+    neon_evm_branch = head_ref_branch if head_ref_branch is not None else 'develop'
+
     data = {"ref": proxy_branch,
             "inputs": {"full_test_suite": full_test_suite,
                        "neon_evm_commit": github_sha,
-                       "neon_evm_branch": github_ref}
+                       "neon_evm_ref": github_ref,
+                       "neon_evm_branch": neon_evm_branch}
             }
     headers = {"Authorization": f"Bearer {token}",
                "Accept": "application/vnd.github+json"}
