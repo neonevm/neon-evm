@@ -97,12 +97,8 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
 
 @cli.command(name="run_tests")
 @click.option('--github_sha')
-@click.option('--run_number')
-def run_tests(github_sha, run_number):
+def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
-    # TODO delete
-    command = "docker stop $(docker ps -a -q)"
-    subprocess.run(command, shell=True)
 
     os.environ["EVM_LOADER_IMAGE"] = image_name
 
@@ -118,7 +114,7 @@ def run_tests(github_sha, run_number):
     try:
         click.echo("start tests")
         exec_id = docker_client.exec_create(
-            container=f"solana-{run_number}", cmd="/opt/deploy-test.sh")
+            container="neon_evm", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
         click.echo(f'logs: {logs}')
         for line in logs:
