@@ -4,6 +4,7 @@ from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Finalized
 from solana.rpc.core import RPCException
+from solana.rpc.types import RPCResponse
 
 from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon, \
     cancel_transaction
@@ -134,7 +135,7 @@ def transfer(
     evm_loader: EvmLoader,
     operator_keypair: Keypair,
     treasury_pool: TreasuryPool,
-):
+) -> RPCResponse:
     message = make_eth_transaction(
         dst_addr,
         bytes(),
