@@ -16,7 +16,7 @@ use crate::account::ACCOUNT_SEED_VERSION;
 pub const TREASURY_POOL_SEED: &str = "treasury_pool";
 
 /// Count of balances in treasury pool
-pub const TREASURY_POOL_COUNT: u32 = 10000;
+pub const TREASURY_POOL_COUNT: u32 = 50000;
 
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
