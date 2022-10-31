@@ -214,18 +214,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut nonce = self.backend.nonce(from_address);
 
         for action in &self.actions {
-            match action {
-                Action::EvmIncrementNonce { address } => {
-                    if from_address == address {
-                        nonce += U256::one();
-                    }
+            if let Action::EvmIncrementNonce { address } = action {
+                if from_address == address {
+                    nonce += U256::one();
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        nonce = U256::zero();
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -237,18 +229,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut known_storage: Option<U256> = None;
 
         for action in &self.actions {
-            match action {
-                Action::EvmSetStorage { address, key, value } => {
-                    if (from_address == address) && (from_key == key) {
-                        known_storage = Some(*value);
-                    }
+            if let Action::EvmSetStorage { address, key, value } = action {
+                if (from_address == address) && (from_key == key) {
+                    known_storage = Some(*value);
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_storage = Some(U256::zero());
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -260,18 +244,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut code_size = self.backend.code_size(from_address);
 
         for action in &self.actions {
-            match action {
-                Action::EvmSetCode { address, code, valids: _ } => {
-                    if from_address == address {
-                        code_size = code.len();
-                    }
+            if let Action::EvmSetCode { address, code, valids: _ } = action {
+                if from_address == address {
+                    code_size = code.len();
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        code_size = 0_usize;
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -283,18 +259,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut known_code: Option<&[u8]> = None;
 
         for action in &self.actions {
-            match action {
-                Action::EvmSetCode { address, code, valids: _ } => {
-                    if from_address == address {
-                        known_code = Some(code);
-                    }
+            if let Action::EvmSetCode { address, code, valids: _ } = action {
+                if from_address == address {
+                    known_code = Some(code);
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_code = Some(&[]);
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -306,18 +274,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut known_code: Option<&[u8]> = None;
 
         for action in &self.actions {
-            match action {
-                Action::EvmSetCode { address, code, valids: _ } => {
-                    if from_address == address {
-                        known_code = Some(code);
-                    }
+            if let Action::EvmSetCode { address, code, valids: _ } = action {
+                if from_address == address {
+                    known_code = Some(code);
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_code = Some(&[]);
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -329,18 +289,10 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
         let mut known_valids: Option<&[u8]> = None;
 
         for action in &self.actions {
-            match action {
-                Action::EvmSetCode { address, code: _, valids } => {
-                    if from_address == address {
-                        known_valids = Some(valids);
-                    }
+            if let Action::EvmSetCode { address, code: _, valids } = action {
+                if from_address == address {
+                    known_valids = Some(valids);
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_valids = Some(&[]);
-                    }
-                }
-                _ => {}
             }
         }
 
