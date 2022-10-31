@@ -220,11 +220,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                         nonce += U256::one();
                     }
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        nonce = U256::zero();
-                    }
-                }
                 _ => {}
             }
         }
@@ -241,11 +236,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 Action::EvmSetStorage { address, key, value } => {
                     if (from_address == address) && (from_key == key) {
                         known_storage = Some(*value);
-                    }
-                }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_storage = Some(U256::zero());
                     }
                 }
                 _ => {}
@@ -266,11 +256,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                         code_size = code.len();
                     }
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        code_size = 0_usize;
-                    }
-                }
                 _ => {}
             }
         }
@@ -287,11 +272,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 Action::EvmSetCode { address, code, valids: _ } => {
                     if from_address == address {
                         known_code = Some(code);
-                    }
-                }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_code = Some(&[]);
                     }
                 }
                 _ => {}
@@ -312,11 +292,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                         known_code = Some(code);
                     }
                 }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_code = Some(&[]);
-                    }
-                }
                 _ => {}
             }
         }
@@ -333,11 +308,6 @@ impl<'a, B: AccountStorage> ExecutorState<'a, B> {
                 Action::EvmSetCode { address, code: _, valids } => {
                     if from_address == address {
                         known_valids = Some(valids);
-                    }
-                }
-                Action::EvmSelfDestruct { address } => {
-                    if from_address == address {
-                        known_valids = Some(&[]);
                     }
                 }
                 _ => {}
