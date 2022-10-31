@@ -1,7 +1,7 @@
 use std::cell::RefMut;
 use std::mem::size_of;
 
-use evm::{U256, Valids};
+use ethnum::U256;
 
 use crate::account::EthereumAccount;
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
@@ -18,16 +18,6 @@ impl<'acc> ContractData<'_, 'acc> {
     pub fn code(&self) -> RefMut<'acc, [u8]> {
         let offset = Self::INTERNAL_STORAGE_SIZE;
         let len = self.account.code_size as usize;
-
-        self.extension_part_borrow_mut(offset, len)
-    }
-
-    #[must_use]
-    pub fn valids(&self) -> RefMut<'acc, [u8]> {
-        let code_size = self.account.code_size as usize;
-
-        let offset = Self::INTERNAL_STORAGE_SIZE + code_size;
-        let len = Valids::size_needed(code_size);
 
         self.extension_part_borrow_mut(offset, len)
     }
@@ -80,7 +70,7 @@ impl<'this, 'acc> EthereumAccount<'acc> {
     pub fn space_needed(code_size: usize) -> usize {
         EthereumAccount::SIZE +
             if code_size > 0 {
-                code_size + Valids::size_needed(code_size) + ContractData::INTERNAL_STORAGE_SIZE
+                code_size + ContractData::INTERNAL_STORAGE_SIZE
             } else {
                 0
             }

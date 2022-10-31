@@ -13,7 +13,7 @@ use solana_client::rpc_client::RpcClient;
 use std::{fmt, fmt::Debug, process::exit, str::FromStr,};
 use clap::ArgMatches;
 use log::error;
-use evm_loader::H256;
+use hex::FromHex;
 
 pub struct Config {
     pub rpc_client: Box<dyn rpc::Rpc>,
@@ -89,7 +89,7 @@ pub fn create(options: &ArgMatches) -> Config {
     let rpc_client: Box<dyn rpc::Rpc> = match (cmd, params) {
         ("emulate_hash" | "trace_hash", Some(params)) => {
             let hash = params.value_of("hash").expect("hash not found");
-            let hash = H256::from_str(truncate(hash)).expect("hash cast error");
+            let hash = <[u8; 32]>::from_hex(truncate(hash)).expect("hash cast error");
 
             Box::new(TrxDbClient::new(&db_config.expect("db-config not found"), hash))
         }

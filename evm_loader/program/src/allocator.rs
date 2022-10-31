@@ -5,7 +5,7 @@ use std::{
     usize
 };
 
-use solana_program::entrypoint::HEAP_START_ADDRESS;
+use solana_program::{entrypoint::HEAP_START_ADDRESS};
 
 
 pub struct BumpAllocator;
@@ -25,7 +25,6 @@ impl BumpAllocator {
 }
 
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
-    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         const POSITION_PTR: *mut usize = HEAP_START_ADDRESS as *mut usize;
 
@@ -47,13 +46,37 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         position as *mut u8
     }
 
-    #[inline]
     unsafe fn dealloc(&self, _: *mut u8, _layout: Layout) {
         // I'm a bump allocator, I don't free
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        // Memory is zeroed by Solana
+        self.alloc(layout)
+
+        // #[cfg(target_os = "solana")]
+        // solana_program::syscalls::sol_memset_(ptr, 0, size as u64);
+
+        // #[cfg(not(target_os = "solana"))]
+        // std::ptr::write_bytes(ptr, 0, size);
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+
+        let new_ptr = self.alloc(new_layout);
+
+        #[cfg(target_os = "solana")]
+        solana_program::syscalls::sol_memcpy_(new_ptr, ptr, std::cmp::min(layout.size(), new_size) as u64);
+
+        #[cfg(not(target_os = "solana"))]
+        std::ptr::copy_nonoverlapping(ptr, new_ptr, std::cmp::min(layout.size(), new_size));
+
+        new_ptr
     }
 }
 
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 #[global_allocator]
 static mut A: BumpAllocator = BumpAllocator;

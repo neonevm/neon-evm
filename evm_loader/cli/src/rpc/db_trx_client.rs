@@ -10,15 +10,15 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use tokio_postgres::Error;
-use std::{convert::TryFrom, str::FromStr};
-use evm_loader::{H160, H256, U256};
+use evm_loader::types::Address;
+use ethnum::U256;
 use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl, e,};
 use crate::commands::TxParams;
-use std::{convert::TryInto, any::Any};
+use std::{convert::{TryInto, TryFrom}, any::Any};
 
 
 impl TrxDbClient {
-    pub fn new(config: &DbConfig, hash: H256) -> Self {
+    pub fn new(config: &DbConfig, hash: [u8; 32]) -> Self {
         let tracer = do_connect(
             &config.tracer_host, &config.tracer_port, &config.tracer_database, &config.tracer_user, &config.tracer_password
         );
@@ -30,7 +30,7 @@ impl TrxDbClient {
 
     fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
 
-        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
+        let hex = format!("0x{}", hex::encode(self.hash));
         let row = block(|| async {
             self.indexer_db.query_one(
                 "SELECT S.sol_sig from solana_neon_transactions S, solana_blocks B \
@@ -67,7 +67,7 @@ impl TrxDbClient {
     }
 
     pub fn get_slot_(&self) -> Result<Slot, Error>{
-        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
+        let hex = format!("0x{}", hex::encode(self.hash));
         let row = block(|| async {
             self.indexer_db.query_one(
                 "SELECT min(S.block_slot) from solana_neon_transactions S, solana_blocks B \
@@ -82,7 +82,7 @@ impl TrxDbClient {
     }
 
     pub fn get_transaction_data_(&self) -> Result<TxParams, Error> {
-        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
+        let hex = format!("0x{}", hex::encode(self.hash));
         let row = block(|| async {
             self.indexer_db.query_one(
                 "select distinct t.from_addr, \
@@ -101,11 +101,11 @@ impl TrxDbClient {
         let value: String = row.try_get(3)?;
         let gas_limit: String = row.try_get(4)?;
 
-        let from = H160::from_str(&from.as_str()[2..]).expect("parse error from");
-        let to = H160::from_str(&to.as_str()[2..]).expect("parse error to");
+        let from = Address::from_hex(&from.as_str()[2..]).expect("parse error from");
+        let to = Address::from_hex(&to.as_str()[2..]).expect("parse error to");
         let data =  hex::decode(&data.as_str()[2..]).expect("data hex::decore error");
-        let value: U256 = value.as_str()[2..].parse().expect("value parse error");
-        let gas_limit: U256 = gas_limit.as_str()[2..].parse().expect("gas_limit parse error");
+        let value: U256 = U256::from_str_hex(&value).expect("value parse error");
+        let gas_limit: U256 = U256::from_str_hex(&gas_limit).expect("gas_limit parse error");
 
         Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
     }

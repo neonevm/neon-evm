@@ -1,4 +1,3 @@
-use evm_loader::StepTrace;
 use super::{
     tracer::Tracer,
 };
@@ -7,27 +6,23 @@ use crate::{
 };
 
 pub trait ListenerTracer {
-    fn step (&mut self, mes: &StepTrace);
+    fn begin_step(&mut self, stack: Vec<[u8; 32]>, memory: Vec<u8>);
+    fn end_step(&mut self);
 }
 
-impl ListenerTracer for Tracer{
+impl ListenerTracer for Tracer {
+    fn begin_step(&mut self, stack: Vec<[u8; 32]>, memory: Vec<u8>) {
+        let storage = self.data.last()
+            .map(|d| d.storage.clone())
+            .unwrap_or_default();
 
-    fn step (&mut self, mes: &StepTrace){
-        if let Some((index, value)) = self.vm.storage_accessed.take() {
-            if let Some(data) = self.data.last_mut() {
-                data.storage = Some((index, value));
-            }
+        self.data.push(FullTraceData { stack, memory, storage });
+    }
+
+    fn end_step(&mut self) {
+        if let Some((index, value)) = self.vm.step_diff().storage_access {
+            let data = self.data.last_mut().expect("data was pushed in begin_step");
+            data.storage.insert(index, value);
         }
-
-        let stack = (0..mes.stack.len())
-            .rev()
-            .map(|i| mes.stack.peek(i).expect("stack peek error"))
-            .collect::<Vec<_>>();
-        let memory = mes.memory.data().to_vec();
-        self.data.push(FullTraceData {
-            stack,
-            memory,
-            storage: None,
-        });
     }
 }

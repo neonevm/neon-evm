@@ -1,13 +1,9 @@
-use std::convert::Infallible;
-
-use evm::{Capture, ExitReason};
-
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn blake2_f(
     input: &[u8]
-) -> Capture<(ExitReason, Vec<u8>), Infallible> {
+) -> Vec<u8> {
     const BLAKE2_F_ARG_LEN: usize = 213;
     debug_print!("blake2F");
 
@@ -74,7 +70,7 @@ pub fn blake2_f(
 
     if input.len() != BLAKE2_F_ARG_LEN {
         // return Err(ExitError::Other("input length for Blake2 F precompile should be exactly 213 bytes".into()));
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()));
+        return Vec::new();
     }
 
     let mut rounds_arr: [u8; 4] = Default::default();
@@ -120,7 +116,7 @@ pub fn blake2_f(
         false
     } else {
         // return Err(ExitError::Other("incorrect final block indicator flag".into()))
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), Vec::new()));
+        return Vec::new()
     };
 
     compress(&mut h, m, [t_0, t_1], f, rounds as usize);
@@ -130,10 +126,5 @@ pub fn blake2_f(
         output_buf[i * 8..(i + 1) * 8].copy_from_slice(&state_word.to_le_bytes());
     }
 
-    debug_print!("{}", &hex::encode(output_buf));
-
-    Capture::Exit((
-        ExitReason::Succeed(evm::ExitSucceed::Returned),
-        output_buf.to_vec(),
-    ))
+    output_buf.to_vec()
 }

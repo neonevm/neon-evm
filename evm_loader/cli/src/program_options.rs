@@ -1,7 +1,9 @@
 use solana_clap_utils::{input_validators::{is_url_or_moniker, is_valid_pubkey},};
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand,};
-use evm_loader::{H160, U256, H256};
-use std::{str::FromStr, fmt::Display,};
+use ethnum::U256;
+use evm_loader::types::Address;
+use hex::FromHex;
+use std::fmt::Display;
 
 pub fn truncate(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
@@ -11,33 +13,41 @@ pub fn truncate(in_str: &str) -> &str {
     }
 }
 
-// Return an error if string cannot be parsed as a H160 address
-fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+// Return an error if string cannot be parsed as a Address address
+fn is_valid_address<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    H160::from_str(truncate(string.as_ref())).map(|_| ())
+    Address::from_hex(string.as_ref()).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
-// Return an error if string cannot be parsed as a H160 address
-fn is_valid_h160_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+// Return an error if string cannot be parsed as a Address address
+fn is_valid_address_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
     if string.as_ref() == "deploy" {
         return Ok(());
     }
-    H160::from_str(truncate(string.as_ref())).map(|_| ())
+    Address::from_hex(string.as_ref()).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
 // Return an error if string cannot be parsed as a U256 integer
 fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    U256::from_str(truncate(string.as_ref())).map(|_| ())
+    let value = string.as_ref();
+    if value.is_empty() {
+        return Ok(());
+    }
+
+    U256::from_str_prefixed(value)
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
 fn is_valid_h256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    H256::from_str(truncate(string.as_ref())).map(|_| ())
+    let str = truncate(string.as_ref());
+    <[u8; 32]>::from_hex(str)
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -67,7 +77,7 @@ macro_rules! trx_params {
                         .takes_value(true)
                         .index(1)
                         .required(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_address)
                         .help("The sender of the transaction")
                 )
                 .arg(
@@ -76,7 +86,7 @@ macro_rules! trx_params {
                         .takes_value(true)
                         .index(2)
                         .required(true)
-                        .validator(is_valid_h160_or_deploy)
+                        .validator(is_valid_address_or_deploy)
                         .help("The contract that executes the transaction or 'deploy'")
                 )
                 .arg(
@@ -85,7 +95,7 @@ macro_rules! trx_params {
                         .takes_value(true)
                         .index(3)
                         .required(false)
-                        .validator(is_amount::<U256, _>)
+                        .validator(is_valid_u256)
                         .help("Transaction value")
                 )
                 .arg(
@@ -121,7 +131,7 @@ macro_rules! trx_params {
                         .value_name("GAS_LIMIT")
                         .takes_value(true)
                         .required(false)
-                        .validator(is_amount::<U256, _>)
+                        .validator(is_valid_u256)
                         .help("Gas limit"),
                 )
     }
@@ -310,7 +320,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .value_name("ether")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_address)
                         .help("Ethereum address"),
                 )
         )
@@ -344,7 +354,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .value_name("ETHER")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_address)
                         .help("Ethereum address"),
                 )
         )
@@ -357,7 +367,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .value_name("ether")
                         .takes_value(true)
                         .required(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_address)
                         .help("Ethereum address"),
                 )
         )
@@ -428,7 +438,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .index(1)
                         .value_name("contract_id")
                         .takes_value(true)
-                        .validator(is_valid_h160)
+                        .validator(is_valid_address)
                         .required(true),
                 )
                 .arg(

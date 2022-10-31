@@ -25,22 +25,20 @@ use solana_client::{
     rpc_config::RpcSendTransactionConfig,
     client_error::Result as SolanaClientResult,
 };
-use evm_loader::{H160, H256, U256};
+use ethnum::U256;
+use evm_loader::types::Address;
 use std::str::FromStr;
-use evm_loader::account::EthereumAccount;
-use log::debug;
 use crate::{
-    NeonCliResult, NeonCliError,
+    NeonCliResult,
     program_options::truncate,
     Config,
-    account_storage::account_info,
     commands::get_neon_elf::CachedElfParams,
 };
 
 #[derive(Clone)]
 pub struct TxParams {
-    pub from: H160,
-    pub to: Option<H160>,
+    pub from: Address,
+    pub to: Option<Address>,
     pub data: Option<Vec<u8>>,
     pub value: Option<U256>,
     pub gas_limit: Option<U256>,
@@ -51,39 +49,39 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
         ("emulate", Some(params)) => {
             let tx= parse_tx(params);
             let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, &tx, token, chain, steps)
+            emulate::execute(config, tx, token, chain, steps)
         }
         ("emulate_hash", Some(params)) => {
             let tx = config.rpc_client.get_transaction_data()?;
             let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, &tx, token, chain, steps)
+            emulate::execute(config, tx, token, chain, steps)
         }
         ("trace", Some(params)) => {
             let tx= parse_tx(params);
             let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, &tx, token, chain, steps)
+            trace::execute(config, tx, token, chain, steps)
         }
         ("trace_hash", Some(params)) => {
             let tx = config.rpc_client.get_transaction_data()?;
             let (token, chain, steps) = parse_tx_params(config, params);
-            trace::execute(config, &tx, token, chain, steps)
+            trace::execute(config, tx, token, chain, steps)
         }
         ("create-program-address", Some(params)) => {
-            let ether = h160_of(params, "seed").expect("seed parse error");
+            let ether = address_of(params, "seed").expect("seed parse error");
             create_program_address::execute(config, &ether);
             Ok(())
         }
         ("create-ether-account", Some(params)) => {
-            let ether = h160_of(params, "ether").expect("ether parse error");
+            let ether = address_of(params, "ether").expect("ether parse error");
             create_ether_account::execute(config, &ether)
         }
         ("deposit", Some(params)) => {
             let amount = value_of(params, "amount").expect("amount parse error");
-            let ether = h160_of(params, "ether").expect("ether parse error");
+            let ether = address_of(params, "ether").expect("ether parse error");
             deposit::execute(config, amount, &ether)
         }
         ("get-ether-account-data", Some(params)) => {
-            let ether = h160_of(params, "ether").expect("ether parse error");
+            let ether = address_of(params, "ether").expect("ether parse error");
             get_ether_account_data::execute(config, &ether);
             Ok(())
         }
@@ -106,7 +104,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             init_environment::execute(config, send_trx, force, keys_dir, file)
         }
         ("get-storage-at", Some(params)) => {
-            let contract_id = h160_of(params, "contract_id").expect("contract_it parse error");
+            let contract_id = address_of(params, "contract_id").expect("contract_it parse error");
             let index = u256_of(params, "index").expect("index parse error");
             get_storage_at::execute(config, contract_id, &index);
             Ok(())
@@ -115,23 +113,26 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
     }
 }
 
-fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
+fn address_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<Address> {
     if matches.value_of(name) == Some("deploy") {
         return None;
     }
-    h160_of(matches, name)
+    address_of(matches, name)
 }
 
-fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
+fn address_of(matches: &ArgMatches<'_>, name: &str) -> Option<Address> {
     matches.value_of(name).map(|value| {
-        // let err  = format!("{} parse error", name);
-        H160::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
+        Address::from_hex(value).unwrap()
     })
 }
 
 fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
     matches.value_of(name).map(|value| {
-        U256::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
+        if value.is_empty() {
+            return U256::ZERO;
+        }
+
+        U256::from_str_prefixed(value).unwrap()
     })
 }
 
@@ -150,41 +151,6 @@ fn read_stdin() -> Option<Vec<u8>>{
     else{
         None
     }
-}
-
-fn get_program_ether(
-    caller_ether: &H160,
-    trx_count: u64
-) -> H160 {
-    let trx_count_256 : U256 = U256::from(trx_count);
-    let mut stream = rlp::RlpStream::new_list(2);
-    stream.append(caller_ether);
-    stream.append(&trx_count_256);
-
-    let hash = solana_sdk::keccak::hash(&stream.out()).to_bytes();
-    H256::from(hash).into()
-}
-
-fn get_ether_account_nonce(
-    config: &Config,
-    caller_sol: &Pubkey,
-) -> Result<(u64, H160), NeonCliError> {
-    let mut acc = match config.rpc_client.get_account_with_commitment(caller_sol, CommitmentConfig::confirmed())?.value {
-        Some(acc) => acc,
-        None => return Ok((u64::default(), H160::default()))
-    };
-
-    debug!("get_ether_account_nonce account = {:?}", acc);
-
-    let info = account_info(caller_sol, &mut acc);
-    let account = EthereumAccount::from_account(&config.evm_loader, &info).map_err(NeonCliError::ProgramError)?;
-    let trx_count = account.trx_count;
-    let caller_ether = account.address;
-
-    debug!("Caller: ether {}, solana {}", caller_ether, caller_sol);
-    debug!("Caller trx_count: {} ", trx_count);
-
-    Ok((trx_count, caller_ether))
 }
 
 pub fn send_transaction(
@@ -211,8 +177,8 @@ pub fn send_transaction(
 
 
 fn parse_tx(params: &ArgMatches) -> TxParams {
-    let from = h160_of(params, "sender").expect("sender parse error");
-    let to = h160_or_deploy_of(params, "contract");
+    let from = address_of(params, "sender").expect("sender parse error");
+    let to = address_or_deploy_of(params, "contract");
     let data = read_stdin();
     let value = value_of(params, "value");
     let gas_limit = u256_of(params, "gas_limit");

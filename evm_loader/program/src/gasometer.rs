@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use evm::{U256};
+use ethnum::U256;
 use solana_program::account_info::AccountInfo;
 use solana_program::{
     program_error::ProgramError,
@@ -8,7 +8,7 @@ use solana_program::{
 use crate::account::Operator;
 use crate::{
     config::{HOLDER_MSG_SIZE},
-    transaction::Transaction, 
+    types::Transaction, 
 };
 
 pub const LAMPORTS_PER_SIGNATURE: u64 = 5000;
@@ -27,7 +27,7 @@ pub struct Gasometer {
 impl Gasometer {
     pub fn new(paid_gas: Option<U256>, operator: &Operator) -> Result<Self, ProgramError> {
         Ok( Self {
-            paid_gas: paid_gas.unwrap_or(U256::zero()), 
+            paid_gas: paid_gas.unwrap_or(U256::ZERO), 
             gas: 0_u64,
             operator_balance: operator.lamports()
         } )

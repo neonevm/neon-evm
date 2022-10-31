@@ -3,7 +3,6 @@
 
 use cfg_if::cfg_if;
 use const_format::formatcp;
-use evm::U256;
 use evm_loader_macro::{
     common_config_parser, declare_param_id, elf_config_parser, neon_elf_param,
     net_specific_config_parser, operators_whitelist,
@@ -34,9 +33,3 @@ cfg_if! {
 }
 
 elf_config_parser!("config/elf_params.toml");
-
-/// Chain ID
-#[must_use]
-pub fn chain_id() -> U256 {
-    U256::from(CHAIN_ID)
-}

@@ -59,15 +59,19 @@ fn process_instruction<'a>(
         }
         EvmInstruction::TransactionExecuteFromInstruction => {
             instruction::transaction_execute_from_instruction::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromInstruction => {
             instruction::transaction_step_from_instruction::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromAccount => {
             instruction::transaction_step_from_account::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::TransactionStepFromAccountNoChainId => {
             instruction::transaction_step_from_account_no_chainid::process(program_id, accounts, instruction)
+                .map_err(ProgramError::from)
         }
         EvmInstruction::CreateAccountV03 => {
             instruction::account_create::process(program_id, accounts, instruction)

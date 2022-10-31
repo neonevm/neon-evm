@@ -1,172 +1,62 @@
-use evm_loader::{
-    U256, Stack, ExitReason, Capture, StepTrace, StepResultTrace, SStoreTrace, SLoadTrace, Opcode
-};
-use crate::types::ec::trace::{INSTRUCTIONS, VMTracer};
-use super::vm_tracer::VmTracer;
-use log::{warn, info};
+use ethnum::U256;
+use evm_loader::evm::{Context, ExitStatus};
+use crate::types::ec::trace::{VMTracer, StorageDiff, MemoryDiff};
+use super::vm_tracer::{VmTracer};
 
 pub trait ListenerVmTracer {
-    fn step (&mut self, mes: &StepTrace);
-    fn step_result (&mut self, mes: &StepResultTrace);
-    fn sstore (&mut self, mes: &SStoreTrace);
-    fn sload (&mut self, mes: &SLoadTrace);
+    fn begin_vm(&mut self, context: Context, code: Vec<u8>);
+    fn end_vm(&mut self, status: ExitStatus);
+    fn begin_step(&mut self, opcode: u8, pc: usize);
+    fn end_step(&mut self, gas_used: u64);
+    fn storage_access(&mut self, index: U256, value: [u8; 32]);
+    fn storage_set(&mut self, index: U256, value: [u8; 32]);
+    fn stack_push(&mut self, value: [u8; 32]);
+    fn memory_set(&mut self, offset: usize, data: Vec<u8>);
 }
 
-impl ListenerVmTracer for VmTracer{
-    fn step(&mut self, mes: &StepTrace){
-        if let Some(pending_trap) = self.take_pending_trap() {
-            self.handle_step_result(mes.stack, mes.memory, pending_trap.pushed);
-        }
+impl ListenerVmTracer for VmTracer {
+    fn begin_vm(&mut self, _context: Context, code: Vec<u8>) {
+        self.push_step_diff();
 
-        let pc = mes.position.expect("trace position");
-        println!("pc = {:?} opcode = {:?}", pc, mes.opcode);
-        let instruction = mes.opcode.0;
-        let mem_written = mem_written(mes.opcode, mes.stack);
-        let store_written = store_written(mes.opcode, mes.stack);
-        self.tracer.trace_prepare_execute(
-            pc,
-            instruction,
-            U256::from(0),
-            mem_written,
-            store_written.map(|(a, b)| (a, b)),
-        );
-
-        if let Some(pushed_count) = pushed(mes.opcode) {
-            self.pushed = pushed_count;
-        } else {
-            warn!("{}", "Unknown opcode");
-        }
+        self.tracer.prepare_subtrace(code);
     }
 
-    fn step_result (&mut self, mes: &StepResultTrace){
-        println!("res");
-        match mes.result {
-            Ok(_) => self.handle_step_result(mes.stack, mes.memory, self.pushed),
-            Err(err) => {
-                match err {
-                    Capture::Trap(opcode) => {
-                        if matches!(*opcode, Opcode::SLOAD | Opcode::SSTORE) {
-                            return; // Handled in separate events
-                        }
+    fn end_vm(&mut self, _status: ExitStatus) {
+        self.pop_step_diff();
 
-                        let trap = PendingTrap {
-                            pushed: self.pushed,
-                            depth: self.tracer.depth,
-                        };
-                        self.trap_stack.push(trap);
-
-                        match *opcode {
-                            Opcode::CALL
-                            | Opcode::CALLCODE
-                            | Opcode::DELEGATECALL
-                            | Opcode::STATICCALL => self.tracer.prepare_subtrace(&[]),
-                            Opcode::LOG0
-                            | Opcode::LOG1
-                            | Opcode::LOG2
-                            | Opcode::LOG3
-                            | Opcode::LOG4 => {
-                                VmTracer::handle_log(*opcode, mes.stack, mes.memory.data());
-                            }
-                            _ => (),
-                        }
-
-                        return;
-                    }
-                    Capture::Exit(err) => {
-                        info!("exit with {:?}", err);
-                        match err {
-                            // RETURN, STOP as SUICIDE opcodes
-                            ExitReason::Succeed(_success) => {
-                                self.tracer.trace_executed(U256::zero(), &[], &[]);
-                            }
-                            ExitReason::Error(_)
-                            | ExitReason::Fatal(_)
-                            | ExitReason::Revert(_)
-                            | ExitReason::StepLimitReached => self.tracer.trace_failed(),
-                        }
-                        self.tracer.done_subtrace();
-                        if let Some(pending_trap) = self.take_pending_trap() {
-                            self.handle_step_result(mes.stack, mes.memory, pending_trap.pushed);
-                        }
-                    }
-                }
-                self.pushed = 0;
-            }
-        }
-
+        self.tracer.done_subtrace();
     }
 
-    fn sstore (&mut self, mes: &SStoreTrace){
-        self.storage_accessed = Some((mes.index, mes.value));
-        self.tracer.trace_executed(U256::zero(), &[], &[]);
-        /* TODO */
+    fn begin_step(&mut self, opcode: u8, pc: usize) {
+        let diff = self.step_diff();
+        diff.stack_push.clear();
+        diff.memory_set = None;
+        diff.storage_set = None;
+        diff.storage_access = None;
+
+        self.tracer.trace_prepare_execute(pc, opcode);
     }
 
-    fn sload (&mut self, mes: &SLoadTrace){
-        self.storage_accessed = Some((mes.index, mes.value));
-        self.tracer
-            .trace_executed(U256::zero(), &[mes.value], &[]);
+    fn end_step(&mut self, gas_used: u64) {
+        let gas_used = U256::from(gas_used);
+        let diff = self.step_diff().clone();
+
+        self.tracer.trace_executed(gas_used, diff.stack_push, diff.memory_set, diff.storage_set);
+    }
+
+    fn storage_access(&mut self, index: U256, value: [u8; 32]) {
+        self.step_diff().storage_access = Some((index, value));
+    }
+
+    fn storage_set(&mut self, index: U256, value: [u8; 32]) {
+        self.step_diff().storage_set = Some(StorageDiff { location: index, value });
+    }
+
+    fn stack_push(&mut self, value: [u8; 32]) {
+        self.step_diff().stack_push.push(value);
+    }
+
+    fn memory_set(&mut self, offset: usize, data: Vec<u8>) {
+        self.step_diff().memory_set = Some(MemoryDiff { offset, data });
     }
 }
-
-
-pub fn pushed(opcode: Opcode) -> Option<usize> {
-    INSTRUCTIONS
-        .get(opcode.as_usize())
-        .and_then(std::option::Option::as_ref)
-        .map(|i| i.ret)
-}
-
-/// Checks whether offset and size is valid memory range
-fn is_valid_range(off: usize, size: usize) -> bool {
-    // When size is zero we haven't actually expanded the memory
-    let overflow = off.overflowing_add(size).1;
-    size > 0 && !overflow
-}
-
-#[allow(clippy::cast_possible_truncation)]
-fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
-    let read = |pos| stack.peek(pos).expect("stack peek error").low_u64() as usize;
-    let written = match instruction {
-        // Core codes
-        Opcode::MSTORE | Opcode::MLOAD => Some((read(0), 32)),
-        Opcode::MSTORE8 => Some((read(0), 1)),
-        Opcode::CALLDATACOPY | Opcode::CODECOPY | Opcode::RETURNDATACOPY => Some((read(0), read(2))),
-        // External codes
-        Opcode::EXTCODECOPY => Some((read(1), read(3))),
-        Opcode::CALL | Opcode::CALLCODE => Some((read(5), read(6))),
-        Opcode::DELEGATECALL | Opcode::STATICCALL => Some((read(4), read(5))),
-        /* Remaining external opcodes that do not affect memory:
-          Opcode::SHA3 | Opcode::ADDRESS | Opcode::BALANCE | Opcode::SELFBALANCE | Opcode::ORIGIN
-        | Opcode::CALLER | Opcode::CALLVALUE | Opcode::GASPRICE | Opcode::EXTCODESIZE
-        | Opcode::EXTCODEHASH | Opcode::RETURNDATASIZE | Opcode::BLOCKHASH | Opcode::COINBASE
-        | Opcode::TIMESTAMP | Opcode::NUMBER | Opcode::DIFFICULTY | Opcode::GASLIMIT
-        | Opcode::CHAINID | Opcode::SLOAD | Opcode::SSTORE | Opcode::GAS | Opcode::LOG0
-        | Opcode::LOG1 | Opcode::LOG2 | Opcode::LOG3 | Opcode::LOG4 | Opcode::CREATE
-        | Opcode::CREATE2
-        */
-        _ => None,
-    };
-
-
-    match written {
-        Some((offset, size)) if !is_valid_range(offset, size) => None,
-        written => written,
-    }
-}
-
-fn store_written(instruction: Opcode, stack: &Stack) -> Option<(U256, U256)> {
-    match instruction {
-        Opcode::SSTORE => Some((stack.peek(0).expect("stack.peek(0) error"), stack.peek(1).expect("stack.peek(1) error"))),
-        _ => None,
-    }
-}
-
-#[derive(Debug)]
-pub struct PendingTrap {
-    pub pushed: usize,
-    pub depth: usize,
-}
-
-
-

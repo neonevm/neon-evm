@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use crate::executor::{OwnedAccountInfo, AccountMeta};
+use crate::executor::{OwnedAccountInfo};
 use borsh::BorshDeserialize;
 use solana_program::{
     entrypoint::ProgramResult,
     pubkey::Pubkey,
-    program_error::ProgramError, rent::Rent, sysvar::Sysvar, program_pack::Pack
+    program_error::ProgramError, rent::Rent, sysvar::Sysvar, program_pack::Pack, instruction::AccountMeta
 };
 use spl_associated_token_account::instruction::AssociatedTokenAccountInstruction;
 
@@ -22,12 +22,12 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
         return Err!(ProgramError::InvalidInstructionData; "Unknown spl_associated_token instruction");
     }
 
-    let funder_key = &meta[0].key;
-    let associated_token_account_key = &meta[1].key;
-    let wallet_account_key = &meta[2].key;
-    let spl_token_mint_key = &meta[3].key;
-    // let system_program_key = &meta[4].key;
-    let spl_token_program_key = &meta[5].key;
+    let funder_key = &meta[0].pubkey;
+    let associated_token_account_key = &meta[1].pubkey;
+    let wallet_account_key = &meta[2].pubkey;
+    let spl_token_mint_key = &meta[3].pubkey;
+    // let system_program_key = &meta[4].pubkey;
+    let spl_token_program_key = &meta[5].pubkey;
 
     let required_lamports = {
         let associated_token_account = &accounts[associated_token_account_key];
@@ -67,6 +67,6 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
     )?;
 
     let instruction: &[u8] = &initialize_account.data;
-    let meta: Vec<AccountMeta> = initialize_account.accounts.into_iter().map(AccountMeta::from_solana_meta).collect();
+    let meta: Vec<AccountMeta> = initialize_account.accounts;
     super::spl_token::emulate(instruction, &meta, accounts)
 }

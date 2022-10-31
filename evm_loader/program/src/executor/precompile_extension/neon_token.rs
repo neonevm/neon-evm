@@ -1,13 +1,14 @@
-use std::convert::{Infallible, TryInto};
+use std::convert::TryInto;
 
 use arrayref::array_ref;
-use evm::{Capture, ExitReason, U256, H160};
-use solana_program::{pubkey::Pubkey, program_pack::Pack, program_error::ProgramError};
+use ethnum::U256;
+use solana_program::{pubkey::Pubkey, program_pack::Pack};
 use spl_associated_token_account::get_associated_token_address;
 
 use crate::{
     account_storage::AccountStorage,
-    executor::{ExecutorState}
+    executor::{ExecutorState},
+    error::{Result, Error}, types::Address, evm::database::Database,
 };
 
 
@@ -17,35 +18,24 @@ use crate::{
 //--------------------------------------------------
 const NEON_TOKEN_METHOD_WITHDRAW_ID: &[u8; 4]       = &[0x8e, 0x19, 0x89, 0x9e];
 
-
-#[must_use]
 pub fn neon_token<B: AccountStorage>(
+    state: &mut ExecutorState<B>,
+    address: &Address,
     input: &[u8],
-    context: &evm::Context,
-    state: &mut ExecutorState<B>
-)
-    -> Capture<(ExitReason, Vec<u8>), Infallible>
-{
+    context: &crate::evm::Context,
+    is_static: bool,
+) -> Result<Vec<u8>> {
     debug_print!("neon_token({})", hex::encode(input));
 
-    if context.apparent_value.is_zero() {
-        // staticcall or call without value is not allowed
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
-    }
-
-    if context.address != super::SYSTEM_ACCOUNT_NEON_TOKEN {
-        // callcode or delegatecall is not allowed
-        return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), vec![]))
+    if &context.contract != address {
+        return Err(Error::Custom("Withdraw: callcode or delegatecall is not allowed".to_string()))
     }
 
     let (method_id, rest) = input.split_at(4);
     let method_id: &[u8; 4] = method_id.try_into().unwrap_or(&[0_u8; 4]);
 
     if method_id == NEON_TOKEN_METHOD_WITHDRAW_ID  {
-        if state.is_static_context() {
-            let revert_message = b"neon_token: withdraw is not allowed in static context".to_vec();
-            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-        }
+        if is_static { return Err(Error::StaticModeViolation(*address)); }
 
         let source = context.caller; // caller contract
 
@@ -53,46 +43,43 @@ pub fn neon_token<B: AccountStorage>(
         let destination = array_ref![rest, 0, 32];
         let destination = Pubkey::new_from_array(*destination);
 
-
-        if withdraw(state, source, destination, context.apparent_value).is_err() {
-            let revert_message = b"neon_token: failed to withdraw NEON".to_vec();
-            return Capture::Exit((ExitReason::Revert(evm::ExitRevert::Reverted), revert_message))
-        }
+        withdraw(state, source, destination, context.value)?;
 
         let mut output = vec![0_u8; 32];
         output[31] = 1; // return true
 
-        return Capture::Exit((ExitReason::Succeed(evm::ExitSucceed::Returned), output));
+        return Ok(output);
     };
 
     debug_print!("neon_token UNKNOWN");
-    Capture::Exit((ExitReason::Fatal(evm::ExitFatal::NotSupported), vec![]))
+    Err(Error::UnknownPrecompileMethodSelector(*address, *method_id))
 }
 
 
 fn withdraw<B: AccountStorage>(
     state: &mut ExecutorState<B>,
-    source: H160,
+    source: Address,
     target: Pubkey,
     value: U256
-) -> Result<(), ProgramError> {
-    if value.is_zero() {
-        return Ok(())
+) -> Result<()> {
+    if value == 0 {
+        return Err(Error::Custom("Neon Withdraw: value == 0".to_string()));
     }
 
-    if state.balance(&source) < value {
-        return Err(ProgramError::InsufficientFunds);
+    if state.balance(&source)? < value {
+        return Err(Error::InsufficientBalanceForTransfer(source, value));
     }
 
-    let min_amount: u64 = u64::pow(10, u32::from(crate::config::token_mint::decimals()));
-    let (spl_amount, remainder) = value.div_mod(U256::from(min_amount));
+    let min_amount = u128::pow(10, u32::from(crate::config::token_mint::decimals()));
+    let spl_amount = value / min_amount;
+    let remainder = value % min_amount;
 
     if spl_amount > U256::from(u64::MAX) {
-        return Err(ProgramError::InvalidArgument);
+        return Err(Error::Custom("Neon Withdraw: value exceeds u64::max".to_string()));
     }
 
-    if !remainder.is_zero() {
-        return Err(ProgramError::InvalidArgument);
+    if remainder != 0 {
+        return Err(Error::Custom("Neon Withdraw: value must be divisible by 10^9".to_string()));
     }
 
 
@@ -128,7 +115,7 @@ fn withdraw<B: AccountStorage>(
     state.queue_external_instruction(transfer, transfer_seeds, 0);
 
 
-    state.withdraw(source, value);
+    state.withdraw_neons(source, value);
 
 
     Ok(())

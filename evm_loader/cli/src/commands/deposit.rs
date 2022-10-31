@@ -7,10 +7,9 @@ use solana_sdk::{
     transaction::Transaction,
     system_program,
 };
-
-use solana_cli::checks::check_account_for_fee;
 use solana_client::rpc_client::RpcClient;
-use evm_loader::H160;
+use solana_cli::checks::check_account_for_fee;
+use evm_loader::types::Address;
 
 use crate::{
     Config,
@@ -22,22 +21,21 @@ use crate::{
 pub fn execute(
     config: &Config,
     amount: u64,
-    ether_address: &H160,
+    ether_address: &Address,
 ) -> NeonCliResult {
     let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
 
     let mut instructions = Vec::with_capacity(2);
 
-    let ether_account = config.rpc_client.get_account(&ether_pubkey);
-    if ether_account.is_err() {
-        info!("No ether account for {}; will be created", ether_address);
-        instructions.push(create_ether_account_instruction(
-            config,
-            ether_address,
-            ether_pubkey,
-            nonce
-        ));
-    }
+    // let ether_account = config.rpc_client.get_account(&ether_pubkey);
+    // if ether_account.is_err() {
+    //     info!("No ether account for {}; will be created", ether_address);
+    //     instructions.push(create_ether_account_instruction(
+    //         config,
+    //         ether_address,
+    //         ether_pubkey,
+    //     ));
+    // }
 
     let token_mint_id = evm_loader::config::token_mint::id();
 
@@ -85,7 +83,7 @@ pub fn execute(
 
     info!("{}", serde_json::json!({
         "amount": amount,
-        "ether": hex::encode(ether_address),
+        "ether": ether_address,
         "nonce": nonce,
     }));
 
@@ -93,22 +91,21 @@ pub fn execute(
 }
 
 /// Returns instruction for creation of account.
-fn create_ether_account_instruction(
-    config: &Config,
-    ether_address: &H160,
-    solana_address: Pubkey,
-    nonce: u8,
-) -> Instruction {
-    Instruction::new_with_bincode(
-        config.evm_loader,
-        &(0x1e_u8, ether_address.as_fixed_bytes(), nonce, 0_u32),
-        vec![
-            AccountMeta::new(config.signer.pubkey(), true),
-            AccountMeta::new_readonly(system_program::id(), false),
-            AccountMeta::new(solana_address, false),
-        ]
-    )
-}
+// fn create_ether_account_instruction(
+//     config: &Config,
+//     ether_address: &Address,
+//     solana_address: Pubkey,
+// ) -> Instruction {
+//     Instruction::new_with_bincode(
+//         config.evm_loader,
+//         &(0x28_u8, ether_address),
+//         vec![
+//             AccountMeta::new(config.signer.pubkey(), true),
+//             AccountMeta::new_readonly(system_program::id(), false),
+//             AccountMeta::new(solana_address, false),
+//         ]
+//     )
+// }
 
 /// Returns instruction to approve transfer of NEON tokens.
 fn spl_approve_instruction(
@@ -139,12 +136,12 @@ fn deposit_instruction(
     config: &Config,
     source_pubkey: Pubkey,
     destination_pubkey: Pubkey,
-    ether_address: &H160,
+    ether_address: &Address,
     ether_account_pubkey: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bincode(
         config.evm_loader,
-        &(0x27_u8, ether_address.as_fixed_bytes()),
+        &(0x27_u8, ether_address.as_bytes()),
         vec![
             AccountMeta::new(source_pubkey, false),
             AccountMeta::new(destination_pubkey, false),

@@ -1,30 +1,30 @@
 use std::{collections::BTreeMap, rc::Rc, cell::RefCell};
-
-use borsh::{BorshSerialize, BorshDeserialize};
+use serde::{Serialize, Deserialize};
 use solana_program::{pubkey::Pubkey, account_info::AccountInfo};
-use evm::{U256};
+use ethnum::U256;
 
 use crate::account_storage::AccountStorage;
 
-
-#[derive(BorshSerialize, BorshDeserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct OwnedAccountInfo {
     pub key: Pubkey,
     pub is_signer: bool,
     pub is_writable: bool,
     pub lamports: u64,
+    #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
     pub owner: Pubkey,
     pub executable: bool,
     pub rent_epoch: solana_program::clock::Epoch,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct OwnedAccountInfoPartial {
     pub key: Pubkey,
     pub is_signer: bool,
     pub is_writable: bool,
     pub lamports: u64,
+    #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
     pub data_offset: usize,
     pub data_total_len: usize,
@@ -88,41 +88,13 @@ impl<'a> solana_program::account_info::IntoAccountInfo<'a> for &'a mut OwnedAcco
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
-pub struct AccountMeta {
-    pub key: Pubkey,
-    pub is_signer: bool,
-    pub is_writable: bool,
-}
-
-impl AccountMeta {
-    #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn from_solana_meta(meta: solana_program::instruction::AccountMeta) -> Self {
-        Self {
-            key: meta.pubkey,
-            is_signer: meta.is_signer,
-            is_writable: meta.is_writable
-        }
-    }
-
-    #[must_use]
-    pub fn into_solana_meta(self) -> solana_program::instruction::AccountMeta {
-        solana_program::instruction::AccountMeta {
-            pubkey: self.key,
-            is_signer: self.is_signer,
-            is_writable: self.is_writable,
-        }
-    }
-}
-
-
-
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Cache {
     pub solana_accounts: BTreeMap<Pubkey, OwnedAccountInfo>,
     pub solana_accounts_partial: BTreeMap<Pubkey, OwnedAccountInfoPartial>,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub block_number: U256,
+    #[serde(with = "ethnum::serde::bytes::le")]
     pub block_timestamp: U256,
 }
 
