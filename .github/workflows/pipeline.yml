@@ -1,7 +1,7 @@
 name: Deploy image
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
   repository_dispatch:
   push:
     branches:
@@ -14,17 +14,13 @@ env:
   DHUBP: ${{secrets.DHUBP}}
   BUILD_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   deploy-neon-evm:
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: test-runner
+    runs-on: build-runner
     steps:
-      - name: Get branch name
-        id: branch-name
-        uses: tj-actions/branch-names@v6
-
       - uses: actions/checkout@v3
         with:
           submodules: "true"
@@ -38,37 +34,58 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
-
-      - name: run tests
+  run-test:
+    runs-on: test-runner
+    needs:
+      - deploy-neon-evm
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Run tests
         run: |
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA}
 
-      - name: Check that the proxy image with the same tag exist
+      - name: Check that the proxy image with the same tag exists
         if: ${{ startsWith(github.ref , 'refs/tags/') }}
         run: |
           python3 ./.github/workflows/deploy.py check_proxy_tag \
           --github_ref=${GITHUB_REF}
 
-      - name: trigger proxy build
+      - name: Trigger proxy build
         run: |
           python3 ./.github/workflows/deploy.py trigger_proxy_action \
           --github_sha=${GITHUB_SHA} \
-          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --head_ref_branch=${{ github.head_ref }} \
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
           --labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
 
-      - name: finalize image
+      - name: Finalize image
         run: |
           python3 ./.github/workflows/deploy.py finalize_image \
-          --head_ref_branch=${{ steps.branch-name.outputs.head_ref_branch }} \
+          --head_ref_branch=${{ github.head_ref }} \
           --github_ref=${GITHUB_REF} \
           --github_sha=${GITHUB_SHA}
-
-      - name: send notification to slack
-        if: ${{ failure() && (github.ref_name == 'develop' || github.ref_name == 'master') }}
+      - name: Check if it version branch
+        id: is_version_branch
+        run: |
+          if [[ "${{ github.ref }}" =~ "refs/heads/"[vt]{1}\d{1,2}\.\d{1,2}\.x ]]; then
+              echo "value=true"
+              echo "value=true" >> $GITHUB_OUTPUT
+          else
+              echo "value=false"
+              echo "value=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Send notification to slack
+        if: |
+          failure() &&
+           (github.ref_name == 'develop' ||
+             github.ref_name == 'master' ||
+             steps.is_version_branch.outputs.value) ||
+             startsWith(github.ref , 'refs/tags/')
         run: |
           python3 ./.github/workflows/deploy.py send_notification \
           --url=${{secrets.SLACK_EVM_CHANNEL_URL}} \
