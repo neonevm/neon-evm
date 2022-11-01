@@ -16,7 +16,10 @@ env:
 
 jobs:
   deploy-neon-evm:
-    runs-on: build-runner
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: test-runner
     steps:
       - name: Get branch name
         id: branch-name
@@ -55,7 +58,7 @@ jobs:
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
-          --labels=${{ toJson(github.event.pull_request.labels.*.name) }}
+          --labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
 
       - name: finalize image
         run: |
