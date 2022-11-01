@@ -2,7 +2,6 @@ import os
 import re
 import time
 
-import click
 import docker
 import sys
 import subprocess
@@ -154,7 +153,7 @@ def trigger_proxy_action(head_ref_branch, github_ref, github_sha, token, is_draf
     is_tag_creating = 'refs/tags/' in github_ref
     is_version_branch = re.match(r"[vt]{1}\d{1,2}\.\d{1,2}\.x", github_ref.replace("refs/tags/", "")) is not None
     print(labels)
-    is_FTS_labeled_not_draft = 'FullTestSuit' in labels and not is_draft
+    is_FTS_labeled_not_draft = 'FullTestSuit' in labels and is_draft != "true"
 
     print(is_develop_branch)
     print(is_tag_creating)
