@@ -1,5 +1,6 @@
 import os
 import re
+import time
 
 import click
 import docker
@@ -9,12 +10,13 @@ import requests
 import json
 from urllib.parse import urlparse
 
+from github_api_client import GithubClient
+
 try:
     import click
 except ImportError:
     print("Please install click library: pip install click==8.0.3")
     sys.exit(1)
-
 
 ERR_MSG_TPL = {
     "blocks": [
@@ -30,7 +32,6 @@ DOCKER_USER = os.environ.get("DHUBU")
 DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_REVISION = 'v1.11.10'
-
 
 docker_client = docker.APIClient()
 
@@ -132,7 +133,7 @@ def run_tests(github_sha):
 @cli.command(name="check_proxy_tag")
 @click.option('--github_ref')
 def check_proxy_tag(github_ref):
-    proxy_tag = re.sub('\d{1,2}$', 'x',  github_ref.replace("refs/tags/", ""))
+    proxy_tag = re.sub('\d{1,2}$', 'x', github_ref.replace("refs/tags/", ""))
     response = requests.get(
         url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/proxy/tags/{proxy_tag}")
     if response.status_code != 200:
@@ -143,40 +144,63 @@ def check_proxy_tag(github_ref):
 
 @cli.command(name="trigger_proxy_action")
 @click.option('--head_ref_branch')
-@click.option('--base_ref_branch')
 @click.option('--github_ref')
 @click.option('--github_sha')
 @click.option('--token')
 @click.option('--is_draft')
-def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft):
+@click.option('--labels')
+def trigger_proxy_action(head_ref_branch, github_ref, github_sha, token, is_draft, labels):
+    is_develop_branch = github_ref in ['refs/heads/develop', 'refs/heads/master']
+    is_tag_creating = 'refs/tags/' in github_ref
+    is_version_branch = re.match(r"[vt]{1}\d{1,2}\.\d{1,2}\.x", github_ref.replace("refs/tags/", ""))
+    print(labels)
+    is_FTS_labeled_not_draft = 'FullTestSuit' in labels and not is_draft
 
-    if (base_ref_branch == "develop" and not is_draft) or github_ref in ['refs/heads/develop', 'refs/heads/master']:
-        full_test_suite = "True"
+    print(is_develop_branch)
+    print(is_tag_creating)
+    print(is_version_branch)
+    print(is_FTS_labeled_not_draft)
+    if is_develop_branch or is_tag_creating or is_version_branch or is_FTS_labeled_not_draft:
+        full_test_suite = "true"
     else:
-        full_test_suite = "False"
+        full_test_suite = "false"
 
-    proxy_endpoint = "https://api.github.com/repos/neonlabsorg/proxy-model.py"
-    proxy_branches_obj = requests.get(
-        f"{proxy_endpoint}/branches?per_page=100").json()
-    proxy_branches = [item["name"] for item in proxy_branches_obj]
+    github = GithubClient(token)
+
     proxy_branch = head_ref_branch
-    if proxy_branch not in proxy_branches:
+    if proxy_branch not in github.get_proxy_branches():
         proxy_branch = 'develop'
 
-    data = {"ref": proxy_branch,
-            "inputs": {"full_test_suite": full_test_suite,
-                       "neon_evm_commit": github_sha,
-                       "neon_evm_branch": github_ref}
-            }
-    headers = {"Authorization": f"Bearer {token}",
-               "Accept": "application/vnd.github+json"}
-    response = requests.post(
-        f"{proxy_endpoint}/actions/workflows/pipeline.yml/dispatches", json=data, headers=headers)
-    print(data)
-    print(headers)
-    print(response.status_code)
-    if response.status_code != 204:
-        raise "proxy-model.py action is not triggered"
+    runs_before = github.get_proxy_runs_list(proxy_branch)
+
+    github.run_proxy_dispatches(proxy_branch, github_ref, github_sha, full_test_suite)
+    wait_condition(lambda: len(github.get_proxy_runs_list(proxy_branch)) > len(runs_before))
+
+    runs_after = github.get_proxy_runs_list(proxy_branch)
+    proxy_run_id = list(set(runs_after) - set(runs_before))[0]
+    click.echo(f"Proxy run id: {proxy_run_id}")
+    click.echo("Waiting completed status...")
+    wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=7200, delay=5)
+
+    if github.get_proxy_run_info(proxy_run_id)["conclusion"] == "success":
+        click.echo("Proxy tests passed successfully")
+    else:
+        raise RuntimeError(f"Proxy tests failed! \
+        See https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}")
+
+
+def wait_condition(func_cond, timeout_sec=15, delay=0.5):
+    start_time = time.time()
+    while True:
+        if time.time() - start_time > timeout_sec:
+            return False
+        try:
+            if func_cond():
+                break
+        except:
+            raise
+        time.sleep(delay)
+    return True
 
 
 @cli.command(name="send_notification", help="Send notification to slack")
