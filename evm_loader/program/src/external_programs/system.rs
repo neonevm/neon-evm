@@ -54,6 +54,10 @@ pub fn emulate(instruction: &[u8], meta: &[AccountMeta], accounts: &mut BTreeMap
 
             {
                 let mut from = accounts.get_mut(from_key).unwrap();
+                if !from.data.is_empty() {
+                    return Err!(ProgramError::InvalidArgument; "Transfer: `from` must not carry data");
+                }
+
                 if from.lamports < lamports {
                     return Err!(ProgramError::InsufficientFunds; "Transfer: insufficient lamports");
                 }
