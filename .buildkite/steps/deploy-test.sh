@@ -18,7 +18,6 @@ docker ps -a
 function cleanup_docker {
     docker logs solana >solana.log 2>&1
     echo "Cleanup docker-compose..."
-    docker logs solana
     docker-compose -f evm_loader/docker-compose-test.yml down --timeout 1
     echo "Cleanup docker-compose done."
 }
