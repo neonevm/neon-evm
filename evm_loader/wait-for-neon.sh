@@ -1,19 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ -z "$SOLANA_URL" ]; then
-  echo "SOLANA_URL is not set"
-  exit 1
-fi
-
-if [ -z "$EVM_LOADER" ]; then
-  echo "EVM_LOADER is not set"
-  exit 1
-fi
+: ${EVM_LOADER:=$(solana address -k evm_loader-keypair.json)}
+: ${SOLANA_URL:?is not set}
 
 ./wait-for-solana.sh "$@"
 
-if [ -z "$1" ]; then
+if [ $# -eq 0 ]; then
   if neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel error init-environment; then
     exit 0
   fi

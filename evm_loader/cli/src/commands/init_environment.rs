@@ -13,6 +13,7 @@ use {
     log::{info, warn, error},
     solana_sdk::{
         instruction::{AccountMeta, Instruction},
+        transaction::Transaction,
         pubkey::Pubkey,
         bpf_loader_upgradeable,
         system_program,
@@ -120,6 +121,33 @@ pub fn execute(
     }
 
     //====================== Create NEON-token mint ===================================================================
+    let create_token = |mint:&Pubkey,decimals:u8| -> Result<Option<Transaction>,NeonCliError>{
+        let mint_signer = keys.get(mint)
+            .ok_or(EnvironmentError::MissingPrivateKey(*mint))?;
+        let data_len = spl_token::state::Mint::LEN;
+        let lamports = config.rpc_client.get_minimum_balance_for_rent_exemption(data_len)?;
+        let transaction = executor.create_transaction(
+            &[
+                system_instruction::create_account(
+                    &executor.fee_payer.pubkey(),
+                    mint,
+                    lamports,
+                    data_len as u64,
+                    &spl_token::id(),
+                ),
+                spl_token::instruction::initialize_mint2(
+                    &spl_token::id(),
+                    mint,
+                    &config.signer.pubkey(),
+                    None,
+                    decimals,
+                )?,
+            ],
+            &[mint_signer]
+        )?;
+        Ok(Some(transaction))
+    };
+
     let neon_token_mint = program_parameters.get::<Pubkey>("NEON_TOKEN_MINT")?;
     let neon_token_mint_decimals = program_parameters.get::<u8>("NEON_TOKEN_MINT_DECIMALS")?;
     executor.check_and_create_object(
@@ -135,32 +163,29 @@ pub fn execute(
             }
             Ok(None)
         },
-        || {
-            let neon_token_mint_signer = keys.get(&neon_token_mint)
-                .ok_or(EnvironmentError::MissingPrivateKey(neon_token_mint))?;
-            let data_len = spl_token::state::Mint::LEN;
-            let lamports = config.rpc_client.get_minimum_balance_for_rent_exemption(data_len)?;
-            let transaction = executor.create_transaction(
-                &[
-                    system_instruction::create_account(
-                        &executor.fee_payer.pubkey(),
-                        &neon_token_mint,
-                        lamports,
-                        data_len as u64,
-                        &spl_token::id(),
-                    ),
-                    spl_token::instruction::initialize_mint2(
-                        &spl_token::id(),
-                        &neon_token_mint,
-                        &config.signer.pubkey(),
-                        None,
-                        neon_token_mint_decimals,
-                    )?,
-                ],
-                &[neon_token_mint_signer]
-            )?;
-            Ok(Some(transaction))
-        }
+        || create_token(&neon_token_mint, neon_token_mint_decimals)
+    )?;
+
+    let allowance_token = program_parameters.get::<Pubkey>("NEON_PERMISSION_ALLOWANCE_TOKEN")?;
+    executor.check_and_create_object(
+        "NEON_PERMISSION_ALLOWANCE_TOKEN",
+        executor.get_account_data_pack::<spl_token::state::Mint>(
+            &spl_token::id(),
+            &allowance_token
+        ),
+        |_| Ok(None),
+        || create_token(&allowance_token, 9),
+    )?;
+
+    let denial_token = program_parameters.get::<Pubkey>("NEON_PERMISSION_DENIAL_TOKEN")?;
+    executor.check_and_create_object(
+        "NEON_PERMISSION_DENIAL_TOKEN",
+        executor.get_account_data_pack::<spl_token::state::Mint>(
+            &spl_token::id(),
+            &denial_token
+        ),
+        |_| Ok(None),
+        || create_token(&denial_token, 9),
     )?;
 
     executor.checkpoint(config.commitment)?;

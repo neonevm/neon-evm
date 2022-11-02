@@ -1,11 +1,9 @@
 #!/bin/bash
+set -euo pipefail
 
-if [ -z "$SOLANA_URL" ]; then
-  echo "SOLANA_URL is not set"
-  exit 1
-fi
+: ${SOLANA_URL:?is not set}
 
-if [ -z "$1" ]; then
+if [ $# -eq 0 ]; then
   if solana -u $SOLANA_URL cluster-version >/dev/null 2>&1; then exit 0; fi
 else
   WAIT_TIME=$1
