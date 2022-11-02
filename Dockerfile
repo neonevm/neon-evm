@@ -83,7 +83,6 @@ COPY evm_loader/wait-for-solana.sh \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
-    evm_loader/keys/ \
     evm_loader/evm_loader-keypair.json \
     evm_loader/permission_allowance_token_keypair.json \
     evm_loader/permission_denial_token_keypair.json \
@@ -91,6 +90,7 @@ COPY evm_loader/wait-for-solana.sh \
     evm_loader/utils/set_many_accts_permission.sh \
     /opt/
 
+COPY evm_loader/keys/ /opt/keys
 COPY evm_loader/tests /opt/tests
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
 COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
