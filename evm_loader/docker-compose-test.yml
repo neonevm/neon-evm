@@ -7,7 +7,6 @@ services:
     environment:
       - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
       - SOLANA_URL=http://127.0.0.1:8899
-      - DEPLOY_EVM_IN_GENESIS=NO
     hostname: solana
     ports:
       - 8899:8899
