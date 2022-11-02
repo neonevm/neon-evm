@@ -84,8 +84,6 @@ COPY evm_loader/wait-for-solana.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
     evm_loader/evm_loader-keypair.json \
-    evm_loader/permission_allowance_token_keypair.json \
-    evm_loader/permission_denial_token_keypair.json \
     evm_loader/utils/set_single_acct_permission.sh \
     evm_loader/utils/set_many_accts_permission.sh \
     /opt/
