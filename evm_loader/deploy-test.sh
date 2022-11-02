@@ -2,7 +2,7 @@
 set -xeuo pipefail
 
 export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
-if ! (wait-for-neon.sh 20 && create-test-accounts.sh 2); then
+if ! (wait-for-neon.sh 120 && create-test-accounts.sh 2); then
   echo "Failed to start evm_loader tests"
   exit 1
 fi

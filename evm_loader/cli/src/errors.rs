@@ -46,8 +46,8 @@ pub enum NeonCliError {
     #[error("EVM loader must be specified.")]
     EvmLoaderNotSpecified,
     /// Need specify fee payer
-    #[error("Fee payer must be specified.")]
-    FeePayerNotSpecified,
+    #[error("Keypair must be specified.")]
+    KeypairNotSpecified,
     /// Incorrect program
     #[error("Incorrect program {0:?}")]
     IncorrectProgram(Pubkey),
@@ -149,7 +149,7 @@ impl NeonCliError {
             NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
             NeonCliError::PubkeyError(_)                    => 116,
             NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
-            NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
+            NeonCliError::KeypairNotSpecified               => 202, // => 4002,
             NeonCliError::IncorrectProgram(_)               => 203,
             NeonCliError::AccountNotFound(_)                => 205, // => 4005,
             NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,

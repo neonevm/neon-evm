@@ -97,7 +97,8 @@ pub fn execute(
 ) -> Result<(), NeonCliError> {
 
     info!("Signer: {}, send_trx: {}, force: {}", config.signer.pubkey(), send_trx, force);
-    let executor = TransactionExecutor::new(&config.rpc_client, send_trx);
+    let fee_payer = config.fee_payer.as_ref().map_or_else(|| config.signer.as_ref(), |v| v);
+    let executor = TransactionExecutor::new(&config.rpc_client, fee_payer, send_trx);
     let keys = keys_dir.map_or(Ok(HashMap::new()), read_keys_dir)?;
 
     let program_data_address = Pubkey::find_program_address(
@@ -142,7 +143,7 @@ pub fn execute(
             let transaction = executor.create_transaction(
                 &[
                     system_instruction::create_account(
-                        &config.signer.pubkey(),
+                        &executor.fee_payer.pubkey(),
                         &neon_token_mint,
                         lamports,
                         data_len as u64,
@@ -156,7 +157,7 @@ pub fn execute(
                         neon_token_mint_decimals,
                     )?,
                 ],
-                &[config.signer.as_ref(), neon_token_mint_signer]
+                &[neon_token_mint_signer]
             )?;
             Ok(Some(transaction))
         }
@@ -183,16 +184,15 @@ pub fn execute(
             }
         },
         || {
-            let transaction = executor.create_transaction(
+            let transaction = executor.create_transaction_with_payer_only(
                 &[
                     spl_associated_token_account::instruction::create_associated_token_account(
-                        &config.signer.pubkey(), 
+                        &executor.fee_payer.pubkey(), 
                         &deposit_authority,
                         &neon_token_mint,
                         &spl_token::id(),
                     )
-                ],
-                &[config.signer.as_ref()]
+                ]
             )?;
             Ok(Some(transaction))
         },
@@ -220,11 +220,11 @@ pub fn execute(
                         vec![
                             AccountMeta::new(main_balance_address, false),
                             AccountMeta::new_readonly(program_data_address, false),
-                            AccountMeta::new_readonly(config.signer.pubkey(), false),
+                            AccountMeta::new_readonly(config.signer.pubkey(), true),
                             AccountMeta::new_readonly(spl_token::id(), false),
                             AccountMeta::new_readonly(system_program::id(), false),
                             AccountMeta::new_readonly(native_mint::id(), false),
-                            AccountMeta::new(config.signer.pubkey(), true),
+                            AccountMeta::new(executor.fee_payer.pubkey(), true),
                         ],
                     ),
                 ],
@@ -243,15 +243,14 @@ pub fn execute(
             executor.get_account(&aux_balance_address),
             |v| {
                 if v.lamports < minimum_balance {
-                    let transaction = executor.create_transaction(
+                    let transaction = executor.create_transaction_with_payer_only(
                         &[
                             system_instruction::transfer(
-                                &config.signer.pubkey(),
+                                &executor.fee_payer.pubkey(),
                                 &aux_balance_address,
                                 minimum_balance-v.lamports
                             )
-                        ],
-                        &[config.signer.as_ref()]
+                        ]
                     )?;
                     Ok(Some(transaction))
                 } else {
@@ -259,15 +258,14 @@ pub fn execute(
                 }
             },
             || {
-                let transaction = executor.create_transaction(
+                let transaction = executor.create_transaction_with_payer_only(
                     &[
                         system_instruction::transfer(
-                            &config.signer.pubkey(),
+                            &executor.fee_payer.pubkey(),
                             &aux_balance_address,
                             minimum_balance
                         ),
-                    ],
-                    &[config.signer.as_ref()]
+                    ]
                 )?;
                 Ok(Some(transaction))
             }

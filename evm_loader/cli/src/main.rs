@@ -84,11 +84,8 @@ type NeonCliResult = Result<(),NeonCliError>;
 pub struct Config {
     rpc_client: Arc<RpcClient>,
     evm_loader: Pubkey,
-    // #[allow(unused)]
-    // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
-    #[allow(dead_code)]
-    keypair: Option<Keypair>,
+    fee_payer: Option<Keypair>,
     commitment: CommitmentConfig,
 }
 
@@ -370,6 +367,20 @@ fn main() {
                 .global(true)
                 .multiple(true)
                 .help("Increase message verbosity"),
+        )
+        .arg(
+            Arg::with_name("fee_payer")
+                .long("fee-payer")
+                .takes_value(true)
+                .global(true)
+                .help("Specify fee payer for transactions (use default solana account if not specified)")
+        )
+        .arg(
+            Arg::with_name("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .global(true)
+                .help("Specify signer for transactions (use default solana account if not specified)")
         )
         .arg(
             Arg::with_name("json_rpc_url")
@@ -669,27 +680,22 @@ fn main() {
                 exit(e.error_code() as i32);
             };
 
-        let (signer, _fee_payer) = signer_from_path(
+        let signer = signer_from_path(
             &app_matches,
             app_matches
-                .value_of("fee_payer")
+                .value_of("keypair")
                 .unwrap_or(&cli_config.keypair_path),
-            "fee_payer",
+            "keypair",
             &mut wallet_manager,
-        ).map_or_else(
-            |e| {
-                error!("{}", e);
-                let e = NeonCliError::FeePayerNotSpecified;
+        ).unwrap_or_else(
+            |_| {
+                let e = NeonCliError::KeypairNotSpecified;
                 error!("{}", e);
                 exit(e.error_code() as i32);
-            },
-            |s| {
-                let p = s.pubkey();
-                (s, p)
             }
         );
 
-        let keypair = keypair_from_path(
+        let fee_payer = keypair_from_path(
             &app_matches,
             app_matches
                 .value_of("fee_payer")
@@ -702,7 +708,7 @@ fn main() {
             rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
             evm_loader,
             signer,
-            keypair,
+            fee_payer,
             commitment,
         }
     };

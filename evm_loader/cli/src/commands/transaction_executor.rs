@@ -11,6 +11,7 @@ use {
         program_pack::{IsInitialized, Pack},
         account::Account,
         pubkey::Pubkey,
+        signer::Signer,
         signature::Signature,
         commitment_config::CommitmentConfig,
     },
@@ -36,15 +37,17 @@ pub struct TransactionExecutor<'a> {
     pub send_trx: bool,
     pub signatures: RefCell<Vec<Signature>>,
     pub stats: RefCell<Stats>,
+    pub fee_payer: &'a dyn Signer,
 }
 
 impl<'a> TransactionExecutor<'a> {
-    pub fn new(client: &'a RpcClient, send_trx: bool) -> Self {
+    pub fn new(client: &'a RpcClient, fee_payer: &'a dyn Signer, send_trx: bool) -> Self {
         Self {
             client,
             send_trx,
             signatures: RefCell::new(vec!()),
             stats: RefCell::new(Stats::default()),
+            fee_payer,
         }
     }
 
@@ -90,12 +93,20 @@ impl<'a> TransactionExecutor<'a> {
             instructions: &[Instruction],
             signing_keypairs: &T,
     ) -> Result<Transaction,NeonCliError> {
-        let mut transaction = Transaction::new_with_payer(instructions, None);
+        let mut transaction = Transaction::new_with_payer(instructions, Some(&self.fee_payer.pubkey()));
 
         let blockhash = self.client.get_latest_blockhash()?;
+        transaction.try_partial_sign(&[self.fee_payer], blockhash)?; 
         transaction.try_sign(signing_keypairs, blockhash)?;
 
         Ok(transaction)
+    }
+
+    pub fn create_transaction_with_payer_only(
+            &self,
+            instructions: &[Instruction]
+    ) -> Result<Transaction,NeonCliError> {
+        self.create_transaction::<[&dyn Signer; 0]>(instructions, &[])
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> Result<Signature,NeonCliError> {

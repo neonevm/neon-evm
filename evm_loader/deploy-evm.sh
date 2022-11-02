@@ -11,10 +11,12 @@ if [ -z "$EVM_LOADER" ]; then
   exit 1
 fi
 
+echo "Deployed from " $(solana address) " with " $(solana balance)
 if [ "$SKIP_EVM_DEPLOY" != "YES" ]; then
     echo "Deploying evm_loader at address $EVM_LOADER..."
-    if ! solana program deploy --url $SOLANA_URL --upgrade-authority evm_loader-keypair.json \
-        --program_id evm_loader-keypair.json evm_loader.so >/dev/null; then
+    if ! solana program deploy --url $SOLANA_URL \
+        --upgrade-authority evm_loader-keypair.json \
+        --program-id evm_loader-keypair.json evm_loader.so; then
       echo "Failed to deploy evm_loader"
       exit 1
     fi
@@ -23,5 +25,7 @@ else
     echo "Skip deploying of evm_loader"
 fi
 
-neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel warn \
-  init-environment --send-trx --keys keys/
+echo "Deployed finished from " $(solana address) " with " $(solana balance)
+neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER \
+  --keypair evm_loader-keypair.json \
+  --loglevel warn init-environment --send-trx --keys-dir keys/

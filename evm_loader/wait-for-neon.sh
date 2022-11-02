@@ -6,14 +6,14 @@ if [ -z "$SOLANA_URL" ]; then
   exit 1
 fi
 
-if [ -z "$EVM_LOADER"]; then
+if [ -z "$EVM_LOADER" ]; then
   echo "EVM_LOADER is not set"
   exit 1
 fi
 
 ./wait-for-solana.sh "$@"
 
-if [ -z "$1"]; then
+if [ -z "$1" ]; then
   if neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel error init-environment; then
     exit 0
   fi
@@ -24,6 +24,7 @@ else
     if neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel error init-environment; then
       exit 0
     fi
+    sleep 1
   done
 fi
 
