@@ -4,11 +4,11 @@ from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
-from tests.solana_utils import OperatorAccount, create_treasury_pool_address, get_associated_token_address, solana_client, \
+from tests.solana_utils import OperatorAccount, get_associated_token_address, solana_client, \
     TransactionWithComputeBudget, create_associated_token_account, send_transaction, \
     create_treasury_pool_address, wait_confirm_transaction
 from solana.rpc.commitment import Processed
-from solana.system_program import SYS_PROGRAM_ID, transfer, TransferParams
+from solana.system_program import transfer, TransferParams
 
 evm_loader = PublicKey(sys.argv[1])
 mint = PublicKey(sys.argv[2])
@@ -30,11 +30,11 @@ for index in range(treasury_count):
     elif create_mode:
         trx = TransactionWithComputeBudget()
         trx.add(transfer(TransferParams(
-            from_pubkey=signer.public_key(),
+            from_pubkey=signer.public_key,
             to_pubkey=treasury_account,
             lamports=min_lamports-lamports
         )))
-        result = solana_client.send_transaction(trx, Keypair.from_secret_key(signer.secret_key()),
+        result = solana_client.send_transaction(trx, Keypair.from_secret_key(signer.secret_key),
             opts=TxOpts(skip_confirmation=True, skip_preflight=False, preflight_commitment=Confirmed))
         trx_results.append(result['result'])
         print(f'{index} {treasury_account} Funded {result}')
@@ -52,8 +52,8 @@ if pool_account is not None:
     print("Pool account already exists")
 elif create_mode:
     trx = TransactionWithComputeBudget()
-    trx.add(create_associated_token_account(signer.public_key(), authority_account, mint))
-    result = send_transaction(solana_client, trx, Keypair.from_secret_key(signer.secret_key()))
+    trx.add(create_associated_token_account(signer.public_key, authority_account, mint))
+    result = send_transaction(solana_client, trx, Keypair.from_secret_key(signer.secret_key))
     print(result)
 else:
     print("Pool account doesn't exist")

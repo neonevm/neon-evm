@@ -3,6 +3,7 @@ import typing as tp
 import pathlib
 
 import pytest
+from eth_account.datastructures import SignedTransaction
 from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
@@ -19,7 +20,12 @@ from .ethereum import create_contract_address, Contract
 
 from web3.auto import w3
 
-def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pathlib.Path, str], holder_account: PublicKey, operator: Keypair) -> int:
+
+def make_deployment_transaction(
+    user: Caller,
+    contract_path: tp.Union[pathlib.Path, str],
+    gas: int = 999999999,
+) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     if not contract_path.name.startswith("/") or not contract_path.name.startswith("."):
@@ -30,15 +36,21 @@ def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pa
     tx = {
         'to': None,
         'value': 0,
-        'gas': 999999999,
+        'gas': gas,
         'gasPrice': 0,
         'nonce': get_transaction_count(solana_client, user.solana_account_address),
         'data': contract_code,
         'chainId': 111
     }
 
-    signed_tx = w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
+    return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
+
+def write_transaction_to_holder_account(
+    signed_tx: SignedTransaction,
+    holder_account: PublicKey,
+    operator: Keypair,
+):
     # Write transaction to transaction holder account
     offset = 0
     receipts = []
@@ -48,22 +60,25 @@ def write_transaction_to_holder_account(user: Caller, contract_path: tp.Union[pa
         trx = Transaction()
         trx.add(make_WriteHolder(operator.public_key, holder_account, signed_tx.hash, offset, part))
         receipts.append(
-            solana_client.send_transaction(trx, operator, opts=TxOpts(
-                skip_confirmation=True, preflight_commitment=Confirmed))["result"])
+            solana_client.send_transaction(
+                trx,
+                operator,
+                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
+            )["result"]
+        )
         offset += len(part)
     for rcpt in receipts:
         wait_confirm_transaction(solana_client, rcpt)
-    return len(contract_code)
 
 
 def deploy_contract_step(
-        step_count: int,
-        treasury: TreasuryPool,
-        holder_address: PublicKey,
-        operator: Keypair,
-        evm_loader: EvmLoader,
-        contract: Contract,
-        user: Caller,
+    step_count: int,
+    treasury: TreasuryPool,
+    holder_address: PublicKey,
+    operator: Keypair,
+    evm_loader: EvmLoader,
+    contract: Contract,
+    user: Caller,
 ):
     print(f"Deploying contract with {step_count} steps")
     trx = TransactionWithComputeBudget()
@@ -73,17 +88,28 @@ def deploy_contract_step(
         [contract.solana_address, user.solana_account_address]
     ))
     receipt = send_transaction(solana_client, trx, operator)["result"]
+
+    print("Deployment receipt:", receipt)
+
     return receipt
 
 
-def deploy_contract(operator: Keypair, user: Caller, contract_path: tp.Union[pathlib.Path, str], evm_loader: EvmLoader, treasury_pool: TreasuryPool, step_count: int = 1000):
+def deploy_contract(
+    operator: Keypair,
+    user: Caller,
+    contract_path: tp.Union[pathlib.Path, str],
+    evm_loader: EvmLoader,
+    treasury_pool: TreasuryPool,
+    step_count: int = 1000,
+):
     print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
     # storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
-    size = write_transaction_to_holder_account(user, contract_path, holder_acc, operator)
+    signed_tx = make_deployment_transaction(user, contract_path)
+    write_transaction_to_holder_account(signed_tx, holder_acc, operator)
 
     contract_deployed = False
     while not contract_deployed:
