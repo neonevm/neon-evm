@@ -5,26 +5,25 @@ set -e
 SOLANA_BIN=/opt/solana/bin
 NEON_BIN=/opt
 
-function deploy_tokens() {
+EVM_LOADER_SO=evm_loader.so
+EVM_LOADER=$(${SOLANA_BIN}/solana address -k ${NEON_BIN}/evm_loader-keypair.json)
+EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
+
+function initialize_neon() {
     # deploy tokens needed by Neon EVM
     export SKIP_EVM_DEPLOY=${DEPLOY_EVM_IN_GENESIS:-YES}
     export SOLANA_URL=http://127.0.0.1:8899
+    export EVM_LOADER
 
     cd ${NEON_BIN}
     ./wait-for-solana.sh ${SOLANA_WAIT_TIMEOUT:-60}
     ./deploy-evm.sh
 }
 
-deploy_tokens &
+initialize_neon &
 
 # run Solana with Neon EVM in genesis
-
 cd ${SOLANA_BIN}
-
-EVM_LOADER_SO=evm_loader.so
-EVM_LOADER=$(${SOLANA_BIN}/solana address -k ${NEON_BIN}/evm_loader-keypair.json)
-EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
-
 cp ${EVM_LOADER_PATH} .
 
 # dump metaplex program from mainnet

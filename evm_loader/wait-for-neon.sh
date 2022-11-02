@@ -1,27 +1,31 @@
-#!/usr/bin/env bash
+#!/bin/bash
+set -euo pipefail
 
-if [ -z "${SOLANA_URL}" ]; then
+if [ -z "$SOLANA_URL" ]; then
   echo "SOLANA_URL is not set"
+  exit 1
+fi
+
+if [ -z "$EVM_LOADER"]; then
+  echo "EVM_LOADER is not set"
   exit 1
 fi
 
 ./wait-for-solana.sh "$@"
 
-export EVM_LOADER=$(solana address -k evm_loader-keypair.json)
-export $(neon-cli --evm_loader="${EVM_LOADER}" neon-elf-params ./evm_loader.so)
-export NEON_TOKEN_MINT=$NEON_TOKEN_MINT
-
-WAIT_TIME=${1:-1}
-echo "Waiting ${WAIT_TIME} seconds for Neon EVM to be available at ${SOLANA_URL}"
-for i in $(seq 1 ${WAIT_TIME}); do
-  echo "Checking EVM Loader token bank..."
-    if python3 neon_pool_generator.py $EVM_LOADER $NEON_TOKEN_MINT $NEON_POOL_COUNT check; then
-        exit 0
+if [ -z "$1"]; then
+  if neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel error init-environment; then
+    exit 0
+  fi
+else
+  WAIT_TIME=$1
+  echo "Waiting $WAIT_TIME seconds for NeonEVM to be available at $SOLANA_URL:$EVM_LOADER"
+  for i in $(seq 1 $WAIT_TIME); do
+    if neon-cli --url $SOLANA_URL --evm_loader $EVM_LOADER --loglevel error init-environment; then
+      exit 0
     fi
-    if [ ${i} -lt ${WAIT_TIME} ]; then
-        sleep 1
-    fi
-done
+  done
+fi
 
-echo "unable to connect to get the Neon EVM at ${SOLANA_URL}"
+echo "unable to connect to NeonEVM at $SOLANA_URL:$EVM_LOADER"
 exit 1
