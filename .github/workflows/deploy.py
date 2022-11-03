@@ -110,6 +110,8 @@ def run_subprocess(command):
 def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
     os.environ["EVM_LOADER_IMAGE"] = image_name
+    run_subprocess("docker stop $(docker ps -a -q)")
+    run_subprocess("docker rm $(docker ps -a -q)")
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
