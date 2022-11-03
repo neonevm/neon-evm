@@ -119,7 +119,7 @@ def run_tests(github_sha):
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
     try:
-        click.echo("start tests")
+        click.echo("Start tests")
         exec_id = docker_client.exec_create(
             container="solana", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
