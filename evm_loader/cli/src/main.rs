@@ -23,7 +23,7 @@ use crate::{
         cancel_trx,
         get_neon_elf,
         collect_treasury,
-        create_main_treasury,
+        init_environment,
         get_storage_at,
     },
 };
@@ -84,11 +84,8 @@ type NeonCliResult = Result<(),NeonCliError>;
 pub struct Config {
     rpc_client: Arc<RpcClient>,
     evm_loader: Pubkey,
-    // #[allow(unused)]
-    // fee_payer: Pubkey,
     signer: Box<dyn Signer>,
-    #[allow(dead_code)]
-    keypair: Option<Keypair>,
+    fee_payer: Option<Keypair>,
     commitment: CommitmentConfig,
 }
 
@@ -98,7 +95,10 @@ impl Debug for Config {
     }
 }
 
-fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
+/// Read program data from file
+/// # Errors
+/// Returns `Err` if can't read from file
+pub fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
     let mut file = File::open(program_location)?;
     // let mut file = File::open(program_location).map_err(|err| {
     //     format!("Unable to open program file '{}': {}", program_location, err)
@@ -327,6 +327,8 @@ fn read_stdin() -> Option<Vec<u8>>{
 macro_rules! neon_cli_pkg_version {
     () => ( env!("CARGO_PKG_VERSION") )
 }
+
+#[macro_export]
 macro_rules! neon_cli_revision {
     () => ( env!("NEON_REVISION") )
 }
@@ -365,6 +367,20 @@ fn main() {
                 .global(true)
                 .multiple(true)
                 .help("Increase message verbosity"),
+        )
+        .arg(
+            Arg::with_name("fee_payer")
+                .long("fee-payer")
+                .takes_value(true)
+                .global(true)
+                .help("Specify fee payer for transactions (use default solana account if not specified)")
+        )
+        .arg(
+            Arg::with_name("keypair")
+                .long("keypair")
+                .takes_value(true)
+                .global(true)
+                .help("Specify signer for transactions (use default solana account if not specified)")
         )
         .arg(
             Arg::with_name("json_rpc_url")
@@ -553,7 +569,7 @@ fn main() {
                         .validator(is_valid_pubkey)
                         .help("storage account for transaction"),
                 )
-            )
+        )
         .subcommand(
             SubCommand::with_name("neon-elf-params")
                 .about("Get NEON values stored in elf")
@@ -571,9 +587,35 @@ fn main() {
                 .about("Collect lamports from auxiliary treasury accounts to the main treasury balance")
         )
         .subcommand(
-            SubCommand::with_name("create-main-treasury")
-                .about("Create main treasury balance")
-        )
+            SubCommand::with_name("init-environment")
+                .about("Initialize and verify environment for NeonEVM execution")
+                .arg(
+                    Arg::with_name("send-trx")
+                        .long("send-trx")
+                        .takes_value(false)
+                        .help("Send transaction for initialize"),
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .help("Force initialize environment (even if NeonEVM and CLI version mismatch)"),
+                )
+                .arg(
+                    Arg::with_name("keys-dir")
+                        .long("keys-dir")
+                        .takes_value(true)
+                        .help("Directory with private-keys")
+                )
+                .arg(
+                    Arg::with_name("file")
+                        .index(1)
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Path to file with program image /path/to/evm_loader.so"),
+                )
+            )
         .subcommand(
             SubCommand::with_name("get-storage-at")
                 .about("Get Ethereum storage value at given index")
@@ -638,27 +680,22 @@ fn main() {
                 exit(e.error_code() as i32);
             };
 
-        let (signer, _fee_payer) = signer_from_path(
+        let signer = signer_from_path(
             &app_matches,
             app_matches
-                .value_of("fee_payer")
+                .value_of("keypair")
                 .unwrap_or(&cli_config.keypair_path),
-            "fee_payer",
+            "keypair",
             &mut wallet_manager,
-        ).map_or_else(
-            |e| {
-                error!("{}", e);
-                let e = NeonCliError::FeePayerNotSpecified;
+        ).unwrap_or_else(
+            |_| {
+                let e = NeonCliError::KeypairNotSpecified;
                 error!("{}", e);
                 exit(e.error_code() as i32);
-            },
-            |s| {
-                let p = s.pubkey();
-                (s, p)
             }
         );
 
-        let keypair = keypair_from_path(
+        let fee_payer = keypair_from_path(
             &app_matches,
             app_matches
                 .value_of("fee_payer")
@@ -671,7 +708,7 @@ fn main() {
             rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
             evm_loader,
             signer,
-            keypair,
+            fee_payer,
             commitment,
         }
     };
@@ -740,8 +777,12 @@ fn main() {
             ("collect-treasury", Some(_)) => {
                 collect_treasury::execute(&config)
             }
-            ("create-main-treasury", Some(_)) => {
-                create_main_treasury::execute(&config)
+            ("init-environment", Some(arg_matches)) => {
+                let file = arg_matches.value_of("file");
+                let send_trx = arg_matches.is_present("send-trx");
+                let force = arg_matches.is_present("force");
+                let keys_dir = arg_matches.value_of("keys-dir");
+                init_environment::execute(&config, send_trx, force, keys_dir, file)
             }
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();

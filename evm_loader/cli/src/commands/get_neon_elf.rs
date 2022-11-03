@@ -7,6 +7,7 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    pubkey::Pubkey,
 };
 
 use crate::{ Config, errors::NeonCliError, NeonCliResult };
@@ -25,7 +26,7 @@ impl CachedElfParams {
     }
 }
 
-fn read_elf_parameters(
+pub fn read_elf_parameters(
         _config: &Config,
         program_data: &[u8],
     )-> HashMap<String, String>{
@@ -53,12 +54,17 @@ fn read_elf_parameters(
 }
 
 pub fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<String, String>, NeonCliError> {
+    let (_, program_data) = read_program_data_from_account(config, &config.evm_loader)?;
+    Ok(read_elf_parameters(config, &program_data))
+}
+
+pub fn read_program_data_from_account(config: &Config, evm_loader: &Pubkey) -> Result<(Option<Pubkey>,Vec<u8>), NeonCliError> {
     let account = config.rpc_client
-        .get_account_with_commitment(&config.evm_loader, config.commitment)?
-        .value.ok_or(NeonCliError::AccountNotFound(config.evm_loader))?;
+        .get_account_with_commitment(evm_loader, config.commitment)?
+        .value.ok_or(NeonCliError::AccountNotFound(*evm_loader))?;
 
     if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
-        Ok(read_elf_parameters(config, &account.data))
+        Ok((None, account.data))
     } else if account.owner == bpf_loader_upgradeable::id() {
         if let Ok(UpgradeableLoaderState::Program {
                       programdata_address,
@@ -68,18 +74,18 @@ pub fn read_elf_parameters_from_account(config: &Config) -> Result<HashMap<Strin
                 .get_account_with_commitment(&programdata_address, config.commitment)?
                 .value.ok_or(NeonCliError::AssociatedPdaNotFound(programdata_address,config.evm_loader))?;
 
-            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = programdata_account.state() {
+            if let Ok(UpgradeableLoaderState::ProgramData { upgrade_authority_address, .. }) = programdata_account.state() {
                 let offset = UpgradeableLoaderState::size_of_programdata_metadata();
                 let program_data = &programdata_account.data[offset..];
-                Ok(read_elf_parameters(config, program_data))
+                Ok((upgrade_authority_address, program_data.to_vec()))
             } else {
                 Err(NeonCliError::InvalidAssociatedPda(programdata_address,config.evm_loader))
             }
 
-        } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+        } else if let Ok(UpgradeableLoaderState::Buffer { authority_address, .. }) = account.state() {
             let offset = UpgradeableLoaderState::size_of_buffer_metadata();
             let program_data = &account.data[offset..];
-            Ok(read_elf_parameters(config, program_data))
+            Ok((authority_address, program_data.to_vec()))
         } else {
             Err(NeonCliError::AccountIsNotUpgradeable(config.evm_loader))
         }
@@ -95,7 +101,7 @@ fn print_elf_parameters(params: &HashMap<String, String>){
     }
 }
 
-fn read_program_data_from_file(config: &Config,
+fn read_program_params_from_file(config: &Config,
                                program_location: &str) -> NeonCliResult {
     let program_data = crate::read_program_data(program_location)?;
     let program_data = &program_data[..];
@@ -104,7 +110,7 @@ fn read_program_data_from_file(config: &Config,
     Ok(())
 }
 
-fn read_program_data_from_account(config: &Config) {
+fn read_program_params_from_account(config: &Config) {
     let elf_params = read_elf_parameters_from_account(config).unwrap();
     print_elf_parameters(&elf_params);
 }
@@ -114,7 +120,7 @@ pub fn execute(
     program_location: Option<&str>,
 ) -> NeonCliResult {
     program_location.map_or_else(
-        || {read_program_data_from_account(config); Ok(())},
-        |program_location| read_program_data_from_file(config, program_location),
+        || {read_program_params_from_account(config); Ok(())},
+        |program_location| read_program_params_from_file(config, program_location),
     )
 }
