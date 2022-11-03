@@ -58,6 +58,7 @@ jobs:
           python3 ./.github/workflows/deploy.py trigger_proxy_action \
           --github_sha=${GITHUB_SHA} \
           --head_ref_branch=${{ github.head_ref }} \
+          --base_ref_branch=${{ github.base_ref }} \
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
