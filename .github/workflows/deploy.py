@@ -107,13 +107,20 @@ def run_tests(github_sha):
 
     os.environ["EVM_LOADER_IMAGE"] = image_name
 
+    command = "docker stop solana"
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+    command = "docker rm solana"
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
     command = "docker-compose -f ./evm_loader/docker-compose-test.yml down"
     click.echo(f"run command: {command}")
     subprocess.run(command, shell=True)
 
     command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} up -d"
     click.echo(f"run command: {command}")
-
     subprocess.run(command, stdout=subprocess.PIPE, shell=True)
 
     try:
