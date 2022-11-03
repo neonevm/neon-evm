@@ -175,6 +175,8 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
         proxy_branch = base_ref_branch
     elif is_tag_creating:
         proxy_branch = github_ref.replace("refs/tags/", "")
+    elif is_version_branch:
+        proxy_branch = github_ref.replace("refs/heads/", "")
     else:
         proxy_branch = 'develop'
     click.echo(f"Proxy branch: {proxy_branch}")
