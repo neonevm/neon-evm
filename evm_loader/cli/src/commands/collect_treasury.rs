@@ -25,7 +25,7 @@ pub fn execute(
 ) -> Result<(), NeonCliError> {
     let neon_params = read_elf_parameters_from_account(config)?;
 
-    let pool_count: u32 = neon_params.get("NEON_TREASURY_COUNT")
+    let pool_count: u32 = neon_params.get("NEON_POOL_COUNT")
         .and_then(|value| value.parse().ok())
         .ok_or(NeonCliError::IncorrectProgram(config.evm_loader))?;
 
