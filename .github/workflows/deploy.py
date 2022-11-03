@@ -32,7 +32,7 @@ DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_REVISION = 'v1.11.10'
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x"
+VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
 
 
@@ -52,11 +52,14 @@ def build_docker_image(github_sha):
 
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
-    output = docker_client.build(tag=tag, buildargs=buildargs, path="./")
-
+    output = docker_client.build(tag=tag, buildargs=buildargs, path="./", decode=True)
     for line in output:
-        if 'stream' in str(line):
-            click.echo(str(line).strip('\n'))
+        if list(line.keys())[0] in ('stream', 'error', 'status'):
+            value = list(line.values())[0].strip()
+            if value:
+                if "progress" in line.keys():
+                    value += line['progress']
+            click.echo(value)
 
 
 @cli.command(name="publish_image")
@@ -100,21 +103,20 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         click.echo("The image is not published, please create tag for publishing")
 
 
+def run_subprocess(command):
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+
 @cli.command(name="run_tests")
 @click.option('--github_sha')
 def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
-
     os.environ["EVM_LOADER_IMAGE"] = image_name
-
-    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} up -d"
-    click.echo(f"run command: {command}")
-
-    subprocess.run(command, stdout=subprocess.PIPE, shell=True)
+    run_subprocess("docker stop $(docker ps -a -q)")
+    run_subprocess("docker rm $(docker ps -a -q)")
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
     try:
         click.echo("start tests")
@@ -125,13 +127,13 @@ def run_tests(github_sha):
         for line in logs:
             if 'ERROR ' in str(line) or 'FAILED ' in str(line):
                 raise RuntimeError("Test are failed")
-
     except:
         raise RuntimeError("Solana container is not run")
 
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
+
+@cli.command(name="stop_containers")
+def stop_containers():
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
 
 
 @cli.command(name="check_proxy_tag")
