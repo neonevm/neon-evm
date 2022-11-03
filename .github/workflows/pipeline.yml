@@ -7,6 +7,7 @@ on:
     branches:
       - master
       - develop
+      - '[vt][0-9].[0-9]+.[0-9x]+*'
     tags:
       - "*"
 env:
@@ -47,17 +48,16 @@ jobs:
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA}
 
-      - name: Check that the proxy image with the same tag exists
-        if: ${{ startsWith(github.ref , 'refs/tags/') }}
-        run: |
-          python3 ./.github/workflows/deploy.py check_proxy_tag \
-          --github_ref=${GITHUB_REF}
+      - name: Stop containers
+        if: always()
+        run: python3 ./.github/workflows/deploy.py stop_containers
 
       - name: Trigger proxy build
         run: |
           python3 ./.github/workflows/deploy.py trigger_proxy_action \
           --github_sha=${GITHUB_SHA} \
           --head_ref_branch=${{ github.head_ref }} \
+          --base_ref_branch=${{ github.base_ref }} \
           --github_ref=${{ github.ref }} \
           --token=${{secrets.GHTOKEN }} \
           --is_draft=${{github.event.pull_request.draft}} \
@@ -72,7 +72,7 @@ jobs:
       - name: Check if it version branch
         id: is_version_branch
         run: |
-          if [[ "${{ github.ref }}" =~ "refs/heads/"[vt]{1}\d{1,2}\.\d{1,2}\.x ]]; then
+          if [[ "${{ github.ref }}" =~ "refs/heads/"[vt][0-9]+\.[0-9]+\.x ]]; then
               echo "value=true"
               echo "value=true" >> $GITHUB_OUTPUT
           else

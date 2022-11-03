@@ -32,7 +32,7 @@ DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_REVISION = 'v1.11.10'
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x"
+VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
 
 
@@ -52,11 +52,14 @@ def build_docker_image(github_sha):
 
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
-    output = docker_client.build(tag=tag, buildargs=buildargs, path="./")
-
+    output = docker_client.build(tag=tag, buildargs=buildargs, path="./", decode=True)
     for line in output:
-        if 'stream' in str(line):
-            click.echo(str(line).strip('\n'))
+        if list(line.keys())[0] in ('stream', 'error', 'status'):
+            value = list(line.values())[0].strip()
+            if value:
+                if "progress" in line.keys():
+                    value += line['progress']
+            click.echo(value)
 
 
 @cli.command(name="publish_image")
@@ -100,24 +103,23 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         click.echo("The image is not published, please create tag for publishing")
 
 
+def run_subprocess(command):
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+
 @cli.command(name="run_tests")
 @click.option('--github_sha')
 def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
-
     os.environ["EVM_LOADER_IMAGE"] = image_name
-
-    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} up -d"
-    click.echo(f"run command: {command}")
-
-    subprocess.run(command, stdout=subprocess.PIPE, shell=True)
+    run_subprocess("docker stop $(docker ps -a -q)")
+    run_subprocess("docker rm $(docker ps -a -q)")
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
     try:
-        click.echo("start tests")
+        click.echo("Start tests")
         exec_id = docker_client.exec_create(
             container="solana", cmd="/opt/deploy-test.sh")
         logs = docker_client.exec_start(exec_id['Id'])
@@ -125,25 +127,13 @@ def run_tests(github_sha):
         for line in logs:
             if 'ERROR ' in str(line) or 'FAILED ' in str(line):
                 raise RuntimeError("Test are failed")
-
     except:
         raise RuntimeError("Solana container is not run")
 
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
 
-
-@cli.command(name="check_proxy_tag")
-@click.option('--github_ref')
-def check_proxy_tag(github_ref):
-    proxy_tag = re.sub('\d{1,2}$', 'x', github_ref.replace("refs/tags/", ""))
-    response = requests.get(
-        url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/proxy/tags/{proxy_tag}")
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Proxy image with {proxy_tag} tag isn't found. Response: {response.json()}")
-    click.echo(f"Proxy image with tag {proxy_tag} is found")
+@cli.command(name="stop_containers")
+def stop_containers():
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
 
 
 @cli.command(name="trigger_proxy_action")
@@ -157,7 +147,7 @@ def check_proxy_tag(github_ref):
 def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sha, token, is_draft, labels):
     is_develop_branch = github_ref in ['refs/heads/develop', 'refs/heads/master']
     is_tag_creating = 'refs/tags/' in github_ref
-    is_version_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/tags/", "")) is not None
+    is_version_branch = re.match(VERSION_BRANCH_TEMPLATE, github_ref.replace("refs/heads/", "")) is not None
     is_FTS_labeled_not_draft = 'FullTestSuit' in labels and is_draft != "true"
 
     if is_develop_branch or is_tag_creating or is_version_branch or is_FTS_labeled_not_draft:
@@ -173,6 +163,8 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
         proxy_branch = base_ref_branch
     elif is_tag_creating:
         proxy_branch = github_ref.replace("refs/tags/", "")
+    elif is_version_branch:
+        proxy_branch = github_ref.replace("refs/heads/", "")
     else:
         proxy_branch = 'develop'
     click.echo(f"Proxy branch: {proxy_branch}")
