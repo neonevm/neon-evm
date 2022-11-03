@@ -52,11 +52,14 @@ def build_docker_image(github_sha):
 
     tag = f"{IMAGE_NAME}:{github_sha}"
     click.echo("start build")
-    output = docker_client.build(tag=tag, buildargs=buildargs, path="./")
-
+    output = docker_client.build(tag=tag, buildargs=buildargs, path="./", decode=True)
     for line in output:
-        if 'stream' in str(line):
-            click.echo(str(line).strip('\n'))
+        if list(line.keys())[0] in ('stream', 'error', 'status'):
+            value = list(line.values())[0].strip()
+            if value:
+                if "progress" in line.keys():
+                    value += line['progress']
+            click.echo(value)
 
 
 @cli.command(name="publish_image")
