@@ -100,28 +100,18 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         click.echo("The image is not published, please create tag for publishing")
 
 
+def run_subprocess(command):
+    click.echo(f"run command: {command}")
+    subprocess.run(command, shell=True)
+
+
 @cli.command(name="run_tests")
 @click.option('--github_sha')
 def run_tests(github_sha):
     image_name = f"{IMAGE_NAME}:{github_sha}"
-
     os.environ["EVM_LOADER_IMAGE"] = image_name
-
-    command = "docker stop solana"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    command = "docker rm solana"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    command = "docker-compose -f ./evm_loader/docker-compose-test.yml down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
-
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} up -d"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, stdout=subprocess.PIPE, shell=True)
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
     try:
         click.echo("start tests")
@@ -132,13 +122,13 @@ def run_tests(github_sha):
         for line in logs:
             if 'ERROR ' in str(line) or 'FAILED ' in str(line):
                 raise RuntimeError("Test are failed")
-
     except:
         raise RuntimeError("Solana container is not run")
 
-    command = f"docker-compose -f ./evm_loader/docker-compose-test.yml -p {github_sha} down"
-    click.echo(f"run command: {command}")
-    subprocess.run(command, shell=True)
+
+@cli.command(name="stop_containers")
+def stop_containers():
+    run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
 
 
 @cli.command(name="check_proxy_tag")

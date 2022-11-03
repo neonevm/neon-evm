@@ -47,6 +47,10 @@ jobs:
           python3 ./.github/workflows/deploy.py run_tests \
           --github_sha=${GITHUB_SHA}
 
+      - name: Stop containers
+        if: always()
+        run: python3 ./.github/workflows/deploy.py stop_containers
+
       - name: Check that the proxy image with the same tag exists
         if: ${{ startsWith(github.ref , 'refs/tags/') }}
         run: |
