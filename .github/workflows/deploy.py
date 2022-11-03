@@ -32,7 +32,7 @@ DOCKER_PASSWORD = os.environ.get("DHUBP")
 IMAGE_NAME = 'neonlabsorg/evm_loader'
 SOLANA_REVISION = 'v1.11.10'
 
-VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x"
+VERSION_BRANCH_TEMPLATE = r"[vt]{1}\d{1,2}\.\d{1,2}\.x.*"
 docker_client = docker.APIClient()
 
 
