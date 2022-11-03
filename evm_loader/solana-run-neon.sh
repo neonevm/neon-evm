@@ -11,7 +11,9 @@ EVM_LOADER_PATH=${NEON_BIN}/${EVM_LOADER_SO}
 
 function initialize_neon() {
     # deploy tokens needed by Neon EVM
-    export SKIP_EVM_DEPLOY=${DEPLOY_EVM_IN_GENESIS:-NO}
+    # temporary disable load NeonEVM in genesis
+    #export SKIP_EVM_DEPLOY=${DEPLOY_EVM_IN_GENESIS:-NO}
+    export SKIP_EVM_DEPLOY=NO
     export SOLANA_URL=http://127.0.0.1:8899
     export EVM_LOADER
 
@@ -30,9 +32,13 @@ cp ${EVM_LOADER_PATH} .
 METAPLEX=metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
 METAPLEX_SO=metaplex.so
 
-if [[ "${DEPLOY_EVM_IN_GENESIS:-NO}" == "YES" ]]; then
+if [[ "${DEPLOY_EVM_IN_GENESIS:-YES}" == "YES" ]]; then
+# temporary disable load NeoneEVM in genesis
+#  NEON_BPF_ARGS=(
+#      --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
+#      --bpf-program ${METAPLEX}   BPFLoader2111111111111111111111111111111111 ${METAPLEX_SO}
+#  )
   NEON_BPF_ARGS=(
-      --bpf-program ${EVM_LOADER} BPFLoader2111111111111111111111111111111111 ${EVM_LOADER_SO}
       --bpf-program ${METAPLEX}   BPFLoader2111111111111111111111111111111111 ${METAPLEX_SO}
   )
 fi
