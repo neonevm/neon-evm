@@ -4,12 +4,12 @@ from base58 import b58encode
 from sha3 import keccak_256
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
-
-from ..solana_utils import EvmLoader, solana_client, get_transaction_count
-from ..eth_tx_utils import pack, make_instruction_data_from_tx
-from ..conftest import Caller
-from .constants import ACCOUNT_SEED_VERSION
 from web3.auto import w3
+
+from .constants import ACCOUNT_SEED_VERSION
+from ..conftest import Caller
+from ..eth_tx_utils import pack
+from ..solana_utils import EvmLoader, solana_client, get_transaction_count
 
 
 @dataclass
@@ -35,9 +35,9 @@ def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_nonce, seed)
 
 
-def make_eth_transaction(to_addr: str, data: bytes, signer: Keypair, from_solana_user: PublicKey, user_eth_address: bytes):
+def make_eth_transaction(to_addr: bytes, data: bytes, signer: Keypair, from_solana_user: PublicKey, value: int = 0):
     nonce = get_transaction_count(solana_client, from_solana_user)
-    tx = {'to': to_addr, 'value': 0, 'gas': 9999999999, 'gasPrice': 0,
+    tx = {'to': to_addr, 'value': value, 'gas': 9999999999, 'gasPrice': 0,
           'nonce': nonce, 'data': data, 'chainId': 111}
 
     return w3.eth.account.sign_transaction(tx, signer.secret_key[:32])

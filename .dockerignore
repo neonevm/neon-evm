@@ -7,6 +7,7 @@ Dockerfile.*
 .gitignore
 .gitmodules
 .dockerfile
+
 bin
 target
 evm_loader/program/target
@@ -17,3 +18,7 @@ evm_loader/rust-evm/gasometer/target
 evm_loader/rust-evm/runtime/target
 evm_loader/rust-evm/src/target
 evm_loader/target
+
+.idea
+venv
+__pycache__

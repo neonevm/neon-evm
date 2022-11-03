@@ -28,16 +28,17 @@ RUN cargo clippy --release && \
     cargo build-sbf --arch bpf --features no-logs
 
 # Build Solidity contracts
-FROM ethereum/solc:0.7.0 AS solc
+FROM ethereum/solc:0.8.0 AS solc
 FROM ubuntu:20.04 AS contracts
 RUN apt-get update && \
     DEBIAN_FRONTEND=nontineractive apt-get -y install xxd && \
     rm -rf /var/lib/apt/lists/* /var/lib/apt/cache/*
 COPY evm_loader/tests/contracts/*.sol /opt/
+COPY evm_loader/solidity/*.sol /opt/
 #COPY evm_loader/tests/test_solidity_precompiles.json /opt/
 COPY --from=solc /usr/bin/solc /usr/bin/solc
 WORKDIR /opt/
-RUN solc --output-dir . --bin *.sol && \
+RUN solc --optimize --optimize-runs 200 --output-dir . --bin *.sol && \
     for file in $(ls *.bin); do xxd -r -p $file >${file}ary; done && \
         ls -l
 
@@ -78,21 +79,18 @@ COPY --from=evm-loader-builder /opt/evm_loader/target/release/neon-cli /opt/
 COPY --from=solana /usr/bin/spl-token /opt/spl-token
 COPY --from=contracts /opt/ /opt/solidity/
 COPY --from=contracts /usr/bin/solc /usr/bin/solc
-COPY evm_loader/*.py \
-    evm_loader/wait-for-solana.sh \
+COPY evm_loader/wait-for-solana.sh \
     evm_loader/wait-for-neon.sh \
     evm_loader/create-test-accounts.sh \
     evm_loader/deploy-evm.sh \
     evm_loader/deploy-test.sh \
-    evm_loader/neon_token_keypair.json \
-    evm_loader/permission_allowance_token_keypair.json \
-    evm_loader/permission_denial_token_keypair.json \
+    evm_loader/evm_loader-keypair.json \
     evm_loader/utils/set_single_acct_permission.sh \
     evm_loader/utils/set_many_accts_permission.sh \
     /opt/
 
+COPY evm_loader/keys/ /opt/keys
 COPY evm_loader/tests /opt/tests
-COPY evm_loader/evm_loader-keypair.json /opt/
 COPY evm_loader/operator1-keypair.json /root/.config/solana/id.json
 COPY evm_loader/operator2-keypair.json /root/.config/solana/id2.json
 
