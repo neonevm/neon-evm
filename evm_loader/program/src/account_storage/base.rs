@@ -82,7 +82,11 @@ impl<'a> ProgramAccountStorage<'a> {
             return;
         }
 
-        panic!("Ethereum account {} must be present in the transaction", address);
+        panic!(
+            "Ethereum account {} (solana address {}) must be present in the transaction",
+            address,
+            solana_address,
+        );
     }
 
     pub fn solana_account(&self, solana_address: &Pubkey) -> Option<&'a AccountInfo<'a>> {
