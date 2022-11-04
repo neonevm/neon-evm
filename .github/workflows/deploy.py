@@ -136,18 +136,6 @@ def stop_containers():
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
 
 
-@cli.command(name="check_proxy_tag")
-@click.option('--github_ref')
-def check_proxy_tag(github_ref):
-    proxy_tag = re.sub('\d{1,2}$', 'x', github_ref.replace("refs/tags/", ""))
-    response = requests.get(
-        url=f"https://registry.hub.docker.com/v2/repositories/neonlabsorg/proxy/tags/{proxy_tag}")
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Proxy image with {proxy_tag} tag isn't found. Response: {response.json()}")
-    click.echo(f"Proxy image with tag {proxy_tag} is found")
-
-
 @cli.command(name="trigger_proxy_action")
 @click.option('--head_ref_branch')
 @click.option('--base_ref_branch')
