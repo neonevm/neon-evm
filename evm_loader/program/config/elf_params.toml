@@ -2,7 +2,7 @@
 neon_pkg_version = "CARGO_PKG_VERSION"
 neon_revision = "NEON_REVISION"
 
-[debug_formatted]
+[formatcp]
 neon_seed_version = "ACCOUNT_SEED_VERSION"
 neon_token_mint_decimals = "token_mint::DECIMALS"
 neon_chain_id = "CHAIN_ID"
@@ -10,6 +10,4 @@ neon_compute_units = "COMPUTE_BUDGET_UNITS"
 neon_heap_frame = "COMPUTE_BUDGET_HEAP_FRAME"
 neon_additional_fee = "REQUEST_UNITS_ADDITIONAL_FEE"
 neon_pool_count = "TREASURY_POOL_COUNT"
-
-[display_formatted]
 neon_pool_seed = "TREASURY_POOL_SEED"

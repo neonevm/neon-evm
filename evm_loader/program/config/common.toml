@@ -1,4 +1,3 @@
-[u64]
 payment_to_treasure = 5000
 payment_to_deposit = 5000
 operator_priority_slots = 16
@@ -6,13 +5,9 @@ holder_msg_size = 950
 request_units_additional_fee = 0
 evm_steps_min = 500
 evm_steps_last_iteration_max = 0
-
-[u32]
 compute_budget_units = 500_000
 compute_budget_heap_frame = 262144 # 256 * 1024
 gas_limit_multiplier_no_chainid = 1000
 storage_entries_in_contract_account = 64
 treasury_pool_count = 128
-
-["&str"]
 treasury_pool_seed = "treasury_pool"

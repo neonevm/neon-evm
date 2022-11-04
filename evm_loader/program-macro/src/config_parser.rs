@@ -6,7 +6,7 @@ use quote::quote;
 use serde::Deserialize;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_str, Expr, Ident, LitFloat, LitInt, LitStr, Type,
+    parse_str, Expr, Ident, LitFloat, LitInt, LitStr,
 };
 
 #[derive(Deserialize)]
@@ -73,57 +73,44 @@ impl Parse for CommonConfig {
                 &format!("{} should be a valid path", file_path.display()),
             )
         })?;
-        let config: HashMap<String, HashMap<String, toml::Value>> =
-            toml::from_slice(&file_contents)
-                .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
+        let config: HashMap<String, toml::Value> = toml::from_slice(&file_contents)
+            .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
         let variables: Vec<_> = config
             .into_iter()
-            .flat_map(|(r#type, variables)| {
-                variables
-                    .into_iter()
-                    .map(move |(name, value)| {
-                        let uppercased_name = name.to_uppercase();
-                        let ident_name: Ident = parse_str(&uppercased_name)?;
-                        let ident_type: Type = parse_str(&r#type)?;
-                        let neon_ident_name: Ident =
-                            parse_str(&format!("NEON_{}", uppercased_name))?;
-                        match value {
-                            toml::Value::Float(v) => {
-                                let v: LitFloat = parse_str(&v.to_string())?;
-                                Ok(quote! {
-                                    pub const #ident_name: #ident_type = #v;
-                                    neon_elf_param!(#neon_ident_name, formatcp!("{:?}", #ident_name));
-                                })
-                            }
-                            toml::Value::Integer(v) => {
-                                let v: LitInt = parse_str(&v.to_string())?;
-                                Ok(quote! {
-                                    pub const #ident_name: #ident_type = #v;
-                                    neon_elf_param!(#neon_ident_name, formatcp!("{:?}", #ident_name));
-                                })
-                            }
-                            toml::Value::String(v) => {
-                                Ok(quote! {
-                                    pub const #ident_name: #ident_type = #v;
-                                    neon_elf_param!(#neon_ident_name, formatcp!("{:?}", #ident_name));
-                                })
-                            }
-                            toml::Value::Boolean(v) => {
-                                Ok(quote! {
-                                    pub const #ident_name: #ident_type = #v;
-                                    neon_elf_param!(#neon_ident_name, formatcp!("{:?}", #ident_name));
-                                })
-                            }
-                            _ => {
-                                Err(syn::Error::new(
-                                    input.span(),
-                                    &format!("Unsupported TOML value {:?}", value),
-                                ))
-                            }
-                        }
-                    })
-                    .flatten_ok()
+            .map(move |(name, value)| {
+                let uppercased_name = name.to_uppercase();
+                let ident_name: Ident = parse_str(&uppercased_name)?;
+                let neon_ident_name: Ident = parse_str(&format!("NEON_{}", uppercased_name))?;
+                match value {
+                    toml::Value::Float(v) => {
+                        let v: LitFloat = parse_str(&v.to_string())?;
+                        Ok(quote! {
+                            pub const #ident_name: f64 = #v;
+                            neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                        })
+                    }
+                    toml::Value::Integer(v) => {
+                        let v: LitInt = parse_str(&v.to_string())?;
+                        Ok(quote! {
+                            pub const #ident_name: u64 = #v;
+                            neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                        })
+                    }
+                    toml::Value::String(v) => Ok(quote! {
+                        pub const #ident_name: &str = #v;
+                        neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                    }),
+                    toml::Value::Boolean(v) => Ok(quote! {
+                        pub const #ident_name: bool = #v;
+                        neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                    }),
+                    _ => Err(syn::Error::new(
+                        input.span(),
+                        &format!("Unsupported TOML value {:?}", value),
+                    )),
+                }
             })
+            .flatten_ok()
             .try_collect()?;
 
         Ok(Self {
@@ -135,8 +122,7 @@ impl Parse for CommonConfig {
 #[derive(Deserialize)]
 struct InternalElfParams {
     env: HashMap<String, String>,
-    debug_formatted: HashMap<String, String>,
-    display_formatted: HashMap<String, String>,
+    formatcp: HashMap<String, String>,
 }
 
 pub struct ElfParams {
@@ -160,11 +146,7 @@ impl Parse for ElfParams {
                 &format!("{} should be a valid path", file_path.display()),
             )
         })?;
-        let InternalElfParams {
-            env,
-            debug_formatted: extra_debug,
-            display_formatted: extra_display,
-        } = toml::from_slice(&file_contents)
+        let InternalElfParams { env, formatcp } = toml::from_slice(&file_contents)
             .map_err(|e| syn::Error::new(input.span(), &e.to_string()))?;
         let env_tokens = env
             .into_iter()
@@ -175,17 +157,7 @@ impl Parse for ElfParams {
             .flatten_ok()
             .try_collect::<_, Vec<_>, syn::Error>()?;
 
-        let debug_tokens = extra_debug
-            .into_iter()
-            .map(|(name, value)| {
-                let name_ident: Ident = parse_str(&name.to_uppercase())?;
-                let value_expr: Expr = parse_str(&value)?;
-                Ok(quote! { neon_elf_param!(#name_ident, formatcp!("{:?}", #value_expr)); })
-            })
-            .flatten_ok()
-            .try_collect::<_, Vec<_>, syn::Error>()?;
-
-        let display_tokens = extra_display
+        let formatcp_tokens = formatcp
             .into_iter()
             .map(|(name, value)| {
                 let name_ident: Ident = parse_str(&name.to_uppercase())?;
@@ -198,8 +170,7 @@ impl Parse for ElfParams {
         Ok(ElfParams {
             token_stream: quote! {
                 #(#env_tokens)*
-                #(#debug_tokens)*
-                #(#display_tokens)*
+                #(#formatcp_tokens)*
             }
             .into(),
         })
