@@ -6,7 +6,7 @@ use quote::quote;
 use serde::Deserialize;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_str, Expr, Ident, LitFloat, LitInt, LitStr,
+    parse_str, Expr, Ident, LitFloat, LitInt, LitStr, Type,
 };
 
 #[derive(Deserialize)]
@@ -104,6 +104,28 @@ impl Parse for CommonConfig {
                         pub const #ident_name: bool = #v;
                         neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
                     }),
+                    toml::Value::Array(ref array) => match (array.get(0), array.get(1)) {
+                        (Some(toml::Value::Integer(v)), Some(toml::Value::String(t))) => {
+                            let v: LitInt = parse_str(&v.to_string())?;
+                            let t: Type = parse_str(t)?;
+                            Ok(quote! {
+                                pub const #ident_name: #t = #v;
+                                neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                            })
+                        }
+                        (Some(toml::Value::Float(v)), Some(toml::Value::String(t))) => {
+                            let v: LitFloat = parse_str(&v.to_string())?;
+                            let t: Type = parse_str(t)?;
+                            Ok(quote! {
+                                pub const #ident_name: #t = #v;
+                                neon_elf_param!(#neon_ident_name, formatcp!("{}", #ident_name));
+                            })
+                        }
+                        _ => Err(syn::Error::new(
+                            input.span(),
+                            &format!("Unsupported TOML value {:?}", value),
+                        )),
+                    },
                     _ => Err(syn::Error::new(
                         input.span(),
                         &format!("Unsupported TOML value {:?}", value),
