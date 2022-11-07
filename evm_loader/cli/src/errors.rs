@@ -16,6 +16,7 @@ use solana_client::tpu_client::TpuSenderError as SolanaTpuSenderError;
 use solana_cli::cli::CliError as SolanaCliError;
 use thiserror::Error;
 
+use crate::commands::init_environment::EnvironmentError;
 
 /// Errors that may be returned by the neon-cli program.
 #[derive(Debug, Error)]
@@ -45,8 +46,8 @@ pub enum NeonCliError {
     #[error("EVM loader must be specified.")]
     EvmLoaderNotSpecified,
     /// Need specify fee payer
-    #[error("Fee payer must be specified.")]
-    FeePayerNotSpecified,
+    #[error("Keypair must be specified.")]
+    KeypairNotSpecified,
     /// Incorrect program
     #[error("Incorrect program {0:?}")]
     IncorrectProgram(Pubkey),
@@ -116,6 +117,19 @@ pub enum NeonCliError {
     // Account nonce exceeds u64::max
     #[error("Transaction count overflow")]
     TrxCountOverflow,
+
+    /// Environment Error
+    #[error("Environment error {0:?}")]
+    EnvironmentError(EnvironmentError),
+
+    /// Environment incomplete and should be corrected (some item missed or can be fixed)
+    #[error("Incomplete environment")]
+    IncompleteEnvironment,
+
+    /// Environment in wrong state (some item in wrong state)
+    #[error("Wrong environment")]
+    WrongEnvironment,
+
     /// Unknown Error.
     #[error("Unknown error.")]
     UnknownError
@@ -124,6 +138,9 @@ pub enum NeonCliError {
 impl NeonCliError {
     pub fn error_code(&self) -> u32 {
         match self {
+            NeonCliError::IncompleteEnvironment             =>  50,
+            NeonCliError::WrongEnvironment                  =>  51,
+            NeonCliError::EnvironmentError(_)               =>  52,
             NeonCliError::StdIoError(_)                     => 102, // => 1002,
             NeonCliError::ProgramError(_)                   => 111, // => 1011,
             NeonCliError::SignerError(_)                    => 112, // => 1012,
@@ -132,7 +149,7 @@ impl NeonCliError {
             NeonCliError::TpuSenderError(_)                 => 115, // => 1015,
             NeonCliError::PubkeyError(_)                    => 116,
             NeonCliError::EvmLoaderNotSpecified             => 201, // => 4001,
-            NeonCliError::FeePayerNotSpecified              => 202, // => 4002,
+            NeonCliError::KeypairNotSpecified               => 202, // => 4002,
             NeonCliError::IncorrectProgram(_)               => 203,
             NeonCliError::AccountNotFound(_)                => 205, // => 4005,
             NeonCliError::AccountNotFoundAtAddress(_)       => 206, // => 4006,
@@ -200,6 +217,12 @@ impl From<SolanaTpuSenderError> for NeonCliError {
 impl From<SolanaPubkeyError> for NeonCliError {
     fn from(e: SolanaPubkeyError) -> NeonCliError {
         NeonCliError::PubkeyError(e)
+    }
+}
+
+impl From<EnvironmentError> for NeonCliError {
+    fn from(e: EnvironmentError) -> NeonCliError {
+        NeonCliError::EnvironmentError(e)
     }
 }
 

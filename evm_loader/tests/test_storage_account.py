@@ -37,7 +37,6 @@ class TestStorageAccountAccess:
             data,
             user_account.solana_account,
             user_account.solana_account_address,
-            user_account.eth_address
         )
         storage_account = create_holder(operator_keypair)
         instruction = eth_transaction.rawTransaction
@@ -89,7 +88,6 @@ class TestStorageAccountAccess:
             data,
             user_account.solana_account,
             user_account.solana_account_address,
-            user_account.eth_address
         )
         instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
@@ -114,7 +112,6 @@ class TestStorageAccountAccess:
             data,
             user2.solana_account,
             user2.solana_account_address,
-            user2.eth_address
         )
         instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
@@ -144,7 +141,6 @@ class TestStorageAccountAccess:
                 data,
                 user_account.solana_account,
                 user_account.solana_account_address,
-                user_account.eth_address
             )
             instruction = eth_transaction.rawTransaction
 
@@ -176,7 +172,6 @@ class TestStorageAccountAccess:
             data,
             user_account.solana_account,
             user_account.solana_account_address,
-            user_account.eth_address
         )
         storage_account = create_holder(operator_keypair)
         instruction = eth_transaction.rawTransaction
