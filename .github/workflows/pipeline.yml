@@ -35,7 +35,7 @@ jobs:
         run: |
           python3 ./.github/workflows/deploy.py publish_image \
           --github_sha=${GITHUB_SHA}
-  run-test:
+  run-tests-and-finalize-image:
     runs-on: test-runner
     needs:
       - deploy-neon-evm
