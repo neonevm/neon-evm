@@ -99,6 +99,7 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         if "error" in out:
             raise RuntimeError(
                 f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
+        click.echo(f"The image {IMAGE_NAME}:{tag} is published")
     else:
         click.echo("The image is not published, please create tag for publishing")
 
@@ -174,15 +175,15 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
 
     runs_after = github.get_proxy_runs_list(proxy_branch)
     proxy_run_id = list(set(runs_after) - set(runs_before))[0]
-    click.echo(f"Proxy run id: {proxy_run_id}")
+    link = f"https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}"
+    click.echo(f"Proxy run link: {link}")
     click.echo("Waiting completed status...")
     wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=7200, delay=5)
 
     if github.get_proxy_run_info(proxy_run_id)["conclusion"] == "success":
         click.echo("Proxy tests passed successfully")
     else:
-        raise RuntimeError(f"Proxy tests failed! \
-        See https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}")
+        raise RuntimeError(f"Proxy tests failed! See {link}")
 
 
 def wait_condition(func_cond, timeout_sec=15, delay=0.5):
