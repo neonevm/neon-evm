@@ -7,6 +7,7 @@ version = "0.13.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 edition = "2018"
+include = ["config/*.toml"]
 
 [features]
 #! The next feature defines configurations for deploys on different blockchains
