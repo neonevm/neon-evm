@@ -166,28 +166,6 @@ pub fn execute(
         || create_token(&neon_token_mint, neon_token_mint_decimals)
     )?;
 
-    let allowance_token = program_parameters.get::<Pubkey>("NEON_PERMISSION_ALLOWANCE_TOKEN")?;
-    executor.check_and_create_object(
-        "NEON_PERMISSION_ALLOWANCE_TOKEN",
-        executor.get_account_data_pack::<spl_token::state::Mint>(
-            &spl_token::id(),
-            &allowance_token
-        ),
-        |_| Ok(None),
-        || create_token(&allowance_token, 9),
-    )?;
-
-    let denial_token = program_parameters.get::<Pubkey>("NEON_PERMISSION_DENIAL_TOKEN")?;
-    executor.check_and_create_object(
-        "NEON_PERMISSION_DENIAL_TOKEN",
-        executor.get_account_data_pack::<spl_token::state::Mint>(
-            &spl_token::id(),
-            &denial_token
-        ),
-        |_| Ok(None),
-        || create_token(&denial_token, 9),
-    )?;
-
     executor.checkpoint(config.commitment)?;
 
     //====================== Create 'Deposit' NEON-token balance ======================================================

@@ -1,6 +1,6 @@
 mod config_parser;
 
-use config_parser::{AccountWhitelists, CommonConfig, ElfParams, NetSpecificConfig, TokenMint};
+use config_parser::{CommonConfig, ElfParams, NetSpecificConfig, TokenMint};
 use proc_macro::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -135,14 +135,7 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
         token_mint: TokenMint {
             neon_token_mint,
             decimals,
-        },
-        account_whitelists:
-            AccountWhitelists {
-                neon_permission_allowance_token,
-                neon_permission_denial_token,
-                neon_minimal_client_allowance_balance,
-                neon_minimal_contract_allowance_balance,
-            },
+        }
     } = parse_macro_input!(tokens as NetSpecificConfig);
 
     quote! {
@@ -163,16 +156,6 @@ pub fn net_specific_config_parser(tokens: TokenStream) -> TokenStream {
             #[must_use]
             pub const fn decimals() -> u8 { DECIMALS }
 
-        }
-
-        /// Account whitelists: Permission tokens
-        pub mod account_whitelists {
-            use super::neon_elf_param;
-
-            neon_elf_param!(NEON_PERMISSION_ALLOWANCE_TOKEN, #neon_permission_allowance_token);
-            neon_elf_param!(NEON_PERMISSION_DENIAL_TOKEN, #neon_permission_denial_token);
-            neon_elf_param!(NEON_MINIMAL_CLIENT_ALLOWANCE_BALANCE, #neon_minimal_client_allowance_balance);
-            neon_elf_param!(NEON_MINIMAL_CONTRACT_ALLOWANCE_BALANCE, #neon_minimal_contract_allowance_balance);
         }
     }
     .into()
