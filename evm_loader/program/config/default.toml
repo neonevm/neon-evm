@@ -36,9 +36,3 @@ operators_whitelist = [
 [token_mint]
 neon_token_mint = "HPsV9Deocecw3GeZv1FkAPNCBRfuVyfw9MMwjwRe1xaU"
 decimals = 9
-
-[account_whitelists]
-neon_permission_allowance_token = "B2m2PGZQuZzaVMkeH8fLR8EbefiEy64ybCxVuzhx6RD1"
-neon_permission_denial_token = "D73ziEn1qS4egcMfADTZJnnn5XCENdcrDDcwAnSEvqGX"
-neon_minimal_client_allowance_balance = "0"
-neon_minimal_contract_allowance_balance = "0"

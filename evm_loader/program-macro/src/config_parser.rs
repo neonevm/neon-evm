@@ -14,7 +14,6 @@ pub struct NetSpecificConfig {
     pub chain_id: u64,
     pub operators_whitelist: Vec<String>,
     pub token_mint: TokenMint,
-    pub account_whitelists: AccountWhitelists,
 }
 
 impl Parse for NetSpecificConfig {
@@ -42,14 +41,6 @@ impl Parse for NetSpecificConfig {
 pub struct TokenMint {
     pub neon_token_mint: String,
     pub decimals: u8,
-}
-
-#[derive(Deserialize)]
-pub struct AccountWhitelists {
-    pub neon_permission_allowance_token: String,
-    pub neon_permission_denial_token: String,
-    pub neon_minimal_client_allowance_balance: String,
-    pub neon_minimal_contract_allowance_balance: String,
 }
 
 pub struct CommonConfig {

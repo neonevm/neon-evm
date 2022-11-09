@@ -240,9 +240,3 @@ operators_whitelist = [
 [token_mint]
 neon_token_mint = "89dre8rZjLNft7HoupGiyxu3MNftR577ZYu8bHe2kK7g"
 decimals = 9
-
-[account_whitelists]
-neon_permission_allowance_token = "95tQS9NwHyboQm31za2FyNdxR8NVgqripwRUjZD97nrz"
-neon_permission_denial_token = "EqhCRgbZqCaXs6S8T2U2TJHkAffuNS99ot3ueFeUXJRF"
-neon_minimal_client_allowance_balance = "0"
-neon_minimal_contract_allowance_balance = "0"
