@@ -28,13 +28,7 @@ pub mod token;
 pub mod sysvar;
 
 /// Ethereum account version
-pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
-    // Special case for alpha configuration (it is needed in order to separate the accounts created for
-    // testing this version)
-    255_u8
-} else {
-    2_u8
-};
+pub const ACCOUNT_SEED_VERSION: u8 = 2_u8;
 
 /*
 Deprecated tags:
