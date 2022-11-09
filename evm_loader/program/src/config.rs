@@ -14,8 +14,6 @@ use crate::account::ACCOUNT_SEED_VERSION;
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
         net_specific_config_parser!("config/mainnet.toml");
-    } else if #[cfg(feature = "alpha")] {
-        net_specific_config_parser!("config/alpha.toml");
     } else if #[cfg(feature = "testnet")] {
         net_specific_config_parser!("config/testnet.toml");
     } else if #[cfg(feature = "devnet")] {
