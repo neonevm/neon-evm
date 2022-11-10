@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION};
+use crate::account::{EthereumAccount, ACCOUNT_SEED_VERSION, EthereumStorage};
 use crate::executor::{Action, OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
 use solana_program::{ pubkey::Pubkey };
@@ -36,9 +36,13 @@ pub struct ProgramAccountStorage<'a> {
     operator: &'a Pubkey,
     clock: Clock,
 
-    solana_accounts: BTreeMap<Pubkey, &'a AccountInfo<'a>>,
+    solana_accounts: BTreeMap<&'a Pubkey, &'a AccountInfo<'a>>,
+
     ethereum_accounts: BTreeMap<H160, EthereumAccount<'a>>,
     empty_ethereum_accounts: RefCell<BTreeSet<H160>>,
+
+    storage_accounts: BTreeMap<(H160,U256), EthereumStorage<'a>>,
+    empty_storage_accounts: RefCell<BTreeSet<(H160,U256)>>,
 }
 
 /// Account storage
@@ -79,17 +83,6 @@ pub trait AccountStorage {
     fn valids(&self, address: &H160) -> Vec<u8>;
     /// Get contract generation
     fn generation(&self, address: &H160) -> u32;
-
-    /// Get storage account address and bump seed
-    fn get_storage_address(&self, address: &H160, index: &U256) -> (Pubkey, u8) {
-        let generation_bytes = self.generation(address).to_le_bytes();
-
-        let mut index_bytes = [0_u8; 32];
-        index.to_little_endian(&mut index_bytes);
-
-        let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes];
-        Pubkey::find_program_address(seeds, self.program_id())
-    }
 
     /// Get data from storage
     fn storage(&self, address: &H160, index: &U256) -> U256;

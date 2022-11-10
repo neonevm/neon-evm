@@ -1,5 +1,6 @@
 use std::convert::From;
 use solana_program::account_info::AccountInfo;
+use solana_program::program::{invoke_unchecked, invoke_signed_unchecked};
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::log::sol_log_data;
@@ -7,7 +8,7 @@ use solana_program::{
     program::{invoke, invoke_signed}, system_instruction,
     rent::Rent, sysvar::Sysvar
 };
-use super::{Operator};
+use super::{Operator, EthereumAccount, ACCOUNT_SEED_VERSION};
 use std::ops::Deref;
 use evm::{ExitError, ExitFatal, ExitReason, ExitSucceed, H160, H256, U256};
 
@@ -187,6 +188,56 @@ impl<'a> System<'a> {
                 ),
                 &[(*payer).clone(), new_account.clone(), self.0.clone()],
                 &[new_account_seeds],
+            )
+        }
+    }
+
+    pub fn create_account_with_seed(
+        &self,
+        payer: &Operator<'a>,
+        base: &EthereumAccount<'a>,
+        owner: &Pubkey,
+        new_account: &AccountInfo<'a>,
+        seed: &str,
+        space: usize
+    ) -> Result<(), ProgramError> {
+        let minimum_balance = Rent::get()?.minimum_balance(space).max(1);
+        let signer_seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], base.address.as_bytes(), &[base.bump_seed]];
+
+        if new_account.lamports() > 0 {
+            let required_lamports = minimum_balance.saturating_sub(new_account.lamports());
+
+            if required_lamports > 0 {
+                invoke_unchecked(
+                    &system_instruction::transfer(payer.key, new_account.key, required_lamports),
+                    &[(*payer).clone(), new_account.clone(), self.0.clone()]
+                )?;
+            }
+
+            invoke_signed_unchecked(
+                &system_instruction::allocate_with_seed(new_account.key, base.info.key, seed, space as u64, owner),
+                &[new_account.clone(), base.info.clone(), self.0.clone()],
+                &[signer_seeds],
+            )?;
+
+            invoke_signed_unchecked(
+                &system_instruction::assign_with_seed(new_account.key, base.info.key, seed, owner),
+                &[new_account.clone(), base.info.clone(), self.0.clone()],
+                &[signer_seeds]
+            )
+        } else {
+            invoke_signed_unchecked(
+                &system_instruction::create_account_with_seed(
+                    payer.key,
+                    new_account.key,
+                    base.info.key,
+                    seed,
+                    minimum_balance,
+                    space as u64,
+                    owner,
+                ),
+                &[(*payer).clone(), new_account.clone(), base.info.clone(), self.0.clone()],
+                &[signer_seeds],
             )
         }
     }
