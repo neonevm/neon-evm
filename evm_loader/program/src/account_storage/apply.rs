@@ -316,8 +316,12 @@ impl<'a> ProgramAccountStorage<'a> {
 
             system_program.create_account_with_seed(operator, base, self.program_id, account, &seed, EthereumStorage::SIZE)?;
 
-            return EthereumStorage::init(account, Data { address, generation, index })?
-                .set(subindex, value, operator, system_program);
+            let mut storage = EthereumStorage::init(account, Data { address, generation, index })?;
+            storage.set(subindex, value, operator, system_program)?;
+
+            self.storage_accounts.insert((address, index), storage);
+
+            return Ok(());
         }
 
         Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", solana_address)
