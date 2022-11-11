@@ -4,7 +4,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::recent_blockhashes
 };
-use crate::account::{EthereumAccount, EthereumStorage};
+use crate::account::{EthereumAccount};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
@@ -104,20 +104,8 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
         let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
         let index = *index & !U256::from(0xFF);
 
-        let (solana_address, _) = self.get_storage_address(address, &index);
-        let account = self.solana_accounts.get(&solana_address)
-            .unwrap_or_else(|| panic!("Account {} - storage account not found", solana_address));
-
-        if account.owner == self.program_id {
-            let storage = EthereumStorage::from_account(self.program_id, account).unwrap();
-            return storage.get(subindex)
-        }
-
-        if solana_program::system_program::check_id(account.owner) {
-            return U256::zero()
-        }
-
-        panic!("Account {} - expected system or program owned", solana_address);
+        self.ethereum_storage(*address, index)
+            .map_or_else(U256::zero, |a| a.get(subindex))
     }
 
     fn clone_solana_account(&self, address: &Pubkey) -> OwnedAccountInfo {

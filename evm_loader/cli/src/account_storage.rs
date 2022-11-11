@@ -197,11 +197,14 @@ impl<'a> EmulatorAccountStorage<'a> {
                     } else {
                         let index = key & !U256::from(0xFF);
 
-                        let (storage_account, _) = self.get_storage_address(&address, &index);
+                        let storage_account = EthereumStorage::solana_address(self, &address, &key);
                         self.add_solana_account(storage_account, true);
 
                         if self.storage(&address, &index).is_zero() {
-                            let cost = rent.minimum_balance(2 + std::mem::size_of_val(&value));
+                            let metadata_size = EthereumStorage::SIZE;
+                            let element_size = 1 + std::mem::size_of_val(&value);
+
+                            let cost = rent.minimum_balance(metadata_size + element_size);
                             gas = gas.saturating_add(cost);
                         }
                     }
@@ -312,7 +315,6 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
     }
 
     fn program_id(&self) -> &Pubkey {
-        info!("program_id");
         &self.config.evm_loader
     }
 
@@ -425,7 +427,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
             let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
             let index = *index & !U256::from(0xFF);
             
-            let (solana_address, _) = self.get_storage_address(address, &index);
+            let solana_address = EthereumStorage::solana_address(self, address, &index);
             debug!("read storage solana address {:?} - {:?}", address, solana_address);
 
             self.add_solana_account(solana_address, false);
@@ -442,7 +444,12 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                 } else {
                     let account_info = account_info(&solana_address, &mut account);
                     let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
-                    storage.get(subindex)
+                    if (storage.address != *address) || (storage.index != index) || (storage.generation != self.generation(address)) {
+                        debug!("storage collision");
+                        U256::zero()
+                    } else {
+                        storage.get(subindex)
+                    }
                 }
             } else {
                 debug!("storage account doesn't exist");
