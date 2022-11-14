@@ -9,8 +9,6 @@ use evm_loader_macro::{
     net_specific_config_parser, operators_whitelist,
 };
 
-use crate::account::ACCOUNT_SEED_VERSION;
-
 cfg_if! {
     if #[cfg(feature = "mainnet")] {
         net_specific_config_parser!("config/mainnet.toml");
