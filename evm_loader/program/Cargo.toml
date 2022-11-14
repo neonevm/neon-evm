@@ -6,7 +6,7 @@ name = "evm-loader"
 version = "0.13.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
-edition = "2018"
+edition = "2021"
 include = ["config/*.toml"]
 
 [features]
