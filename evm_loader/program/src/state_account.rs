@@ -1,7 +1,7 @@
 use crate::{
     config::OPERATOR_PRIORITY_SLOTS,
     error::EvmLoaderError,
-    account::{State, FinalizedState, Operator, Incinerator, program, Holder},
+    account::{State, FinalizedState, Operator, Incinerator, program, Holder, EthereumAccount},
     transaction::Transaction,
 };
 use evm::{H160, U256};
@@ -13,7 +13,6 @@ use solana_program::{
     clock::Clock,
 };
 use std::cell::{RefMut, Ref};
-use crate::account::TAG_ACCOUNT_V3;
 
 const ACCOUNT_CHUNK_LEN: usize = 1 + 1 + 32;
 
@@ -255,6 +254,6 @@ impl<'a> State<'a> {
 
     #[must_use]
     fn account_exists(program_id: &Pubkey, info: &AccountInfo) -> bool {
-        info.owner == program_id && !info.data_is_empty() && info.data.borrow()[0] == TAG_ACCOUNT_V3
+        (info.owner == program_id) && !info.data_is_empty() && (info.data.borrow()[0] == EthereumAccount::TAG)
     }
 }

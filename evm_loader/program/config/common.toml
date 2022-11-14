@@ -1,3 +1,4 @@
+account_seed_version = [3, "u8"]
 payment_to_treasure = 5000
 payment_to_deposit = 5000
 operator_priority_slots = 16
