@@ -275,7 +275,7 @@ fn metadata<B: AccountStorage>(
 fn to_solidity_bool(v: bool) -> Vec<u8>
 {
     let mut result = vec![0_u8; 32];
-    result[31] = if v {1} else {0};
+    result[31] = u8::from(v);
     result
 }
 

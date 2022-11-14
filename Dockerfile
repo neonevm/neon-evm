@@ -1,6 +1,6 @@
 ARG SOLANA_IMAGE
 # Install BPF SDK
-FROM solanalabs/rust:1.64.0 AS builder
+FROM solanalabs/rust:1.65.0 AS builder
 WORKDIR /opt
 ARG SOLANA_REVISION
 # TODO: make connection insecure to solve with expired certificate
