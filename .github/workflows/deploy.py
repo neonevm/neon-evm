@@ -186,7 +186,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
         raise RuntimeError(f"Proxy tests failed! See {link}")
 
 
-def wait_condition(func_cond, timeout_sec=15, delay=0.5):
+def wait_condition(func_cond, timeout_sec=60, delay=0.5):
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
