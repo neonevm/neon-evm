@@ -178,7 +178,7 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
     link = f"https://github.com/neonlabsorg/proxy-model.py/actions/runs/{proxy_run_id}"
     click.echo(f"Proxy run link: {link}")
     click.echo("Waiting completed status...")
-    wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=7200, delay=5)
+    wait_condition(lambda: github.get_proxy_run_info(proxy_run_id)["status"] == "completed", timeout_sec=10800, delay=5)
 
     if github.get_proxy_run_info(proxy_run_id)["conclusion"] == "success":
         click.echo("Proxy tests passed successfully")
@@ -186,18 +186,17 @@ def trigger_proxy_action(head_ref_branch, base_ref_branch, github_ref, github_sh
         raise RuntimeError(f"Proxy tests failed! See {link}")
 
 
-def wait_condition(func_cond, timeout_sec=15, delay=0.5):
+def wait_condition(func_cond, timeout_sec=60, delay=0.5):
     start_time = time.time()
     while True:
         if time.time() - start_time > timeout_sec:
-            return False
+            raise RuntimeError(f"The condition not reached within {timeout_sec} sec")
         try:
             if func_cond():
                 break
         except:
             raise
         time.sleep(delay)
-    return True
 
 
 @cli.command(name="send_notification", help="Send notification to slack")
