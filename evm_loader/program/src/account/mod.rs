@@ -10,6 +10,8 @@ use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::Sysvar;
 
+pub use crate::config::ACCOUNT_SEED_VERSION;
+
 pub use incinerator::Incinerator;
 pub use operator::Operator;
 pub use treasury::{MainTreasury, Treasury};
@@ -26,15 +28,6 @@ pub mod holder;
 pub mod program;
 pub mod token;
 pub mod sysvar;
-
-/// Ethereum account version
-pub const ACCOUNT_SEED_VERSION: u8 = if cfg!(feature = "alpha") {
-    // Special case for alpha configuration (it is needed in order to separate the accounts created for
-    // testing this version)
-    255_u8
-} else {
-    2_u8
-};
 
 /*
 Deprecated tags:
@@ -53,10 +46,10 @@ const TAG_HOLDER: u8 = 6;
 */
 
 pub const TAG_EMPTY: u8 = 0;
-pub const TAG_ACCOUNT_V3: u8 = 11;
+const TAG_ACCOUNT_V3: u8 = 12;
 const TAG_STATE: u8 = 22;
 const TAG_FINALIZED_STATE: u8 = 31;
-const TAG_CONTRACT_STORAGE: u8 = 41;
+const TAG_CONTRACT_STORAGE: u8 = 42;
 const TAG_HOLDER: u8 = 51;
 
 pub type EthereumAccount<'a> = AccountData<'a, ether_account::Data>;

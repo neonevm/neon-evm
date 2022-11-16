@@ -7,3 +7,5 @@ rlp==2.0.1
 web3==5.29.1
 solana==0.18.3
 pytest-xdist==2.5.0
+construct~=2.10.67
+base58~=2.1.1

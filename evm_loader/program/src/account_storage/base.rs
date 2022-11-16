@@ -1,13 +1,13 @@
 use std::cell::{RefCell};
 use std::collections::{BTreeMap, BTreeSet};
-use evm::{H160};
+use evm::{H160, U256};
 use solana_program::account_info::AccountInfo;
 use solana_program::clock::Clock;
 use solana_program::program_error::ProgramError;
 use solana_program::pubkey::Pubkey;
 use solana_program::system_program;
 use solana_program::sysvar::Sysvar;
-use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY};
+use crate::account::{EthereumAccount, Operator, program, TAG_EMPTY, EthereumStorage};
 use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 
 
@@ -20,35 +20,43 @@ impl<'a> ProgramAccountStorage<'a> {
     ) -> Result<Self, ProgramError> {
         debug_print!("ProgramAccountStorage::new");
 
-        let mut solana_accounts = BTreeMap::new();
-        for account in accounts {
-            let duplicate = solana_accounts.insert(*account.key, account);
-            if duplicate.is_some() {
-                return Err!(ProgramError::InvalidArgument; "Account {} - repeats in the transaction", account.key)
-            }
-        }
+        let mut solana_accounts = accounts.iter()
+            .map(|a| (a.key, a))
+            .collect::<BTreeMap<_, _>>();
 
-        solana_accounts.insert(*operator.key, operator.info);
+        solana_accounts.insert(operator.key, operator.info);
         if let Some(system) = system_program {
-            solana_accounts.insert(*system.key, system.into());
+            solana_accounts.insert(system.key, system.into());
         }
 
 
         let mut ethereum_accounts = BTreeMap::new();
-        for account_info in accounts {
+        let mut storage_accounts = BTreeMap::new();
+
+        for &account_info in solana_accounts.values() {
             if account_info.owner != program_id {
                 continue;
             }
 
             match crate::account::tag(program_id, account_info) {
-                Ok(EthereumAccount::TAG) => {}
+                Ok(EthereumAccount::TAG) => {
+                    let account = EthereumAccount::from_account(program_id, account_info)?;
+                    ethereum_accounts.insert(account.address, account);
+                },
+                Ok(EthereumStorage::TAG) => {
+                    let account = EthereumStorage::from_account(program_id, account_info)?;
+                    storage_accounts.insert((account.address, account.index), account);
+                }
                 Ok(_) | Err(_) => continue
             }
-
-            let ether_account = EthereumAccount::from_account(program_id, account_info)?;
-            ethereum_accounts.insert(ether_account.address, ether_account);
         }
 
+        for storage in storage_accounts.values_mut() {
+            let owner = &ethereum_accounts[&storage.address];
+            if storage.generation != owner.generation {
+                storage.clear(owner.generation, operator)?;
+            }
+        }
 
         Ok(Self {
             program_id,
@@ -57,41 +65,67 @@ impl<'a> ProgramAccountStorage<'a> {
             solana_accounts,
             ethereum_accounts,
             empty_ethereum_accounts: RefCell::new(BTreeSet::new()),
+            storage_accounts,
+            empty_storage_accounts: RefCell::new(BTreeSet::new()),
         })
-    }
-
-    pub(crate) fn panic_if_account_not_exists(&self, address: &H160) {
-        if self.ethereum_accounts.contains_key(address) {
-            return;
-        }
-
-        let mut empty_accounts = self.empty_ethereum_accounts.borrow_mut();
-        if empty_accounts.contains(address) {
-            return;
-        }
-
-        let (solana_address, _bump_seed) = self.calc_solana_address(address);
-        if let Some(account) = self.solana_accounts.get(&solana_address) {
-            assert!(
-                self.is_account_empty(account),
-                "Empty ethereum account {} must belong to the system program or be uninitialized",
-                address,
-            );
-
-            empty_accounts.insert(*address);
-            return;
-        }
-
-        panic!("Ethereum account {} must be present in the transaction", address);
     }
 
     pub fn solana_account(&self, solana_address: &Pubkey) -> Option<&'a AccountInfo<'a>> {
         self.solana_accounts.get(solana_address).copied()
     }
 
+    pub fn ethereum_storage(&self, address: H160, index: U256) -> Option<&EthereumStorage<'a>> {
+        let key = (address, index);
+
+        if let Some(account) = self.storage_accounts.get(&key) {
+            return Some(account);
+        }
+
+        let mut empty_accounts = self.empty_storage_accounts.borrow_mut();
+        if empty_accounts.contains(&key) {
+            return None;
+        }
+
+        let solana_address = EthereumStorage::solana_address(self, &address, &index);
+        if let Some(&account) = self.solana_accounts.get(&solana_address) {
+            assert!(solana_program::system_program::check_id(account.owner));
+
+            empty_accounts.insert(key);
+            return None;
+        }
+
+        panic!(
+            "Storage account {} {} (solana address {}) must be present in the transaction",
+            address, index, solana_address
+        );
+    }
+
     pub fn ethereum_account(&self, address: &H160) -> Option<&EthereumAccount<'a>> {
-        self.panic_if_account_not_exists(address);
-        self.ethereum_accounts.get(address)
+        if let Some(account) = self.ethereum_accounts.get(address) {
+            return Some(account);
+        }
+
+        let mut empty_accounts = self.empty_ethereum_accounts.borrow_mut();
+        if empty_accounts.contains(address) {
+            return None;
+        }
+
+        let (solana_address, _bump_seed) = self.calc_solana_address(address);
+        if let Some(&account) = self.solana_accounts.get(&solana_address) {
+            assert!(
+                self.is_account_empty(account),
+                "Empty ethereum account {} must belong to the system program or be uninitialized",
+                address
+            );
+
+            empty_accounts.insert(*address);
+            return None;
+        }
+
+        panic!(
+            "Ethereum account {} (solana address {}) must be present in the transaction",
+            address, solana_address
+        );
     }
 
     pub fn ethereum_account_mut(&mut self, address: &H160) -> &mut EthereumAccount<'a> {

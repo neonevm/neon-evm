@@ -10,7 +10,7 @@ use solana_program::rent::Rent;
 use solana_program::system_instruction;
 use solana_program::sysvar::Sysvar;
 
-use crate::account::{ACCOUNT_SEED_VERSION, ether_account, EthereumAccount, EthereumStorage, Operator, program};
+use crate::account::{ether_account, EthereumAccount, EthereumStorage, Operator, program};
 use crate::account_storage::{AccountOperation, AccountsOperations, AccountsReadiness, AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{AccountMeta, Action};
@@ -295,34 +295,33 @@ impl<'a> ProgramAccountStorage<'a> {
         let subindex = (index & U256::from(0xFF)).as_u64() as u8;
         let index = index & !U256::from(0xFF);
 
-        let (solana_address, bump_seed) = self.get_storage_address(&address, &index);
+        if let Some(storage) = self.storage_accounts.get_mut(&(address, index)) {
+            return storage.set(subindex, value, operator, system_program);
+        }
+
+        let solana_address = EthereumStorage::solana_address(self, &address, &index);
         let account = self.solana_accounts.get(&solana_address)
             .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - storage account not found", solana_address))?;
 
-        if account.owner == self.program_id {
-            let mut storage = EthereumStorage::from_account(self.program_id, account)?;
-            storage.set(subindex, value, operator, system_program)?;
-
-            return Ok(());
-        }
-
         if solana_program::system_program::check_id(account.owner) {
+            use crate::account::ether_storage::Data;
+
             if value.is_zero() {
                 return Ok(());
             }
 
-            let generation_bytes = self.generation(&address).to_le_bytes();
+            let base = &self.ethereum_accounts[&address];
+            let generation = base.generation;
+            let seed = EthereumStorage::creation_seed(&index);
 
-            let mut index_bytes = [0_u8; 32];
-            index.to_little_endian(&mut index_bytes);
-    
-            let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", address.as_bytes(), &generation_bytes, &index_bytes, &[bump_seed]];
-            system_program.create_pda_account(self.program_id, operator, account, seeds, EthereumStorage::SIZE)?;
+            system_program.create_account_with_seed(operator, base, self.program_id, account, &seed, EthereumStorage::SIZE)?;
 
-            let mut storage = EthereumStorage::init(account, crate::account::ether_storage::Data {})?;
+            let mut storage = EthereumStorage::init(account, Data { address, generation, index })?;
             storage.set(subindex, value, operator, system_program)?;
 
-            return Ok(())
+            self.storage_accounts.insert((address, index), storage);
+
+            return Ok(());
         }
 
         Err!(ProgramError::InvalidAccountData; "Account {} - expected system or program owned", solana_address)

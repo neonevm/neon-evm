@@ -3,7 +3,7 @@ use solana_sdk::{ pubkey::Pubkey };
 use evm::{H160, U256};
 
 use evm_loader::{
-    account::{EthereumStorage, ACCOUNT_SEED_VERSION},
+    account::{EthereumStorage},
     config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT,
 };
 use evm_loader::account::EthereumAccount;
@@ -33,11 +33,8 @@ pub fn execute(
                 let subindex = (*index & U256::from(0xFF)).as_u64() as u8;
                 let index = *index & !U256::from(0xFF);
 
-                let mut index_bytes = [0_u8; 32];
-                index.to_little_endian(&mut index_bytes);
-                let seeds: &[&[u8]] = &[&[ACCOUNT_SEED_VERSION], b"ContractStorage", ether_address.as_bytes(), &account_data.generation.to_le_bytes(), &index_bytes];
-
-                let (address, _) = Pubkey::find_program_address(seeds, &config.evm_loader);
+                let seed = EthereumStorage::creation_seed(&index);
+                let address = Pubkey::create_with_seed(&solana_address, &seed, &config.evm_loader).unwrap();
 
                 if let Ok(mut account) = config.rpc_client.get_account(&address) {
                     if solana_sdk::system_program::check_id(&account.owner) {
@@ -45,7 +42,11 @@ pub fn execute(
                     } else {
                         let account_info = account_info(&address, &mut account);
                         let storage = EthereumStorage::from_account(&config.evm_loader, &account_info).unwrap();
-                        storage.get(subindex)
+                        if (storage.address != ether_address) || (storage.index != index) || (storage.generation != account_data.generation) {
+                            U256::zero()
+                        } else {
+                            storage.get(subindex)
+                        }
                     }
                 } else {
                     U256::zero()

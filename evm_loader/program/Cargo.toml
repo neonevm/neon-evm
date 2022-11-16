@@ -3,15 +3,14 @@
 
 [package]
 name = "evm-loader"
-version = "0.13.0-dev"
+version = "0.14.0-dev"
 description = "Neon EVM loader"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
-edition = "2018"
+edition = "2021"
+include = ["config/*.toml"]
 
 [features]
 #! The next feature defines configurations for deploys on different blockchains
-## Builds NeonEVM for `alpha`-testing mode
-alpha = []
 ## Builds NeonEVM for testing with goverment system
 govertest = []
 ## Builds NeonEVM for mainnet deployment
