@@ -99,6 +99,9 @@ def test_collect_treasury(evm_loader):
     index = random.randint(0, 127)
     treasury_pool_address = create_treasury_pool_address(index)
     result = neon_cli().call(command_args)
+    main_pool_address = result.split('\n')[0].split('Main pool balance:')[-1].strip()
+    balance_before = get_solana_balance(main_pool_address)
+
     assert f"{index}: skip account {treasury_pool_address}" in result
 
     amount = random.randint(1, 1000)
@@ -106,6 +109,9 @@ def test_collect_treasury(evm_loader):
     wait_confirm_transaction(solana_client, trx['result'])
     result = neon_cli().call(command_args)
     assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
+
+    balance_after = get_solana_balance(main_pool_address)
+    assert balance_after == balance_before + amount
 
 
 def test_init_environment(evm_loader):
