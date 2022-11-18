@@ -1,10 +1,12 @@
 import json
 import os
+import random
 
 import pytest
 from solana.rpc.api import Client
 
-from .solana_utils import neon_cli, get_solana_balance, send_transaction
+from .solana_utils import neon_cli, create_treasury_pool_address, get_neon_balance
+from .solana_utils import solana_client, wait_confirm_transaction, get_solana_balance, send_transaction
 from .utils.constants import SOLANA_URL
 from .utils.contract import deploy_contract
 from .utils.ethereum import make_eth_transaction
@@ -93,20 +95,35 @@ def test_help():
 
 
 def test_collect_treasury(evm_loader):
-    result = neon_cli().call(f"collect-treasury --evm_loader {evm_loader.loader_id}")
-    assert len(result) > 1000
+    command_args = f"collect-treasury --evm_loader {evm_loader.loader_id}"
+    index = random.randint(0, 127)
+    treasury_pool_address = create_treasury_pool_address(index)
+    result = neon_cli().call(command_args)
+    assert f"{index}: skip account {treasury_pool_address}" in result
 
+    amount = random.randint(1, 1000)
+    trx = solana_client.request_airdrop(treasury_pool_address, amount)
+    wait_confirm_transaction(solana_client, trx['result'])
+    result = neon_cli().call(command_args)
+    assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
 
 
 def test_init_environment(evm_loader):
     result = neon_cli().call(f"init-environment --evm_loader {evm_loader.loader_id}")
-    assert len(result) > 1000
+    assert "Main treasury pool: correct" in result
+    index = random.randint(0, 127)
+    treasury_pool_address = create_treasury_pool_address(index)
+    balance = get_solana_balance(treasury_pool_address)
+    assert f"Aux treasury pool {index}: Account {{ lamports: {balance}, data.len: 0, owner: " \
+           "11111111111111111111111111111111, executable: false, rent_epoch: 0 }" in result
 
 
 def test_get_ether_account_data(evm_loader, user_account):
     result = neon_cli().call(
         f"get-ether-account-data --evm_loader {evm_loader.loader_id} {user_account.eth_address.hex()}")
     assert "Account found" in result
+    assert f"Ethereum address: 0x{user_account.eth_address.hex()}" in result
+    assert f"Solana address: {user_account.solana_account_address}" in result
 
 
 def test_create_ether_account(evm_loader):
@@ -124,9 +141,12 @@ def test_create_program_address(evm_loader):
 
 
 def test_deposit(evm_loader, user_account):
+    amount = random.randint(1, 100000)
     result = neon_cli().call(
-        f"deposit --evm_loader {evm_loader.loader_id} 10 {user_account.eth_address.hex()}").strip()
+        f"deposit --evm_loader {evm_loader.loader_id} {amount} {user_account.eth_address.hex()}").strip()
+    balance_after = get_neon_balance(solana_client, user_account.solana_account_address)
     assert "CompiledInstruction" in result
+    assert balance_after == amount * 1000000000
 
 
 def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_pool):
@@ -137,7 +157,7 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
 
 
 @pytest.mark.xfail(reason="https://neonlabs.atlassian.net/browse/NDEV-957")
-def test_cancel_trx(evm_loader,user_account, deployed_contract, operator_keypair, treasury_pool):
+def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
     eth_transaction = make_eth_transaction(
