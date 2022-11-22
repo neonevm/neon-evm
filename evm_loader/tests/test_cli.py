@@ -4,8 +4,9 @@ import random
 
 import pytest
 from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed
 
-from .solana_utils import neon_cli, create_treasury_pool_address, get_neon_balance
+from .solana_utils import neon_cli, create_treasury_pool_address, get_neon_balance, get_transaction_count
 from .solana_utils import solana_client, wait_confirm_transaction, get_solana_balance, send_transaction
 from .utils.constants import SOLANA_URL
 from .utils.contract import deploy_contract
@@ -131,12 +132,18 @@ def test_get_ether_account_data(evm_loader, user_account):
     assert f"Ethereum address: 0x{user_account.eth_address.hex()}" in result
     assert f"Solana address: {user_account.solana_account_address}" in result
 
+    assert solana_client.get_account_info(user_account.solana_account.public_key)["result"]['value'] is not None
+
 
 def test_create_ether_account(evm_loader):
-    acc = gen_hash_of_block(20)
+    acc = gen_hash_of_block(20)[2:]
     result = neon_cli().call(
-        f"create-ether-account --evm_loader {evm_loader.loader_id} {acc[2:]}")
-    assert "CompiledInstruction" in result
+        f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}").strip()
+    created_acc = json.loads(result.split(' ')[-1])
+    assert created_acc['ether'] == acc
+
+    acc_info = solana_client.get_account_info(created_acc['solana'], commitment=Confirmed)
+    assert acc_info['result']['value'] is not None
 
 
 def test_create_program_address(evm_loader):
@@ -157,15 +164,17 @@ def test_deposit(evm_loader, user_account):
 
 def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_pool):
     contract = deploy_contract(operator_keypair, user_account, "hello_world.binary", evm_loader, treasury_pool)
+    expected_storage = '0x5'
     result = neon_cli().call(
         f"get-storage-at --evm_loader {evm_loader.loader_id} {contract.eth_address.hex()} 0x0").strip()
-    assert len(result) > 500
+    actual_storage = result.split("\n")[-1]
+    assert actual_storage == expected_storage
 
 
-@pytest.mark.xfail(reason="https://neonlabs.atlassian.net/browse/NDEV-957")
 def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
+
     eth_transaction = make_eth_transaction(
         deployed_contract.eth_address,
         data,
@@ -186,8 +195,11 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
         )
     )
     solana_client = Client(SOLANA_URL)
+
     receipt = send_transaction(solana_client, trx, operator_keypair)
     assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+    user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
 
-    result = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")
-    assert "CompiledInstruction" in result
+    response = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")
+    assert str(user_account.solana_account_address) in response
+    assert user_nonce < get_transaction_count(solana_client, user_account.solana_account_address)
