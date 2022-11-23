@@ -196,7 +196,8 @@ class neon_cli:
     def call(self, arguments):
         cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, SOLANA_URL, arguments)
         try:
-            return subprocess.check_output(cmd, shell=True, universal_newlines=True)
+            return subprocess.check_output(cmd, shell=True,  text=True, universal_newlines=True,
+                                           stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as err:
             print(f"ERR: neon-cli error {err}")
             raise

@@ -7,7 +7,7 @@ from solana.publickey import PublicKey
 from web3.auto import w3
 
 from .constants import ACCOUNT_SEED_VERSION
-from ..conftest import Caller
+from .types import Caller
 from ..eth_tx_utils import pack
 from ..solana_utils import EvmLoader, solana_client, get_transaction_count
 

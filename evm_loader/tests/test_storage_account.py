@@ -17,12 +17,6 @@ from .utils.instructions import make_PartialCallOrContinueFromRawEthereumTX, Tra
 from .utils.layouts import STORAGE_ACCOUNT_INFO_LAYOUT, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
 
 
-@pytest.fixture(scope="function")
-def deployed_contract(evm_loader: "EvmLoader", user_account: "Caller", operator_keypair: Keypair,
-                      treasury_pool) -> "Contract":
-    return deploy_contract(operator_keypair, user_account, "rw_lock.binary", evm_loader, treasury_pool)
-
-
 #  We need test here two types of transaction
 class TestStorageAccountAccess:
     def test_write_to_new_storage_and_finalize(self, operator_keypair, deployed_contract, user_account, treasury_pool,
