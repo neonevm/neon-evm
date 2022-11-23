@@ -10,12 +10,12 @@ from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
 
+from .types import Caller, TreasuryPool
 from ..solana_utils import EVM_LOADER, solana_client, \
     send_transaction, create_account_with_seed, get_transaction_count, EvmLoader, \
     wait_confirm_transaction
 from .storage import create_holder, create_holder_account
 from .instructions import TransactionWithComputeBudget, make_WriteHolder, make_ExecuteTrxFromAccountDataIterativeOrContinue
-from ..conftest import Caller, TreasuryPool
 from .ethereum import create_contract_address, Contract
 
 from web3.auto import w3
