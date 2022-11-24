@@ -195,12 +195,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                     if key < U256::from(STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT) {
                         self.add_ethereum_account(&address, true);
                     } else {
-                        let index = key & !U256::from(0xFF);
-
                         let storage_account = EthereumStorage::solana_address(self, &address, &key);
                         self.add_solana_account(storage_account, true);
 
-                        if self.storage(&address, &index).is_zero() {
+                        if self.storage(&address, &key).is_zero() {
                             let metadata_size = EthereumStorage::SIZE;
                             let element_size = 1 + std::mem::size_of_val(&value);
 
@@ -225,8 +223,10 @@ impl<'a> EmulatorAccountStorage<'a> {
                         self.add_solana_account(account.key, account.is_writable);
                     }
 
-                    let cost = rent.minimum_balance(allocate);
-                    gas = gas.saturating_add(cost);
+                    if allocate > 0 {
+                        let cost = rent.minimum_balance(allocate);
+                        gas = gas.saturating_add(cost);
+                    }
                 }
             }
         }
