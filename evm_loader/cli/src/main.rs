@@ -362,11 +362,11 @@ fn main() {
             }
         })
         .arg(
-            Arg::with_name("db_config_file")
-                .long("db_config_file")
+            Arg::with_name("db_config")
+                .long("db_config")
                 .takes_value(true)
                 .global(true)
-                .help("Configuration file to use Click-house DB")
+                .help("Configuration file to use Postgress DB")
         )
         .arg(
             Arg::with_name("verbose")
@@ -759,7 +759,7 @@ fn main() {
                 let max_steps_to_execute = value_of::<u64>(arg_matches, "max_steps_to_execute").unwrap();
 
                 if let Some(slot) = slot{
-                    let db_config = app_matches.value_of("db_config_file").map(|path|{
+                    let db_config = app_matches.value_of("db_config").map(|path|{
                         solana_cli_config::load_config_file(path).unwrap()
                     }).unwrap();
                     config.rpc_client.rpc_db = Some(PostgresClient::new(&db_config, slot));
