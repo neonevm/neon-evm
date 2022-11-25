@@ -85,7 +85,6 @@ type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
     rpc_client: Clients,
-    websocket_url: String,
     evm_loader: Pubkey,
     signer: Box<dyn Signer>,
     fee_payer: Option<Keypair>,

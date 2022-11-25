@@ -25,6 +25,8 @@ pub struct Clients{
 
 
 pub trait Rpc{
+    fn commitment(&self) -> CommitmentConfig;
+    fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>;
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>;
     fn get_account_with_commitment(&self, key: &Pubkey, commitment: CommitmentConfig) -> RpcResult<Option<Account>>;
     fn get_account_data(&self, key: &Pubkey) -> ClientResult<Vec<u8>>;
@@ -35,6 +37,7 @@ pub trait Rpc{
     fn get_slot(&self) -> ClientResult<Slot>;
     fn get_signature_statuses(&self, signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>>;
     fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>;
+    fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>;
     fn send_and_confirm_transaction_with_spinner(&self, transaction: &Transaction) -> ClientResult<Signature>;
     fn send_and_confirm_transaction_with_spinner_and_commitment(&self, transaction: &Transaction, commitment: CommitmentConfig) -> ClientResult<Signature>;
     fn send_and_confirm_transaction_with_spinner_and_config(
@@ -47,6 +50,20 @@ pub trait Rpc{
 }
 
 impl Rpc for Clients{
+    fn commitment(&self) -> CommitmentConfig {
+        if self.rpc_db.is_some() {
+            return CommitmentConfig::default()
+        }
+        self.rpc_node.commitment()
+    }
+
+    fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>{
+        if self.rpc_db.is_some() {
+            return Err(ClientErrorKind::Custom("confirm_transaction_with_spinner() not implemented for rpc_db client".to_string()).into())
+        }
+        self.rpc_node.confirm_transaction_with_spinner(signature, recent_blockhash, commitment_config)
+    }
+
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
         if self.rpc_db.is_some() {
             return self.rpc_db.as_ref().unwrap()
@@ -62,7 +79,7 @@ impl Rpc for Clients{
             let rpc_db = self.rpc_db.as_ref().unwrap();
             let account= rpc_db.get_account_at_slot(key)
                 .map_err(|_| ClientError::from( ClientErrorKind::Custom("load account error".to_string())))?;
-            let context = RpcResponseContext{slot: rpc_db.slot};
+            let context = RpcResponseContext{slot: rpc_db.slot, api_version: None};
             return Ok(Response {context, value: account})
         }
 
@@ -112,6 +129,13 @@ impl Rpc for Clients{
             return Err(ClientErrorKind::Custom("get_transaction_with_config() not implemented for rpc_db client".to_string()).into())
         }
         self.rpc_node.get_transaction_with_config(signature, config)
+    }
+
+    fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>{
+        if self.rpc_db.is_some(){
+            return Err(ClientErrorKind::Custom("send_transaction() not implemented for rpc_db client".to_string()).into())
+        }
+        self.rpc_node.send_transaction(transaction)
     }
 
     fn send_and_confirm_transaction_with_spinner(&self, transaction: &Transaction) -> ClientResult<Signature>{

@@ -1,9 +1,6 @@
 use {
     log::{error, warn, info, debug},
     std::cell::RefCell,
-    solana_client::{
-        rpc_client::RpcClient,
-    },
     solana_sdk::{
         transaction::Transaction,
         instruction::Instruction,
@@ -15,7 +12,7 @@ use {
         signature::Signature,
         commitment_config::CommitmentConfig,
     },
-    crate::errors::NeonCliError,
+    crate::{errors::NeonCliError, rpc::{Rpc, Clients}}
 };
 
 #[derive(Default,Debug)]
@@ -33,7 +30,7 @@ impl Stats {
     pub fn inc_created_objects(&mut self) {self.total_objects += 1; self.created_objects += 1;}
 }
 pub struct TransactionExecutor<'a> {
-    pub client: &'a RpcClient,
+    pub client: &'a Clients,
     pub send_trx: bool,
     pub signatures: RefCell<Vec<Signature>>,
     pub stats: RefCell<Stats>,
@@ -41,7 +38,7 @@ pub struct TransactionExecutor<'a> {
 }
 
 impl<'a> TransactionExecutor<'a> {
-    pub fn new(client: &'a RpcClient, fee_payer: &'a dyn Signer, send_trx: bool) -> Self {
+    pub fn new(client: &'a Clients, fee_payer: &'a dyn Signer, send_trx: bool) -> Self {
         Self {
             client,
             send_trx,
