@@ -33,14 +33,6 @@ fn serde_pubkey_bs58<S>(value: &Pubkey, s: S) -> Result<S::Ok, S::Error> where S
     s.serialize_str(&bs58)
 }
 
-fn serde_opt_pubkey_bs58<S>(value: &Option<Pubkey>, s: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-    if let Some(value) = value {
-        let bs58 = bs58::encode(value).into_string();
-        s.serialize_str(&bs58)
-    } else {
-        s.serialize_none()
-    }
-}
 #[allow(unused)]
 fn deserialize_pubkey_from_str<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
     where

@@ -8,6 +8,7 @@ mod syscall_stubs;
 mod errors;
 mod logs;
 mod commands;
+mod rpc;
 
 use crate::{
     account_storage::{
@@ -26,6 +27,7 @@ use crate::{
         init_environment,
         get_storage_at,
     },
+    rpc::{Rpc, Clients, db::PostgresClient},
 };
 
 use evm_loader::{
@@ -672,7 +674,7 @@ fn main() {
     logs::init(context, loglevel).unwrap();
 
     let mut wallet_manager = None;
-    let config = {
+    let mut config = {
         let cli_config = app_matches.value_of("config_file").map_or_else(
             solana_cli_config::Config::default,
             |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
@@ -739,6 +741,7 @@ fn main() {
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = read_stdin();
                 let value = value_of(arg_matches, "value");
+                let slot: Option<u64> = value_of(arg_matches, "slot");
 
                 // Read ELF params only if token_mint or chain_id is not set.
                 let mut token_mint = pubkey_of(arg_matches, "token_mint");

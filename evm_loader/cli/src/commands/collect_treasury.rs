@@ -58,7 +58,7 @@ pub fn execute(
                 let blockhash = config.rpc_client.get_latest_blockhash()?;
                 message.recent_blockhash = blockhash;
 
-                check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &message)?;
+                check_account_for_fee(&config.rpc_client.rpc_node, &config.signer.pubkey(), &message)?;
 
                 let mut trx = Transaction::new_unsigned(message);
                 trx.try_sign(&[&*config.signer], blockhash)?;
@@ -79,7 +79,7 @@ pub fn execute(
     let blockhash = config.rpc_client.get_latest_blockhash()?;
     message.recent_blockhash = blockhash;
 
-    check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &message)?;
+    check_account_for_fee(&config.rpc_client.rpc_node, &config.signer.pubkey(), &message)?;
 
     let mut trx = Transaction::new_unsigned(message);
     trx.try_sign(&[&*config.signer], blockhash)?;
