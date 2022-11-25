@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     rc::Rc,
+    str::FromStr,
 };
 
 use log::{debug, info, trace, warn};
@@ -22,7 +23,7 @@ use evm_loader::{
 };
 use evm_loader::account::ether_contract;
 use evm_loader::account_storage::{AccountOperation, AccountsOperations};
-
+use crate::rpc::Rpc;
 
 use crate::Config;
 

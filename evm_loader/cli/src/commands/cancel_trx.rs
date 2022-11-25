@@ -14,6 +14,7 @@ use crate::{
     account_storage::account_info,
     Config,
     NeonCliResult,
+    rpc::Rpc,
 };
 
 

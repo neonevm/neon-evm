@@ -8,6 +8,7 @@ use {
             get_neon_elf::{read_elf_parameters, read_program_data_from_account},
             transaction_executor::TransactionExecutor,
         },
+        rpc::Rpc,
     },
     spl_associated_token_account::get_associated_token_address,
     log::{info, warn, error},

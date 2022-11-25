@@ -3,6 +3,7 @@ use crate::{
     Config,
     commands::get_neon_elf::read_elf_parameters_from_account,
     errors::NeonCliError,
+    rpc::Rpc,
 };
 
 use solana_sdk::{

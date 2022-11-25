@@ -4,8 +4,7 @@ use solana_sdk::{
     sysvar::rent::Rent
 };
 
-use crate::errors::NeonCliError;
-use crate::Config;
+use crate::{errors::NeonCliError, Config, rpc::Rpc};
 
 pub struct Stubs {
     rent: Rent,

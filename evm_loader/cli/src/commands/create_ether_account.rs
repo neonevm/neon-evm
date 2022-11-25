@@ -16,6 +16,7 @@ use evm::{H160};
 use crate::{
     Config,
     NeonCliResult,
+    rpc::Rpc,
 };
 
 

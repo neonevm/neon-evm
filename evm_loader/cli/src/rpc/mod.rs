@@ -15,7 +15,7 @@ use solana_sdk::{
     account::Account, pubkey::Pubkey, commitment_config::CommitmentConfig, clock::{UnixTimestamp, Slot},
     hash::Hash, signature::Signature, transaction::Transaction,
 };
-use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus};
+use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use std::sync::Arc;
 
 pub struct Clients{
@@ -34,7 +34,7 @@ pub trait Rpc{
     fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64>;
     fn get_slot(&self) -> ClientResult<Slot>;
     fn get_signature_statuses(&self, signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>>;
-    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransaction>;
+    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>;
     fn send_and_confirm_transaction_with_spinner(&self, transaction: &Transaction) -> ClientResult<Signature>;
     fn send_and_confirm_transaction_with_spinner_and_commitment(&self, transaction: &Transaction, commitment: CommitmentConfig) -> ClientResult<Signature>;
     fn send_and_confirm_transaction_with_spinner_and_config(
@@ -107,7 +107,7 @@ impl Rpc for Clients{
         self.rpc_node.get_signature_statuses(signatures)
     }
 
-    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransaction>{
+    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>{
         if self.rpc_db.is_some(){
             return Err(ClientErrorKind::Custom("get_transaction_with_config() not implemented for rpc_db client".to_string()).into())
         }

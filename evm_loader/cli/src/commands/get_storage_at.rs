@@ -11,6 +11,7 @@ use evm_loader::account::EthereumAccount;
 use crate::{
     account_storage::{EmulatorAccountStorage, account_info },
     Config,
+    rpc::Rpc,
 };
 
 
