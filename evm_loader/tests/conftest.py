@@ -8,6 +8,8 @@ from solana.keypair import Keypair
 from eth_keys import keys as eth_keys
 
 from .solana_utils import EvmLoader, OperatorAccount, create_treasury_pool_address, make_new_user, get_solana_balance
+from .utils.contract import deploy_contract
+from .utils.ethereum import Contract
 from .utils.types import TreasuryPool, Caller
 
 
@@ -58,3 +60,14 @@ def treasury_pool(evm_loader) -> TreasuryPool:
 @pytest.fixture(scope="function")
 def user_account(evm_loader) -> Caller:
     return make_new_user(evm_loader)
+
+
+@pytest.fixture(scope="function")
+def second_user(evm_loader) -> Caller:
+    return make_new_user(evm_loader)
+
+
+@pytest.fixture(scope="function")
+def deployed_contract(evm_loader: EvmLoader, user_account, operator_keypair: Keypair,
+                      treasury_pool) -> Contract:
+    return deploy_contract(operator_keypair, user_account, "rw_lock.binary", evm_loader, treasury_pool)
