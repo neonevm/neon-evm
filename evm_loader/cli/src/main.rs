@@ -27,7 +27,7 @@ use crate::{
         init_environment,
         get_storage_at,
     },
-    rpc::{Rpc, Clients, db::PostgresClient},
+    rpc::{Rpc, db::PostgresClient},
 };
 
 use evm_loader::{
@@ -79,12 +79,12 @@ use log::{ debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
-use crate::get_neon_elf::CachedElfParams;
+use crate::{get_neon_elf::CachedElfParams, rpc::{DB_INSTANCE, NODE_INSTANCE}};
 
 type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
-    rpc_client: Clients,
+    rpc_client: rpc::Clients,
     evm_loader: Pubkey,
     signer: Box<dyn Signer>,
     fee_payer: Option<Keypair>,
@@ -340,7 +340,8 @@ macro_rules! version_string {
 
 
 #[allow(clippy::too_many_lines)]
-fn main() {
+#[tokio::main]
+async fn main() {
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(version_string!())
@@ -367,6 +368,14 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use Postgress DB")
+        )
+        .arg(
+            Arg::with_name("slot")
+                .long("slot")
+                .value_name("SLOT")
+                .takes_value(true)
+                .required(false)
+                .help("Slot for postgres db-client (implementated only for emulate command)"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -503,14 +512,6 @@ fn main() {
                         .required(false)
                         .default_value("100000")
                         .help("Maximal number of steps to execute in a single run"),
-                )
-                .arg(
-                    Arg::with_name("slot")
-                        .long("slot")
-                        .value_name("SLOT")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Slot for db-client"),
                 )
         )
         .subcommand(
@@ -673,7 +674,7 @@ fn main() {
     logs::init(context, loglevel).unwrap();
 
     let mut wallet_manager = None;
-    let mut config = {
+    let config = {
         let cli_config = app_matches.value_of("config_file").map_or_else(
             solana_cli_config::Config::default,
             |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
@@ -720,11 +721,28 @@ fn main() {
             true,
         ).ok();
 
+
+        let rpc_client = if let Some(slot) = app_matches.value_of("slot") {
+            let slot:u64 = slot.parse().unwrap();
+
+            let db_config = app_matches.value_of("db_config")
+                .map(|path|{ solana_cli_config::load_config_file(path).unwrap()})
+                .unwrap();
+
+            DB_INSTANCE.set(Arc::new(PostgresClient::new(&db_config, slot))).unwrap();
+            rpc::Clients::Postgress
+        } else {
+            NODE_INSTANCE.set(
+                Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
+            ).unwrap_or_else(|_|{
+                error!("NODE_INSTANCE.set error");
+                exit(NeonCliError::UnknownError.error_code() as i32);
+            });
+            rpc::Clients::Node
+        };
+
         Config {
-            rpc_client: Clients{
-                rpc_node: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
-                rpc_db: None
-            },
+            rpc_client: rpc_client,
             evm_loader,
             signer,
             fee_payer,
@@ -740,7 +758,6 @@ fn main() {
                 let sender = h160_of(arg_matches, "sender").unwrap();
                 let data = read_stdin();
                 let value = value_of(arg_matches, "value");
-                let slot: Option<u64> = value_of(arg_matches, "slot");
 
                 // Read ELF params only if token_mint or chain_id is not set.
                 let mut token_mint = pubkey_of(arg_matches, "token_mint");
@@ -757,13 +774,6 @@ fn main() {
                 let token_mint = token_mint.unwrap();
                 let chain_id = chain_id.unwrap();
                 let max_steps_to_execute = value_of::<u64>(arg_matches, "max_steps_to_execute").unwrap();
-
-                if let Some(slot) = slot{
-                    let db_config = app_matches.value_of("db_config").map(|path|{
-                        solana_cli_config::load_config_file(path).unwrap()
-                    }).unwrap();
-                    config.rpc_client.rpc_db = Some(PostgresClient::new(&db_config, slot));
-                }
 
                 emulate::execute(&config,
                                  contract,
