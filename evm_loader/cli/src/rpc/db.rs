@@ -6,6 +6,7 @@ use tokio_postgres::{ connect, Error, Client};
 use postgres::{ NoTls};
 use serde::{Serialize, Deserialize };
 use tokio::task::block_in_place;
+use std::convert::TryFrom;
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -52,8 +53,9 @@ impl PostgresClient {
     }
 
     pub fn get_accounts_at_slot(&self, keys: impl Iterator<Item = Pubkey>) -> Result<Vec<(Pubkey, Account)>, Error> {
-        let key_bytes = keys.map(|entry| entry.to_bytes()).collect::<Vec<_>>();
-        let key_slices = key_bytes.iter().map(|entry| entry.as_slice()).collect::<Vec<_>>();
+        let key_bytes = keys.map(solana_sdk::pubkey::Pubkey::to_bytes).collect::<Vec<_>>();
+        let key_slices = key_bytes.iter().map(<[u8;32]>::as_slice).collect::<Vec<_>>();
+
 
         let rows= block(|| async {
             self.client.query(
@@ -68,11 +70,11 @@ impl PostgresClient {
             result.push((
                 Pubkey::new(row.try_get(0)?),
                 Account {
-                    lamports: lamports as u64,
+                    lamports: u64::try_from(lamports).unwrap(),
                     data: row.try_get(5)?,
                     owner: Pubkey::new(row.try_get(1)?),
                     executable: row.try_get(3)?,
-                    rent_epoch: rent_epoch as u64,
+                    rent_epoch: u64::try_from(rent_epoch).unwrap(),
                 }
             ));
         }
@@ -113,6 +115,6 @@ impl PostgresClient {
                 .await
         })?.try_get(0)?;
 
-        self.get_block_hash(slot as u64)
+        self.get_block_hash(u64::try_from(slot).unwrap())
     }
 }

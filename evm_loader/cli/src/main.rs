@@ -742,7 +742,7 @@ async fn main() {
         };
 
         Config {
-            rpc_client: rpc_client,
+            rpc_client,
             evm_loader,
             signer,
             fee_payer,
@@ -840,5 +840,5 @@ async fn main() {
             }
         };
     
-    exit(exit_code)
+    exit(exit_code);
 }
