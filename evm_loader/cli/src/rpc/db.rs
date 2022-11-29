@@ -69,11 +69,11 @@ impl PostgresClient {
         let lamports: i64 = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
         Ok(Some(Account {
-            lamports: lamports as u64,
+            lamports: u64::try_from(lamports).unwrap(),
             data: row.try_get(5)?,
             owner: Pubkey::new(row.try_get(1)?),
             executable: row.try_get(3)?,
-            rent_epoch: rent_epoch as u64,
+            rent_epoch: u64::try_from(rent_epoch).unwrap(),
         }))
     }
 
