@@ -52,39 +52,29 @@ impl PostgresClient {
         Self {slot, client}
     }
 
-    pub fn get_accounts_at_slot(&self, keys: impl Iterator<Item = Pubkey>) -> Result<Vec<(Pubkey, Account)>, Error> {
-        let key_bytes = keys.map(solana_sdk::pubkey::Pubkey::to_bytes).collect::<Vec<_>>();
-        let key_slices = key_bytes.iter().map(<[u8;32]>::as_slice).collect::<Vec<_>>();
-
-
-        let rows= block(|| async {
+    pub fn get_account_at_slot(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
+        let pubkey_bytes = pubkey.to_bytes();
+        let rows = block(|| async {
             self.client.query(
-                "SELECT * FROM get_accounts_at_slot($1, $2)",&[&key_slices, &(self.slot as i64)]
+                "SELECT * FROM get_account_at_slot($1, $2)",
+                &[&pubkey_bytes.as_slice(), &(self.slot as i64)]
             ).await
         })?;
 
-        let mut result = vec![];
-        for row in rows {
-            let lamports: i64 = row.try_get(2)?;
-            let rent_epoch: i64 = row.try_get(4)?;
-            result.push((
-                Pubkey::new(row.try_get(0)?),
-                Account {
-                    lamports: u64::try_from(lamports).unwrap(),
-                    data: row.try_get(5)?,
-                    owner: Pubkey::new(row.try_get(1)?),
-                    executable: row.try_get(3)?,
-                    rent_epoch: u64::try_from(rent_epoch).unwrap(),
-                }
-            ));
+        if rows.len() != 1 {
+            return Ok(None);
         }
-        Ok(result)
-    }
 
-    pub fn get_account_at_slot(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
-        let accounts = self.get_accounts_at_slot(std::iter::once(*pubkey))?;
-        let account = accounts.get(0).map(|(_, account)| account).cloned();
-        Ok(account)
+        let row = &rows[0];
+        let lamports: i64 = row.try_get(2)?;
+        let rent_epoch: i64 = row.try_get(4)?;
+        Ok(Some(Account {
+            lamports: lamports as u64,
+            data: row.try_get(5)?,
+            owner: Pubkey::new(row.try_get(1)?),
+            executable: row.try_get(3)?,
+            rent_epoch: rent_epoch as u64,
+        }))
     }
 
     pub fn get_block_hash(&self, slot: u64) -> Result<String, Error> {
