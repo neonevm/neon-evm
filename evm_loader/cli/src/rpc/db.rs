@@ -40,9 +40,20 @@ impl PostgresClient {
         let connection_str= format!("host={} port={} dbname={} user={} password={}",
                                     config.host, config.port, config.database, config.user, config.password);
 
-        let (client, connection) = block(|| async {
-            connect(&connection_str, NoTls).await
-        }).unwrap();
+        let mut attempt = 0;
+        let mut result = None;
+
+        while attempt < 3 {
+            result = block(|| async {
+                connect(&connection_str, NoTls).await
+            }).ok();
+            if result.is_some() {
+                break;
+            }
+            attempt += 1;
+        }
+
+        let (client, connection) = result.expect("error to set DB connection");
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
