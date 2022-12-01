@@ -33,36 +33,6 @@ use crate::{
     rpc::Rpc,
     account_storage::account_info,
 };
-use rlp::RlpStream;
-
-#[derive(Debug)]
-pub struct UnsignedTransaction {
-    pub nonce: u64,
-    pub gas_price: U256,
-    pub gas_limit: U256,
-    pub to: Option<H160>,
-    pub value: U256,
-    pub data: Vec<u8>,
-    pub chain_id: U256,
-}
-
-impl rlp::Encodable for UnsignedTransaction {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas_limit);
-        match self.to.as_ref() {
-            None => s.append(&""),
-            Some(addr) => s.append(addr),
-        };
-        s.append(&self.value);
-        s.append(&self.data);
-        s.append(&self.chain_id);
-        s.append_empty_data();
-        s.append_empty_data();
-    }
-}
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
     match (cmd, params) {
