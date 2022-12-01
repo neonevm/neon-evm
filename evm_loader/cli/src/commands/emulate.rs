@@ -10,11 +10,13 @@ use crate::{
     Config,
     NeonCliResult,
     syscall_stubs::Stubs,
+    account_storage::make_solana_program_address,
 };
 
 use solana_sdk::pubkey::Pubkey;
 use evm_loader::account_storage::AccountStorage;
-use crate::{errors};
+use crate::errors;
+use super::{get_program_ether, get_ether_account_nonce};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn execute(
@@ -43,10 +45,10 @@ pub fn execute(
         debug!("program_id to call: {}", program_id);
         program_id
     } else {
-        let (solana_address, _nonce) = crate::make_solana_program_address(&caller_id, &config.evm_loader);
-        let trx_count = crate::get_ether_account_nonce(config, &solana_address)?;
+        let (solana_address, _nonce) = make_solana_program_address(&caller_id, &config.evm_loader);
+        let trx_count = get_ether_account_nonce(config, &solana_address)?;
         let trx_count= trx_count.0;
-        let program_id = crate::get_program_ether(&caller_id, trx_count);
+        let program_id = get_program_ether(&caller_id, trx_count);
         debug!("program_id to deploy: {}", program_id);
         program_id
     };

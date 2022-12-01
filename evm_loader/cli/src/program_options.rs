@@ -1,12 +1,5 @@
-use solana_clap_utils::{
-    input_validators::{is_url_or_moniker, is_valid_pubkey},
-};
-
-use clap::{
-    crate_description, crate_name, App, AppSettings, Arg,
-    ArgMatches, SubCommand,
-};
-
+use solana_clap_utils::{input_validators::{is_url_or_moniker, is_valid_pubkey},};
+use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand,};
 use evm::{H160, U256,};
 use std::{str::FromStr, fmt::Display,};
 
@@ -72,7 +65,7 @@ macro_rules! version_string {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn parse_options<'a >() -> ArgMatches<'a> {
+pub fn parse<'a >() -> ArgMatches<'a> {
     App::new(crate_name!())
         .about(crate_description!())
         .version(version_string!())

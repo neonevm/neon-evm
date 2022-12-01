@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
     convert::TryFrom,
+    fs::File,
+    io::{Read},
 };
 
 use solana_sdk::{
@@ -101,9 +103,17 @@ fn print_elf_parameters(params: &HashMap<String, String>){
     }
 }
 
+/// # Errors
+pub fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
+    let mut file = File::open(program_location)?;
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data)?;
+    Ok(program_data)
+}
+
 fn read_program_params_from_file(config: &Config,
                                program_location: &str) -> NeonCliResult {
-    let program_data = crate::read_program_data(program_location)?;
+    let program_data = read_program_data(program_location)?;
     let program_data = &program_data[..];
     let elf_params = read_elf_parameters(config, program_data);
     print_elf_parameters(&elf_params);

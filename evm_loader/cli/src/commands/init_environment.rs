@@ -1,11 +1,10 @@
 use {
     crate::{
-        read_program_data,
         neon_cli_revision,
         Config,
         errors::NeonCliError,
         commands::{
-            get_neon_elf::{read_elf_parameters, read_program_data_from_account},
+            get_neon_elf::{read_elf_parameters, read_program_data, read_program_data_from_account},
             transaction_executor::TransactionExecutor,
         },
         rpc::Rpc,

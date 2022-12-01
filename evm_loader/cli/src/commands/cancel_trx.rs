@@ -15,6 +15,7 @@ use crate::{
     Config,
     NeonCliResult,
     rpc::Rpc,
+    commands::send_transaction,
 };
 
 
@@ -52,7 +53,7 @@ pub fn execute(
 
     let instructions = vec![cancel_with_nonce_instruction];
 
-    crate::send_transaction(config, &instructions)?;
+    send_transaction(config, &instructions)?;
 
     Ok(())
 }

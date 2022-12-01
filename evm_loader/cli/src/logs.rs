@@ -1,6 +1,7 @@
 use serde::{ Deserialize };
 use fern::{ Dispatch };
 use std::{ process, path, ffi::OsStr };
+use clap::ArgMatches;
 
 #[derive(Deserialize)]
 #[derive(Default)]
@@ -35,7 +36,24 @@ const LOG_MODULES: [&str; 14] = [
 ];
 
 
-pub fn init(context: LogContext, loglevel: log::LevelFilter) -> Result<(), log::SetLoggerError> {
+pub fn init(options: &ArgMatches) -> Result<(), log::SetLoggerError> {
+
+    let context: LogContext = options.value_of("logging_ctx")
+        .map(|ctx| LogContext::new(ctx.to_string()) )
+        .unwrap_or_default();
+
+    let loglevel: log::LevelFilter =
+        options.value_of("loglevel")
+            .map_or(log::LevelFilter::Trace, |ll|
+                match ll.to_ascii_lowercase().as_str() {
+                    "off"   => log::LevelFilter::Off,
+                    "error" => log::LevelFilter::Error,
+                    "warn"  => log::LevelFilter::Warn,
+                    "info"  => log::LevelFilter::Info,
+                    "debug" => log::LevelFilter::Debug,
+                    _       => log::LevelFilter::Trace,
+                }
+            );
 
     let dispatch: Dispatch =
         if loglevel == log::LevelFilter::Off {
