@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::{debug, info, trace, warn};
-use evm::{H160, U256, H256};
+use evm_loader::{H160, U256, H256};
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,

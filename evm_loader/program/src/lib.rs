@@ -29,3 +29,6 @@ pub mod utils;
 pub use solana_program;
 
 //solana_sdk::declare_id!("EVM1111111111111111111111111111111111111111");
+
+#[cfg(feature = "tracing")]
+pub use evm::*;

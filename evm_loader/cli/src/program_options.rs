@@ -1,6 +1,6 @@
 use solana_clap_utils::{input_validators::{is_url_or_moniker, is_valid_pubkey},};
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand,};
-use evm::{H160, U256,};
+use evm_loader::{H160, U256,};
 use std::{str::FromStr, fmt::Display,};
 
 pub fn make_clean_hex(in_str: &str) -> &str {

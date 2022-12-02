@@ -2026,7 +2026,6 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "ethereum-types",
- "evm",
  "evm-loader",
  "fern",
  "getrandom 0.1.16",

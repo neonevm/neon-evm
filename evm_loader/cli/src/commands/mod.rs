@@ -21,7 +21,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_client::{rpc_config::RpcSendTransactionConfig,client_error::Result as SolanaClientResult,};
-use evm::{H160, H256, U256};
+use evm_loader::{H160, H256, U256};
 use std::str::FromStr;
 use evm_loader::account::EthereumAccount;
 use log::debug;

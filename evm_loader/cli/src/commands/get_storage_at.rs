@@ -1,6 +1,6 @@
 use solana_sdk::{ pubkey::Pubkey };
 
-use evm::{H160, U256};
+use evm_loader::{H160, U256};
 
 use evm_loader::{
     account::{EthereumStorage},

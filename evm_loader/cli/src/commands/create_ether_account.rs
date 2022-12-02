@@ -11,7 +11,7 @@ use solana_cli::{
     checks::{check_account_for_fee},
 };
 
-use evm::{H160};
+use evm_loader::{H160};
 
 use crate::{
     Config,
