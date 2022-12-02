@@ -2,7 +2,7 @@ use evm::{H160, ExitReason, U256, Transfer, ExitError, CONFIG, Handler, H256, Ca
 use solana_program::{entrypoint::ProgramResult, program_error::ProgramError};
 
 use crate::{
-    event, account_storage::AccountStorage, precompile::{call_precompile, is_precompile_address}
+    account_storage::AccountStorage, precompile::{call_precompile, is_precompile_address}
 };
 
 use super::{state::ExecutorState};
@@ -65,7 +65,6 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         gas_limit: U256,
         gas_price: U256
     ) -> ProgramResult {
-        event!(TransactCall { caller, address, value, data, gas_limit });
 
         self.gas_limit = gas_limit;
         self.gas_price = gas_price;
@@ -88,7 +87,6 @@ impl<'a, B: AccountStorage> Executor<'a, B> {
         gas_limit: U256,
         gas_price: U256
     ) -> Result<H160, ProgramError> {
-        event!(TransactCreate { caller, value, init_code, gas_limit });
 
         self.gas_limit = gas_limit;
         self.gas_price = gas_price;
@@ -255,16 +253,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         // Get the create address from given scheme.
         let address = self.create_address(scheme);
 
-        event!(Create {
-            caller,
-            address,
-            scheme,
-            value,
-            init_code: &init_code,
-            target_gas,
-        });
-
-
         self.state.inc_nonce(caller);
 
         if self.state.code_size(&address) > U256::zero() {
@@ -295,14 +283,6 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
         is_static: bool,
         context: evm::Context,
     ) -> Capture<(ExitReason, Vec<u8>), Self::CallInterrupt> {
-        event!(Call {
-            code_address,
-            transfer: &transfer,
-            input: &input,
-            target_gas,
-            is_static,
-            context: &context,
-        });
 
         debug_print!("call {:?}, {:?}", code_address, input);
 
