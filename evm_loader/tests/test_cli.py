@@ -3,6 +3,7 @@ import os
 import random
 
 import pytest
+from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 
@@ -132,7 +133,7 @@ def test_get_ether_account_data(evm_loader, user_account):
     assert f"Ethereum address: 0x{user_account.eth_address.hex()}" in result
     assert f"Solana address: {user_account.solana_account_address}" in result
 
-    assert solana_client.get_account_info(user_account.solana_account.public_key)["result"]['value'] is not None
+    assert solana_client.get_account_info(user_account.solana_account.public_key).value is not None
 
 
 def test_create_ether_account(evm_loader):
@@ -142,8 +143,8 @@ def test_create_ether_account(evm_loader):
     created_acc = json.loads(result.split(' ')[-1])
     assert created_acc['ether'] == acc
 
-    acc_info = solana_client.get_account_info(created_acc['solana'], commitment=Confirmed)
-    assert acc_info['result']['value'] is not None
+    acc_info = solana_client.get_account_info(PublicKey(created_acc['solana']), commitment=Confirmed)
+    assert acc_info.value is not None
 
 
 def test_create_program_address(evm_loader):

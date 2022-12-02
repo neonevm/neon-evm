@@ -40,10 +40,9 @@ class TransactionWithComputeBudget(Transaction):
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
         if units:
-            self.instructions.append(ComputeBudget.request_units(units, additional_fee))
+            self.add(ComputeBudget.request_units(units, additional_fee))
         if heap_frame:
-            self.instructions.append(ComputeBudget.request_heap_frame(heap_frame))
-
+            self.add(ComputeBudget.request_heap_frame(heap_frame))
 
 def write_holder_layout(hash: bytes, offset: int, data: bytes):
     assert(len(hash) == 32)
@@ -59,7 +58,7 @@ def make_WriteHolder(operator: PublicKey, holder_account: PublicKey, hash: bytes
     d = write_holder_layout(hash, offset, payload)
 
     return TransactionInstruction(
-                program_id=EVM_LOADER,
+                program_id=PublicKey(EVM_LOADER),
                 data=d,
                 keys=[
                     AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
@@ -120,17 +119,17 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
                 AccountMeta(pubkey=holder_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
                 AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
                 # Neon EVM account
-                AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+                AccountMeta(PublicKey(EVM_LOADER), is_signer=False, is_writable=False),
             ]
     for acc in additional_accounts:
         print("Additional acc ", acc)
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
     return TransactionInstruction(
-            program_id=EVM_LOADER,
+            program_id=PublicKey(EVM_LOADER),
             data=d,
             keys=accounts
         )
@@ -153,16 +152,16 @@ def make_PartialCallOrContinueFromRawEthereumTX(
                 AccountMeta(pubkey=storage_address, is_signer=False, is_writable=True),
                 AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
                 AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-                AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+                AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
                 AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
                 # Neon EVM account
-                AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+                AccountMeta(PublicKey(EVM_LOADER), is_signer=False, is_writable=False),
             ]
     for acc in additional_accounts:
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
     return TransactionInstruction(
-            program_id=EVM_LOADER,
+            program_id=PublicKey(EVM_LOADER),
             data=d,
             keys=accounts
         )
@@ -181,7 +180,7 @@ def make_Cancel(storage_address: PublicKey, operator: Keypair, hash: bytes, addi
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
     return TransactionInstruction(
-        program_id=EVM_LOADER,
+        program_id=PublicKey(EVM_LOADER),
         data=d,
         keys=accounts
     )
@@ -206,4 +205,4 @@ def make_DepositV03(
         AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
     ]
 
-    return TransactionInstruction(program_id=EVM_LOADER, data=data, keys=accounts)
+    return TransactionInstruction(program_id=PublicKey(EVM_LOADER), data=data, keys=accounts)

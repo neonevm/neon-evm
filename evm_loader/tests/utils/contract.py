@@ -1,4 +1,5 @@
 import random
+import time
 import typing as tp
 import pathlib
 
@@ -9,6 +10,7 @@ from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
+from solders.transaction_status import TransactionConfirmationStatus
 
 from .types import Caller, TreasuryPool
 from ..solana_utils import EVM_LOADER, solana_client, \
@@ -64,11 +66,11 @@ def write_transaction_to_holder_account(
                 trx,
                 operator,
                 opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
-            )["result"]
+            )
         )
         offset += len(part)
     for rcpt in receipts:
-        wait_confirm_transaction(solana_client, rcpt)
+        wait_confirm_transaction(solana_client, rcpt.value)
 
 
 def deploy_contract_step(
@@ -87,8 +89,8 @@ def deploy_contract_step(
         operator, evm_loader, holder_address, treasury.account, treasury.buffer, step_count,
         [contract.solana_address, user.solana_account_address]
     ))
-    receipt = send_transaction(solana_client, trx, operator)["result"]
-
+    print(trx.instructions)
+    receipt = send_transaction(solana_client, trx, operator)
     print("Deployment receipt:", receipt)
 
     return receipt
@@ -105,7 +107,6 @@ def deploy_contract(
     print("Deploying contract")
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
-    # storage_account = create_storage_account(operator)
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
     signed_tx = make_deployment_transaction(user, contract_path)
@@ -114,12 +115,11 @@ def deploy_contract(
     contract_deployed = False
     while not contract_deployed:
         receipt = deploy_contract_step(step_count, treasury_pool, holder_acc, operator, evm_loader, contract, user)
-        if receipt["meta"]["err"]:
-            raise AssertionError(f"Can't deploy contract: {receipt['meta']['err']}")
-        for log in receipt["meta"]["logMessages"]:
-            if "exit_status" in log:
-                contract_deployed = True
-                break
-            if "ExitError" in log:
-                raise AssertionError(f"EVM Return error in logs: {receipt}")
+        print(receipt)
+        if receipt.value[0].err is not None:
+            raise AssertionError(f"Can't deploy contract: {receipt[0].err}")
+        if receipt.value[0].confirmation_status in [TransactionConfirmationStatus.Finalized,
+                                                    TransactionConfirmationStatus.Confirmed]:
+            contract_deployed = True
     return contract
+
