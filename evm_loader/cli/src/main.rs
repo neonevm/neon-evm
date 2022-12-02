@@ -1,4 +1,4 @@
-#![deny(warnings)]
+// #![deny(warnings)] //TODO
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 
@@ -10,6 +10,9 @@ mod commands;
 mod rpc;
 mod program_options;
 pub mod config;
+mod event_listener;
+mod types;
+
 pub use config::Config;
 
 use std::process::exit;
