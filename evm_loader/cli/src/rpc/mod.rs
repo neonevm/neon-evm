@@ -18,11 +18,11 @@ use crate::rpc::db::PostgresClient;
 use std::any::Any;
 
 
-pub trait RpcToAny: 'static {
+pub trait ToAny: 'static {
     fn as_any(&self) -> &dyn Any;
 }
 
-impl<T: 'static> RpcToAny for T {
+impl<T: 'static> ToAny for T {
     fn as_any(&self) -> &dyn Any {
         self
     }

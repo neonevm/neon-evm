@@ -20,7 +20,7 @@ use solana_client::rpc_client::RpcClient;
 use spl_token::instruction::sync_native;
 
 use evm_loader::account::{MainTreasury, Treasury};
-use crate::rpc::RpcToAny;
+use crate::rpc::ToAny;
 
 pub fn execute(
     config: &Config,
