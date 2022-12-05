@@ -9,6 +9,7 @@ pub mod get_storage_at;
 pub mod collect_treasury;
 pub mod init_environment;
 mod transaction_executor;
+mod trace;
 
 use clap::ArgMatches;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
@@ -37,35 +38,7 @@ use crate::{
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
     match (cmd, params) {
         ("emulate", Some(params)) => {
-            let contract = h160_or_deploy_of(params, "contract");
-            let sender = h160_of(params, "sender").unwrap();
-            let data = read_stdin();
-            let value = value_of(params, "value");
-
-            // Read ELF params only if token_mint or chain_id is not set.
-            let mut token_mint = pubkey_of(params, "token_mint");
-            let mut chain_id = value_of(params, "chain_id");
-            if token_mint.is_none() || chain_id.is_none() {
-                let cached_elf_params = CachedElfParams::new(config);
-                token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
-                    cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
-                ).unwrap()));
-                chain_id = chain_id.or_else(|| Some(u64::from_str(
-                    cached_elf_params.get("NEON_CHAIN_ID").unwrap()
-                ).unwrap()));
-            }
-            let token_mint = token_mint.unwrap();
-            let chain_id = chain_id.unwrap();
-            let max_steps_to_execute = value_of::<u64>(params, "max_steps_to_execute").unwrap();
-
-            emulate::execute(config,
-                             contract,
-                             sender,
-                             data,
-                             value,
-                             &token_mint,
-                             chain_id,
-                             max_steps_to_execute)
+            emulate::execute(config, params,)
         }
         ("create-program-address", Some(params)) => {
             let ether = h160_of(params, "seed").unwrap();
@@ -109,6 +82,9 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             let index = u256_of(params, "index").unwrap();
             get_storage_at::execute(config, contract_id, &index);
             Ok(())
+        }
+        ("trace", Some(params)) => {
+            trace::execute(config, params)
         }
         _ => unreachable!(),
     }

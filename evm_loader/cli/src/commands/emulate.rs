@@ -15,20 +15,41 @@ use crate::{
 
 use solana_sdk::pubkey::Pubkey;
 use evm_loader::account_storage::AccountStorage;
-use crate::errors;
+use crate::{errors, commands::get_neon_elf::CachedElfParams,};
 use super::{get_program_ether, get_ether_account_nonce};
+use clap::ArgMatches;
+use super::{h160_or_deploy_of, h160_of, value_of, read_stdin, pubkey_of};
+use std::str::FromStr;
+
+
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn execute(
-    config: &Config, 
-    contract_id: Option<H160>, 
-    caller_id: H160, 
-    data: Option<Vec<u8>>,
-    value: Option<U256>,
-    token_mint: &Pubkey,
-    chain_id: u64,
-    max_steps_to_execute: u64,
+    config: &Config,
+    params: &ArgMatches,
 ) -> NeonCliResult {
+
+    let contract_id = h160_or_deploy_of(params, "contract");
+    let caller_id = h160_of(params, "sender").unwrap();
+    let data = read_stdin();
+    let value = value_of(params, "value");
+
+    // Read ELF params only if token_mint or chain_id is not set.
+    let mut token_mint = pubkey_of(params, "token_mint");
+    let mut chain_id = value_of(params, "chain_id");
+    if token_mint.is_none() || chain_id.is_none() {
+        let cached_elf_params = CachedElfParams::new(config);
+        token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
+            cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
+        ).unwrap()));
+        chain_id = chain_id.or_else(|| Some(u64::from_str(
+            cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+        ).unwrap()));
+    }
+    let token_mint = token_mint.unwrap();
+    let chain_id = chain_id.unwrap();
+    let max_steps_to_execute = value_of::<u64>(params, "max_steps_to_execute").unwrap();
+
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
         contract_id,
@@ -39,7 +60,7 @@ pub fn execute(
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, *token_mint, chain_id);
+    let storage = EmulatorAccountStorage::new(config, token_mint, chain_id);
 
     let program_id = if let Some(program_id) = contract_id {
         debug!("program_id to call: {}", program_id);
