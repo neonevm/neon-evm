@@ -2033,7 +2033,6 @@ dependencies = [
  "goblin 0.4.3",
  "hex",
  "log",
- "once_cell",
  "postgres",
  "rand 0.8.5",
  "rlp",

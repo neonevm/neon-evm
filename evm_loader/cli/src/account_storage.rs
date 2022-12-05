@@ -23,7 +23,6 @@ use evm_loader::{
 };
 use evm_loader::account::ether_contract;
 use evm_loader::account_storage::{AccountOperation, AccountsOperations};
-use crate::rpc::Rpc;
 
 use crate::Config;
 

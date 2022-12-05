@@ -27,7 +27,7 @@ use crate::{
         init_environment,
         get_storage_at,
     },
-    rpc::{Rpc, db::PostgresClient},
+    rpc::db::PostgresClient,
 };
 
 use evm_loader::{
@@ -51,7 +51,6 @@ use std::{
     env,
     str::FromStr,
     process::{exit},
-    sync::Arc,
     fmt,
     fmt::{Debug, Display,},
 };
@@ -79,12 +78,12 @@ use log::{ debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
-use crate::{get_neon_elf::CachedElfParams, rpc::{DB_INSTANCE, NODE_INSTANCE}};
+use crate::{get_neon_elf::CachedElfParams,};
 
 type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
-    rpc_client: rpc::Clients,
+    rpc_client: Box<dyn rpc::Rpc>,
     evm_loader: Pubkey,
     signer: Box<dyn Signer>,
     fee_payer: Option<Keypair>,
@@ -722,23 +721,16 @@ async fn main() {
         ).ok();
 
 
-        let rpc_client = if let Some(slot) = app_matches.value_of("slot") {
+        let rpc_client: Box<dyn rpc::Rpc> = if let Some(slot) = app_matches.value_of("slot") {
             let slot:u64 = slot.parse().unwrap();
 
             let db_config = app_matches.value_of("db_config")
                 .map(|path|{ solana_cli_config::load_config_file(path).unwrap()})
                 .unwrap();
 
-            DB_INSTANCE.set(Arc::new(PostgresClient::new(&db_config, slot))).unwrap();
-            rpc::Clients::Postgress
+            Box::new(PostgresClient::new(&db_config, slot))
         } else {
-            NODE_INSTANCE.set(
-                Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
-            ).unwrap_or_else(|_|{
-                error!("NODE_INSTANCE.set error");
-                exit(NeonCliError::UnknownError.error_code() as i32);
-            });
-            rpc::Clients::Node
+            Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
         };
 
         Config {

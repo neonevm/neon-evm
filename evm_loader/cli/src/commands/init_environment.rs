@@ -8,7 +8,6 @@ use {
             get_neon_elf::{read_elf_parameters, read_program_data_from_account},
             transaction_executor::TransactionExecutor,
         },
-        rpc::Rpc,
     },
     spl_associated_token_account::get_associated_token_address,
     log::{info, warn, error},
@@ -100,7 +99,7 @@ pub fn execute(
 
     info!("Signer: {}, send_trx: {}, force: {}", config.signer.pubkey(), send_trx, force);
     let fee_payer = config.fee_payer.as_ref().map_or_else(|| config.signer.as_ref(), |v| v);
-    let executor = TransactionExecutor::new(&config.rpc_client, fee_payer, send_trx);
+    let executor = TransactionExecutor::new(config.rpc_client.as_ref(), fee_payer, send_trx);
     let keys = keys_dir.map_or(Ok(HashMap::new()), read_keys_dir)?;
 
     let program_data_address = Pubkey::find_program_address(
