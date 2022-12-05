@@ -1,4 +1,5 @@
 import pytest
+import solders
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
@@ -11,7 +12,7 @@ def create_account(seed: str):
     bytes_seed = sha256(bytes(seed, 'utf8')).digest()
     new_acc = Keypair.from_seed(bytes_seed)
     trx = solana_client.request_airdrop(new_acc.public_key, 10 * 10 ** 9)
-    wait_confirm_transaction(solana_client, trx['result'])
+    wait_confirm_transaction(solana_client, trx.value)
     return new_acc
 
 
@@ -31,9 +32,10 @@ def create_holder(acc: Keypair, seed: str):
 
 def delete_holder(del_key: PublicKey, acc: Keypair, signer: Keypair):
     trx = Transaction()
+
     trx.add(TransactionInstruction(
-        program_id=EVM_LOADER,
-        data=bytearray.fromhex("25"),
+        program_id=PublicKey(EVM_LOADER),
+        data=bytes.fromhex("25"),
         keys=[
             AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
             AccountMeta(pubkey=acc.public_key, is_signer=(signer == acc), is_writable=True),
@@ -57,9 +59,9 @@ class TestFundReturn:
         cls.bob_account = create_holder(cls.bob, "2")
 
     def test_creator_not_signer(self):
-        err_msg = "expected signer"
+        err_msg = "keypair-pubkey mismatch"
 
-        with pytest.raises(RPCException, match=err_msg):
+        with pytest.raises(solders.errors.SignerError, match=err_msg):
             delete_holder(self.bob_account, self.alice, self.bob)
 
     def test_error_on_wrong_creator(self):

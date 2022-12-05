@@ -198,7 +198,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     solana_client = Client(SOLANA_URL)
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
-    assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+    assert receipt.value[0].err is None
     user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
 
     response = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")

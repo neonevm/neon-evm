@@ -10,7 +10,6 @@ from eth_utils import abi
 from .solana_utils import send_transaction, solana_client, get_transaction_count, make_new_user
 from .utils.constants import TAG_STATE, TAG_FINALIZED_STATE
 from .utils.storage import create_holder
-from .utils.contract import deploy_contract
 from .utils.ethereum import make_eth_transaction
 from .utils.instructions import make_PartialCallOrContinueFromRawEthereumTX, TransactionWithComputeBudget, \
     make_Cancel
@@ -47,8 +46,8 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert "success" in receipt["result"]["meta"]["logMessages"][-1]
-        account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+        assert receipt.value[0].err is None
+        account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
         assert parsed_data.caller == user_account.eth_address
@@ -67,7 +66,7 @@ class TestStorageAccountAccess:
             )
             receipt = send_transaction(solana_client, trx, operator_keypair)
 
-        account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+        account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_FINALIZED_STATE
         assert "exit_status=0x12" in "\n".join(receipt["result"]["meta"]["logMessages"])
@@ -83,6 +82,7 @@ class TestStorageAccountAccess:
             user_account.solana_account,
             user_account.solana_account_address,
         )
+
         instruction = eth_transaction.rawTransaction
         trx = TransactionWithComputeBudget()
         trx.add(
@@ -96,8 +96,8 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert "success" in receipt["result"]["meta"]["logMessages"][-1]
-        account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+        assert receipt.value[0].err is None
+        account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
         user2 = make_new_user(evm_loader)
@@ -153,7 +153,7 @@ class TestStorageAccountAccess:
                 send_transaction(solana_client, trx, operator_keypair)
 
             account_data = base64.b64decode(
-                solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+                solana_client.get_account_info(storage_account).value.data)
             parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
             assert parsed_data.tag == TAG_FINALIZED_STATE
 
@@ -181,8 +181,8 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert "success" in receipt["result"]["meta"]["logMessages"][-1]
-        account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+        assert receipt.value[0].err is None
+        account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
         user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
@@ -196,7 +196,7 @@ class TestStorageAccountAccess:
                                  )
         )
         send_transaction(solana_client, trx, operator_keypair)
-        account_data = base64.b64decode(solana_client.get_account_info(storage_account)["result"]["value"]["data"][0])
+        account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_FINALIZED_STATE
         assert user_nonce < get_transaction_count(solana_client, user_account.solana_account_address)

@@ -6,7 +6,6 @@ from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Finalized
 from solana.rpc.core import RPCException
-from solana.rpc.types import RPCResponse
 
 from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon, \
     cancel_transaction
@@ -137,7 +136,7 @@ class ParallelTransactionsTest(TestCase):
         evm_loader: EvmLoader,
         operator_keypair: Keypair,
         treasury_pool: TreasuryPool,
-    ) -> RPCResponse:
+    ):
         message = make_eth_transaction(
             dst_addr,
             bytes(),
@@ -158,8 +157,9 @@ class ParallelTransactionsTest(TestCase):
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair, Finalized)
+        print(type(receipt))
         print("Transfer receipt:", receipt)
-        assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+        assert receipt.value[0].err is None
 
         return receipt
 
