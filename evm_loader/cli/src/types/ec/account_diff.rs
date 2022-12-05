@@ -20,7 +20,7 @@ use crate::types::Bytes;
 use evm_loader::{H256, U256};
 use std::{cmp::*, collections::BTreeMap, fmt};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone)]
 /// Diff type for specifying a change (or not).
 pub enum Diff<T> {
     /// Both sides are the same.
@@ -71,7 +71,7 @@ impl<T> Diff<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone)]
 /// Account diff.
 pub struct AccountDiff {
     /// Change in balance, allowed to be `Diff::Same`.

@@ -19,7 +19,7 @@ pub const KECCAK_EMPTY: H256 = H256([
 /// Trace localized in vector of traces produced by a single transaction.
 ///
 /// Parent and children indexes refer to positions in this vector.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
 pub struct FlatTrace {
     /// Type of action performed by a transaction.
     pub action: Action,
@@ -57,7 +57,7 @@ pub struct LocalizedTrace {
 }
 
 /// Description of a _create_ action, either a `CREATE` operation or a create transaction.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct Create {
     /// The address of the creator.
     pub from: H160,
@@ -81,7 +81,7 @@ impl From<ActionParams> for Create {
 }
 
 /// Suicide action.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct Suicide {
     /// Suicided address.
     pub address: H160,
@@ -92,7 +92,7 @@ pub struct Suicide {
 }
 
 /// Reward action
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct Reward {
     /// Author's address.
     pub author: H160,
@@ -103,7 +103,7 @@ pub struct Reward {
 }
 
 /// Reward type.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(serde::Serialize, Debug, PartialEq, Clone, Copy)]
 pub enum RewardType {
     /// Block
     Block,
@@ -116,7 +116,7 @@ pub enum RewardType {
 }
 
 /// Description of an action that we trace; will be either a call or a create.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub enum Action {
     /// It's a call action.
     Call(Call),
@@ -141,7 +141,7 @@ pub enum ActionType {
 }
 
 /// The result of the performed action.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub enum Res {
     /// Successful call action result.
     Call(CallResult),
@@ -156,7 +156,7 @@ pub enum Res {
 }
 
 /// `Call` result.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Default)]
 pub struct CallResult {
     /// Gas used by call.
     pub gas_used: U256,
@@ -165,7 +165,7 @@ pub struct CallResult {
 }
 
 /// `Create` result.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct CreateResult {
     /// Gas used by create.
     pub gas_used: U256,
@@ -176,7 +176,7 @@ pub struct CreateResult {
 }
 
 /// Description of a _call_ action, either a `CALL` operation or a message transaction.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct Call {
     /// The sending account.
     pub from: H160,
@@ -216,7 +216,7 @@ impl From<ActionParams> for Call {
 }
 
 /// Trace evm errors.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
 pub enum Error {
     /// `OutOfGas` is returned when transaction execution runs out of gas.
     OutOfGas,
@@ -305,7 +305,7 @@ impl fmt::Display for Error {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
 pub enum CallType {
     /// Not a CALL.
     None,
@@ -319,7 +319,7 @@ pub enum CallType {
     StaticCall,
 }
 
-#[derive(Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some chunk of memory.
 pub struct MemoryDiff {
     /// Offset into memory the change begins.
@@ -328,7 +328,7 @@ pub struct MemoryDiff {
     pub data: Bytes,
 }
 
-#[derive(Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some storage value.
 pub struct StorageDiff {
     /// Which key in storage is changed.
@@ -337,7 +337,7 @@ pub struct StorageDiff {
     pub value: U256,
 }
 
-#[derive(Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A record of an executed VM operation.
 pub struct VMExecutedOperation {
     /// The total gas used.
@@ -350,7 +350,7 @@ pub struct VMExecutedOperation {
     pub store_diff: Option<StorageDiff>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
 /// A record of the execution of a single VM operation.
 pub struct VMOperation {
     /// The program counter.
@@ -363,7 +363,7 @@ pub struct VMOperation {
     pub executed: Option<VMExecutedOperation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
 /// A record of a full VM trace for a CALL/CREATE.
 pub struct VMTrace {
     /// The step (i.e. index into operations) at which this trace corresponds.
@@ -383,7 +383,7 @@ struct TraceData {
     store_written: Option<(U256, U256)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(serde::Serialize, Clone, Debug)]
 pub struct FullTraceData {
     pub stack: Vec<U256>,
     pub memory: Vec<u8>,

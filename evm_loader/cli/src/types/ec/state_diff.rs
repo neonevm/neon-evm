@@ -22,7 +22,7 @@ use std::{collections::BTreeMap, fmt, ops::*};
 
 /// Expression for the delta between two system states. Encoded the
 /// delta of every altered account.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct StateDiff {
     /// Raw diff key-value
     pub raw: BTreeMap<H160, AccountDiff>,
