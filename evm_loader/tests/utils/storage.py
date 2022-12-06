@@ -1,7 +1,6 @@
 from hashlib import sha256
 from random import randrange
 
-from sha3 import keccak_256
 from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from ..solana_utils import create_holder_account, get_solana_balance, create_account_with_seed, \

@@ -102,17 +102,17 @@ def test_collect_treasury(evm_loader):
     treasury_pool_address = create_treasury_pool_address(index)
     result = neon_cli().call(command_args)
     main_pool_address = result.split('\n')[0].split('Main pool balance:')[-1].strip()
-    balance_before = get_solana_balance(main_pool_address)
+    balance_before = get_solana_balance(PublicKey(main_pool_address))
 
     assert f"{index}: skip account {treasury_pool_address}" in result
 
     amount = random.randint(1, 1000)
     trx = solana_client.request_airdrop(treasury_pool_address, amount)
-    wait_confirm_transaction(solana_client, trx['result'])
+    wait_confirm_transaction(solana_client, trx.value)
     result = neon_cli().call(command_args)
     assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
 
-    balance_after = get_solana_balance(main_pool_address)
+    balance_after = get_solana_balance(PublicKey(main_pool_address))
     assert balance_after == balance_before + amount
 
 
@@ -198,7 +198,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     solana_client = Client(SOLANA_URL)
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
-    assert receipt.value[0].err is None
+    assert receipt.value.transaction.meta.err is None
     user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
 
     response = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")

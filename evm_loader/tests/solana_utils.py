@@ -1,4 +1,3 @@
-import base64
 import json
 import math
 import os
@@ -21,15 +20,14 @@ import solana.system_program as sp
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
-from solana.rpc.commitment import Confirmed, Finalized
+from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solders.signature import Signature
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
 
-from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
+from .utils.constants import EVM_LOADER, SOLANA_URL, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
 from .utils.instructions import make_DepositV03, make_Cancel, make_WriteHolder, make_ExecuteTrxFromInstruction
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
@@ -126,11 +124,10 @@ def wait_confirm_transaction(http_client, tx_sig, confirmations=0):
         resp = http_client.get_signature_statuses([tx_sig])
         print(f'Response: {resp}')
         if resp.value[0] is not None:
-            print(resp.value)
             status = resp.value[0]
             if status.confirmation_status in [TransactionConfirmationStatus.Finalized,
-                                              TransactionConfirmationStatus.Confirmed]:
-                #  and status.confirmations >= confirmations):
+                                              TransactionConfirmationStatus.Confirmed] and \
+                    status.confirmations >= confirmations:
                 return
         sleep_time = 1
         time.sleep(sleep_time)
@@ -385,7 +382,6 @@ class EvmLoader:
                 AccountMeta(pubkey=PublicKey(SYSTEM_ADDRESS), is_signer=False, is_writable=False),
                 AccountMeta(pubkey=PublicKey(sol), is_signer=False, is_writable=True),
             ]))
-        print(trx.instructions)
         return trx, sol
 
 
@@ -436,12 +432,7 @@ def get_neon_balance(solana_client: Client, sol_account: Union[str, PublicKey]) 
 
 def send_transaction(client: Client, trx, acc, wait_status=Confirmed):
     print("Send trx")
-    print("SIGNER public_key")
-    print(acc.public_key)
-    print(trx.instructions)
-
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=wait_status))
-    print(result)
     tx = result.value
     print("Result: {}".format(result))
     wait_confirm_transaction(client, tx)
@@ -452,7 +443,7 @@ def send_transaction(client: Client, trx, acc, wait_status=Confirmed):
         time.sleep(1)
     else:
         raise AssertionError(f"Can't get confirmed transaction ")
-    return receipt
+    return solana_client.get_transaction(tx)
 
 
 def evm_step_cost():
@@ -535,8 +526,7 @@ def cancel_transaction(
     cancel_receipt = send_transaction(solana_client, trx, operator_keypair)
 
     print("Cancel receipt:", cancel_receipt)
-    assert cancel_receipt.value[0].err is None
-
+    assert cancel_receipt.value.transaction.meta.err is None
     return cancel_receipt
 
 

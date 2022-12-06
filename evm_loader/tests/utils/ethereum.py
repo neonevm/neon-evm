@@ -1,6 +1,5 @@
-import pathlib
 from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Union
 
 from base58 import b58encode
 from sha3 import keccak_256
@@ -45,6 +44,6 @@ def make_eth_transaction(to_addr: bytes, data: Union[bytes, None], signer: Keypa
 
     if data is not None:
         tx['data'] = data
-    print(tx)
+
     return w3.eth.account.sign_transaction(tx, signer.secret_key[:32])
 

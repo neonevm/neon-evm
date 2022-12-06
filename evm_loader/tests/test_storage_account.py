@@ -2,7 +2,6 @@ import base64
 
 import pytest
 
-from solana.keypair import Keypair
 from solana.rpc.core import RPCException
 from solana.transaction import Transaction
 
@@ -46,8 +45,9 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert receipt.value[0].err is None
+        assert receipt.value.transaction.meta.err is None
         account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
+
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
         assert parsed_data.caller == user_account.eth_address
@@ -69,7 +69,7 @@ class TestStorageAccountAccess:
         account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_FINALIZED_STATE
-        assert "exit_status=0x12" in "\n".join(receipt["result"]["meta"]["logMessages"])
+        assert "exit_status=0x12" in "\n".join(receipt.value.transaction.meta.log_messages)
 
     def test_write_to_locked(self, operator_keypair, deployed_contract, user_account, treasury_pool, evm_loader):
         """EVM can't write to locked storage account"""
@@ -96,7 +96,7 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert receipt.value[0].err is None
+        assert receipt.value.transaction.meta.err is None
         account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
@@ -181,7 +181,7 @@ class TestStorageAccountAccess:
             )
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
-        assert receipt.value[0].err is None
+        assert receipt.value.transaction.meta.err is None
         account_data = base64.b64decode(solana_client.get_account_info(storage_account).value.data)
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
         assert parsed_data.tag == TAG_STATE
