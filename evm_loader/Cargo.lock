@@ -2200,7 +2200,6 @@ dependencies = [
  "lazy_static",
  "log",
  "once_cell",
- "parity-bytes",
  "parity-crypto",
  "postgres",
  "primitive-types 0.10.1",
@@ -2442,12 +2441,6 @@ name = "os_str_bytes"
 version = "6.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ff7415e9ae3fff1225851df9e0d9e4e5479f947619774677a63572e55e80eff"
-
-[[package]]
-name = "parity-bytes"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16b56e3a2420138bdb970f84dfb9c774aea80fa0e7371549eedec0d80c209c67"
 
 [[package]]
 name = "parity-crypto"

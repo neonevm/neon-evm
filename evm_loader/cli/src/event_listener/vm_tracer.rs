@@ -25,7 +25,7 @@ impl VmTracer {
         }
     }
 
-    pub fn handle_log(&self, opcode: Opcode, stack: &Stack, memory: &[u8]) {
+    pub fn handle_log(opcode: Opcode, stack: &Stack, memory: &[u8]) {
         info!("handling log {:?}", opcode);
         let offset = stack.peek(0).ok();
         let length = stack.peek(1).ok();

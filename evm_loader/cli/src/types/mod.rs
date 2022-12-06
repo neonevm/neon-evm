@@ -4,7 +4,5 @@
 #[allow(clippy::all)]
 pub mod ec;
 
-use evm_loader::H256;
-use parity_bytes::ToPretty;
 
 type Bytes = Vec<u8>;

@@ -65,7 +65,7 @@ impl ListenerVmTracer for VmTracer{
                             | Opcode::LOG2
                             | Opcode::LOG3
                             | Opcode::LOG4 => {
-                                self.handle_log(*opcode, mes.stack, mes.memory.data())
+                                VmTracer::handle_log(*opcode, mes.stack, mes.memory.data());
                             }
                             _ => (),
                         }
@@ -77,7 +77,7 @@ impl ListenerVmTracer for VmTracer{
                         match err {
                             // RETURN, STOP as SUICIDE opcodes
                             ExitReason::Succeed(_success) => {
-                                self.tracer.trace_executed(U256::zero(), &[], &[])
+                                self.tracer.trace_executed(U256::zero(), &[], &[]);
                             }
                             ExitReason::Error(_)
                             | ExitReason::Fatal(_)
@@ -113,7 +113,7 @@ impl ListenerVmTracer for VmTracer{
 pub fn pushed(opcode: Opcode) -> Option<usize> {
     INSTRUCTIONS
         .get(opcode.as_usize())
-        .and_then(|i| i.as_ref())
+        .and_then(std::option::Option::as_ref)
         .map(|i| i.ret)
 }
 
@@ -124,16 +124,16 @@ fn is_valid_range(off: usize, size: usize) -> bool {
     size > 0 && !overflow
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
     let read = |pos| stack.peek(pos).unwrap().low_u64() as usize;
     let written = match instruction {
         // Core codes
         Opcode::MSTORE | Opcode::MLOAD => Some((read(0), 32)),
         Opcode::MSTORE8 => Some((read(0), 1)),
-        Opcode::CALLDATACOPY | Opcode::CODECOPY => Some((read(0), read(2))),
+        Opcode::CALLDATACOPY | Opcode::CODECOPY | Opcode::RETURNDATACOPY => Some((read(0), read(2))),
         // External codes
         Opcode::EXTCODECOPY => Some((read(1), read(3))),
-        Opcode::RETURNDATACOPY => Some((read(0), read(2))),
         Opcode::CALL | Opcode::CALLCODE => Some((read(5), read(6))),
         Opcode::DELEGATECALL | Opcode::STATICCALL => Some((read(4), read(5))),
         /* Remaining external opcodes that do not affect memory:

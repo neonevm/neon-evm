@@ -25,8 +25,8 @@ impl ListenerTracer for Tracer{
             .collect::<Vec<_>>();
         let memory = mes.memory.data().to_vec();
         self.data.push(FullTraceData {
-            stack: stack.clone(),
-            memory: memory.clone(),
+            stack,
+            memory,
             storage: None,
         });
     }
