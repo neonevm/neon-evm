@@ -184,7 +184,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     )
     storage_account = create_holder(operator_keypair)
     instruction = eth_transaction.rawTransaction
-    trx = TransactionWithComputeBudget()
+    trx = TransactionWithComputeBudget(operator_keypair)
     trx.add(
         make_PartialCallOrContinueFromRawEthereumTX(
             instruction,

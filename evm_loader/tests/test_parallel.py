@@ -145,7 +145,7 @@ class ParallelTransactionsTest(TestCase):
             value,
         ).rawTransaction
 
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_ExecuteTrxFromInstruction(
                 operator_keypair,
