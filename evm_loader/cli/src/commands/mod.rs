@@ -30,7 +30,6 @@ use crate::{
     NeonCliResult, NeonCliError,
     program_options::make_clean_hex,
     Config,
-    rpc::Rpc,
     account_storage::account_info,
 };
 

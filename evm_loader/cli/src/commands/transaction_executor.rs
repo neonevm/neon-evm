@@ -12,7 +12,7 @@ use {
         signature::Signature,
         commitment_config::CommitmentConfig,
     },
-    crate::{errors::NeonCliError, rpc::{Rpc, Clients}}
+    crate::{errors::NeonCliError, rpc}
 };
 
 #[derive(Default,Debug)]
@@ -30,7 +30,7 @@ impl Stats {
     pub fn inc_created_objects(&mut self) {self.total_objects += 1; self.created_objects += 1;}
 }
 pub struct TransactionExecutor<'a> {
-    pub client: &'a Clients,
+    pub client: &'a dyn rpc::Rpc,
     pub send_trx: bool,
     pub signatures: RefCell<Vec<Signature>>,
     pub stats: RefCell<Stats>,
@@ -38,7 +38,7 @@ pub struct TransactionExecutor<'a> {
 }
 
 impl<'a> TransactionExecutor<'a> {
-    pub fn new(client: &'a Clients, fee_payer: &'a dyn Signer, send_trx: bool) -> Self {
+    pub fn new(client: &'a dyn rpc::Rpc, fee_payer: &'a dyn Signer, send_trx: bool) -> Self {
         Self {
             client,
             send_trx,

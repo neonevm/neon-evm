@@ -3,20 +3,20 @@ use solana_clap_utils::{
     input_validators::normalize_to_url_if_moniker,
     keypair::{signer_from_path, keypair_from_path},
 };
-use crate::{rpc, rpc::{db::PostgresClient, NODE_INSTANCE, DB_INSTANCE}, NeonCliError};
+use crate::{rpc, rpc::db::PostgresClient, NeonCliError};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer,},
 };
 use solana_client::rpc_client::RpcClient;
-use std::{fmt, fmt::Debug, process::{exit}, str::FromStr, sync::Arc,};
+use std::{fmt, fmt::Debug, process::exit, str::FromStr,};
 use clap::ArgMatches;
 use log::error;
 
 
 pub struct Config {
-    pub rpc_client: rpc::Clients,
+    pub rpc_client: Box<dyn rpc::Rpc>,
     pub evm_loader: Pubkey,
     pub signer: Box<dyn Signer>,
     pub fee_payer: Option<Keypair>,
@@ -81,23 +81,16 @@ pub fn create(options: &ArgMatches) -> Config {
     ).ok();
 
 
-    let rpc_client = if let Some(slot) = options.value_of("slot") {
+    let rpc_client: Box<dyn rpc::Rpc>  = if let Some(slot) = options.value_of("slot") {
         let slot:u64 = slot.parse().unwrap();
 
         let db_config = options.value_of("db_config")
             .map(|path|{ solana_cli_config::load_config_file(path).unwrap()})
             .unwrap();
 
-        DB_INSTANCE.set(Arc::new(PostgresClient::new(&db_config, slot))).unwrap();
-        rpc::Clients::Postgress
+        Box::new(PostgresClient::new(&db_config, slot))
     } else {
-        NODE_INSTANCE.set(
-            Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
-        ).unwrap_or_else(|_|{
-            error!("NODE_INSTANCE.set error");
-            exit(NeonCliError::UnknownError.error_code() as i32);
-        });
-        rpc::Clients::Node
+        Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
     };
 
     Config {
