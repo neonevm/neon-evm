@@ -117,6 +117,13 @@ pub fn pushed(opcode: Opcode) -> Option<usize> {
         .map(|i| i.ret)
 }
 
+/// Checks whether offset and size is valid memory range
+fn is_valid_range(off: usize, size: usize) -> bool {
+    // When size is zero we haven't actually expanded the memory
+    let overflow = off.overflowing_add(size).1;
+    size > 0 && !overflow
+}
+
 fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
     let read = |pos| stack.peek(pos).unwrap().low_u64() as usize;
     let written = match instruction {
@@ -141,12 +148,6 @@ fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
         _ => None,
     };
 
-    /// Checks whether offset and size is valid memory range
-    fn is_valid_range(off: usize, size: usize) -> bool {
-        // When size is zero we haven't actually expanded the memory
-        let overflow = off.overflowing_add(size).1;
-        size > 0 && !overflow
-    }
 
     match written {
         Some((offset, size)) if !is_valid_range(offset, size) => None,

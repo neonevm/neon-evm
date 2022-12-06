@@ -120,7 +120,7 @@ impl AccountDiff {
 
 // TODO: refactor into something nicer.
 fn interpreted_hash(u: &H256) -> String {
-    if u <= &H256::from_low_u64_be(0xffffffff) {
+    if u <= &H256::from_low_u64_be(0xffff_ffff) {
         format!(
             "{} = 0x{:x}",
             U256::from(u.as_bytes()).low_u32(),

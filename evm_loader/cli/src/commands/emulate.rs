@@ -1,6 +1,6 @@
 use log::{debug, info};
 
-use evm_loader::{H160, U256, ExitReason};
+use evm_loader::{U256, ExitReason};
 use evm_loader::{executor::{Machine, LAMPORTS_PER_SIGNATURE}, config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE}};
 
 use crate::{
