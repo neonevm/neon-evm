@@ -48,29 +48,6 @@ def make_deployment_transaction(
     return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
 
-def write_transaction_to_holder_account(
-    signed_tx: SignedTransaction,
-    holder_account: PublicKey,
-    operator: Keypair,
-):
-    # Write transaction to transaction holder account
-    offset = 0
-    receipts = []
-    rest = signed_tx.rawTransaction
-    while len(rest):
-        (part, rest) = (rest[:920], rest[920:])
-        trx = Transaction()
-        trx.add(make_WriteHolder(operator.public_key, holder_account, signed_tx.hash, offset, part))
-        receipts.append(
-            solana_client.send_transaction(
-                trx,
-                operator,
-                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
-            )
-        )
-        offset += len(part)
-    for rcpt in receipts:
-        wait_confirm_transaction(solana_client, rcpt.value)
 
 
 def deploy_contract_step(
@@ -90,6 +67,8 @@ def deploy_contract_step(
         [contract.solana_address, user.solana_account_address]
     ))
     print(trx.instructions)
+    print("OPERATOR public_key")
+    print(operator.public_key)
     receipt = send_transaction(solana_client, trx, operator)
     print("Deployment receipt:", receipt)
 
@@ -110,7 +89,7 @@ def deploy_contract(
     contract = create_contract_address(user, evm_loader)
     holder_acc = create_holder(operator)
     signed_tx = make_deployment_transaction(user, contract_path)
-    write_transaction_to_holder_account(signed_tx, holder_acc, operator)
+    solana_client.write_transaction_to_holder_account(signed_tx, holder_acc, operator)
 
     contract_deployed = False
     while not contract_deployed:

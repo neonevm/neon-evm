@@ -12,6 +12,7 @@ from typing import NamedTuple, Tuple, Union
 import rlp
 import spl.token.instructions
 from base58 import b58encode
+from eth_account.datastructures import SignedTransaction
 from eth_keys import keys as eth_keys
 from hexbytes import HexBytes
 from sha3 import keccak_256
@@ -20,16 +21,17 @@ import solana.system_program as sp
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
-from solana.rpc.commitment import Confirmed
+from solana.rpc.commitment import Confirmed, Finalized
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solders.signature import Signature
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
 
 from .utils.constants import EVM_LOADER, SOLANA_URL, TREASURY_POOL_COUNT, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
-from .utils.instructions import make_DepositV03, make_Cancel
+from .utils.instructions import make_DepositV03, make_Cancel, make_WriteHolder, make_ExecuteTrxFromInstruction
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -434,8 +436,10 @@ def get_neon_balance(solana_client: Client, sol_account: Union[str, PublicKey]) 
 
 def send_transaction(client: Client, trx, acc, wait_status=Confirmed):
     print("Send trx")
-    print("signer")
+    print("SIGNER public_key")
     print(acc.public_key)
+    print(trx.instructions)
+
     result = client.send_transaction(trx, acc, opts=TxOpts(skip_confirmation=True, preflight_commitment=wait_status))
     print(result)
     tx = result.value
@@ -483,7 +487,6 @@ def deposit_neon(evm_loader: EvmLoader, operator_keypair: Keypair, ether_address
     evm_pool_key = get_associated_token_address(evm_token_authority, NEON_TOKEN_MINT_ID)
 
     signer_token_pubkey = get_associated_token_address(operator_keypair.public_key, NEON_TOKEN_MINT_ID)
-
     trx = Transaction()
     trx.add(
         spl.token.instructions.approve(
@@ -535,3 +538,37 @@ def cancel_transaction(
     assert cancel_receipt.value[0].err is None
 
     return cancel_receipt
+
+
+def write_transaction_to_holder_account(
+        signed_tx: SignedTransaction,
+        holder_account: PublicKey,
+        operator: Keypair,
+):
+    # Write transaction to transaction holder account
+    offset = 0
+    receipts = []
+    rest = signed_tx.rawTransaction
+    while len(rest):
+        (part, rest) = (rest[:920], rest[920:])
+        trx = Transaction()
+        trx.add(make_WriteHolder(operator.public_key, holder_account, signed_tx.hash, offset, part))
+        receipts.append(
+            solana_client.send_transaction(
+                trx,
+                operator,
+                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
+            )
+        )
+        offset += len(part)
+    for rcpt in receipts:
+        wait_confirm_transaction(solana_client, rcpt.value)
+
+
+def execute_trx_from_instruction(operator: Keypair, evm_loader, treasury_address: PublicKey, treasury_buffer: bytes,
+                                 instruction: SignedTransaction,
+                                 additional_accounts, signer: Keypair):
+    trx = Transaction()
+    trx.add(make_ExecuteTrxFromInstruction(operator, evm_loader, treasury_address,
+                                           treasury_buffer, instruction.rawTransaction, additional_accounts))
+    return solana_client.send_transaction(trx, signer, opts=TxOpts(skip_preflight=False, skip_confirmation=False))

@@ -83,16 +83,16 @@ def make_ExecuteTrxFromInstruction(
     accounts = [
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
-        AccountMeta(pubkey=evm_loader.ether2program(operator_ether)[0], is_signer=False, is_writable=True),
+        AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
         AccountMeta(SYS_PROGRAM_ID, is_signer=False, is_writable=True),
-        AccountMeta(EVM_LOADER, is_signer=False, is_writable=False),
+        AccountMeta(PublicKey(EVM_LOADER), is_signer=False, is_writable=False),
     ]
     for acc in additional_accounts:
         print("Additional acc ", acc)
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True),)
 
     return TransactionInstruction(
-            program_id=EVM_LOADER,
+            program_id=PublicKey(EVM_LOADER),
             data=data,
             keys=accounts
         )
