@@ -16,33 +16,35 @@ COMPUTE_BUDGET_ID: PublicKey = PublicKey("ComputeBudget1111111111111111111111111
 
 class ComputeBudget:
     @staticmethod
-    def request_units(units, additional_fee):
+    def request_units(operator, units, additional_fee):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
-            keys=[],
+            keys=[AccountMeta(PublicKey(operator.public_key), is_signer=True, is_writable=False)],
             data=bytes.fromhex("00") + units.to_bytes(4, "little") + additional_fee.to_bytes(4, "little")
         )
 
     @staticmethod
-    def request_heap_frame(heap_frame):
+    def request_heap_frame(operator, heap_frame):
         return TransactionInstruction(
             program_id=COMPUTE_BUDGET_ID,
-            keys=[],
+            keys=[AccountMeta(PublicKey(operator.public_key), is_signer=True, is_writable=False)],
             data=bytes.fromhex("01") + heap_frame.to_bytes(4, "little")
         )
 
 
 class TransactionWithComputeBudget(Transaction):
     def __init__(self,
+                 operator: Keypair,
                  units=DEFAULT_UNITS,
                  additional_fee=DEFAULT_ADDITIONAL_FEE,
                  heap_frame=DEFAULT_HEAP_FRAME,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
         if units:
-            self.add(ComputeBudget.request_units(units, additional_fee))
+            self.add(ComputeBudget.request_units(operator, units, additional_fee))
         if heap_frame:
-            self.add(ComputeBudget.request_heap_frame(heap_frame))
+            self.add(ComputeBudget.request_heap_frame(operator, heap_frame))
+
 
 def write_holder_layout(hash: bytes, offset: int, data: bytes):
     assert(len(hash) == 32)
@@ -64,6 +66,7 @@ def make_WriteHolder(operator: PublicKey, holder_account: PublicKey, hash: bytes
                     AccountMeta(pubkey=holder_account, is_signer=False, is_writable=True),
                     AccountMeta(pubkey=operator, is_signer=True, is_writable=False),
                 ])
+
 
 def make_ExecuteTrxFromInstruction(
     operator: Keypair,

@@ -60,7 +60,7 @@ def deploy_contract_step(
     user: Caller,
 ):
     print(f"Deploying contract with {step_count} steps")
-    trx = TransactionWithComputeBudget()
+    trx = TransactionWithComputeBudget(operator)
 
     trx.add(make_ExecuteTrxFromAccountDataIterativeOrContinue(
         operator, evm_loader, holder_address, treasury.account, treasury.buffer, step_count,

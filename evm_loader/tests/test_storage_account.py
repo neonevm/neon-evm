@@ -34,7 +34,7 @@ class TestStorageAccountAccess:
         storage_account = create_holder(operator_keypair)
         instruction = eth_transaction.rawTransaction
 
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
                 instruction,
@@ -53,7 +53,7 @@ class TestStorageAccountAccess:
         assert parsed_data.caller == user_account.eth_address
         
         for _ in range(2):
-            trx = TransactionWithComputeBudget()
+            trx = TransactionWithComputeBudget(operator_keypair)
             trx.add(
                 make_PartialCallOrContinueFromRawEthereumTX(
                     instruction,
@@ -84,7 +84,7 @@ class TestStorageAccountAccess:
         )
 
         instruction = eth_transaction.rawTransaction
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
                 instruction,
@@ -108,7 +108,7 @@ class TestStorageAccountAccess:
             user2.solana_account_address,
         )
         instruction = eth_transaction.rawTransaction
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
                 instruction,
@@ -139,7 +139,7 @@ class TestStorageAccountAccess:
             instruction = eth_transaction.rawTransaction
 
             for _ in range(3):
-                trx = TransactionWithComputeBudget()
+                trx = TransactionWithComputeBudget(operator_keypair)
                 trx.add(
                     make_PartialCallOrContinueFromRawEthereumTX(
                         instruction,
@@ -169,7 +169,7 @@ class TestStorageAccountAccess:
         )
         storage_account = create_holder(operator_keypair)
         instruction = eth_transaction.rawTransaction
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_PartialCallOrContinueFromRawEthereumTX(
                 instruction,
