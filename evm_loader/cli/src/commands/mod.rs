@@ -31,12 +31,25 @@ use crate::{
     program_options::make_clean_hex,
     Config,
     account_storage::account_info,
+    commands::get_neon_elf::CachedElfParams,
 };
+
+#[derive(Clone)]
+pub struct TxParams {
+    from: H160,
+    to: Option<H160>,
+    data: Option<Vec<u8>>,
+    value: Option<U256>,
+    token: Pubkey,
+    chain: u64,
+    max_steps: u64,
+}
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
     match (cmd, params) {
         ("emulate", Some(params)) => {
-            emulate::execute(config, params,)
+            let tx= parse_tx_params(config, params);
+            emulate::execute(config, &tx)
         }
         ("create-program-address", Some(params)) => {
             let ether = h160_of(params, "seed").unwrap();
@@ -82,7 +95,8 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             Ok(())
         }
         ("trace_call", Some(params)) => {
-            trace_call::execute(config, params)
+            let tx = parse_tx_params(config, params);
+            trace_call::execute(config, &tx)
         }
         _ => unreachable!(),
     }
@@ -181,3 +195,32 @@ pub fn send_transaction(
     )
 }
 
+
+
+fn parse_tx_params(
+    config: &Config,
+    params: &ArgMatches,
+) -> TxParams {
+    let from = h160_of(params, "sender").unwrap();
+    let to = h160_or_deploy_of(params, "contract");
+    let data = read_stdin();
+    let value = value_of(params, "value");
+
+    // Read ELF params only if token_mint or chain_id is not set.
+    let mut token = pubkey_of(params, "token_mint");
+    let mut chain = value_of(params, "chain_id");
+    if token.is_none() || chain.is_none() {
+        let cached_elf_params = CachedElfParams::new(config);
+        token = token.or_else(|| Some(Pubkey::from_str(
+            cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
+        ).unwrap()));
+        chain = chain.or_else(|| Some(u64::from_str(
+            cached_elf_params.get("NEON_CHAIN_ID").unwrap()
+        ).unwrap()));
+    }
+    let token = token.unwrap();
+    let chain = chain.unwrap();
+    let max_steps = value_of::<u64>(params, "max_steps_to_execute").unwrap();
+
+    TxParams {from, to, data, value, token, chain, max_steps}
+}

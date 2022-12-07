@@ -1,98 +1,68 @@
 use log::{debug, info};
-
-use evm_loader::{U256, ExitReason};
-use evm_loader::{executor::{Machine, LAMPORTS_PER_SIGNATURE}, config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE}};
-
+use evm_loader::{
+    executor::{Machine, LAMPORTS_PER_SIGNATURE},
+    config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
+    account_storage::AccountStorage,
+    U256, ExitReason
+};
 use crate::{
     account_storage::{
         EmulatorAccountStorage, NeonAccount, SolanaAccount,
     },
     Config,
-    NeonCliResult,
+    NeonCliResult, NeonCliError,
     syscall_stubs::Stubs,
     account_storage::make_solana_program_address,
+    errors,
 };
-
-use solana_sdk::pubkey::Pubkey;
-use evm_loader::account_storage::AccountStorage;
-use crate::{errors, commands::get_neon_elf::CachedElfParams,};
-use super::{get_program_ether, get_ether_account_nonce};
-use clap::ArgMatches;
-use super::{h160_or_deploy_of, h160_of, value_of, read_stdin, pubkey_of};
-use std::str::FromStr;
-
-
+use super::{get_program_ether, get_ether_account_nonce, TxParams};
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn execute(
-    config: &Config,
-    params: &ArgMatches,
-) -> NeonCliResult {
-
-    let contract_id = h160_or_deploy_of(params, "contract");
-    let caller_id = h160_of(params, "sender").unwrap();
-    let data = read_stdin();
-    let value = value_of(params, "value");
-
-    // Read ELF params only if token_mint or chain_id is not set.
-    let mut token_mint = pubkey_of(params, "token_mint");
-    let mut chain_id = value_of(params, "chain_id");
-    if token_mint.is_none() || chain_id.is_none() {
-        let cached_elf_params = CachedElfParams::new(config);
-        token_mint = token_mint.or_else(|| Some(Pubkey::from_str(
-            cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
-        ).unwrap()));
-        chain_id = chain_id.or_else(|| Some(u64::from_str(
-            cached_elf_params.get("NEON_CHAIN_ID").unwrap()
-        ).unwrap()));
-    }
-    let token_mint = token_mint.unwrap();
-    let chain_id = chain_id.unwrap();
-    let max_steps_to_execute = value_of::<u64>(params, "max_steps_to_execute").unwrap();
-
+pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCliError> {
+    let data = tx.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
-        contract_id,
-        caller_id,
-        &hex::encode(data.clone().unwrap_or_default()),
-        value);
+        tx.to,
+        tx.from,
+        &hex::encode(&data),
+        tx.value);
 
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, token_mint, chain_id);
+    let storage = EmulatorAccountStorage::new(config, tx.token, tx.chain);
 
-    let program_id = if let Some(program_id) = contract_id {
+    let program_id = if let Some(program_id) = tx.to {
         debug!("program_id to call: {}", program_id);
         program_id
     } else {
-        let (solana_address, _nonce) = make_solana_program_address(&caller_id, &config.evm_loader);
+        let (solana_address, _nonce) = make_solana_program_address(&tx.from, &config.evm_loader);
         let trx_count = get_ether_account_nonce(config, &solana_address)?;
         let trx_count= trx_count.0;
-        let program_id = get_program_ether(&caller_id, trx_count);
+        let program_id = get_program_ether(&tx.from, trx_count);
         debug!("program_id to deploy: {}", program_id);
         program_id
     };
 
     let (exit_reason, result, actions, steps_executed) = {
         let gas_limit = U256::from(999_999_999_999_u64);
-        let mut executor = Machine::new(caller_id, &storage)?;
+        let mut executor = Machine::new(tx.from, &storage)?;
         debug!("Executor initialized");
 
-        let (result, exit_reason) = match &contract_id {
+        let (result, exit_reason) = match &tx.to {
             Some(_) =>  {
                 debug!("call_begin(caller_id={:?}, program_id={:?}, data={:?}, value={:?})",
-                    caller_id,
+                    tx.from,
                     program_id,
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
+                    &hex::encode(&data),
+                    tx.value);
 
-                executor.call_begin(caller_id,
+                executor.call_begin(tx.from,
                     program_id,
-                    data.unwrap_or_default(),
-                    value.unwrap_or_default(),
+                    data,
+                    tx.value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(max_steps_to_execute){
+                match executor.execute_n_steps(tx.max_steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -102,17 +72,17 @@ pub fn execute(
             },
             None => {
                 debug!("create_begin(caller_id={:?}, data={:?}, value={:?})",
-                    caller_id,
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
+                    tx.from,
+                    &hex::encode(&data),
+                    tx.value);
                 executor.create_begin(
-                    caller_id,
-                    data.unwrap_or_default(),
-                    value.unwrap_or_default(),
+                    tx.from,
+                    data,
+                    tx.value.unwrap_or_default(),
                     gas_limit,
                     U256::zero(),
                 )?;
-                match executor.execute_n_steps(max_steps_to_execute){
+                match executor.execute_n_steps(tx.max_steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -173,7 +143,14 @@ pub fn execute(
         "used_gas": steps_gas + begin_end_gas + actions_gas + accounts_gas
     });
 
-    println!("{}", js);
 
+    Ok(js)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
+
+    let js = send_eth_tx(config, tx)?;
+    println!("{}", js);
     Ok(())
 }
