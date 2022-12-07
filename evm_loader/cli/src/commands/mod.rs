@@ -9,7 +9,7 @@ pub mod get_storage_at;
 pub mod collect_treasury;
 pub mod init_environment;
 mod transaction_executor;
-mod trace;
+mod trace_call;
 
 use clap::ArgMatches;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
@@ -81,8 +81,8 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             get_storage_at::execute(config, contract_id, &index);
             Ok(())
         }
-        ("trace", Some(params)) => {
-            trace::execute(config, params)
+        ("trace_call", Some(params)) => {
+            trace_call::execute(config, params)
         }
         _ => unreachable!(),
     }

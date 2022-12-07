@@ -50,25 +50,71 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
     }
 }
 
-
-macro_rules! neon_cli_pkg_version {
-    () => ( env!("CARGO_PKG_VERSION") )
-}
-
-#[macro_export]
-macro_rules! neon_cli_revision {
-    () => ( env!("NEON_REVISION") )
-}
-
-macro_rules! version_string {
-    () => ( concat!("Neon-cli/v", neon_cli_pkg_version!(), "-", neon_cli_revision!()) )
+macro_rules! emulate {
+    ($cmd:expr, $desc:expr) => {
+        SubCommand::with_name($cmd)
+                .about($desc)
+                .arg(
+                    Arg::with_name("sender")
+                        .value_name("SENDER")
+                        .takes_value(true)
+                        .index(1)
+                        .required(true)
+                        .validator(is_valid_h160)
+                        .help("The sender of the transaction")
+                )
+                .arg(
+                    Arg::with_name("contract")
+                        .value_name("CONTRACT")
+                        .takes_value(true)
+                        .index(2)
+                        .required(true)
+                        .validator(is_valid_h160_or_deploy)
+                        .help("The contract that executes the transaction or 'deploy'")
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .value_name("VALUE")
+                        .takes_value(true)
+                        .index(3)
+                        .required(false)
+                        .validator(is_amount::<U256, _>)
+                        .help("Transaction value")
+                )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
+                )
+                .arg(
+                    Arg::with_name("max_steps_to_execute")
+                        .long("max_steps_to_execute")
+                        .value_name("NUMBER_OF_STEPS")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("100000")
+                        .help("Maximal number of steps to execute in a single run"),
+                )
+    }
 }
 
 #[allow(clippy::too_many_lines)]
 pub fn parse<'a >() -> ArgMatches<'a> {
     App::new(crate_name!())
         .about(crate_description!())
-        .version(version_string!())
+        .version(concat!("Neon-cli/v", env!("CARGO_PKG_VERSION"), "-", env!("NEON_REVISION")))
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -99,6 +145,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .value_name("SLOT")
                 .takes_value(true)
                 .required(false)
+                .global(true)
                 .help("Slot for postgres db-client (implementated only for emulate command)"),
         )
         .arg(
@@ -182,61 +229,10 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .help("Logging level"),
         )
         .subcommand(
-            SubCommand::with_name("emulate")
-                .about("Emulate execution of Ethereum transaction")
-                .arg(
-                    Arg::with_name("sender")
-                        .value_name("SENDER")
-                        .takes_value(true)
-                        .index(1)
-                        .required(true)
-                        .validator(is_valid_h160)
-                        .help("The sender of the transaction")
-                )
-                .arg(
-                    Arg::with_name("contract")
-                        .value_name("CONTRACT")
-                        .takes_value(true)
-                        .index(2)
-                        .required(true)
-                        .validator(is_valid_h160_or_deploy)
-                        .help("The contract that executes the transaction or 'deploy'")
-                )
-                .arg(
-                    Arg::with_name("value")
-                        .value_name("VALUE")
-                        .takes_value(true)
-                        .index(3)
-                        .required(false)
-                        .validator(is_amount::<U256, _>)
-                        .help("Transaction value")
-                )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
-                )
-                .arg(
-                    Arg::with_name("chain_id")
-                        .long("chain_id")
-                        .value_name("CHAIN_ID")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Network chain_id"),
-                )
-                .arg(
-                    Arg::with_name("max_steps_to_execute")
-                        .long("max_steps_to_execute")
-                        .value_name("NUMBER_OF_STEPS")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("100000")
-                        .help("Maximal number of steps to execute in a single run"),
-                )
+            emulate!("emulate", "Emulate execution of Ethereum transaction")
+        )
+        .subcommand(
+            emulate!("trace_call", "Getting traces of Ethereum transaction execution")
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")
