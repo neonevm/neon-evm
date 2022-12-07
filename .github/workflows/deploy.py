@@ -121,11 +121,15 @@ def run_tests(github_sha):
         click.echo("Start tests")
         exec_id = docker_client.exec_create(
             container="solana", cmd="/opt/deploy-test.sh")
-        logs = docker_client.exec_start(exec_id['Id'])
-        click.echo(f'logs: {logs}')
+        logs = docker_client.exec_start(exec_id['Id'], stream=True)
+
+        tests_are_failed = False
         for line in logs:
+            print(line.decode('utf-8'))
             if 'ERROR ' in str(line) or 'FAILED ' in str(line):
-                raise RuntimeError("Test are failed")
+                tests_are_failed = True
+        if tests_are_failed:
+            raise RuntimeError("Test are failed")
     except:
         raise RuntimeError("Solana container is not run")
 
