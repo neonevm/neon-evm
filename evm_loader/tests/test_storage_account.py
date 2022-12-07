@@ -180,7 +180,7 @@ class TestStorageAccountAccess:
         )
         receipt = send_transaction(solana_client, trx, operator_keypair)
         assert receipt.value.transaction.meta.err is None
-        account_data = solana_client.get_account_info(storage_account, commitment=Confirmed).value.data
+        account_data = solana_client.get_account_info(storage_account).value.data
         parsed_data = STORAGE_ACCOUNT_INFO_LAYOUT.parse(account_data)
 
         assert parsed_data.tag == TAG_STATE

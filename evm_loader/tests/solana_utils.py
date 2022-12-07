@@ -372,7 +372,6 @@ class EvmLoader:
         print('createEtherAccount: {} {} => {}'.format(ether, nonce, sol))
         base = self.acc.get_acc().public_key
         data = bytes.fromhex('28') + CREATE_ACCOUNT_LAYOUT.build(dict(ether=self.ether2bytes(ether)))
-        # trx = TransactionWithComputeBudget()
         trx = Transaction()
         trx.add(TransactionInstruction(
             program_id=self.loader_id,
