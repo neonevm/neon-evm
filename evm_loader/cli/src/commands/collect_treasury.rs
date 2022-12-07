@@ -17,10 +17,12 @@ use solana_client::rpc_client::RpcClient;
 use solana_cli::{
     checks::{check_account_for_fee},
 };
+use solana_client::rpc_client::RpcClient;
 
 use spl_token::instruction::sync_native;
 
 use evm_loader::account::{MainTreasury, Treasury};
+use crate::rpc::ToAny;
 
 pub fn execute(
     config: &Config,
