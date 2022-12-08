@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     rc::Rc,
+    str::FromStr,
 };
 
 use log::{debug, info, trace, warn};
@@ -23,7 +24,6 @@ use evm_loader::{
 use evm_loader::account::ether_contract;
 use evm_loader::account_storage::{AccountOperation, AccountsOperations};
 
-
 use crate::Config;
 
 const FAKE_OPERATOR: Pubkey = pubkey!("neonoperator1111111111111111111111111111111");
@@ -33,10 +33,35 @@ fn serde_pubkey_bs58<S>(value: &Pubkey, s: S) -> Result<S::Ok, S::Error> where S
     s.serialize_str(&bs58)
 }
 
+#[allow(unused)]
+fn deserialize_pubkey_from_str<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+{
+    struct StringVisitor;
+    impl<'de> serde::de::Visitor<'de> for StringVisitor {
+        type Value = Pubkey;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string containing json data")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+        {
+            Pubkey::from_str(v).map_err(E::custom)
+        }
+    }
+    deserializer.deserialize_any(StringVisitor)
+}
+
+
 #[derive(serde::Serialize, Clone)]
 pub struct NeonAccount {
     address: H160,
     #[serde(serialize_with = "serde_pubkey_bs58")]
+    #[serde(deserialize_with = "deserialize_pubkey_from_str")]
     account: Pubkey,
     writable: bool,
     new: bool,

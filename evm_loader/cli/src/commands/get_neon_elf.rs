@@ -10,7 +10,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-use crate::{ Config, errors::NeonCliError, NeonCliResult };
+use crate::{ Config, errors::NeonCliError, NeonCliResult};
 
 pub struct CachedElfParams {
     elf_params: HashMap<String,String>,
