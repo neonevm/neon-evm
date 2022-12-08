@@ -11,7 +11,6 @@ pub struct TracedCall {
     pub exit_reason: ExitReason,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
     let mut tracer = Tracer::new();
 
