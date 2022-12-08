@@ -20,7 +20,7 @@ pub struct CachedElfParams {
 impl CachedElfParams {
     pub fn new(config: &Config) -> Self {
         Self {
-            elf_params: read_elf_parameters_from_account(config).unwrap(),
+            elf_params: read_elf_parameters_from_account(config).expect("read elf_params error"),
         }
     }
     pub fn get(&self, param_name: &str) -> Option<&String> {
@@ -43,7 +43,7 @@ pub fn read_elf_parameters(
             let to: usize = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {}", sym.st_value + sym.st_size, err));
             if to < end && from < end {
                 let buf = &program_data[from..to];
-                let value = std::str::from_utf8(buf).unwrap();
+                let value = std::str::from_utf8(buf).expect("read elf value error");
                 result.insert(name, String::from(value));
             }
             else {
@@ -121,7 +121,7 @@ fn read_program_params_from_file(config: &Config,
 }
 
 fn read_program_params_from_account(config: &Config) {
-    let elf_params = read_elf_parameters_from_account(config).unwrap();
+    let elf_params = read_elf_parameters_from_account(config).expect("read elf params error");
     print_elf_parameters(&elf_params);
 }
 

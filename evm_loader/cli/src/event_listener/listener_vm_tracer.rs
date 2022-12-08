@@ -18,7 +18,7 @@ impl ListenerVmTracer for VmTracer{
             self.handle_step_result(mes.stack, mes.memory, pending_trap.pushed);
         }
 
-        let pc = mes.position.unwrap();
+        let pc = mes.position.expect("trace position");
         println!("pc = {:?} opcode = {:?}", pc, mes.opcode);
         let instruction = mes.opcode.0;
         let mem_written = mem_written(mes.opcode, mes.stack);
@@ -126,7 +126,7 @@ fn is_valid_range(off: usize, size: usize) -> bool {
 
 #[allow(clippy::cast_possible_truncation)]
 fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
-    let read = |pos| stack.peek(pos).unwrap().low_u64() as usize;
+    let read = |pos| stack.peek(pos).expect("stack peek error").low_u64() as usize;
     let written = match instruction {
         // Core codes
         Opcode::MSTORE | Opcode::MLOAD => Some((read(0), 32)),
@@ -157,7 +157,7 @@ fn mem_written(instruction: Opcode, stack: &Stack) -> Option<(usize, usize)> {
 
 fn store_written(instruction: Opcode, stack: &Stack) -> Option<(U256, U256)> {
     match instruction {
-        Opcode::SSTORE => Some((stack.peek(0).unwrap(), stack.peek(1).unwrap())),
+        Opcode::SSTORE => Some((stack.peek(0).expect("stack.peek(0) error"), stack.peek(1).expect("stack.peek(1) error"))),
         _ => None,
     }
 }

@@ -78,7 +78,7 @@ impl VmTracer {
         let gas_used = U256::from(self.gas);
         let mut stack_push = vec![];
         for i in (0..pushed).rev() {
-            stack_push.push(stack.peek(i).unwrap());
+            stack_push.push(stack.peek(i).expect("stack peek error"));
         }
         let mem = &mem.data();
         self.tracer.trace_executed(gas_used, &stack_push, mem);

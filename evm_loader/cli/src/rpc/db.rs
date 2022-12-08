@@ -80,11 +80,11 @@ impl PostgresClient {
         let lamports: i64 = row.try_get(2)?;
         let rent_epoch: i64 = row.try_get(4)?;
         Ok(Some(Account {
-            lamports: u64::try_from(lamports).unwrap(),
+            lamports: u64::try_from(lamports).expect("lamports parse error"),
             data: row.try_get(5)?,
             owner: Pubkey::new(row.try_get(1)?),
             executable: row.try_get(3)?,
-            rent_epoch: u64::try_from(rent_epoch).unwrap(),
+            rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch parse error"),
         }))
     }
 
@@ -116,6 +116,6 @@ impl PostgresClient {
                 .await
         })?.try_get(0)?;
 
-        self.get_block_hash(u64::try_from(slot).unwrap())
+        self.get_block_hash(u64::try_from(slot).expect("slot parse error"))
     }
 }

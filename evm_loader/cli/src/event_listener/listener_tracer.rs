@@ -21,7 +21,7 @@ impl ListenerTracer for Tracer{
 
         let stack = (0..mes.stack.len())
             .rev()
-            .map(|i| mes.stack.peek(i).unwrap())
+            .map(|i| mes.stack.peek(i).expect("stack peek error"))
             .collect::<Vec<_>>();
         let memory = mes.memory.data().to_vec();
         self.data.push(FullTraceData {

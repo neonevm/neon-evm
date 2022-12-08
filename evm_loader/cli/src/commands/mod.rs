@@ -52,26 +52,26 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             emulate::execute(config, &tx)
         }
         ("create-program-address", Some(params)) => {
-            let ether = h160_of(params, "seed").unwrap();
+            let ether = h160_of(params, "seed").expect("seed parse error");
             create_program_address::execute(config, &ether);
             Ok(())
         }
         ("create-ether-account", Some(params)) => {
-            let ether = h160_of(params, "ether").unwrap();
+            let ether = h160_of(params, "ether").expect("ether parse error");
             create_ether_account::execute(config, &ether)
         }
         ("deposit", Some(params)) => {
-            let amount = value_of(params, "amount").unwrap();
-            let ether = h160_of(params, "ether").unwrap();
+            let amount = value_of(params, "amount").expect("amount parse error");
+            let ether = h160_of(params, "ether").expect("ether parse error");
             deposit::execute(config, amount, &ether)
         }
         ("get-ether-account-data", Some(params)) => {
-            let ether = h160_of(params, "ether").unwrap();
+            let ether = h160_of(params, "ether").expect("ether parse error");
             get_ether_account_data::execute(config, &ether);
             Ok(())
         }
         ("cancel-trx", Some(params)) => {
-            let storage_account = pubkey_of(params, "storage_account").unwrap();
+            let storage_account = pubkey_of(params, "storage_account").expect("storage_account parse error");
             cancel_trx::execute(config, &storage_account)
         }
         ("neon-elf-params", Some(params)) => {
@@ -89,8 +89,8 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             init_environment::execute(config, send_trx, force, keys_dir, file)
         }
         ("get-storage-at", Some(params)) => {
-            let contract_id = h160_of(params, "contract_id").unwrap();
-            let index = u256_of(params, "index").unwrap();
+            let contract_id = h160_of(params, "contract_id").expect("contract_it parse error");
+            let index = u256_of(params, "index").expect("index parse error");
             get_storage_at::execute(config, contract_id, &index);
             Ok(())
         }
@@ -106,20 +106,19 @@ fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     if matches.value_of(name) == Some("deploy") {
         return None;
     }
-    matches.value_of(name).map(|value| {
-        H160::from_str(make_clean_hex(value)).unwrap()
-    })
+    h160_of(matches, name)
 }
 
 fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     matches.value_of(name).map(|value| {
-        H160::from_str(make_clean_hex(value)).unwrap()
+        // let err  = format!("{} parse error", name);
+        H160::from_str(make_clean_hex(value)).unwrap_or_else(|_| panic!("{} parse error", name))
     })
 }
 
 fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
     matches.value_of(name).map(|value| {
-        U256::from_str(make_clean_hex(value)).unwrap()
+        U256::from_str(make_clean_hex(value)).unwrap_or_else(|_| panic!("{} parse error", name))
     })
 }
 
@@ -131,7 +130,7 @@ fn read_stdin() -> Option<Vec<u8>>{
             return None
         }
         let data = make_clean_hex(data.as_str());
-        let bin = hex::decode(data).unwrap();
+        let bin = hex::decode(data).expect("data hex::decore error");
         Some(bin)
     }
     else{
@@ -201,7 +200,7 @@ fn parse_tx_params(
     config: &Config,
     params: &ArgMatches,
 ) -> TxParams {
-    let from = h160_of(params, "sender").unwrap();
+    let from = h160_of(params, "sender").expect("sender parse error");
     let to = h160_or_deploy_of(params, "contract");
     let data = read_stdin();
     let value = value_of(params, "value");
@@ -212,15 +211,15 @@ fn parse_tx_params(
     if token.is_none() || chain.is_none() {
         let cached_elf_params = CachedElfParams::new(config);
         token = token.or_else(|| Some(Pubkey::from_str(
-            cached_elf_params.get("NEON_TOKEN_MINT").unwrap()
-        ).unwrap()));
+            cached_elf_params.get("NEON_TOKEN_MINT").expect("NEON_TOKEN_MINT load error")
+        ).expect("NEON_TOKEN_MINT Pubkey ctor error ")));
         chain = chain.or_else(|| Some(u64::from_str(
-            cached_elf_params.get("NEON_CHAIN_ID").unwrap()
-        ).unwrap()));
+            cached_elf_params.get("NEON_CHAIN_ID").expect("NEON_CHAIN_ID load error")
+        ).expect("NEON_CHAIN_ID u64 ctor error")));
     }
-    let token = token.unwrap();
-    let chain = chain.unwrap();
-    let max_steps = value_of::<u64>(params, "max_steps_to_execute").unwrap();
+    let token = token.expect("token_mint get error");
+    let chain = chain.expect("chain_id get error");
+    let max_steps = value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
     TxParams {from, to, data, value, token, chain, max_steps}
 }

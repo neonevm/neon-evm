@@ -37,7 +37,7 @@ pub fn create(options: &ArgMatches) -> Config {
         |config_file| solana_cli_config::Config::load(config_file).unwrap_or_default()
     );
 
-    let commitment = CommitmentConfig::from_str(options.value_of("commitment").unwrap()).unwrap();
+    let commitment = CommitmentConfig::from_str(options.value_of("commitment").expect("commitment parse error")).expect("CommitmentConfig ctor error");
 
     let json_rpc_url = normalize_to_url_if_moniker(
         options
@@ -82,11 +82,11 @@ pub fn create(options: &ArgMatches) -> Config {
 
 
     let rpc_client: Box<dyn rpc::Rpc>  = if let Some(slot) = options.value_of("slot") {
-        let slot:u64 = slot.parse().unwrap();
+        let slot:u64 = slot.parse().expect("slot parse error");
 
         let db_config = options.value_of("db_config")
-            .map(|path|{ solana_cli_config::load_config_file(path).unwrap()})
-            .unwrap();
+            .map(|path|{ solana_cli_config::load_config_file(path).expect("load db-config error")})
+            .expect("parse db-config erro");
 
         Box::new(PostgresClient::new(&db_config, slot))
     } else {
