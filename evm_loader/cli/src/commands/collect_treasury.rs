@@ -20,7 +20,6 @@ use solana_client::rpc_client::RpcClient;
 use spl_token::instruction::sync_native;
 
 use evm_loader::account::{MainTreasury, Treasury};
-use crate::rpc::ToAny;
 
 pub fn execute(
     config: &Config,
@@ -35,10 +34,8 @@ pub fn execute(
 
     info!("Main pool balance: {}", main_balance_address);
 
-    let client = match config.rpc_client.as_any().downcast_ref::<RpcClient>(){
-        Some(item) => item,
-        None => panic!("cast to solana_client::rpc_client::RpcClient error")
-    };
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
 
     for i in 0..pool_count {
         let (aux_balance_address, _) = Treasury::address(&config.evm_loader, i);
