@@ -17,7 +17,7 @@ use crate::{
 };
 use super::{get_program_ether, get_ether_account_nonce, TxParams};
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCliError> {
     let data = tx.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
@@ -147,7 +147,6 @@ pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value,
     Ok(js)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
 
     let js = send_eth_tx(config, tx)?;
