@@ -23,6 +23,7 @@ from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solders.rpc.responses import GetAccountInfoResp, SendTransactionResp
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
@@ -556,7 +557,7 @@ def write_transaction_to_holder_account(
 
 def execute_trx_from_instruction(operator: Keypair, evm_loader, treasury_address: PublicKey, treasury_buffer: bytes,
                                  instruction: SignedTransaction,
-                                 additional_accounts, signer: Keypair):
+                                 additional_accounts, signer: Keypair) -> SendTransactionResp:
     trx = Transaction()
     trx.add(make_ExecuteTrxFromInstruction(operator, evm_loader, treasury_address,
                                            treasury_buffer, instruction.rawTransaction, additional_accounts))
