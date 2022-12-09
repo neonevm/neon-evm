@@ -8,6 +8,7 @@ mod syscall_stubs;
 mod errors;
 mod logs;
 mod commands;
+mod rpc;
 
 use crate::{
     account_storage::{
@@ -26,6 +27,7 @@ use crate::{
         init_environment,
         get_storage_at,
     },
+    rpc::db::PostgresClient,
 };
 
 use evm_loader::{
@@ -49,7 +51,6 @@ use std::{
     env,
     str::FromStr,
     process::{exit},
-    sync::Arc,
     fmt,
     fmt::{Debug, Display,},
 };
@@ -77,12 +78,12 @@ use log::{ debug, error};
 use logs::LogContext;
 
 use crate::errors::NeonCliError;
-use crate::get_neon_elf::CachedElfParams;
+use crate::{get_neon_elf::CachedElfParams,};
 
 type NeonCliResult = Result<(),NeonCliError>;
 
 pub struct Config {
-    rpc_client: Arc<RpcClient>,
+    rpc_client: Box<dyn rpc::Rpc>,
     evm_loader: Pubkey,
     signer: Box<dyn Signer>,
     fee_payer: Option<Keypair>,
@@ -338,7 +339,8 @@ macro_rules! version_string {
 
 
 #[allow(clippy::too_many_lines)]
-fn main() {
+#[tokio::main]
+async fn main() {
     let app_matches = App::new(crate_name!())
         .about(crate_description!())
         .version(version_string!())
@@ -359,6 +361,21 @@ fn main() {
                 arg
             }
         })
+        .arg(
+            Arg::with_name("db_config")
+                .long("db_config")
+                .takes_value(true)
+                .global(true)
+                .help("Configuration file to use Postgress DB")
+        )
+        .arg(
+            Arg::with_name("slot")
+                .long("slot")
+                .value_name("SLOT")
+                .takes_value(true)
+                .required(false)
+                .help("Slot for postgres db-client (implementated only for emulate command)"),
+        )
         .arg(
             Arg::with_name("verbose")
                 .short("v")
@@ -390,7 +407,6 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .validator(is_url_or_moniker)
-                .default_value("http://localhost:8899")
                 .help("URL for Solana node"),
         )
         .arg(
@@ -704,8 +720,21 @@ fn main() {
             true,
         ).ok();
 
+
+        let rpc_client: Box<dyn rpc::Rpc> = if let Some(slot) = app_matches.value_of("slot") {
+            let slot:u64 = slot.parse().unwrap();
+
+            let db_config = app_matches.value_of("db_config")
+                .map(|path|{ solana_cli_config::load_config_file(path).unwrap()})
+                .unwrap();
+
+            Box::new(PostgresClient::new(&db_config, slot))
+        } else {
+            Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
+        };
+
         Config {
-            rpc_client: Arc::new(RpcClient::new_with_commitment(json_rpc_url, commitment)),
+            rpc_client,
             evm_loader,
             signer,
             fee_payer,
@@ -803,5 +832,5 @@ fn main() {
             }
         };
     
-    exit(exit_code)
+    exit(exit_code);
 }

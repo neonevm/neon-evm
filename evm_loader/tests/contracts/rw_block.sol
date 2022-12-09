@@ -30,6 +30,7 @@ contract rw_lock {
 
 
 contract hello_world {
+    uint public num = 5;
     string public text = "Hello World!";
 
     function call_hello_world() public view returns (string memory) {

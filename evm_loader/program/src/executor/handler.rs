@@ -310,6 +310,10 @@ impl<'a, B: AccountStorage> Handler for Executor<'a, B> {
             if (self.state.is_static_context() || is_static) && !transfer.value.is_zero() {
                 return Capture::Exit((ExitError::StaticModeViolation.into(), Vec::new()))
             }
+
+            if self.balance(transfer.source) < transfer.value {
+                return Capture::Exit((ExitError::OutOfFund.into(), Vec::new()))
+            }
         }
 
         let precompile_result = call_precompile(code_address, &input, &context, &mut self.state);
