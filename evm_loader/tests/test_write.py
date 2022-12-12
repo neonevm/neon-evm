@@ -61,9 +61,9 @@ def write_to_account(account, operator, signer, hash, data) -> int:
         AccountMeta(pubkey=account, is_signer=False, is_writable=True),
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=False),
     ]
-    tx.add(TransactionInstruction(program_id=EVM_LOADER, data=write_holder_layout(hash, 0, data), keys=metas))
+    tx.add(TransactionInstruction(program_id=PublicKey(EVM_LOADER), data=write_holder_layout(hash, 0, data), keys=metas))
     opts = TxOpts(skip_confirmation=True, preflight_commitment=Confirmed)
-    return solana_client.send_transaction(tx, signer, opts=opts)["id"]
+    return solana_client.send_transaction(tx, signer, opts=opts).value
 
 
 @pytest.fixture(scope="class")
@@ -84,7 +84,7 @@ def account(operator_keypair) -> PublicKey:
 class TestWriteAccount:
     def test_instruction_write_is_ok(self, account, operator_keypair):
         tx_id = write_to_account(account, operator_keypair, operator_keypair, bytes(32), test_data)
-        assert tx_id > 0
+        assert tx_id is not None
 
     def test_instruction_write_fails_wrong_operator(self, account, attacker):
         with pytest.raises(

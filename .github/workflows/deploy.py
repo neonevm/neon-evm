@@ -68,8 +68,8 @@ def publish_image(github_sha):
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
     out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
     if "error" in out:
-        raise RuntimeError(
-            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+        print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+        sys.exit(1)
 
 
 @cli.command(name="finalize_image")
@@ -91,14 +91,14 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
         out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
         if "error" in out:
-            raise RuntimeError(
-                f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            print(f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            sys.exit(1)
 
         docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
         out = docker_client.push(f"{IMAGE_NAME}:{tag}")
         if "error" in out:
-            raise RuntimeError(
-                f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
+            print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            sys.exit(1)
         click.echo(f"The image {IMAGE_NAME}:{tag} is published")
     else:
         click.echo("The image is not published, please create tag for publishing")
@@ -117,17 +117,20 @@ def run_tests(github_sha):
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml down")
     run_subprocess(f"docker-compose -f ./evm_loader/docker-compose-test.yml up -d")
 
-    try:
-        click.echo("Start tests")
-        exec_id = docker_client.exec_create(
-            container="solana", cmd="/opt/deploy-test.sh")
-        logs = docker_client.exec_start(exec_id['Id'])
-        click.echo(f'logs: {logs}')
-        for line in logs:
-            if 'ERROR ' in str(line) or 'FAILED ' in str(line):
-                raise RuntimeError("Test are failed")
-    except:
-        raise RuntimeError("Solana container is not run")
+    click.echo("Start tests")
+    exec_id = docker_client.exec_create(
+        container="solana", cmd="/opt/deploy-test.sh")
+    logs = docker_client.exec_start(exec_id['Id'], stream=True)
+
+    tests_are_failed = False
+    for line in logs:
+        current_line = line.decode('utf-8')
+        click.echo(current_line)
+        if 'ERROR ' in current_line or 'FAILED ' in current_line:
+            tests_are_failed = True
+    if tests_are_failed:
+        print("Tests are failed")
+        sys.exit(1)
 
 
 @cli.command(name="stop_containers")
