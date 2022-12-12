@@ -16,7 +16,6 @@ use evm::{H160};
 use crate::{
     Config,
     NeonCliResult,
-    rpc::ToAny
 };
 
 /// Executes subcommand `deposit`.
@@ -68,10 +67,9 @@ pub fn execute(
     let blockhash = config.rpc_client.get_latest_blockhash()?;
     finalize_message.recent_blockhash = blockhash;
 
-    let client = match config.rpc_client.as_any().downcast_ref::<RpcClient>(){
-        Some(item) => item,
-        None => panic!("cast to solana_client::rpc_client::RpcClient error")
-    };
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
+
     check_account_for_fee(
         client,
         &config.signer.pubkey(),

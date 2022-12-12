@@ -18,16 +18,6 @@ use crate::rpc::db::PostgresClient;
 use std::any::Any;
 
 
-pub trait ToAny: 'static {
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: 'static> ToAny for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
     fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>;
@@ -51,6 +41,8 @@ pub trait Rpc{
         config: RpcSendTransactionConfig
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
+    fn as_any(&self) -> &dyn Any;
+
 }
 
 impl Rpc for RpcClient{
@@ -125,6 +117,10 @@ impl Rpc for RpcClient{
 
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
         self.get_latest_blockhash_with_commitment(commitment)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -221,5 +217,9 @@ impl Rpc for PostgresClient {
 
     fn get_latest_blockhash_with_commitment(&self, _commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
         Err(ClientErrorKind::Custom("get_latest_blockhash_with_commitment() not implemented for rpc_db client".to_string()).into())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

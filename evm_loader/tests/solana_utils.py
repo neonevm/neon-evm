@@ -23,7 +23,6 @@ from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solders.rpc.responses import GetAccountInfoResp, SendTransactionResp
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
@@ -208,7 +207,6 @@ class neon_cli:
                contract
                ]
         print('cmd:', cmd)
-        print("data:", data)
         try:
             if data:
                 proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -528,37 +526,3 @@ def cancel_transaction(
     print("Cancel receipt:", cancel_receipt)
     assert cancel_receipt.value.transaction.meta.err is None
     return cancel_receipt
-
-
-def write_transaction_to_holder_account(
-        signed_tx: SignedTransaction,
-        holder_account: PublicKey,
-        operator: Keypair,
-):
-    # Write transaction to transaction holder account
-    offset = 0
-    receipts = []
-    rest = signed_tx.rawTransaction
-    while len(rest):
-        (part, rest) = (rest[:920], rest[920:])
-        trx = Transaction()
-        trx.add(make_WriteHolder(operator.public_key, holder_account, signed_tx.hash, offset, part))
-        receipts.append(
-            solana_client.send_transaction(
-                trx,
-                operator,
-                opts=TxOpts(skip_confirmation=True, preflight_commitment=Confirmed),
-            )
-        )
-        offset += len(part)
-    for rcpt in receipts:
-        wait_confirm_transaction(solana_client, rcpt.value)
-
-
-def execute_trx_from_instruction(operator: Keypair, evm_loader, treasury_address: PublicKey, treasury_buffer: bytes,
-                                 instruction: SignedTransaction,
-                                 additional_accounts, signer: Keypair) -> SendTransactionResp:
-    trx = Transaction()
-    trx.add(make_ExecuteTrxFromInstruction(operator, evm_loader, treasury_address,
-                                           treasury_buffer, instruction.rawTransaction, additional_accounts))
-    return solana_client.send_transaction(trx, signer, opts=TxOpts(skip_preflight=False, skip_confirmation=False))

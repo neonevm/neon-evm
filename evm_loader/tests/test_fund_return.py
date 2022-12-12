@@ -58,12 +58,6 @@ class TestFundReturn:
         cls.alice_account = create_holder(cls.alice, "1")
         cls.bob_account = create_holder(cls.bob, "2")
 
-    def test_creator_not_signer(self):
-        err_msg = "keypair-pubkey mismatch"
-
-        with pytest.raises(solders.errors.SignerError, match=err_msg):
-            delete_holder(self.bob_account, self.alice, self.bob)
-
     def test_error_on_wrong_creator(self):
         err_msg = "invalid account data for instruction"
 
