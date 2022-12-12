@@ -63,7 +63,7 @@ def user_account(evm_loader) -> Caller:
     return make_new_user(evm_loader)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def second_user(evm_loader) -> Caller:
     return make_new_user(evm_loader)
 
