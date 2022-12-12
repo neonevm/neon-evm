@@ -68,8 +68,8 @@ def publish_image(github_sha):
     docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
     out = docker_client.push(f"{IMAGE_NAME}:{github_sha}")
     if "error" in out:
-        raise RuntimeError(
-            f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+        print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+        sys.exit(1)
 
 
 @cli.command(name="finalize_image")
@@ -91,14 +91,14 @@ def finalize_image(head_ref_branch, github_ref, github_sha):
         docker_client.login(username=DOCKER_USER, password=DOCKER_PASSWORD)
         out = docker_client.pull(f"{IMAGE_NAME}:{github_sha}")
         if "error" in out:
-            raise RuntimeError(
-                f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            print(f"Pull {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            sys.exit(1)
 
         docker_client.tag(f"{IMAGE_NAME}:{github_sha}", f"{IMAGE_NAME}:{tag}")
         out = docker_client.push(f"{IMAGE_NAME}:{tag}")
         if "error" in out:
-            raise RuntimeError(
-                f"Push {IMAGE_NAME}:{tag} finished with error: {out}")
+            print(f"Push {IMAGE_NAME}:{github_sha} finished with error: {out}")
+            sys.exit(1)
         click.echo(f"The image {IMAGE_NAME}:{tag} is published")
     else:
         click.echo("The image is not published, please create tag for publishing")
@@ -129,7 +129,8 @@ def run_tests(github_sha):
         if 'ERROR ' in current_line or 'FAILED ' in current_line:
             tests_are_failed = True
     if tests_are_failed:
-        raise RuntimeError("Tests are failed")
+        print("Tests are failed")
+        sys.exit(1)
 
 
 @cli.command(name="stop_containers")

@@ -207,7 +207,6 @@ class neon_cli:
                contract
                ]
         print('cmd:', cmd)
-        print("data:", data)
         try:
             if data:
                 proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
