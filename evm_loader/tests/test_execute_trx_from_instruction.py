@@ -79,7 +79,7 @@ class TestExecuteTrxFromInstruction:
 
         assert recipient_balance_after == amount
 
-    def test_deploy_contract(self, operator_keypair, evm_loader, treasury_pool, sender_with_tokens):
+    def test_deploy_contract_not_allowed(self, operator_keypair, evm_loader, treasury_pool, sender_with_tokens):
         contract_filename = "small.binary"
 
         signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename)
