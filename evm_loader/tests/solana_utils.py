@@ -23,13 +23,15 @@ from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
+from solders.rpc.responses import SendTransactionResp
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
 
 from .utils.constants import EVM_LOADER, SOLANA_URL, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
-from .utils.instructions import make_DepositV03, make_Cancel, make_WriteHolder, make_ExecuteTrxFromInstruction
+from .utils.instructions import make_DepositV03, make_Cancel, make_WriteHolder, make_ExecuteTrxFromInstruction, \
+    TransactionWithComputeBudget
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
 from .utils.types import Caller
 
@@ -555,8 +557,11 @@ def write_transaction_to_holder_account(
 
 def execute_trx_from_instruction(operator: Keypair, evm_loader, treasury_address: PublicKey, treasury_buffer: bytes,
                                  instruction: SignedTransaction,
-                                 additional_accounts, signer: Keypair):
-    trx = Transaction()
+                                 additional_accounts, signer: Keypair, system_program=sp.SYS_PROGRAM_ID,
+                                 evm_loader_public_key=PublicKey(EVM_LOADER)) -> SendTransactionResp:
+    trx = TransactionWithComputeBudget(operator)
     trx.add(make_ExecuteTrxFromInstruction(operator, evm_loader, treasury_address,
-                                           treasury_buffer, instruction.rawTransaction, additional_accounts))
+                                           treasury_buffer, instruction.rawTransaction, additional_accounts,
+                                           system_program, evm_loader_public_key))
+
     return solana_client.send_transaction(trx, signer, opts=TxOpts(skip_preflight=False, skip_confirmation=False))

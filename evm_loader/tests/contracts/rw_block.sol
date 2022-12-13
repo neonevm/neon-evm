@@ -38,3 +38,22 @@ contract hello_world {
     }
 }
 
+contract small {
+    function call_hello() public view returns (string memory) {
+        return "Hi";
+    }
+}
+
+
+contract  string_setter{
+    string public text;
+
+
+    function get() public view returns (string memory) {
+        return text;
+    }
+
+    function set(string memory new_text) public payable {
+        text = new_text;
+    }
+}
