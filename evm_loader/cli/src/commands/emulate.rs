@@ -139,7 +139,7 @@ pub fn execute(
         .cloned()
         .collect();
 
-    let js = serde_json::json!({
+    Ok(serde_json::json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": [],
@@ -148,9 +148,5 @@ pub fn execute(
         "exit_reason": exit_reason,
         "steps_executed": steps_executed,
         "used_gas": steps_gas + begin_end_gas + actions_gas + accounts_gas
-    });
-
-    println!("{}", js);
-
-    Ok(())
+    }))
 }

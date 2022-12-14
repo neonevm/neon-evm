@@ -51,8 +51,10 @@ pub fn execute(
 
     let instructions = vec![cancel_with_nonce_instruction];
 
-    crate::send_transaction(config, &instructions)?;
+    let signature = crate::send_transaction(config, &instructions)?;
 
-    Ok(())
+    Ok(serde_json::json!({
+        "transaction": signature
+    }))
 }
 

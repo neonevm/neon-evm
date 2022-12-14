@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::{debug};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
@@ -56,12 +56,8 @@ pub fn execute (
 
     config.rpc_client.send_and_confirm_transaction_with_spinner(&finalize_tx)?;
 
-    info!("{}", serde_json::json!({
-        "solana": solana_address.to_string(),
-        "ether": hex::encode(ether_address),
-        "nonce": nonce,
-    }));
-
-    Ok(())
+    Ok(serde_json::json!({
+        "solana_address": solana_address.to_string(),
+    }))
 }
 

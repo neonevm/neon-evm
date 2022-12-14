@@ -95,24 +95,34 @@ pub fn read_program_data_from_account(config: &Config, evm_loader: &Pubkey) -> R
 
 }
 
-fn print_elf_parameters(params: &HashMap<String, String>){
-    for (key, value) in params {
-        println!("{}={}", key, value);
-    }
+#[allow(clippy::unnecessary_wraps)]
+fn elf_parameters_to_json(params: HashMap<String, String>) -> NeonCliResult {
+    use serde_json::{Map, Value};
+
+    let params: Map<String, Value> = params.into_iter().map(|(key, value)| {
+        (key, Value::String(value))
+    }).collect();
+
+    Ok(Value::Object(params))
 }
 
-fn read_program_params_from_file(config: &Config,
-                               program_location: &str) -> NeonCliResult {
+fn read_program_params_from_file(
+    config: &Config,
+    program_location: &str
+) -> NeonCliResult {
     let program_data = crate::read_program_data(program_location)?;
     let program_data = &program_data[..];
     let elf_params = read_elf_parameters(config, program_data);
-    print_elf_parameters(&elf_params);
-    Ok(())
+
+    elf_parameters_to_json(elf_params)
 }
 
-fn read_program_params_from_account(config: &Config) {
-    let elf_params = read_elf_parameters_from_account(config).unwrap();
-    print_elf_parameters(&elf_params);
+fn read_program_params_from_account(
+    config: &Config
+) -> NeonCliResult {
+    let elf_params = read_elf_parameters_from_account(config)?;
+
+    elf_parameters_to_json(elf_params)
 }
 
 pub fn execute(
@@ -120,7 +130,7 @@ pub fn execute(
     program_location: Option<&str>,
 ) -> NeonCliResult {
     program_location.map_or_else(
-        || {read_program_params_from_account(config); Ok(())},
+        || read_program_params_from_account(config),
         |program_location| read_program_params_from_file(config, program_location),
     )
 }

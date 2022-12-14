@@ -195,18 +195,16 @@ class neon_cli:
 
     def call(self, arguments):
         cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, SOLANA_URL, arguments)
-        try:
-            return subprocess.check_output(cmd, shell=True,  text=True, universal_newlines=True,
-                                           stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as err:
-            print(f"ERR: neon-cli error {err}")
-            raise
+        proc_result = subprocess.run(cmd, shell=True,  text=True, stdout=subprocess.PIPE, universal_newlines=True)
+        result = json.loads(proc_result.stdout)
+        if result["result"] == "error":
+            error = result["error"]
+            raise Exception(f"ERR: neon-cli error {error}")
+        
+        proc_result.check_returncode()
+        return result["value"]
 
     def emulate(self, loader_id, sender, contract, data):
-        # cmd = 'neon-cli {} --commitment=processed --evm_loader {} --url {} emulate {}'.format(self.verbose_flags,
-        #                                                                                       loader_id,
-        #                                                                                       SOLANA_URL,
-        #                                                                                       arguments)
         cmd = ["neon-cli",
                "--commitment=recent",
                "--url", SOLANA_URL,
@@ -217,25 +215,19 @@ class neon_cli:
                ]
         print('cmd:', cmd)
         print ("data:", data)
-        try:
-            if data:
-                proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                             universal_newlines=True)
-            else:
-                proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                             universal_newlines=True)
-            if proc_result.stderr is not None:
-                print(proc_result.stderr)
-            output = proc_result.stdout
-            if not output:
-                proc_result.check_returncode()
 
-            without_empty_lines = os.linesep.join([s for s in output.splitlines() if s])
-            last_line = without_empty_lines.splitlines()[-1]
-            return last_line
-        except subprocess.CalledProcessError as err:
-            print(f"ERR: neon-cli error {err}")
-            raise
+        if data:
+            proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, universal_newlines=True)
+        else:
+            proc_result = subprocess.run(cmd, input="", text=True, stdout=subprocess.PIPE, universal_newlines=True)
+
+        result = json.loads(proc_result.stdout)
+        if result["result"] == "error":
+            error = result["error"]
+            raise Exception(f"ERR: neon-cli error {error}")
+        
+        proc_result.check_returncode()
+        return result["value"]
 
 
 class RandomAccount:
@@ -353,10 +345,8 @@ class EvmLoader:
         return acc, 255
 
     def ether2program(self, ether: Union[str, bytes]) -> Tuple[str, int]:
-        output = neon_cli().call("create-program-address --evm_loader {} {}"
-                                 .format(self.loader_id, self.ether2hex(ether)))
-        items = output.rstrip().split(' ')
-        return items[0], int(items[1])
+        items = PublicKey.find_program_address([ACCOUNT_SEED_VERSION, self.ether2bytes(ether)], PublicKey(EVM_LOADER))
+        return str(items[0]), items[1]
 
     def check_account(self, solana):
         info = solana_client.get_account_info(solana)

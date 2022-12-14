@@ -17,7 +17,6 @@ use crate::{
     },
     commands::{
         emulate,
-        create_program_address,
         create_ether_account,
         deposit,
         get_ether_account_data,
@@ -75,12 +74,11 @@ use solana_client::{
 use rlp::RlpStream;
 
 use log::{ debug, error};
-use logs::LogContext;
 
 use crate::errors::NeonCliError;
 use crate::{get_neon_elf::CachedElfParams,};
 
-type NeonCliResult = Result<(),NeonCliError>;
+type NeonCliResult = Result<serde_json::Value, NeonCliError>;
 
 pub struct Config {
     rpc_client: Box<dyn rpc::Rpc>,
@@ -439,15 +437,6 @@ async fn main() {
                 .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
         )
         .arg(
-            Arg::with_name("logging_ctx")
-                .short("L")
-                .long("logging_ctx")
-                .value_name("LOG_CONTEXT")
-                .takes_value(true)
-                .global(true)
-                .help("Logging context"),
-        )
-        .arg(
             Arg::with_name("loglevel")
                 .short("l")
                 .long("loglevel")
@@ -526,18 +515,6 @@ async fn main() {
                         .help("Ethereum address"),
                 )
             )
-        .subcommand(
-            SubCommand::with_name("create-program-address")
-                .about("Generate a program address")
-                .arg(
-                    Arg::with_name("seed")
-                        .index(1)
-                        .value_name("SEED_STRING")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The seeds (a string containing seeds in hex form, separated by spaces)"),
-                )
-        )
         .subcommand(
             SubCommand::with_name("deposit")
                 .about("Deposit NEONs to ether account")
@@ -654,23 +631,18 @@ async fn main() {
         )
         .get_matches();
 
-    let context: LogContext =
-        app_matches.value_of("logging_ctx")
-            .map(|ctx| LogContext::new(ctx.to_string()) )
-            .unwrap_or_default();
-    let loglevel: log::LevelFilter =
-        app_matches.value_of("loglevel")
-            .map_or(log::LevelFilter::Trace, |ll| 
-                match ll.to_ascii_lowercase().as_str() {
-                    "off"   => log::LevelFilter::Off,
-                    "error" => log::LevelFilter::Error,
-                    "warn"  => log::LevelFilter::Warn,
-                    "info"  => log::LevelFilter::Info,
-                    "debug" => log::LevelFilter::Debug,
-                    _       => log::LevelFilter::Trace,
-                }
-            );
-    logs::init(context, loglevel).unwrap();
+    let log_level: log::LevelFilter = app_matches.value_of("loglevel")
+        .map_or(log::LevelFilter::Error, |ll| 
+            match ll.to_ascii_lowercase().as_str() {
+                "off"   => log::LevelFilter::Off,
+                "error" => log::LevelFilter::Error,
+                "warn"  => log::LevelFilter::Warn,
+                "info"  => log::LevelFilter::Info,
+                "debug" => log::LevelFilter::Debug,
+                _       => log::LevelFilter::Trace,
+            }
+        );
+    logs::init(log_level).unwrap();
 
     let mut wallet_manager = None;
     let config = {
@@ -776,11 +748,6 @@ async fn main() {
                                  chain_id,
                                  max_steps_to_execute)
             }
-            ("create-program-address", Some(arg_matches)) => {
-                let ether = h160_of(arg_matches, "seed").unwrap();
-                create_program_address::execute(&config, &ether);
-                Ok(())
-            }
             ("create-ether-account", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
                 create_ether_account::execute(&config, &ether)
@@ -792,8 +759,7 @@ async fn main() {
             }
             ("get-ether-account-data", Some(arg_matches)) => {
                 let ether = h160_of(arg_matches, "ether").unwrap();
-                get_ether_account_data::execute(&config, &ether);
-                Ok(())
+                get_ether_account_data::execute(&config, &ether)
             }
             ("cancel-trx", Some(arg_matches)) => {
                 let storage_account = pubkey_of(arg_matches, "storage_account").unwrap();
@@ -816,21 +782,35 @@ async fn main() {
             ("get-storage-at", Some(arg_matches)) => {
                 let contract_id = h160_of(arg_matches, "contract_id").unwrap();
                 let index = u256_of(arg_matches, "index").unwrap();
-                get_storage_at::execute(&config, contract_id, &index);
-                Ok(())
+                get_storage_at::execute(&config, contract_id, &index)
             }
             _ => unreachable!(),
         };
+
+    let logs = {
+        let context = crate::logs::CONTEXT.lock().unwrap();
+        context.clone()
+    };
     
-    let exit_code: i32 =
+    let (result, exit_code) =
         match result {
-            Ok(_)  => 0,
+            Ok(result) => {
+                (serde_json::json!({
+                    "result": "success",
+                    "value": result,
+                    "logs": logs
+                }), 0_i32)
+            }
             Err(e) => {
-                let error_code = e.error_code();
-                error!("NeonCli Error ({}): {}", error_code, e);
-                error_code as i32
+                let error_code = e.error_code() as i32;
+                (serde_json::json!({
+                    "result": "error",
+                    "error": e.to_string(),
+                    "logs": logs
+                }), error_code)
             }
         };
     
+    println!("{}", serde_json::to_string_pretty(&result).unwrap());
     exit(exit_code);
 }

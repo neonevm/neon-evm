@@ -1,3 +1,5 @@
+use crate::NeonCliResult;
+
 use {
     crate::{
         read_program_data,
@@ -95,7 +97,7 @@ pub fn execute(
     force: bool,
     keys_dir: Option<&str>,
     file: Option<&str>,
-) -> Result<(), NeonCliError> {
+) -> NeonCliResult {
 
     info!("Signer: {}, send_trx: {}, force: {}", config.signer.pubkey(), send_trx, force);
     let fee_payer = config.fee_payer.as_ref().map_or_else(|| config.signer.as_ref(), |v| v);
@@ -277,13 +279,19 @@ pub fn execute(
 
     executor.checkpoint(config.rpc_client.commitment())?;
 
-    let stats = executor.stats.borrow();
+    let stats = executor.stats.take();
     info!("Stats: {:?}", stats);
+    
+    let signatures = executor.signatures.take();
+    let result = serde_json::json!({
+        "transactions": signatures,
+    });
+
     if stats.total_objects == stats.corrected_objects {
-        Ok(())
+        Ok(result)
     } else if stats.invalid_objects == 0 {
         if send_trx {
-            Ok(())
+            Ok(result)
         } else {
             // Some object required modifing
             Err(NeonCliError::IncompleteEnvironment)
