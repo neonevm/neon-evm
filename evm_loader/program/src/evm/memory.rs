@@ -1,5 +1,5 @@
 use std::{
-    alloc::{Layout, alloc_zeroed, realloc},
+    alloc::{Layout, alloc_zeroed, realloc, dealloc},
     cell::Cell,
 };
 use solana_program::program_memory::{sol_memset, sol_memcpy};
@@ -59,9 +59,8 @@ impl Memory {
             realloc(self.data, old_layout, size)
         };
 
-        // Memory is zeroed by Solana
-        // let slice = unsafe { core::slice::from_raw_parts_mut(self.data, size) };
-        // sol_memset(&mut slice[self.capacity..], 0, size - self.capacity);
+        let slice = unsafe { core::slice::from_raw_parts_mut(self.data, size) };
+        sol_memset(&mut slice[self.capacity..], 0, size - self.capacity);
         
         self.capacity = size;
 
@@ -199,6 +198,16 @@ impl Memory {
         Ok(())
     }
 }
+
+impl Drop for Memory {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(self.capacity, MEMORY_ALIGN);
+            dealloc(self.data, layout);
+        }
+    }
+}
+
 
 
 impl serde::Serialize for Memory {

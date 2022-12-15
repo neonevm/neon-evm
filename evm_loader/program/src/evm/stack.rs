@@ -1,6 +1,6 @@
 #![allow(clippy::inline_always)]
 
-use std::{alloc::{Layout, alloc}, convert::TryInto};
+use std::{alloc::{Layout, alloc, dealloc}, convert::TryInto};
 use ethnum::{U256, I256};
 use crate::{error::Error, types::Address};
 use super::tracing_event;
@@ -244,6 +244,16 @@ impl Stack {
         }
 
         Ok(())
+    }
+}
+
+
+impl Drop for Stack {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(STACK_SIZE, ELEMENT_SIZE);
+            dealloc(self.begin, layout);
+        }
     }
 }
 
