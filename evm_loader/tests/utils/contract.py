@@ -7,12 +7,12 @@ from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from solders.rpc.responses import GetTransactionResp
 
-from .types import Caller, TreasuryPool
+from .types import Caller, TreasuryPool, Contract
 from ..solana_utils import solana_client, \
-    send_transaction, get_transaction_count, EvmLoader,  write_transaction_to_holder_account
+    send_transaction, get_transaction_count, EvmLoader, write_transaction_to_holder_account
 from .storage import create_holder
 from .instructions import TransactionWithComputeBudget, make_ExecuteTrxFromAccountDataIterativeOrContinue
-from .ethereum import create_contract_address, Contract
+from .ethereum import create_contract_address
 
 from web3.auto import w3
 
@@ -20,7 +20,7 @@ from web3.auto import w3
 def make_deployment_transaction(
         user: Caller,
         contract_path: tp.Union[pathlib.Path, str],
-        gas: int = 999999999,
+        gas: int = 999999999, chain_id=111
 ) -> SignedTransaction:
     if isinstance(contract_path, str):
         contract_path = pathlib.Path(contract_path)
@@ -35,10 +35,11 @@ def make_deployment_transaction(
         'gas': gas,
         'gasPrice': 0,
         'nonce': get_transaction_count(solana_client, user.solana_account_address),
-        'data': contract_code,
-        'chainId': 111
+        'data': contract_code
     }
-
+    if chain_id is not None:
+        tx['chainId'] = chain_id
+    print(tx)
     return w3.eth.account.sign_transaction(tx, user.solana_account.secret_key[:32])
 
 

@@ -13,6 +13,7 @@ import spl.token.instructions
 from base58 import b58encode
 from eth_account.datastructures import SignedTransaction
 from eth_keys import keys as eth_keys
+from eth_utils import abi, to_text
 from hexbytes import HexBytes
 from sha3 import keccak_256
 import solana.system_program as sp
@@ -23,7 +24,7 @@ from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 from solana.rpc.types import TxOpts
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction
-from solders.rpc.responses import SendTransactionResp
+from solders.rpc.responses import SendTransactionResp, GetTransactionResp
 from solders.transaction_status import TransactionConfirmationStatus
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import get_associated_token_address, ApproveParams
@@ -31,9 +32,10 @@ from spl.token.instructions import get_associated_token_address, ApproveParams
 from .utils.constants import EVM_LOADER, SOLANA_URL, SYSTEM_ADDRESS, NEON_TOKEN_MINT_ID, \
     ACCOUNT_SEED_VERSION, TREASURY_POOL_SEED
 from .utils.instructions import make_DepositV03, make_Cancel, make_WriteHolder, make_ExecuteTrxFromInstruction, \
-    TransactionWithComputeBudget
+    TransactionWithComputeBudget, make_PartialCallOrContinueFromRawEthereumTX, \
+    make_ExecuteTrxFromAccountDataIterativeOrContinue
 from .utils.layouts import ACCOUNT_INFO_LAYOUT, CREATE_ACCOUNT_LAYOUT
-from .utils.types import Caller
+from .utils.types import Caller, Contract
 
 EVM_LOADER_SO = os.environ.get("EVM_LOADER_SO", 'target/bpfel-unknown-unknown/release/evm_loader.so')
 solana_client = Client(SOLANA_URL)
@@ -42,7 +44,7 @@ path_to_solana = 'solana'
 # amount of gas per 1 byte evm_storage
 EVM_BYTE_COST = 6960  # 1_000_000_000/ 100 * 365 / (1024*1024) * 2
 # number of evm steps per transaction
-EVM_STEPS = 500
+EVM_STEPS = 1000  # TODO
 # the message size that is used to holder-account filling
 HOLDER_MSG_SIZE = 950
 # Ethereum account allocated data size
@@ -228,6 +230,28 @@ class neon_cli:
         except subprocess.CalledProcessError as err:
             print(f"ERR: neon-cli error {err}")
             raise
+
+    def call_contract_get_function(self, evm_loader, sender, contract, function_signature: str):
+        data = abi.function_signature_to_4byte_selector(function_signature)
+        result = json.loads(
+            self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(),
+                         data.hex())
+        )
+        return to_text(result["result"])
+
+    def get_steps_count(self, evm_loader, from_acc, to, data):
+        if isinstance(to, (Caller, Contract)):
+            to = to.eth_address.hex()
+
+        result = json.loads(
+            neon_cli().emulate(
+                evm_loader.loader_id,
+                from_acc.eth_address.hex(),
+                to,
+                data
+            )
+        )
+        return result["steps_executed"]
 
 
 class RandomAccount:
@@ -565,3 +589,69 @@ def execute_trx_from_instruction(operator: Keypair, evm_loader, treasury_address
                                            system_program, evm_loader_public_key))
 
     return solana_client.send_transaction(trx, signer, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+
+
+def send_transaction_step_from_instruction(operator: Keypair, evm_loader, treasury, storage_account,
+                                           instruction: SignedTransaction,
+                                           additional_accounts, steps_count, signer: Keypair,
+                                           system_program=sp.SYS_PROGRAM_ID,
+                                           evm_loader_public_key=PublicKey(EVM_LOADER)) -> SendTransactionResp:
+    trx = TransactionWithComputeBudget(operator)
+    trx.add(
+        make_PartialCallOrContinueFromRawEthereumTX(
+            instruction.rawTransaction,
+            operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
+            additional_accounts
+        )
+    )
+
+    return solana_client.send_transaction(trx, signer, opts=TxOpts(skip_preflight=False, skip_confirmation=False))
+
+
+def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader, treasury, storage_account,
+                                               instruction: SignedTransaction,
+                                               additional_accounts, steps_count=EVM_STEPS, signer: Keypair = None,
+                                               system_program=sp.SYS_PROGRAM_ID,
+                                               evm_loader_public_key=PublicKey(EVM_LOADER)) -> SendTransactionResp:
+    signer = operator if signer is None else signer
+
+    send_transaction_step_from_instruction(operator, evm_loader, treasury, storage_account, instruction,
+                                           additional_accounts, 1, signer)
+    if steps_count > 0:
+        steps_left = steps_count
+        while steps_left > 0:
+            send_transaction_step_from_instruction(operator, evm_loader, treasury, storage_account, instruction,
+                                                   additional_accounts, EVM_STEPS, signer)
+            steps_left = steps_left - EVM_STEPS
+    return send_transaction_step_from_instruction(operator, evm_loader, treasury, storage_account, instruction,
+                                                  additional_accounts, 1, signer)
+
+
+def send_transaction_step_from_account(operator: Keypair, evm_loader, treasury, storage_account,
+                                       additional_accounts, steps_count, signer: Keypair,
+                                       system_program=sp.SYS_PROGRAM_ID,
+                                       evm_loader_public_key=PublicKey(EVM_LOADER)) -> GetTransactionResp:
+    trx = TransactionWithComputeBudget(operator)
+    trx.add(
+        make_ExecuteTrxFromAccountDataIterativeOrContinue(
+            operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
+            additional_accounts
+        )
+    )
+    return send_transaction(solana_client, trx, operator)
+
+
+def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasury, storage_account,
+                                           additional_accounts, steps_count=EVM_STEPS,
+                                           signer: Keypair = None) -> GetTransactionResp:
+    signer = operator if signer is None else signer
+
+    send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1, signer)
+    if steps_count > 0:
+        steps_left = steps_count
+        while steps_left > 0:
+            send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts,
+                                               EVM_STEPS, signer)
+            steps_left = steps_left - EVM_STEPS
+    return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
+                                              signer)
