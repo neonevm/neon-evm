@@ -39,10 +39,10 @@ pub fn do_begin<'a>(
     let mut backend = ExecutorState::new(account_storage);
     let evm = Machine::new(trx, caller, &mut backend)?;
 
-    { // Save EVM State into storage
+    {   // Save EVM State into storage
         let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
-        bincode::serialize_into(&mut buffer, &backend)?;
-        bincode::serialize_into(&mut buffer, &evm)?;
+        backend.serialize_into(&mut buffer)?;
+        evm.serialize_into(&mut buffer)?;
     }
 
     finalize(0, accounts, storage, account_storage, None, gasometer)
@@ -64,7 +64,7 @@ pub fn do_continue<'a>(
     let (mut backend, mut evm) = {
         let mut buffer: &[u8] = &mut storage.evm_state_data();
         let backend: ExecutorState<_> = ExecutorState::deserialize_from(&mut buffer, account_storage)?;
-        let evm: Machine<_> = bincode::deserialize_from(&mut buffer)?;
+        let evm: Machine<_> = Machine::deserialize_from(&mut buffer, &backend)?;
         (backend, evm)
     };
 
@@ -81,8 +81,8 @@ pub fn do_continue<'a>(
 
     if steps_executed > 0 {
         let mut buffer: &mut [u8] = &mut storage.evm_state_mut_data();
-        bincode::serialize_into(&mut buffer, &backend)?;
-        bincode::serialize_into(&mut buffer, &evm)?;
+        backend.serialize_into(&mut buffer)?;
+        evm.serialize_into(&mut buffer)?;
     }
 
     let results = match result {

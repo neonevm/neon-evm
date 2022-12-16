@@ -62,6 +62,8 @@ pub struct Context {
     pub contract: Address,
     #[serde(with="ethnum::serde::bytes::le")]
     pub value: U256,
+
+    pub code_address: Option<Address>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -96,6 +98,29 @@ pub struct Machine<B: Database> {
 }
 
 impl<B: Database> Machine<B> {
+    pub fn serialize_into<W>(mut self, writer: &mut W) -> Result<()> 
+        where W: std::io::Write
+    {
+        if self.context.code_address.is_some() {
+            // Execution code can be restored from the account
+            self.execution_code.clear();
+        }
+
+        bincode::serialize_into(writer, &self)
+            .map_err(Error::from)
+    }
+
+    pub fn deserialize_from(buffer: &mut &[u8], backend: &B) -> Result<Self> 
+    {
+        let mut machine: Self = bincode::deserialize_from(buffer)?;
+        if let Some(code_address) = &machine.context.code_address {
+            machine.execution_code = backend.code(code_address)?;
+        }
+
+        Ok(machine)
+    }
+
+
     pub fn new(
         trx: Transaction,
         origin: Address,
@@ -149,7 +174,8 @@ impl<B: Database> Machine<B> {
             context: Context { 
                 caller: origin,
                 contract: target,
-                value: trx.value
+                value: trx.value,
+                code_address: Some(target),
             },
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,
@@ -186,10 +212,11 @@ impl<B: Database> Machine<B> {
 
         Ok(Self {
             origin,
-            context: Context { 
+            context: Context {
                 caller: origin,
                 contract: target,
-                value: trx.value
+                value: trx.value,
+                code_address: None,
             },
             gas_price: trx.gas_price,
             gas_limit: trx.gas_limit,

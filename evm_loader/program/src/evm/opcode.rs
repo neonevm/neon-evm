@@ -975,7 +975,8 @@ impl<B: Database> Machine<B> {
         let context = Context {
             caller: self.context.contract,
             contract: address,
-            value
+            value,
+            code_address: None,
         };
         let init_code = self.memory.read(offset, length)?.to_vec();
 
@@ -1021,7 +1022,8 @@ impl<B: Database> Machine<B> {
         let context = Context {
             caller: self.context.contract,
             contract: address,
-            value
+            value,
+            code_address: Some(address),
         };
         let call_data = self.memory.read(args_offset, args_length)?.to_vec();
 
@@ -1075,7 +1077,8 @@ impl<B: Database> Machine<B> {
         let context = Context {
             caller: self.context.contract,
             contract: self.context.contract,
-            value
+            value,
+            code_address: Some(address),
         };
         let call_data = self.memory.read(args_offset, args_length)?.to_vec();
         
@@ -1159,6 +1162,7 @@ impl<B: Database> Machine<B> {
             caller: self.context.contract,
             contract: address,
             value: U256::ZERO,
+            code_address: Some(address),
         };
         let call_data = self.memory.read(args_offset, args_length)?.to_vec();
 
