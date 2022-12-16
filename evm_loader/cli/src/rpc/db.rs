@@ -7,22 +7,37 @@ use postgres::{ NoTls};
 use serde::{Serialize, Deserialize };
 use tokio::task::block_in_place;
 use std::convert::TryFrom;
+use evm_loader::H256;
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct DBConfig{
-    pub host: String,
-    pub port: String,
-    pub database: String,
-    pub user: String,
-    pub password: String,
+pub struct DbConfig{
+    pub tracer_host: String,
+    pub tracer_port: String,
+    pub tracer_database: String,
+    pub tracer_user: String,
+    pub tracer_password: String,
+    pub indexer_host: String,
+    pub indexer_port: String,
+    pub indexer_database: String,
+    pub indexer_user: String,
+    pub indexer_password: String,
+}
+
+
+#[derive(Debug)]
+pub struct CallDbClient {
+    pub slot: u64,
+    tracer_db: Client,
 }
 
 #[derive(Debug)]
-pub struct PostgresClient {
-    pub slot: u64,
-    client: Client,
+pub struct TrxDbClient {
+    pub hash: H256,
+    tracer_db: Client,
+    indexer_db: Client,
 }
+
 
 pub fn block<F, Fu, R>(f: F) -> R
     where
@@ -35,17 +50,47 @@ pub fn block<F, Fu, R>(f: F) -> R
     })
 }
 
+
 impl PostgresClient {
-    pub fn new(config: &DBConfig, slot: u64) -> Self {
-        let connection_str= format!("host={} port={} dbname={} user={} password={}",
-                                    config.host, config.port, config.database, config.user, config.password);
+    pub fn new_for_eth_call(config: &DbConfig, slot: u64) -> Self {
+        let client = PostgresClient::do_connect(
+            &config.tracer_host, &config.tracer_port, &config.tracer_database, &config.tracer_user, &config.tracer_password
+        );
+        PostgresClient {
+            slot: Some(slot),
+            hash: None,
+            tracer_client : client,
+            indexer_client: None,
+        }
+    }
+
+    pub fn new_for_trx(config: &DBconfig, hash: H256) -> Self {
+        let tracer_client = PostgresClient::do_connect(
+            &config.tracer_host, &config.tracer_port, &config.tracer_database, &config.tracer_user, &config.tracer_password
+        );
+        let indexer_client = PostgresClient::do_connect(
+            &config.indexer_host, &config.indexer_port, &config.indexer_database, &config.indexer_user, &config.indexer_password
+        );
+        PostgresClient {
+            slot: None,
+            hash: Some(hash),
+            tracer_client : tracer_client,
+            indexer_client: Some(indexer_client),
+        }
+    }
+
+
+    pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {
+        let authority= format!(
+            "host={} port={} dbname={} user={} password={}", host, port, db, user, pass
+        );
 
         let mut attempt = 0;
         let mut result = None;
 
         while attempt < 3 {
             result = block(|| async {
-                connect(&connection_str, NoTls).await
+                connect(&authority, NoTls).await
             }).ok();
             if result.is_some() {
                 break;
@@ -60,7 +105,7 @@ impl PostgresClient {
                 eprintln!("connection error: {}", e);
             }
         });
-        Self {slot, client}
+        client
     }
 
     pub fn get_account_at_slot(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
@@ -117,5 +162,16 @@ impl PostgresClient {
         })?.try_get(0)?;
 
         self.get_block_hash(u64::try_from(slot).expect("slot parse error"))
+    }
+
+    pub fn get_transaction_data(&self, hash: &String) -> Result<> {
+        let row = block(|| async {
+            self.client.query(
+                "select distinct from_addr, to_addr, calldata, value, gas_used, gas_limit\
+                 from neon_transactions where neon_sig = {}", hash
+            ).await;
+        })?;
+
+
     }
 }

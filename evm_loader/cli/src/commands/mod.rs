@@ -10,6 +10,7 @@ pub mod collect_treasury;
 pub mod init_environment;
 mod transaction_executor;
 mod trace_call;
+mod trace_trx;
 
 use clap::ArgMatches;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
@@ -28,10 +29,11 @@ use evm_loader::account::EthereumAccount;
 use log::debug;
 use crate::{
     NeonCliResult, NeonCliError,
-    program_options::make_clean_hex,
+    program_options::truncate,
     Config,
     account_storage::account_info,
     commands::get_neon_elf::CachedElfParams,
+    types::EthCallObject,
 };
 
 #[derive(Clone)]
@@ -43,6 +45,7 @@ pub struct TxParams {
     token: Pubkey,
     chain: u64,
     max_steps: u64,
+    gas_limit: Option<U256>,
 }
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
@@ -95,10 +98,16 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             Ok(())
         }
         ("trace_call", Some(params)) => {
-            let tx = parse_tx_params(config, params);
+            let mut tx= parse_tx_params(config, params);
+            let gas_limit = u256_of(params, "gas_limit");
+            tx.gas_limit = gas_limit;
             trace_call::execute(config, &tx)
         }
-        _ => unreachable!(),
+        ("trace_trx", Some(params)) => {
+            let player = player::Player::new(config);
+            player.replay_trx_hash();
+        }
+            _ => unreachable!(),
     }
 }
 
@@ -112,26 +121,45 @@ fn h160_or_deploy_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
 fn h160_of(matches: &ArgMatches<'_>, name: &str) -> Option<H160> {
     matches.value_of(name).map(|value| {
         // let err  = format!("{} parse error", name);
-        H160::from_str(make_clean_hex(value)).unwrap_or_else(|_| panic!("{} parse error", name))
+        H160::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
     })
 }
 
 fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
     matches.value_of(name).map(|value| {
-        U256::from_str(make_clean_hex(value)).unwrap_or_else(|_| panic!("{} parse error", name))
+        U256::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
     })
 }
 
-fn read_stdin() -> Option<Vec<u8>>{
+fn h256_of(matches: &ArgMatches<'_>, name: &str) -> Option<H256> {
+    matches.value_of(name).map(|value| {
+        H256::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
+    })
+}
+
+// fn read_stdin() -> Option<Vec<u8>>{
+//     let mut data = String::new();
+//
+//     if let Ok(len) = std::io::stdin().read_line(&mut data){
+//         if len == 0{
+//             return None
+//         }
+//         let data = truncate(data.as_str());
+//         let bin = hex::decode(data).expect("data hex::decore error");
+//         Some(bin)
+//     }
+//     else{
+//         None
+//     }
+// }
+fn read_stdin() -> Option<String>{
     let mut data = String::new();
 
     if let Ok(len) = std::io::stdin().read_line(&mut data){
         if len == 0{
             return None
         }
-        let data = make_clean_hex(data.as_str());
-        let bin = hex::decode(data).expect("data hex::decore error");
-        Some(bin)
+        Some(data)
     }
     else{
         None
@@ -202,7 +230,20 @@ fn parse_tx_params(
 ) -> TxParams {
     let from = h160_of(params, "sender").expect("sender parse error");
     let to = h160_or_deploy_of(params, "contract");
-    let data = read_stdin();
+    // let data = read_stdin();
+    // let data = if let Some(str) = data  {
+    //     let data = truncate(str.as_str());
+    //     let bin = hex::decode(data).expect("data hex::decore error");
+    //     Some(bin)
+    // } else {
+    //     None
+    // };
+
+    let data : Option<Vec<u8>> =  read_stdin().map(|str| {
+        hex::decode(truncate(str.as_str())).expect("data hex::decore error")
+    });
+
+
     let value = value_of(params, "value");
 
     // Read ELF params only if token_mint or chain_id is not set.
@@ -221,5 +262,5 @@ fn parse_tx_params(
     let chain = chain.expect("chain_id get error");
     let max_steps = value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
-    TxParams {from, to, data, value, token, chain, max_steps}
+    TxParams {from, to, data, value, token, chain, max_steps, gas_limit: None}
 }

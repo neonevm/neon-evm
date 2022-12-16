@@ -15,7 +15,7 @@ pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
     let mut tracer = Tracer::new();
 
     evm_loader::using( &mut tracer, || {
-        emulate::send_eth_tx(config, tx)
+        emulate::send(config, tx)
     })?;
 
     let (vm_trace, full_trace_data) = tracer.into_traces();
@@ -30,3 +30,4 @@ pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
     println!("{}", serde_json::json!(trace));
     NeonCliResult::Ok(())
 }
+

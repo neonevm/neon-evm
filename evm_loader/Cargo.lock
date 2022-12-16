@@ -1040,12 +1040,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "environmental"
-version = "1.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48c92028aaa870e83d51c64e5d4e0b6981b360c522198c23959f219a4e1b15b"
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1115,7 +1109,6 @@ name = "evm-core"
 version = "0.18.2"
 dependencies = [
  "borsh",
- "environmental",
  "fixed-hash 0.7.0",
  "impl-rlp",
  "impl-serde 0.3.1",

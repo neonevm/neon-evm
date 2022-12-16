@@ -26,7 +26,7 @@ type NeonCliResult = Result<(),NeonCliError>;
 async fn main() {
     let options = program_options::parse();
 
-    logs::init(&options).expect("logs init error\");
+    logs::init(&options).expect("logs init error");
 
     let config = config::create(&options);
 

@@ -18,7 +18,7 @@ use crate::{
 use super::{get_program_ether, get_ether_account_nonce, TxParams};
 
 #[allow(clippy::too_many_lines)]
-pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCliError> {
+pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCliError> {
     let data = tx.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -45,7 +45,7 @@ pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value,
     };
 
     let (exit_reason, result, actions, steps_executed) = {
-        let gas_limit = U256::from(999_999_999_999_u64);
+        let gas_limit = tx.gas_limit.unwrap_or(U256::from(999_999_999_999_u64));
         let mut executor = Machine::new(tx.from, &storage)?;
         debug!("Executor initialized");
 
@@ -149,7 +149,7 @@ pub fn send_eth_tx( config: &Config, tx: &TxParams) -> Result<serde_json::Value,
 
 pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
 
-    let js = send_eth_tx(config, tx)?;
+    let js = send(config, tx)?;
     println!("{}", js);
     Ok(())
 }

@@ -3,9 +3,12 @@
 #[rustfmt::skip]
 #[allow(clippy::all)]
 pub mod ec;
+mod primitive;
+
+pub use primitive::*;
 
 use evm_loader::H256;
-use parity_bytes::ToPretty;
+// use parity_bytes::ToPretty;
 
 type Bytes = Vec<u8>;
 #[derive(Debug, Clone)]
@@ -37,3 +40,16 @@ impl<T> TxMeta<T> {
         }
     }
 }
+
+
+#[derive(Debug, Default, PartialEq, serde::Deserialize)]
+pub struct EthCallObject {
+    pub from: Option<H160T>,
+    pub to: Option<H160T>,
+    pub gas: Option<U256T>,
+    pub gasprice: Option<U256T>,
+    pub value: Option<U256T>,
+    pub data: Option<Bytes>,
+}
+
+

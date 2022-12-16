@@ -11,7 +11,7 @@ pub struct EthTrx<'a> {
 }
 
 
-impl<'a> ToSolanaTransaction for EthTrx<'a>{
+impl<'a> ToEthereumTransaction for EthTrx<'a>{
     fn to_solana_trx(&mut self) -> Result<SolanaTransaction, anyhow::Error> {
         self.load_accounts()?;
 

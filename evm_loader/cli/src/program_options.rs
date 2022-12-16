@@ -1,9 +1,9 @@
 use solana_clap_utils::{input_validators::{is_url_or_moniker, is_valid_pubkey},};
 use clap::{crate_description, crate_name, App, AppSettings, Arg, ArgMatches, SubCommand,};
-use evm_loader::{H160, U256,};
+use evm_loader::{H160, U256, H256};
 use std::{str::FromStr, fmt::Display,};
 
-pub fn make_clean_hex(in_str: &str) -> &str {
+pub fn truncate(in_str: &str) -> &str {
     if &in_str[..2] == "0x" {
         &in_str[2..]
     } else {
@@ -14,7 +14,7 @@ pub fn make_clean_hex(in_str: &str) -> &str {
 // Return an error if string cannot be parsed as a H160 address
 fn is_valid_h160<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+    H160::from_str(truncate(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -24,14 +24,20 @@ fn is_valid_h160_or_deploy<T>(string: T) -> Result<(), String> where T: AsRef<st
     if string.as_ref() == "deploy" {
         return Ok(());
     }
-    H160::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+    H160::from_str(truncate(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
 // Return an error if string cannot be parsed as a U256 integer
 fn is_valid_u256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
 {
-    U256::from_str(make_clean_hex(string.as_ref())).map(|_| ())
+    U256::from_str(truncate(string.as_ref())).map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+fn is_valid_h256<T>(string: T) -> Result<(), String> where T: AsRef<str>,
+{
+    H256::from_str(truncate(string.as_ref())).map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -44,13 +50,13 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
         Ok(())
     } else {
         Err(format!(
-            "Unable to parse input amount as {}, provided: {}",
+            "Unable to parse argument as {}, provided: {}",
             std::any::type_name::<T>(), amount
         ))
     }
 }
 
-macro_rules! emulate {
+macro_rules! sender_contract_value {
     ($cmd:expr, $desc:expr) => {
         SubCommand::with_name($cmd)
                 .about($desc)
@@ -81,34 +87,10 @@ macro_rules! emulate {
                         .validator(is_amount::<U256, _>)
                         .help("Transaction value")
                 )
-                .arg(
-                    Arg::with_name("token_mint")
-                        .long("token_mint")
-                        .value_name("TOKEN_MINT")
-                        .takes_value(true)
-                        .global(true)
-                        .validator(is_valid_pubkey)
-                        .help("Pubkey for token_mint")
-                )
-                .arg(
-                    Arg::with_name("chain_id")
-                        .long("chain_id")
-                        .value_name("CHAIN_ID")
-                        .takes_value(true)
-                        .required(false)
-                        .help("Network chain_id"),
-                )
-                .arg(
-                    Arg::with_name("max_steps_to_execute")
-                        .long("max_steps_to_execute")
-                        .value_name("NUMBER_OF_STEPS")
-                        .takes_value(true)
-                        .required(false)
-                        .default_value("100000")
-                        .help("Maximal number of steps to execute in a single run"),
-                )
     }
 }
+
+
 
 #[allow(clippy::too_many_lines)]
 pub fn parse<'a >() -> ArgMatches<'a> {
@@ -146,7 +128,16 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .takes_value(true)
                 .required(false)
                 .global(true)
-                .help("Slot for postgres db-client (implementated only for emulate command)"),
+                .help("Slot for db-client (only for trace_call command)"),
+        )
+        .arg(
+            Arg::with_name("hash")
+                .long("hash")
+                .value_name("HASH")
+                .takes_value(true)
+                .required(false)
+                .global(true)
+                .help("Transaction hash for db-client (only for trace_tx command)"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -228,11 +219,72 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .global(true)
                 .help("Logging level"),
         )
+        // TODO: remove it
+        .arg(
+            Arg::with_name("token_mint")
+                .long("token_mint")
+                .value_name("TOKEN_MINT")
+                .takes_value(true)
+                .global(true)
+                .validator(is_valid_pubkey)
+                .help("Pubkey for token_mint")
+        )
+        .arg(
+            Arg::with_name("chain_id")
+                .long("chain_id")
+                .value_name("CHAIN_ID")
+                .takes_value(true)
+                .required(false)
+                .help("Network chain_id"),
+        )
+        .arg(
+            Arg::with_name("max_steps_to_execute")
+                .long("max_steps_to_execute")
+                .value_name("NUMBER_OF_STEPS")
+                .takes_value(true)
+                .required(false)
+                .default_value("100000")
+                .help("Maximal number of steps to execute in a single run"),
+        )
+
         .subcommand(
-            emulate!("emulate", "Emulate execution of Ethereum transaction")
+            sender_contract_value!("emulate", "Emulate execution of Ethereum transaction")
         )
         .subcommand(
-            emulate!("trace_call", "Getting traces of Ethereum transaction execution")
+            sender_contract_value!("trace_call", "Getting traces of Ethereum transaction execution")
+                .arg(
+                    Arg::with_name("gas_limit")
+                        .short("G")
+                        .long("gas_slimit")
+                        .value_name("GAS_LIMIT")
+                        .takes_value(true)
+                        .required(false) // TODO: check it
+                        .validator(is_amount::<U256, _>)
+                        .help("Gas limit"),
+                )
+                .arg(
+                    Arg::with_name("slot")
+                        .short("L")
+                        .long("slot")
+                        .value_name("slot")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_amount::<u64, _>)
+                        .help("Slot number"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("trace-trx")
+                .about("Getting traces of transaction execution by hash")
+                .arg(
+                    Arg::with_name("hash")
+                        .index(1)
+                        .value_name("hash")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_h256)
+                        .help("Neon transaction hash"),
+                )
         )
         .subcommand(
             SubCommand::with_name("create-ether-account")

@@ -1,9 +1,9 @@
 use solana_clap_utils::{
-    input_parsers::pubkey_of,
+    input_parsers::{pubkey_of, value_of},
     input_validators::normalize_to_url_if_moniker,
     keypair::{signer_from_path, keypair_from_path},
 };
-use crate::{rpc, rpc::db::PostgresClient, NeonCliError};
+use crate::{rpc, rpc::db::PostgresClient, NeonCliError, program_options::truncate};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
@@ -13,7 +13,7 @@ use solana_client::rpc_client::RpcClient;
 use std::{fmt, fmt::Debug, process::exit, str::FromStr,};
 use clap::ArgMatches;
 use log::error;
-
+use evm_loader::H256;
 
 pub struct Config {
     pub rpc_client: Box<dyn rpc::Rpc>,
@@ -81,16 +81,23 @@ pub fn create(options: &ArgMatches) -> Config {
     ).ok();
 
 
-    let rpc_client: Box<dyn rpc::Rpc>  = if let Some(slot) = options.value_of("slot") {
-        let slot:u64 = slot.parse().expect("slot parse error");
+    let db_config = options.value_of("db_config")
+        .map(|path|{ solana_cli_config::load_config_file(path).expect("load db-config error")});
 
-        let db_config = options.value_of("db_config")
-            .map(|path|{ solana_cli_config::load_config_file(path).expect("load db-config error")})
-            .expect("parse db-config erro");
-
-        Box::new(PostgresClient::new(&db_config, slot))
-    } else {
-        Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
+    let (cmd, params) = options.subcommand();
+    let rpc_client = match (cmd, params) {
+        ("trace_call", Some(params)) => {
+            let slot = value_of::<u64>(params, "slot").expect("slot parse error");
+            Box::new(PostgresClient::new_for_eth_call(&db_config.expect("db-config not found"), slot))
+        }
+        ("trace_trx", Some(params)) => {
+            let hash: H256 = params.value_of("hash").map(|h| {
+                let h = truncate(h);
+                H256::from_str(h).except("hash cast error")
+            }).expect("hash parse error");
+            Box::new(PostgresClient::new_for_trx(&db_config.expect("db-config not found"), hash))
+        }
+        _ => Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
     };
 
     Config {
@@ -101,3 +108,6 @@ pub fn create(options: &ArgMatches) -> Config {
         commitment,
     }
 }
+
+
+
