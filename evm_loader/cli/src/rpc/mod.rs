@@ -19,7 +19,7 @@ use solana_sdk::{
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use crate::{rpc::db::PostgresClient, types::TxMeta};
+use crate::{rpc::db::PostgresClient};
 use std::any::Any;
 use evm_loader::{H256, H160, U256};
 use tokio::task::block_in_place;

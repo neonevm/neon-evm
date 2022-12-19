@@ -33,7 +33,6 @@ use crate::{
     Config,
     account_storage::account_info,
     commands::get_neon_elf::CachedElfParams,
-    types::EthCallObject,
 };
 
 #[derive(Clone)]
