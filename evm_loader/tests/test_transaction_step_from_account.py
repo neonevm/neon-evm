@@ -36,7 +36,7 @@ class TestTransactionStepFromAccount:
         recipient_balance_after = get_neon_balance(solana_client, second_user.solana_account_address)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
-        check_transaction_logs_have_text(resp.value, "exit_status=0x11")
+        check_transaction_logs_have_text(resp.value.transaction.transaction.signatures[0], "exit_status=0x11")
         assert sender_balance_before - amount == sender_balance_after
         assert recipient_balance_before + amount == recipient_balance_after
 
