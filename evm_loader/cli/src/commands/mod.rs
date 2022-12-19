@@ -38,14 +38,14 @@ use crate::{
 
 #[derive(Clone)]
 pub struct TxParams {
-    from: H160,
-    to: Option<H160>,
-    data: Option<Vec<u8>>,
-    value: Option<U256>,
-    token: Pubkey,
-    chain: u64,
-    max_steps: u64,
-    gas_limit: Option<U256>,
+    pub from: H160,
+    pub to: Option<H160>,
+    pub data: Option<Vec<u8>>,
+    pub value: Option<U256>,
+    pub token: Pubkey,
+    pub chain: u64,
+    pub max_steps: u64,
+    pub gas_limit: Option<U256>,
 }
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
@@ -246,6 +246,12 @@ fn parse_tx_params(
 
     let value = value_of(params, "value");
 
+    let (token, chain, max_steps) = parse_token_chain_steps(config, params);
+    TxParams {from, to, data, value, token, chain, max_steps, gas_limit: None}
+}
+
+
+pub fn parse_token_chain_steps( config: &Config, params: &ArgMatches) -> (Pubkey, u64, u4) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");
@@ -262,5 +268,5 @@ fn parse_tx_params(
     let chain = chain.expect("chain_id get error");
     let max_steps = value_of::<u64>(params, "max_steps_to_execute").expect("max_steps_to_execute parse error");
 
-    TxParams {from, to, data, value, token, chain, max_steps, gas_limit: None}
+    (token, chain, max_steps)
 }

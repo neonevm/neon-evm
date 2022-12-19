@@ -1,5 +1,9 @@
-mod call_db;
-mod trx_db;
+mod eth_call_client;
+mod trx_client;
+mod solana_client;
+
+
+
 
 use solana_client::{
     rpc_client::RpcClient,
@@ -17,8 +21,13 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use crate::{rpc::db::PostgresClient, types::TxMeta};
 use std::any::Any;
-use evm_loader::H256;
+use evm_loader::{H256, H160, U256};
 use tokio::task::block_in_place;
+
+use tokio_postgres::{ connect, Error, Client};
+use postgres::{ NoTls};
+use serde::{Serialize, Deserialize };
+use std::convert::TryFrom;
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -35,6 +44,27 @@ pub struct DbConfig{
     pub indexer_password: String,
 }
 
+#[derive(Debug)]
+pub struct CallDbClient {
+    pub slot: u64,
+    tracer_db: Client,
+}
+
+#[derive(Debug)]
+pub struct TrxDbClient {
+    pub hash: H256,
+    tracer_db: Client,
+    indexer_db: Client,
+}
+
+pub struct TrxRow {
+    pub from: H160,
+    pub to: H160,
+    pub data: Vec<u8>,
+    pub value: U256,
+    pub gas_limit: U256,
+}
+
 pub trait ToAny: 'static {
     fn as_any(&self) -> &dyn Any;
 }
@@ -45,13 +75,36 @@ impl<T: 'static> ToAny for T {
     }
 }
 
-
 pub trait DbClient {
-    fn get_account_at_slot(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error>;
-    fn get_block_hash(&self, slot: u64) -> Result<String, Error>;
-    fn get_block_time(&self, slot: u64) -> Result<i64, Error>;
-    fn get_latest_blockhash(&self) -> Result<String, Error>;
-    // fn get_transaction_data(&self, hash: &String) -> Result<>;
+    fn get_account_at(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error>;
+
+    fn get_block_hash(&self, slot: u64) -> Result<String, Error>{
+        let hash = block(|| async {
+            self.tracer_db.query_one(
+                "SELECT blockhash FROM public.block WHERE slot = $1", &[&(slot as i64)],
+            ).await
+        })?.try_get(0)?;
+
+        Ok(hash)
+    }
+
+    fn get_block_time(&self, slot: u64) -> Result<i64, Error>{
+        let time = block(|| async {
+            self.tracer_db.query_one(
+                "SELECT block_time FROM public.block WHERE slot = $1", &[&(slot as i64)],
+            ).await
+        })?.try_get(0)?;
+
+        Ok(time)
+    }
+
+    fn get_latest_blockhash(&self) -> Result<String, Error>{
+        let slot: i64 = block(|| async {
+            self.tracer_db.query_one("SELECT MAX(slot) FROM public.slot", &[]).await
+        })?.try_get(0)?;
+
+        self.get_block_hash(u64::try_from(slot).expect("slot parse error"))
+    }
 }
 
 pub trait Rpc{
@@ -77,90 +130,8 @@ pub trait Rpc{
         config: RpcSendTransactionConfig
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
-    fn get_transaction_data(&self, tx: H256) -> ClientResult<Vec<TxMeta<SanitizedMessage>>>;
-    }
-
-impl Rpc for RpcClient{
-    fn commitment(&self) -> CommitmentConfig {
-        self.commitment()
-    }
-
-    fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>{
-        self.confirm_transaction_with_spinner(signature, recent_blockhash, commitment_config)
-    }
-
-    fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
-        self.get_account(key)
-    }
-
-    fn get_account_with_commitment(&self, key: &Pubkey, commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
-        self.get_account_with_commitment(key, commitment)
-    }
-
-    fn get_account_data(&self, key: &Pubkey)-> ClientResult<Vec<u8>>{
-        Ok(self.get_account(key)?.data)
-    }
-
-    fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
-        self.get_block(slot)
-    }
-
-    fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
-        self.get_block_time(slot)
-    }
-
-    fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        self.get_latest_blockhash()
-    }
-
-    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> ClientResult<u64>{
-        self.get_minimum_balance_for_rent_exemption(data_len)
-    }
-
-    fn get_slot(&self) -> ClientResult<Slot>{
-        self.get_slot()
-    }
-
-    fn get_signature_statuses(&self, signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
-        self.get_signature_statuses(signatures)
-    }
-
-    fn get_transaction_with_config(&self, signature: &Signature, config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>{
-        self.get_transaction_with_config(signature, config)
-    }
-
-    fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature>{
-        self.send_transaction(transaction)
-    }
-
-    fn send_and_confirm_transaction_with_spinner(&self, transaction: &Transaction) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner(transaction)
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_commitment(&self, transaction: &Transaction, commitment: CommitmentConfig) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner_and_commitment(transaction, commitment)
-    }
-
-    fn send_and_confirm_transaction_with_spinner_and_config(
-        &self,
-        transaction: &Transaction,
-        commitment: CommitmentConfig,
-        config: RpcSendTransactionConfig
-    ) -> ClientResult<Signature>{
-        self.send_and_confirm_transaction_with_spinner_and_config(transaction, commitment, config)
-    }
-
-    fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
-        self.get_latest_blockhash_with_commitment(commitment)
-    }
-
-    fn get_transaction_data(&self, tx: H256) -> ClientResult<Vec<TxMeta<SanitizedMessage>>> {
-        Err(ClientErrorKind::Custom("get_transaction_data() not implemented for rpc_node client".to_string()).into())
-    }
-
+    fn get_transaction_data(&self, tx: H256) -> ClientResult<TrxRow>;
 }
-
-
 
 pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {
     let authority= format!(
@@ -189,8 +160,6 @@ pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass
     });
     client
 }
-
-
 
 pub fn block<F, Fu, R>(f: F) -> R
     where
