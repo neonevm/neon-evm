@@ -1,5 +1,3 @@
-import base64
-import json
 import random
 import string
 
@@ -7,38 +5,21 @@ import pytest
 import solana
 import eth_abi
 from eth_keys import keys as eth_keys
-from eth_utils import abi, to_text
+from eth_utils import abi
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 from spl.token.instructions import get_associated_token_address
 
-from .solana_utils import execute_trx_from_instruction, deposit_neon, solana_client, get_neon_balance, \
-    neon_cli, make_new_user
+from .solana_utils import execute_trx_from_instruction, solana_client, get_neon_balance, neon_cli
 from .utils.constants import NEON_TOKEN_MINT_ID
 from .utils.contract import make_deployment_transaction, deploy_contract
 from .utils.ethereum import make_eth_transaction, create_contract_address
+from .utils.transaction_checks import check_transaction_logs_have_text
 from .utils.types import Caller
 
 
 class TestExecuteTrxFromInstruction:
-
-    @pytest.fixture(scope="session")
-    def sender_with_tokens(self, evm_loader, operator_keypair):
-        user = make_new_user(evm_loader)
-        deposit_neon(evm_loader, operator_keypair, user.eth_address, 100000)
-        return user
-
-    def check_transaction_logs_have_text(self, trx_hash, text):
-        receipt = solana_client.get_transaction(trx_hash)
-        logs = ""
-        for log in receipt.value.transaction.meta.log_messages:
-            if "Program data:" in log:
-                logs += "Program data: " + str(base64.b64decode(log.replace("Program data: ", "")))
-            else:
-                logs += log
-            logs += " "
-        assert text in logs, f"Transaction logs don't contain '{text}'. Logs: {logs}"
 
     def test_simple_transfer_transaction(self, operator_keypair, treasury_pool, sender_with_tokens, second_user,
                                          evm_loader):
@@ -57,7 +38,7 @@ class TestExecuteTrxFromInstruction:
         recipient_balance_after = get_neon_balance(solana_client, second_user.solana_account_address)
         assert sender_balance_before - amount == sender_balance_after
         assert recipient_balance_before + amount == recipient_balance_after
-        self.check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "ExitSucceed")
 
     def test_transfer_transaction_with_non_existing_recipient(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                               evm_loader):
@@ -75,7 +56,7 @@ class TestExecuteTrxFromInstruction:
                                              PublicKey(recipient_solana_address)],
                                             operator_keypair)
         recipient_balance_after = get_neon_balance(solana_client, PublicKey(recipient_solana_address))
-        self.check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "ExitSucceed")
 
         assert recipient_balance_after == amount
 
@@ -109,14 +90,8 @@ class TestExecuteTrxFromInstruction:
                                              contract.solana_address],
                                             operator_keypair)
 
-        self.check_transaction_logs_have_text(resp.value, "ExitSucceed")
-
-        data = abi.function_signature_to_4byte_selector('get()')
-        result = json.loads(
-            neon_cli().emulate(evm_loader.loader_id, sender_with_tokens.eth_address.hex(), contract.eth_address.hex(),
-                               data.hex())
-        )
-        assert text in to_text(result["result"])
+        check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        assert text in neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, contract, "get()")
 
     def test_call_contract_function_with_neon_transfer(self, operator_keypair, treasury_pool, sender_with_tokens,
                                                        evm_loader):
@@ -139,14 +114,10 @@ class TestExecuteTrxFromInstruction:
                                              contract.solana_address],
                                             operator_keypair)
 
-        self.check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "ExitSucceed")
 
-        data = abi.function_signature_to_4byte_selector('get()')
-        result = json.loads(
-            neon_cli().emulate(evm_loader.loader_id, sender_with_tokens.eth_address.hex(), contract.eth_address.hex(),
-                               data.hex())
-        )
-        assert text in to_text(result["result"])
+        assert text in neon_cli().call_contract_get_function(evm_loader, sender_with_tokens, contract, "get()")
+
         sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
         contract_balance_after = get_neon_balance(solana_client, contract.solana_address)
         assert sender_balance_before - transfer_amount == sender_balance_after
@@ -269,7 +240,7 @@ class TestExecuteTrxFromInstruction:
                                             [sender_with_tokens.solana_account_address,
                                              second_user.solana_account_address],
                                             sender_with_tokens.solana_account)
-        self.check_transaction_logs_have_text(resp.value, "ExitSucceed")
+        check_transaction_logs_have_text(resp.value, "ExitSucceed")
 
     def test_incorrect_system_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
                                       second_user):

@@ -8,17 +8,11 @@ from solana.publickey import PublicKey
 from web3.auto import w3
 
 from .constants import ACCOUNT_SEED_VERSION
-from .types import Caller
+from .types import Caller, Contract
 from ..eth_tx_utils import pack
 from ..solana_utils import EvmLoader, solana_client, get_transaction_count
 
 
-@dataclass
-class Contract:
-    eth_address: bytes
-    solana_address: PublicKey
-    nonce: int
-    seed: str
 
 
 def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
