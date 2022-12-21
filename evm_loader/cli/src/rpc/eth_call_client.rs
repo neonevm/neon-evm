@@ -15,6 +15,7 @@ use postgres::{ NoTls};
 use std::convert::TryFrom;
 use evm_loader::H256;
 use super::{DbConfig, DbClient, CallDbClient, Rpc, block, do_connect,} ;
+use crate::commands::TxParams;
 
 
 impl CallDbClient {
@@ -143,7 +144,7 @@ impl Rpc for CallDbClient {
         Err(ClientErrorKind::Custom("get_latest_blockhash_with_commitment() not implemented for eth_call rpc client".to_string()).into())
     }
 
-    fn get_transaction_data(&self, tx: H256) -> ClientResult<TrxRow> {
+    fn get_transaction_data(&self) -> ClientResult<TxParams> {
         Err(ClientErrorKind::Custom("get_transaction_data() not implemented for eth_call rpc client".to_string()).into())
     }
 }

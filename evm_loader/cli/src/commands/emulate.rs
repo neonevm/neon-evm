@@ -16,9 +16,10 @@ use crate::{
     errors,
 };
 use super::{get_program_ether, get_ether_account_nonce, TxParams};
+use solana_sdk::pubkey::Pubkey;
 
 #[allow(clippy::too_many_lines)]
-pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCliError> {
+pub fn send( config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u64) -> Result<serde_json::Value, NeonCliError> {
     let data = tx.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
@@ -30,7 +31,7 @@ pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCl
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, tx.token, tx.chain);
+    let storage = EmulatorAccountStorage::new(config, token, chain);
 
     let program_id = if let Some(program_id) = tx.to {
         debug!("program_id to call: {}", program_id);
@@ -62,7 +63,7 @@ pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCl
                     data,
                     tx.value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(tx.max_steps){
+                match executor.execute_n_steps(steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -82,7 +83,7 @@ pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCl
                     gas_limit,
                     U256::zero(),
                 )?;
-                match executor.execute_n_steps(tx.max_steps){
+                match executor.execute_n_steps(steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -132,7 +133,7 @@ pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCl
         .cloned()
         .collect();
 
-    let js = serde_json::json!({
+    let json = serde_json::json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": [],
@@ -144,12 +145,12 @@ pub fn send( config: &Config, tx: &TxParams) -> Result<serde_json::Value, NeonCl
     });
 
 
-    Ok(js)
+    Ok(json)
 }
 
-pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
+pub fn execute(config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
 
-    let js = send(config, tx)?;
-    println!("{}", js);
+    let json = send(config, tx, token, chain, steps)?;
+    println!("{}", json);
     Ok(())
 }

@@ -10,7 +10,6 @@ pub mod collect_treasury;
 pub mod init_environment;
 mod transaction_executor;
 mod trace_call;
-mod trace_trx;
 
 use clap::ArgMatches;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
@@ -22,7 +21,10 @@ use solana_sdk::{
     signature::Signature,
     transaction::Transaction,
 };
-use solana_client::{rpc_config::RpcSendTransactionConfig,client_error::Result as SolanaClientResult,};
+use solana_client::{
+    rpc_config::RpcSendTransactionConfig
+    client_error::Result as SolanaClientResult, ClientErrorKind
+};
 use evm_loader::{H160, H256, U256};
 use std::str::FromStr;
 use evm_loader::account::EthereumAccount;
@@ -41,17 +43,15 @@ pub struct TxParams {
     pub to: Option<H160>,
     pub data: Option<Vec<u8>>,
     pub value: Option<U256>,
-    pub token: Pubkey,
-    pub chain: u64,
-    pub max_steps: u64,
     pub gas_limit: Option<U256>,
 }
 
 pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonCliResult{
     match (cmd, params) {
         ("emulate", Some(params)) => {
-            let tx= parse_tx_params(config, params);
-            emulate::execute(config, &tx)
+            let tx= parse_tx(params);
+            let (token, chain, steps) = parse_tx_params(config, params);
+            emulate::execute(config, &tx, token, chain, steps);
         }
         ("create-program-address", Some(params)) => {
             let ether = h160_of(params, "seed").expect("seed parse error");
@@ -97,14 +97,16 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             Ok(())
         }
         ("trace_call", Some(params)) => {
-            let mut tx= parse_tx_params(config, params);
-            let gas_limit = u256_of(params, "gas_limit");
-            tx.gas_limit = gas_limit;
-            trace_call::execute(config, &tx)
+            let mut tx= parse_tx(params);
+            tx.gas_limit = u256_of(params, "gas_limit");
+            let (token, chain, steps) = parse_tx_params(config, params);
+            trace_call::execute(config, &tx, token, chain, steps)
         }
         ("trace_trx", Some(params)) => {
-            let player = player::Player::new(config);
-            player.replay_trx_hash();
+            let tx = config.rpc_client.get_transaction_data().
+                map_err(|_| NeonCliError::from(ClientErrorKind::Custom("load trx error".to_string())) )?;
+            let (token, chain, steps) = parse_tx_params(config, params);
+            trace_call::execute(config, &tx, token, chain, steps)
         }
             _ => unreachable!(),
     }
@@ -136,29 +138,16 @@ fn h256_of(matches: &ArgMatches<'_>, name: &str) -> Option<H256> {
     })
 }
 
-// fn read_stdin() -> Option<Vec<u8>>{
-//     let mut data = String::new();
-//
-//     if let Ok(len) = std::io::stdin().read_line(&mut data){
-//         if len == 0{
-//             return None
-//         }
-//         let data = truncate(data.as_str());
-//         let bin = hex::decode(data).expect("data hex::decore error");
-//         Some(bin)
-//     }
-//     else{
-//         None
-//     }
-// }
-fn read_stdin() -> Option<String>{
+fn read_stdin() -> Option<Vec<u8>>{
     let mut data = String::new();
 
     if let Ok(len) = std::io::stdin().read_line(&mut data){
         if len == 0{
             return None
         }
-        Some(data)
+        let data = truncate(data.as_str());
+        let bin = hex::decode(data).expect("data hex::decore error");
+        Some(bin)
     }
     else{
         None
@@ -223,34 +212,17 @@ pub fn send_transaction(
 
 
 
-fn parse_tx_params(
-    config: &Config,
-    params: &ArgMatches,
-) -> TxParams {
+fn parse_tx(params: &ArgMatches) -> TxParams {
     let from = h160_of(params, "sender").expect("sender parse error");
     let to = h160_or_deploy_of(params, "contract");
-    // let data = read_stdin();
-    // let data = if let Some(str) = data  {
-    //     let data = truncate(str.as_str());
-    //     let bin = hex::decode(data).expect("data hex::decore error");
-    //     Some(bin)
-    // } else {
-    //     None
-    // };
-
-    let data : Option<Vec<u8>> =  read_stdin().map(|str| {
-        hex::decode(truncate(str.as_str())).expect("data hex::decore error")
-    });
-
-
+    let data = read_stdin();
     let value = value_of(params, "value");
 
-    let (token, chain, max_steps) = parse_token_chain_steps(config, params);
-    TxParams {from, to, data, value, token, chain, max_steps, gas_limit: None}
+    TxParams {from, to, data, value, gas_limit: None}
 }
 
 
-pub fn parse_token_chain_steps( config: &Config, params: &ArgMatches) -> (Pubkey, u64, u4) {
+pub fn parse_tx_params( config: &Config, params: &ArgMatches) -> (Pubkey, u64, u64) {
     // Read ELF params only if token_mint or chain_id is not set.
     let mut token = pubkey_of(params, "token_mint");
     let mut chain = value_of(params, "chain_id");

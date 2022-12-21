@@ -1,6 +1,7 @@
 use crate::{Config, NeonCliResult, event_listener::tracer::Tracer, commands::{emulate, TxParams},
             types::ec::{trace::{FullTraceData, VMTrace},},
 };
+use solana_sdk::pubkey::Pubkey;
 use evm_loader::ExitReason;
 
 #[derive(serde::Serialize, Debug)]
@@ -11,11 +12,11 @@ pub struct TracedCall {
     pub exit_reason: ExitReason,
 }
 
-pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
+pub fn execute(config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
     let mut tracer = Tracer::new();
 
     evm_loader::using( &mut tracer, || {
-        emulate::send(config, tx)
+        emulate::send(config, tx, token, chain, steps)
     })?;
 
     let (vm_trace, full_trace_data) = tracer.into_traces();
@@ -30,4 +31,3 @@ pub fn execute(config: &Config, tx: &TxParams) -> NeonCliResult {
     println!("{}", serde_json::json!(trace));
     NeonCliResult::Ok(())
 }
-

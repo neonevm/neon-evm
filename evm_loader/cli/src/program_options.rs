@@ -56,7 +56,7 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
     }
 }
 
-macro_rules! sender_contract_value {
+macro_rules! emulate {
     ($cmd:expr, $desc:expr) => {
         SubCommand::with_name($cmd)
                 .about($desc)
@@ -86,6 +86,32 @@ macro_rules! sender_contract_value {
                         .required(false)
                         .validator(is_amount::<U256, _>)
                         .help("Transaction value")
+                )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
+                )
+                .arg(
+                    Arg::with_name("max_steps_to_execute")
+                        .long("max_steps_to_execute")
+                        .value_name("NUMBER_OF_STEPS")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("100000")
+                        .help("Maximal number of steps to execute in a single run"),
                 )
     }
 }
@@ -120,24 +146,6 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .takes_value(true)
                 .global(true)
                 .help("Configuration file to use Postgress DB")
-        )
-        .arg(
-            Arg::with_name("slot")
-                .long("slot")
-                .value_name("SLOT")
-                .takes_value(true)
-                .required(false)
-                .global(true)
-                .help("Slot for db-client (only for trace_call command)"),
-        )
-        .arg(
-            Arg::with_name("hash")
-                .long("hash")
-                .value_name("HASH")
-                .takes_value(true)
-                .required(false)
-                .global(true)
-                .help("Transaction hash for db-client (only for trace_tx command)"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -219,39 +227,11 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 .global(true)
                 .help("Logging level"),
         )
-        // TODO: remove it
-        .arg(
-            Arg::with_name("token_mint")
-                .long("token_mint")
-                .value_name("TOKEN_MINT")
-                .takes_value(true)
-                .global(true)
-                .validator(is_valid_pubkey)
-                .help("Pubkey for token_mint")
-        )
-        .arg(
-            Arg::with_name("chain_id")
-                .long("chain_id")
-                .value_name("CHAIN_ID")
-                .takes_value(true)
-                .required(false)
-                .help("Network chain_id"),
-        )
-        .arg(
-            Arg::with_name("max_steps_to_execute")
-                .long("max_steps_to_execute")
-                .value_name("NUMBER_OF_STEPS")
-                .takes_value(true)
-                .required(false)
-                .default_value("100000")
-                .help("Maximal number of steps to execute in a single run"),
-        )
-
         .subcommand(
-            sender_contract_value!("emulate", "Emulate execution of Ethereum transaction")
+            emulate!("emulate", "Emulate execution of Ethereum transaction")
         )
         .subcommand(
-            sender_contract_value!("trace_call", "Getting traces of Ethereum transaction execution")
+            emulate!("trace_call", "Getting traces of Ethereum transaction execution")
                 .arg(
                     Arg::with_name("gas_limit")
                         .short("G")

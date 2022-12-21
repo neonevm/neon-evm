@@ -15,6 +15,7 @@ use postgres::{ NoTls};
 use std::convert::TryFrom;
 use evm_loader::H256;
 use super::{DbConfig, DbClient, TrxDbClient, Rpc, block, do_connect, TrxRow} ;
+use crate::commands::TxParams;
 
 impl TrxDbClient {
     pub fn new(config: &DbConfig, hash: H256) -> Self {
@@ -172,9 +173,9 @@ impl Rpc for TrxDbClient {
         Err(ClientErrorKind::Custom("get_latest_blockhash_with_commitment() not implemented for trx rpc client".to_string()).into())
     }
 
-    fn get_transaction_data(&self, hash: H256) -> ClientResult<TrxRow> {
+    fn get_transaction_data(&self) -> ClientResult<TxParams> {
 
-        let hex = format!("0x{}", hex::encode(hash.as_bytes()));
+        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
 
         let row = block(|| async {
             self.indexer_db.query_one(
@@ -199,6 +200,6 @@ impl Rpc for TrxDbClient {
         let value: U256 = value.as_str()[2..].parse().unwrap(); //TODO: check it
         let gas_limit: U256 = gas_limit.as_str()[2..].parse().unwrap(); //TODO: check it
 
-        Ok(TrxRow {from, to, data, value, gas_limit})
+        Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
     }
 }

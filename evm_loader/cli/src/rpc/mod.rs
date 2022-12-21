@@ -2,9 +2,6 @@ mod eth_call_client;
 mod trx_client;
 mod solana_client;
 
-
-
-
 use solana_client::{
     rpc_client::RpcClient,
     client_error::{
@@ -19,7 +16,7 @@ use solana_sdk::{
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use crate::{rpc::db::PostgresClient};
+use crate::{rpc::db::PostgresClient, commands::TxParams};
 use std::any::Any;
 use evm_loader::{H256, H160, U256};
 use tokio::task::block_in_place;
@@ -55,14 +52,6 @@ pub struct TrxDbClient {
     pub hash: H256,
     tracer_db: Client,
     indexer_db: Client,
-}
-
-pub struct TrxRow {
-    pub from: H160,
-    pub to: H160,
-    pub data: Vec<u8>,
-    pub value: U256,
-    pub gas_limit: U256,
 }
 
 pub trait ToAny: 'static {
@@ -130,7 +119,7 @@ pub trait Rpc{
         config: RpcSendTransactionConfig
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
-    fn get_transaction_data(&self, tx: H256) -> ClientResult<TrxRow>;
+    fn get_transaction_data(&self) -> ClientResult<TxParams>;
 }
 
 pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {

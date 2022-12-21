@@ -11,7 +11,8 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use evm_loader::H256;
-use super::{Rpc, TrxRow};
+use super::Rpc;
+use crate::commands::TxParams;
 
 impl Rpc for RpcClient{
     fn commitment(&self) -> CommitmentConfig {
@@ -87,7 +88,7 @@ impl Rpc for RpcClient{
         self.get_latest_blockhash_with_commitment(commitment)
     }
 
-    fn get_transaction_data(&self, tx: H256) -> ClientResult<TrxRow> {
+    fn get_transaction_data(&self) -> ClientResult<TxParams> {
         Err(ClientErrorKind::Custom("get_transaction_data() not implemented for rpc_node client".to_string()).into())
     }
 }
