@@ -2,15 +2,14 @@ use solana_client::{
     rpc_client::RpcClient,
     client_error::Result as ClientResult,
     rpc_config::{RpcTransactionConfig, RpcSendTransactionConfig},
-    rpc_response::{RpcResult, Response, RpcResponseContext},
-    client_error::{ClientErrorKind, ClientError}
+    rpc_response::RpcResult,
+    client_error::ClientErrorKind,
 };
 use solana_sdk::{
     account::Account, pubkey::Pubkey, commitment_config::CommitmentConfig, clock::{UnixTimestamp, Slot},
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use evm_loader::H256;
 use super::Rpc;
 use crate::commands::TxParams;
 

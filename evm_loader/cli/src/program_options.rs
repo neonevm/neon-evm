@@ -116,8 +116,6 @@ macro_rules! emulate {
     }
 }
 
-
-
 #[allow(clippy::too_many_lines)]
 pub fn parse<'a >() -> ArgMatches<'a> {
     App::new(crate_name!())

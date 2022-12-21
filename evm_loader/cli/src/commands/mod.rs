@@ -22,8 +22,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_client::{
-    rpc_config::RpcSendTransactionConfig
-    client_error::Result as SolanaClientResult, ClientErrorKind
+    rpc_config::RpcSendTransactionConfig,
+    client_error::{Result as SolanaClientResult,ClientError, ClientErrorKind},
 };
 use evm_loader::{H160, H256, U256};
 use std::str::FromStr;
@@ -51,7 +51,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
         ("emulate", Some(params)) => {
             let tx= parse_tx(params);
             let (token, chain, steps) = parse_tx_params(config, params);
-            emulate::execute(config, &tx, token, chain, steps);
+            emulate::execute(config, &tx, token, chain, steps)
         }
         ("create-program-address", Some(params)) => {
             let ether = h160_of(params, "seed").expect("seed parse error");
@@ -104,7 +104,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
         }
         ("trace_trx", Some(params)) => {
             let tx = config.rpc_client.get_transaction_data().
-                map_err(|_| NeonCliError::from(ClientErrorKind::Custom("load trx error".to_string())) )?;
+                map_err(|_| ClientError::from(ClientErrorKind::Custom("load trx error".to_string())) )?;
             let (token, chain, steps) = parse_tx_params(config, params);
             trace_call::execute(config, &tx, token, chain, steps)
         }
@@ -132,11 +132,6 @@ fn u256_of(matches: &ArgMatches<'_>, name: &str) -> Option<U256> {
     })
 }
 
-fn h256_of(matches: &ArgMatches<'_>, name: &str) -> Option<H256> {
-    matches.value_of(name).map(|value| {
-        H256::from_str(truncate(value)).unwrap_or_else(|_| panic!("{} parse error", name))
-    })
-}
 
 fn read_stdin() -> Option<Vec<u8>>{
     let mut data = String::new();

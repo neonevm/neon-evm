@@ -12,7 +12,6 @@ mod program_options;
 pub mod config;
 mod event_listener;
 mod types;
-mod eth_trx;
 
 pub use config::Config;
 

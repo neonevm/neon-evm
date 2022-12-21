@@ -1,5 +1,4 @@
 use solana_client::{
-    rpc_client::RpcClient,
     client_error::Result as ClientResult,
     rpc_config::{RpcTransactionConfig, RpcSendTransactionConfig},
     rpc_response::{RpcResult, Response, RpcResponseContext},
@@ -10,11 +9,10 @@ use solana_sdk::{
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use tokio_postgres::{ connect, Error, Client};
-use postgres::{ NoTls};
-use std::convert::TryFrom;
-use evm_loader::H256;
-use super::{DbConfig, DbClient, TrxDbClient, Rpc, block, do_connect, TrxRow} ;
+use tokio_postgres::Error;
+use std::{convert::TryFrom, str::FromStr};
+use evm_loader::{H160, H256, U256};
+use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl} ;
 use crate::commands::TxParams;
 
 impl TrxDbClient {
@@ -27,10 +25,8 @@ impl TrxDbClient {
         );
         Self {hash, tracer_db: tracer, indexer_db: indexer}
     }
-}
 
-impl DbClient for TrxDbClient {
-    fn get_account_at(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
+    fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
 
         let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
         let row = block(|| async {
@@ -42,7 +38,8 @@ impl DbClient for TrxDbClient {
                 &[&hex]
             ).await
         })?;
-        let sol_sig_b58: &String = row.try_get(0)?;
+        let sol_sig_b58: &str = row.try_get(0)?;
+        let sol_sig_b58 = sol_sig_b58.to_string();
         let sol_sig = bs58::decode(sol_sig_b58).into_vec().expect("sol_sig base58 decode error");
 
         let pubkey_bytes = pubkey.to_bytes();
@@ -57,14 +54,59 @@ impl DbClient for TrxDbClient {
         let rent_epoch: i64 = row.try_get(4)?;
 
         let account = Account {
-            lamports: u64::try_from(lamports).expect("lamports parse error"),
+            lamports: u64::try_from(lamports).expect("lamports cast error"),
             data: row.try_get(5)?,
             owner: Pubkey::new(row.try_get(1)?),
             executable: row.try_get(3)?,
-            rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch parse error"),
+            rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch cast error"),
         };
         Ok(Some(account))
     }
+
+    pub fn get_slot_(&self) -> Result<Slot, Error>{
+        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
+        let row = block(|| async {
+            self.indexer_db.query_one(
+                "SELECT min(S.block_slot) from solana_neon_transactions S, solana_blocks B \
+                where S.block_slot = B.block_slot \
+                and B.is_active =  true \
+                and S.neon_sig = $1",
+                &[&hex]
+            ).await
+        })?;
+        let slot: i64 = row.try_get(0)?;
+        Ok(u64::try_from(slot).expect("slot cast error"))
+    }
+
+    pub fn get_transaction_data_(&self) -> Result<TxParams, Error> {
+        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
+        let row = block(|| async {
+            self.indexer_db.query_one(
+                "select distinct from_addr,  COALESCE(to_addr, contract), calldata, value, gas_limit\
+                 from neon_transactions S, solana_blocks B \
+                    where S.block_slot = B.block_slot \
+                    and B.is_active =  true \
+                    and S.neon_sig = {}",
+                &[&hex]
+            ).await
+        })?;
+
+        let from: String = row.try_get(0)?;
+        let to: String = row.try_get(1)?;
+        let data: String = row.try_get(2)?;
+        let value: String = row.try_get(3)?;
+        let gas_limit: String = row.try_get(4)?;
+
+        let from = H160::from_str(&from.as_str()[2..]).expect("parse error from");
+        let to = H160::from_str(&to.as_str()[2..]).expect("parse error to");
+        let data =  hex::decode(&data.as_str()[2..]).expect("data hex::decore error");
+        let value: U256 = value.as_str()[2..].parse().unwrap(); //TODO: check it
+        let gas_limit: U256 = gas_limit.as_str()[2..].parse().unwrap(); //TODO: check it
+
+        Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
+    }
+
+    db_client_impl!();
 }
 
 
@@ -78,15 +120,16 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
-        self.get_account_at(key)
+        self.get_account_at_(key)
             .map_err(|_| ClientError::from(ClientErrorKind::Custom("load account error".to_string())) )?
             .ok_or_else(|| ClientError::from(ClientErrorKind::Custom(format!("account not found {}", key))))
     }
 
     fn get_account_with_commitment(&self, key: &Pubkey, _commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
-        let account= self.get_account_at(key)
+        let account= self.get_account_at_(key)
             .map_err(|_| ClientError::from( ClientErrorKind::Custom("load account error".to_string())))?;
-        let context = RpcResponseContext{slot: self.slot, api_version: None};
+        let slot = self.get_slot()?;
+        let context = RpcResponseContext{slot, api_version: None};
         Ok(Response {context, value: account})
     }
 
@@ -95,7 +138,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
-        let hash = self.get_block_hash(slot)
+        let hash = self.get_block_hash_(slot)
             .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_hash error".to_string())))?;
 
         Ok(EncodedConfirmedBlock{
@@ -110,12 +153,12 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
-        self.get_block_time(slot)
+        self.get_block_time_(slot)
             .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_time error".to_string())))
     }
 
     fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        let blockhash =  self.get_latest_blockhash()
+        let blockhash =  self.get_latest_blockhash_()
             .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash error".to_string())))?;
         blockhash.parse::<Hash>()
             .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash parse error".to_string())))
@@ -126,18 +169,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_slot(&self) -> ClientResult<Slot>{
-        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
-        let row = block(|| async {
-            self.indexer_db.query_one(
-                "SELECT S.block_slot from solana_neon_transactions S, solana_blocks B \
-                where S.block_slot = B.block_slot \
-                and B.is_active =  true \
-                and S.neon_sig = $1",
-                &[&hex]
-            ).await
-        })?;
-        let slot: u64 = row.try_get(0)?;
-        Ok(slot)
+        self.get_slot_().map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash error".to_string())))
     }
 
     fn get_signature_statuses(&self, _signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
@@ -174,32 +206,7 @@ impl Rpc for TrxDbClient {
     }
 
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
-
-        let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
-
-        let row = block(|| async {
-            self.indexer_db.query_one(
-                "select distinct from_addr,  COALESCE(to_addr, contract), calldata, value, gas_limit\
-                 from neon_transactions S, solana_blocks B \
-                    where S.block_slot = B.block_slot \
-                    and B.is_active =  true \
-                    and S.neon_sig = {}",
-                &[&hex]
-            ).await;
-        })?;
-
-        let from: String = row.try_get(0)?;
-        let to: String = row.try_get(1)?;
-        let data: String = row.try_get(2)?;
-        let value: String = row.try_get(3)?;
-        let gas_limit: String = row.try_get(4)?;
-
-        let from = H160::from_str(&from.as_str()[2..]).except("parse error from");
-        let to = H160::from_str(&to.as_str()[2..]).except("parse error to");
-        let data =   hex::decode(&to.as_str()[2..]).expect("data hex::decore error");
-        let value: U256 = value.as_str()[2..].parse().unwrap(); //TODO: check it
-        let gas_limit: U256 = gas_limit.as_str()[2..].parse().unwrap(); //TODO: check it
-
-        Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
+        self.get_transaction_data_()
+            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_transaction_data error".to_string())))
     }
 }

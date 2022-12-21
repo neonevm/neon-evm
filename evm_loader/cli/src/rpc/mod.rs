@@ -1,30 +1,25 @@
-mod eth_call_client;
-mod trx_client;
-mod solana_client;
+mod db_call_client;
+mod db_trx_client;
+mod validator_client;
 
 use solana_client::{
-    rpc_client::RpcClient,
-    client_error::{
-        Result as ClientResult,
-    },
+    client_error::{Result as ClientResult,},
     rpc_config::{RpcTransactionConfig, RpcSendTransactionConfig},
-    rpc_response::{RpcResult, Response, RpcResponseContext},
-    client_error::{ClientErrorKind, ClientError}
+    rpc_response::RpcResult,
 };
 use solana_sdk::{
     account::Account, pubkey::Pubkey, commitment_config::CommitmentConfig, clock::{UnixTimestamp, Slot},
     hash::Hash, signature::Signature, transaction::Transaction,
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
-use crate::{rpc::db::PostgresClient, commands::TxParams};
+use crate::commands::TxParams;
 use std::any::Any;
-use evm_loader::{H256, H160, U256};
+use evm_loader::H256;
 use tokio::task::block_in_place;
 
-use tokio_postgres::{ connect, Error, Client};
+use tokio_postgres::{ connect, Client};
 use postgres::{ NoTls};
 use serde::{Serialize, Deserialize };
-use std::convert::TryFrom;
 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -61,38 +56,6 @@ pub trait ToAny: 'static {
 impl<T: 'static> ToAny for T {
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-pub trait DbClient {
-    fn get_account_at(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error>;
-
-    fn get_block_hash(&self, slot: u64) -> Result<String, Error>{
-        let hash = block(|| async {
-            self.tracer_db.query_one(
-                "SELECT blockhash FROM public.block WHERE slot = $1", &[&(slot as i64)],
-            ).await
-        })?.try_get(0)?;
-
-        Ok(hash)
-    }
-
-    fn get_block_time(&self, slot: u64) -> Result<i64, Error>{
-        let time = block(|| async {
-            self.tracer_db.query_one(
-                "SELECT block_time FROM public.block WHERE slot = $1", &[&(slot as i64)],
-            ).await
-        })?.try_get(0)?;
-
-        Ok(time)
-    }
-
-    fn get_latest_blockhash(&self) -> Result<String, Error>{
-        let slot: i64 = block(|| async {
-            self.tracer_db.query_one("SELECT MAX(slot) FROM public.slot", &[]).await
-        })?.try_get(0)?;
-
-        self.get_block_hash(u64::try_from(slot).expect("slot parse error"))
     }
 }
 
@@ -155,7 +118,7 @@ pub fn block<F, Fu, R>(f: F) -> R
         F: FnOnce() -> Fu,
         Fu: std::future::Future<Output = R>,
 {
-    block_in1_place(|| {
+    block_in_place(|| {
         let handle = tokio::runtime::Handle::current();
         handle.block_on(f())
     })

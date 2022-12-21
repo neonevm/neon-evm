@@ -46,7 +46,7 @@ pub fn send( config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u
     };
 
     let (exit_reason, result, actions, steps_executed) = {
-        let gas_limit = tx.gas_limit.unwrap_or(U256::from(999_999_999_999_u64));
+        let gas_limit = tx.gas_limit.unwrap_or_else(|| U256::from(999_999_999_999_u64));
         let mut executor = Machine::new(tx.from, &storage)?;
         debug!("Executor initialized");
 

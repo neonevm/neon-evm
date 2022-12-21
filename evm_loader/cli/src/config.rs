@@ -3,7 +3,7 @@ use solana_clap_utils::{
     input_validators::normalize_to_url_if_moniker,
     keypair::{signer_from_path, keypair_from_path},
 };
-use crate::{rpc, rpc::db::PostgresClient, NeonCliError, program_options::truncate};
+use crate::{rpc, rpc::{CallDbClient, TrxDbClient}, NeonCliError, program_options::truncate};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
@@ -85,17 +85,17 @@ pub fn create(options: &ArgMatches) -> Config {
         .map(|path|{ solana_cli_config::load_config_file(path).expect("load db-config error")});
 
     let (cmd, params) = options.subcommand();
-    let rpc_client = match (cmd, params) {
+    let rpc_client: Box<dyn rpc::Rpc> = match (cmd, params) {
         ("trace_call", Some(params)) => {
             let slot = value_of::<u64>(params, "slot").expect("slot parse error");
-            Box::new(PostgresClient::new_for_eth_call(&db_config.expect("db-config not found"), slot))
+            Box::new(CallDbClient::new(&db_config.expect("db-config not found"), slot))
         }
         ("trace_trx", Some(params)) => {
             let hash: H256 = params.value_of("hash").map(|h| {
                 let h = truncate(h);
-                H256::from_str(h).except("hash cast error")
+                H256::from_str(h).expect("hash cast error")
             }).expect("hash parse error");
-            Box::new(PostgresClient::new_for_trx(&db_config.expect("db-config not found"), hash))
+            Box::new(TrxDbClient::new(&db_config.expect("db-config not found"), hash))
         }
         _ => Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
     };
