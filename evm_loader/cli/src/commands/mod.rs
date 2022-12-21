@@ -23,7 +23,7 @@ use solana_sdk::{
 };
 use solana_client::{
     rpc_config::RpcSendTransactionConfig,
-    client_error::{Result as SolanaClientResult,ClientError, ClientErrorKind},
+    client_error::Result as SolanaClientResult,
 };
 use evm_loader::{H160, H256, U256};
 use std::str::FromStr;
@@ -103,8 +103,7 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             trace_call::execute(config, &tx, token, chain, steps)
         }
         ("trace_trx", Some(params)) => {
-            let tx = config.rpc_client.get_transaction_data().
-                map_err(|_| ClientError::from(ClientErrorKind::Custom("load trx error".to_string())) )?;
+            let tx = config.rpc_client.get_transaction_data()?;
             let (token, chain, steps) = parse_tx_params(config, params);
             trace_call::execute(config, &tx, token, chain, steps)
         }

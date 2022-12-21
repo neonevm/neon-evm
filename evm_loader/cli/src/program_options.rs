@@ -56,6 +56,7 @@ fn is_amount<T, U>(amount: U) -> Result<(), String>
     }
 }
 
+
 macro_rules! emulate {
     ($cmd:expr, $desc:expr) => {
         SubCommand::with_name($cmd)
@@ -115,6 +116,7 @@ macro_rules! emulate {
                 )
     }
 }
+
 
 #[allow(clippy::too_many_lines)]
 pub fn parse<'a >() -> ArgMatches<'a> {
@@ -252,7 +254,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("trace-trx")
+            SubCommand::with_name("trace_trx")
                 .about("Getting traces of transaction execution by hash")
                 .arg(
                     Arg::with_name("hash")
@@ -262,6 +264,32 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .required(true)
                         .validator(is_valid_h256)
                         .help("Neon transaction hash"),
+                )
+                .arg(
+                    Arg::with_name("token_mint")
+                        .long("token_mint")
+                        .value_name("TOKEN_MINT")
+                        .takes_value(true)
+                        .global(true)
+                        .validator(is_valid_pubkey)
+                        .help("Pubkey for token_mint")
+                )
+                .arg(
+                    Arg::with_name("chain_id")
+                        .long("chain_id")
+                        .value_name("CHAIN_ID")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Network chain_id"),
+                )
+                .arg(
+                    Arg::with_name("max_steps_to_execute")
+                        .long("max_steps_to_execute")
+                        .value_name("NUMBER_OF_STEPS")
+                        .takes_value(true)
+                        .required(false)
+                        .default_value("100000")
+                        .help("Maximal number of steps to execute in a single run"),
                 )
         )
         .subcommand(

@@ -91,13 +91,13 @@ impl Rpc for CallDbClient {
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
         self.get_account_at_(key)
-            .map_err(|_| ClientError::from(ClientErrorKind::Custom("load account error".to_string())) )?
+            .map_err(|e| ClientError::from(ClientErrorKind::Custom(format!("load account error {}", e))) )?
             .ok_or_else(|| ClientError::from(ClientErrorKind::Custom(format!("account not found {}", key))))
     }
 
     fn get_account_with_commitment(&self, key: &Pubkey, _commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
         let account= self.get_account_at_(key)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("load account error".to_string())))?;
+            .map_err(|e| ClientError::from( ClientErrorKind::Custom(format!("load account {} error: {}", key, e))))?;
         let context = RpcResponseContext{slot: self.slot, api_version: None};
         Ok(Response {context, value: account})
     }
