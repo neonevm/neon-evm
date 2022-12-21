@@ -3,12 +3,14 @@ from random import randrange
 
 import pytest
 import solana
+from eth_utils import abi
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
 
 from . import solana_utils
-from .solana_utils import solana_client, make_new_user, write_transaction_to_holder_account
+from .solana_utils import solana_client, make_new_user, write_transaction_to_holder_account, \
+    send_transaction_step_from_account
 from .test_fund_return import delete_holder
 from .utils.constants import EVM_LOADER
 from .utils.contract import make_deployment_transaction
@@ -83,3 +85,21 @@ def test_delete_holder_by_no_owner(operator_keypair, user_account):
     holder_acc = create_holder(operator_keypair)
     with pytest.raises(solana.rpc.core.RPCException, match="invalid account data for instruction"):
         delete_holder(holder_acc, user_account.solana_account, user_account.solana_account)
+
+
+def test_write_to_not_finalized_holder(rw_lock_contract, session_user, evm_loader, operator_keypair, treasury_pool,
+                                       holder_acc):
+    func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
+    data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
+    signed_tx = make_eth_transaction(rw_lock_contract.eth_address, data, session_user.solana_account,
+                                     session_user.solana_account_address)
+    write_transaction_to_holder_account(signed_tx, holder_acc, operator_keypair)
+
+    send_transaction_step_from_account(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                       [session_user.solana_account_address,
+                                        rw_lock_contract.solana_address], 1, operator_keypair)
+
+    signed_tx2 = make_eth_transaction(rw_lock_contract.eth_address, data, session_user.solana_account,
+                                      session_user.solana_account_address)
+    with pytest.raises(solana.rpc.core.RPCException, match=r"Account .* - expected Holder or Finalized"):
+        write_transaction_to_holder_account(signed_tx2, holder_acc, operator_keypair)

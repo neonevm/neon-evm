@@ -601,7 +601,7 @@ def send_transaction_step_from_instruction(operator: Keypair, evm_loader, treasu
         make_PartialCallOrContinueFromRawEthereumTX(
             instruction.rawTransaction,
             operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
-            additional_accounts
+            additional_accounts, system_program, evm_loader_public_key
         )
     )
 
@@ -610,9 +610,8 @@ def send_transaction_step_from_instruction(operator: Keypair, evm_loader, treasu
 
 def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader, treasury, storage_account,
                                                instruction: SignedTransaction,
-                                               additional_accounts, steps_count=EVM_STEPS, signer: Keypair = None,
-                                               system_program=sp.SYS_PROGRAM_ID,
-                                               evm_loader_public_key=PublicKey(EVM_LOADER)) -> SendTransactionResp:
+                                               additional_accounts, steps_count=EVM_STEPS,
+                                               signer: Keypair = None) -> SendTransactionResp:
     signer = operator if signer is None else signer
 
     send_transaction_step_from_instruction(operator, evm_loader, treasury, storage_account, instruction,
@@ -635,10 +634,10 @@ def send_transaction_step_from_account(operator: Keypair, evm_loader, treasury, 
     trx.add(
         make_ExecuteTrxFromAccountDataIterativeOrContinue(
             operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
-            additional_accounts
+            additional_accounts, system_program, evm_loader_public_key
         )
     )
-    return send_transaction(solana_client, trx, operator)
+    return send_transaction(solana_client, trx, signer)
 
 
 def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasury, storage_account,
@@ -651,7 +650,7 @@ def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasu
         steps_left = steps_count
         while steps_left > 0:
             send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts,
-                                               EVM_STEPS, signer)
+                                                   EVM_STEPS, signer)
             steps_left = steps_left - EVM_STEPS
     return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
                                               signer)

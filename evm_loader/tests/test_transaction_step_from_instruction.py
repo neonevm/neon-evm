@@ -3,37 +3,41 @@ import string
 
 import eth_abi
 import pytest
+import solana
 from eth_keys import keys as eth_keys
 from eth_utils import abi
 from solana.keypair import Keypair
 from solana.publickey import PublicKey
 
-from .solana_utils import get_neon_balance, solana_client, execute_transaction_steps_from_instruction, neon_cli
-from .utils.constants import TAG_FINALIZED_STATE
+from .solana_utils import get_neon_balance, solana_client, execute_transaction_steps_from_instruction, neon_cli, \
+    create_treasury_pool_address, send_transaction_step_from_instruction
+from .utils.assert_messages import InstructionAsserts
+from .utils.constants import TAG_FINALIZED_STATE, TAG_STATE
 from .utils.contract import make_deployment_transaction, deploy_contract
 from .utils.ethereum import make_eth_transaction, create_contract_address
-from .utils.layouts import FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT
+from .utils.layouts import FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, ACCOUNT_INFO_LAYOUT, STORAGE_ACCOUNT_INFO_LAYOUT
 from .utils.storage import create_holder
 from .utils.transaction_checks import check_transaction_logs_have_text, check_holder_account_tag
+from .utils.types import TreasuryPool
 
 
 class TestTransactionStepFromInstruction:
 
     def test_simple_transfer_transaction(self, operator_keypair, treasury_pool, evm_loader,
-                                         sender_with_tokens, second_user, holder_acc):
+                                         sender_with_tokens, session_user, holder_acc):
         amount = 10
         sender_balance_before = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        recipient_balance_before = get_neon_balance(solana_client, second_user.solana_account_address)
+        recipient_balance_before = get_neon_balance(solana_client, session_user.solana_account_address)
 
-        signed_tx = make_eth_transaction(second_user.eth_address, None, sender_with_tokens.solana_account,
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
                                          sender_with_tokens.solana_account_address, amount)
 
         resp = execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
-                                                          signed_tx, [second_user.solana_account_address,
+                                                          signed_tx, [session_user.solana_account_address,
                                                                       sender_with_tokens.solana_account_address], 0)
 
         sender_balance_after = get_neon_balance(solana_client, sender_with_tokens.solana_account_address)
-        recipient_balance_after = get_neon_balance(solana_client, second_user.solana_account_address)
+        recipient_balance_after = get_neon_balance(solana_client, session_user.solana_account_address)
 
         check_holder_account_tag(holder_acc, FINALIZED_STORAGE_ACCOUNT_INFO_LAYOUT, TAG_FINALIZED_STATE)
         check_transaction_logs_have_text(resp.value, "exit_status=0x11")
@@ -41,7 +45,8 @@ class TestTransactionStepFromInstruction:
         assert recipient_balance_before + amount == recipient_balance_after
 
     @pytest.mark.parametrize("chain_id", [None, 111])
-    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens, chain_id):
+    def test_deploy_contract(self, operator_keypair, holder_acc, treasury_pool, evm_loader, sender_with_tokens,
+                             chain_id):
         contract_filename = "small.binary"
 
         signed_tx = make_deployment_transaction(sender_with_tokens, contract_filename, chain_id=chain_id)
@@ -129,3 +134,174 @@ class TestTransactionStepFromInstruction:
         check_transaction_logs_have_text(resp.value, "ExitSucceed")
 
         assert recipient_balance_after == amount
+
+    def test_incorrect_chain_id(self, operator_keypair, holder_acc, treasury_pool,
+                                sender_with_tokens, session_user, evm_loader):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1, chain_id=1)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_CHAIN_ID):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_incorrect_nonce(self, operator_keypair, treasury_pool, sender_with_tokens, evm_loader, session_user,
+                             holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                   signed_tx,
+                                                   [session_user.solana_account_address,
+                                                    sender_with_tokens.solana_account_address], 0)
+        new_holder_acc = create_holder(operator_keypair)
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_NONCE):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_run_finalized_transaction(self, operator_keypair, treasury_pool, sender_with_tokens, evm_loader,
+                                       session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                   signed_tx,
+                                                   [session_user.solana_account_address,
+                                                    sender_with_tokens.solana_account_address], 0)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.TRX_ALREADY_FINALIZED):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_insufficient_funds(self, operator_keypair, treasury_pool, evm_loader, session_user,
+                                holder_acc, user_account):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, user_account.solana_account,
+                                         user_account.solana_account_address, 10)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INSUFFICIENT_FUNDS):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        user_account.solana_account_address], 0)
+
+    def test_gas_limit_reached(self, operator_keypair, treasury_pool, session_user, evm_loader, sender_with_tokens,
+                               holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 10, gas=1)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.OUT_OF_GAS):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_sender_missed_in_remaining_accounts(self, operator_keypair, treasury_pool, session_user,
+                                                 sender_with_tokens, evm_loader, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ADDRESS_MUST_BE_PRESENT):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address], 0)
+
+    def test_recipient_missed_in_remaining_accounts(self, operator_keypair, treasury_pool, session_user,
+                                                    sender_with_tokens, evm_loader, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ADDRESS_MUST_BE_PRESENT):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address], 0)
+
+    def test_incorrect_treasure_pool(self, operator_keypair, sender_with_tokens, evm_loader, session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        index = 2
+        treasury = TreasuryPool(index, Keypair().generate().public_key, index.to_bytes(4, 'little'))
+
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_TREASURE_ACC):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_incorrect_treasure_index(self, operator_keypair, sender_with_tokens, evm_loader,
+                                      session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        index = 2
+        treasury = TreasuryPool(index, create_treasury_pool_address(index), (index + 1).to_bytes(4, 'little'))
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.INVALID_TREASURE_ACC):
+            execute_transaction_steps_from_instruction(operator_keypair, evm_loader, treasury, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_incorrect_operator_account(self, sender_with_tokens, evm_loader, treasury_pool, session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        fake_operator = Keypair().generate()
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.ACC_NOT_FOUND):
+            execute_transaction_steps_from_instruction(fake_operator, evm_loader, treasury_pool, holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0)
+
+    def test_operator_is_not_in_white_list(self, sender_with_tokens, evm_loader, treasury_pool,
+                                           session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        with pytest.raises(solana.rpc.core.RPCException, match=InstructionAsserts.NOT_AUTHORIZED_OPERATOR):
+            execute_transaction_steps_from_instruction(sender_with_tokens.solana_account, evm_loader, treasury_pool,
+                                                       holder_acc,
+                                                       signed_tx,
+                                                       [session_user.solana_account_address,
+                                                        sender_with_tokens.solana_account_address], 0,
+                                                       signer=sender_with_tokens.solana_account)
+
+    def test_incorrect_system_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
+                                      session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        fake_sys_program_id = Keypair().generate().public_key
+
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=str.format(InstructionAsserts.NOT_SYSTEM_PROGRAM, fake_sys_program_id)):
+            send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                   signed_tx,
+                                                   [sender_with_tokens.solana_account_address,
+                                                    session_user.solana_account_address], 1, operator_keypair,
+                                                   system_program=fake_sys_program_id)
+
+    def test_incorrect_neon_program(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
+                                    session_user, holder_acc):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        fake_neon_program_id = Keypair().generate().public_key
+
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=str.format(InstructionAsserts.NOT_NEON_PROGRAM, fake_neon_program_id)):
+            send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, holder_acc,
+                                                   signed_tx,
+                                                   [sender_with_tokens.solana_account_address,
+                                                    session_user.solana_account_address], 1, operator_keypair,
+                                                   evm_loader_public_key=fake_neon_program_id)
+
+    def test_incorrect_holder_account(self, sender_with_tokens, operator_keypair, evm_loader, treasury_pool,
+                                      session_user):
+        signed_tx = make_eth_transaction(session_user.eth_address, None, sender_with_tokens.solana_account,
+                                         sender_with_tokens.solana_account_address, 1)
+        fake_holder_acc = Keypair.generate().public_key
+        with pytest.raises(solana.rpc.core.RPCException,
+                           match=str.format(InstructionAsserts.NOT_PROGRAM_OWNED, fake_holder_acc)):
+            send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, fake_holder_acc,
+                                                   signed_tx,
+                                                   [sender_with_tokens.solana_account_address,
+                                                    session_user.solana_account_address], 1, operator_keypair)
+
+

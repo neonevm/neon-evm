@@ -8,8 +8,8 @@ from solana.rpc.commitment import Finalized
 from solana.rpc.core import RPCException
 
 from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon, \
-    cancel_transaction
-from .utils.contract import write_transaction_to_holder_account, deploy_contract_step, make_deployment_transaction
+    cancel_transaction, send_transaction_step_from_account
+from .utils.contract import write_transaction_to_holder_account, make_deployment_transaction
 from .utils.ethereum import create_contract_address, make_eth_transaction
 from .utils.instructions import TransactionWithComputeBudget, make_ExecuteTrxFromInstruction
 from .utils.layouts import ACCOUNT_INFO_LAYOUT
@@ -61,15 +61,14 @@ class ParallelTransactionsTest(TestCase):
 
         # First N iterations
         for i in range(iterations):
-            deployment_receipt = deploy_contract_step(
-                EVM_STEPS_COUNT,
-                self.treasury_pool,
-                holder_acc,
-                self.operator_keypair,
-                self.evm_loader,
-                contract,
-                self.user_account,
-            )
+            deployment_receipt = send_transaction_step_from_account(self.operator_keypair,
+                                                                    self.evm_loader,
+                                                                    self.treasury_pool,
+                                                                    holder_acc,
+                                                                    [contract.solana_address,
+                                                                     self.user_account.solana_account_address],
+                                                                    EVM_STEPS_COUNT,
+                                                                    self.operator_keypair)
 
             assert not ParallelTransactionsTest.check_iteration_deployed(deployment_receipt)
 
@@ -86,15 +85,14 @@ class ParallelTransactionsTest(TestCase):
 
         # Trying to finish deployment (expected to fail)
         try:
-            deploy_contract_step(
-                EVM_STEPS_COUNT,
-                self.treasury_pool,
-                holder_acc,
-                self.operator_keypair,
-                self.evm_loader,
-                contract,
-                self.user_account,
-            )
+            send_transaction_step_from_account(self.operator_keypair,
+                                               self.evm_loader,
+                                               self.treasury_pool,
+                                               holder_acc,
+                                               [contract.solana_address,
+                                                self.user_account.solana_account_address],
+                                               EVM_STEPS_COUNT,
+                                               self.operator_keypair)
 
             assert False, 'Deployment expected to fail'
         except RPCException as e:

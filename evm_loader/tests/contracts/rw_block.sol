@@ -2,9 +2,9 @@
 pragma solidity >=0.5.12;
 
 contract rw_lock {
-
     mapping(address => mapping(uint256 => uint256)) data;
     uint len = 0;
+    string public text = 'text';
 
     function unchange_storage(uint8 x, uint8 y) public pure returns(uint8) {
         return x + y;
@@ -18,6 +18,22 @@ contract rw_lock {
             n = n + 1;
         }
         len = len + resize;
+    }
+
+    function update_storage_str(string memory new_text) public {
+        text = new_text;
+    }
+
+    function update_storage_map(uint resize) public {
+        uint n = 0;
+        while (n < resize){
+            data[msg.sender][len+n] = uint256(len+n);
+            n = n + 1;
+        }
+    }
+
+    function get_text() public view returns (string memory) {
+        return text;
     }
 
     function deploy_contract() public returns(address){
@@ -46,7 +62,7 @@ contract small {
 
 
 contract  string_setter{
-    string public text;
+    string public text = 'text';
 
 
     function get() public view returns (string memory) {
@@ -56,4 +72,6 @@ contract  string_setter{
     function set(string memory new_text) public payable {
         text = new_text;
     }
+
+
 }
