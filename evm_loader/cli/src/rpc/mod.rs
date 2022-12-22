@@ -49,16 +49,6 @@ pub struct TrxDbClient {
     indexer_db: Client,
 }
 
-pub trait ToAny: 'static {
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: 'static> ToAny for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 pub trait Rpc{
     fn commitment(&self) -> CommitmentConfig;
     fn confirm_transaction_with_spinner(&self, signature: &Signature, recent_blockhash: &Hash, commitment_config: CommitmentConfig) -> ClientResult<()>;
@@ -83,6 +73,7 @@ pub trait Rpc{
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
     fn get_transaction_data(&self) -> ClientResult<TxParams>;
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub fn do_connect(host: &String, port: &String, db: &String, user: &String, pass: &String) -> Client {

@@ -10,7 +10,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use tokio_postgres::Error;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, any::Any};
 use super::{DbConfig, CallDbClient, Rpc, block, do_connect,} ;
 use crate::commands::TxParams;
 
@@ -176,6 +176,10 @@ impl Rpc for CallDbClient {
 
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
         Err(ClientErrorKind::Custom("get_transaction_data() not implemented for db_call_client".to_string()).into())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

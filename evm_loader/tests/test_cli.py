@@ -3,6 +3,7 @@ import os
 import random
 
 import pytest
+from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 
@@ -101,17 +102,17 @@ def test_collect_treasury(evm_loader):
     treasury_pool_address = create_treasury_pool_address(index)
     result = neon_cli().call(command_args)
     main_pool_address = result.split('\n')[0].split('Main pool balance:')[-1].strip()
-    balance_before = get_solana_balance(main_pool_address)
+    balance_before = get_solana_balance(PublicKey(main_pool_address))
 
     assert f"{index}: skip account {treasury_pool_address}" in result
 
     amount = random.randint(1, 1000)
     trx = solana_client.request_airdrop(treasury_pool_address, amount)
-    wait_confirm_transaction(solana_client, trx['result'])
+    wait_confirm_transaction(solana_client, trx.value)
     result = neon_cli().call(command_args)
     assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
 
-    balance_after = get_solana_balance(main_pool_address)
+    balance_after = get_solana_balance(PublicKey(main_pool_address))
     assert balance_after == balance_before + amount
 
 
@@ -132,7 +133,7 @@ def test_get_ether_account_data(evm_loader, user_account):
     assert f"Ethereum address: 0x{user_account.eth_address.hex()}" in result
     assert f"Solana address: {user_account.solana_account_address}" in result
 
-    assert solana_client.get_account_info(user_account.solana_account.public_key)["result"]['value'] is not None
+    assert solana_client.get_account_info(user_account.solana_account.public_key).value is not None
 
 
 def test_create_ether_account(evm_loader):
@@ -142,8 +143,8 @@ def test_create_ether_account(evm_loader):
     created_acc = json.loads(result.split(' ')[-1])
     assert created_acc['ether'] == acc
 
-    acc_info = solana_client.get_account_info(created_acc['solana'], commitment=Confirmed)
-    assert acc_info['result']['value'] is not None
+    acc_info = solana_client.get_account_info(PublicKey(created_acc['solana']), commitment=Confirmed)
+    assert acc_info.value is not None
 
 
 def test_create_program_address(evm_loader):
@@ -183,7 +184,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     )
     storage_account = create_holder(operator_keypair)
     instruction = eth_transaction.rawTransaction
-    trx = TransactionWithComputeBudget()
+    trx = TransactionWithComputeBudget(operator_keypair)
     trx.add(
         make_PartialCallOrContinueFromRawEthereumTX(
             instruction,
@@ -197,7 +198,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     solana_client = Client(SOLANA_URL)
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
-    assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+    assert receipt.value.transaction.meta.err is None
     user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
 
     response = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")

@@ -12,6 +12,8 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus};
 use super::Rpc;
 use crate::commands::TxParams;
+use std::any::Any;
+
 
 impl Rpc for RpcClient{
     fn commitment(&self) -> CommitmentConfig {
@@ -89,5 +91,9 @@ impl Rpc for RpcClient{
 
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
         Err(ClientErrorKind::Custom("get_transaction_data() not implemented for rpc_node client".to_string()).into())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

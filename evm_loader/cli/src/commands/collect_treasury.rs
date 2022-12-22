@@ -3,7 +3,6 @@ use crate::{
     Config,
     commands::get_neon_elf::read_elf_parameters_from_account,
     errors::NeonCliError,
-    rpc::ToAny,
 };
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -31,10 +30,8 @@ pub fn execute(
 
     info!("Main pool balance: {}", main_balance_address);
 
-    let client = match config.rpc_client.as_any().downcast_ref::<RpcClient>(){
-        Some(item) => item,
-        None => panic!("cast to solana_client::rpc_client::RpcClient error")
-    };
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
 
     for i in 0..pool_count {
         let (aux_balance_address, _) = Treasury::address(&config.evm_loader, i);

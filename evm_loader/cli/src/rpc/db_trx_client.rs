@@ -14,7 +14,8 @@ use std::{convert::TryFrom, str::FromStr};
 use evm_loader::{H160, H256, U256};
 use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl} ;
 use crate::commands::TxParams;
-use std::convert::TryInto;
+use std::{convert::TryInto, any::Any};
+
 
 impl TrxDbClient {
     pub fn new(config: &DbConfig, hash: H256) -> Self {
@@ -211,5 +212,9 @@ impl Rpc for TrxDbClient {
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
         self.get_transaction_data_()
             .map_err(|e| ClientError::from( ClientErrorKind::Custom(format!("load transaction {} error: {} ", self.hash, e))))
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
