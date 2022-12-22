@@ -114,3 +114,24 @@ pub fn block<F, Fu, R>(f: F) -> R
         handle.block_on(f())
     })
 }
+
+
+macro_rules! e {
+    ($mes:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}", $mes))
+        )
+    };
+    ($mes:expr, $error:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}: {:?}", $mes, $error))
+        )
+    };
+    ($mes:expr, $error:expr, $arg:expr) => {
+        ClientError::from(
+            ClientErrorKind::Custom(format!("{}, {:?}: {:?}", $mes, $error, $arg))
+        )
+    };
+}
+pub(crate) use e;
+

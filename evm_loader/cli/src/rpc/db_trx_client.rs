@@ -12,7 +12,7 @@ use solana_transaction_status::{EncodedConfirmedBlock, EncodedConfirmedTransacti
 use tokio_postgres::Error;
 use std::{convert::TryFrom, str::FromStr};
 use evm_loader::{H160, H256, U256};
-use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl} ;
+use super::{DbConfig, TrxDbClient, Rpc, block, do_connect, db_call_client::db_client_impl, e,};
 use crate::commands::TxParams;
 use std::{convert::TryInto, any::Any};
 
@@ -120,18 +120,18 @@ impl Rpc for TrxDbClient {
     }
 
     fn confirm_transaction_with_spinner(&self, _signature: &Signature, _recent_blockhash: &Hash, _commitment_config: CommitmentConfig) -> ClientResult<()>{
-        Err(ClientErrorKind::Custom("confirm_transaction_with_spinner() not implemented for trx rpc client".to_string()).into())
+        Err(e!("confirm_transaction_with_spinner() not implemented for trx rpc client"))
     }
 
     fn get_account(&self, key: &Pubkey) -> ClientResult<Account>  {
         self.get_account_at_(key)
-            .map_err(|e| ClientError::from(ClientErrorKind::Custom(format!("load account {} error: {}", key, e))) )?
-            .ok_or_else(|| ClientError::from(ClientErrorKind::Custom(format!("account not found {}", key))))
+            .map_err(|e| e!("load account error", key, e) )?
+            .ok_or_else(|| e!("account not found", key))
     }
 
     fn get_account_with_commitment(&self, key: &Pubkey, _commitment: CommitmentConfig) -> RpcResult<Option<Account>> {
         let account= self.get_account_at_(key)
-            .map_err(|e| ClientError::from( ClientErrorKind::Custom(format!("load account {} error: {}", key, e))))?;
+            .map_err(|e| e!("load account error", key, e))?;
         let slot = self.get_slot()?;
         let context = RpcResponseContext{slot, api_version: None};
         Ok(Response {context, value: account})
@@ -143,7 +143,7 @@ impl Rpc for TrxDbClient {
 
     fn get_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock>{
         let hash = self.get_block_hash_(slot)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_hash error".to_string())))?;
+            .map_err(|e| e!("get_block error", slot, e))?;
 
         Ok(EncodedConfirmedBlock{
             previous_blockhash: String::default(),
@@ -158,42 +158,40 @@ impl Rpc for TrxDbClient {
 
     fn get_block_time(&self, slot: Slot) -> ClientResult<UnixTimestamp>{
         self.get_block_time_(slot)
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_block_time error".to_string())))
+            .map_err(|e| e!("get_block_time error", slot, e))
     }
 
     fn get_latest_blockhash(&self) -> ClientResult<Hash>{
-        let blockhash =  self.get_latest_blockhash_()
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash error".to_string())))?;
-        blockhash.parse::<Hash>()
-            .map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash parse error".to_string())))
+        let hash =  self.get_latest_blockhash_().map_err(|e| e!("get_latest_blockhash error", e))?;
+        hash.parse::<Hash>().map_err(|e| e!("get_latest_blockhash parse error", e))
     }
 
     fn get_minimum_balance_for_rent_exemption(&self, _data_len: usize) -> ClientResult<u64>{
-        Err(ClientErrorKind::Custom("get_minimum_balance_for_rent_exemption() not implemented for trx rpc client".to_string()).into())
+        Err(e!("get_minimum_balance_for_rent_exemption() not implemented for db_trx_client"))
     }
 
     fn get_slot(&self) -> ClientResult<Slot>{
-        self.get_slot_().map_err(|_| ClientError::from( ClientErrorKind::Custom("get_latest_blockhash error".to_string())))
+        self.get_slot_().map_err(|e| e!("get_slot error", e))
     }
 
     fn get_signature_statuses(&self, _signatures: &[Signature]) -> RpcResult<Vec<Option<TransactionStatus>>> {
-        Err(ClientErrorKind::Custom("get_signature_statuses() not implemented for trx rpc client".to_string()).into())
+        Err(e!("get_signature_statuses() not implemented for db_trx_client"))
     }
 
     fn get_transaction_with_config(&self, _signature: &Signature, _config: RpcTransactionConfig)-> ClientResult<EncodedConfirmedTransactionWithStatusMeta>{
-        Err(ClientErrorKind::Custom("get_transaction_with_config() not implemented for trx rpc client".to_string()).into())
+        Err(e!("get_transaction_with_config() not implemented for db_trx_client"))
     }
 
     fn send_transaction(&self, _transaction: &Transaction) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_transaction() not implemented for trx rpc client".to_string()).into())
+        Err(e!("send_transaction() not implemented for db_trx_client"))
     }
 
     fn send_and_confirm_transaction_with_spinner(&self, _transaction: &Transaction) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner() not implemented for trx rpc client".to_string()).into())
+        Err(e!("send_and_confirm_transaction_with_spinner() not implemented for db_trx_client"))
     }
 
     fn send_and_confirm_transaction_with_spinner_and_commitment(&self, _transaction: &Transaction, _commitment: CommitmentConfig) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner_and_commitment() not implemented for trx rpc client".to_string()).into())
+        Err(e!("send_and_confirm_transaction_with_spinner_and_commitment() not implemented for db_trx_client"))
     }
 
     fn send_and_confirm_transaction_with_spinner_and_config(
@@ -202,16 +200,15 @@ impl Rpc for TrxDbClient {
         _commitment: CommitmentConfig,
         _config: RpcSendTransactionConfig
     ) -> ClientResult<Signature>{
-        Err(ClientErrorKind::Custom("send_and_confirm_transaction_with_spinner_and_config() not implemented for trx rpc client".to_string()).into())
+        Err(e!("send_and_confirm_transaction_with_spinner_and_config() not implemented for db_trx_client"))
     }
 
     fn get_latest_blockhash_with_commitment(&self, _commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>{
-        Err(ClientErrorKind::Custom("get_latest_blockhash_with_commitment() not implemented for trx rpc client".to_string()).into())
+        Err(e!("get_latest_blockhash_with_commitment() not implemented for db_trx_client"))
     }
 
     fn get_transaction_data(&self) -> ClientResult<TxParams> {
-        self.get_transaction_data_()
-            .map_err(|e| ClientError::from( ClientErrorKind::Custom(format!("load transaction {} error: {} ", self.hash, e))))
+        self.get_transaction_data_().map_err(|e| e!("load transaction error", self.hash, e))
     }
 
     fn as_any(&self) -> &dyn Any {
