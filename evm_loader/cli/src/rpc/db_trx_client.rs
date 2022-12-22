@@ -28,7 +28,6 @@ impl TrxDbClient {
     }
 
     fn get_account_at_(&self, pubkey: &Pubkey) -> Result<Option<Account>, Error> {
-        println!("-1");
 
         let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
         let row = block(|| async {
@@ -40,32 +39,28 @@ impl TrxDbClient {
                 &[&hex]
             ).await
         })?;
-        println!("0");
         let sol_sig_b58: &str = row.try_get(0)?;
         let sol_sig_b58 = sol_sig_b58.to_string();
         let sol_sig = bs58::decode(sol_sig_b58).into_vec().expect("sol_sig base58 decode error");
         let sol_sig: [u8; 64] = sol_sig.as_slice().try_into().unwrap();
 
         let pubkey_bytes = pubkey.to_bytes();
-        println!("01");
         let row = block(|| async {
             self.tracer_db.query_one(
                 "SELECT * FROM get_pre_accounts($1, $2)",
-                &[&sol_sig.as_slice(), &pubkey_bytes.as_slice()]
+                &[&sol_sig.as_slice(), &[&pubkey_bytes.as_slice()]]
             ).await
         })?;
-        println!("1");
-        let lamports: i64 = row.try_get(2)?;
+        let lamports: i64 = row.try_get(0)?;
         let rent_epoch: i64 = row.try_get(4)?;
 
         let account = Account {
             lamports: u64::try_from(lamports).expect("lamports cast error"),
-            data: row.try_get(5)?,
-            owner: Pubkey::new(row.try_get(1)?),
+            data: row.try_get(1)?,
+            owner: Pubkey::new(row.try_get(2)?),
             executable: row.try_get(3)?,
             rent_epoch: u64::try_from(rent_epoch).expect("rent_epoch cast error"),
         };
-        println!("2");
 
         Ok(Some(account))
     }
@@ -89,14 +84,12 @@ impl TrxDbClient {
         let hex = format!("0x{}", hex::encode(self.hash.as_bytes()));
         let row = block(|| async {
             self.indexer_db.query_one(
-                "select distinct neon_transactions.from_addr,  \
-                COALESCE(neon_transactions.to_addr, neon_transactions.contract), \
-                neon_transactions.calldata, neon_transactions.value, \
-                neon_transactions.gas_limit \
-                 from neon_transactions, solana_blocks  \
-                    where neon_transactions.block_slot = solana_blocks.block_slot \
-                    and solana_blocks.is_active =  true \
-                    and neon_transactions.neon_sig = $1",
+                "select distinct t.from_addr, \
+                COALESCE(t.to_addr, t.contract), t.calldata, t.value, t.gas_limit \
+                 from neon_transactions as t, solana_blocks as b \
+                    where t.block_slot = b.block_slot \
+                    and b.is_active =  true \
+                    and t.neon_sig = $1",
                 &[&hex]
             ).await
         })?;
