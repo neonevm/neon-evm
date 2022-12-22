@@ -15,6 +15,7 @@ use evm_loader::H160;
 use crate::{
     Config,
     NeonCliResult,
+    account_storage::make_solana_program_address,
 };
 
 /// Executes subcommand `deposit`.
@@ -23,7 +24,7 @@ pub fn execute(
     amount: u64,
     ether_address: &H160,
 ) -> NeonCliResult {
-    let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
+    let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
 
     let mut instructions = Vec::with_capacity(2);
 

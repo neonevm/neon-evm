@@ -42,7 +42,6 @@ pub trait Rpc{
     ) -> ClientResult<Signature>;
     fn get_latest_blockhash_with_commitment(&self, commitment: CommitmentConfig) -> ClientResult<(Hash, u64)>;
     fn as_any(&self) -> &dyn Any;
-
 }
 
 impl Rpc for RpcClient{

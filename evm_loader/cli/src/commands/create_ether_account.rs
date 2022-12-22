@@ -14,6 +14,7 @@ use evm_loader::H160;
 use crate::{
     Config,
     NeonCliResult,
+    account_storage::make_solana_program_address,
 };
 
 
@@ -22,7 +23,7 @@ pub fn execute (
     ether_address: &H160,
 ) -> NeonCliResult {
 
-    let (solana_address, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
+    let (solana_address, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
     debug!("Create ethereum account {} <- {} {}", solana_address, hex::encode(ether_address), nonce);
 
     let create_account_v03_instruction = Instruction::new_with_bincode(
