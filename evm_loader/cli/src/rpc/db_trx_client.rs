@@ -104,8 +104,8 @@ impl TrxDbClient {
         let from = H160::from_str(&from.as_str()[2..]).expect("parse error from");
         let to = H160::from_str(&to.as_str()[2..]).expect("parse error to");
         let data =  hex::decode(&data.as_str()[2..]).expect("data hex::decore error");
-        let value: U256 = value.as_str()[2..].parse().unwrap(); //TODO: check it
-        let gas_limit: U256 = gas_limit.as_str()[2..].parse().unwrap(); //TODO: check it
+        let value: U256 = value.as_str()[2..].parse().expect("value parse error");
+        let gas_limit: U256 = gas_limit.as_str()[2..].parse().expect("gas_limit parse error");
 
         Ok(TxParams {from, to: Some(to), data: Some(data), value: Some(value), gas_limit: Some(gas_limit)})
     }

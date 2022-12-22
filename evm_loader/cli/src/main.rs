@@ -1,4 +1,4 @@
-#![deny(warnings)] //TODO
+#![deny(warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 

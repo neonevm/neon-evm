@@ -238,7 +238,7 @@ pub fn parse<'a >() -> ArgMatches<'a> {
                         .long("gas_slimit")
                         .value_name("GAS_LIMIT")
                         .takes_value(true)
-                        .required(false) // TODO: check it
+                        .required(false)
                         .validator(is_amount::<U256, _>)
                         .help("Gas limit"),
                 )
