@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Union
 
 from base58 import b58encode
 from sha3 import keccak_256
@@ -7,17 +8,11 @@ from solana.publickey import PublicKey
 from web3.auto import w3
 
 from .constants import ACCOUNT_SEED_VERSION
-from .types import Caller
+from .types import Caller, Contract
 from ..eth_tx_utils import pack
 from ..solana_utils import EvmLoader, solana_client, get_transaction_count
 
 
-@dataclass
-class Contract:
-    eth_address: bytes
-    solana_address: PublicKey
-    nonce: int
-    seed: str
 
 
 def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
@@ -35,9 +30,17 @@ def create_contract_address(user: Caller, evm_loader: EvmLoader) -> Contract:
     return Contract(contract_eth_address, PublicKey(contract_solana_address), contract_nonce, seed)
 
 
-def make_eth_transaction(to_addr: bytes, data: bytes, signer: Keypair, from_solana_user: PublicKey, value: int = 0):
+def make_eth_transaction(to_addr: bytes, data: Union[bytes, None], signer: Keypair, from_solana_user: PublicKey,
+                         value: int = 0, chain_id = 111, gas = 9999999999):
     nonce = get_transaction_count(solana_client, from_solana_user)
-    tx = {'to': to_addr, 'value': value, 'gas': 9999999999, 'gasPrice': 0,
-          'nonce': nonce, 'data': data, 'chainId': 111}
+    tx = {'to': to_addr, 'value': value, 'gas': gas, 'gasPrice': 0,
+          'nonce': nonce}
+
+    if chain_id is not None:
+        tx['chainId'] = chain_id
+
+    if data is not None:
+        tx['data'] = data
 
     return w3.eth.account.sign_transaction(tx, signer.secret_key[:32])
+

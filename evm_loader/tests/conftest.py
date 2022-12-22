@@ -6,11 +6,13 @@ import pytest
 
 from solana.keypair import Keypair
 from eth_keys import keys as eth_keys
+from solana.publickey import PublicKey
 
-from .solana_utils import EvmLoader, OperatorAccount, create_treasury_pool_address, make_new_user, get_solana_balance
+from .solana_utils import EvmLoader, OperatorAccount, create_treasury_pool_address, make_new_user, get_solana_balance, \
+    deposit_neon
 from .utils.contract import deploy_contract
-from .utils.ethereum import Contract
-from .utils.types import TreasuryPool, Caller
+from .utils.storage import create_holder
+from .utils.types import TreasuryPool, Caller, Contract
 
 
 def pytest_addoption(parser):
@@ -39,12 +41,12 @@ def operator_keypair(request, evm_loader) -> Keypair:
     Initialized solana keypair with balance. Get private key from cli or ~/.config/solana/id.json
     """
     with open(pathlib.Path(request.config.getoption("--operator-key")).expanduser(), "r") as key:
-        account = Keypair(json.load(key)[:32])
+        secret_key = json.load(key)[:32]
+        account = Keypair.from_secret_key(secret_key)
     caller_ether = eth_keys.PrivateKey(account.secret_key[:32]).public_key.to_canonical_address()
     caller, caller_nonce = evm_loader.ether2program(caller_ether)
 
-    if get_solana_balance(caller) == 0:
-        print(f"Create eth account for operator {caller}")
+    if get_solana_balance(PublicKey(caller)) == 0:
         evm_loader.create_ether_account(caller_ether)
     return account
 
@@ -62,9 +64,21 @@ def user_account(evm_loader) -> Caller:
     return make_new_user(evm_loader)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def second_user(evm_loader) -> Caller:
     return make_new_user(evm_loader)
+
+
+@pytest.fixture(scope="session")
+def sender_with_tokens(evm_loader, operator_keypair):
+    user = make_new_user(evm_loader)
+    deposit_neon(evm_loader, operator_keypair, user.eth_address, 100000)
+    return user
+
+
+@pytest.fixture(scope="session")
+def holder_acc(operator_keypair):
+    return create_holder(operator_keypair)
 
 
 @pytest.fixture(scope="function")

@@ -15,8 +15,6 @@ use evm_loader::H160;
 use crate::{
     Config,
     NeonCliResult,
-    rpc::ToAny,
-    account_storage::make_solana_program_address,
 };
 
 /// Executes subcommand `deposit`.
@@ -25,7 +23,7 @@ pub fn execute(
     amount: u64,
     ether_address: &H160,
 ) -> NeonCliResult {
-    let (ether_pubkey, nonce) = make_solana_program_address(ether_address, &config.evm_loader);
+    let (ether_pubkey, nonce) = crate::make_solana_program_address(ether_address, &config.evm_loader);
 
     let mut instructions = Vec::with_capacity(2);
 
@@ -68,10 +66,9 @@ pub fn execute(
     let blockhash = config.rpc_client.get_latest_blockhash()?;
     finalize_message.recent_blockhash = blockhash;
 
-    let client = match config.rpc_client.as_any().downcast_ref::<RpcClient>(){
-        Some(item) => item,
-        None => panic!("cast to solana_client::rpc_client::RpcClient error")
-    };
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
+
     check_account_for_fee(
         client,
         &config.signer.pubkey(),
