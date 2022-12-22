@@ -1,5 +1,5 @@
 use solana_clap_utils::{
-    input_parsers::{pubkey_of, value_of},
+    input_parsers::pubkey_of,
     input_validators::normalize_to_url_if_moniker,
     keypair::{signer_from_path, keypair_from_path},
 };
@@ -83,21 +83,24 @@ pub fn create(options: &ArgMatches) -> Config {
 
     let db_config = options.value_of("db_config")
         .map(|path|{ solana_cli_config::load_config_file(path).expect("load db-config error")});
+    let slot = options.value_of("slot");
 
     let (cmd, params) = options.subcommand();
     let rpc_client: Box<dyn rpc::Rpc> = match (cmd, params) {
-        ("trace_call", Some(params)) => {
-            let slot = value_of::<u64>(params, "slot").expect("slot parse error");
-            Box::new(CallDbClient::new(&db_config.expect("db-config not found"), slot))
-        }
-        ("trace_trx", Some(params)) => {
-            let hash: H256 = params.value_of("hash").map(|h| {
-                let h = truncate(h);
-                H256::from_str(h).expect("hash cast error")
-            }).expect("hash parse error");
+        ("emulate_hash" | "trace_hash", Some(params)) => {
+            let hash = params.value_of("hash").expect("hash not found");
+            let hash = H256::from_str(truncate(hash)).expect("hash cast error");
+
             Box::new(TrxDbClient::new(&db_config.expect("db-config not found"), hash))
         }
-        _ => Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
+        _ => {
+            if let Some(slot) = slot {
+                let slot: u64 = slot.parse().expect("slot parse error");
+                Box::new(CallDbClient::new(&db_config.expect("db-config not found"), slot))
+            } else{
+                Box::new(RpcClient::new_with_commitment(json_rpc_url, commitment))
+            }
+        }
     };
 
     Config {

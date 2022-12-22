@@ -9,7 +9,7 @@ pub mod get_storage_at;
 pub mod collect_treasury;
 pub mod init_environment;
 mod transaction_executor;
-mod trace_call;
+mod trace;
 
 use clap::ArgMatches;
 use solana_clap_utils::input_parsers::{pubkey_of, value_of,};
@@ -53,6 +53,21 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             let (token, chain, steps) = parse_tx_params(config, params);
             emulate::execute(config, &tx, token, chain, steps)
         }
+        ("emulate_hash", Some(params)) => {
+            let tx = config.rpc_client.get_transaction_data()?;
+            let (token, chain, steps) = parse_tx_params(config, params);
+            emulate::execute(config, &tx, token, chain, steps)
+        }
+        ("trace", Some(params)) => {
+            let tx= parse_tx(params);
+            let (token, chain, steps) = parse_tx_params(config, params);
+            trace::execute(config, &tx, token, chain, steps)
+        }
+        ("trace_hash", Some(params)) => {
+            let tx = config.rpc_client.get_transaction_data()?;
+            let (token, chain, steps) = parse_tx_params(config, params);
+            trace::execute(config, &tx, token, chain, steps)
+        }
         ("create-program-address", Some(params)) => {
             let ether = h160_of(params, "seed").expect("seed parse error");
             create_program_address::execute(config, &ether);
@@ -95,17 +110,6 @@ pub fn execute(cmd: &str, params: Option<&ArgMatches>, config: &Config) -> NeonC
             let index = u256_of(params, "index").expect("index parse error");
             get_storage_at::execute(config, contract_id, &index);
             Ok(())
-        }
-        ("trace_call", Some(params)) => {
-            let mut tx= parse_tx(params);
-            tx.gas_limit = u256_of(params, "gas_limit");
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace_call::execute(config, &tx, token, chain, steps)
-        }
-        ("trace_trx", Some(params)) => {
-            let tx = config.rpc_client.get_transaction_data()?;
-            let (token, chain, steps) = parse_tx_params(config, params);
-            trace_call::execute(config, &tx, token, chain, steps)
         }
             _ => unreachable!(),
     }
@@ -211,8 +215,9 @@ fn parse_tx(params: &ArgMatches) -> TxParams {
     let to = h160_or_deploy_of(params, "contract");
     let data = read_stdin();
     let value = value_of(params, "value");
+    let gas_limit = u256_of(params, "gas_limit");
 
-    TxParams {from, to, data, value, gas_limit: None}
+    TxParams {from, to, data, value, gas_limit}
 }
 
 
