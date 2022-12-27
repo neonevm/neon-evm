@@ -2,14 +2,16 @@ import os
 import json
 import pathlib
 
+import eth_abi
 import pytest
 
 from solana.keypair import Keypair
 from eth_keys import keys as eth_keys
 from solana.publickey import PublicKey
+from solana.rpc.commitment import Confirmed
 
 from .solana_utils import EvmLoader, OperatorAccount, create_treasury_pool_address, make_new_user, get_solana_balance, \
-    deposit_neon
+    deposit_neon, solana_client
 from .utils.contract import deploy_contract
 from .utils.storage import create_holder
 from .utils.types import TreasuryPool, Caller, Contract
@@ -31,7 +33,8 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def evm_loader(request) -> EvmLoader:
-    wallet = OperatorAccount(pathlib.Path(request.config.getoption("--operator-keys").split(',')[0]).expanduser().as_posix())
+    wallet = OperatorAccount(
+        pathlib.Path(request.config.getoption("--operator-keys").split(',')[0]).expanduser().as_posix())
     loader = EvmLoader(wallet)
     return loader
 
@@ -103,13 +106,25 @@ def holder_acc(operator_keypair):
     return create_holder(operator_keypair)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
+def new_holder_acc(operator_keypair):
+    return create_holder(operator_keypair)
+
+
+@pytest.fixture(scope="function")
 def rw_lock_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user,
                      treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "rw_lock.binary", evm_loader, treasury_pool)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
+def rw_lock_caller(operator_keypair, rw_lock_contract, treasury_pool, session_user, evm_loader) -> Contract:
+    constructor_args = eth_abi.encode(['address'], [rw_lock_contract.eth_address.hex()])
+    return deploy_contract(operator_keypair, session_user, "rw_lock_caller.binary", evm_loader,
+                           treasury_pool, encoded_args=constructor_args)
+
+
+@pytest.fixture(scope="function")
 def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user,
                            treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool)
