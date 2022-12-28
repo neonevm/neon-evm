@@ -5,7 +5,7 @@ from solana.publickey import PublicKey
 from solana.keypair import Keypair
 from ..solana_utils import create_holder_account, get_solana_balance, create_account_with_seed, \
     send_transaction, solana_client
-from solana.transaction import Transaction
+from solana.transaction import Transaction, TransactionInstruction, AccountMeta
 from .constants import EVM_LOADER
 
 
@@ -32,3 +32,16 @@ def create_holder(signer: Keypair, seed: str = None, size: int = None, fund: int
         send_transaction(solana_client, trx, signer)
     print(f"Created holder account: {storage}")
     return storage
+
+
+def delete_holder(del_key: PublicKey, acc: Keypair, signer: Keypair):
+    trx = Transaction()
+
+    trx.add(TransactionInstruction(
+        program_id=PublicKey(EVM_LOADER),
+        data=bytes.fromhex("25"),
+        keys=[
+            AccountMeta(pubkey=del_key, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=acc.public_key, is_signer=(signer == acc), is_writable=True),
+        ]))
+    return send_transaction(solana_client, trx, signer)
