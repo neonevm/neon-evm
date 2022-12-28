@@ -102,4 +102,4 @@ func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uin
 data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 ```
 
-uint8 parameters must be 64 bytes long.
+uint8 parameters must be 64 bytes long
