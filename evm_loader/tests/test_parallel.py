@@ -6,7 +6,6 @@ from solana.keypair import Keypair
 from solana.publickey import PublicKey
 from solana.rpc.commitment import Finalized
 from solana.rpc.core import RPCException
-from solana.rpc.types import RPCResponse
 
 from .solana_utils import EvmLoader, send_transaction, solana_client, get_account_data, make_new_user, deposit_neon, \
     cancel_transaction
@@ -119,9 +118,9 @@ class ParallelTransactionsTest(TestCase):
 
     @staticmethod
     def check_iteration_deployed(receipt: Any) -> bool:
-        if receipt["meta"]["err"]:
-            raise AssertionError(f"Can't deploy contract: {receipt['meta']['err']}")
-        for log in receipt["meta"]["logMessages"]:
+        if receipt.value.transaction.meta.err:
+            raise AssertionError(f"Can't deploy contract: {receipt.value.transaction.meta.err}")
+        for log in receipt.value.transaction.meta.log_messages:
             if "exit_status" in log:
                 return True
             if "ExitError" in log:
@@ -137,7 +136,7 @@ class ParallelTransactionsTest(TestCase):
         evm_loader: EvmLoader,
         operator_keypair: Keypair,
         treasury_pool: TreasuryPool,
-    ) -> RPCResponse:
+    ):
         message = make_eth_transaction(
             dst_addr,
             bytes(),
@@ -146,7 +145,7 @@ class ParallelTransactionsTest(TestCase):
             value,
         ).rawTransaction
 
-        trx = TransactionWithComputeBudget()
+        trx = TransactionWithComputeBudget(operator_keypair)
         trx.add(
             make_ExecuteTrxFromInstruction(
                 operator_keypair,
@@ -159,7 +158,7 @@ class ParallelTransactionsTest(TestCase):
         )
         receipt = send_transaction(solana_client, trx, operator_keypair, Finalized)
         print("Transfer receipt:", receipt)
-        assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+        assert receipt.value.transaction.meta.err is None
 
         return receipt
 
@@ -167,10 +166,9 @@ class ParallelTransactionsTest(TestCase):
     def check_account_initialized_in_another_trx_exception(exception: RPCException, solana_address: PublicKey):
         error = exception.args[0]
         print("error:", error)
-        assert error['code'] == -32002
-        assert 'instruction requires an uninitialized account' in error['message']
+        assert 'instruction requires an uninitialized account' in error.message
 
-        for log in error['data']['logs']:
+        for log in error.data.logs:
             if f'Blocked nonexistent account {solana_address} was created/initialized outside' in log:
                 return
 

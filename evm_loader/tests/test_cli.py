@@ -3,6 +3,7 @@ import os
 import random
 
 import pytest
+from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 
@@ -92,11 +93,10 @@ def test_collect_treasury(evm_loader):
 
     amount = random.randint(1, 1000)
     trx = solana_client.request_airdrop(treasury_pool_address, amount)
-    wait_confirm_transaction(solana_client, trx['result'])
+    wait_confirm_transaction(solana_client, trx.value)
     result = neon_cli().call(command_args)
 
     balance_after = get_solana_balance(main_pool_address)
-    assert balance_after == result["balance"]
     assert balance_after == balance_before + amount
 
 
@@ -112,7 +112,7 @@ def test_get_ether_account_data(evm_loader, user_account):
     assert f"0x{user_account.eth_address.hex()}" == result["address"]
     assert str(user_account.solana_account_address) == result["solana_address"]
 
-    assert solana_client.get_account_info(user_account.solana_account.public_key)["result"]['value'] is not None
+    assert solana_client.get_account_info(user_account.solana_account.public_key).value is not None
 
 
 def test_create_ether_account(evm_loader):
@@ -153,7 +153,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     )
     storage_account = create_holder(operator_keypair)
     instruction = eth_transaction.rawTransaction
-    trx = TransactionWithComputeBudget()
+    trx = TransactionWithComputeBudget(operator_keypair)
     trx.add(
         make_PartialCallOrContinueFromRawEthereumTX(
             instruction,
@@ -167,7 +167,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
     solana_client = Client(SOLANA_URL)
 
     receipt = send_transaction(solana_client, trx, operator_keypair)
-    assert "success" in receipt["result"]["meta"]["logMessages"][-1]
+    assert receipt.value.transaction.meta.err is None
     user_nonce = get_transaction_count(solana_client, user_account.solana_account_address)
 
     result = neon_cli().call(f"cancel-trx --evm_loader={evm_loader.loader_id} {storage_account}")
