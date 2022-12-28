@@ -95,36 +95,37 @@ def second_session_user(evm_loader) -> Caller:
 
 
 @pytest.fixture(scope="session")
-def sender_with_tokens(evm_loader, operator_keypair):
+def sender_with_tokens(evm_loader, operator_keypair) -> Caller:
     user = make_new_user(evm_loader)
     deposit_neon(evm_loader, operator_keypair, user.eth_address, 100000)
     return user
 
 
 @pytest.fixture(scope="session")
-def holder_acc(operator_keypair):
+def holder_acc(operator_keypair) -> PublicKey:
     return create_holder(operator_keypair)
 
 
 @pytest.fixture(scope="function")
-def new_holder_acc(operator_keypair):
+def new_holder_acc(operator_keypair) -> PublicKey:
     return create_holder(operator_keypair)
 
 
 @pytest.fixture(scope="function")
-def rw_lock_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user,
+def rw_lock_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
                      treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "rw_lock.binary", evm_loader, treasury_pool)
 
 
 @pytest.fixture(scope="function")
-def rw_lock_caller(operator_keypair, rw_lock_contract, treasury_pool, session_user, evm_loader) -> Contract:
+def rw_lock_caller(evm_loader: EvmLoader, operator_keypair: Keypair,
+                   session_user: Caller, treasury_pool: TreasuryPool, rw_lock_contract: Contract) -> Contract:
     constructor_args = eth_abi.encode(['address'], [rw_lock_contract.eth_address.hex()])
     return deploy_contract(operator_keypair, session_user, "rw_lock_caller.binary", evm_loader,
                            treasury_pool, encoded_args=constructor_args)
 
 
 @pytest.fixture(scope="function")
-def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user,
+def string_setter_contract(evm_loader: EvmLoader, operator_keypair: Keypair, session_user: Caller,
                            treasury_pool) -> Contract:
     return deploy_contract(operator_keypair, session_user, "string_setter.binary", evm_loader, treasury_pool)
