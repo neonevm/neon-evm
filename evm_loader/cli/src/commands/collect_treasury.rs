@@ -15,6 +15,7 @@ use solana_sdk::{
 use solana_cli::{
     checks::{check_account_for_fee},
 };
+use solana_client::rpc_client::RpcClient;
 
 use spl_token::instruction::sync_native;
 
@@ -32,6 +33,9 @@ pub fn execute(
     let main_balance_address = MainTreasury::address(&config.evm_loader).0;
 
     info!("Main pool balance: {}", main_balance_address);
+
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
 
     for i in 0..pool_count {
         let (aux_balance_address, _) = Treasury::address(&config.evm_loader, i);
@@ -58,7 +62,7 @@ pub fn execute(
                 let blockhash = config.rpc_client.get_latest_blockhash()?;
                 message.recent_blockhash = blockhash;
 
-                check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &message)?;
+                check_account_for_fee(client, &config.signer.pubkey(), &message)?;
 
                 let mut trx = Transaction::new_unsigned(message);
                 trx.try_sign(&[&*config.signer], blockhash)?;
@@ -79,7 +83,7 @@ pub fn execute(
     let blockhash = config.rpc_client.get_latest_blockhash()?;
     message.recent_blockhash = blockhash;
 
-    check_account_for_fee(&config.rpc_client, &config.signer.pubkey(), &message)?;
+    check_account_for_fee(client, &config.signer.pubkey(), &message)?;
 
     let mut trx = Transaction::new_unsigned(message);
     trx.try_sign(&[&*config.signer], blockhash)?;

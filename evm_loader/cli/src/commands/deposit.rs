@@ -11,9 +11,8 @@ use solana_sdk::{
 use solana_cli::{
     checks::{check_account_for_fee},
 };
-
+use solana_client::rpc_client::RpcClient;
 use evm::{H160};
-
 use crate::{
     Config,
     NeonCliResult,
@@ -68,8 +67,11 @@ pub fn execute(
     let blockhash = config.rpc_client.get_latest_blockhash()?;
     finalize_message.recent_blockhash = blockhash;
 
+    let client = config.rpc_client.as_any().downcast_ref::<RpcClient>()
+        .expect("cast to solana_client::rpc_client::RpcClient error");
+
     check_account_for_fee(
-        &config.rpc_client,
+        client,
         &config.signer.pubkey(),
         &finalize_message
     )?;

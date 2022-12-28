@@ -17,3 +17,11 @@ class Caller:
     eth_address: bytes
     nonce: int
     token_address: PublicKey
+
+
+@dataclass
+class Contract:
+    eth_address: bytes
+    solana_address: PublicKey
+    nonce: int
+    seed: str

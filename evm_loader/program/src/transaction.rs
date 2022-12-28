@@ -191,31 +191,5 @@ pub fn check_ethereum_transaction(
         }
     }
 
-    match &transaction.to {
-        Some(address) => {
-            if !transaction.call_data.is_empty() {
-                let ether_account = account_storage.ethereum_account(address)
-                    .ok_or_else(|| E!(ProgramError::InvalidArgument; "Account {} - target must be initialized account", address))?;
-
-                if !ether_account.is_contract() {
-                    return Err!(ProgramError::InvalidArgument; "Account {} - target must be a contract", address);
-                }
-            }
-        }
-
-        None => {
-            let mut stream = rlp::RlpStream::new_list(2);
-            stream.append(recovered_address);
-            stream.append(&U256::from(transaction.nonce));
-            let contract_address: H160 = crate::utils::keccak256_h256(&stream.out()).into();
-
-            if let Some(account) = account_storage.ethereum_account(&contract_address) {
-                if account.is_contract() {
-                    return Err!(ProgramError::InvalidArgument; "Account {} is already a contract", contract_address)?;
-                }
-            }
-        }
-    }
-
     Ok(())
 }
