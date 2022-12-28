@@ -631,12 +631,12 @@ def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader, tr
 def send_transaction_step_from_account(operator: Keypair, evm_loader, treasury, storage_account,
                                        additional_accounts, steps_count, signer: Keypair,
                                        system_program=sp.SYS_PROGRAM_ID,
-                                       evm_loader_public_key=PublicKey(EVM_LOADER)) -> GetTransactionResp:
+                                       evm_loader_public_key=PublicKey(EVM_LOADER), tag=33) -> GetTransactionResp:
     trx = TransactionWithComputeBudget(operator)
     trx.add(
         make_ExecuteTrxFromAccountDataIterativeOrContinue(
             operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
-            additional_accounts, system_program, evm_loader_public_key
+            additional_accounts, system_program, evm_loader_public_key, tag
         )
     )
     return send_transaction(solana_client, trx, signer)
@@ -656,3 +656,20 @@ def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasu
             steps_left = steps_left - EVM_STEPS
     return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
                                               signer)
+
+
+def execute_transaction_steps_from_account_no_chain_id(operator: Keypair, evm_loader, treasury, storage_account,
+                                                       additional_accounts, steps_count=EVM_STEPS,
+                                                       signer: Keypair = None) -> GetTransactionResp:
+    signer = operator if signer is None else signer
+
+    send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1, signer,
+                                       tag=34)
+    if steps_count > 0:
+        steps_left = steps_count
+        while steps_left > 0:
+            send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts,
+                                               EVM_STEPS, signer, tag=34)
+            steps_left = steps_left - EVM_STEPS
+    return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
+                                              signer, tag=34)
