@@ -360,11 +360,10 @@ class TestAccountStepContractCallContractInteractions:
 
         func_name = abi.function_signature_to_4byte_selector('update_storage_map(uint256)')
         data = func_name + eth_abi.encode(['uint256'], [3])
-        result = json.loads(
-            neon_cli().emulate(evm_loader.loader_id,
+        result = neon_cli().emulate(evm_loader.loader_id,
                                session_user.eth_address.hex(),
                                rw_lock_caller.eth_address.hex(),
-                               data.hex()))
+                               data.hex())
         additional_accounts = [session_user.solana_account_address, rw_lock_contract.solana_address,
                                rw_lock_caller.solana_address]
         for acc in result['solana_accounts']:
