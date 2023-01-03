@@ -112,8 +112,10 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         step_count: int,
         additional_accounts: tp.List[PublicKey],
         sys_program_id=sp.SYS_PROGRAM_ID,
-        neon_evm_program_id=PublicKey(EVM_LOADER)):
-    d = (33).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
+        neon_evm_program_id=PublicKey(EVM_LOADER), tag=33):
+    # 33 - TransactionStepFromAccount
+    # 34 - TransactionStepFromAccountNoChainId
+    d = tag.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
     print("Holder: ", holder_address)

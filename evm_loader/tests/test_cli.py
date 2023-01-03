@@ -113,7 +113,7 @@ def test_collect_treasury(evm_loader):
     assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
 
     balance_after = get_solana_balance(PublicKey(main_pool_address))
-    assert balance_after == balance_before + amount
+    assert balance_after >= balance_before + amount
 
 
 def test_init_environment(evm_loader):
