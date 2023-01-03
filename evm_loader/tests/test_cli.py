@@ -120,7 +120,7 @@ def test_create_ether_account(evm_loader):
         f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}")
 
     acc_info = solana_client.get_account_info(PublicKey(result['solana_address']), commitment=Confirmed)
-    assert acc_info['result']['value'] is not None
+    assert acc_info.value is not None
 
 
 def test_deposit(evm_loader, user_account):
