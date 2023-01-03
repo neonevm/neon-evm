@@ -1,5 +1,4 @@
 import pytest
-import solders
 from solana.rpc.core import RPCException
 from solana.keypair import Keypair
 from solana.transaction import AccountMeta, TransactionInstruction, Transaction

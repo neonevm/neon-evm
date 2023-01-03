@@ -28,7 +28,7 @@ TOKEN_ACCOUNT2=$(spl-token create-account $NEON_TOKEN_MINT --owner $ACCOUNT2 | g
 spl-token mint $NEON_TOKEN_MINT 5000 --owner evm_loader-keypair.json -- $TOKEN_ACCOUNT2
 spl-token balance $NEON_TOKEN_MINT --owner $ACCOUNT2
 
-py.test -n 4 tests/
+py.test -n 6 tests/
 
 echo "Deploy test success"
 exit 0

@@ -1,9 +1,7 @@
-import json
 import os
 import random
 
 import pytest
-from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.commitment import Confirmed
 
@@ -70,7 +68,7 @@ def test_emulate_call_contract_function(user_account, evm_loader, operator_keypa
     )
 
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
-    assert result['steps_executed'] > 0, f"Steps executed amount is not 0. Result: {result}"
+    assert result['steps_executed'] > 0, f"Steps executed amount is 0. Result: {result}"
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
     assert "Hello World" in to_text(result["result"])
 
@@ -141,12 +139,12 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
     assert result["value"] == expected_storage
 
 
-def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypair, treasury_pool):
+def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 
     eth_transaction = make_eth_transaction(
-        deployed_contract.eth_address,
+        rw_lock_contract.eth_address,
         data,
         user_account.solana_account,
         user_account.solana_account_address,
@@ -159,7 +157,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
             instruction,
             operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
             [
-                deployed_contract.solana_address,
+                rw_lock_contract.solana_address,
                 user_account.solana_account_address,
             ]
         )
