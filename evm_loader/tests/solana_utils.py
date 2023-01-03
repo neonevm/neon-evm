@@ -190,12 +190,12 @@ class neon_cli:
 
     def call(self, arguments):
         cmd = 'neon-cli {} --commitment=processed --url {} {} -vvv'.format(self.verbose_flags, SOLANA_URL, arguments)
-        proc_result = subprocess.run(cmd, shell=True,  text=True, stdout=subprocess.PIPE, universal_newlines=True)
+        proc_result = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, universal_newlines=True)
         result = json.loads(proc_result.stdout)
         if result["result"] == "error":
             error = result["error"]
             raise Exception(f"ERR: neon-cli error {error}")
-        
+
         proc_result.check_returncode()
         return result["value"]
 
@@ -209,7 +209,7 @@ class neon_cli:
                contract
                ]
         print('cmd:', cmd)
-        print ("data:", data)
+        print("data:", data)
 
         if data:
             proc_result = subprocess.run(cmd, input=data, text=True, stdout=subprocess.PIPE, universal_newlines=True)
@@ -220,7 +220,7 @@ class neon_cli:
         if result["result"] == "error":
             error = result["error"]
             raise Exception(f"ERR: neon-cli error {error}")
-        
+
         proc_result.check_returncode()
         return result["value"]
 
@@ -228,24 +228,20 @@ class neon_cli:
         data = abi.function_signature_to_4byte_selector(function_signature)
         if constructor_args is not None:
             data += constructor_args
-        result = json.loads(
-            self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(),
-                         data.hex())
-        )
+        result = self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(), data.hex())
         return result["result"]
 
     def get_steps_count(self, evm_loader, from_acc, to, data):
         if isinstance(to, (Caller, Contract)):
             to = to.eth_address.hex()
 
-        result = json.loads(
-            neon_cli().emulate(
-                evm_loader.loader_id,
-                from_acc.eth_address.hex(),
-                to,
-                data
-            )
+        result = neon_cli().emulate(
+            evm_loader.loader_id,
+            from_acc.eth_address.hex(),
+            to,
+            data
         )
+
         return result["steps_executed"]
 
 

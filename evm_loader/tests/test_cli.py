@@ -3,6 +3,7 @@ import random
 
 import pytest
 from solana.rpc.api import Client
+from solana.publickey import PublicKey
 from solana.rpc.commitment import Confirmed
 
 from .solana_utils import neon_cli, create_treasury_pool_address, get_neon_balance, get_transaction_count
@@ -26,11 +27,11 @@ def gen_hash_of_block(size: int) -> str:
         return gen_hash_of_block(size)
 
 
-def test_emulate_transfer(user_account, evm_loader, second_user):
+def test_emulate_transfer(user_account, evm_loader, session_user):
     result = neon_cli().emulate(
         evm_loader.loader_id,
         user_account.eth_address.hex(),
-        second_user.eth_address.hex(),
+        session_user.eth_address.hex(),
         data=None
     )
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
@@ -86,7 +87,7 @@ def test_collect_treasury(evm_loader):
     index = random.randint(0, 127)
     treasury_pool_address = create_treasury_pool_address(index)
     result = neon_cli().call(command_args)
-    main_pool_address = result["pool_address"]
+    main_pool_address = PublicKey(result["pool_address"])
     balance_before = get_solana_balance(main_pool_address)
 
     amount = random.randint(1, 1000)
@@ -118,7 +119,7 @@ def test_create_ether_account(evm_loader):
     result = neon_cli().call(
         f"create-ether-account --evm_loader {evm_loader.loader_id} {acc}")
 
-    acc_info = solana_client.get_account_info(result['solana_address'], commitment=Confirmed)
+    acc_info = solana_client.get_account_info(PublicKey(result['solana_address']), commitment=Confirmed)
     assert acc_info['result']['value'] is not None
 
 
