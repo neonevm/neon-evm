@@ -2,7 +2,7 @@
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 
-pub mod account_storage;
+mod account_storage;
 mod syscall_stubs;
 
 mod errors;
