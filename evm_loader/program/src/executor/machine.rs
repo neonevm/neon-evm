@@ -3,7 +3,6 @@ use evm::{H160, U256, ExitReason, Capture, ExitFatal, Resolve, CONFIG, Control, 
 use solana_program::{program_error::ProgramError, entrypoint::ProgramResult};
 
 use crate::{
-    emit_exit,
     account_storage::AccountStorage
 };
 
@@ -156,29 +155,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
         }
     }
 
-    #[cfg(feature = "tracing")]
-    fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
-        let runtime = match self.runtime.last_mut() {
-            Some((runtime, _)) => runtime,
-            None => return (0, RuntimeApply::Exit(ExitFatal::NotSupported.into()))
-        };
-
-        let mut steps_executed = 0;
-        loop {
-            if steps_executed >= max_steps {
-                self.state_mut().set_exit_result(Some((vec![], ExitReason::StepLimitReached)));
-                return (steps_executed, RuntimeApply::Continue);
-            }
-            if let Err(capture) = runtime.step(&mut self.executor) {
-                let apply_result = Self::process_capture(capture);
-
-                return (steps_executed, apply_result);
-            }
-            steps_executed += 1;
-        }
-    }
-
-    #[cfg(not(feature = "tracing"))]
     fn run(&mut self, max_steps: u64) -> (u64, RuntimeApply) {
         let runtime = match self.runtime.last_mut() {
             Some((runtime, _)) => runtime,
@@ -293,8 +269,6 @@ impl<'a, B: AccountStorage> Machine<'a, B> {
             Some((runtime, reason)) => (runtime, reason),
             None => return Err((Vec::new(), ExitFatal::NotSupported.into()))
         };
-
-        emit_exit!(exited_runtime.machine().return_value(), reason);
 
         if !reason.is_succeed() {
             self.executor.state.exit_revert();

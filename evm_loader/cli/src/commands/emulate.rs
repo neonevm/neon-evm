@@ -1,75 +1,69 @@
 use log::{debug, info};
-
-use evm::{H160, U256, ExitReason};
-use evm_loader::{executor::{Machine, LAMPORTS_PER_SIGNATURE}, config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE}};
-
+use evm_loader::{
+    executor::{Machine, LAMPORTS_PER_SIGNATURE},
+    config::{EVM_STEPS_MIN, PAYMENT_TO_TREASURE},
+    account_storage::AccountStorage,
+    U256, ExitReason
+};
 use crate::{
     account_storage::{
         EmulatorAccountStorage, NeonAccount, SolanaAccount,
     },
     Config,
-    NeonCliResult,
+    NeonCliResult, NeonCliError,
     syscall_stubs::Stubs,
+    account_storage::make_solana_program_address,
+    errors,
 };
-
+use super::{get_program_ether, get_ether_account_nonce, TxParams};
 use solana_sdk::pubkey::Pubkey;
-use evm_loader::account_storage::AccountStorage;
-use crate::{errors};
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-pub fn execute(
-    config: &Config, 
-    contract_id: Option<H160>, 
-    caller_id: H160, 
-    data: Option<Vec<u8>>,
-    value: Option<U256>,
-    token_mint: &Pubkey,
-    chain_id: u64,
-    max_steps_to_execute: u64,
-) -> NeonCliResult {
+#[allow(clippy::too_many_lines)]
+pub fn send( config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u64) -> Result<serde_json::Value, NeonCliError> {
+    let data = tx.data.clone().unwrap_or_default();
     debug!("command_emulate(config={:?}, contract_id={:?}, caller_id={:?}, data={:?}, value={:?})",
         config,
-        contract_id,
-        caller_id,
-        &hex::encode(data.clone().unwrap_or_default()),
-        value);
+        tx.to,
+        tx.from,
+        &hex::encode(&data),
+        tx.value);
 
     let syscall_stubs = Stubs::new(config)?;
     solana_sdk::program_stubs::set_syscall_stubs(syscall_stubs);
 
-    let storage = EmulatorAccountStorage::new(config, *token_mint, chain_id);
+    let storage = EmulatorAccountStorage::new(config, token, chain);
 
-    let program_id = if let Some(program_id) = contract_id {
+    let program_id = if let Some(program_id) = tx.to {
         debug!("program_id to call: {}", program_id);
         program_id
     } else {
-        let (solana_address, _nonce) = crate::make_solana_program_address(&caller_id, &config.evm_loader);
-        let trx_count = crate::get_ether_account_nonce(config, &solana_address)?;
+        let (solana_address, _nonce) = make_solana_program_address(&tx.from, &config.evm_loader);
+        let trx_count = get_ether_account_nonce(config, &solana_address)?;
         let trx_count= trx_count.0;
-        let program_id = crate::get_program_ether(&caller_id, trx_count);
+        let program_id = get_program_ether(&tx.from, trx_count);
         debug!("program_id to deploy: {}", program_id);
         program_id
     };
 
     let (exit_reason, result, actions, steps_executed) = {
-        let gas_limit = U256::from(999_999_999_999_u64);
-        let mut executor = Machine::new(caller_id, &storage)?;
+        let gas_limit = tx.gas_limit.unwrap_or_else(|| U256::from(999_999_999_999_u64));
+        let mut executor = Machine::new(tx.from, &storage)?;
         debug!("Executor initialized");
 
-        let (result, exit_reason) = match &contract_id {
+        let (result, exit_reason) = match &tx.to {
             Some(_) =>  {
                 debug!("call_begin(caller_id={:?}, program_id={:?}, data={:?}, value={:?})",
-                    caller_id,
+                    tx.from,
                     program_id,
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
+                    &hex::encode(&data),
+                    tx.value);
 
-                executor.call_begin(caller_id,
+                executor.call_begin(tx.from,
                     program_id,
-                    data.unwrap_or_default(),
-                    value.unwrap_or_default(),
+                    data,
+                    tx.value.unwrap_or_default(),
                     gas_limit, U256::zero())?;
-                match executor.execute_n_steps(max_steps_to_execute){
+                match executor.execute_n_steps(steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -79,17 +73,17 @@ pub fn execute(
             },
             None => {
                 debug!("create_begin(caller_id={:?}, data={:?}, value={:?})",
-                    caller_id,
-                    &hex::encode(data.clone().unwrap_or_default()),
-                    value);
+                    tx.from,
+                    &hex::encode(&data),
+                    tx.value);
                 executor.create_begin(
-                    caller_id,
-                    data.unwrap_or_default(),
-                    value.unwrap_or_default(),
+                    tx.from,
+                    data,
+                    tx.value.unwrap_or_default(),
                     gas_limit,
                     U256::zero(),
                 )?;
-                match executor.execute_n_steps(max_steps_to_execute){
+                match executor.execute_n_steps(steps){
                     Ok(()) => {
                         info!("too many steps");
                         return Err(errors::NeonCliError::TooManySteps)
@@ -139,7 +133,7 @@ pub fn execute(
         .cloned()
         .collect();
 
-    let js = serde_json::json!({
+    let json = serde_json::json!({
         "accounts": accounts,
         "solana_accounts": solana_accounts,
         "token_accounts": [],
@@ -150,7 +144,13 @@ pub fn execute(
         "used_gas": steps_gas + begin_end_gas + actions_gas + accounts_gas
     });
 
-    println!("{}", js);
 
+    Ok(json)
+}
+
+pub fn execute(config: &Config, tx: &TxParams, token: Pubkey, chain: u64, steps: u64) -> NeonCliResult {
+
+    let json = send(config, tx, token, chain, steps)?;
+    println!("{}", json);
     Ok(())
 }

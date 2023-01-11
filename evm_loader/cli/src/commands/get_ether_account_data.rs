@@ -1,4 +1,4 @@
-use evm::{H160};
+use evm_loader::{H160};
 
 use evm_loader::account::EthereumAccount;
 
@@ -18,7 +18,7 @@ pub fn execute (
     match EmulatorAccountStorage::get_account_from_solana(config, ether_address) {
         (solana_address, Some(mut acc)) => {
             let acc_info = account_info(&solana_address, &mut acc);
-            let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).unwrap();
+            let account_data = EthereumAccount::from_account(&config.evm_loader, &acc_info).expect("EthereumAccount ctor error ");
 
             println!("Ethereum address: 0x{}", &hex::encode(ether_address.as_fixed_bytes()));
             println!("Solana address: {}", solana_address);

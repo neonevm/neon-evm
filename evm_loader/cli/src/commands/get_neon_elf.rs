@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
     convert::TryFrom,
+    fs::File,
+    io::{Read},
 };
 
 use solana_sdk::{
@@ -10,7 +12,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-use crate::{ Config, errors::NeonCliError, NeonCliResult};
+use crate::{ Config, errors::NeonCliError, NeonCliResult,};
 
 pub struct CachedElfParams {
     elf_params: HashMap<String,String>,
@@ -18,7 +20,7 @@ pub struct CachedElfParams {
 impl CachedElfParams {
     pub fn new(config: &Config) -> Self {
         Self {
-            elf_params: read_elf_parameters_from_account(config).unwrap(),
+            elf_params: read_elf_parameters_from_account(config).expect("read elf_params error"),
         }
     }
     pub fn get(&self, param_name: &str) -> Option<&String> {
@@ -41,7 +43,7 @@ pub fn read_elf_parameters(
             let to: usize = usize::try_from(sym.st_value + sym.st_size).unwrap_or_else(|err| panic!("Unable to cast usize from u64:{:?}. Error: {}", sym.st_value + sym.st_size, err));
             if to < end && from < end {
                 let buf = &program_data[from..to];
-                let value = std::str::from_utf8(buf).unwrap();
+                let value = std::str::from_utf8(buf).expect("read elf value error");
                 result.insert(name, String::from(value));
             }
             else {
@@ -101,9 +103,17 @@ fn print_elf_parameters(params: &HashMap<String, String>){
     }
 }
 
+/// # Errors
+pub fn read_program_data(program_location: &str) -> Result<Vec<u8>, NeonCliError> {
+    let mut file = File::open(program_location)?;
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data)?;
+    Ok(program_data)
+}
+
 fn read_program_params_from_file(config: &Config,
                                program_location: &str) -> NeonCliResult {
-    let program_data = crate::read_program_data(program_location)?;
+    let program_data = read_program_data(program_location)?;
     let program_data = &program_data[..];
     let elf_params = read_elf_parameters(config, program_data);
     print_elf_parameters(&elf_params);
@@ -111,7 +121,7 @@ fn read_program_params_from_file(config: &Config,
 }
 
 fn read_program_params_from_account(config: &Config) {
-    let elf_params = read_elf_parameters_from_account(config).unwrap();
+    let elf_params = read_elf_parameters_from_account(config).expect("read elf params error");
     print_elf_parameters(&elf_params);
 }
 

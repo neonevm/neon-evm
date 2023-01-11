@@ -1,11 +1,9 @@
 use {
     crate::{
-        read_program_data,
-        neon_cli_revision,
         Config,
         errors::NeonCliError,
         commands::{
-            get_neon_elf::{read_elf_parameters, read_program_data_from_account},
+            get_neon_elf::{read_elf_parameters, read_program_data, read_program_data_from_account},
             transaction_executor::TransactionExecutor,
         },
     },
@@ -111,12 +109,12 @@ pub fn execute(
     let program_parameters = Parameters::new(read_elf_parameters(config, &data));
 
     let neon_revision = program_parameters.get::<String>("NEON_REVISION")?;
-    if neon_revision != neon_cli_revision!() {
+    if neon_revision != env!("NEON_REVISION") {
         if force {
             warn!("NeonEVM revision doesn't match CLI revision. This check has been disabled with `--force` flag");
         } else {
             error!("NeonEVM revision doesn't match CLI revision. Use appropriate neon-cli version or add `--force` flag");
-            return Err(EnvironmentError::RevisionMismatch(neon_revision, neon_cli_revision!().to_string()).into());
+            return Err(EnvironmentError::RevisionMismatch(neon_revision, env!("NEON_REVISION").to_string()).into());
         }
     }
 

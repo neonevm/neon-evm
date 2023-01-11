@@ -6,7 +6,7 @@ use std::{
 };
 
 use log::{debug, info, trace, warn};
-use evm::{H160, U256, H256};
+use evm_loader::{H160, U256, H256};
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
@@ -203,7 +203,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     #[must_use]
     pub fn apply_actions(&self, actions: Vec<Action>) -> u64 {
         let mut gas = 0_u64;
-        let rent = Rent::get().unwrap();
+        let rent = Rent::get().expect("Rent get error");
 
         for action in actions {
             #[allow(clippy::match_same_arms)]
@@ -262,7 +262,7 @@ impl<'a> EmulatorAccountStorage<'a> {
     #[must_use]
     pub fn apply_accounts_operations(&self, operations: AccountsOperations) -> u64 {
         let mut gas = 0_u64;
-        let rent = Rent::get().unwrap();
+        let rent = Rent::get().expect("Rent get error");
 
         let mut iterations = 0_usize;
 
@@ -297,11 +297,11 @@ impl<'a> EmulatorAccountStorage<'a> {
         self.add_ethereum_account(address, false);
 
         let mut accounts = self.accounts.borrow_mut();
-        let solana_account = accounts.get_mut(address).unwrap();
+        let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
             let info = account_info(&solana_account.account, account_data);
-            let ethereum_account = EthereumAccount::from_account(&self.config.evm_loader, &info).unwrap();
+            let ethereum_account = EthereumAccount::from_account(&self.config.evm_loader, &info).expect("EthereumAccount ctor error");
             f(&ethereum_account)
         } else {
             default
@@ -315,11 +315,11 @@ impl<'a> EmulatorAccountStorage<'a> {
         self.add_ethereum_account(address, false);
 
         let mut accounts = self.accounts.borrow_mut();
-        let solana_account = accounts.get_mut(address).unwrap();
+        let solana_account = accounts.get_mut(address).expect("get account error");
 
         if let Some(account_data) = &mut solana_account.data {
             let info = account_info(&solana_account.account, account_data);
-            let ethereum_account = EthereumAccount::from_account(&self.config.evm_loader, &info).unwrap();
+            let ethereum_account = EthereumAccount::from_account(&self.config.evm_loader, &info).expect("EthereumAccount ctor error");
             ethereum_account.contract_data().map_or(default, f)
         } else {
             default
@@ -363,7 +363,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
         }
 
         if let Ok(timestamp) = self.config.rpc_client.get_block(number.as_u64()) {
-            H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().unwrap())
+            H256::from_slice(&bs58::decode(timestamp.blockhash).into_vec().expect("blockhash parse error"))
         } else {
             warn!("Got error trying to get block hash");
             H256::default()
@@ -468,7 +468,7 @@ impl<'a> AccountStorage for EmulatorAccountStorage<'a> {
                     U256::zero()
                 } else {
                     let account_info = account_info(&solana_address, &mut account);
-                    let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).unwrap();
+                    let storage = EthereumStorage::from_account(&self.config.evm_loader, &account_info).expect("EthereumAccount ctor error");
                     if (storage.address != *address) || (storage.index != index) || (storage.generation != self.generation(address)) {
                         debug!("storage collision");
                         U256::zero()

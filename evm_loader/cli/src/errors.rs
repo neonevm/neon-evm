@@ -4,7 +4,7 @@
 
 use log::{ error };
 
-use evm::{ H160, U256 };
+use evm_loader::{ H160, U256 };
 
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::{Pubkey,PubkeyError as SolanaPubkeyError};

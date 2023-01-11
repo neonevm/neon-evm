@@ -4,21 +4,17 @@ use crate::{
     commands::get_neon_elf::read_elf_parameters_from_account,
     errors::NeonCliError,
 };
-
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     message::Message,
     transaction::Transaction,
     system_program,
 };
-
+use solana_client::rpc_client::RpcClient;
 use solana_cli::{
     checks::{check_account_for_fee},
 };
-use solana_client::rpc_client::RpcClient;
-
 use spl_token::instruction::sync_native;
-
 use evm_loader::account::{MainTreasury, Treasury};
 
 pub fn execute(
