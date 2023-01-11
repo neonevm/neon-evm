@@ -110,8 +110,12 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         treasury_address: PublicKey,
         treasury_buffer: bytes,
         step_count: int,
-        additional_accounts: tp.List[PublicKey]):
-    d = (33).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
+        additional_accounts: tp.List[PublicKey],
+        sys_program_id=sp.SYS_PROGRAM_ID,
+        neon_evm_program_id=PublicKey(EVM_LOADER), tag=33):
+    # 33 - TransactionStepFromAccount
+    # 34 - TransactionStepFromAccountNoChainId
+    d = tag.to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little")
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
     print("make_ExecuteTrxFromAccountDataIterativeOrContinue accounts")
     print("Holder: ", holder_address)
@@ -124,10 +128,11 @@ def make_ExecuteTrxFromAccountDataIterativeOrContinue(
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
         AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
-        AccountMeta(sp.SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(sys_program_id, is_signer=False, is_writable=True),
         # Neon EVM account
-        AccountMeta(PublicKey(EVM_LOADER), is_signer=False, is_writable=False),
+        AccountMeta(neon_evm_program_id, is_signer=False, is_writable=False),
     ]
+
     for acc in additional_accounts:
         print("Additional acc ", acc)
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True), )
@@ -147,7 +152,9 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         treasury_address: PublicKey,
         treasury_buffer: bytes,
         step_count: int,
-        additional_accounts: tp.List[PublicKey]):
+        additional_accounts: tp.List[PublicKey],
+        system_program=sp.SYS_PROGRAM_ID,
+        evm_loader_public_key=PublicKey(EVM_LOADER)):
     d = (32).to_bytes(1, "little") + treasury_buffer + step_count.to_bytes(8, byteorder="little") + instruction
     operator_ether = eth_keys.PrivateKey(operator.secret_key[:32]).public_key.to_canonical_address()
 
@@ -156,9 +163,9 @@ def make_PartialCallOrContinueFromRawEthereumTX(
         AccountMeta(pubkey=operator.public_key, is_signer=True, is_writable=True),
         AccountMeta(pubkey=treasury_address, is_signer=False, is_writable=True),
         AccountMeta(pubkey=PublicKey(evm_loader.ether2program(operator_ether)[0]), is_signer=False, is_writable=True),
-        AccountMeta(sp.SYS_PROGRAM_ID, is_signer=False, is_writable=True),
+        AccountMeta(system_program, is_signer=False, is_writable=True),
         # Neon EVM account
-        AccountMeta(PublicKey(EVM_LOADER), is_signer=False, is_writable=False),
+        AccountMeta(evm_loader_public_key, is_signer=False, is_writable=False),
     ]
     for acc in additional_accounts:
         accounts.append(AccountMeta(acc, is_signer=False, is_writable=True), )

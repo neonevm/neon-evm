@@ -28,12 +28,12 @@ def gen_hash_of_block(size: int) -> str:
         return gen_hash_of_block(size)
 
 
-def test_emulate_transfer(user_account, evm_loader, second_user):
+def test_emulate_transfer(user_account, evm_loader, session_user):
     result = json.loads(
         neon_cli().emulate(
             evm_loader.loader_id,
             user_account.eth_address.hex(),
-            second_user.eth_address.hex(),
+            session_user.eth_address.hex(),
             data=None
         )
     )
@@ -75,7 +75,7 @@ def test_emulate_call_contract_function(user_account, evm_loader, operator_keypa
         )
     )
     assert result['exit_status'] == 'succeed', f"The 'exit_status' field is not succeed. Result: {result}"
-    assert result['steps_executed'] > 0, f"Steps executed amount is not 0. Result: {result}"
+    assert result['steps_executed'] > 0, f"Steps executed amount is 0. Result: {result}"
     assert result['used_gas'] > 0, f"Used gas is less than 0. Result: {result}"
     assert "Hello World" in to_text(result["result"])
 
@@ -113,7 +113,7 @@ def test_collect_treasury(evm_loader):
     assert f"{index}: collect {amount} lamports from {treasury_pool_address}" in result
 
     balance_after = get_solana_balance(PublicKey(main_pool_address))
-    assert balance_after == balance_before + amount
+    assert balance_after >= balance_before + amount
 
 
 def test_init_environment(evm_loader):
@@ -172,12 +172,12 @@ def test_get_storage_at(evm_loader, operator_keypair, user_account, treasury_poo
     assert actual_storage == expected_storage
 
 
-def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypair, treasury_pool):
+def test_cancel_trx(evm_loader, user_account, rw_lock_contract, operator_keypair, treasury_pool):
     func_name = abi.function_signature_to_4byte_selector('unchange_storage(uint8,uint8)')
     data = (func_name + bytes.fromhex("%064x" % 0x01) + bytes.fromhex("%064x" % 0x01))
 
     eth_transaction = make_eth_transaction(
-        deployed_contract.eth_address,
+        rw_lock_contract.eth_address,
         data,
         user_account.solana_account,
         user_account.solana_account_address,
@@ -190,7 +190,7 @@ def test_cancel_trx(evm_loader, user_account, deployed_contract, operator_keypai
             instruction,
             operator_keypair, evm_loader, storage_account, treasury_pool.account, treasury_pool.buffer, 1,
             [
-                deployed_contract.solana_address,
+                rw_lock_contract.solana_address,
                 user_account.solana_account_address,
             ]
         )

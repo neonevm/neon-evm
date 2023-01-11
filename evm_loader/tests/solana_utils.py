@@ -13,7 +13,7 @@ import spl.token.instructions
 from base58 import b58encode
 from eth_account.datastructures import SignedTransaction
 from eth_keys import keys as eth_keys
-from eth_utils import abi, to_text
+from eth_utils import abi
 from hexbytes import HexBytes
 from sha3 import keccak_256
 import solana.system_program as sp
@@ -231,13 +231,15 @@ class neon_cli:
             print(f"ERR: neon-cli error {err}")
             raise
 
-    def call_contract_get_function(self, evm_loader, sender, contract, function_signature: str):
+    def call_contract_get_function(self, evm_loader, sender, contract, function_signature: str, constructor_args=None):
         data = abi.function_signature_to_4byte_selector(function_signature)
+        if constructor_args is not None:
+            data += constructor_args
         result = json.loads(
             self.emulate(evm_loader.loader_id, sender.eth_address.hex(), contract.eth_address.hex(),
                          data.hex())
         )
-        return to_text(result["result"])
+        return result["result"]
 
     def get_steps_count(self, evm_loader, from_acc, to, data):
         if isinstance(to, (Caller, Contract)):
@@ -601,7 +603,7 @@ def send_transaction_step_from_instruction(operator: Keypair, evm_loader, treasu
         make_PartialCallOrContinueFromRawEthereumTX(
             instruction.rawTransaction,
             operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
-            additional_accounts
+            additional_accounts, system_program, evm_loader_public_key
         )
     )
 
@@ -610,9 +612,8 @@ def send_transaction_step_from_instruction(operator: Keypair, evm_loader, treasu
 
 def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader, treasury, storage_account,
                                                instruction: SignedTransaction,
-                                               additional_accounts, steps_count=EVM_STEPS, signer: Keypair = None,
-                                               system_program=sp.SYS_PROGRAM_ID,
-                                               evm_loader_public_key=PublicKey(EVM_LOADER)) -> SendTransactionResp:
+                                               additional_accounts, steps_count=EVM_STEPS,
+                                               signer: Keypair = None) -> SendTransactionResp:
     signer = operator if signer is None else signer
 
     send_transaction_step_from_instruction(operator, evm_loader, treasury, storage_account, instruction,
@@ -630,15 +631,15 @@ def execute_transaction_steps_from_instruction(operator: Keypair, evm_loader, tr
 def send_transaction_step_from_account(operator: Keypair, evm_loader, treasury, storage_account,
                                        additional_accounts, steps_count, signer: Keypair,
                                        system_program=sp.SYS_PROGRAM_ID,
-                                       evm_loader_public_key=PublicKey(EVM_LOADER)) -> GetTransactionResp:
+                                       evm_loader_public_key=PublicKey(EVM_LOADER), tag=33) -> GetTransactionResp:
     trx = TransactionWithComputeBudget(operator)
     trx.add(
         make_ExecuteTrxFromAccountDataIterativeOrContinue(
             operator, evm_loader, storage_account, treasury.account, treasury.buffer, steps_count,
-            additional_accounts
+            additional_accounts, system_program, evm_loader_public_key, tag
         )
     )
-    return send_transaction(solana_client, trx, operator)
+    return send_transaction(solana_client, trx, signer)
 
 
 def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasury, storage_account,
@@ -655,3 +656,20 @@ def execute_transaction_steps_from_account(operator: Keypair, evm_loader, treasu
             steps_left = steps_left - EVM_STEPS
     return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
                                               signer)
+
+
+def execute_transaction_steps_from_account_no_chain_id(operator: Keypair, evm_loader, treasury, storage_account,
+                                                       additional_accounts, steps_count=EVM_STEPS,
+                                                       signer: Keypair = None) -> GetTransactionResp:
+    signer = operator if signer is None else signer
+
+    send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1, signer,
+                                       tag=34)
+    if steps_count > 0:
+        steps_left = steps_count
+        while steps_left > 0:
+            send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts,
+                                               EVM_STEPS, signer, tag=34)
+            steps_left = steps_left - EVM_STEPS
+    return send_transaction_step_from_account(operator, evm_loader, treasury, storage_account, additional_accounts, 1,
+                                              signer, tag=34)
