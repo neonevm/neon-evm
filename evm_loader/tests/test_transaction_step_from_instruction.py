@@ -435,29 +435,29 @@ class TestTransactionStepFromInstructionParallelRuns:
 
 
 class TestStepFromInstructionChangingOperatorsDuringTrxRun:
-    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, session_user, evm_loader,
+    def test_next_operator_can_continue_trx_after_some_time(self, rw_lock_contract, user_account, evm_loader,
                                                             operator_keypair, second_operator_keypair, treasury_pool,
                                                             new_holder_acc):
-        signed_tx = make_contract_call_trx(session_user, rw_lock_contract, 'update_storage_str(string)', ['text'])
+        signed_tx = make_contract_call_trx(user_account, rw_lock_contract, 'update_storage_str(string)', ['text'])
 
         send_transaction_step_from_instruction(operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                signed_tx,
-                                               [session_user.solana_account_address,
+                                               [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 1, operator_keypair)
         # next operator can't continue trx during OPERATOR_PRIORITY_SLOTS*0.4
         with pytest.raises(solana.rpc.core.RPCException, match="operator.key != storage.operator"):
             send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                    signed_tx,
-                                                   [session_user.solana_account_address,
+                                                   [user_account.solana_account_address,
                                                     rw_lock_contract.solana_address], 500, second_operator_keypair)
 
-        time.sleep(8)
+        time.sleep(15)
         send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool, new_holder_acc,
                                                signed_tx,
-                                               [session_user.solana_account_address,
+                                               [user_account.solana_account_address,
                                                 rw_lock_contract.solana_address], 500, second_operator_keypair)
         resp = send_transaction_step_from_instruction(second_operator_keypair, evm_loader, treasury_pool,
                                                       new_holder_acc, signed_tx,
-                                                      [session_user.solana_account_address,
+                                                      [user_account.solana_account_address,
                                                        rw_lock_contract.solana_address], 1, second_operator_keypair)
         check_transaction_logs_have_text(resp.value, "exit_status=0x11")
