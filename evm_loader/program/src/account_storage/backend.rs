@@ -3,8 +3,23 @@ use crate::account_storage::{AccountStorage, ProgramAccountStorage};
 use crate::config::STORAGE_ENTRIES_IN_CONTRACT_ACCOUNT;
 use crate::executor::{OwnedAccountInfo, OwnedAccountInfoPartial};
 use evm::{H160, H256, U256};
-use solana_program::{pubkey::Pubkey, sysvar::recent_blockhashes};
-use std::convert::TryInto;
+use solana_program::slot_history::Slot;
+use solana_program::{
+    pubkey::Pubkey,
+    sysvar::slot_hashes::{self, SlotHashes},
+};
+
+fn generate_fake_block_hash(slot: Slot) -> [u8; 32] {
+    let slot_bytes: [u8; 8] = slot.to_be().to_ne_bytes();
+    let non_null_bytes: Vec<_> = slot_bytes.into_iter().skip_while(|&n| n == 0).collect();
+    let non_null_len = non_null_bytes.len();
+    let mut hash = [255; 32];
+    hash[32 - 1 - non_null_len] = 0;
+    for i in 0..non_null_len {
+        hash[32 - non_null_len + i] = non_null_bytes[i];
+    }
+    hash
+}
 
 impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     fn neon_token_mint(&self) -> &Pubkey {
@@ -28,24 +43,23 @@ impl<'a> AccountStorage for ProgramAccountStorage<'a> {
     }
 
     fn block_hash(&self, number: U256) -> H256 {
-        if let Some(account) = self.solana_accounts.get(&recent_blockhashes::ID) {
-            let slot_hash_data = account.data.borrow();
-            let clock_slot = self.clock.slot;
-            if number >= clock_slot.into() {
-                return H256::default();
-            }
-            let offset: usize = (8 + (clock_slot - 1 - number.as_u64()) * 40)
-                .try_into()
-                .unwrap();
-            if offset + 32 > slot_hash_data.len() {
-                return H256::default();
-            }
-            return H256::from_slice(&slot_hash_data[offset..][..32]);
-        }
-        panic!(
-            "Trying to get blockhash info without providing sysvar account: {}",
-            recent_blockhashes::ID
-        );
+        let slot_hashes_account = self
+            .solana_accounts
+            .get(&slot_hashes::ID)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Trying to get slot hash info without providing sysvar account: {}",
+                    slot_hashes::ID
+                )
+            });
+        let slot_hashes: SlotHashes = slot_hashes_account
+            .deserialize_data()
+            .unwrap_or_else(|e| panic!("Error {e} while deserializing sysvar {}", slot_hashes::ID));
+        let slot = self.clock.slot - 1 - number.as_u64();
+        slot_hashes
+            .get(&slot)
+            .map_or_else(|| generate_fake_block_hash(slot), |x| x.to_bytes())
+            .into()
     }
 
     fn exists(&self, address: &H160) -> bool {
