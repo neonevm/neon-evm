@@ -5,7 +5,7 @@ use log::warn;
 use std::cmp::min;
 
 
-#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some chunk of memory.
 pub struct MemoryDiff {
     /// Offset into memory the change begins.
@@ -14,7 +14,7 @@ pub struct MemoryDiff {
     pub data: Bytes,
 }
 
-#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A diff of some storage value.
 pub struct StorageDiff {
     /// Which key in storage is changed.
@@ -23,7 +23,7 @@ pub struct StorageDiff {
     pub value: U256,
 }
 
-#[derive(serde::Serialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq /*, RlpEncodable, RlpDecodable */)]
 /// A record of an executed VM operation.
 pub struct VMExecutedOperation {
     /// The total gas used.
@@ -36,7 +36,7 @@ pub struct VMExecutedOperation {
     pub store_diff: Option<StorageDiff>,
 }
 
-#[derive(serde::Serialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
 /// A record of the execution of a single VM operation.
 pub struct VMOperation {
     /// The program counter.
@@ -49,7 +49,7 @@ pub struct VMOperation {
     pub executed: Option<VMExecutedOperation>,
 }
 
-#[derive(serde::Serialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Default /*, RlpEncodable, RlpDecodable */)]
 /// A record of a full VM trace for a CALL/CREATE.
 #[allow(clippy::module_name_repetitions)]
 pub struct VMTrace {
@@ -70,7 +70,7 @@ struct TraceData {
     store_written: Option<(U256, U256)>,
 }
 
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FullTraceData {
     pub stack: Vec<U256>,
     pub memory: Vec<u8>,
@@ -413,7 +413,7 @@ lazy_static! {
     };
 }
 
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct TracedCall {
     pub vm_trace: Option<VMTrace>,
     pub full_trace_data: Vec<FullTraceData>,
